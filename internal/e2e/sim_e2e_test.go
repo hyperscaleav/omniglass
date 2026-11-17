@@ -193,7 +193,7 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	})
 
 	// A whole simulated system to a standard, through the CLI: the system and
-	// a component per staffed role, served on the next pull with no restart.
+	// a component per staffed slot, served on the next pull with no restart.
 	// The boot seeds no standard, so the operator forks the one it builds to.
 	out, code = cli("standard", "createFromTemplate", "--template", "meeting-room", "--server", server, "--token", ownerTok)
 	if code != 0 {

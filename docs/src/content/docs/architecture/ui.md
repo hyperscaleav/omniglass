@@ -59,9 +59,9 @@ An operator surface carries no inline explanatory text (ADR-0127): every explain
 label's `(i)` tooltip (`InfoTip`; `Eyebrow` for section labels), so the pedagogy doctrine is
 satisfied by hover and the page itself stays scannable. The standard-editor's vocabulary
 (choices, alternates, accepted types) never leads an operator view, and a system's body
-renders components-first: one row per component with its role in a column, role-level
+renders components-first: one row per component with its slot in a column, slot-level
 chrome only where it says something a column cannot (a quorum beyond one, a shortfall, an
-unstaffed role). The platform-wide sweep of the older pages is tracked in #784.
+unstaffed slot). The platform-wide sweep of the older pages is tracked in #784.
 
 **A detail view is one per system, its place a card of context** (ADR-0139). Systems are the
 unit Omniglass monitors; locations are folders and metadata; components are pieces of systems.
@@ -76,7 +76,7 @@ card reads each metric's unit off the effective-metrics read (the metric type's,
 so an uptime reads `306 s`; a float keeps at most two decimals (`lib/component_leaf.ts`,
 `vitalValueText`) and the raw value sits on the title. The
 model behind it is pure, in `lib/detail.ts` (where a location lands, the path that names each
-location once, the roles a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
+location once, the slots a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
 these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
 look, one altitude rule (Explore drills the location tree, systems open full screen,
 components open in blades), editing through the one `EntityForm` (ADR-0137). The side
@@ -238,8 +238,8 @@ blade stack and by the Configure face) is the one place that knows an editor is 
 hang off it (#854):
 
 1. **Invalidation set.** Deleting a component from its blade refreshes everything that read it: the
-   components list, the fleet view, the system roles and health reads (prefix keys, so every system's
-   copy), and the verdict read. A component that staffs a role is refused by the server (409,
+   components list, the fleet view, the system slots and health reads (prefix keys, so every system's
+   copy), and the verdict read. A component that staffs a slot is refused by the server (409,
    referenced); the blade stays open and says why, rather than closing on a delete that did not happen.
 2. **Error placement.** A failed Save keeps the editor open and the slot remembers the reason
    (`saveError`). The host shows it in its footer beside Save (`SaveError`, in the blade footer and the

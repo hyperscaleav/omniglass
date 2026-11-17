@@ -109,7 +109,7 @@ var idOnlyIsCorrect = map[string]string{
 // name WAS their primary key; epic #262 gave each a uuid key and a renameable
 // name, so they moved into referenceFields and now carry both like any reference.
 // What remains is a set of row ids that address rows with no separate name of
-// their own (an alarm, an event, an audit row, a rule, a contract line, a role,
+// their own (an alarm, an event, an audit row, a rule, a contract line, a slot,
 // a tag binding's key).
 var exemptRefs = map[string]bool{
 	"role_id": true, "alarm_id": true, "derived_by_rule_id": true,

@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// The adversarial review of the role staffing slice (#504) found each of these
+// The adversarial review of the slot staffing slice (#504) found each of these
 // by driving the real gateway against a real Postgres; each is the regression
 // for one finding.
 
@@ -54,7 +54,7 @@ func TestStaffingNeverDeadlocksALabelCascade(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
-	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.UnassignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatal(err)
 	}
 	label, err := f.conn.Begin(ctx)
@@ -67,7 +67,7 @@ func TestStaffingNeverDeadlocksALabelCascade(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		done <- f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all)
+		done <- f.gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all)
 	}()
 	waitForWaiters(t, ctx, label, 1, nil)
 	_, lerr := label.Exec(ctx, `select id from system where location_id = (select id from location where name = 'hq-r1') order by id for update`)
@@ -83,31 +83,31 @@ func TestStaffingNeverDeadlocksALabelCascade(t *testing.T) {
 	}
 }
 
-// TestRoleWithdrawalWaitsForAStandardChange: a standard change locks the
-// stranded assignments in position order, and a role withdrawal's cascade
+// TestSlotWithdrawalWaitsForAStandardChange: a standard change locks the
+// stranded assignments in position order, and a slot withdrawal's cascade
 // deletes the same rows in heap order; after a swap the two disagree. The
-// withdrawal must serialize on the role-name lock every other declaration
+// withdrawal must serialize on the slot-name lock every other declaration
 // write takes, so it waits for the change instead of deadlocking with it.
-func TestRoleWithdrawalWaitsForAStandardChange(t *testing.T) {
+func TestSlotWithdrawalWaitsForAStandardChange(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	capacity := 3
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", "health-huddle", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1, Capacity: &capacity, AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	f.mustBar(t, ctx, "bar-2")
-	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.gw.SwapPositions(ctx, "", "hq-huddle", "table-mic", 1, 2, f.all, f.all); err != nil {
 		t.Fatal(err)
 	}
-	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{Name: "other", Label: "Other", Quorum: 1})
+	f.declareSlot(t, ctx, "huddle-next", storage.SystemSlotSpec{Name: "other", Label: "Other", Quorum: 1})
 	var lowest string
-	if err := f.conn.QueryRow(ctx, `select id from system_role_assignment where position = 1`).Scan(&lowest); err != nil {
+	if err := f.conn.QueryRow(ctx, `select id from system_slot_assignment where position = 1`).Scan(&lowest); err != nil {
 		t.Fatal(err)
 	}
 	// A third transaction holds the row the change locks first (a component
@@ -117,7 +117,7 @@ func TestRoleWithdrawalWaitsForAStandardChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = z.Rollback(ctx) }()
-	if _, err := z.Exec(ctx, `select 1 from system_role_assignment where id = $1 for update`, lowest); err != nil {
+	if _, err := z.Exec(ctx, `select 1 from system_slot_assignment where id = $1 for update`, lowest); err != nil {
 		t.Fatal(err)
 	}
 	next := "huddle-next"
@@ -128,12 +128,12 @@ func TestRoleWithdrawalWaitsForAStandardChange(t *testing.T) {
 	}()
 	waitForWaiters(t, ctx, z, 1, nil)
 	withdraw := make(chan error, 1)
-	go func() { withdraw <- f.gw.DeleteSystemRole(ctx, "", "standard", "health-huddle", "table-mic") }()
+	go func() { withdraw <- f.gw.DeleteSystemSlot(ctx, "", "standard", "health-huddle", "table-mic") }()
 	waitForWaiters(t, ctx, z, 2, nil)
 	_ = z.Rollback(ctx)
 	e1, e2 := <-change, <-withdraw
 	if isDeadlock(e1) || isDeadlock(e2) {
-		t.Fatalf("a standard change and a role withdrawal deadlocked: change %v, withdrawal %v", e1, e2)
+		t.Fatalf("a standard change and a slot withdrawal deadlocked: change %v, withdrawal %v", e1, e2)
 	}
 	if e1 != nil || e2 != nil {
 		t.Fatalf("change %v, withdrawal %v", e1, e2)
@@ -150,7 +150,7 @@ func TestDeletingAStandardCannotSkipTheCarry(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
-	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{
+	f.declareSlot(t, ctx, "huddle-next", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	})
 	z, err := f.conn.Begin(ctx)
@@ -220,7 +220,7 @@ func TestUnbindingDisclosesNoUnreadableComponent(t *testing.T) {
 			return f.gw.SetPrimaryMember(ctx, "", "hq-huddle", ref, f.all, f.all, narrow, narrow)
 		}},
 		{"unassign", func(ref string) error {
-			return f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", ref, f.all, f.all, narrow, narrow)
+			return f.gw.UnassignSlot(ctx, "", "hq-huddle", "table-mic", ref, f.all, f.all, narrow, narrow)
 		}},
 	} {
 		hidden, missing := write.do("hidden-codec"), write.do("no-such-component")
@@ -240,7 +240,7 @@ func TestUnbindingDisclosesNoUnreadableComponent(t *testing.T) {
 
 // TestAnUnchangedStandardTakesNoFleetWideLock: the console resends a system's
 // standard on every save, so a save that leaves it where it is must not queue
-// behind the role-name lock every role declaration and standard change in the
+// behind the slot-name lock every slot declaration and standard change in the
 // install serializes on. The lock is held on a raw connection.
 func TestAnUnchangedStandardTakesNoFleetWideLock(t *testing.T) {
 	t.Parallel()
@@ -251,19 +251,19 @@ func TestAnUnchangedStandardTakesNoFleetWideLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = held.Rollback(ctx) }()
-	if _, err := held.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended('system_role/name', 0))`); err != nil {
+	if _, err := held.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended('system_slot/name', 0))`); err != nil {
 		t.Fatal(err)
 	}
 	quick, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	std, label := "health-huddle", "Huddle"
 	if _, err := f.gw.UpdateSystem(quick, "", "hq-huddle", storage.SystemPatch{Label: &label, StandardID: &std}, f.all, f.all); err != nil {
-		t.Fatalf("a label save resending the current standard = %v, want it served without the role-name lock", err)
+		t.Fatalf("a label save resending the current standard = %v, want it served without the slot-name lock", err)
 	}
 }
 
 // TestDeletingAStandardCannotNullANewSystem: a system created onto a standard
-// takes no role-name lock, so the delete must hold the standard's own row
+// takes no slot-name lock, so the delete must hold the standard's own row
 // across its in-use count and its delete. A create landing between the two
 // would otherwise be nulled by the foreign key, and a simulated system's
 // assignments with it, unaudited. The delete is held between the two by a raw
@@ -272,7 +272,7 @@ func TestDeletingAStandardCannotNullANewSystem(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
-	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{Name: "table-mic", Label: "Table microphone", Quorum: 1, Impact: "degraded"})
+	f.declareSlot(t, ctx, "huddle-next", storage.SystemSlotSpec{Name: "table-mic", Label: "Table microphone", Quorum: 1, Impact: "degraded"})
 	z, err := f.conn.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -305,7 +305,7 @@ func TestASaveThatRacesAStandardChangeCarriesNothing(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
-	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{
+	f.declareSlot(t, ctx, "huddle-next", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	})
 	// The change holds the system's row, its standard already moved.
@@ -333,8 +333,8 @@ func TestASaveThatRacesAStandardChangeCarriesNothing(t *testing.T) {
 	// The raw change carried nothing, so bar-1 is still on health-huddle's
 	// table-mic: a save that ran the carry itself would have moved it.
 	var standard string
-	if err := f.conn.QueryRow(ctx, `select st.name from system_role_assignment ra
-		join system_role r on r.id = ra.role_id join standard st on st.id = r.standard_id
+	if err := f.conn.QueryRow(ctx, `select st.name from system_slot_assignment ra
+		join system_slot r on r.id = ra.slot_id join standard st on st.id = r.standard_id
 		where ra.component_id = (select id from component where name = 'bar-1')`).Scan(&standard); err != nil {
 		t.Fatalf("read bar-1's assignment: %v", err)
 	}

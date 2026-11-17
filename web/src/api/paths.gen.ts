@@ -2756,32 +2756,32 @@ export interface paths {
       error: og.deleteStandardPropertyResponseError["data"];
     };
   };
-  "/standards/{id}/roles": {
+  "/standards/{id}/slots": {
     get: {
       path: { "id": string };
       query: never;
       body: never;
       bodyRequired: false;
-      data: og.listStandardRolesResponseSuccess["data"];
-      error: og.listStandardRolesResponseError["data"];
+      data: og.listStandardSlotsResponseSuccess["data"];
+      error: og.listStandardSlotsResponseError["data"];
     };
   };
-  "/standards/{id}/roles/{role}": {
+  "/standards/{id}/slots/{slot}": {
     delete: {
-      path: { "id": string; "role": string };
+      path: { "id": string; "slot": string };
       query: never;
       body: never;
       bodyRequired: false;
-      data: og.deleteStandardRoleResponseSuccess["data"];
-      error: og.deleteStandardRoleResponseError["data"];
+      data: og.deleteStandardSlotResponseSuccess["data"];
+      error: og.deleteStandardSlotResponseError["data"];
     };
     patch: {
-      path: { "id": string; "role": string };
+      path: { "id": string; "slot": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setStandardRole>[2]>;
+      body: NonNullable<Parameters<typeof og.setStandardSlot>[2]>;
       bodyRequired: true;
-      data: og.setStandardRoleResponseSuccess["data"];
-      error: og.setStandardRoleResponseError["data"];
+      data: og.setStandardSlotResponseSuccess["data"];
+      error: og.setStandardSlotResponseError["data"];
     };
   };
   "/standards/{id}:rename": {
@@ -3020,60 +3020,60 @@ export interface paths {
       error: og.listSystemPropertySeriesResponseError["data"];
     };
   };
-  "/systems/{name}/roles": {
+  "/systems/{name}/slots": {
     get: {
       path: { "name": string };
       query: never;
       body: never;
       bodyRequired: false;
-      data: og.listSystemRolesResponseSuccess["data"];
-      error: og.listSystemRolesResponseError["data"];
+      data: og.listSystemSlotsResponseSuccess["data"];
+      error: og.listSystemSlotsResponseError["data"];
     };
   };
-  "/systems/{name}/roles/{role}": {
+  "/systems/{name}/slots/{slot}": {
     delete: {
-      path: { "name": string; "role": string };
+      path: { "name": string; "slot": string };
       query: never;
       body: never;
       bodyRequired: false;
-      data: og.deleteSystemRoleResponseSuccess["data"];
-      error: og.deleteSystemRoleResponseError["data"];
+      data: og.deleteSystemSlotResponseSuccess["data"];
+      error: og.deleteSystemSlotResponseError["data"];
     };
     patch: {
-      path: { "name": string; "role": string };
+      path: { "name": string; "slot": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.setSystemRole>[2]>;
+      body: NonNullable<Parameters<typeof og.setSystemSlot>[2]>;
       bodyRequired: true;
-      data: og.setSystemRoleResponseSuccess["data"];
-      error: og.setSystemRoleResponseError["data"];
+      data: og.setSystemSlotResponseSuccess["data"];
+      error: og.setSystemSlotResponseError["data"];
     };
   };
-  "/systems/{name}/roles/{role}/assignments/{component}": {
+  "/systems/{name}/slots/{slot}/assignments/{component}": {
     put: {
-      path: { "name": string; "role": string; "component": string };
+      path: { "name": string; "slot": string; "component": string };
       query: never;
       body: never;
       bodyRequired: false;
-      data: og.assignSystemRoleResponseSuccess["data"];
-      error: og.assignSystemRoleResponseError["data"];
+      data: og.assignSystemSlotResponseSuccess["data"];
+      error: og.assignSystemSlotResponseError["data"];
     };
     delete: {
-      path: { "name": string; "role": string; "component": string };
+      path: { "name": string; "slot": string; "component": string };
       query: never;
       body: never;
       bodyRequired: false;
-      data: og.unassignSystemRoleResponseSuccess["data"];
-      error: og.unassignSystemRoleResponseError["data"];
+      data: og.unassignSystemSlotResponseSuccess["data"];
+      error: og.unassignSystemSlotResponseError["data"];
     };
   };
-  "/systems/{name}/roles/{role}:swapPositions": {
+  "/systems/{name}/slots/{slot}:swapPositions": {
     post: {
-      path: { "name": string; "role": string };
+      path: { "name": string; "slot": string };
       query: never;
-      body: NonNullable<Parameters<typeof og.swapRolePositions>[2]>;
+      body: NonNullable<Parameters<typeof og.swapSlotPositions>[2]>;
       bodyRequired: true;
-      data: og.swapRolePositionsResponseSuccess["data"];
-      error: og.swapRolePositionsResponseError["data"];
+      data: og.swapSlotPositionsResponseSuccess["data"];
+      error: og.swapSlotPositionsResponseError["data"];
     };
   };
   "/systems/{name}:listTags": {

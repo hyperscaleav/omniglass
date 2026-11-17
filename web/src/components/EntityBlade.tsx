@@ -22,9 +22,9 @@ import { LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents, deleteComponent } from "../lib/components";
 import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
 import { componentSystems, componentSystemsKey } from "../lib/members";
-import { systemRoles, systemRolesKey, SYSTEM_ROLES_PREFIX } from "../lib/system_roles";
+import { systemSlots, systemSlotsKey, SYSTEM_SLOTS_PREFIX } from "../lib/system_slots";
 import { slotStrip } from "../lib/slot_strip";
-import { contentsOf, isRoomOf, rolesOf, systemsAtLocation } from "../lib/detail";
+import { contentsOf, isRoomOf, slotsOf, systemsAtLocation } from "../lib/detail";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
@@ -33,10 +33,10 @@ import { durationText } from "../lib/timeline";
 // fleet kind, and it is where an operator lands from a row. Verdict and
 // since-when lead, the active alarms say why with their severity, and the
 // context the operator came for follows: a system's location and its standard
-// and size, a component's location and the systems it serves with its role in
+// and size, a component's location and the systems it serves with its slot in
 // each, a location's systems with their verdicts. Then the form's identity,
 // placement and tags, read or edit through the blade's own footer.
-// Configuration (roles, properties, their cascade) and the depth (members,
+// Configuration (slots, properties, their cascade) and the depth (members,
 // history, vitals) are the detail view's, one Expand away. Every body
 // self-fetches by id, so any page can push any kind.
 
@@ -219,7 +219,7 @@ function ComponentBody(props: { id: string }) {
   const verdict = () => (view.data ? dotVerdict(view.data, props.id) : null);
   const scale = useSeverity();
   const active = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
-  // The systems it serves, by uuid, each with the role it fills there, the
+  // The systems it serves, by uuid, each with the slot it fills there, the
   // primary first (the read orders by name, and the primary is the one whose
   // location stands in for a component with none of its own).
   const served = createMemo(() =>
@@ -228,8 +228,8 @@ function ComponentBody(props: { id: string }) {
       .map((m) => (view.data?.systems ?? []).find((s) => s.id === m.system_id || (!m.system_id && s.name === m.system)))
       .filter((s): s is NonNullable<typeof s> => !!s),
   );
-  const roleReads = useQueries(() => ({
-    queries: served().map((s) => ({ queryKey: systemRolesKey(s.id), queryFn: () => systemRoles(s.id), staleTime: 30_000 })),
+  const slotReads = useQueries(() => ({
+    queries: served().map((s) => ({ queryKey: systemSlotsKey(s.id), queryFn: () => systemSlots(s.id), staleTime: 30_000 })),
   }));
   const primarySystem = () => served()[0];
   const locationId = () => row()?.location_id ?? primarySystem()?.location ?? null;
@@ -243,14 +243,14 @@ function ComponentBody(props: { id: string }) {
     name: () => row()?.name,
     actions: () => row()?.actions ?? [],
     remove: (id) => deleteComponent(id),
-    // A blade is page-level, so it may sit over a system workspace whose role
+    // A blade is page-level, so it may sit over a system workspace whose slot
     // cards and health read their own keys: refresh those too, or the deleted
     // component's card stays and opens a blade stuck loading.
     invalidate: () =>
       Promise.all([
         qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] }),
         qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
-        qc.invalidateQueries({ queryKey: [...SYSTEM_ROLES_PREFIX] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEM_SLOTS_PREFIX] }),
         qc.invalidateQueries({ queryKey: [...SYSTEM_HEALTH_PREFIX] }),
         qc.invalidateQueries({ queryKey: [...SYSTEM_VERDICTS_KEY] }),
       ]),
@@ -292,7 +292,7 @@ function ComponentBody(props: { id: string }) {
             {(s, i) => (
               <div class="flex flex-wrap items-center gap-2">
                 <button type="button" class="cursor-pointer hover:underline" onClick={() => blades.push({ kind: "system", id: s.id })}>{entityLabel(s)}</button>
-                <For each={roleReads[i()]?.data ? rolesOf(row()?.name ?? "", roleReads[i()]!.data!) : []}>
+                <For each={slotReads[i()]?.data ? slotsOf(row()?.name ?? "", slotReads[i()]!.data!) : []}>
                   {(r) => <span class="badge badge-ghost badge-sm">{r}</span>}
                 </For>
               </div>

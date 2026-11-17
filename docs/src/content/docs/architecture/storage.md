@@ -205,7 +205,7 @@ the two in one migration. Three buckets, never conflated:
   ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
   **The label lock comes first.** A cascade holds the `label/recompute` advisory lock and then waits
   for system rows `FOR UPDATE`, so any write that restamps a label takes that lock before anything a
-  cascade also waits on: a membership write (bind, unbind, re-default, a system's release, a role
+  cascade also waits on: a membership write (bind, unbind, re-default, a system's release, a slot
   assignment that binds a non-member) takes the label lock, then the component's membership lock, and
   only then inserts, because the insert's foreign key shares the system's row. Holding that row while
   waiting for the label lock deadlocks against every cascade (#1214).
@@ -819,7 +819,7 @@ change, since rows reference blobs by `sha256`.
 ## The standard's map
 
 A standard may carry a room-layout declaration (ADR-0128): the `map` jsonb column, one
-value holding an aspect ratio and normalized 1-based role positions, validated in Go on
+value holding an aspect ratio and normalized 1-based slot positions, validated in Go on
 write and cleared by a JSON null. Display data: nothing queries into it, every conforming
 system renders from it.
 

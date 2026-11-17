@@ -6,7 +6,7 @@ import { CALC_ALIAS_MAX, CALC_RESERVED_NAMES } from "./calc_names.gen";
 // The calc rules data layer (#999, #1018, epic #525; ADR-0147, ADR-0148): thin
 // typed wrappers over /calc-rules plus the pure core the Calc rules page reads
 // a rule through. A calc rule derives one output key on each owner it selects
-// (each component, or each system from its role-bound members) by an
+// (each component, or each system from its slot-bound members) by an
 // expression over its inputs, each bound by its alias as the list of its
 // current values. Rules read like a catalog:
 // any rule:read lists them all, with live counts over the owners the caller

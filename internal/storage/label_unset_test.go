@@ -38,9 +38,9 @@ var labelUnsetExempt = map[string]string{
 	"secret_type":      "seeded only: the boot phase upserts the shipped set and there is no create path",
 	"role":             "seeded only, same as secret_type",
 	"task":             "content-addressed and derived; its label is minted with the row, never operator-typed",
-	"role_choice":      "written as part of a role declaration, covered by the system_role prover on the same write",
-	"choice_alternate": "written inside its choice, covered by the same write as role_choice",
-	"system_role":      "written by SetStandardRole with a label the declaration carries; the arc is keyed by owner, not by a bare name",
+	"slot_choice":      "written as part of a slot declaration, covered by the system_slot prover on the same write",
+	"choice_alternate": "written inside its choice, covered by the same write as slot_choice",
+	"system_slot":      "written by SetStandardSlot with a label the declaration carries; the arc is keyed by owner, not by a bare name",
 	"human":            "keyed by username rather than name; covered by the human profile prover below",
 	"principal_group":  "covered by the group prover below, which is keyed by name like the rest",
 	// The three PENNED tables. A create with no label does not leave the column

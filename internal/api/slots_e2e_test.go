@@ -14,9 +14,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// effectiveRoleWire is one decoded resolved role: the declaration, which arc it
+// effectiveSlotWire is one decoded resolved slot: the declaration, which arc it
 // came from, and its staffing.
-type effectiveRoleWire struct {
+type effectiveSlotWire struct {
 	Name           string   `json:"name"`
 	Label          string   `json:"label"`
 	Quorum         int      `json:"quorum"`
@@ -32,30 +32,30 @@ type effectiveRoleWire struct {
 	Understaffed   int      `json:"understaffed"`
 }
 
-type systemRolesWire struct {
+type systemSlotsWire struct {
 	System string              `json:"system"`
-	Roles  []effectiveRoleWire `json:"roles"`
+	Slots  []effectiveSlotWire `json:"slots"`
 }
 
-func (w systemRolesWire) find(t *testing.T, name string) effectiveRoleWire {
+func (w systemSlotsWire) find(t *testing.T, name string) effectiveSlotWire {
 	t.Helper()
-	for _, r := range w.Roles {
+	for _, r := range w.Slots {
 		if r.Name == name {
 			return r
 		}
 	}
-	t.Fatalf("role %q not in the resolved read %+v", name, w.Roles)
-	return effectiveRoleWire{}
+	t.Fatalf("slot %q not in the resolved read %+v", name, w.Slots)
+	return effectiveSlotWire{}
 }
 
-// TestSystemRolesAPI drives the role surface over HTTP: a role declared on a
+// TestSystemSlotsAPI drives the slot surface over HTTP: a slot declared on a
 // standard resolves onto every conforming system with its staffing, a system
 // declares its own alongside it, a component whose product's component_type
 // falls within an accepted type fills it, and one that does not is refused
 // with a 422 that names both parties in operator vocabulary (the whole point
 // of the typed-slot model: a refusal an operator can act on). An out-of-scope
 // system is a non-disclosing 404. Skipped under -short.
-func TestSystemRolesAPI(t *testing.T) {
+func TestSystemSlotsAPI(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -78,7 +78,7 @@ func TestSystemRolesAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
 		"name": "acme-room", "label": "Acme Room",
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/standards/acme-room/roles/table-mic", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/standards/acme-room/slots/table-mic", map[string]any{
 		"label": "Table Microphone", "quorum": 2,
 		"accepted_types": []string{"video-bar"},
 	}, http.StatusOK)
@@ -86,59 +86,59 @@ func TestSystemRolesAPI(t *testing.T) {
 		"name": "acme-1", "standard_id": "acme-room",
 	}, http.StatusCreated)
 
-	// The declaration read on the standard is the standard's own roles.
+	// The declaration read on the standard is the standard's own slots.
 	var declared struct {
-		Roles []struct {
+		Slots []struct {
 			Name          string   `json:"name"`
 			Label         string   `json:"label"`
 			Quorum        int      `json:"quorum"`
 			AcceptedTypes []string `json:"accepted_types"`
-		} `json:"roles"`
+		} `json:"slots"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/roles", nil, http.StatusOK), &declared); err != nil {
-		t.Fatalf("decode standard roles: %v", err)
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/acme-room/slots", nil, http.StatusOK), &declared); err != nil {
+		t.Fatalf("decode standard slots: %v", err)
 	}
-	if len(declared.Roles) != 1 || declared.Roles[0].Name != "table-mic" ||
-		declared.Roles[0].Quorum != 2 || len(declared.Roles[0].AcceptedTypes) != 1 || declared.Roles[0].AcceptedTypes[0] != "video-bar" {
-		t.Fatalf("standard roles = %+v, want one table-mic wanting two, accepting video-bar", declared.Roles)
+	if len(declared.Slots) != 1 || declared.Slots[0].Name != "table-mic" ||
+		declared.Slots[0].Quorum != 2 || len(declared.Slots[0].AcceptedTypes) != 1 || declared.Slots[0].AcceptedTypes[0] != "video-bar" {
+		t.Fatalf("standard slots = %+v, want one table-mic wanting two, accepting video-bar", declared.Slots)
 	}
 
-	read := func(tok, name string) systemRolesWire {
+	read := func(tok, name string) systemSlotsWire {
 		t.Helper()
-		var w systemRolesWire
-		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/systems/"+name+"/roles", nil, http.StatusOK), &w); err != nil {
-			t.Fatalf("decode system roles: %v", err)
+		var w systemSlotsWire
+		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/systems/"+name+"/slots", nil, http.StatusOK), &w); err != nil {
+			t.Fatalf("decode system slots: %v", err)
 		}
 		return w
 	}
 
 	// The system inherits it, unstaffed: the read says how short it is.
 	got := read(ownerTok, "acme-1")
-	if got.System != "acme-1" || len(got.Roles) != 1 {
-		t.Fatalf("resolved read = %+v, want acme-1 with the one inherited role", got)
+	if got.System != "acme-1" || len(got.Slots) != 1 {
+		t.Fatalf("resolved read = %+v, want acme-1 with the one inherited slot", got)
 	}
 	mic := got.find(t, "table-mic")
 	if !mic.FromStandard || mic.Quorum != 2 || mic.Assigned != 0 || mic.Understaffed != 2 {
 		t.Fatalf("inherited table-mic = %+v, want from-standard, quorum 2, two short", mic)
 	}
 
-	// An ad-hoc role declared straight on the system sits beside the inherited
+	// An ad-hoc slot declared straight on the system sits beside the inherited
 	// one, marked as not coming from the standard.
-	c.do(ownerTok, http.MethodPatch, "/systems/acme-1/roles/wall-display", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/systems/acme-1/slots/wall-display", map[string]any{
 		"label": "Wall Display", "accepted_types": []string{"display"},
 	}, http.StatusOK)
 	got = read(ownerTok, "acme-1")
-	if len(got.Roles) != 2 {
-		t.Fatalf("resolved read = %+v, want the inherited role plus the ad-hoc one", got.Roles)
+	if len(got.Slots) != 2 {
+		t.Fatalf("resolved read = %+v, want the inherited slot plus the ad-hoc one", got.Slots)
 	}
 	if disp := got.find(t, "wall-display"); disp.FromStandard || disp.Quorum != 1 {
 		t.Fatalf("wall-display = %+v, want ad-hoc with the default quorum of one", disp)
 	}
 
-	// A product classified video-bar, so it fills the mic role.
+	// A product classified video-bar, so it fills the mic slot.
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-1", "product": bar}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/bar-1", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPut, "/systems/acme-1/slots/table-mic/assignments/bar-1", nil, http.StatusNoContent)
 	mic = read(ownerTok, "acme-1").find(t, "table-mic")
 	if mic.Assigned != 1 || mic.Understaffed != 1 || len(mic.AssignedTo) != 1 || mic.AssignedTo[0] != "bar-1" {
 		t.Fatalf("after one assignment: %+v, want bar-1 filling it and still one short", mic)
@@ -150,8 +150,8 @@ func TestSystemRolesAPI(t *testing.T) {
 	// worked example, up to the specific names).
 	disp := storagetest.MintProduct(t, ctx, gw, "display")
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-1", "product": disp.Name}, http.StatusCreated)
-	body := c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/panel-1", nil, http.StatusUnprocessableEntity)
-	const wantDetail = `component "panel-1" is a display; role "Table Microphone" wants a video-bar`
+	body := c.do(ownerTok, http.MethodPut, "/systems/acme-1/slots/table-mic/assignments/panel-1", nil, http.StatusUnprocessableEntity)
+	const wantDetail = `component "panel-1" is a display; slot "Table Microphone" wants a video-bar`
 	var problem struct {
 		Detail string `json:"detail"`
 	}
@@ -164,39 +164,39 @@ func TestSystemRolesAPI(t *testing.T) {
 
 	// A second video-bar reaches quorum.
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-2", "product": bar}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/bar-2", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPut, "/systems/acme-1/slots/table-mic/assignments/bar-2", nil, http.StatusNoContent)
 	mic = read(ownerTok, "acme-1").find(t, "table-mic")
 	if mic.Assigned != 2 || mic.Understaffed != 0 {
 		t.Fatalf("after staffing to quorum: %+v, want two assigned and no shortfall", mic)
 	}
 
-	// Unassigning leaves the role short again; unassigning twice is an explicit
+	// Unassigning leaves the slot short again; unassigning twice is an explicit
 	// miss.
-	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/table-mic/assignments/bar-2", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/slots/table-mic/assignments/bar-2", nil, http.StatusNoContent)
 	if mic = read(ownerTok, "acme-1").find(t, "table-mic"); mic.Assigned != 1 || mic.Understaffed != 1 {
 		t.Fatalf("after unassign: %+v, want one assigned and one short", mic)
 	}
-	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/table-mic/assignments/bar-2", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/slots/table-mic/assignments/bar-2", nil, http.StatusNotFound)
 
-	// A role nobody declared is a request fault rather than a 500.
-	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/no-such-role/assignments/bar-1", nil, http.StatusNotFound)
+	// A slot nobody declared is a request fault rather than a 500.
+	c.do(ownerTok, http.MethodPut, "/systems/acme-1/slots/no-such-slot/assignments/bar-1", nil, http.StatusNotFound)
 
-	// Withdrawing the ad-hoc role removes it from the resolved read; withdrawing
+	// Withdrawing the ad-hoc slot removes it from the resolved read; withdrawing
 	// it twice is an explicit miss.
-	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/wall-display", nil, http.StatusNoContent)
-	if got = read(ownerTok, "acme-1"); len(got.Roles) != 1 {
-		t.Fatalf("after withdrawing the ad-hoc role: %+v, want only the inherited one", got.Roles)
+	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/slots/wall-display", nil, http.StatusNoContent)
+	if got = read(ownerTok, "acme-1"); len(got.Slots) != 1 {
+		t.Fatalf("after withdrawing the ad-hoc slot: %+v, want only the inherited one", got.Slots)
 	}
-	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/roles/wall-display", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodDelete, "/systems/acme-1/slots/wall-display", nil, http.StatusNotFound)
 
-	// Withdrawing the standard's role takes it off every conforming system, and
+	// Withdrawing the standard's slot takes it off every conforming system, and
 	// the assignments to it go with it.
-	c.do(ownerTok, http.MethodDelete, "/standards/acme-room/roles/table-mic", nil, http.StatusNoContent)
-	if got = read(ownerTok, "acme-1"); len(got.Roles) != 0 {
-		t.Fatalf("after withdrawing the standard's role: %+v, want none left", got.Roles)
+	c.do(ownerTok, http.MethodDelete, "/standards/acme-room/slots/table-mic", nil, http.StatusNoContent)
+	if got = read(ownerTok, "acme-1"); len(got.Slots) != 0 {
+		t.Fatalf("after withdrawing the standard's slot: %+v, want none left", got.Slots)
 	}
 
-	// A viewer scoped to another system reads its own roles but gets a
+	// A viewer scoped to another system reads its own slots but gets a
 	// non-disclosing 404 on acme-1: the *:read floor passes the gate, scope
 	// injection hides it.
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "other-sys"}, http.StatusCreated)
@@ -209,19 +209,19 @@ func TestSystemRolesAPI(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select id from system where name = 'other-sys'`).Scan(&otherID); err != nil {
 		t.Fatalf("other id: %v", err)
 	}
-	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-other-roles", "viewer", "system", otherID)
-	c.do(viewerTok, http.MethodGet, "/systems/acme-1/roles", nil, http.StatusNotFound)
-	c.do(viewerTok, http.MethodGet, "/systems/other-sys/roles", nil, http.StatusOK)
+	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-other-slots", "viewer", "system", otherID)
+	c.do(viewerTok, http.MethodGet, "/systems/acme-1/slots", nil, http.StatusNotFound)
+	c.do(viewerTok, http.MethodGet, "/systems/other-sys/slots", nil, http.StatusOK)
 }
 
-// TestSeededStandardTypedRoles proves the ship-with example lands through the
+// TestSeededStandardTypedSlots proves the ship-with example lands through the
 // API on the typed-slot guard (#626, rework of the former
-// TestSeededStandardRolesAPI): the meeting-room standard arrives with roles
+// TestSeededStandardSlotsAPI): the meeting-room standard arrives with slots
 // declaring accepted_types, not capabilities, so a system that conforms to it
 // shows staffing work to do the moment it is created, a display-classified
 // product can satisfy what the shipped standard asks for, and a component of
 // the wrong type is refused.
-func TestSeededStandardTypedRoles(t *testing.T) {
+func TestSeededStandardTypedSlots(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -242,12 +242,12 @@ func TestSeededStandardTypedRoles(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{
 		"name": "seeded-room", "standard_id": "meeting-room",
 	}, http.StatusCreated)
-	var w systemRolesWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/seeded-room/roles", nil, http.StatusOK), &w); err != nil {
-		t.Fatalf("decode system roles: %v", err)
+	var w systemSlotsWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/seeded-room/slots", nil, http.StatusOK), &w); err != nil {
+		t.Fatalf("decode system slots: %v", err)
 	}
-	if len(w.Roles) != 4 {
-		t.Fatalf("seeded meeting-room roles = %+v, want the four the standard ships (#802)", w.Roles)
+	if len(w.Slots) != 4 {
+		t.Fatalf("seeded meeting-room slots = %+v, want the four the standard ships (#802)", w.Slots)
 	}
 	bar := w.find(t, "video-bar")
 	if !bar.FromStandard || bar.Quorum != 1 || bar.Understaffed != 1 || !hasAllString(bar.AcceptedTypes, "video-bar") {
@@ -257,16 +257,16 @@ func TestSeededStandardTypedRoles(t *testing.T) {
 		t.Fatalf("seeded main-display = %+v, want accepting display", disp)
 	}
 
-	// A product classified display fills the display role without any
+	// A product classified display fills the display slot without any
 	// hand-declaration: the typed slot matches on the classification alone.
 	disp := storagetest.MintProduct(t, ctx, gw, "display")
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "qm-1", "product": disp.Name}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/roles/main-display/assignments/qm-1", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/slots/main-display/assignments/qm-1", nil, http.StatusNoContent)
 
 	// A touch panel is not a display: refused.
 	panel := storagetest.MintProduct(t, ctx, gw, "touch-panel")
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-9", "product": panel.Name}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/roles/main-display/assignments/panel-9", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/slots/main-display/assignments/panel-9", nil, http.StatusUnprocessableEntity)
 }
 
 // TestSwapPositionsAndCapacityRefusalsAPI drives the #626 position and
@@ -294,26 +294,26 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "swap-api-sys"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/roles/table-mic", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/slots/table-mic", map[string]any{
 		"label": "Table Mic", "quorum": 2, "accepted_types": []string{"video-bar"},
 	}, http.StatusOK)
 	// No accepted_types: main-display takes any type, so the double-staffing
 	// refusal below is isolated from the typed-slot guard.
-	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/roles/main-display", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/slots/main-display", map[string]any{
 		"label": "Main Display",
 	}, http.StatusOK)
 
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "zeta", "product": bar}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "alpha", "product": bar}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic/assignments/zeta", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic/assignments/alpha", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/slots/table-mic/assignments/zeta", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/slots/table-mic/assignments/alpha", nil, http.StatusNoContent)
 
-	read := func() systemRolesWire {
+	read := func() systemSlotsWire {
 		t.Helper()
-		var w systemRolesWire
-		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/swap-api-sys/roles", nil, http.StatusOK), &w); err != nil {
-			t.Fatalf("decode system roles: %v", err)
+		var w systemSlotsWire
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/swap-api-sys/slots", nil, http.StatusOK), &w); err != nil {
+			t.Fatalf("decode system slots: %v", err)
 		}
 		return w
 	}
@@ -321,15 +321,15 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 		t.Fatalf("assigned_to before swap = %v, want [zeta alpha] (assignment order)", got)
 	}
 
-	c.do(ownerTok, http.MethodPost, "/systems/swap-api-sys/roles/table-mic:swapPositions",
+	c.do(ownerTok, http.MethodPost, "/systems/swap-api-sys/slots/table-mic:swapPositions",
 		map[string]any{"position": 1, "with": 2}, http.StatusNoContent)
 	if got := read().find(t, "table-mic").AssignedTo; got[0] != "alpha" || got[1] != "zeta" {
 		t.Fatalf("assigned_to after swap = %v, want [alpha zeta]", got)
 	}
 
-	// A component already filling one role is refused (409, names both
+	// A component already filling one slot is refused (409, names both
 	// parties) when assigned to a second in the same system.
-	body := c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/main-display/assignments/zeta", nil, http.StatusConflict)
+	body := c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/slots/main-display/assignments/zeta", nil, http.StatusConflict)
 	var problem struct {
 		Detail string `json:"detail"`
 	}
@@ -340,10 +340,10 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 		t.Fatalf("double-staffing refusal detail = %q, want it to name zeta and Table Mic", problem.Detail)
 	}
 
-	// A capacity below the role's own quorum is a 422 (the declaration alone
+	// A capacity below the slot's own quorum is a 422 (the declaration alone
 	// is invalid, independent of any other row): main-display has nobody
 	// assigned yet, so this cannot also trip the below-assigned-count check.
-	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/roles/main-display", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/slots/main-display", map[string]any{
 		"label": "Main Display", "quorum": 2, "accepted_types": []string{"display"}, "capacity": 1,
 	}, http.StatusUnprocessableEntity)
 
@@ -353,14 +353,14 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 	// the proposed capacity of 2 clears "at least quorum" and fails only on
 	// the assigned count.
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "gamma", "product": bar}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic/assignments/gamma", nil, http.StatusNoContent)
-	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/roles/table-mic", map[string]any{
+	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/slots/table-mic/assignments/gamma", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/slots/table-mic", map[string]any{
 		"label": "Table Mic", "quorum": 2, "accepted_types": []string{"video-bar"}, "capacity": 2,
 	}, http.StatusConflict)
 }
 
-// TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope closes a gap Task
-// 10's round 4 left: requireSystemInScope (roles.go) resolves its reference
+// TestSetSystemSlotResolvesAmbiguousNameWithinCallerScope closes a gap Task
+// 10's round 4 left: requireSystemInScope (slots.go) resolves its reference
 // through gw.GetSystem, which after #627 can return storage.ErrAmbiguousName
 // the moment two systems share a name, and that round added no test for it,
 // because the behaviour-changing case needs the real migrated schema (a
@@ -375,7 +375,7 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 // scoped deploy principal succeeds, and the all-scoped owner (who can see
 // both "seat-1" rows) is refused with a 409, not a silent pick of either row
 // and not a 500. Skipped under -short.
-func TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
+func TestSetSystemSlotResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -409,12 +409,12 @@ func TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
 	// Within scope-av's subtree, "seat-1" is unique (the other row sits
 	// entirely outside it), so the scoped caller's declare succeeds even
 	// though the bare name is ambiguous fleet-wide.
-	c.do(deployTok, http.MethodPatch, "/systems/seat-1/roles/table-mic", map[string]any{
+	c.do(deployTok, http.MethodPatch, "/systems/seat-1/slots/table-mic", map[string]any{
 		"label": "Table Mic", "quorum": 1,
 	}, http.StatusOK)
 
 	// The all-scoped owner, who CAN see both rows, is genuinely ambiguous.
-	status, body := c.send(ownerTok, http.MethodPatch, "/systems/seat-1/roles/table-mic", map[string]any{
+	status, body := c.send(ownerTok, http.MethodPatch, "/systems/seat-1/slots/table-mic", map[string]any{
 		"label": "Table Mic", "quorum": 1,
 	})
 	if status != http.StatusNotFound {

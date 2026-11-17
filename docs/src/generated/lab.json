@@ -66,9 +66,9 @@
   ],
   "walkthroughs": [
     {
-      "id": "declare-a-first-role",
-      "title": "Declare a first role",
-      "description": "Give a one-off system its first role from the console, name it, say what it accepts, and see the slot it opens.",
+      "id": "declare-a-first-slot",
+      "title": "Declare a first slot",
+      "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",
       "setup": [
         "omniglass system create --label \"Lectern cart\" --location media-lab --name lectern-cart"
       ]

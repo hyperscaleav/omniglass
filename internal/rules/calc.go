@@ -251,7 +251,7 @@ func sampleType(valueType string) reflect.Type {
 // type (#1018), or, for a windowed input, the list of its samples in the
 // window, one record each (#1142): on a component owner one per instance (the named instances,
 // the aggregate instance ” only when it is the key's one, a stale one left
-// out), on a system owner every role-bound member's, in member order. A
+// out), on a system owner every slot-bound member's, in member order. A
 // system owner also binds members, one record per member. It yields the
 // output key's type.
 func CalcEnv(ownerKind string, inputs []TypedInput, output string) (expression.Env, error) {
@@ -297,7 +297,7 @@ func calcEnv(ownerKind string, inputs []TypedInput, output string) (expression.E
 }
 
 // systemEnvType is a system expression's environment: each input's list
-// (lists), then members, one record per role-bound member in a stable order
+// (lists), then members, one record per slot-bound member in a stable order
 // (name, then id), each with the member's id and name, its own value of each
 // input under value (its aggregate instance's), and whether it holds one
 // under has. One record per member keeps a member's inputs together, which
@@ -319,7 +319,7 @@ func systemEnvType(inputs []TypedInput, lists []reflect.StructField) reflect.Typ
 		{Name: "Has", Type: reflect.StructOf(has), Tag: `expr:"has" doc:"Whether the member holds its own value of each input, by its alias"`},
 	})
 	return reflect.StructOf(append(slices.Clone(lists), reflect.StructField{Name: "Members", Type: reflect.SliceOf(member),
-		Tag: `expr:"members" doc:"The system's role-bound members, one record each, by name then id"`}))
+		Tag: `expr:"members" doc:"The system's slot-bound members, one record each, by name then id"`}))
 }
 
 // CompileCalc checks a rule's reduce against its owner kind, its inputs and

@@ -28,7 +28,7 @@ import (
 // root: the seeded type catalog allows a building at root, which is what lets
 // the fixture prove the canvas needs no fixed campus/building/floor/room ladder.
 //
-// bar-1 fills a role in hq-huddle and is ALSO a member of depot-huddle, which
+// bar-1 fills a slot in hq-huddle and is ALSO a member of depot-huddle, which
 // is what the shared-dot rules are read against.
 type fleetFixture struct {
 	gw  *storage.PG
@@ -75,18 +75,18 @@ func newFleetFixture(t *testing.T) *fleetFixture {
 			t.Fatalf("create system %s: %v", s.name, err)
 		}
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "fleet-huddle", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "fleet-huddle", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	// The same physical box also serves the depot room. This is the case the dot

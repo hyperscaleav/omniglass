@@ -71,7 +71,7 @@ terms:
     nav: /system-types
   - word: standard
     plural: standards
-    definition: The contract a system is built to, declaring the roles it fills and the properties every conforming system exposes.
+    definition: The contract a system is built to, declaring the slots it fills and the properties every conforming system exposes.
     audience: admin
     collection: standards
     schema: StandardBody
@@ -83,6 +83,18 @@ terms:
         pattern: '(?i)\bblueprints?\b'
         origin: ADR-2033
         replacement: the contract a system is built to (a standard)
+  - word: system slot
+    plural: system slots
+    definition: A position in a system a component fills, such as a main display or a table microphone, with how many it wants and what losing it means.
+    audience: admin
+    retired:
+      # Banned in the spellings that carry the system sense (the noun, the tables, the Go types,
+      # the routes, the $role accessor, the CLI subgroup), not as a bare word: role keeps its IAM
+      # sense (the operator role, /roles, role:read) and HTML keeps its role attribute.
+      - word: system role
+        pattern: '(?i)system[ _-]?roles?|\$role\b|/(?:systems|standards)/\{[^}/]*\}/roles\b|\brole[_ ](?:choices?|assignments?)(?:\b|_)|\beffective[ _-]?roles?\b'
+        origin: ADR-2032
+        replacement: system slot, or slot with the system in view (system_slot, /systems/{name}/slots, $slot, omniglass system slot)
   - word: component
     plural: components
     definition: One managed device or service, an instance of a product, placed at a location and usually a member of a system.

@@ -14,9 +14,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// declaredRoleWire is one role as its OWNER declares it: the write's echo and
+// declaredSlotWire is one slot as its OWNER declares it: the write's echo and
 // the standard-arc read, which is where a caller confirms what actually landed.
-type declaredRoleWire struct {
+type declaredSlotWire struct {
 	Name           string   `json:"name"`
 	Label          string   `json:"label"`
 	Quorum         int      `json:"quorum"`
@@ -28,9 +28,9 @@ type declaredRoleWire struct {
 	Alternate      string   `json:"alternate"`
 }
 
-// roleMaskFixture stands up an owner-token client over a standard that declares
-// one fully specified role, the shape every case below patches.
-func roleMaskFixture(t *testing.T) (*apiClient, string, string) {
+// slotMaskFixture stands up an owner-token client over a standard that declares
+// one fully specified slot, the shape every case below patches.
+func slotMaskFixture(t *testing.T) (*apiClient, string, string) {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -51,44 +51,44 @@ func roleMaskFixture(t *testing.T) (*apiClient, string, string) {
 		"name": "mask-room", "label": "Mask Room",
 	}, http.StatusCreated)
 	pinned := storagetest.MintProduct(t, ctx, gw, "display")
-	c.do(ownerTok, http.MethodPatch, "/standards/mask-room/roles/main-display", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/standards/mask-room/slots/main-display", map[string]any{
 		"label": "Main Display", "quorum": 2, "capacity": 3, "impact": "outage",
 		"position_labels": []string{"left", "right"},
 		"accepted_types":  []string{"display"}, "pinned_products": []string{pinned.Name},
 	}, http.StatusOK)
-	return c, ownerTok, "/standards/mask-room/roles/main-display"
+	return c, ownerTok, "/standards/mask-room/slots/main-display"
 }
 
-// readDeclaredRole reads the role back off the standard's declaration list,
+// readDeclaredSlot reads the slot back off the standard's declaration list,
 // which is the surface an operator confirms a write on.
-func readDeclaredRole(t *testing.T, c *apiClient, tok, name string) declaredRoleWire {
+func readDeclaredSlot(t *testing.T, c *apiClient, tok, name string) declaredSlotWire {
 	t.Helper()
 	var list struct {
-		Roles []declaredRoleWire `json:"roles"`
+		Slots []declaredSlotWire `json:"slots"`
 	}
-	if err := json.Unmarshal(c.do(tok, http.MethodGet, "/standards/mask-room/roles", nil, http.StatusOK), &list); err != nil {
-		t.Fatalf("decode standard roles: %v", err)
+	if err := json.Unmarshal(c.do(tok, http.MethodGet, "/standards/mask-room/slots", nil, http.StatusOK), &list); err != nil {
+		t.Fatalf("decode standard slots: %v", err)
 	}
-	for _, r := range list.Roles {
+	for _, r := range list.Slots {
 		if r.Name == name {
 			return r
 		}
 	}
-	t.Fatalf("role %q not in the declaration read %+v", name, list.Roles)
-	return declaredRoleWire{}
+	t.Fatalf("slot %q not in the declaration read %+v", name, list.Slots)
+	return declaredSlotWire{}
 }
 
-// TestRolePatchWithNoMaskLeavesOmittedFieldsAlone is #639 over the wire: the
+// TestSlotPatchWithNoMaskLeavesOmittedFieldsAlone is #639 over the wire: the
 // implied mask is the fields the body populated, so an edit that carries a
 // label changes a label and nothing else. Before the conversion
 // this route was a PUT that wholesale-replaced most of the row.
-func TestRolePatchWithNoMaskLeavesOmittedFieldsAlone(t *testing.T) {
+func TestSlotPatchWithNoMaskLeavesOmittedFieldsAlone(t *testing.T) {
 	t.Parallel()
-	c, tok, path := roleMaskFixture(t)
+	c, tok, path := slotMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{"label": "Main Display (renamed)"}, http.StatusOK)
 
-	got := readDeclaredRole(t, c, tok, "main-display")
+	got := readDeclaredSlot(t, c, tok, "main-display")
 	if got.Label != "Main Display (renamed)" {
 		t.Fatalf("label = %q, want the edit to take", got.Label)
 	}
@@ -103,96 +103,96 @@ func TestRolePatchWithNoMaskLeavesOmittedFieldsAlone(t *testing.T) {
 	}
 }
 
-// TestRolePatchWithAMaskClearsCapacity is #638 over the wire, the worked case
+// TestSlotPatchWithAMaskClearsCapacity is #638 over the wire, the worked case
 // the primitive exists for: capacity is an integer, so it has no empty-string
 // sentinel to clear it with, and under the implied mask alone "clear it" and
 // "leave it alone" are the same request.
-func TestRolePatchWithAMaskClearsCapacity(t *testing.T) {
+func TestSlotPatchWithAMaskClearsCapacity(t *testing.T) {
 	t.Parallel()
-	c, tok, path := roleMaskFixture(t)
+	c, tok, path := slotMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{"update_mask": []string{"capacity"}}, http.StatusOK)
 
-	got := readDeclaredRole(t, c, tok, "main-display")
+	got := readDeclaredSlot(t, c, tok, "main-display")
 	if got.Capacity != nil {
 		t.Fatalf("capacity = %v, want it cleared back to unbounded (#638)", *got.Capacity)
 	}
 	if got.Impact != "outage" || got.Quorum != 2 || got.Label != "Main Display" {
-		t.Fatalf("role after a capacity-only mask = %+v, want everything the mask does not name untouched", got)
+		t.Fatalf("slot after a capacity-only mask = %+v, want everything the mask does not name untouched", got)
 	}
 }
 
-// TestRolePatchWithAMaskClearsTheLists is the other half of the doc change the
+// TestSlotPatchWithAMaskClearsTheLists is the other half of the doc change the
 // mask forces: an empty list is not a populated field, so clearing one means
 // naming it in the mask, not sending [].
-func TestRolePatchWithAMaskClearsTheLists(t *testing.T) {
+func TestSlotPatchWithAMaskClearsTheLists(t *testing.T) {
 	t.Parallel()
-	c, tok, path := roleMaskFixture(t)
+	c, tok, path := slotMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{
 		"accepted_types": []string{}, "position_labels": []string{},
 	}, http.StatusOK)
-	if got := readDeclaredRole(t, c, tok, "main-display"); len(got.AcceptedTypes) != 1 || len(got.PositionLabels) != 2 {
-		t.Fatalf("role after sending empty lists = %+v, want them unchanged: an empty list is not populated", got)
+	if got := readDeclaredSlot(t, c, tok, "main-display"); len(got.AcceptedTypes) != 1 || len(got.PositionLabels) != 2 {
+		t.Fatalf("slot after sending empty lists = %+v, want them unchanged: an empty list is not populated", got)
 	}
 
 	c.do(tok, http.MethodPatch, path, map[string]any{
 		"update_mask": []string{"accepted_types", "position_labels"},
 	}, http.StatusOK)
-	got := readDeclaredRole(t, c, tok, "main-display")
+	got := readDeclaredSlot(t, c, tok, "main-display")
 	if len(got.AcceptedTypes) != 0 || len(got.PositionLabels) != 0 {
-		t.Fatalf("role after naming the lists in the mask = %+v, want both cleared", got)
+		t.Fatalf("slot after naming the lists in the mask = %+v, want both cleared", got)
 	}
 	if len(got.PinnedProducts) != 1 {
 		t.Fatalf("pinned_products = %v, want the set the mask never named left alone", got.PinnedProducts)
 	}
 }
 
-// TestRolePatchWithAnEmptyMaskWritesNothing pins the one place the wire can
+// TestSlotPatchWithAnEmptyMaskWritesNothing pins the one place the wire can
 // silently disagree with the primitive: "omitted" and "present but empty" are
 // different requests, and they survive the JSON decode as a nil slice and an
 // empty one. If a decoder ever collapsed the two, an empty mask would quietly
 // become the implied mask and start writing the body after all.
-func TestRolePatchWithAnEmptyMaskWritesNothing(t *testing.T) {
+func TestSlotPatchWithAnEmptyMaskWritesNothing(t *testing.T) {
 	t.Parallel()
-	c, tok, path := roleMaskFixture(t)
+	c, tok, path := slotMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{
 		"update_mask": []string{}, "label": "Ignored", "quorum": 1, "impact": "none",
 	}, http.StatusOK)
 
-	got := readDeclaredRole(t, c, tok, "main-display")
+	got := readDeclaredSlot(t, c, tok, "main-display")
 	if got.Label != "Main Display" || got.Quorum != 2 || got.Impact != "outage" {
-		t.Fatalf("role after an empty mask = %+v, want it exactly as declared: the mask named no fields", got)
+		t.Fatalf("slot after an empty mask = %+v, want it exactly as declared: the mask named no fields", got)
 	}
 }
 
-// TestRolePatchWithAStarMaskReplacesEverything proves "*" is the PUT this route
+// TestSlotPatchWithAStarMaskReplacesEverything proves "*" is the PUT this route
 // used to be: every field the body omits goes back to its default.
-func TestRolePatchWithAStarMaskReplacesEverything(t *testing.T) {
+func TestSlotPatchWithAStarMaskReplacesEverything(t *testing.T) {
 	t.Parallel()
-	c, tok, path := roleMaskFixture(t)
+	c, tok, path := slotMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{
 		"update_mask": []string{"*"}, "label": "Wiped",
 	}, http.StatusOK)
 
-	got := readDeclaredRole(t, c, tok, "main-display")
+	got := readDeclaredSlot(t, c, tok, "main-display")
 	if got.Label != "Wiped" || got.Quorum != 1 || got.Capacity != nil || got.Impact != "degraded" {
-		t.Fatalf("role after a full replacement = %+v, want every omitted field back to its default", got)
+		t.Fatalf("slot after a full replacement = %+v, want every omitted field back to its default", got)
 	}
 	if len(got.AcceptedTypes) != 0 || len(got.PinnedProducts) != 0 || len(got.PositionLabels) != 0 {
 		t.Fatalf("lists after a full replacement = %+v, want all three cleared", got)
 	}
 }
 
-// TestRolePatchRefusesAMaskItCannotHonor: a mask naming a field the resource
+// TestSlotPatchRefusesAMaskItCannotHonor: a mask naming a field the resource
 // does not patch is a 422 that names the field, never a silent no-op, because
 // a mask is the caller stating intent and a typo that succeeds is worse than
 // one that fails.
-func TestRolePatchRefusesAMaskItCannotHonor(t *testing.T) {
+func TestSlotPatchRefusesAMaskItCannotHonor(t *testing.T) {
 	t.Parallel()
-	c, tok, path := roleMaskFixture(t)
+	c, tok, path := slotMaskFixture(t)
 
 	for _, mask := range [][]string{{"colour"}, {"*", "quorum"}} {
 		status, body := c.send(tok, http.MethodPatch, path, map[string]any{"update_mask": mask})
@@ -211,18 +211,18 @@ func TestRolePatchRefusesAMaskItCannotHonor(t *testing.T) {
 	}
 
 	// The refusal is a refusal: nothing moved.
-	if got := readDeclaredRole(t, c, tok, "main-display"); got.Impact != "outage" || got.Quorum != 2 {
-		t.Fatalf("role after a refused mask = %+v, want it exactly as declared", got)
+	if got := readDeclaredSlot(t, c, tok, "main-display"); got.Impact != "outage" || got.Quorum != 2 {
+		t.Fatalf("slot after a refused mask = %+v, want it exactly as declared", got)
 	}
 }
 
-// TestRoleAlternateRoundTrips is #640: the alternate was writable and read by
-// nothing, so an operator could put a role into an alternate and had no API way
+// TestSlotAlternateRoundTrips is #640: the alternate was writable and read by
+// nothing, so an operator could put a slot into an alternate and had no API way
 // to confirm it landed, and neither the generated client nor the CLI could
-// round-trip it. Both role reads carry it now, and the write's own echo does
+// round-trip it. Both slot reads carry it now, and the write's own echo does
 // too, so the same PATCH-then-GET that confirms every other field confirms this
 // one.
-func TestRoleAlternateRoundTrips(t *testing.T) {
+func TestSlotAlternateRoundTrips(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -245,7 +245,7 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 	// with it through the audited create from a template.
 	if _, err := gw.CreateStandardFromTemplate(ctx, "", storage.StandardFromTemplate{
 		Template: "test", Name: "alt-room", Label: "Alternate Room",
-		Choices: []storage.RoleChoiceSpec{{
+		Choices: []storage.SlotChoiceSpec{{
 			Name: "conferencing", Label: "Conferencing",
 			Alternates: []storage.AlternateSpec{
 				{Name: "all-in-one", Label: "All-in-one"},
@@ -256,27 +256,27 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 		t.Fatalf("create standard with choice: %v", err)
 	}
 
-	const path = "/standards/alt-room/roles/conf-bar"
+	const path = "/standards/alt-room/slots/conf-bar"
 	readAlt := func() string {
 		t.Helper()
 		var list struct {
-			Roles []declaredRoleWire `json:"roles"`
+			Slots []declaredSlotWire `json:"slots"`
 		}
-		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/alt-room/roles", nil, http.StatusOK), &list); err != nil {
-			t.Fatalf("decode standard roles: %v", err)
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/alt-room/slots", nil, http.StatusOK), &list); err != nil {
+			t.Fatalf("decode standard slots: %v", err)
 		}
-		for _, r := range list.Roles {
+		for _, r := range list.Slots {
 			if r.Name == "conf-bar" {
 				return r.Alternate
 			}
 		}
-		t.Fatalf("conf-bar not in the declaration read %+v", list.Roles)
+		t.Fatalf("conf-bar not in the declaration read %+v", list.Slots)
 		return ""
 	}
 
 	// The write's own echo answers first: a caller does not have to re-read to
 	// see what it just joined.
-	var echo declaredRoleWire
+	var echo declaredSlotWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, path, map[string]any{
 		"label": "Conferencing Bar", "accepted_types": []string{"video-bar"},
 		"alternate": "conferencing/all-in-one",
@@ -292,9 +292,9 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 
 	// And on the resolved per-system read, where an operator actually works.
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "alt-1", "standard_id": "alt-room"}, http.StatusCreated)
-	var w systemRolesWire
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/alt-1/roles", nil, http.StatusOK), &w); err != nil {
-		t.Fatalf("decode system roles: %v", err)
+	var w systemSlotsWire
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/alt-1/slots", nil, http.StatusOK), &w); err != nil {
+		t.Fatalf("decode system slots: %v", err)
 	}
 	if got := w.find(t, "conf-bar").Alternate; got != "conferencing/all-in-one" {
 		t.Fatalf("alternate on the resolved read = %q, want conferencing/all-in-one (#640)", got)
@@ -314,7 +314,7 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 	}
 	c.do(ownerTok, http.MethodPatch, path, map[string]any{"alternate": ""}, http.StatusOK)
 	if got := readAlt(); got != "" {
-		t.Fatalf("alternate after an explicit detach = %q, want the role unconditional", got)
+		t.Fatalf("alternate after an explicit detach = %q, want the slot unconditional", got)
 	}
 
 	// And the mask reaches it like any other field: named with nothing to
@@ -326,15 +326,15 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 	}
 }
 
-// TestSystemRolePatchTakesTheSameMask pins the system arc against the standard
+// TestSystemSlotPatchTakesTheSameMask pins the system arc against the standard
 // arc: the two share a body but not a handler, so a fix to one is not a fix to
 // the other (#639 names both).
-func TestSystemRolePatchTakesTheSameMask(t *testing.T) {
+func TestSystemSlotPatchTakesTheSameMask(t *testing.T) {
 	t.Parallel()
-	c, tok, _ := roleMaskFixture(t)
+	c, tok, _ := slotMaskFixture(t)
 
 	c.do(tok, http.MethodPost, "/systems", map[string]any{"name": "mask-sys"}, http.StatusCreated)
-	const path = "/systems/mask-sys/roles/table-mic"
+	const path = "/systems/mask-sys/slots/table-mic"
 	c.do(tok, http.MethodPatch, path, map[string]any{
 		"label": "Table Mic", "quorum": 2, "capacity": 4, "impact": "outage",
 		"accepted_types": []string{"video-bar"},
@@ -343,16 +343,16 @@ func TestSystemRolePatchTakesTheSameMask(t *testing.T) {
 	c.do(tok, http.MethodPatch, path, map[string]any{"label": "Table Mic (renamed)"}, http.StatusOK)
 	c.do(tok, http.MethodPatch, path, map[string]any{"update_mask": []string{"capacity"}}, http.StatusOK)
 
-	var w systemRolesWire
-	if err := json.Unmarshal(c.do(tok, http.MethodGet, "/systems/mask-sys/roles", nil, http.StatusOK), &w); err != nil {
-		t.Fatalf("decode system roles: %v", err)
+	var w systemSlotsWire
+	if err := json.Unmarshal(c.do(tok, http.MethodGet, "/systems/mask-sys/slots", nil, http.StatusOK), &w); err != nil {
+		t.Fatalf("decode system slots: %v", err)
 	}
 	mic := w.find(t, "table-mic")
 	if mic.Capacity != nil {
 		t.Fatalf("capacity = %v, want the system arc's mask to clear it too (#638)", *mic.Capacity)
 	}
 	if mic.Impact != "outage" || mic.Quorum != 2 || mic.Label != "Table Mic (renamed)" {
-		t.Fatalf("system-declared role = %+v, want the rename kept and impact and quorum untouched (#639)", mic)
+		t.Fatalf("system-declared slot = %+v, want the rename kept and impact and quorum untouched (#639)", mic)
 	}
 	if len(mic.AcceptedTypes) != 1 || mic.AcceptedTypes[0] != "video-bar" {
 		t.Fatalf("accepted_types = %v, want the typed slot to survive both edits", mic.AcceptedTypes)

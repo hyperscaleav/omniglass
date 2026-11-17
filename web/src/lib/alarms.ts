@@ -7,10 +7,10 @@ import { compareSeverity, type SeverityLevel } from "./severity";
 //
 // An ALARM is a condition recorded on a COMPONENT, and it impairs that component's
 // own verdict wholesale (#626): any active alarm degrades it, one at an outage
-// severity level (high and above, see lib/severity) is an outage. A system role the component fills no longer counts it toward quorum
-// while it is down, so the role can drop below quorum and its impact becomes the
+// severity level (high and above, see lib/severity) is an outage. A system slot the component fills no longer counts it toward quorum
+// while it is down, so the slot can drop below quorum and its impact becomes the
 // system's verdict. That is the whole chain: alarm on a component, component down,
-// role below quorum, verdict.
+// slot below quorum, verdict.
 //
 // Clearing keeps the row: what was wrong and when it was wrong outlives the fix,
 // which is the point of the recorded history.

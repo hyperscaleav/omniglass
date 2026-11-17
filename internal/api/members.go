@@ -63,7 +63,7 @@ type listComponentMembershipsOutput struct {
 	}
 }
 
-// ErrComponentEndNeedsUpdate is the 403 a membership or role-assignment write
+// ErrComponentEndNeedsUpdate is the 403 a membership or slot-assignment write
 // returns when the caller holds no component:update at all (#510). Binding a
 // component into a system, unbinding it, re-defaulting it and staffing it all
 // write onto the component (its primary membership, its label, the system band
@@ -72,14 +72,14 @@ type listComponentMembershipsOutput struct {
 // permission, as ErrSystemBindNeedsUpdate does for the create that writes the
 // same row from the other end, because a refusal an operator cannot act on sends
 // them to an administrator with no ask.
-const ErrComponentEndNeedsUpdate = "a membership or a role assignment writes onto its component as well as its system (the component's primary membership, its label, the system band of its cascade), so it requires component:update as well as system:update. Ask for component:update over the component."
+const ErrComponentEndNeedsUpdate = "a membership or a slot assignment writes onto its component as well as its system (the component's primary membership, its label, the system band of its cascade), so it requires component:update as well as system:update. Ask for component:update over the component."
 
 // ErrComponentEndOutOfScope is the 403 for the scope half of the same gate: the
 // caller holds component:update, but not over this component. It is reached
 // only for a component the caller may read, or one already bound into a system
 // it reads (whose member list names it), so naming the scope discloses nothing
 // a GET would not.
-const ErrComponentEndOutOfScope = "this component is outside the component:update scope your grants resolve to; a membership or a role assignment writes onto its component as well as its system, so both must be in scope. Ask for a component:update grant covering it."
+const ErrComponentEndOutOfScope = "this component is outside the component:update scope your grants resolve to; a membership or a slot assignment writes onto its component as well as its system, so both must be in scope. Ask for a component:update grant covering it."
 
 // requireComponentEndPermission is the permission half of the component end
 // (#510): every route that names a component in a membership or an assignment
@@ -105,7 +105,7 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/members",
 		Summary:     "List the components in a system",
-		Description: "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemMembersInput) (*listSystemMembersOutput, error) {
 		ms, err := gw.ListMembers(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
@@ -160,7 +160,7 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/systems/{name}/members/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Take a component out of a system",
-		Description:   "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).",
+		Description:   "Unbinds this component from the system. Refused with a 409 while it still fills a slot here, since removing it would leave the system staffed by a non-member: unassign the slot first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).",
 	}, "system", "update"), "component", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
 		if err := requireComponentEndPermission(ctx, a); err != nil {
 			return nil, err
@@ -204,7 +204,7 @@ func mapMemberErr(err error) error {
 	case errors.Is(err, storage.ErrMemberNotFound):
 		return huma.Error404NotFound("component is not a member of this system")
 	case errors.Is(err, storage.ErrMemberOccupied):
-		return huma.Error409Conflict("component still fills a role in this system; unassign the role first")
+		return huma.Error409Conflict("component still fills a slot in this system; unassign the slot first")
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrComponentNotFound):

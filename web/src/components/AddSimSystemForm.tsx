@@ -22,16 +22,16 @@ import {
   validateAddSystem,
   type AddSimSystemResult,
   type AddSystemDraft,
-  type SimRoleFill,
+  type SimSlotFill,
   type SimSystemPlan,
 } from "../lib/simulation";
 
 // AddSimSystemForm (#913): the add-simulated-system form the Drawer hosts. The
 // operator picks where it is served, the standard it is built to, its type, and
 // optionally where it sits and its name; the server staffs each of the
-// standard's roles with a simulated product and creates the system and every
+// standard's slots with a simulated product and creates the system and every
 // component in one transaction. Choosing a standard reads the plan first, so
-// the operator sees what the system will hold, and which roles it will be
+// the operator sees what the system will hold, and which slots it will be
 // short, before anything is created.
 export default function AddSimSystemForm(props: { outposts: string[]; close: () => void; onAdded: (r: AddSimSystemResult) => void }) {
   const qc = useQueryClient();
@@ -114,7 +114,7 @@ export default function AddSimSystemForm(props: { outposts: string[]; close: () 
       <LoadError what="the standards" query={standards} testid="standards-error" />
       <FieldRow
         label="Standard"
-        info="The contract the system is built to. Its roles say which components a system of this standard holds and how many; each role is staffed with the first simulated product that fits it, and where the standard offers a choice, one alternate is taken."
+        info="The contract the system is built to. Its slots say which components a system of this standard holds and how many; each slot is staffed with the first simulated product that fits it, and where the standard offers a choice, one alternate is taken."
         hint={shown("standard") ?? (standards.data?.length === 0 ? "No standards yet: define one under Catalog, Standards." : undefined)}
       >
         <select class="select select-bordered w-full" aria-required="true" value={draft().standard} onChange={(e) => set("standard", e.currentTarget.value)} disabled={busy() || standards.isPending}>
@@ -181,7 +181,7 @@ function LoadError(props: { what: string; query: UseQueryResult<unknown>; testid
   );
 }
 
-// PlanPreview: what the chosen standard's system will hold, role by role, read
+// PlanPreview: what the chosen standard's system will hold, slot by slot, read
 // from the plan before anything is created.
 function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unknown; retrying: boolean; onRetry: () => void }): JSX.Element {
   const short = () => planShortfall(props.plan);
@@ -190,13 +190,13 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
       <div class="flex items-center gap-3 border-b border-base-300 px-3 py-2">
         <Eyebrow
           label="Plan"
-          hint="What the system will hold: each of the standard's roles, the simulated product it gets and how many. A short role is one no simulated product fits; the system is created without it and reads as short of quorum, the same gap a real system missing a component shows."
+          hint="What the system will hold: each of the standard's slots, the simulated product it gets and how many. A short slot is one no simulated product fits; the system is created without it and reads as short of quorum, the same gap a real system missing a component shows."
         />
         <Show when={props.plan}>
           {(p) => (
             <span class="ml-auto flex items-center gap-2 text-xs">
-              <Show when={short().roles.length > 0}>
-                <span class={PILL_WARN} data-testid="plan-short-count">{short().roles.length} short</span>
+              <Show when={short().slots.length > 0}>
+                <span class={PILL_WARN} data-testid="plan-short-count">{short().slots.length} short</span>
               </Show>
               <span class="font-data tnum font-semibold" data-testid="plan-total">{p().components}</span>
               <span class="text-base-content/60">{p().components === 1 ? "component" : "components"}</span>
@@ -220,10 +220,10 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
           <>
             <Show when={p().components === 0}>
               <div role="alert" class="alert alert-warning alert-soft m-3 text-sm" data-testid="plan-empty">
-                <span>Nothing in this standard can be simulated: no role has a simulated product that fits it.</span>
+                <span>Nothing in this standard can be simulated: no slot has a simulated product that fits it.</span>
               </div>
             </Show>
-            <table class="table table-fixed table-sm" data-testid="plan-roles" aria-label="Plan: each role, its simulated product and count">
+            <table class="table table-fixed table-sm" data-testid="plan-slots" aria-label="Plan: each slot, its simulated product and count">
               <colgroup>
                 <col style={{ width: "38%" }} />
                 <col />
@@ -231,13 +231,13 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
               </colgroup>
               <thead>
                 <tr>
-                  <th>Role</th>
+                  <th>Slot</th>
                   <th>Product</th>
                   <th class="text-right">Count</th>
                 </tr>
               </thead>
               <tbody>
-                <For each={p().roles ?? []}>{(r) => <PlanRow role={r} />}</For>
+                <For each={p().slots ?? []}>{(r) => <PlanRow slot={r} />}</For>
               </tbody>
             </table>
           </>
@@ -247,14 +247,14 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
   );
 }
 
-function PlanRow(props: { role: SimRoleFill }) {
-  const r = () => props.role;
+function PlanRow(props: { slot: SimSlotFill }) {
+  const r = () => props.slot;
   const isShort = () => !r().product || (r().missing ?? 0) > 0;
   return (
-    <tr data-testid="plan-role" data-role={r().role} data-short={isShort() ? "true" : undefined}>
+    <tr data-testid="plan-slot" data-slot={r().slot} data-short={isShort() ? "true" : undefined}>
       <td>
         <span class="flex min-w-0 flex-col">
-          <span class="truncate font-data text-xs" title={r().role}>{r().role}</span>
+          <span class="truncate font-data text-xs" title={r().slot}>{r().slot}</span>
           <Show when={r().alternate}>
             <span class="truncate font-data text-[11px] text-base-content/50" title={`Alternate taken: ${r().alternate}`}>{r().alternate}</span>
           </Show>

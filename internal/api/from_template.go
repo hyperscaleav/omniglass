@@ -20,7 +20,7 @@ import (
 // resource's create permission, and each turns the template into one plan
 // that storage.CreatePlan lands whole: every piece (a standard created from its template when
 // absent, a location, a system, a component, its endpoint, a declared value, a
-// role assignment) is the ordinary create in the caller's own scope, with its
+// slot assignment) is the ordinary create in the caller's own scope, with its
 // own audit row naming the template, in one transaction. A refused piece is
 // mapped as its own route maps it, and nothing lands.
 
@@ -98,8 +98,8 @@ func mapFromTemplateErr(err error) error {
 		return mapComponentErr(pe.Err)
 	case "endpoint":
 		return mapEndpointErr(pe.Err)
-	case "role":
-		return mapRoleErr(pe.Err)
+	case "slot":
+		return mapSlotErr(pe.Err)
 	case "property":
 		return mapComponentPropertyErr(pe.Err)
 	case "system-property":
@@ -111,7 +111,7 @@ func mapFromTemplateErr(err error) error {
 type createdComponentBody struct {
 	Component   string `json:"component" doc:"The component's name"`
 	ComponentID string `json:"component_id" doc:"The component's id, the stable address a link to it uses"`
-	Role        string `json:"role,omitempty" doc:"The role it fills in its system"`
+	Slot        string `json:"slot,omitempty" doc:"The slot it fills in its system"`
 	Product     string `json:"product" doc:"Its product"`
 	Attached    bool   `json:"attached" doc:"Whether its endpoint attached from the inputs given; false lists it as still to attach"`
 }
@@ -145,7 +145,7 @@ type createSystemFromTemplateInput struct {
 		Label    string                         `json:"label,omitempty" doc:"The system's label"`
 		Standard string                         `json:"standard,omitempty" doc:"A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name"`
 		Outpost  string                         `json:"outpost,omitempty" doc:"The outpost the endpoints are placed on; needed when any component attaches"`
-		Attach   map[string][]map[string]string `json:"attach,omitempty" doc:"Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached"`
+		Attach   map[string][]map[string]string `json:"attach,omitempty" doc:"Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached"`
 	}
 }
 
@@ -156,7 +156,7 @@ type createSystemFromTemplateOutput struct {
 		SystemID         string                 `json:"system_id" doc:"The system's id, the stable address a link to it uses"`
 		Standard         string                 `json:"standard" doc:"The standard it is built to"`
 		StandardsCreated []string               `json:"standards_created" doc:"The standards this write created from their templates (parents first); empty when you held them"`
-		Components       []createdComponentBody `json:"components" doc:"A component per role, filled to quorum and assigned"`
+		Components       []createdComponentBody `json:"components" doc:"A component per slot, filled to quorum and assigned"`
 		ToAttach         []string               `json:"to_attach" doc:"The components that landed with no endpoint, still to attach"`
 	}
 }
@@ -255,8 +255,8 @@ func registerCreateFromTemplateRoutes(api huma.API, a *authenticator, gw storage
 		Path:          "/systems:createFromTemplate",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Start a whole system from a template",
-		Description: "Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. " +
-			"Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.",
+		Description: "Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each slot filled to its quorum and assigned, and the declared values. A component whose slot you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. " +
+			"Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the slots.",
 	}, "system", "create"), "secret", "bind"), func(ctx context.Context, in *createSystemFromTemplateInput) (*createSystemFromTemplateOutput, error) {
 		t, err := cat.GetKind(in.Body.Template, template.KindSystem)
 		if err != nil {
@@ -264,9 +264,9 @@ func registerCreateFromTemplateRoutes(api huma.API, a *authenticator, gw storage
 		}
 		needs := [][2]string{{"system", "read"}, {"system", "update"}, {"component", "create"}, {"component", "update"}}
 		attach := map[string][]template.Inputs{}
-		for role, list := range in.Body.Attach {
+		for slot, list := range in.Body.Attach {
 			for _, inputs := range list {
-				attach[role] = append(attach[role], template.Inputs(inputs))
+				attach[slot] = append(attach[slot], template.Inputs(inputs))
 				if inputs[template.AddressInput] != "" && !containsNeed(needs, "endpoint", "create") {
 					needs = append(needs, [2]string{"endpoint", "create"})
 				}
@@ -296,7 +296,7 @@ func registerCreateFromTemplateRoutes(api huma.API, a *authenticator, gw storage
 		out.Body.Components, out.Body.ToAttach = []createdComponentBody{}, []string{}
 		for i, c := range made.Systems[0].Components {
 			p := sp.Pieces[i]
-			out.Body.Components = append(out.Body.Components, createdComponentBody{Component: c.Name, ComponentID: c.ID, Role: p.Role, Product: p.Product, Attached: p.Attached})
+			out.Body.Components = append(out.Body.Components, createdComponentBody{Component: c.Name, ComponentID: c.ID, Slot: p.Slot, Product: p.Product, Attached: p.Attached})
 			if !p.Attached {
 				out.Body.ToAttach = append(out.Body.ToAttach, c.Name)
 			}

@@ -406,7 +406,7 @@ func PerfPlanDigest(name string, systems int) (string, error) {
 	}
 	for _, site := range plan.Sites {
 		for _, sys := range site.Systems {
-			fmt.Fprintf(h, "%s %s %s %s %s %v %v\n", site.Name, sys.Name, sys.Standard, sys.Building, sys.Room, sys.Components, sys.Roles)
+			fmt.Fprintf(h, "%s %s %s %s %s %v %v\n", site.Name, sys.Name, sys.Standard, sys.Building, sys.Room, sys.Components, sys.Slots)
 		}
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil

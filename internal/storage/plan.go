@@ -13,13 +13,13 @@ import (
 
 // The planned create (#827, ADR-0827): the transactional half of the
 // planned-system primitive. A plan names locations, systems, the components
-// that fill each system's roles (with their endpoints and declared values)
+// that fill each system's slots (with their endpoints and declared values)
 // and standalone components, and CreatePlan lands all of it in one
 // transaction or none of it. Every piece is the ordinary create, under the
 // caller's own scope, writing its own audit row, so the composite is exactly
 // the writes an operator could make one at a time. The simulator's add
 // (CreateSimSystem) and the creates from a template are its consumers; the
-// pure half that decides what a system's roles take is internal/systemplan.
+// pure half that decides what a system's slots take is internal/systemplan.
 
 // Plan is what CreatePlan lands.
 type Plan struct {
@@ -44,7 +44,7 @@ type PlannedLocation struct {
 }
 
 // PlannedSystem is one system of a plan and the components that fill its
-// roles. LocationKey names a location of the plan to sit in, else the system's
+// slots. LocationKey names a location of the plan to sit in, else the system's
 // own LocationName is used.
 type PlannedSystem struct {
 	LocationKey string
@@ -53,12 +53,12 @@ type PlannedSystem struct {
 	Properties  []PlannedValue
 }
 
-// PlannedComponent is one component of a plan. Role is the role it is
+// PlannedComponent is one component of a plan. Slot is the slot it is
 // assigned in its system (empty for a standalone component). A component of
 // a system sits where the system sits; a standalone one where its spec says,
 // or in the location LocationKey names. Each endpoint's Component is filled in.
 type PlannedComponent struct {
-	Role        string
+	Slot        string
 	LocationKey string
 	Component   ComponentSpec
 	Endpoints   []EndpointSpec
@@ -72,7 +72,7 @@ type PlannedValue struct {
 }
 
 // PlanScopes are the caller's scopes for each kind of write a plan makes.
-// ComponentRead and ComponentUpdate are the component end of a role
+// ComponentRead and ComponentUpdate are the component end of a slot
 // assignment (#510) and the scope a declared component value is written
 // under; SystemUpdate is the scope a declared system value is written under.
 type PlanScopes struct {
@@ -92,20 +92,20 @@ var ErrPlanStandardForbidden = errors.New("storage: creating the standard from i
 
 // PlanError says which piece of a plan failed, so a caller maps the cause
 // the way that piece's own route maps it. Stage is standard, location, system,
-// component, endpoint, role, property (a component's declared value) or
-// system-property; Ref names the piece (a role, a
+// component, endpoint, slot, property (a component's declared value) or
+// system-property; Ref names the piece (a slot, a
 // location key, a standard, a property).
 type PlanError struct {
 	Stage string
-	Role  string
+	Slot  string
 	Ref   string
 	Err   error
 }
 
 func (e *PlanError) Error() string {
 	switch {
-	case e.Role != "":
-		return fmt.Sprintf("storage: plan %s for role %s: %v", e.Stage, e.Role, e.Err)
+	case e.Slot != "":
+		return fmt.Sprintf("storage: plan %s for slot %s: %v", e.Stage, e.Slot, e.Err)
 	case e.Ref != "":
 		return fmt.Sprintf("storage: plan %s %s: %v", e.Stage, e.Ref, e.Err)
 	}
@@ -131,7 +131,7 @@ type PlannedSystemResult struct {
 
 // CreatePlan lands a plan whole, in one transaction: the standards it creates from templates,
 // its locations parents first, each system then each of its components (with
-// their endpoints, their declared values and their role assignment) and the
+// their endpoints, their declared values and their slot assignment) and the
 // system's declared values, then the standalone components. Every piece is
 // the ordinary create with the caller's own scope and its own audit row, so
 // a refused piece refuses the whole plan, mapped as that piece's own route
@@ -225,9 +225,9 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 			if err != nil {
 				return nil, err
 			}
-			if pc.Role != "" {
-				if err := p.assignRoleTx(ctx, tx, actorID, sys.ID, pc.Role, c.ID, sc.SystemRead, sc.SystemUpdate, sc.ComponentRead, sc.ComponentUpdate, deferred); err != nil {
-					return nil, &PlanError{Stage: "role", Role: pc.Role, Err: err}
+			if pc.Slot != "" {
+				if err := p.assignSlotTx(ctx, tx, actorID, sys.ID, pc.Slot, c.ID, sc.SystemRead, sc.SystemUpdate, sc.ComponentRead, sc.ComponentUpdate, deferred); err != nil {
+					return nil, &PlanError{Stage: "slot", Slot: pc.Slot, Err: err}
 				}
 			}
 			res.Components = append(res.Components, c)
@@ -263,18 +263,18 @@ func (p *PG) createPlanTx(ctx context.Context, tx pgx.Tx, actorID string, plan P
 func (p *PG) createPlannedComponentTx(ctx context.Context, tx pgx.Tx, actorID string, pc PlannedComponent, sc PlanScopes) (*Component, error) {
 	c, err := p.createComponentTx(ctx, tx, actorID, pc.Component, sc.ComponentCreate, sc.LocationRead, sc.SystemRead, sc.SystemUpdate)
 	if err != nil {
-		return nil, &PlanError{Stage: "component", Role: pc.Role, Err: err}
+		return nil, &PlanError{Stage: "component", Slot: pc.Slot, Err: err}
 	}
 	for _, e := range pc.Endpoints {
 		id := c.ID
 		e.Component, e.SecretRead, e.SecretBind, e.CanAdmin = &id, sc.SecretRead, sc.SecretBind, sc.CanAdmin
 		if _, err := p.createEndpointTx(ctx, tx, actorID, e, sc.EndpointCreate); err != nil {
-			return nil, &PlanError{Stage: "endpoint", Role: pc.Role, Err: err}
+			return nil, &PlanError{Stage: "endpoint", Slot: pc.Slot, Err: err}
 		}
 	}
 	for _, v := range pc.Properties {
 		if _, err := p.setPropertyTx(ctx, tx, actorID, "component", c.ID, v.Name, "", v.Value, sc.ComponentRead, sc.ComponentUpdate); err != nil {
-			return nil, &PlanError{Stage: "property", Role: pc.Role, Ref: v.Name, Err: err}
+			return nil, &PlanError{Stage: "property", Slot: pc.Slot, Ref: v.Name, Err: err}
 		}
 	}
 	return c, nil

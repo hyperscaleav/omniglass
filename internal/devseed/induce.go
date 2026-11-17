@@ -28,7 +28,7 @@ const (
 )
 
 // Induced names what an induced seed attached: the component (its plan key,
-// system/role/n) whose endpoint answers Key through Driver.
+// system/slot/n) whose endpoint answers Key through Driver.
 type Induced struct {
 	Component, Driver, Key string
 }

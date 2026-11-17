@@ -82,7 +82,7 @@ a location holding none or several renders its own subject card,
   with a `SystemSummary` per system and `OutlineWorkspace` rooted at it. A component's view wears
   the `LocationCard` too, with its provenance. `DetailGate` owns the miss, pending and error-with-Retry
   states for all three. A system's components render as `MemberRows`, the outline's row idiom on
-  its own grid, a role grouped only where it says something a column cannot. There is no counts
+  its own grid, a slot grouped only where it says something a column cannot. There is no counts
   line above a detail view: the subject card's header carries its facts. A list whose items hold
   their own queries iterates stable ids, never the objects a fresh read hands back: iterating
   objects rebuilt each card on every read, and each rebuilt card refetched, a request storm.
@@ -93,7 +93,7 @@ a location holding none or several renders its own subject card,
   (`lib/detail.ts` `isRoomOf`), so its `LocationCard` names no location and offers no second panel, and a
   component in such a room shows no location card beside the system it serves. A blade has no
   breadcrumb, so its `LocationCard` takes `path` and says where the location sits. `EntityForm` with `host="blade"` leaves out the
-  kind's configuration panels (roles, properties, reconciliation, endpoints), which the detail
+  kind's configuration panels (slots, properties, reconciliation, endpoints), which the detail
   view's Configure tab carries, and a system's or component's placement, which the panel's
   location card already says.
 - **The Name column has a floor, and the card scrolls before it gives it up.** A list table is

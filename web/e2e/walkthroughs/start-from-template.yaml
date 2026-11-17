@@ -16,9 +16,9 @@ steps:
   - select: { target: 'role=combobox[name="Template"]', value: mr55-system }
     caption: Choose the Meeting Room 55 system template.
   - wait: { selector: '[data-testid="template-create-preview"]' }
-    caption: What it creates, read from the template, a component for each role of the standard it is built to.
+    caption: What it creates, read from the template, a component for each slot of the standard it is built to.
   - click: { role: button, name: Start system }
-    caption: Start it. The system, a component per role and their assignments land together, or not at all.
+    caption: Start it. The system, a component per slot and their assignments land together, or not at all.
   - wait: { selector: '[data-testid="template-notice"]' }
     caption: The new system, with its components filled. It is yours now; a release that changes the template never touches it.
     hold: 1500

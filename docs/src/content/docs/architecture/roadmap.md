@@ -29,7 +29,7 @@ per-slice detail is on [implementation status](/architecture/status/).
   with dual-actor audit; principal groups with grant-by-group; grants with scope operators; and the
   append-only [audit](/architecture/audit/) trail with its admin read surface.
 - **The fleet and its catalogs.** The `location` / `system` / `component` trees on the shared
-  scoped-CRUD primitive, `system_member` multi-membership, system roles with the typed-slot assignment
+  scoped-CRUD primitive, `system_member` multi-membership, system slots with the typed-slot assignment
   guard, the standard / product / vendor / driver / component_type catalogs, and location types with
   `allowed_parent_types` placement rules.
 - **The values cascade.** [Tags](/architecture/tags/), [variables](/architecture/variables/),
@@ -72,7 +72,7 @@ authoritative.
 
 | Epic | Outcome | Lands in |
 |---|---|---|
-| [Pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524), the event rule tier (#819), and [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603) are done: #603 closed with both its arcs (the stateless one, then held sessions, listeners, scheduled polls and re-derived tasks) and two protocol waves, and its open follow-ups (more protocols, server ingress, files, connection metrics) moved to the [collection tracker after 0.1.0 (#1187)](https://github.com/hyperscaleav/omniglass/issues/1187). What the tag still waits on is the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430), the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504), and the pre-tag hygiene the epic lists. | [collection](/architecture/collection/), [outposts](/architecture/outposts/) |
+| [Pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524), the event rule tier (#819), and [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603) are done: #603 closed with both its arcs (the stateless one, then held sessions, listeners, scheduled polls and re-derived tasks) and two protocol waves, and its open follow-ups (more protocols, server ingress, files, connection metrics) moved to the [collection tracker after 0.1.0 (#1187)](https://github.com/hyperscaleav/omniglass/issues/1187). What the tag still waits on is the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430), the [slot staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504), and the pre-tag hygiene the epic lists. | [collection](/architecture/collection/), [outposts](/architecture/outposts/) |
 | [Groups as scope and the cross-tier cascade (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
 | [Public releases (#57)](https://github.com/hyperscaleav/omniglass/issues/57) | Ahead: signed and notarized binaries for every major OS/arch and one-line installs (Homebrew / Scoop / winget), so a first-time user runs with no security warning. | [scaling and deployment](/architecture/scaling/) |
 | [Embedded Postgres run mode (#19)](https://github.com/hyperscaleav/omniglass/issues/19) | Ahead: an opt-in single-binary mode with a managed embedded Postgres, for edge, demo, and learning installs with zero external database. | [scaling and deployment](/architecture/scaling/) |
@@ -115,7 +115,7 @@ that describes the target:
    location and component templates an operator starts from, #827) landed.
 3. **Detection and verdict.** [Events](/architecture/events/) shipped (their catalog, sink, and
    lineage columns), as did [commands](/architecture/commands/) with settlement, and the **verdict half
-   has landed**: an alarm impairs a component's own verdict, an impaired role sinks its system by its
+   has landed**: an alarm impairs a component's own verdict, an impaired slot sinks its system by its
    impact, and the transitions record when it changed. What **produces** an alarm has landed too: the
    `event_rule` tier raises and clears alarms at a severity level, and component
    [calc rules](/architecture/calculations/) derive the samples rules judge. What remains is what

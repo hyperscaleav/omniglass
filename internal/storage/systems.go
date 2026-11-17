@@ -73,7 +73,7 @@ type Standard struct {
 	// chain, and then to the global tier.
 	LabelRule *string
 	// Map is the standard's room-layout declaration (#791, ADR-0128), the raw
-	// jsonb value ({aspect, positions:[{role, position, x, y}]}); nil when the
+	// jsonb value ({aspect, positions:[{slot, position, x, y}]}); nil when the
 	// standard declares none. Display data: nothing queries into it.
 	Map json.RawMessage
 }
@@ -83,13 +83,13 @@ type Standard struct {
 type StandardMap struct {
 	// Aspect is width over height of the room's drawing space.
 	Aspect float64 `json:"aspect"`
-	// Positions place each role position in normalized space: x and y in
+	// Positions place each slot position in normalized space: x and y in
 	// [0, 1], position 1-based (matching position_labels).
 	Positions []StandardMapPosition `json:"positions"`
 }
 
 type StandardMapPosition struct {
-	Role     string  `json:"role"`
+	Slot     string  `json:"slot"`
 	Position int     `json:"position"`
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
@@ -97,7 +97,7 @@ type StandardMapPosition struct {
 
 // ErrStandardMapInvalid is a map declaration that fails validation: a
 // non-positive aspect, a coordinate outside [0, 1], a position below 1, or a
-// duplicate (role, position) pair.
+// duplicate (slot, position) pair.
 var ErrStandardMapInvalid = errors.New("storage: standard map invalid")
 
 // ValidateStandardMap is validateStandardMap for a caller outside storage:
@@ -119,10 +119,10 @@ func validateStandardMap(raw json.RawMessage) error {
 	}
 	seen := map[string]bool{}
 	for _, pos := range m.Positions {
-		if pos.Role == "" || pos.Position < 1 || pos.X < 0 || pos.X > 1 || pos.Y < 0 || pos.Y > 1 {
-			return fmt.Errorf("%w: position %s/%d out of bounds", ErrStandardMapInvalid, pos.Role, pos.Position)
+		if pos.Slot == "" || pos.Position < 1 || pos.X < 0 || pos.X > 1 || pos.Y < 0 || pos.Y > 1 {
+			return fmt.Errorf("%w: position %s/%d out of bounds", ErrStandardMapInvalid, pos.Slot, pos.Position)
 		}
-		key := fmt.Sprintf("%s/%d", pos.Role, pos.Position)
+		key := fmt.Sprintf("%s/%d", pos.Slot, pos.Position)
 		if seen[key] {
 			return fmt.Errorf("%w: duplicate position %s", ErrStandardMapInvalid, key)
 		}
@@ -479,14 +479,14 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 // The in-use count and the delete are compare-then-act, and a system moved or
 // created onto this standard between them would be nulled by the foreign key: a
 // standard change that skips the carry, its audit and its health recompute
-// (#506). So the delete takes the role-name lock first, as every write that
-// changes which roles a system has does, and then the standard's own row for
+// (#506). So the delete takes the slot-name lock first, as every write that
+// changes which slots a system has does, and then the standard's own row for
 // update before it counts: a standard change waits on the first, and a create's
 // foreign-key check on the second, so the delete either sees the system that
 // landed and refuses, or runs first and the write onto it fails cleanly.
 func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 	lock := func(ctx context.Context, q txQuerier) error {
-		if err := lockRoleNames(ctx, q); err != nil {
+		if err := lockSlotNames(ctx, q); err != nil {
 			return err
 		}
 		if _, err := q.Exec(ctx, `select 1 from standard where id = (select r.id from `+refRows("standard", id)+` r where r.`+catalogRefCol(id)+` = $1) for update`, id); err != nil {
@@ -798,7 +798,7 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 	if err := writeAuditRes(ctx, tx, actorID, "create", "system", s.ID, nil, s); err != nil {
 		return nil, err
 	}
-	// A system inherits its standard's roles the instant it exists, and nobody is
+	// A system inherits its standard's slots the instant it exists, and nobody is
 	// assigned yet, so it is usually born impaired. Recording the opening verdict is
 	// what gives its history a defined beginning: without it the first edge would be
 	// whatever a later write happened to notice.
@@ -811,7 +811,7 @@ func (p *PG) createSystemTx(ctx context.Context, tx pgx.Tx, actorID string, spec
 	// for a create that has nothing ambiguous about it: the row it means is
 	// the one it is holding.
 	// A system born into a rule's selector: its calc rules compute on the next
-	// tick (over no members until roles are staffed).
+	// tick (over no members until slots are staffed).
 	if err := markSystemCalcRules(ctx, tx, s.ID); err != nil {
 		return nil, err
 	}
@@ -843,10 +843,10 @@ func (p *PG) systemIsDescendant(ctx context.Context, q querier, targetID, candid
 
 // UpdateSystem patches a system by name with the three-way scope split and
 // in-transaction audit, recomputing health when the standard moved (it swaps
-// the whole inherited role set, so the verdict can flip in either direction).
-// A standard move is refused when the new standard declares a role name the
+// the whole inherited slot set, so the verdict can flip in either direction).
+// A standard move is refused when the new standard declares a slot name the
 // system declares itself (ADR-0503), and carries the system's staffing onto
-// the new standard's roles of the same names, releasing the rest (ADR-0506).
+// the new standard's slots of the same names, releasing the rest (ADR-0506).
 //
 // Placement (a relocate or a reparent) is NOT here (#627 Task 13): it is its
 // own act, MoveSystem, gated by system:move. See that function's doc comment,
@@ -870,8 +870,8 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// names but does not move is treated as omitted: the edit takes no lock
 	// for it, carries nothing, and never reverts a change a concurrent write
 	// made in the meantime. Only an actual move takes the locks a standard
-	// change needs, first (the reads above take none): the role-name lock
-	// (#503: it swaps the system's inherited roles, so it is a write a
+	// change needs, first (the reads above take none): the slot-name lock
+	// (#503: it swaps the system's inherited slots, so it is a write a
 	// collision can come from) and the system's staffing lock exclusive
 	// (#506: no staffing write is mid-flight while its staffing is carried).
 	// Under them nothing else can move the standard, so the before-image and
@@ -888,7 +888,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// and recomputed.
 	standardMoves := false
 	if patch.StandardID != nil {
-		if err := lockRoleNames(ctx, tx); err != nil {
+		if err := lockSlotNames(ctx, tx); err != nil {
 			return nil, err
 		}
 		if err := lockSystemStandardChange(ctx, tx, before.ID); err != nil {
@@ -906,7 +906,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		standardMoves = patch.StandardID != nil
 	}
 	// Moving onto a standard that declares a name the system declares itself
-	// would make the name mean two roles here (#503, ADR-0503). Judged only on
+	// would make the name mean two slots here (#503, ADR-0503). Judged only on
 	// an actual move, so an unrelated edit that resends the current standard
 	// is never refused over a collision written before the rule.
 	if standardPatchID != nil {
@@ -1039,8 +1039,8 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system", after.ID, before, after); err != nil {
 		return nil, err
 	}
-	// A standard move swaps the system's inherited roles, so its staffing is
-	// carried onto the roles that still exist and released from the rest
+	// A standard move swaps the system's inherited slots, so its staffing is
+	// carried onto the slots that still exist and released from the rest
 	// (#506, ADR-0506), before the recompute below reads it. The update above
 	// holds the system's row, which is what keeps a staffing write out until
 	// this commits.
@@ -1053,7 +1053,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// against the patch (a patch that sets a field to what it already held
 	// changes nothing).
 	// A retype moves the system in or out of rules' selectors, a new standard
-	// moves its roles and members: either way its calc rules recompute.
+	// moves its slots and members: either way its calc rules recompute.
 	if !sameOptional(before.SystemTypeID, after.SystemTypeID) || standardMoves {
 		if err := markSystemCalcRules(ctx, tx, after.ID); err != nil {
 			return nil, err

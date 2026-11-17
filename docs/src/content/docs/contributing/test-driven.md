@@ -199,7 +199,7 @@ The rule is enforced, not documented, in the house pattern: a guard in
 outside the designated pin files (the seed's own tests and the demo fleet's),
 reading the SKU list from the seed's own render so it can never drift from
 the catalog it protects. The pin files, in turn, derive their expectations
-(counts, role shapes, accepted types, contract defaults) from the embedded
+(counts, slot shapes, accepted types, contract defaults) from the embedded
 YAML instead of restating it. A future catalog change touches the YAML and
 the pin files, and nothing else (#804).
 

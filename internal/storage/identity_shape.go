@@ -124,15 +124,15 @@ var IdentityShapes = map[string]TableIdentity{
 	"principal_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
 	"role": {Shape: ShapeKeyBearing}, "secret": {Shape: ShapeKeyBearing},
 	"secret_type": {Shape: ShapeKeyBearing}, "standard": {Shape: ShapeKeyBearing},
-	"system": {Shape: ShapeKeyBearing}, "system_role": {Shape: ShapeKeyBearing},
+	"system": {Shape: ShapeKeyBearing}, "system_slot": {Shape: ShapeKeyBearing},
 	"tag": {Shape: ShapeKeyBearing}, "variable": {Shape: ShapeKeyBearing},
 	"vendor": {Shape: ShapeKeyBearing}, "component_type": {Shape: ShapeKeyBearing},
 	"system_type": {Shape: ShapeKeyBearing},
-	// role_choice is named the same way system_role is: within its owner
+	// slot_choice is named the same way system_slot is: within its owner
 	// arc (owner_kind, standard_id, system_id). choice_alternate is named
 	// within its choice (choice_id, name), one level narrower, the same
 	// relationship component_type's root/child split already has.
-	"role_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
+	"slot_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
 	// Keyspace: a name, on the other rule.
 	"property_type":       {Shape: ShapeKeyspace, Reason: "serial-number, a signal name referenced from drivers and templates"},
 	"metric_type":         {Shape: ShapeKeyspace, Reason: "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
@@ -206,7 +206,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"retired_sample":   {Shape: ShapeIDOnly, Reason: "a retired sample or event row kept for audit (ADR-1100), keyed by its lane and the row's own id; nothing addresses it by name"},
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
-	"system_role_assignment": {Shape: ShapeIDOnly},
+	"system_slot_assignment": {Shape: ShapeIDOnly},
 	// The one row omniglass lab writes into its own database (#1195); nobody
 	// names or addresses it.
 	"lab_mark": {Shape: ShapeIDOnly},
@@ -226,7 +226,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"unclaimed_source":     {Shape: ShapeIDOnly, Reason: "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name"},
 	"identity_binding":     {Shape: ShapeIDOnly, Reason: "a conduit's identity tied to its owner, addressed by its conduit, match key and value; nothing names it"},
 	"unbound_identity":     {Shape: ShapeIDOnly, Reason: "an identity a conduit reported that no binding places, one row per conduit, match key and value; read as the conduit's list, never addressed by name"},
-	"system_role_product":  {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
+	"system_slot_product":  {Shape: ShapeIDOnly}, "system_slot_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 	// catalog_shadow holds an operator's version of a shipped catalog row
 	// (#655, ADR-0095). Nobody names it: it is addressed by the row it shadows,
@@ -247,7 +247,7 @@ var IdentityShapes = map[string]TableIdentity{
 var KeyProvedElsewhere = map[string]string{
 	"role":             "seeded only, no create path on the gateway",
 	"secret_type":      "seeded only, no create path on the gateway",
-	"role_choice":      "seeded only, no create path on the gateway",
+	"slot_choice":      "seeded only, no create path on the gateway",
 	"choice_alternate": "seeded only, no create path on the gateway",
 	"endpoint": "the name is server-derived, not operator-typed: EndpointSpec carries no Name " +
 		"and the column is set from spec.Transport, a name the code registry already validated",

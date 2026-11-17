@@ -39,7 +39,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // product carries a kind (device/app/service; vm retired, folded into app,
 // ADR-0086), a required component_type (the device-class genus every product
 // is classified under, ADR-0085, picked from the Types tree; also what a
-// system role's typed-slot guard checks, #626), an optional icon override
+// system slot's typed-slot guard checks, #626), an optional icon override
 // (default: the type's icon), and an optional vendor and driver (picked from
 // those catalogs).
 

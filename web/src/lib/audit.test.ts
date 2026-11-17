@@ -80,8 +80,8 @@ describe("resourceLabel", () => {
     expect(resourceLabel(labelEv("alarm", { component: "disp-1", cleared_at: "now" }))).toBe("disp-1");
   });
 
-  it("labels a role assignment by the role, a grant by its role", () => {
-    expect(resourceLabel(labelEv("system_role_assignment", { system: "boardroom", role: "camera", component: "cam-1" }))).toBe("camera");
+  it("labels a slot assignment by the slot, a grant by its role", () => {
+    expect(resourceLabel(labelEv("system_slot_assignment", { system: "boardroom", slot: "camera", component: "cam-1" }))).toBe("camera");
     expect(resourceLabel(labelEv("principal_grant", { Role: "admin", ScopeKind: "all" }))).toBe("admin");
   });
 

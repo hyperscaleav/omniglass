@@ -404,7 +404,7 @@ describe("the states an operator can land in", () => {
 describe("the Detail column", () => {
   it("names the alarm behind a component's red light, matched by the component's id", async () => {
     // A health report names an alarm's component by name and by uuid (internal/api/health.go); the outline matches the uuid.
-    const report = { roles: [{ alarms: [{ id: "a1", component: "dsp-1", component_id: uuidFor("dsp-1"), severity: "high", message: "No signal on input 3" }] }] };
+    const report = { slots: [{ alarms: [{ id: "a1", component: "dsp-1", component_id: uuidFor("dsp-1"), severity: "high", message: "No signal on input 3" }] }] };
     mount("/web/explore", owner, view, false, components, (qc) => qc.setQueryData([...systemHealthKey(uuidFor("s-aud"))], report));
     await screen.findByRole("tree");
     expand("Headquarters");
@@ -415,7 +415,7 @@ describe("the Detail column", () => {
 
   it("reads no health report while the filter shows results instead of the tree", async () => {
     localStorage.setItem("explore-open", JSON.stringify([uuidFor("hq"), uuidFor("east"), uuidFor("aud")]));
-    const health = vi.fn(async (_u: RequestInfo | URL) => new Response(JSON.stringify({ roles: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+    const health = vi.fn(async (_u: RequestInfo | URL) => new Response(JSON.stringify({ slots: [] }), { status: 200, headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", health);
     mount(`/web/explore?chips=${encodeURIComponent(JSON.stringify([{ key: "name", op: "contains", values: ["dsp"] }]))}`, owner, view, true);
     await screen.findByRole("list", { name: "Matches" });

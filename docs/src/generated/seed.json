@@ -353,7 +353,7 @@
    "name": "health",
    "data_type": "string",
    "label": "Health",
-   "description": "The rolled-up health verdict for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's roles, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check. incomplete ranks between healthy and degraded and means a commissioning gap: a role short because its hardware was never installed, which no alarm will ever fire for."
+   "description": "The rolled-up health verdict for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's slots, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check. incomplete ranks between healthy and degraded and means a commissioning gap: a slot short because its hardware was never installed, which no alarm will ever fire for."
   },
   {
    "name": "server-version",
@@ -2276,7 +2276,7 @@
    "label": "Auditorium",
    "description": "The hall-scale chain with no conferencing: projection, stage and podium microphones, a DSP and amplifier rack, speakers and cameras.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "projection",
       "label": "Projection",
@@ -2371,73 +2371,73 @@
      "aspect": 1.8,
      "positions": [
       {
-       "role": "projection",
+       "slot": "projection",
        "position": 1,
        "x": 0.5,
        "y": 0.06
       },
       {
-       "role": "confidence-display",
+       "slot": "confidence-display",
        "position": 1,
        "x": 0.85,
        "y": 0.12
       },
       {
-       "role": "podium-mic",
+       "slot": "podium-mic",
        "position": 1,
        "x": 0.2,
        "y": 0.22
       },
       {
-       "role": "stage-mic",
+       "slot": "stage-mic",
        "position": 1,
        "x": 0.4,
        "y": 0.2
       },
       {
-       "role": "stage-mic",
+       "slot": "stage-mic",
        "position": 2,
        "x": 0.6,
        "y": 0.2
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 1,
        "x": 0.15,
        "y": 0.4
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 2,
        "x": 0.85,
        "y": 0.4
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 3,
        "x": 0.15,
        "y": 0.75
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 4,
        "x": 0.85,
        "y": 0.75
       },
       {
-       "role": "camera",
+       "slot": "camera",
        "position": 1,
        "x": 0.35,
        "y": 0.94
       },
       {
-       "role": "camera",
+       "slot": "camera",
        "position": 2,
        "x": 0.65,
        "y": 0.94
       },
       {
-       "role": "touch-control",
+       "slot": "touch-control",
        "position": 1,
        "x": 0.08,
        "y": 0.3
@@ -2452,7 +2452,7 @@
    "label": "Classroom",
    "description": "The light teaching space: a display, an instructor microphone and touch control.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "class-display",
       "label": "Main Display",
@@ -2487,19 +2487,19 @@
      "aspect": 1.4,
      "positions": [
       {
-       "role": "class-display",
+       "slot": "class-display",
        "position": 1,
        "x": 0.5,
        "y": 0.07
       },
       {
-       "role": "instructor-mic",
+       "slot": "instructor-mic",
        "position": 1,
        "x": 0.5,
        "y": 0.3
       },
       {
-       "role": "touch-control",
+       "slot": "touch-control",
        "position": 1,
        "x": 0.14,
        "y": 0.6
@@ -2514,7 +2514,7 @@
    "label": "Digital Sign",
    "description": "A signage point: a panel and the media player that drives it. The parent of the sized variants.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "panel",
       "label": "Panel",
@@ -2538,7 +2538,7 @@
    "label": "Divisible Conference",
    "description": "One side of a combinable space: two displays and two room microphones each, with one DSP and amplifier rack shared by both sides, the shared-component quorum case.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -2608,7 +2608,7 @@
    "description": "Digital Sign with its panel pinned to a 55-inch display. Create Digital Sign from its template first.",
    "standard": {
     "parent": "digital-sign",
-    "roles": [
+    "slots": [
      {
       "name": "panel",
       "label": "Panel",
@@ -2631,13 +2631,13 @@
      "aspect": 1.2,
      "positions": [
       {
-       "role": "panel",
+       "slot": "panel",
        "position": 1,
        "x": 0.5,
        "y": 0.12
       },
       {
-       "role": "player",
+       "slot": "player",
        "position": 1,
        "x": 0.5,
        "y": 0.3
@@ -2653,7 +2653,7 @@
    "description": "Digital Sign with its panel pinned to a 75-inch display. Create Digital Sign from its template first.",
    "standard": {
     "parent": "digital-sign",
-    "roles": [
+    "slots": [
      {
       "name": "panel",
       "label": "Panel",
@@ -2696,7 +2696,7 @@
       ]
      }
     ],
-    "roles": [
+    "slots": [
      {
       "name": "main-display",
       "label": "Main Display",
@@ -2772,43 +2772,43 @@
      "aspect": 1.3,
      "positions": [
       {
-       "role": "main-display",
+       "slot": "main-display",
        "position": 1,
        "x": 0.5,
        "y": 0.06
       },
       {
-       "role": "conf-bar",
+       "slot": "conf-bar",
        "position": 1,
        "x": 0.5,
        "y": 0.14
       },
       {
-       "role": "conf-codec",
+       "slot": "conf-codec",
        "position": 1,
        "x": 0.12,
        "y": 0.9
       },
       {
-       "role": "conf-camera",
+       "slot": "conf-camera",
        "position": 1,
        "x": 0.5,
        "y": 0.2
       },
       {
-       "role": "conf-dsp",
+       "slot": "conf-dsp",
        "position": 1,
        "x": 0.24,
        "y": 0.9
       },
       {
-       "role": "conf-amp",
+       "slot": "conf-amp",
        "position": 1,
        "x": 0.36,
        "y": 0.9
       },
       {
-       "role": "conf-mic",
+       "slot": "conf-mic",
        "position": 1,
        "x": 0.5,
        "y": 0.55
@@ -2823,7 +2823,7 @@
    "label": "Meeting Room",
    "description": "A meeting space's full chain: a video bar at the front, a main display, touch control and a scheduling panel. The parent of the sized variants, with no display pinned.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -2870,7 +2870,7 @@
    "description": "Meeting Room with its main display pinned to a 55-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -2915,25 +2915,25 @@
      "aspect": 1.5,
      "positions": [
       {
-       "role": "main-display",
+       "slot": "main-display",
        "position": 1,
        "x": 0.5,
        "y": 0.06
       },
       {
-       "role": "video-bar",
+       "slot": "video-bar",
        "position": 1,
        "x": 0.5,
        "y": 0.14
       },
       {
-       "role": "touch-control",
+       "slot": "touch-control",
        "position": 1,
        "x": 0.5,
        "y": 0.55
       },
       {
-       "role": "scheduling-panel",
+       "slot": "scheduling-panel",
        "position": 1,
        "x": 0.06,
        "y": 0.9
@@ -2949,7 +2949,7 @@
    "description": "Meeting Room with its main display pinned to a 65-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -2999,7 +2999,7 @@
    "description": "Meeting Room with its main display pinned to a 75-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -3049,7 +3049,7 @@
    "description": "Meeting Room with its main display pinned to an 86-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -3099,7 +3099,7 @@
    "description": "Meeting Room with its main display pinned to a 98-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -3148,7 +3148,7 @@
    "label": "Training Room",
    "description": "The full teaching chain: two front displays, voice lift and program audio through a rack, capture cameras at the back, and a people counter for occupancy.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "front-display",
       "label": "Front Display",
@@ -3268,79 +3268,79 @@
      "aspect": 1.6,
      "positions": [
       {
-       "role": "front-display",
+       "slot": "front-display",
        "position": 1,
        "x": 0.32,
        "y": 0.06
       },
       {
-       "role": "front-display",
+       "slot": "front-display",
        "position": 2,
        "x": 0.68,
        "y": 0.06
       },
       {
-       "role": "podium-mic",
+       "slot": "podium-mic",
        "position": 1,
        "x": 0.12,
        "y": 0.2
       },
       {
-       "role": "ceiling-mic",
+       "slot": "ceiling-mic",
        "position": 1,
        "x": 0.35,
        "y": 0.45
       },
       {
-       "role": "ceiling-mic",
+       "slot": "ceiling-mic",
        "position": 2,
        "x": 0.65,
        "y": 0.45
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 1,
        "x": 0.25,
        "y": 0.3
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 2,
        "x": 0.75,
        "y": 0.3
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 3,
        "x": 0.25,
        "y": 0.7
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 4,
        "x": 0.75,
        "y": 0.7
       },
       {
-       "role": "camera",
+       "slot": "camera",
        "position": 1,
        "x": 0.35,
        "y": 0.93
       },
       {
-       "role": "camera",
+       "slot": "camera",
        "position": 2,
        "x": 0.65,
        "y": 0.93
       },
       {
-       "role": "touch-control",
+       "slot": "touch-control",
        "position": 1,
        "x": 0.12,
        "y": 0.3
       },
       {
-       "role": "scheduling-panel",
+       "slot": "scheduling-panel",
        "position": 1,
        "x": 0.05,
        "y": 0.9
@@ -3357,7 +3357,7 @@
    "system": {
     "standard": "ds55",
     "system_type": "sign",
-    "roles": {
+    "slots": {
      "panel": {
       "component": "boreal-edge-55"
      },
@@ -3375,7 +3375,7 @@
    "system": {
     "standard": "mr55",
     "system_type": "meeting",
-    "roles": {
+    "slots": {
      "main-display": {
       "component": "boreal-edge-55"
      },

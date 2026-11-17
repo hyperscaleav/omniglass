@@ -5,32 +5,32 @@ import { Box, MapPin } from "./icons";
 import { entityLabel } from "../lib/entities";
 import {
   type Template,
-  type TemplateRole,
+  type TemplateSlot,
   locationTreeRows,
   quorumText,
-  systemRoleSlots,
+  systemSlotFills,
   valueText,
 } from "../lib/templates";
 
 // TemplatePreview (#1329): what a template creates, rendered from the template
 // body itself, never a description of it. Each kind reads its own body: a
-// standard its roles (quorum, accepted types, pins) and choices, a system the
-// fill of each role, a place its subtree as an indented tree with the systems
+// standard its slots (quorum, accepted types, pins) and choices, a system the
+// fill of each slot, a place its subtree as an indented tree with the systems
 // that land in it, a component its product, preset inputs and declared values.
 // `all` is the catalog, so a system's fills read as the component templates'
-// labels and its role counts come from its standard template.
+// labels and its slot counts come from its standard template.
 
 const CHIP = "badge badge-ghost badge-sm whitespace-nowrap font-data";
 
-// heldRoles: the roles of the fleet's own standard a system template builds to,
+// heldSlots: the slots of the fleet's own standard a system template builds to,
 // when it holds one; the counts come from those, else from the standard template.
-type HeldRole = { name: string; label?: string; quorum: number };
+type HeldSlot = { name: string; label?: string; quorum: number };
 
-export default function TemplatePreview(props: { template: Template; all: Template[]; heldRoles?: HeldRole[] }): JSX.Element {
+export default function TemplatePreview(props: { template: Template; all: Template[]; heldSlots?: HeldSlot[] }): JSX.Element {
   return (
     <Switch>
       <Match when={props.template.standard}>{(s) => <StandardPreview standard={s()} />}</Match>
-      <Match when={props.template.system && props.template}>{(t) => <SystemPreview template={t()} all={props.all} heldRoles={props.heldRoles} />}</Match>
+      <Match when={props.template.system && props.template}>{(t) => <SystemPreview template={t()} all={props.all} heldSlots={props.heldSlots} />}</Match>
       <Match when={props.template.location}>{(p) => <LocationPreview template={props.template} all={props.all} location={p()} />}</Match>
       <Match when={props.template.component}>{(c) => <ComponentPreview component={c()} />}</Match>
     </Switch>
@@ -48,8 +48,8 @@ function Chips(props: { items?: string[] | null; none: string }): JSX.Element {
 }
 
 function StandardPreview(props: { standard: NonNullable<Template["standard"]> }): JSX.Element {
-  const roles = () => props.standard.roles ?? [];
-  const choiceOf = (r: TemplateRole) => {
+  const slots = () => props.standard.slots ?? [];
+  const choiceOf = (r: TemplateSlot) => {
     if (!r.choice) return "";
     const c = (props.standard.choices ?? []).find((x) => x.name === r.choice);
     const a = c?.alternates?.find((x) => x.name === r.alternate);
@@ -58,16 +58,16 @@ function StandardPreview(props: { standard: NonNullable<Template["standard"]> })
   return (
     <div class="flex flex-col gap-4" data-testid="preview-standard">
       <section class="flex flex-col gap-1.5">
-        <Eyebrow label="Roles" hint="What a conforming system needs filled. Quorum is how many components the role takes; accepts is the component types that may fill it (any, when empty), and a pinned role is held to the products it names." />
+        <Eyebrow label="Slots" hint="What a conforming system needs filled. Quorum is how many components the slot takes; accepts is the component types that may fill it (any, when empty), and a pinned slot is held to the products it names." />
         <div class="overflow-x-auto rounded-box border border-base-300">
           <table class="table table-sm">
             <thead>
-              <tr><th>Role</th><th class="whitespace-nowrap">Quorum</th><th>Accepts</th></tr>
+              <tr><th>Slot</th><th class="whitespace-nowrap">Quorum</th><th>Accepts</th></tr>
             </thead>
             <tbody>
-              <For each={roles()}>
+              <For each={slots()}>
                 {(r) => (
-                  <tr data-role={r.name}>
+                  <tr data-slot={r.name}>
                     <td>
                       <div class="flex flex-col">
                         <span>{entityLabel(r)}</span>
@@ -95,7 +95,7 @@ function StandardPreview(props: { standard: NonNullable<Template["standard"]> })
       </section>
       <Show when={(props.standard.choices ?? []).length > 0}>
         <section class="flex flex-col gap-1.5">
-          <Eyebrow label="Choices" hint="A choice is answered one way by each conforming system: the roles of the alternate it takes are needed, the others are not. The first alternate is the template's default." />
+          <Eyebrow label="Choices" hint="A choice is answered one way by each conforming system: the slots of the alternate it takes are needed, the others are not. The first alternate is the template's default." />
           <ul class="flex flex-col gap-1.5 text-sm">
             <For each={props.standard.choices ?? []}>
               {(c) => (
@@ -141,21 +141,21 @@ function Contract(props: { label: string; lines?: NonNullable<Template["standard
   );
 }
 
-function SystemPreview(props: { template: Template; all: Template[]; heldRoles?: HeldRole[] }): JSX.Element {
+function SystemPreview(props: { template: Template; all: Template[]; heldSlots?: HeldSlot[] }): JSX.Element {
   const sys = () => props.template.system!;
-  const slots = () => systemRoleSlots(props.template, props.all, props.heldRoles);
+  const slots = () => systemSlotFills(props.template, props.all, props.heldSlots);
   return (
     <div class="flex flex-col gap-4" data-testid="preview-system">
       <div class="grid grid-cols-2 gap-3">
-        <KVStacked label="Standard" mono hint="The standard the system is built to: yours of that name when you hold one, else created from its template in the same write." value={<span data-testid="preview-standard-source">{sys().standard} <span class="font-sans text-xs text-base-content/60">{props.heldRoles ? "(yours)" : "(created from its template)"}</span></span>} />
+        <KVStacked label="Standard" mono hint="The standard the system is built to: yours of that name when you hold one, else created from its template in the same write." value={<span data-testid="preview-standard-source">{sys().standard} <span class="font-sans text-xs text-base-content/60">{props.heldSlots ? "(yours)" : "(created from its template)"}</span></span>} />
         <KVStacked label="System type" mono value={sys().system_type || "none"} />
       </div>
       <section class="flex flex-col gap-1.5">
-        <Eyebrow label="Role fills" hint="A component for each role, as many as the quorum of the standard it is built to (yours of that name when you hold one), each assigned to its role. They land unattached unless you give an address." />
+        <Eyebrow label="Slot fills" hint="A component for each slot, as many as the quorum of the standard it is built to (yours of that name when you hold one), each assigned to its slot. They land unattached unless you give an address." />
         <ul class="flex flex-col divide-y divide-base-300 rounded-box border border-base-300 text-sm">
           <For each={slots()}>
             {(s) => (
-              <li data-role={s.role} class="flex items-center gap-3 px-3 py-2">
+              <li data-slot={s.slot} class="flex items-center gap-3 px-3 py-2">
                 <span class="flex-1">{s.label}</span>
                 <span class="text-base-content/70">{s.fill}</span>
                 <span class="font-data tabular-nums text-xs text-base-content/50">x{s.count}</span>

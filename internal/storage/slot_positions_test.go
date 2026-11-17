@@ -13,12 +13,12 @@ import (
 )
 
 // declareTableMic is the fixture every position test shares: a fresh ad-hoc
-// system with a quorum-2 table-mic role accepting any video-bar, so a test
+// system with a quorum-2 table-mic slot accepting any video-bar, so a test
 // only names its own components.
 func declareTableMic(t *testing.T, ctx context.Context, gw storage.Gateway, all scope.Set, system string, quorum int) {
 	t.Helper()
 	typedSlotSystem(t, ctx, gw, all, system)
-	if _, err := gw.SetSystemRole(ctx, "", "system", system, storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", system, storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table Mic", Quorum: quorum, AcceptedTypes: []string{"video-bar"},
 	}); err != nil {
 		t.Fatalf("declare table-mic on %s: %v", system, err)
@@ -35,31 +35,31 @@ func newBarInto(t *testing.T, ctx context.Context, gw storage.Gateway, all scope
 	}
 }
 
-func assignedTo(t *testing.T, roles []storage.EffectiveRole, name string) []string {
+func assignedTo(t *testing.T, slots []storage.EffectiveSlot, name string) []string {
 	t.Helper()
-	for _, r := range roles {
+	for _, r := range slots {
 		if r.Name == name {
 			return r.AssignedTo
 		}
 	}
-	t.Fatalf("role %q not found among %+v", name, roles)
+	t.Fatalf("slot %q not found among %+v", name, slots)
 	return nil
 }
 
-func positionsOf(t *testing.T, roles []storage.EffectiveRole, name string) []int {
+func positionsOf(t *testing.T, slots []storage.EffectiveSlot, name string) []int {
 	t.Helper()
-	for _, r := range roles {
+	for _, r := range slots {
 		if r.Name == name {
 			return r.Positions
 		}
 	}
-	t.Fatalf("role %q not found among %+v", name, roles)
+	t.Fatalf("slot %q not found among %+v", name, slots)
 	return nil
 }
 
 // TestAssignedToIsPositionOrdered proves the #626 ordered read: assignment
-// order, not alphabetical order, decides how a role's occupants list. Both
-// resolved reads (EffectiveRoles, the declaration-plus-staffing read, and
+// order, not alphabetical order, decides how a slot's occupants list. Both
+// resolved reads (EffectiveSlots, the declaration-plus-staffing read, and
 // SystemHealth, the verdict read) must agree, since they resolve the same
 // underlying assignments and a divergence between them would be a silent
 // display bug on one and a verdict bug on the other.
@@ -83,19 +83,19 @@ func TestAssignedToIsPositionOrdered(t *testing.T) {
 	newBarInto(t, ctx, gw, all, bar, "zeta")
 	newBarInto(t, ctx, gw, all, bar, "alpha")
 
-	if err := gw.AssignRole(ctx, "", "position-order-sys", "table-mic", "zeta", all, all, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "position-order-sys", "table-mic", "zeta", all, all, all, all); err != nil {
 		t.Fatalf("assign zeta: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "position-order-sys", "table-mic", "alpha", all, all, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "position-order-sys", "table-mic", "alpha", all, all, all, all); err != nil {
 		t.Fatalf("assign alpha: %v", err)
 	}
 
-	roles, err := gw.EffectiveRoles(ctx, "position-order-sys", all)
+	slots, err := gw.EffectiveSlots(ctx, "position-order-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles: %v", err)
+		t.Fatalf("effective slots: %v", err)
 	}
-	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"zeta", "alpha"}) {
-		t.Errorf("EffectiveRoles assigned_to = %v, want [zeta alpha] (assignment order), not alphabetical", got)
+	if got := assignedTo(t, slots, "table-mic"); !sameSeq(got, []string{"zeta", "alpha"}) {
+		t.Errorf("EffectiveSlots assigned_to = %v, want [zeta alpha] (assignment order), not alphabetical", got)
 	}
 
 	rep, err := gw.SystemHealth(ctx, "position-order-sys", 0, all)
@@ -103,7 +103,7 @@ func TestAssignedToIsPositionOrdered(t *testing.T) {
 		t.Fatalf("system health: %v", err)
 	}
 	var gotHealth []string
-	for _, r := range rep.Roles {
+	for _, r := range rep.Slots {
 		if r.Name == "table-mic" {
 			gotHealth = r.AssignedTo
 		}
@@ -137,28 +137,28 @@ func TestSwapIsAtomic(t *testing.T) {
 	newBarInto(t, ctx, gw, all, bar, "first")
 	newBarInto(t, ctx, gw, all, bar, "second")
 
-	if err := gw.AssignRole(ctx, "", "swap-sys", "table-mic", "first", all, all, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "swap-sys", "table-mic", "first", all, all, all, all); err != nil {
 		t.Fatalf("assign first: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "swap-sys", "table-mic", "second", all, all, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "swap-sys", "table-mic", "second", all, all, all, all); err != nil {
 		t.Fatalf("assign second: %v", err)
 	}
-	roles, err := gw.EffectiveRoles(ctx, "swap-sys", all)
+	slots, err := gw.EffectiveSlots(ctx, "swap-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles: %v", err)
+		t.Fatalf("effective slots: %v", err)
 	}
-	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"first", "second"}) {
+	if got := assignedTo(t, slots, "table-mic"); !sameSeq(got, []string{"first", "second"}) {
 		t.Fatalf("before swap = %v, want [first second]", got)
 	}
 
 	if err := gw.SwapPositions(ctx, "", "swap-sys", "table-mic", 1, 2, all, all); err != nil {
 		t.Fatalf("swap positions: %v", err)
 	}
-	roles, err = gw.EffectiveRoles(ctx, "swap-sys", all)
+	slots, err = gw.EffectiveSlots(ctx, "swap-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles after swap: %v", err)
+		t.Fatalf("effective slots after swap: %v", err)
 	}
-	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"second", "first"}) {
+	if got := assignedTo(t, slots, "table-mic"); !sameSeq(got, []string{"second", "first"}) {
 		t.Fatalf("after swap = %v, want [second first]", got)
 	}
 
@@ -169,7 +169,7 @@ func TestSwapIsAtomic(t *testing.T) {
 }
 
 // TestConcurrentAssignsGetDistinctPositions proves the advisory lock (#626):
-// two concurrent assigns to the same role must not compute the same
+// two concurrent assigns to the same slot must not compute the same
 // next-free position and collide on the deferrable uniqueness constraint.
 // Reachable through runTogether the same way health_invariant_test.go's
 // concurrent-write proofs are.
@@ -195,18 +195,18 @@ func TestConcurrentAssignsGetDistinctPositions(t *testing.T) {
 
 	runTogether(t,
 		func() error {
-			return gw.AssignRole(ctx, "", "concurrent-position-sys", "table-mic", "race-a", all, all, all, all)
+			return gw.AssignSlot(ctx, "", "concurrent-position-sys", "table-mic", "race-a", all, all, all, all)
 		},
 		func() error {
-			return gw.AssignRole(ctx, "", "concurrent-position-sys", "table-mic", "race-b", all, all, all, all)
+			return gw.AssignSlot(ctx, "", "concurrent-position-sys", "table-mic", "race-b", all, all, all, all)
 		},
 	)
 
-	roles, err := gw.EffectiveRoles(ctx, "concurrent-position-sys", all)
+	slots, err := gw.EffectiveSlots(ctx, "concurrent-position-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles: %v", err)
+		t.Fatalf("effective slots: %v", err)
 	}
-	got := assignedTo(t, roles, "table-mic")
+	got := assignedTo(t, slots, "table-mic")
 	if len(got) != 2 {
 		t.Fatalf("assigned = %v, want both concurrent assigns to land at distinct positions", got)
 	}
@@ -245,47 +245,47 @@ func TestUnassignLeavesGapThenRefills(t *testing.T) {
 		newBarInto(t, ctx, gw, all, bar, name)
 	}
 	for _, name := range []string{"one", "two", "three"} {
-		if err := gw.AssignRole(ctx, "", "gap-sys", "table-mic", name, all, all, all, all); err != nil {
+		if err := gw.AssignSlot(ctx, "", "gap-sys", "table-mic", name, all, all, all, all); err != nil {
 			t.Fatalf("assign %s: %v", name, err)
 		}
 	}
-	roles, err := gw.EffectiveRoles(ctx, "gap-sys", all)
+	slots, err := gw.EffectiveSlots(ctx, "gap-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles: %v", err)
+		t.Fatalf("effective slots: %v", err)
 	}
-	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"one", "two", "three"}) {
+	if got := assignedTo(t, slots, "table-mic"); !sameSeq(got, []string{"one", "two", "three"}) {
 		t.Fatalf("before unassign = %v, want [one two three]", got)
 	}
 
 	// two held position 2; unassigning it leaves a gap rather than shifting
 	// three down to fill it.
-	if err := gw.UnassignRole(ctx, "", "gap-sys", "table-mic", "two", all, all, all, all); err != nil {
+	if err := gw.UnassignSlot(ctx, "", "gap-sys", "table-mic", "two", all, all, all, all); err != nil {
 		t.Fatalf("unassign two: %v", err)
 	}
-	roles, err = gw.EffectiveRoles(ctx, "gap-sys", all)
+	slots, err = gw.EffectiveSlots(ctx, "gap-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles after unassign: %v", err)
+		t.Fatalf("effective slots after unassign: %v", err)
 	}
-	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"one", "three"}) {
+	if got := assignedTo(t, slots, "table-mic"); !sameSeq(got, []string{"one", "three"}) {
 		t.Fatalf("after unassign = %v, want [one three] (three keeps its own position, no compaction)", got)
 	}
 
 	// The next assignment refills the vacated position (2), landing between
 	// one and three rather than appending after three at position 4.
 	newBarInto(t, ctx, gw, all, bar, "four")
-	if err := gw.AssignRole(ctx, "", "gap-sys", "table-mic", "four", all, all, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "gap-sys", "table-mic", "four", all, all, all, all); err != nil {
 		t.Fatalf("assign four: %v", err)
 	}
-	roles, err = gw.EffectiveRoles(ctx, "gap-sys", all)
+	slots, err = gw.EffectiveSlots(ctx, "gap-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles after refill: %v", err)
+		t.Fatalf("effective slots after refill: %v", err)
 	}
-	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"one", "four", "three"}) {
+	if got := assignedTo(t, slots, "table-mic"); !sameSeq(got, []string{"one", "four", "three"}) {
 		t.Fatalf("after refill = %v, want [one four three] (four took the vacated position 2)", got)
 	}
 }
 
-// TestEffectiveRolesReportsRealPositionsAcrossAGap proves EffectiveRole.Positions
+// TestEffectiveSlotsReportsRealPositionsAcrossAGap proves EffectiveSlot.Positions
 // carries each AssignedTo entry's OWN position, not an assumed i+1: a console
 // that reorders occupants (drag-to-reorder) has to address a real, possibly
 // non-contiguous position, and index-plus-one silently guesses wrong the
@@ -293,7 +293,7 @@ func TestUnassignLeavesGapThenRefills(t *testing.T) {
 // TestUnassignLeavesGapThenRefills's exact gap shape: after unassigning the
 // occupant at position 2, AssignedTo is [one three] but their real positions
 // are [1 3], not [1 2].
-func TestEffectiveRolesReportsRealPositionsAcrossAGap(t *testing.T) {
+func TestEffectiveSlotsReportsRealPositionsAcrossAGap(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -314,27 +314,27 @@ func TestEffectiveRolesReportsRealPositionsAcrossAGap(t *testing.T) {
 		newBarInto(t, ctx, gw, all, bar, name)
 	}
 	for _, name := range []string{"one", "two", "three"} {
-		if err := gw.AssignRole(ctx, "", "gap-positions-sys", "table-mic", name, all, all, all, all); err != nil {
+		if err := gw.AssignSlot(ctx, "", "gap-positions-sys", "table-mic", name, all, all, all, all); err != nil {
 			t.Fatalf("assign %s: %v", name, err)
 		}
 	}
-	roles, err := gw.EffectiveRoles(ctx, "gap-positions-sys", all)
+	slots, err := gw.EffectiveSlots(ctx, "gap-positions-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles: %v", err)
+		t.Fatalf("effective slots: %v", err)
 	}
-	if got := positionsOf(t, roles, "table-mic"); !intSeq(got, []int{1, 2, 3}) {
+	if got := positionsOf(t, slots, "table-mic"); !intSeq(got, []int{1, 2, 3}) {
 		t.Fatalf("positions before unassign = %v, want [1 2 3]", got)
 	}
 
-	if err := gw.UnassignRole(ctx, "", "gap-positions-sys", "table-mic", "two", all, all, all, all); err != nil {
+	if err := gw.UnassignSlot(ctx, "", "gap-positions-sys", "table-mic", "two", all, all, all, all); err != nil {
 		t.Fatalf("unassign two: %v", err)
 	}
-	roles, err = gw.EffectiveRoles(ctx, "gap-positions-sys", all)
+	slots, err = gw.EffectiveSlots(ctx, "gap-positions-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles after unassign: %v", err)
+		t.Fatalf("effective slots after unassign: %v", err)
 	}
-	gotAssigned := assignedTo(t, roles, "table-mic")
-	gotPositions := positionsOf(t, roles, "table-mic")
+	gotAssigned := assignedTo(t, slots, "table-mic")
+	gotPositions := positionsOf(t, slots, "table-mic")
 	if !sameSeq(gotAssigned, []string{"one", "three"}) {
 		t.Fatalf("assigned_to after unassign = %v, want [one three]", gotAssigned)
 	}
@@ -358,11 +358,11 @@ func intSeq(got, want []int) bool {
 	return true
 }
 
-// TestAssignRefusesAtCapacity proves AssignRole enforces capacity by an
+// TestAssignRefusesAtCapacity proves AssignSlot enforces capacity by an
 // explicit count, not merely as a side effect of a position collision:
-// filling a role to its declared capacity refuses the next assign with a
-// message naming the role and the cap, not "that position is already
-// taken". An existing occupant of a full role stays idempotent.
+// filling a slot to its declared capacity refuses the next assign with a
+// message naming the slot and the cap, not "that position is already
+// taken". An existing occupant of a full slot stays idempotent.
 func TestAssignRefusesAtCapacity(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -380,44 +380,44 @@ func TestAssignRefusesAtCapacity(t *testing.T) {
 	all := scope.Set{All: true}
 	typedSlotSystem(t, ctx, gw, all, "capacity-full-sys")
 	cap2 := 2
-	if _, err := gw.SetSystemRole(ctx, "", "system", "capacity-full-sys", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", "capacity-full-sys", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	newBarInto(t, ctx, gw, all, bar, "one")
 	newBarInto(t, ctx, gw, all, bar, "two")
 	newBarInto(t, ctx, gw, all, bar, "three")
-	if err := gw.AssignRole(ctx, "", "capacity-full-sys", "table-mic", "one", all, all, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "capacity-full-sys", "table-mic", "one", all, all, all, all); err != nil {
 		t.Fatalf("assign one: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "capacity-full-sys", "table-mic", "two", all, all, all, all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "capacity-full-sys", "table-mic", "two", all, all, all, all); err != nil {
 		t.Fatalf("assign two: %v", err)
 	}
 
-	err = gw.AssignRole(ctx, "", "capacity-full-sys", "table-mic", "three", all, all, all, all)
+	err = gw.AssignSlot(ctx, "", "capacity-full-sys", "table-mic", "three", all, all, all, all)
 	var full *storage.CapacityFullShortfall
 	if !errors.As(err, &full) {
 		t.Fatalf("assign past capacity: err = %v, want CapacityFullShortfall", err)
 	}
-	if full.Role != "Table Mic" || full.System != "capacity-full-sys" || full.Have != 2 || full.Capacity != 2 {
+	if full.Slot != "Table Mic" || full.System != "capacity-full-sys" || full.Have != 2 || full.Capacity != 2 {
 		t.Fatalf("shortfall = %+v, want Table Mic in capacity-full-sys full at 2 of 2", full)
 	}
 	if !strings.Contains(err.Error(), "Table Mic") || !strings.Contains(err.Error(), "2") {
-		t.Fatalf("shortfall message = %q, want it to name the role and the cap", err.Error())
+		t.Fatalf("shortfall message = %q, want it to name the slot and the cap", err.Error())
 	}
 
-	// The role stays idempotent for its existing occupants even while full.
-	if err := gw.AssignRole(ctx, "", "capacity-full-sys", "table-mic", "one", all, all, all, all); err != nil {
-		t.Fatalf("re-assign an existing occupant of a full role: %v, want idempotent success", err)
+	// The slot stays idempotent for its existing occupants even while full.
+	if err := gw.AssignSlot(ctx, "", "capacity-full-sys", "table-mic", "one", all, all, all, all); err != nil {
+		t.Fatalf("re-assign an existing occupant of a full slot: %v, want idempotent success", err)
 	}
 
-	roles, err := gw.EffectiveRoles(ctx, "capacity-full-sys", all)
+	slots, err := gw.EffectiveSlots(ctx, "capacity-full-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles: %v", err)
+		t.Fatalf("effective slots: %v", err)
 	}
-	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"one", "two"}) {
+	if got := assignedTo(t, slots, "table-mic"); !sameSeq(got, []string{"one", "two"}) {
 		t.Fatalf("assigned after the refused overfill = %v, want still [one two]", got)
 	}
 }
@@ -427,12 +427,12 @@ func TestAssignRefusesAtCapacity(t *testing.T) {
 // gap below the position an eventual cap would sit at), lower capacity to
 // something the remaining row count already satisfies, then attempt one
 // more assign. The lowering itself must succeed (two rows fit a cap of
-// two: SetSystemRole's pre-check and AssignRole's now both count
-// assignment rows for the role, the same count, since a component fills a
-// system_role_assignment row at most once per role and every row carries a
+// two: SetSystemSlot's pre-check and AssignSlot's now both count
+// assignment rows for the slot, the same count, since a component fills a
+// system_slot_assignment row at most once per slot and every row carries a
 // unique, NOT NULL position, so rows, occupants, and occupied positions are
 // the same number here). The next assign must not silently land in the
-// vacated gap and push the role to three occupants against a declared
+// vacated gap and push the slot to three occupants against a declared
 // capacity of two.
 func TestLoweringCapacityThenAssigningIsRefused(t *testing.T) {
 	t.Parallel()
@@ -455,19 +455,19 @@ func TestLoweringCapacityThenAssigningIsRefused(t *testing.T) {
 		newBarInto(t, ctx, gw, all, bar, name)
 	}
 	for _, name := range []string{"one", "two", "three"} {
-		if err := gw.AssignRole(ctx, "", "capacity-bypass-sys", "table-mic", name, all, all, all, all); err != nil {
+		if err := gw.AssignSlot(ctx, "", "capacity-bypass-sys", "table-mic", name, all, all, all, all); err != nil {
 			t.Fatalf("assign %s: %v", name, err)
 		}
 	}
 	// two held position 2; vacate it, leaving a gap below where the new cap
 	// will sit.
-	if err := gw.UnassignRole(ctx, "", "capacity-bypass-sys", "table-mic", "two", all, all, all, all); err != nil {
+	if err := gw.UnassignSlot(ctx, "", "capacity-bypass-sys", "table-mic", "two", all, all, all, all); err != nil {
 		t.Fatalf("unassign two: %v", err)
 	}
 
 	// Lowering to 2 succeeds: two rows (one, three) fit a cap of two.
 	cap2 := 2
-	if _, err := gw.SetSystemRole(ctx, "", "system", "capacity-bypass-sys", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", "capacity-bypass-sys", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
 	}); err != nil {
 		t.Fatalf("lower capacity to 2: %v, want success (2 rows fit a cap of 2)", err)
@@ -477,7 +477,7 @@ func TestLoweringCapacityThenAssigningIsRefused(t *testing.T) {
 	// the vacated position 2 free (it is within the new bound
 	// least(capacity=2, count+1=3)=2) and would insert there, landing at 3
 	// occupants against a declared capacity of 2 with no error.
-	err = gw.AssignRole(ctx, "", "capacity-bypass-sys", "table-mic", "four", all, all, all, all)
+	err = gw.AssignSlot(ctx, "", "capacity-bypass-sys", "table-mic", "four", all, all, all, all)
 	var full *storage.CapacityFullShortfall
 	if !errors.As(err, &full) {
 		t.Fatalf("assign a fourth component after lowering capacity to 2: err = %v, want CapacityFullShortfall", err)
@@ -486,11 +486,11 @@ func TestLoweringCapacityThenAssigningIsRefused(t *testing.T) {
 		t.Fatalf("shortfall = %+v, want 2 of 2", full)
 	}
 
-	roles, err := gw.EffectiveRoles(ctx, "capacity-bypass-sys", all)
+	slots, err := gw.EffectiveSlots(ctx, "capacity-bypass-sys", all)
 	if err != nil {
-		t.Fatalf("effective roles: %v", err)
+		t.Fatalf("effective slots: %v", err)
 	}
-	if got := assignedTo(t, roles, "table-mic"); !sameSeq(got, []string{"one", "three"}) {
+	if got := assignedTo(t, slots, "table-mic"); !sameSeq(got, []string{"one", "three"}) {
 		t.Fatalf("assigned after the refused overfill = %v, want still [one three]", got)
 	}
 }

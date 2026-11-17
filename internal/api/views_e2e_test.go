@@ -77,14 +77,14 @@ func TestFleetViewAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "campus"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "hq-r1", "location_type": "room", "parent": "hq"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{"name": "hq-room", "label": "HQ Room"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/standards/hq-room/roles/table-mic", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/standards/hq-room/slots/table-mic", map[string]any{
 		"label": "Table Microphone", "quorum": 1,
 		"accepted_types": []string{"video-bar"}, "impact": "outage",
 	}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "hq-1", "standard_id": "hq-room", "location": "hq-r1"}, http.StatusCreated)
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar")
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-1", "product": bar.Name}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/systems/hq-1/roles/table-mic/assignments/bar-1", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPut, "/systems/hq-1/slots/table-mic/assignments/bar-1", nil, http.StatusNoContent)
 
 	// view reads the fleet and sets aside the boot seed's platform system
 	// (#1625), which an all-scope caller sees beside the operator's systems.

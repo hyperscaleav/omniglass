@@ -1076,7 +1076,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes")
 				_ = cmd.MarkFlagRequired("output-key")
-				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create")
 				_ = cmd.MarkFlagRequired("owner-kind")
 				cmd.Flags().StringVar(&fReduce, "reduce", "", "An expression over the inputs by alias")
 				_ = cmd.MarkFlagRequired("reduce")
@@ -1540,7 +1540,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Raise an alarm on a component",
-						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1933,7 +1933,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a component",
-					Long:    "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4062,7 +4062,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fInputs, "inputs", "", "For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid)")
 				cmd.Flags().StringVar(&fKey, "key", "", "The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield")
-				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per slot-bound member with value.<alias> and has.<alias> per input; defaults to component")
 				cmd.Flags().StringVar(&fSite, "site", "", "Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria")
 				_ = cmd.MarkFlagRequired("site")
 				cmd.Flags().StringVar(&fSource, "source", "", "The expression")
@@ -4372,7 +4372,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a location's health",
-						Long:    "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -7857,7 +7857,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "add-system <name>",
 					Short:   "Add a simulated system",
-					Long:    "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
+					Long:    "Creates a system built to a standard, with a simulated component for each staffed slot in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its slot, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; slots nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its slot writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
 					Example: "  omniglass simulation add-system <name> --standard standard --system-type system_type",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7880,7 +7880,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fLocation, "location", "", "Where the system and its components sit, by name or dotted path")
 				cmd.Flags().StringVar(&fName, "name", "", "The system's name; minted from its type when empty")
-				cmd.Flags().StringVar(&fStandard, "standard", "", "The standard the system is built to; its roles decide the components")
+				cmd.Flags().StringVar(&fStandard, "standard", "", "The standard the system is built to; its slots decide the components")
 				_ = cmd.MarkFlagRequired("standard")
 				cmd.Flags().StringVar(&fSystemType, "system-type", "", "The system's type, which also mints its name when none is given")
 				_ = cmd.MarkFlagRequired("system-type")
@@ -7910,7 +7910,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "plan-system <standard>",
 					Short:   "Plan a simulated system to a standard",
-					Long:    "Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.",
+					Long:    "Previews a simulated system built to a standard: each of the standard's slots (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.",
 					Example: "  omniglass simulation plan-system <standard>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7990,7 +7990,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "createFromTemplate",
 					Short:   "Create a standard from a template",
-					Long:    "Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.",
+					Long:    "Writes one standard of your own (official false) from a standard template in the catalog: its slots, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.",
 					Example: "  omniglass standard createFromTemplate --template template",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8235,19 +8235,19 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
-				Use:   "role",
-				Short: "Commands for the role resource",
+				Use:   "slot",
+				Short: "Commands for the slot resource",
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
-						Use:     "delete <id> <role>",
-						Short:   "Withdraw a role from a standard",
-						Long:    "Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.",
-						Example: "  omniglass standard role delete meeting-room <role>",
+						Use:     "delete <id> <slot>",
+						Short:   "Withdraw a slot from a standard",
+						Long:    "Removes the slot from the standard, and with it every assignment conforming systems made to it. A slot the standard does not declare is a 404. Gated by standard:delete.",
+						Example: "  omniglass standard slot delete meeting-room <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -8259,12 +8259,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <id>",
-						Short:   "List a standard's declared roles",
-						Long:    "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.",
-						Example: "  omniglass standard role list meeting-room",
+						Short:   "List a standard's declared slots",
+						Long:    "Lists the slots this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.",
+						Example: "  omniglass standard slot list meeting-room",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/roles", pathSegment(args[0]))
+							path := fmt.Sprintf("/api/v1/standards/%s/slots", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -8284,13 +8284,13 @@ func generatedCommands() []*cobra.Command {
 					var fQuorum int
 					var fUpdateMask string
 					cmd := &cobra.Command{
-						Use:     "update <id> <role>",
-						Short:   "Declare a role on a standard",
-						Long:    "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a role name must mean one role in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.",
-						Example: "  omniglass standard role update meeting-room <role>",
+						Use:     "update <id> <slot>",
+						Short:   "Declare a slot on a standard",
+						Long:    "Declares a slot every conforming system needs filled, or revises it in place (the slot is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a slot name must mean one slot in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.",
+						Example: "  omniglass standard slot update meeting-room <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
@@ -8323,13 +8323,13 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask")
-					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422")
-					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
-					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
-					cmd.Flags().StringVar(&fLabel, "label", "", "The role's human label; defaults to the role name on first declare")
+					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this slot joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the slot, making it unconditional; an unknown choice or alternate is a 422")
+					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the slot will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
+					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
+					cmd.Flags().StringVar(&fLabel, "label", "", "The slot's human label; defaults to the slot name on first declare")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask")
-					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
-					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the role; one on first declare")
+					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the slot, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
+					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the slot; one on first declare")
 					cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send [\"*\"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it")
 					return cmd
 				}()
@@ -8364,7 +8364,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fMap, "map", "", "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair")
+				cmd.Flags().StringVar(&fMap, "map", "", "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (slot, position) pair")
 				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A new variant parent, by handle or uuid; omit to leave unchanged, \"\" to clear it back to a standalone standard")
 				return cmd
 			}()
@@ -8500,7 +8500,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "createFromTemplate",
 					Short:   "Start a whole system from a template",
-					Long:    "Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.",
+					Long:    "Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each slot filled to its quorum and assigned, and the declared values. A component whose slot you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the slots.",
 					Example: "  omniglass system createFromTemplate --template template",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8530,7 +8530,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fAttach, "attach", "", "Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached")
+				cmd.Flags().StringVar(&fAttach, "attach", "", "Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached")
 				cmd.Flags().StringVar(&fLabel, "label", "", "The system's label")
 				cmd.Flags().StringVar(&fLocation, "location", "", "The location the system and its components sit in, by name or dotted path")
 				cmd.Flags().StringVar(&fName, "name", "", "The system's name; minted from its type when empty")
@@ -8605,7 +8605,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "health",
 					Short:   "Read every system's health verdict",
-					Long:    "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
+					Long:    "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
 					Example: "  omniglass system health",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8620,7 +8620,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a system's health",
-						Long:    "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8716,7 +8716,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <component>",
 						Short:   "Take a component out of a system",
-						Long:    "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Unbinds this component from the system. Refused with a 409 while it still fills a slot here, since removing it would leave the system staffed by a non-member: unassign the slot first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system member delete <name> <component>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8733,7 +8733,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List the components in a system",
-						Long:    "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system member list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -9137,9 +9137,39 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fKey string
+				var fValue string
+				cmd := &cobra.Command{
+					Use:     "setTag <name>",
+					Short:   "Set a tag value on a system",
+					Long:    "Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Example: "  omniglass system setTag <name> --key key --value value",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems/%s:setTag", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("key") {
+							body["key"] = fKey
+						}
+						if cmd.Flags().Changed("value") {
+							body["value"] = fValue
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fKey, "key", "", "The tag key (must exist and apply to this kind)")
+				_ = cmd.MarkFlagRequired("key")
+				cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
+				_ = cmd.MarkFlagRequired("value")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
-				Use:   "role",
-				Short: "Commands for the role resource",
+				Use:   "slot",
+				Short: "Commands for the slot resource",
 			}
 			parent.AddCommand(func() *cobra.Command {
 				parent := &cobra.Command{
@@ -9149,13 +9179,13 @@ func generatedCommands() []*cobra.Command {
 				parent.AddCommand(func() *cobra.Command {
 					cmd := func() *cobra.Command {
 						cmd := &cobra.Command{
-							Use:     "delete <name> <role> <component>",
-							Short:   "Unassign a component from a role",
-							Long:    "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-							Example: "  omniglass system role assignment delete <name> <role> <component>",
+							Use:     "delete <name> <slot> <component>",
+							Short:   "Unassign a component from a slot",
+							Long:    "Takes this component out of the slot, leaving the slot understaffed until another fills it. A component that was not filling the slot is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the slot's own read already names it).\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+							Example: "  omniglass system slot assignment delete <name> <slot> <component>",
 							Args:    pathArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
+								path := fmt.Sprintf("/api/v1/systems/%s/slots/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
 								return runAPICommand(cmd, "DELETE", path, nil)
 							},
 						}
@@ -9166,13 +9196,13 @@ func generatedCommands() []*cobra.Command {
 				parent.AddCommand(func() *cobra.Command {
 					cmd := func() *cobra.Command {
 						cmd := &cobra.Command{
-							Use:     "update <name> <role> <component>",
-							Short:   "Assign a component to a role",
-							Long:    "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-							Example: "  omniglass system role assignment update <name> <role> <component>",
+							Use:     "update <name> <slot> <component>",
+							Short:   "Assign a component to a slot",
+							Long:    "Puts this component in the slot for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the slot accepts, or (if the slot pins products) its product not one of them. A slot with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a slot makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+							Example: "  omniglass system slot assignment update <name> <slot> <component>",
 							Args:    pathArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
+								path := fmt.Sprintf("/api/v1/systems/%s/slots/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
 								return runAPICommand(cmd, "PUT", path, nil)
 							},
 						}
@@ -9185,13 +9215,13 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
-						Use:     "delete <name> <role>",
-						Short:   "Withdraw a role from a system",
-						Long:    "Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass system role delete <name> <role>",
+						Use:     "delete <name> <slot>",
+						Short:   "Withdraw a slot from a system",
+						Long:    "Removes a slot declared on this system, and with it every assignment to it. A slot the system does not declare itself is a 404 (a slot inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass system slot delete <name> <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -9203,12 +9233,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
-						Short:   "List a system's effective roles",
-						Long:    "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass system role list <name>",
+						Short:   "List a system's effective slots",
+						Long:    "Every slot this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass system slot list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles", pathSegment(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/slots", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -9221,13 +9251,13 @@ func generatedCommands() []*cobra.Command {
 					var fPosition int
 					var fWith int
 					cmd := &cobra.Command{
-						Use:     "swapPositions <name> <role>",
-						Short:   "Exchange two occupants' positions within a role",
-						Long:    "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass system role swapPositions <name> <role> --position <int> --with <int>",
+						Use:     "swapPositions <name> <slot>",
+						Short:   "Exchange two occupants' positions within a slot",
+						Long:    "Exchanges the positions of whichever components currently hold position and with within this slot: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass system slot swapPositions <name> <slot> --position <int> --with <int>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s:swapPositions", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/slots/%s:swapPositions", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("position") {
 								body["position"] = fPosition
@@ -9258,13 +9288,13 @@ func generatedCommands() []*cobra.Command {
 					var fQuorum int
 					var fUpdateMask string
 					cmd := &cobra.Command{
-						Use:     "update <name> <role>",
-						Short:   "Declare a role on a system",
-						Long:    "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass system role update <name> <role>",
+						Use:     "update <name> <slot>",
+						Short:   "Declare a slot on a system",
+						Long:    "Declares a slot directly on this system (how a one-off system gets slots at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. A name the system's standard already declares is a 409: a system slot never shadows an inherited one, since a slot name must mean one slot in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass system slot update <name> <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
@@ -9297,13 +9327,13 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask")
-					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422")
-					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
-					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
-					cmd.Flags().StringVar(&fLabel, "label", "", "The role's human label; defaults to the role name on first declare")
+					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this slot joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the slot, making it unconditional; an unknown choice or alternate is a 422")
+					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the slot will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
+					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
+					cmd.Flags().StringVar(&fLabel, "label", "", "The slot's human label; defaults to the slot name on first declare")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask")
-					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
-					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the role; one on first declare")
+					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the slot, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
+					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the slot; one on first declare")
 					cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send [\"*\"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it")
 					return cmd
 				}()
@@ -9313,43 +9343,13 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
-				var fKey string
-				var fValue string
-				cmd := &cobra.Command{
-					Use:     "setTag <name>",
-					Short:   "Set a tag value on a system",
-					Long:    "Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-					Example: "  omniglass system setTag <name> --key key --value value",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s:setTag", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("key") {
-							body["key"] = fKey
-						}
-						if cmd.Flags().Changed("value") {
-							body["value"] = fValue
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fKey, "key", "", "The tag key (must exist and apply to this kind)")
-				_ = cmd.MarkFlagRequired("key")
-				cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
-				_ = cmd.MarkFlagRequired("value")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
 				var fLabel string
 				var fStandardId string
 				var fSystemTypeId string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a system",
-					Long:    "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a slot name the system declares itself is a 409 naming the slot, since a slot name must mean one slot in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited slot moves onto the new standard's slot of the same name when it is still a typed match and the slot has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

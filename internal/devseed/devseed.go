@@ -41,7 +41,7 @@ type Doc struct {
 	Components        []Component       `yaml:"components"`
 	Systems           []System          `yaml:"systems"`
 	Members           []Member          `yaml:"members"`
-	RoleAssignments   []RoleAssignment  `yaml:"role_assignments"`
+	SlotAssignments   []SlotAssignment  `yaml:"slot_assignments"`
 	// ComponentDependencies are the fleet's dependency edges (#1648): a
 	// component fed from a PDU's outlet, or hosted by another component.
 	ComponentDependencies []ComponentDependency `yaml:"component_dependencies"`
@@ -186,7 +186,7 @@ func PlantedFaults(sc Scenario) ([]PlantedFault, error) {
 // System is one example system: a thing in a room that either works or does not.
 // Key is the fixture-local identity (see identity.go); Name is optional and its
 // absence asks the platform to mint one from the system_type's stem. Standard
-// names a boot-seeded standard whose roles it inherits live; SystemType names a
+// names a boot-seeded standard whose slots it inherits live; SystemType names a
 // boot-seeded coarse space classifier (what kind of space it is, a separate axis
 // from the standard); Location names a fixture location BY KEY.
 type System struct {
@@ -200,20 +200,20 @@ type System struct {
 
 // Member binds a component into a system without giving it a job. The dev fleet
 // needs the case explicitly, because it is the one an assignment cannot produce: a
-// component that is in the room and accounted for while filling no declared role.
+// component that is in the room and accounted for while filling no declared slot.
 // Both ends are fixture KEYS.
 type Member struct {
 	System    string `yaml:"system"`
 	Component string `yaml:"component"`
 }
 
-// RoleAssignment staffs one of a system's roles. It also produces membership as a
+// SlotAssignment staffs one of a system's slots. It also produces membership as a
 // side effect, which is the point: the seed shows both ways a component comes to
-// be in a system. System and Component are fixture keys; Role names a role the
+// be in a system. System and Component are fixture keys; Slot names a slot the
 // system's standard declares.
-type RoleAssignment struct {
+type SlotAssignment struct {
 	System    string `yaml:"system"`
-	Role      string `yaml:"role"`
+	Slot      string `yaml:"slot"`
 	Component string `yaml:"component"`
 }
 
@@ -643,7 +643,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	}
 
 	// Systems: the thing in the room that either works or does not, conforming to a
-	// standard created from a template (above) whose roles it inherits live. Locations must already be
+	// standard created from a template (above) whose slots it inherits live. Locations must already be
 	// seeded for the placement to resolve. Recognised the same way a component is,
 	// with the system_type as the classification whose stem is minted.
 	sysIDs := map[string]string{}
@@ -712,15 +712,15 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 		}
 	}
 
-	// Role assignments: staffing, which also creates the membership. Last of the
+	// Slot assignments: staffing, which also creates the membership. Last of the
 	// three, since it needs both ends to exist. Idempotent on conflict.
-	for _, ra := range doc.RoleAssignments {
+	for _, ra := range doc.SlotAssignments {
 		sysID, compID, err := memberEnds(sysIDs, compIDs, ra.System, ra.Component)
 		if err != nil {
 			return err
 		}
-		if err := gw.AssignRole(ctx, actorID, sysID, ra.Role, compID, all, all, all, all); err != nil {
-			return fmt.Errorf("devseed: assign %s to %s/%s: %w", ra.Component, ra.System, ra.Role, err)
+		if err := gw.AssignSlot(ctx, actorID, sysID, ra.Slot, compID, all, all, all, all); err != nil {
+			return fmt.Errorf("devseed: assign %s to %s/%s: %w", ra.Component, ra.System, ra.Slot, err)
 		}
 	}
 

@@ -927,7 +927,7 @@ func (UnimplementedGateway) DeleteLocationTypeProperty(context.Context, string, 
 	return nil
 }
 
-func (UnimplementedGateway) EffectiveRoles(context.Context, string, scope.Set) ([]EffectiveRole, error) {
+func (UnimplementedGateway) EffectiveSlots(context.Context, string, scope.Set) ([]EffectiveSlot, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListMembers(context.Context, string, scope.Set) ([]Member, error) {
@@ -963,22 +963,22 @@ func (UnimplementedGateway) ListComponentDependencies(context.Context, string, s
 func (UnimplementedGateway) DeleteComponentDependency(context.Context, string, string, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
+func (UnimplementedGateway) AssignSlot(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) UnassignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
+func (UnimplementedGateway) UnassignSlot(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) SwapPositions(context.Context, string, string, string, int, int, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ListSystemRoles(context.Context, string, string) ([]SystemRole, error) {
+func (UnimplementedGateway) ListSystemSlots(context.Context, string, string) ([]SystemSlot, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SetSystemRole(context.Context, string, string, string, SystemRoleSpec) (*SystemRole, error) {
+func (UnimplementedGateway) SetSystemSlot(context.Context, string, string, string, SystemSlotSpec) (*SystemSlot, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteSystemRole(context.Context, string, string, string, string) error {
+func (UnimplementedGateway) DeleteSystemSlot(context.Context, string, string, string, string) error {
 	return nil
 }
 func (UnimplementedGateway) ResolveAlternate(context.Context, string, string, string) (string, error) {

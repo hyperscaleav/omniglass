@@ -56,7 +56,7 @@ type calcRuleBody struct {
 	Name         string              `json:"name" doc:"The rule's name, the address an operator types; renameable"`
 	Label        string              `json:"label,omitempty" doc:"A human label"`
 	Description  string              `json:"description,omitempty" doc:"What the rule derives and why"`
-	OwnerKind    string              `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members)"`
+	OwnerKind    string              `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members)"`
 	Selector     calcSelectorBody    `json:"selector" doc:"The owners the rule derives for: a component rule's components or a system rule's systems; empty is every owner of its kind"`
 	Inputs       []calcInputReadBody `json:"inputs" doc:"The keys the rule reads, each by the alias its reduce uses"`
 	Reduce       calcReduceBody      `json:"reduce" doc:"How the inputs reduce into the output: an expression over their aliases"`
@@ -129,7 +129,7 @@ type createCalcRuleInput struct {
 		Name        string            `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The rule's name (lowercase letters, digits, hyphens)"`
 		Label       string            `json:"label,omitempty" required:"false" doc:"A human label"`
 		Description string            `json:"description,omitempty" required:"false" doc:"What the rule derives and why"`
-		OwnerKind   string            `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create"`
+		OwnerKind   string            `json:"owner_kind" enum:"component,system" doc:"What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create"`
 		Selector    *calcSelectorBody `json:"selector,omitempty" required:"false" doc:"The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind"`
 		Inputs      []calcInputBody   `json:"inputs" minItems:"1" maxItems:"16" doc:"The keys the rule reads, each by a unique alias its reduce uses; health may not be one"`
 		Reduce      calcReduceBody    `json:"reduce" doc:"An expression over the inputs by alias"`

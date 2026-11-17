@@ -60,8 +60,8 @@ func TestPlanLocationsRefusesWhatTheFleetCannotHold(t *testing.T) {
 
 // TestPlanSystemFillsToQuorumAndCreatesTheChain: a system template on a fresh
 // fleet plans the fork of its standard with every ancestor, parents first,
-// and a component per role to quorum; a role filled with a product its type
-// refuses is refused naming the role.
+// and a component per slot to quorum; a slot filled with a product its type
+// refuses is refused naming the slot.
 func TestPlanSystemFillsToQuorumAndCreatesTheChain(t *testing.T) {
 	gw := seeded(t)
 	ctx := context.Background()
@@ -77,23 +77,23 @@ func TestPlanSystemFillsToQuorumAndCreatesTheChain(t *testing.T) {
 		t.Fatalf("forks = %v, want meeting-room then mr55", forks)
 	}
 	if len(sp.Pieces) != 4 {
-		t.Fatalf("pieces = %+v, want one per role", sp.Pieces)
+		t.Fatalf("pieces = %+v, want one per slot", sp.Pieces)
 	}
 
 	bad, err := template.Load(map[string][]byte{"s.yaml": []byte(`templates:
   - kind: standard_template
     name: one-screen
     label: One screen
-    standard: { roles: [{ name: screen, label: Screen, quorum: 2, accepted_types: [display] }] }
+    standard: { slots: [{ name: screen, label: Screen, quorum: 2, accepted_types: [display] }] }
   - kind: system_template
     name: wrong-screen
     label: Wrong
-    system: { standard: one-screen, roles: { screen: { product: boreal-cast-m1 } } }
+    system: { standard: one-screen, slots: { screen: { product: boreal-cast-m1 } } }
 `)})
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	if _, err := template.PlanSystem(ctx, gw, bad, template.SystemRequest{Template: "wrong-screen"}); !errors.Is(err, template.ErrInvalid) || !strings.Contains(err.Error(), "screen (") {
-		t.Fatalf("a fill of the wrong type: %v, want an ErrInvalid naming the role", err)
+		t.Fatalf("a fill of the wrong type: %v, want an ErrInvalid naming the slot", err)
 	}
 }

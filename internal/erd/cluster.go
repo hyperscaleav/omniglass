@@ -9,9 +9,9 @@ var Subsystems = []Cluster{
 	{Name: "identity", Tables: []string{
 		"principal", "human", "service", "principal_grant", "principal_group",
 		"principal_group_member", "impersonation_session",
-		"role", "system_role", "system_role_assignment",
-		"system_role_type", "system_role_product",
-		"role_choice", "choice_alternate",
+		"role", "system_slot", "system_slot_assignment",
+		"system_slot_type", "system_slot_product",
+		"slot_choice", "choice_alternate",
 	}},
 	{Name: "fleet", Tables: []string{
 		"location", "location_type", "location_type_property", "location_type_metric",

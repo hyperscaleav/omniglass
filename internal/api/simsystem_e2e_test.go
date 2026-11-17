@@ -23,18 +23,18 @@ import (
 
 type systemPlanBody struct {
 	Standard string `json:"standard"`
-	Roles    []struct {
-		Role    string `json:"role"`
+	Slots    []struct {
+		Slot    string `json:"slot"`
 		Product string `json:"product"`
 		Count   int    `json:"count"`
 		Missing int    `json:"missing"`
 		Reason  string `json:"reason"`
-	} `json:"roles"`
+	} `json:"slots"`
 	Components int `json:"components"`
 }
 
 // TestSimulatedSystemAPI drives adding a whole simulated system to a
-// standard: the plan previews each role staffed with a simulated product
+// standard: the plan previews each slot staffed with a simulated product
 // (or left short, saying why), and adding it creates the system and its
 // components, each at its own free address on the outpost, as one write.
 // Adding needs simulation:update and the creates it makes.
@@ -159,33 +159,33 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The plan: every role of the standard, staffed with a product the
+	// The plan: every slot of the standard, staffed with a product the
 	// simulator serves, or short with a reason.
 	var plan systemPlanBody
 	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/simulation/standards/meeting-room:plan", nil, http.StatusOK), &plan); err != nil {
 		t.Fatal(err)
 	}
-	roles, err := gw.ListSystemRoles(ctx, "standard", "meeting-room")
+	slots, err := gw.ListSystemSlots(ctx, "standard", "meeting-room")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.Standard != "meeting-room" || len(plan.Roles) != len(roles) {
-		t.Fatalf("plan = %+v, want every one of the standard's %d roles", plan, len(roles))
+	if plan.Standard != "meeting-room" || len(plan.Slots) != len(slots) {
+		t.Fatalf("plan = %+v, want every one of the standard's %d slots", plan, len(slots))
 	}
 	staffed, sum := 0, 0
-	for _, r := range plan.Roles {
+	for _, r := range plan.Slots {
 		sum += r.Count
 		if r.Count > 0 {
 			staffed++
 			if _, _, ok := store.ForProduct(r.Product); !ok {
-				t.Errorf("role %s staffed with %s, which nothing simulates", r.Role, r.Product)
+				t.Errorf("slot %s staffed with %s, which nothing simulates", r.Slot, r.Product)
 			}
 		} else if r.Reason == "" || r.Missing == 0 {
-			t.Errorf("role %s unstaffed with no reason: %+v", r.Role, r)
+			t.Errorf("slot %s unstaffed with no reason: %+v", r.Slot, r)
 		}
 	}
 	if staffed < 3 || plan.Components != sum {
-		t.Fatalf("plan staffs %d roles and %d components (says %d), want at least the bar, display and panel", staffed, sum, plan.Components)
+		t.Fatalf("plan staffs %d slots and %d components (says %d), want at least the bar, display and panel", staffed, sum, plan.Components)
 	}
 	c.do(viewer, http.MethodGet, "/simulation/standards/no-such-standard:plan", nil, http.StatusNotFound)
 
@@ -222,12 +222,12 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		SystemID   string `json:"system_id"`
 		Components []struct {
 			Component string `json:"component"`
-			Role      string `json:"role"`
+			Slot      string `json:"slot"`
 			Product   string `json:"product"`
 			Address   string `json:"address"`
 		} `json:"components"`
 		Unstaffed []struct {
-			Role   string `json:"role"`
+			Slot   string `json:"slot"`
 			Reason string `json:"reason"`
 		} `json:"unstaffed"`
 	}
@@ -244,15 +244,15 @@ func TestSimulatedSystemAPI(t *testing.T) {
 		}
 		seen[comp.Address] = true
 	}
-	if len(added.Unstaffed) != len(plan.Roles)-staffed {
-		t.Fatalf("unstaffed = %+v, want the plan's short roles", added.Unstaffed)
+	if len(added.Unstaffed) != len(plan.Slots)-staffed {
+		t.Fatalf("unstaffed = %+v, want the plan's short slots", added.Unstaffed)
 	}
 	var assigned int
-	if err := conn.QueryRow(ctx, `select count(*) from system_role_assignment where system_id = (select id from system where name = $1)`, added.System).Scan(&assigned); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from system_slot_assignment where system_id = (select id from system where name = $1)`, added.System).Scan(&assigned); err != nil {
 		t.Fatal(err)
 	}
 	if assigned != plan.Components {
-		t.Fatalf("%d role assignments, want %d", assigned, plan.Components)
+		t.Fatalf("%d slot assignments, want %d", assigned, plan.Components)
 	}
 	var view simulationBody
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusOK), &view); err != nil {

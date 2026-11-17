@@ -106,11 +106,11 @@ display line in its sizes, say), which keeps its endpoint valid (with `component
 ## Add a whole system
 
 A simulated system is built to one of your **standards** (a meeting room, a huddle room, a digital
-sign). Omniglass staffs each of the standard's roles with a simulated product that fits it, and lists
-the roles it cannot fill yet, which stay short so the system honestly reads that way. On the
+sign). Omniglass staffs each of the standard's slots with a simulated product that fits it, and lists
+the slots it cannot fill yet, which stay short so the system honestly reads that way. On the
 Simulation page, **Add simulated system** asks for an outpost, a standard, a system type, and optionally a
-location and a name; choosing the standard previews its **plan** (each role, the product it gets and how
-many, and any short role with its reason) before anything is created. From a terminal, preview the plan,
+location and a name; choosing the standard previews its **plan** (each slot, the product it gets and how
+many, and any short slot with its reason) before anything is created. From a terminal, preview the plan,
 then add it:
 
 ```sh
@@ -121,7 +121,7 @@ omniglass simulation add-system edge-hq --standard meeting-room --system-type me
 The system and its components land together or not at all (with `simulation:update`, plus
 `system:create`, `system:update`, `system:read`, `component:create`, `component:update`, `endpoint:create`
 and `outpost:read`; `component:create` and `component:update` must reach the whole fleet, since the
-components are created at the top level and each is then assigned its role), named as any new system and
+components are created at the top level and each is then assigned its slot), named as any new system and
 component are named, and the simulator serves them from its next pull.
 
 ## Break it on purpose
@@ -153,8 +153,8 @@ omniglass component impairment set panel-1                   # repaired
 
 Unplugging closes the monitoring loop with nobody in between. Once the component's endpoint has
 read `down` for the official reachability rule's fire sustain ([the shipped rules](/guides/admin/rules/#the-rules-that-ship)),
-the rule opens an alarm at its severity on it, the component goes to outage and stops filling its roles, and its system's verdict follows (degraded or
-out, as the role's impact says). **Catalog > Actions > Event rules** shows the rule's open alarm while it
+the rule opens an alarm at its severity on it, the component goes to outage and stops filling its slots, and its system's verdict follows (degraded or
+out, as the slot's impact says). **Catalog > Actions > Event rules** shows the rule's open alarm while it
 lasts. Repair it and the next `up` reading clears the alarm and the verdict recovers. The
 [rules guide](/guides/admin/rules/) walks the same loop with a rule of your own.
 

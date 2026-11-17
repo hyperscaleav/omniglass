@@ -9,55 +9,55 @@ import (
 )
 
 // strandedAssignment is one assignment a standard change has to settle: an
-// occupant of a role the system no longer has, because the role belongs to
+// occupant of a slot the system no longer has, because the slot belongs to
 // the standard it is leaving.
 type strandedAssignment struct {
 	ID            string
-	RoleID        string
-	RoleName      string
+	SlotID        string
+	SlotName      string
 	Standard      string
 	ComponentID   string
 	ComponentName string
 	Position      int
 }
 
-// carryTarget is the role a stranded assignment's role name means on the new
+// carryTarget is the slot a stranded assignment's slot name means on the new
 // standard, with what the guard and the capacity need to judge each occupant.
 type carryTarget struct {
 	ID             string
 	Label          string
 	Capacity       *int
-	AcceptedTypes  []roleRef
-	PinnedProducts []roleRef
-	// Taken holds the positions already occupied in the target role, the
+	AcceptedTypes  []slotRef
+	PinnedProducts []slotRef
+	// Taken holds the positions already occupied in the target slot, the
 	// carried ones included as they land.
 	Taken map[int]bool
 }
 
 // carryStaffing settles a system's staffing after its standard moved (#506,
 // ADR-0506), inside the change's transaction, after the system's row is
-// updated and before its health recomputes. Every assignment whose role is
+// updated and before its health recomputes. Every assignment whose slot is
 // neither the system's own nor its current standard's is either carried or
 // released:
 //
-//   - carried onto the role of the same name the new standard declares, when
+//   - carried onto the slot of the same name the new standard declares, when
 //     the component is still a typed match for it (the guard runs again) and
-//     the role has room under its capacity, lowest positions first. It keeps
+//     the slot has room under its capacity, lowest positions first. It keeps
 //     its position when that is free and within the capacity, and takes the
 //     lowest free one otherwise. The row is moved, not replaced, so its id and
 //     its history hold, and the move is audited as an update.
-//   - released otherwise (no such role, a component that no longer fits, an
+//   - released otherwise (no such slot, a component that no longer fits, an
 //     occupant past the capacity), audited as a delete. A released component
-//     stays a member: giving up a role never ends membership, so it can be
+//     stays a member: giving up a slot never ends membership, so it can be
 //     unbound, restaffed or deleted at once.
 //
-// A name means one role in a system (ADR-0503), so the match by name cannot
-// restaff onto the wrong role. standardID is the new standard, nil for a
+// A name means one slot in a system (ADR-0503), so the match by name cannot
+// restaff onto the wrong slot. standardID is the new standard, nil for a
 // one-off system, which releases every inherited assignment.
 //
 // The caller already holds the system's staffing lock exclusive, which is what
 // keeps a staffing write out (lockSystemStandardChange); the stranded rows are
-// taken for update and the target role for key share, so a concurrent
+// taken for update and the target slot for key share, so a concurrent
 // withdrawal of either waits rather than leaving the carry pointing at a row
 // that is gone.
 func (p *PG) carryStaffing(ctx context.Context, tx pgx.Tx, actorID, systemID, systemName string, standardID *string) error {
@@ -73,12 +73,12 @@ func (p *PG) carryStaffing(ctx context.Context, tx pgx.Tx, actorID, systemID, sy
 	}
 	targets := map[string]*carryTarget{}
 	for _, a := range stranded {
-		target, seen := targets[a.RoleName]
+		target, seen := targets[a.SlotName]
 		if !seen {
-			if target, err = p.loadCarryTarget(ctx, tx, systemID, standardID, a.RoleName); err != nil {
+			if target, err = p.loadCarryTarget(ctx, tx, systemID, standardID, a.SlotName); err != nil {
 				return err
 			}
-			targets[a.RoleName] = target
+			targets[a.SlotName] = target
 		}
 		position, fits, err := p.carryPosition(ctx, tx, target, a)
 		if err != nil {
@@ -98,15 +98,15 @@ func (p *PG) carryStaffing(ctx context.Context, tx pgx.Tx, actorID, systemID, sy
 }
 
 // loadStrandedAssignments reads the assignments a standard change has to
-// settle, ordered by role name and then position, which is the order the
-// capacity is filled in. Taken for update, so a role withdrawal racing the
+// settle, ordered by slot name and then position, which is the order the
+// capacity is filled in. Taken for update, so a slot withdrawal racing the
 // change waits for it (and one that already committed has taken its rows).
 func loadStrandedAssignments(ctx context.Context, tx pgx.Tx, systemID string) ([]strandedAssignment, error) {
 	rows, err := tx.Query(ctx, `
-		select ra.id, ra.role_id, r.name, coalesce(st.name, ''), ra.component_id, c.name, ra.position
-		  from system_role_assignment ra
+		select ra.id, ra.slot_id, r.name, coalesce(st.name, ''), ra.component_id, c.name, ra.position
+		  from system_slot_assignment ra
 		  join system s on s.id = ra.system_id
-		  join system_role r on r.id = ra.role_id
+		  join system_slot r on r.id = ra.slot_id
 		  join component c on c.id = ra.component_id
 		  left join standard st on st.id = r.standard_id
 		 where ra.system_id = $1::uuid
@@ -121,7 +121,7 @@ func loadStrandedAssignments(ctx context.Context, tx pgx.Tx, systemID string) ([
 	var out []strandedAssignment
 	for rows.Next() {
 		var a strandedAssignment
-		if err := rows.Scan(&a.ID, &a.RoleID, &a.RoleName, &a.Standard, &a.ComponentID, &a.ComponentName, &a.Position); err != nil {
+		if err := rows.Scan(&a.ID, &a.SlotID, &a.SlotName, &a.Standard, &a.ComponentID, &a.ComponentName, &a.Position); err != nil {
 			return nil, fmt.Errorf("storage: scan stranded assignment: %w", err)
 		}
 		out = append(out, a)
@@ -129,31 +129,31 @@ func loadStrandedAssignments(ctx context.Context, tx pgx.Tx, systemID string) ([
 	return out, rows.Err()
 }
 
-// loadCarryTarget resolves the role a stranded role name means on the new
+// loadCarryTarget resolves the slot a stranded slot name means on the new
 // standard, or nil when the system has no standard now or its standard does
-// not declare the name. The role row is taken for key share so it cannot be
+// not declare the name. The slot row is taken for key share so it cannot be
 // withdrawn under the carry.
-func (p *PG) loadCarryTarget(ctx context.Context, tx pgx.Tx, systemID string, standardID *string, roleName string) (*carryTarget, error) {
+func (p *PG) loadCarryTarget(ctx context.Context, tx pgx.Tx, systemID string, standardID *string, slotName string) (*carryTarget, error) {
 	if standardID == nil {
 		return nil, nil
 	}
 	t := &carryTarget{Taken: map[int]bool{}}
 	err := tx.QueryRow(ctx, `
-		select id, coalesce(label, ''), capacity from system_role
+		select id, coalesce(label, ''), capacity from system_slot
 		 where owner_kind = 'standard' and standard_id = $1::uuid and name = $2
-		   for key share`, *standardID, roleName).Scan(&t.ID, &t.Label, &t.Capacity)
+		   for key share`, *standardID, slotName).Scan(&t.ID, &t.Label, &t.Capacity)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("storage: carry target %s: %w", roleName, err)
+		return nil, fmt.Errorf("storage: carry target %s: %w", slotName, err)
 	}
-	if t.AcceptedTypes, t.PinnedProducts, err = roleSlot(ctx, tx, t.ID); err != nil {
+	if t.AcceptedTypes, t.PinnedProducts, err = slotGuardSets(ctx, tx, t.ID); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, `select position from system_role_assignment where system_id = $1::uuid and role_id = $2`, systemID, t.ID)
+	rows, err := tx.Query(ctx, `select position from system_slot_assignment where system_id = $1::uuid and slot_id = $2`, systemID, t.ID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: carry target positions %s: %w", roleName, err)
+		return nil, fmt.Errorf("storage: carry target positions %s: %w", slotName, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -205,25 +205,25 @@ func carriedPosition(own int, capacity *int, taken map[int]bool) int {
 	return n
 }
 
-// carryAssignment moves one assignment onto the new standard's role, audited
-// as an update of the assignment naming the role on both sides.
+// carryAssignment moves one assignment onto the new standard's slot, audited
+// as an update of the assignment naming the slot on both sides.
 func carryAssignment(ctx context.Context, tx pgx.Tx, actorID, systemName, newStandard string, target *carryTarget, a strandedAssignment, position int) error {
-	if _, err := tx.Exec(ctx, `update system_role_assignment set role_id = $2, position = $3 where id = $1`,
+	if _, err := tx.Exec(ctx, `update system_slot_assignment set slot_id = $2, position = $3 where id = $1`,
 		a.ID, target.ID, position); err != nil {
-		return mapRoleWriteErr(err)
+		return mapSlotWriteErr(err)
 	}
 	target.Taken[position] = true
-	return writeAuditRes(ctx, tx, actorID, "update", "system_role_assignment", a.ID,
-		map[string]any{"system": systemName, "standard": a.Standard, "role": a.RoleName, "component": a.ComponentName, "position": a.Position},
-		map[string]any{"system": systemName, "standard": newStandard, "role": a.RoleName, "component": a.ComponentName, "position": position})
+	return writeAuditRes(ctx, tx, actorID, "update", "system_slot_assignment", a.ID,
+		map[string]any{"system": systemName, "standard": a.Standard, "slot": a.SlotName, "component": a.ComponentName, "position": a.Position},
+		map[string]any{"system": systemName, "standard": newStandard, "slot": a.SlotName, "component": a.ComponentName, "position": position})
 }
 
 // releaseAssignment drops one assignment, audited as a delete of it. The
 // membership is untouched.
 func releaseAssignment(ctx context.Context, tx pgx.Tx, actorID, systemName string, a strandedAssignment) error {
-	if _, err := tx.Exec(ctx, `delete from system_role_assignment where id = $1`, a.ID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from system_slot_assignment where id = $1`, a.ID); err != nil {
 		return fmt.Errorf("storage: release assignment %s: %w", a.ID, err)
 	}
-	return writeAuditRes(ctx, tx, actorID, "delete", "system_role_assignment", a.ID,
-		map[string]any{"system": systemName, "standard": a.Standard, "role": a.RoleName, "component": a.ComponentName, "position": a.Position}, nil)
+	return writeAuditRes(ctx, tx, actorID, "delete", "system_slot_assignment", a.ID,
+		map[string]any{"system": systemName, "standard": a.Standard, "slot": a.SlotName, "component": a.ComponentName, "position": a.Position}, nil)
 }

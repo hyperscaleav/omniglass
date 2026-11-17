@@ -14,20 +14,20 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-type simRoleFillBody struct {
-	Role      string `json:"role"`
-	Alternate string `json:"alternate,omitempty" doc:"The choice alternate the role belongs to, choice/alternate; empty when unconditional."`
-	Product   string `json:"product,omitempty" doc:"The simulated product chosen for the role; empty when nothing simulated fits."`
-	Count     int    `json:"count" doc:"How many simulated components the role gets: its quorum, at least one, capped at its capacity."`
-	Missing   int    `json:"missing,omitempty" doc:"How many the role stays short when nothing simulated fits."`
-	Reason    string `json:"reason,omitempty" doc:"Why the role is left unstaffed."`
+type simSlotFillBody struct {
+	Slot      string `json:"slot"`
+	Alternate string `json:"alternate,omitempty" doc:"The choice alternate the slot belongs to, choice/alternate; empty when unconditional."`
+	Product   string `json:"product,omitempty" doc:"The simulated product chosen for the slot; empty when nothing simulated fits."`
+	Count     int    `json:"count" doc:"How many simulated components the slot gets: its quorum, at least one, capped at its capacity."`
+	Missing   int    `json:"missing,omitempty" doc:"How many the slot stays short when nothing simulated fits."`
+	Reason    string `json:"reason,omitempty" doc:"Why the slot is left unstaffed."`
 }
 
 type simSystemPlanOutput struct {
 	Body struct {
 		Standard   string            `json:"standard"`
 		Alternates map[string]string `json:"alternates" doc:"The alternate taken for each of the standard's choices."`
-		Roles      []simRoleFillBody `json:"roles"`
+		Slots      []simSlotFillBody `json:"slots"`
 		Components int               `json:"components" doc:"How many simulated components the system would get."`
 	}
 }
@@ -39,7 +39,7 @@ type simStandardInput struct {
 type addSimSystemInput struct {
 	Name string `path:"name" doc:"The outpost whose simulator serves the system's components"`
 	Body struct {
-		Standard   string  `json:"standard" minLength:"1" doc:"The standard the system is built to; its roles decide the components"`
+		Standard   string  `json:"standard" minLength:"1" doc:"The standard the system is built to; its slots decide the components"`
 		SystemType string  `json:"system_type" minLength:"1" doc:"The system's type, which also mints its name when none is given"`
 		Location   *string `json:"location,omitempty" required:"false" doc:"Where the system and its components sit, by name or dotted path"`
 		SystemName string  `json:"name,omitempty" required:"false" doc:"The system's name; minted from its type when empty"`
@@ -48,7 +48,7 @@ type addSimSystemInput struct {
 
 type addSimSystemComponentBody struct {
 	Component string `json:"component"`
-	Role      string `json:"role"`
+	Slot      string `json:"slot"`
 	Product   string `json:"product"`
 	Address   string `json:"address" doc:"The loopback address the simulated component answers on."`
 }
@@ -59,7 +59,7 @@ type addSimSystemOutput struct {
 		SystemID   string                      `json:"system_id" doc:"The new system's id, the stable address a link to it uses."`
 		Outpost    string                      `json:"outpost"`
 		Components []addSimSystemComponentBody `json:"components"`
-		Unstaffed  []simRoleFillBody           `json:"unstaffed" doc:"The roles nothing simulated could fill, left short."`
+		Unstaffed  []simSlotFillBody           `json:"unstaffed" doc:"The slots nothing simulated could fill, left short."`
 	}
 }
 
@@ -112,14 +112,14 @@ func simEndpointSpecs(eps []simfleet.Endpoint) []storage.EndpointSpec {
 	return out
 }
 
-// planSimSystem staffs a standard's roles with simulated products.
+// planSimSystem staffs a standard's slots with simulated products.
 func planSimSystem(ctx context.Context, gw storage.Gateway, standard string, store *profile.Store, products []storage.Product) (simfleet.SystemPlan, error) {
 	if _, err := gw.GetStandard(ctx, standard); err != nil {
 		return simfleet.SystemPlan{}, mapStandardErr(err)
 	}
-	roles, err := gw.ListSystemRoles(ctx, "standard", standard)
+	slots, err := gw.ListSystemSlots(ctx, "standard", standard)
 	if err != nil {
-		return simfleet.SystemPlan{}, huma.Error500InternalServerError("list the standard's roles")
+		return simfleet.SystemPlan{}, huma.Error500InternalServerError("list the standard's slots")
 	}
 	types, err := gw.ListComponentTypes(ctx)
 	if err != nil {
@@ -130,9 +130,9 @@ func planSimSystem(ctx context.Context, gw storage.Gateway, standard string, sto
 	for _, t := range storage.InEffect(types, func(t storage.ComponentType) (string, string) { return t.Namespace, t.Name }) {
 		typeIDs[t.Name] = t
 	}
-	in := make([]simfleet.Role, 0, len(roles))
-	for _, r := range roles {
-		in = append(in, simfleet.Role{Name: r.Name, Quorum: r.Quorum, Capacity: r.Capacity,
+	in := make([]simfleet.Slot, 0, len(slots))
+	for _, r := range slots {
+		in = append(in, simfleet.Slot{Name: r.Name, Quorum: r.Quorum, Capacity: r.Capacity,
 			AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts, Alternate: r.Alternate})
 	}
 	ps := make([]simfleet.Product, 0, len(products))
@@ -155,7 +155,7 @@ func planSimSystem(ctx context.Context, gw storage.Gateway, standard string, sto
 
 // mapSimSystemErr maps a simulated system's failure the way the failing
 // piece's own route maps it: a component refused is the component route's
-// 403, a role shortfall the role route's 422, and so on.
+// 403, a slot shortfall the slot route's 422, and so on.
 func mapSimSystemErr(err error) error {
 	var se *storage.SimSystemError
 	if !errors.As(err, &se) {
@@ -166,15 +166,15 @@ func mapSimSystemErr(err error) error {
 		return mapComponentErr(se.Err)
 	case "endpoint":
 		return mapEndpointErr(se.Err)
-	case "role":
-		return mapRoleErr(se.Err)
+	case "slot":
+		return mapSlotErr(se.Err)
 	default:
 		return mapSystemErr(se.Err)
 	}
 }
 
-func fillBody(f simfleet.RoleFill) simRoleFillBody {
-	return simRoleFillBody{Role: f.Role, Alternate: f.Alternate, Product: f.Product, Count: f.Count, Missing: f.Missing, Reason: f.Reason}
+func fillBody(f simfleet.SlotFill) simSlotFillBody {
+	return simSlotFillBody{Slot: f.Slot, Alternate: f.Alternate, Product: f.Product, Count: f.Count, Missing: f.Missing, Reason: f.Reason}
 }
 
 func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway, hub SimHub) {
@@ -183,7 +183,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		Method:      http.MethodGet,
 		Path:        "/simulation/standards/{standard}:plan",
 		Summary:     "Plan a simulated system to a standard",
-		Description: "Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.",
+		Description: "Previews a simulated system built to a standard: each of the standard's slots (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.",
 	}, "simulation", "read"), func(ctx context.Context, in *simStandardInput) (*simSystemPlanOutput, error) {
 		store, err := simCatalog()
 		if err != nil {
@@ -199,9 +199,9 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		}
 		out := &simSystemPlanOutput{}
 		out.Body.Standard, out.Body.Alternates, out.Body.Components = in.Standard, plan.Alternates, plan.Components()
-		out.Body.Roles = make([]simRoleFillBody, 0, len(plan.Roles))
-		for _, f := range plan.Roles {
-			out.Body.Roles = append(out.Body.Roles, fillBody(f))
+		out.Body.Slots = make([]simSlotFillBody, 0, len(plan.Slots))
+		for _, f := range plan.Slots {
+			out.Body.Slots = append(out.Body.Slots, fillBody(f))
 		}
 		return out, nil
 	})
@@ -212,7 +212,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		Path:          "/outposts/{name}/simulation/systems",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Add a simulated system",
-		Description:   "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
+		Description:   "Creates a system built to a standard, with a simulated component for each staffed slot in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its slot, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; slots nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its slot writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
 	}, "simulation", "update"), "secret", "bind"), func(ctx context.Context, in *addSimSystemInput) (*addSimSystemOutput, error) {
 		needs := [][2]string{{"system", "create"}, {"system", "update"}, {"system", "read"}, {"component", "create"}, {"component", "update"}, {"endpoint", "create"}, {"outpost", "read"}}
 		if in.Body.Location != nil && *in.Body.Location != "" {
@@ -251,14 +251,14 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			return nil, err
 		}
 		if plan.Components() == 0 {
-			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("nothing the simulator serves fits a role of %s", in.Body.Standard))
+			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("nothing the simulator serves fits a slot of %s", in.Body.Standard))
 		}
 		drivers := simDrivers(products)
 		attachable := simAttachable(ctx, a, gw)
 		out := &addSimSystemOutput{}
 		out.Body.Outpost = in.Name
-		out.Body.Unstaffed = []simRoleFillBody{}
-		for _, f := range plan.Roles {
+		out.Body.Unstaffed = []simSlotFillBody{}
+		for _, f := range plan.Slots {
 			if f.Count == 0 {
 				out.Body.Unstaffed = append(out.Body.Unstaffed, fillBody(f))
 			}
@@ -273,14 +273,14 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			// Each component gets a placeholder id in slot order, so the
 			// address planner hands out addresses in that order.
 			type slot struct {
-				role, product, id string
+				slot, product, id string
 			}
 			var slots []slot
 			var comps []simfleet.Component
-			for _, f := range plan.Roles {
+			for _, f := range plan.Slots {
 				for i := 0; i < f.Count; i++ {
 					id := fmt.Sprintf("%06d", len(slots))
-					slots = append(slots, slot{f.Role, f.Product, id})
+					slots = append(slots, slot{f.Slot, f.Product, id})
 					comps = append(comps, simfleet.Component{ID: id, Product: f.Product})
 				}
 			}
@@ -305,7 +305,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 				if len(addrs[i].Endpoints) == 0 {
 					return huma.Error409Conflict(fmt.Sprintf("the collector has no way to reach a simulated %s", s.product))
 				}
-				spec.Components = append(spec.Components, storage.SimSystemComponent{Role: s.role, Product: s.product, Endpoints: simEndpointSpecs(addrs[i].Endpoints)})
+				spec.Components = append(spec.Components, storage.SimSystemComponent{Slot: s.slot, Product: s.product, Endpoints: simEndpointSpecs(addrs[i].Endpoints)})
 			}
 			use := a.secretBind(ctx)
 			made, err := gw.CreateSimSystem(ctx, actorID(ctx), spec, storage.SimSystemScopes{
@@ -321,7 +321,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			out.Body.System, out.Body.SystemID = made.System.Name, made.System.ID
 			for i, c := range made.Components {
 				out.Body.Components = append(out.Body.Components, addSimSystemComponentBody{Component: c.Name,
-					Role: slots[i].role, Product: slots[i].product, Address: addrs[i].Address})
+					Slot: slots[i].slot, Product: slots[i].product, Address: addrs[i].Address})
 			}
 			return nil
 		})

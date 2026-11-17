@@ -96,7 +96,7 @@ const RESOURCE_LABEL_KEYS: Record<string, string[]> = {
   property: ["PropertyTypeName", "property_type_name"],
   alarm: ["component", "Component"],
   command: ["command_type"],
-  system_role_assignment: ["role"],
+  system_slot_assignment: ["slot"],
   principal_grant: ["Role", "role"],
 };
 

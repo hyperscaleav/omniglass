@@ -83,11 +83,11 @@ const view: FleetView = {
   ],
 } as unknown as FleetView;
 
-// The lobby system's health: an unstaffed role, which must read incomplete on
+// The lobby system's health: an unstaffed slot, which must read incomplete on
 // the card, in the server's own words, never outage.
 const lobbyHealth: FleetHealth = {
   verdict: "incomplete",
-  roles: [
+  slots: [
     {
       name: "signage",
       label: "Signage",
@@ -140,11 +140,11 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
   qc.setQueryData([...STANDARDS_KEY], []);
   qc.setQueryData([...PRODUCTS_KEY], []);
   qc.setQueryData([...COMPONENT_TYPES_KEY], []);
-  qc.setQueryData([...systemHealthKey(uuidFor("lz-s-sign"))], { verdict: "healthy", roles: [], systems: [], transitions: [] } as unknown as FleetHealth);
+  qc.setQueryData([...systemHealthKey(uuidFor("lz-s-sign"))], { verdict: "healthy", slots: [], systems: [], transitions: [] } as unknown as FleetHealth);
   qc.setQueryData([...systemHealthKey(uuidFor("lz-s-lobby"))], lobbyHealth);
   qc.setQueryData([...locationHealthKey(uuidFor("lz-hq"))], {
     verdict: "degraded",
-    roles: [],
+    slots: [],
     systems: [],
     transitions: [
       { ts: "2026-08-01T09:00:00Z", verdict: "healthy" },

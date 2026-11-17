@@ -22,7 +22,7 @@ import (
 
 // verdictFleet builds `systems` systems in one room, staffs each with the
 // component named for it, and returns the gateway plus its counter. Every system
-// is built to one standard carrying one role, so a raised alarm on a member
+// is built to one standard carrying one slot, so a raised alarm on a member
 // degrades exactly its own system and leaves the rest healthy: the fixture has to
 // contain more than one verdict or an oracle that always answered "healthy" would
 // pass it.
@@ -39,11 +39,11 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "verdict-std", Label: "Verdict"}); err != nil {
 		t.Fatalf("upsert standard: %v", err)
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "verdict-std", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "verdict-std", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	std := "verdict-std"
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
@@ -56,8 +56,8 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp, ProductName: &bar}, sc, sc, sc, sc); err != nil {
 			t.Fatalf("create component %d: %v", i, err)
 		}
-		if err := gw.AssignRole(ctx, "", sys, "table-mic", comp, sc, sc, sc, sc); err != nil {
-			t.Fatalf("assign role %d: %v", i, err)
+		if err := gw.AssignSlot(ctx, "", sys, "table-mic", comp, sc, sc, sc, sc); err != nil {
+			t.Fatalf("assign slot %d: %v", i, err)
 		}
 		// Every third system's member is in trouble, so the answer is a mix.
 		if i%3 == 1 {
@@ -72,7 +72,7 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 			}
 		}
 	}
-	// One system with NO standard, no role and no member: nothing has ever
+	// One system with NO standard, no slot and no member: nothing has ever
 	// recomputed it, so it has no recorded row at all, and the read has to answer
 	// for it from the default rather than omit it. This is the row the whole
 	// "coalesce to healthy" branch exists for.
@@ -84,7 +84,7 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 
 // TestSystemVerdictsAgreeWithTheReport is the oracle gate. SystemHealth is the
 // read the badge used to make per row, and it computes its verdict live from the
-// roles; SystemVerdicts reads the recorded series and defaults what it does not
+// slots; SystemVerdicts reads the recorded series and defaults what it does not
 // find. Those are two different mechanisms answering one question, so the
 // agreement is asserted rather than assumed, over a fleet deliberately holding
 // all three verdicts AND a system nothing has ever recomputed.

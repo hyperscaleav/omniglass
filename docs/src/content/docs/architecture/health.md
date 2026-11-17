@@ -1,6 +1,6 @@
 ---
 title: Health, KPIs, and service levels
-description: "Health as a verdict rolled up from alarms through occupied slots and roles, recorded as a transition so the edges are accurate, plus the KPIs every fleet should track and SLI / SLO / SLA."
+description: "Health as a verdict rolled up from alarms through the slots its components occupy, recorded as a transition so the edges are accurate, plus the KPIs every fleet should track and SLI / SLO / SLA."
 sidebar:
   badge:
     text: Partial
@@ -9,7 +9,7 @@ sidebar:
 
 Health answers "is this system working right now?" and "since when?". It is a **first-class
 model**, not a rules-engine byproduct: a deliberate chain (an alarm impairs a component's own
-verdict, an outage component no longer occupies the role it fills, an impaired role sinks its
+verdict, an outage component no longer occupies the slot it fills, an impaired slot sinks its
 system by a declared impact) carried on the ordinary sample pipeline: stored, queried, and trended
 like any other signal.
 
@@ -21,7 +21,7 @@ rest of this page still call the value a verdict until that rename lands.
 
 :::note[Partial]
 Built today: the **`alarm`** table (component-local, impairing its component wholesale), **`impact`**
-on a `system_role`, the **rollup** from component through system to location, and the **recorded
+on a `system_slot`, the **rollup** from component through system to location, and the **recorded
 transition history**. Three reads serve it: the two explanations
 (`GET /systems/{name}/health` and `GET /locations/{name}/health`) and the bulk verdict read
 (`GET /systems:health`, #653), alongside the alarm write surface on a component, and alarms are
@@ -40,8 +40,8 @@ reads as the grey of an unknown verdict
 A health read comes in two shapes, and which one a surface takes is a design rule rather than a
 preference.
 
-`GET /systems/{name}/health` is the **explanation**: the verdict plus every role the system needs,
-whether it is impaired, what an impaired role costs the system, which assigned components are down,
+`GET /systems/{name}/health` is the **explanation**: the verdict plus every slot the system needs,
+whether it is impaired, what an impaired slot costs the system, which assigned components are down,
 the alarms that took them down, and thirty days of recorded transitions. It is what a panel opens
 into, and it is expensive by design, because explaining is the job.
 
@@ -56,7 +56,7 @@ has one.
 
 The bulk read reports a system with nothing recorded as `healthy` rather than omitting it, and that is
 not a guess: a verdict is written only on a transition, so a system that has never been recomputed has
-no row, and a system with no impaired active role is healthy. The two reads are held to agreeing.
+no row, and a system with no impaired active slot is healthy. The two reads are held to agreeing.
 
 ## The chain: a component's own verdict is the routing key
 
@@ -66,10 +66,10 @@ Health is a chain, every hop a thing an operator already models:
 alarm on a component
   -> the component's own verdict moves (any active alarm; #626)
     -> an alarm at or above high takes it to outage, and only then does it stop
-       occupying the roles it is assigned to (a lesser alarm still degrades
+       occupying the slots it is assigned to (a lesser alarm still degrades
        it, but it keeps its slot)
-      -> a role falls below its quorum and is impaired
-        -> the role contributes its declared impact
+      -> a slot falls below its quorum and is impaired
+        -> the slot contributes its declared impact
           -> the system takes the worst contribution
             -> the location takes the worst of its systems
 ```
@@ -77,12 +77,12 @@ alarm on a component
 - An **[alarm](#the-alarm-what-is-wrong-with-one-component)** is **component-local** and impairs its
   component **wholesale**: any active alarm degrades it, one at or above `high` is an outage. It no longer
   names what it takes away (#626 retired the capability catalog that used to route it).
-- A component **occupies** a [system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
+- A component **occupies** a [system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
   it is assigned to unless its own verdict is currently **outage**: a merely **degraded** component
   (an info or warning alarm) still counts, since severity is how loudly to page somebody, not a
   second threshold for staffing. The typed-slot guard (accepted `component_type`s, optionally
   pinned products) is checked once, at assignment; it plays no further part in health.
-- A role with fewer occupying components than its **quorum** is **impaired**, contributing its
+- A slot with fewer occupying components than its **quorum** is **impaired**, contributing its
   **impact**; the system takes the **worst** contribution, the location the worst across its
   subtree's systems.
 
@@ -106,16 +106,16 @@ written one, the component has been observed by definition.
 `unknown` here is a reading of those reads alone. It never enters the rollup (the built verdict domain
 stays `healthy`, `incomplete`, `degraded`, `outage`), so an unobserved member neither raises nor hides a
 system's verdict, and the console words it with the same grey chip as a verdict it was never sent. The
-[design below](#unknown-and-honest-coverage) is the larger step: an unmeasured role changing what a
+[design below](#unknown-and-honest-coverage) is the larger step: an unmeasured slot changing what a
 system reads.
 
-## Impact lives on the role
+## Impact lives on the slot
 
-**`impact`** is a column on `system_role`: `outage`, `degraded`, or `none`, defaulting to `degraded`.
-It lives on the **role**, not the alarm or component, because the same broken box matters
+**`impact`** is a column on `system_slot`: `outage`, `degraded`, or `none`, defaulting to `degraded`.
+It lives on the **slot**, not the alarm or component, because the same broken box matters
 differently per slot: a dead confidence monitor is not a dead main display.
 
-| impact | an impaired role means | use it for |
+| impact | an impaired slot means | use it for |
 |---|---|---|
 | `outage` | the system is not working | the slot the room cannot run without |
 | `degraded` | the system is working, worse | the slot that costs quality, not the meeting |
@@ -136,10 +136,10 @@ healthy  <  incomplete  <  degraded  <  outage
 **`outage`, not `down`**: a device is down, a room has an outage, the reasoning that once picked
 `ok` over `up` ([ADR-0003](/architecture/decisions/#adr-0003-health-reads-ok-not-up)).
 
-**`incomplete` is a commissioning gap, not a fault.** A role can be short of quorum two ways, and
+**`incomplete` is a commissioning gap, not a fault.** A slot can be short of quorum two ways, and
 they are not the same event. Its assigned hardware can be **failing**, which is what `impact`
 describes and what an alarm fires for. Or the hardware was **never installed**, which no alarm
-will ever fire for, because nothing exists yet to alarm. A role short for the second reason reads
+will ever fire for, because nothing exists yet to alarm. A slot short for the second reason reads
 `incomplete`.
 
 The distinction earns its place on the fleet view. Most of a real fleet is mid-commissioning
@@ -149,18 +149,18 @@ visible above a finished room and invisible beneath anything actually broken.
 
 Two consequences follow from `impact` describing failure rather than absence:
 
-- A role that is **both** under-installed and partly alarming reads its `impact`, the worse of the
+- A slot that is **both** under-installed and partly alarming reads its `impact`, the worse of the
   two by rank and the one somebody is not already on their way to fix.
-- A role declaring `impact: none` reads `healthy` when empty, not `incomplete`. A slot whose
+- A slot declaring `impact: none` reads `healthy` when empty, not `incomplete`. A slot whose
   failure does not matter has an absence that does not matter either, and reporting one would
   leave a permanent gap on every confidence monitor nobody intends to staff.
 
-A role inside a **choice** whose alternate did not win contributes nothing at all, `incomplete`
+A slot inside a **choice** whose alternate did not win contributes nothing at all, `incomplete`
 included: the build the room was not made to is not outstanding work.
 
 Health is **distinct from severity**: severity is an alarm's alert importance
 ([alarms and actions](/architecture/alarms-actions/)), health an entity's operational state; a
-`high` alarm on a component filling no role moves nothing above it.
+`high` alarm on a component filling no slot moves nothing above it.
 
 ## The rollup is a pure function
 
@@ -171,12 +171,12 @@ unit tests.
 Two defaults are deliberate safety calls pointing in **opposite** directions:
 
 - An **unrecognized impact reads `degraded`**, never `healthy`: a bad value must not make an impaired
-  role silently harmless.
+  slot silently harmless.
 - An **unrecognized recorded value reads `healthy`**: one stray row must not paint a fleet broken.
 
 The rule behind both: **fail loud about a judgement, fail quiet about a record.** Two more defaults
-follow: a **system with no roles is `healthy`** (nothing claimed about it), and a **quorum below
-one reads as one** (a role no component need fill is not a role).
+follow: a **system with no slots is `healthy`** (nothing claimed about it), and a **quorum below
+one reads as one** (a slot no component need fill is not a slot).
 
 ## Health is recorded as a transition
 
@@ -211,12 +211,12 @@ the cause and the verdict commit together or not at all:
 
 | the write | why it can move health |
 |---|---|
-| raise or clear an **alarm** | the component's own verdict, and every role it occupies, can flip |
-| **assign** or **unassign** a component | a role reaches or falls below its quorum |
-| **declare** or **withdraw** a role | a system gains or loses a slot it can be short of |
-| change a role's **quorum** or **impact** | the same staffing crosses a different line |
+| raise or clear an **alarm** | the component's own verdict, and every slot it occupies, can flip |
+| **assign** or **unassign** a component | a slot reaches or falls below its quorum |
+| **declare** or **withdraw** a slot | a system gains or loses a slot it can be short of |
+| change a slot's **quorum** or **impact** | the same staffing crosses a different line |
 | **create** a system | its opening verdict gives its history a beginning |
-| change the **standard** a system conforms to | the whole inherited role set is swapped, and its staffing is carried onto the new roles or released first ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)) |
+| change the **standard** a system conforms to | the whole inherited slot set is swapped, and its staffing is carried onto the new slots or released first ([ADR-0506](/architecture/decisions/#adr-0506-changing-a-systems-standard-carries-its-staffing-onto-the-roles-that-still-exist)) |
 | change a system's **location** | the contribution moves between rollups, so **both** are recomputed |
 | change a **location's parent** | its whole subtree's contribution moves, so **both** ancestor chains are recomputed |
 | **delete** a system | the location it sat in loses a contributor and may have just improved |
@@ -225,7 +225,7 @@ A standard change moves **every conforming system** at once. The relocation case
 the system **left** explicitly, because its rollup may have just **improved** (a recovery is an edge
 as real as a failure; **deleting** a system is the same shape). A component's **product** (and so its
 `component_type`) governs the typed-slot guard checked once at **assignment**; changing it after the
-fact does not, by itself, move any assigned role's health (#626: the guard is not part of the health
+fact does not, by itself, move any assigned slot's health (#626: the guard is not part of the health
 chain, so this row that used to reach the whole fleet on a catalog edit is retired along with it).
 
 A **location move** is the relocation shape one tier up
@@ -238,9 +238,9 @@ naming the old parent covers the old one. A `:move` that changes no parent recom
 Deleting a **location** needs no trigger: a location holding anything cannot be deleted (`on delete
 restrict` throughout), so a deletable location is empty and already healthy.
 
-A **composite write** (a planned or simulated system and its role slots, one transaction) recomputes
+A **composite write** (a planned or simulated system and its slots, one transaction) recomputes
 **once, before commit**, not once per piece. Each piece would otherwise record its own transition: a
-system born with every role empty is `incomplete`, and filling its slots one by one would write
+system born with every slot empty is `incomplete`, and filling its slots one by one would write
 `incomplete` and then `healthy` milliseconds apart, an edge no reader could observe because the write is
 atomic, and cost a pass over the whole chain per slot. So the create and assign bodies take an optional
 deferral and, when given one, name their owners to it instead of recomputing; the composite then runs
@@ -288,8 +288,8 @@ live, and the tests hold the recorded tree to that full fold after every kind of
 
 Self-healing on read would stamp the edge at read time, precisely the inaccuracy this model avoids.
 The reads do, however, **compute the verdict they serve from the same rows they display**, a
-correctness fix: serving the **last recorded** verdict while resolving contributing roles
-**live** once let a system report `healthy` beside an impaired `outage` role. **Recorded transitions
+correctness fix: serving the **last recorded** verdict while resolving contributing slots
+**live** once let a system report `healthy` beside an impaired `outage` slot. **Recorded transitions
 remain the source for history**; a missing trigger can cost an **edge**, never a report that
 **lies about the present**.
 
@@ -298,9 +298,9 @@ remain the source for history**; a missing trigger can cost an **edge**, never a
 Two reads, both scope-injected, both a non-disclosing 404 for an owner outside the caller's scope
 ([API](/architecture/api/#health-the-verdict-and-why)).
 
-**A system's report** is the verdict, every role it needs filled, and for an impaired role the
-causing chain: "the `room-mic` role wants 2 and has 1, because `mic-pod-2` went down on a high
-alarm raised at 14:02" tells the operator where to walk. A role impaired with **no assigned component
+**A system's report** is the verdict, every slot it needs filled, and for an impaired slot the
+causing chain: "the `room-mic` slot wants 2 and has 1, because `mic-pod-2` went down on a high
+alarm raised at 14:02" tells the operator where to walk. A slot impaired with **no assigned component
 down** (nobody assigned, or fewer assigned than the quorum wants) names no alarm, distinguishing
 **short-staffed** from **broken**.
 
@@ -323,17 +323,17 @@ room cannot be made to look healthy by somebody looking at it
 verdict answers "is this component out", which is a question about the condition; the
 acknowledgement answers "has anybody seen this", which is a question about a person.
 
-The health report carries the acknowledgement anyway. Each alarm under `roles[].alarms[]` has
+The health report carries the acknowledgement anyway. Each alarm under `slots[].alarms[]` has
 `acknowledged`, `acknowledged_at` and `acknowledged_by`, the same fields and rules as the component's
 alarm list, so a reader of the report sees which causing alarms somebody already looked at. They
 annotate the alarm and never feed the verdict. The system page's Why strip reads them to show who
 acknowledged and when, and to offer **Acknowledge** on the rest (#990).
 
 Severity drives the **component's own** verdict (any active alarm makes it `degraded`, one at or above `high`
-one an `outage`) and **nothing above it**: what reaches a role is only whether its occupant's
+one an `outage`) and **nothing above it**: what reaches a slot is only whether its occupant's
 verdict is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
 is how loudly to page somebody, impact is what the room lost. A component's verdict records on its
-own arc, so a component filling no role still carries accurate history.
+own arc, so a component filling no slot still carries accurate history.
 
 ## Where alarms come from
 
@@ -345,8 +345,8 @@ alarm uses. A rule-opened alarm impairs its owner's own verdict exactly as a han
 (#626: it names nothing it takes away; the component is impaired wholesale), and the
 acknowledgement-independence above holds for it identically. The official `reachability-lost` rule is
 what closes the monitoring loop with no operator in between: an endpoint whose verdict reads `down` for
-its sustain opens a `high` alarm, the component goes to outage and stops filling its roles, and the
-system reads whatever those roles' impact says; reading `up` clears it and the verdict recovers.
+its sustain opens a `high` alarm, the component goes to outage and stops filling its slots, and the
+system reads whatever those slots' impact says; reading `up` clears it and the verdict recovers.
 
 ::::design[Target design (ADR-0050)]
 
@@ -377,7 +377,7 @@ machinery in [time](/architecture/time/)), **`uncovered`** (no health-impacting 
 alarm, keeping `uncovered` rare.
 
 :::caution[Open question]
-How `unknown` composes upward. A required role whose only component is unmeasured is not `healthy`,
+How `unknown` composes upward. A required slot whose only component is unmeasured is not `healthy`,
 but calling the system an outage overstates it.
 :::
 
@@ -470,8 +470,8 @@ hall's head-end) relates to its subsystems' verdicts is decided with the groupin
 ([ADR-0140](/architecture/decisions/#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing),
 #879).
 
-Related: [core entities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
-(the role, the typed-slot guard, the quorum), [alarms and actions](/architecture/alarms-actions/) (the
+Related: [core entities](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
+(the slot, the typed-slot guard, the quorum), [alarms and actions](/architecture/alarms-actions/) (the
 detection tier), [samples](/architecture/properties/) (the `property` lane and the owner arc), and
 the [Standards](/guides/admin/standards/) and [Work with an entity](/guides/operator/entities/)
 guides for the operator loop.

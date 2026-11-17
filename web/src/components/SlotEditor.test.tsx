@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import RoleEditor from "./RoleEditor";
-import { standardRolesKey, type DeclaredRole } from "../lib/system_roles";
+import SlotEditor from "./SlotEditor";
+import { standardSlotsKey, type DeclaredSlot } from "../lib/system_slots";
 import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
 import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { ME_KEY, type Me } from "../lib/auth";
 import { BladeEditContext, createEditSlot } from "../lib/blades";
 import { uuidFor } from "../lib/testids";
 
-// The editor curates the roles a standard declares: the slots every conforming
+// The editor curates the slots a standard declares: the slots every conforming
 // system needs filled, each with the typed-slot guard (#626) a filling
 // component's product must clear and how many components the slot wants. Data
 // is seeded into the query cache so no server is needed; the PATCH / DELETE
@@ -17,7 +17,7 @@ import { uuidFor } from "../lib/testids";
 // inside a blade edit slot, as the standard blade does: the controls are
 // edit-state affordances (#621), so the default mount enters edit mode;
 // `editing: false` witnesses the read state.
-const declared: DeclaredRole[] = [
+const declared: DeclaredSlot[] = [
   { name: "table-mic", label: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" },
   { name: "main-display", label: "Main display", quorum: 1, accepted_types: ["display"], pinned_products: ["samsung-qm55"], position_labels: [], impact: "outage" },
 ];
@@ -41,9 +41,9 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(opts: { me?: Me; official?: boolean; rows?: DeclaredRole[]; editing?: boolean } = {}) {
+function mount(opts: { me?: Me; official?: boolean; rows?: DeclaredSlot[]; editing?: boolean } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...standardRolesKey("meeting-room")], opts.rows ?? declared);
+  qc.setQueryData([...standardSlotsKey("meeting-room")], opts.rows ?? declared);
   qc.setQueryData([...COMPONENT_TYPES_KEY], typeCatalog);
   qc.setQueryData([...PRODUCTS_KEY], productCatalog);
   qc.setQueryData([...ME_KEY], opts.me ?? owner);
@@ -52,23 +52,23 @@ function mount(opts: { me?: Me; official?: boolean; rows?: DeclaredRole[]; editi
   const result = render(() => (
     <QueryClientProvider client={qc}>
       <BladeEditContext.Provider value={edit}>
-        <RoleEditor id="meeting-room" official={opts.official ?? false} />
+        <SlotEditor id="meeting-room" official={opts.official ?? false} />
       </BladeEditContext.Provider>
     </QueryClientProvider>
   ));
   return { ...result, edit };
 }
 
-const roleRow = (name: HTMLElement) => name.closest("div.flex-col") as HTMLElement;
+const slotRow = (name: HTMLElement) => name.closest("div.flex-col") as HTMLElement;
 
-describe("RoleEditor on a standard", () => {
+describe("SlotEditor on a standard", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists each declared role with its quorum and what it accepts", () => {
+  it("lists each declared slot with its quorum and what it accepts", () => {
     const { getByText } = mount();
-    expect(getByText("Declared roles")).toBeTruthy();
-    expect(getByText("the standard's roles")).toBeTruthy();
-    const row = roleRow(getByText("table-mic"));
+    expect(getByText("Declared slots")).toBeTruthy();
+    expect(getByText("the standard's slots")).toBeTruthy();
+    const row = slotRow(getByText("table-mic"));
     expect(within(row).getByText("Table microphone")).toBeTruthy();
     expect(within(row).getByText("2 wanted")).toBeTruthy();
     expect(within(row).getByText("video-bar")).toBeTruthy();
@@ -80,7 +80,7 @@ describe("RoleEditor on a standard", () => {
   // value, which the API reads as "unchanged", and the removal is silently
   // dropped. The mask must stop at what the editor owns: alternate has no
   // control here (#640 gave it a read, not an editor), so naming it would clear
-  // a role's alternate on an unrelated edit, the exact #626 defect.
+  // a slot's alternate on an unrelated edit, the exact #626 defect.
   it("names every field it owns in the update mask, and nothing it does not", async () => {
     let patch: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -89,7 +89,7 @@ describe("RoleEditor on a standard", () => {
         patch = req.clone();
         return json({ name: "main-display", label: "Main display", quorum: 1 });
       }
-      return json({ roles: declared });
+      return json({ slots: declared });
     });
 
     const { getByLabelText } = mount();
@@ -107,7 +107,7 @@ describe("RoleEditor on a standard", () => {
     expect(body.pinned_products).toEqual([]);
   });
 
-  it("declares a role, patching its name, label, quorum, and typed-slot guard", async () => {
+  it("declares a slot, patching its name, label, quorum, and typed-slot guard", async () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -115,20 +115,20 @@ describe("RoleEditor on a standard", () => {
         put = req.clone();
         return json({ name: "camera", label: "Room camera", quorum: 1, accepted_types: ["video-bar"] });
       }
-      return json({ roles: declared });
+      return json({ slots: declared });
     });
 
     const { getByLabelText } = mount();
-    // The rest of the form appears only once the role is named: the name is the
+    // The rest of the form appears only once the slot is named: the name is the
     // address, and it is invented here, not picked from a catalog.
-    fireEvent.input(getByLabelText("Role name"), { target: { value: "camera" } });
-    fireEvent.input(getByLabelText("Name for the new role"), { target: { value: "Room camera" } });
-    fireEvent.input(getByLabelText("Quorum for the new role"), { target: { value: "3" } });
+    fireEvent.input(getByLabelText("Slot name"), { target: { value: "camera" } });
+    fireEvent.input(getByLabelText("Name for the new slot"), { target: { value: "Room camera" } });
+    fireEvent.input(getByLabelText("Quorum for the new slot"), { target: { value: "3" } });
     fireEvent.change(getByLabelText("Accept a component type…"), { target: { value: "video-bar" } });
-    fireEvent.click(getByLabelText("Declare role"));
+    fireEvent.click(getByLabelText("Declare slot"));
 
     await waitFor(() => expect(put).toBeTruthy());
-    expect(put!.url).toContain("/standards/meeting-room/roles/camera");
+    expect(put!.url).toContain("/standards/meeting-room/slots/camera");
     expect(await put!.json()).toEqual({
       update_mask: ["label", "quorum", "capacity", "position_labels", "accepted_types", "pinned_products", "impact"],
       quorum: 3,
@@ -140,7 +140,7 @@ describe("RoleEditor on a standard", () => {
     });
   });
 
-  it("edits a role in place, replacing the typed-slot sets wholesale", async () => {
+  it("edits a slot in place, replacing the typed-slot sets wholesale", async () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -148,7 +148,7 @@ describe("RoleEditor on a standard", () => {
         put = req.clone();
         return json({ name: "main-display", label: "Main display", quorum: 2, accepted_types: ["display"] });
       }
-      return json({ roles: declared });
+      return json({ slots: declared });
     });
 
     const { getByLabelText } = mount();
@@ -161,7 +161,7 @@ describe("RoleEditor on a standard", () => {
     fireEvent.click(getByLabelText("Save main-display"));
 
     await waitFor(() => expect(put).toBeTruthy());
-    expect(put!.url).toContain("/standards/meeting-room/roles/main-display");
+    expect(put!.url).toContain("/standards/meeting-room/slots/main-display");
     expect(await put!.json()).toEqual({
       update_mask: ["label", "quorum", "capacity", "position_labels", "accepted_types", "pinned_products", "impact"],
       quorum: 2,
@@ -175,9 +175,9 @@ describe("RoleEditor on a standard", () => {
 
   // Predates the epic (#626): buildSpec sent only quorum/display/typed-slot
   // fields, so the wholesale-replace PUT defaulted an omitted impact to
-  // "degraded" server-side, silently downgrading an outage-impact role on any
+  // "degraded" server-side, silently downgrading an outage-impact slot on any
   // unrelated edit. See build-log.md.
-  it("preserves a role's impact when only its quorum changes", async () => {
+  it("preserves a slot's impact when only its quorum changes", async () => {
     let put: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -185,7 +185,7 @@ describe("RoleEditor on a standard", () => {
         put = req.clone();
         return json({ name: "main-display", label: "Main display", quorum: 2, accepted_types: ["display"], impact: "outage" });
       }
-      return json({ roles: declared });
+      return json({ slots: declared });
     });
 
     const { getByLabelText } = mount();
@@ -204,7 +204,7 @@ describe("RoleEditor on a standard", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "PATCH") { put = req.clone(); return json({}); }
-      return json({ roles: declared });
+      return json({ slots: declared });
     });
 
     const { getByLabelText, getByRole } = mount();
@@ -216,29 +216,29 @@ describe("RoleEditor on a standard", () => {
     expect(put).toBeUndefined();
   });
 
-  it("withdraws a role after confirmation, calling DELETE", async () => {
+  it("withdraws a slot after confirmation, calling DELETE", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     let del: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "DELETE") { del = req.clone(); return new Response(null, { status: 204 }); }
-      return json({ roles: declared });
+      return json({ slots: declared });
     });
 
     const { getByLabelText } = mount();
     fireEvent.click(getByLabelText("Withdraw table-mic"));
 
     await waitFor(() => expect(del).toBeTruthy());
-    // The confirm says what withdrawing costs: conforming systems lose the role.
+    // The confirm says what withdrawing costs: conforming systems lose the slot.
     expect(confirmSpy.mock.calls[0][0]).toContain("conforming system");
-    expect(del!.url).toContain("/standards/meeting-room/roles/table-mic");
+    expect(del!.url).toContain("/standards/meeting-room/slots/table-mic");
   });
 
-  it("renders an official standard's roles read-only", () => {
+  it("renders an official standard's slots read-only", () => {
     const { getByText, queryByLabelText } = mount({ official: true });
     expect(getByText("table-mic")).toBeTruthy(); // the list still renders
-    expect(getByText("official roles, read-only")).toBeTruthy();
-    expect(queryByLabelText("Role name")).toBeNull();
+    expect(getByText("official slots, read-only")).toBeTruthy();
+    expect(queryByLabelText("Slot name")).toBeNull();
     expect(queryByLabelText("Edit table-mic")).toBeNull();
     expect(queryByLabelText("Withdraw table-mic")).toBeNull();
   });
@@ -246,23 +246,23 @@ describe("RoleEditor on a standard", () => {
   it("hides the write controls from a principal without standard:update", () => {
     const { getByText, queryByLabelText } = mount({ me: reader });
     expect(getByText("table-mic")).toBeTruthy();
-    expect(queryByLabelText("Role name")).toBeNull();
+    expect(queryByLabelText("Slot name")).toBeNull();
     expect(queryByLabelText("Edit table-mic")).toBeNull();
     expect(queryByLabelText("Withdraw table-mic")).toBeNull();
   });
 
-  it("shows the empty state when a standard declares no roles", () => {
+  it("shows the empty state when a standard declares no slots", () => {
     const { getByText } = mount({ rows: [] });
-    expect(getByText("This standard declares no roles.")).toBeTruthy();
+    expect(getByText("This standard declares no slots.")).toBeTruthy();
   });
 
   // The blade model (#621): outside blade edit mode the panel is facts alone,
   // whatever the caller may do; the pencil is the one route to the controls.
-  it("renders the roles as facts alone while the blade is in read mode", () => {
+  it("renders the slots as facts alone while the blade is in read mode", () => {
     const { getByText, queryByLabelText } = mount({ editing: false });
     expect(getByText("table-mic")).toBeTruthy();
     expect(getByText("2 wanted")).toBeTruthy();
-    expect(queryByLabelText("Role name")).toBeNull();
+    expect(queryByLabelText("Slot name")).toBeNull();
     expect(queryByLabelText("Edit table-mic")).toBeNull();
     expect(queryByLabelText("Withdraw table-mic")).toBeNull();
   });
@@ -270,11 +270,11 @@ describe("RoleEditor on a standard", () => {
 
 
 // Symmetric with ContractEditor: leaving blade edit mode discards the open
-// role drafts, so nothing resurrects on the next pencil press (#621's review).
-describe("RoleEditor drafts die with the edit session", () => {
+// slot drafts, so nothing resurrects on the next pencil press (#621's review).
+describe("SlotEditor drafts die with the edit session", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("closes an open role edit when edit mode ends and stays closed on re-entry", async () => {
+  it("closes an open slot edit when edit mode ends and stays closed on re-entry", async () => {
     const { edit, getByLabelText, queryByLabelText } = mount();
     fireEvent.click(getByLabelText("Edit main-display"));
     expect(queryByLabelText("Name for main-display")).toBeTruthy();

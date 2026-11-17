@@ -52,14 +52,14 @@ A fleet entity's blade (a location, a system, a component) is the glance an oper
 from a row. It leads with the verdict and since-when and the active alarms that say why, each
 with its severity, then the context you came for: a system's location (as a card saying where it
 sits, the path above it, since a blade has no breadcrumb) and its size;
-the systems a component serves, with the role it fills in each, and its location when that is
+the systems a component serves, with the slot it fills in each, and its location when that is
 somewhere else; a location's systems, each with its verdict, one click from its own blade. Then
 the entity's **form**: its name, classification, a location's parent, and tags, read or edited
 in place. Each fact is said once: the blade's title is the label (the Label field appears only
 while editing), a room's only system is the room (its card names no location and offers no second
 blade for it, only **Configure location**), and the standard is in Classification, not repeated
 above it. Configuration (a
-system's roles, the properties and their cascade, the reconciliation, a component's
+system's slots, the properties and their cascade, the reconciliation, a component's
 endpoints) is the detail view's **Configure** tab, one **Expand** away, along with the
 components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
 permissions on that row.
@@ -135,7 +135,7 @@ identity pages.
   not a choice you are stuck with. **Edit** a component and the primary system is a picker you can
   change or clear, and any other systems it belongs to (a shared device is in several) are chips with a
   remove control. **Save** applies them with the rest of the edit; if the server refuses one (a system
-  outside your `system:update` scope, or a role the component still fills there), the reason shows in
+  outside your `system:update` scope, or a slot the component still fills there), the reason shows in
   the footer beside **Save** and the form stays in edit. Without `system:update` the field reads but does not edit. The
   system's member list updates without a reload.
 
@@ -306,39 +306,39 @@ which holds only what is declared or calculated. A calculated property is not re
 asked for its value), so it shows in Properties alone. A location has no Reconciliation panel: a
 location owns no observed value.
 
-## Roles on a system
+## Slots on a system
 
-A **system** carries one more panel: **Roles**, the slots it needs filled. A role is a slot (a room
-microphone, a main display), not a component, so the system can say what it needs before anything is
-assigned and an **empty slot stays visible**. These are slots in a system, not the
-[roles that grant people access](/guides/admin/access/); the two share only the word.
+A **system** carries one more panel: **Slots**, the places it needs filled. A slot (a room
+microphone, a main display) is a position, not a component, so the system can say what it needs before anything is
+assigned and an **empty slot stays visible**. A slot is not one of the
+[roles that grant people access](/guides/admin/access/): a role is IAM's word, a slot the system's.
 
-Each row is one role with **where it came from**, **who fills it**, and **how many more it wants**:
+Each row is one slot with **where it came from**, **who fills it**, and **how many more it wants**:
 
-- **Inherited or declared here.** A role marked as coming from the standard is declared on the
+- **Inherited or declared here.** A slot marked as coming from the standard is declared on the
   [standard](/guides/admin/standards/) this system conforms to, and every conforming system has it.
-  A role declared on this system is this system's own. A **one-off system** (conforming to no standard)
+  A slot declared on this system is this system's own. A **one-off system** (conforming to no standard)
   has only its own.
-- **Assigned and understaffed.** A role has a **quorum**, how many components should fill it. Two
+- **Assigned and understaffed.** A slot has a **quorum**, how many components should fill it. Two
   assigned against a quorum of two reads as staffed; one reads as short by one. That is true the
   moment you enter it, with nothing collecting: staffing is a fact about your model, not a
   measurement.
-- **Impact.** Each role also says what the system loses when the slot is not being filled properly:
+- **Impact.** Each slot also says what the system loses when the slot is not being filled properly:
   **outage**, **degraded**, or **none**. That is what turns a broken component into a system-level verdict
   further down this page, and it is declared on the
-  [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) or on the system.
-- **Assign** picks a component to fill the role; **unassign** takes it out and the role goes back to
+  [standard](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled) or on the system.
+- **Assign** picks a component to fill the slot; **unassign** takes it out and the slot goes back to
   understaffed. Assigning the same component twice changes nothing.
-- **A component staffing a role cannot be deleted.** Unassign it first. The refusal is deliberate: a
+- **A component staffing a slot cannot be deleted.** Unassign it first. The refusal is deliberate: a
   delete that silently emptied a slot would leave the system quietly wrong.
 
-**An assignment can be refused, and the refusal tells you why.** A role's [accepted types and pinned
-products](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) are the typed-slot
+**An assignment can be refused, and the refusal tells you why.** A slot's [accepted types and pinned
+products](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled) are the typed-slot
 guard: assign a component of the wrong type and you get both parties named
-(`component "panel-1" is a display; role "Table microphone" wants a video-bar`), which is either a
-sign you picked the wrong component or that the role needs widening.
+(`component "panel-1" is a display; slot "Table microphone" wants a video-bar`), which is either a
+sign you picked the wrong component or that the slot needs widening.
 
-Declaring the roles is on the [Standards guide](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled);
+Declaring the slots is on the [Standards guide](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled);
 this panel is where they get staffed.
 
 ## Alarms on a component
@@ -353,7 +353,7 @@ Raising one takes two things:
   under Actions: Severity** (the [rules guide](/guides/admin/rules/#severity-levels) renders the shipped
   set, and an admin can add more between them on that page). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
   **component's own** verdict (any active alarm makes the component degraded, one at a level marked
-  outage takes it out). Only an **outage** stops a component occupying a role it fills: an info or warning
+  outage takes it out). Only an **outage** stops a component occupying a slot it fills: an info or warning
   alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
   a system on its own;
 - a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
@@ -490,34 +490,34 @@ the outline:
 | **degraded** | it is working, worse |
 | **outage** | it is not working |
 
-**`incomplete` is not a fault.** It means a role is short because nobody has put the hardware in
+**`incomplete` is not a fault.** It means a slot is short because nobody has put the hardware in
 yet, so no alarm will ever fire for it: there is nothing there to alarm. A system mid-installation
 reads incomplete, and it stays that way until somebody fills the slot. That is deliberately a
 different colour from a system that is broken, because during a rollout most of your fleet is in
 the first state and you need to be able to see past it to the second.
 
 A location's verdict is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
-when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **roles** it
+when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **slots** it
 needs filled.
 
 **The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
 view names the chain instead: **Why** leads its Overview, each alarm naming the down component
-and the role it impairs, and the component rows beneath carry the arithmetic. Read together they are this
+and the slot it impairs, and the component rows beneath carry the arithmetic. Read together they are this
 chain:
 
 ```text
 alarm on mic-pod-2 (high, "no audio on channel 1")
   -> mic-pod-2 is down (its own verdict, from the alarm)
-    -> role room-mic wants 2, and mic-pod-2 no longer occupies its slot
+    -> slot room-mic wants 2, and mic-pod-2 no longer occupies its slot
       -> only 1 assigned component still occupies it
-        -> role impaired, impact degraded
+        -> slot impaired, impact degraded
           -> hq-r1 is degraded
 ```
 
-Read it bottom-up when you want the verdict and top-down when you want the fix. A role can also be
+Read it bottom-up when you want the verdict and top-down when you want the fix. A slot can also be
 impaired with **no down component named**, which means it is **short-staffed** rather than broken:
 nobody is assigned. Those are two different jobs, and the view keeps them apart: an unstaffed seat
-reads **incomplete** as an empty slot, a down occupant keeps its seat and reads the impact its role
+reads **incomplete** as an empty slot, a down occupant keeps its seat and reads the impact its slot
 declared.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
@@ -532,19 +532,19 @@ From the CLI: `omniglass system health list <name>` and `omniglass location heal
 
 Once, in order, on a real system:
 
-1. **Declare the roles with their impact.** On the system's
-   [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled), give **Main Display**
+1. **Declare the slots with their impact.** On the system's
+   [standard](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled), give **Main Display**
    impact **outage** and **Room Microphone** impact **degraded** with quorum 2, accepting `video-bar`.
    Every conforming system inherits both immediately.
-2. **Staff the system.** Assign components to each role from the system's **Roles** panel. A component
-   of the wrong type is refused by name (`component "panel-1" is a display; role "Room Microphone"
+2. **Staff the system.** Assign components to each slot from the system's **Slots** panel. A component
+   of the wrong type is refused by name (`component "panel-1" is a display; slot "Room Microphone"
    wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
 3. **Raise an alarm.** On one of the mic pods, raise a `high` alarm.
-4. **Watch the system move.** The system goes **degraded** (the `room-mic` role now has one occupant
+4. **Watch the system move.** The system goes **degraded** (the `room-mic` slot now has one occupant
    against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
-   the alarm been on the main display instead, the system would be an **outage**, because that role says so.
+   the alarm been on the main display instead, the system would be an **outage**, because that slot says so.
 5. **Read the system's Overview** to find the cause: the active alarm, the component it took down and
-   the role that component fills, with the message and the time it was raised. Walk to the pod.
+   the slot that component fills, with the message and the time it was raised. Walk to the pod.
 6. **Clear the alarm** once it is fixed. The system returns to **healthy** in the same transaction, and the
    alarm row stays in the component's history.
 7. **Read the history afterwards.** The transition strip now shows the exact stretch the system was

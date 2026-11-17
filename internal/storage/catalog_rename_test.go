@@ -106,27 +106,27 @@ func TestCatalogHandleRenameKeepsReferences(t *testing.T) {
 		t.Errorf("component product reads %v, want acme-soundbar", comp.ProductHandle)
 	}
 
-	// Slice 2: a standard rename with its role's typed-slot requirement intact.
-	// The standard has a role accepting video-bar (the typed-slot guard, #626);
-	// renaming the standard must leave the role, and what it accepts, resolving.
+	// Slice 2: a standard rename with its slot's typed-slot requirement intact.
+	// The standard has a slot accepting video-bar (the typed-slot guard, #626);
+	// renaming the standard must leave the slot, and what it accepts, resolving.
 	if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "huddle", Label: "Huddle"}); err != nil {
 		t.Fatalf("standard: %v", err)
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "huddle", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "huddle", storage.SystemSlotSpec{
 		Name: "mic", Label: "Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded"}); err != nil {
-		t.Fatalf("role: %v", err)
+		t.Fatalf("slot: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `update standard set name = 'huddle-space' where name = 'huddle'`); err != nil {
 		t.Fatalf("rename standard: %v", err)
 	}
-	// The standard is addressable by its new handle, and the role still declares
+	// The standard is addressable by its new handle, and the slot still declares
 	// the accepted type it did before the rename.
-	roles, err := gw.ListSystemRoles(ctx, "standard", "huddle-space")
+	slots, err := gw.ListSystemSlots(ctx, "standard", "huddle-space")
 	if err != nil {
-		t.Fatalf("list roles by the renamed standard: %v", err)
+		t.Fatalf("list slots by the renamed standard: %v", err)
 	}
-	if len(roles) != 1 || len(roles[0].AcceptedTypes) != 1 || roles[0].AcceptedTypes[0] != "video-bar" {
-		t.Errorf("role accepted types = %v, want [video-bar]", roles)
+	if len(slots) != 1 || len(slots[0].AcceptedTypes) != 1 || slots[0].AcceptedTypes[0] != "video-bar" {
+		t.Errorf("slot accepted types = %v, want [video-bar]", slots)
 	}
 
 	// Slice 3: a property rename follows its contract line, a declared value, AND

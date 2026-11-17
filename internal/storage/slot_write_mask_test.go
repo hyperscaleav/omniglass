@@ -11,14 +11,14 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/updatemask"
 )
 
-// The write mask at the storage layer (#666): SetSystemRole writes the fields
+// The write mask at the storage layer (#666): SetSystemSlot writes the fields
 // spec.Write names, and when the caller names none (every caller that predates
 // the mask), the fields the spec itself populated. The declaration used to
 // wholesale-replace most of the row, which is what took impact and
 // position_labels with it on an unrelated edit (#639) and left capacity with no
 // clear path at all (#638).
 
-func roleMaskGateway(t *testing.T) (*storage.PG, context.Context, scope.Set) {
+func slotMaskGateway(t *testing.T) (*storage.PG, context.Context, scope.Set) {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -43,14 +43,14 @@ func roleMaskGateway(t *testing.T) (*storage.PG, context.Context, scope.Set) {
 // field by field.
 func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 	t.Parallel()
-	gw, ctx, all := roleMaskGateway(t)
+	gw, ctx, all := slotMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-preserve-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 
 	pinned := storagetest.MintProduct(t, ctx, gw, "display").Name
 	cap3 := 3
-	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-preserve-sys", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", "mask-preserve-sys", storage.SystemSlotSpec{
 		Name: "main-display", Label: "Main Display", Quorum: 2, Impact: "outage",
 		Capacity: &cap3, PositionLabels: []string{"left", "right"},
 		AcceptedTypes: []string{"display"}, PinnedProducts: []string{pinned},
@@ -58,7 +58,7 @@ func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 		t.Fatalf("declare: %v", err)
 	}
 
-	r, err := gw.SetSystemRole(ctx, "", "system", "mask-preserve-sys", storage.SystemRoleSpec{
+	r, err := gw.SetSystemSlot(ctx, "", "system", "mask-preserve-sys", storage.SystemSlotSpec{
 		Name: "main-display", Label: "Main Display (renamed)",
 	})
 	if err != nil {
@@ -94,21 +94,21 @@ func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 // only ever narrow it, and raw SQL was the only way back to unbounded.
 func TestExplicitMaskClearsCapacity(t *testing.T) {
 	t.Parallel()
-	gw, ctx, all := roleMaskGateway(t)
+	gw, ctx, all := slotMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-clear-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 
 	cap3 := 3
-	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-clear-sys", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", "mask-clear-sys", storage.SystemSlotSpec{
 		Name: "main-display", Label: "Main Display", Impact: "outage", Capacity: &cap3,
 	}); err != nil {
 		t.Fatalf("declare with capacity: %v", err)
 	}
 
-	r, err := gw.SetSystemRole(ctx, "", "system", "mask-clear-sys", storage.SystemRoleSpec{
+	r, err := gw.SetSystemSlot(ctx, "", "system", "mask-clear-sys", storage.SystemSlotSpec{
 		Name:  "main-display",
-		Write: updatemask.Of(storage.RoleFieldCapacity),
+		Write: updatemask.Of(storage.SlotFieldCapacity),
 	})
 	if err != nil {
 		t.Fatalf("clear capacity through the mask: %v", err)
@@ -118,7 +118,7 @@ func TestExplicitMaskClearsCapacity(t *testing.T) {
 			"zero value clears (#638)", *r.Capacity)
 	}
 	if r.Impact != "outage" || r.Label != "Main Display" {
-		t.Fatalf("role after a capacity-only mask = %+v, want every other field untouched", r)
+		t.Fatalf("slot after a capacity-only mask = %+v, want every other field untouched", r)
 	}
 }
 
@@ -127,12 +127,12 @@ func TestExplicitMaskClearsCapacity(t *testing.T) {
 // one now means naming it in the mask rather than sending [].
 func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
 	t.Parallel()
-	gw, ctx, all := roleMaskGateway(t)
+	gw, ctx, all := slotMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-clear-list-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	pinned := storagetest.MintProduct(t, ctx, gw, "display").Name
-	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-clear-list-sys", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", "mask-clear-list-sys", storage.SystemSlotSpec{
 		Name: "main-display", Label: "Main Display",
 		PositionLabels: []string{"left"}, AcceptedTypes: []string{"display"},
 		PinnedProducts: []string{pinned},
@@ -140,16 +140,16 @@ func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
 		t.Fatalf("declare: %v", err)
 	}
 
-	r, err := gw.SetSystemRole(ctx, "", "system", "mask-clear-list-sys", storage.SystemRoleSpec{
+	r, err := gw.SetSystemSlot(ctx, "", "system", "mask-clear-list-sys", storage.SystemSlotSpec{
 		Name: "main-display",
-		Write: updatemask.Of(storage.RoleFieldPositionLabels, storage.RoleFieldAcceptedTypes,
-			storage.RoleFieldPinnedProducts),
+		Write: updatemask.Of(storage.SlotFieldPositionLabels, storage.SlotFieldAcceptedTypes,
+			storage.SlotFieldPinnedProducts),
 	})
 	if err != nil {
 		t.Fatalf("clear the lists through the mask: %v", err)
 	}
 	if len(r.PositionLabels) != 0 || len(r.AcceptedTypes) != 0 || len(r.PinnedProducts) != 0 {
-		t.Fatalf("role after a list-clearing mask = %+v, want all three lists empty", r)
+		t.Fatalf("slot after a list-clearing mask = %+v, want all three lists empty", r)
 	}
 	if r.Label != "Main Display" {
 		t.Fatalf("label = %q, want it untouched by a mask that does not name it", r.Label)
@@ -162,23 +162,23 @@ func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
 // write whether the caller meant it or not.
 func TestStarMaskReplacesTheWholeDeclaration(t *testing.T) {
 	t.Parallel()
-	gw, ctx, all := roleMaskGateway(t)
+	gw, ctx, all := slotMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-star-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	cap3 := 3
-	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-star-sys", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", "mask-star-sys", storage.SystemSlotSpec{
 		Name: "main-display", Label: "Main Display", Quorum: 2, Impact: "outage", Capacity: &cap3,
 		PositionLabels: []string{"left", "right"}, AcceptedTypes: []string{"display"},
 	}); err != nil {
 		t.Fatalf("declare: %v", err)
 	}
 
-	full, err := updatemask.Resolve([]string{updatemask.Star}, storage.RolePatchFields, nil)
+	full, err := updatemask.Resolve([]string{updatemask.Star}, storage.SlotPatchFields, nil)
 	if err != nil {
 		t.Fatalf("resolve star: %v", err)
 	}
-	r, err := gw.SetSystemRole(ctx, "", "system", "mask-star-sys", storage.SystemRoleSpec{
+	r, err := gw.SetSystemSlot(ctx, "", "system", "mask-star-sys", storage.SystemSlotSpec{
 		Name: "main-display", Write: full,
 	})
 	if err != nil {
@@ -186,10 +186,10 @@ func TestStarMaskReplacesTheWholeDeclaration(t *testing.T) {
 	}
 	if r.Impact != "degraded" || r.Quorum != 1 || r.Capacity != nil ||
 		len(r.PositionLabels) != 0 || len(r.AcceptedTypes) != 0 {
-		t.Fatalf("role after a full replacement = %+v, want every omitted field back to its default", r)
+		t.Fatalf("slot after a full replacement = %+v, want every omitted field back to its default", r)
 	}
 	if r.Label != "main-display" {
-		t.Fatalf("label after a full replacement = %q, want the role name (its default)", r.Label)
+		t.Fatalf("label after a full replacement = %q, want the slot name (its default)", r.Label)
 	}
 }
 
@@ -198,14 +198,14 @@ func TestStarMaskReplacesTheWholeDeclaration(t *testing.T) {
 // than on whatever the body happened to carry.
 func TestMaskedCreateTakesDefaultsForWhatItDoesNotName(t *testing.T) {
 	t.Parallel()
-	gw, ctx, all := roleMaskGateway(t)
+	gw, ctx, all := slotMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-create-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	cap5 := 5
-	r, err := gw.SetSystemRole(ctx, "", "system", "mask-create-sys", storage.SystemRoleSpec{
+	r, err := gw.SetSystemSlot(ctx, "", "system", "mask-create-sys", storage.SystemSlotSpec{
 		Name: "main-display", Label: "Main Display", Quorum: 4, Impact: "outage", Capacity: &cap5,
-		Write: updatemask.Of(storage.RoleFieldLabel),
+		Write: updatemask.Of(storage.SlotFieldLabel),
 	})
 	if err != nil {
 		t.Fatalf("masked create: %v", err)
@@ -222,26 +222,26 @@ func TestMaskedCreateTakesDefaultsForWhatItDoesNotName(t *testing.T) {
 // named no fields, so nothing moves, however full the rest of the body is.
 func TestAnEmptyMaskWritesNothing(t *testing.T) {
 	t.Parallel()
-	gw, ctx, all := roleMaskGateway(t)
+	gw, ctx, all := slotMaskGateway(t)
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-empty-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-empty-sys", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "system", "mask-empty-sys", storage.SystemSlotSpec{
 		Name: "main-display", Label: "Main Display", Quorum: 2, Impact: "outage",
 	}); err != nil {
 		t.Fatalf("declare: %v", err)
 	}
-	empty, err := updatemask.Resolve([]string{}, storage.RolePatchFields, nil)
+	empty, err := updatemask.Resolve([]string{}, storage.SlotPatchFields, nil)
 	if err != nil {
 		t.Fatalf("resolve an empty mask: %v", err)
 	}
-	r, err := gw.SetSystemRole(ctx, "", "system", "mask-empty-sys", storage.SystemRoleSpec{
+	r, err := gw.SetSystemSlot(ctx, "", "system", "mask-empty-sys", storage.SystemSlotSpec{
 		Name: "main-display", Label: "Ignored", Quorum: 9, Impact: "none", Write: empty,
 	})
 	if err != nil {
 		t.Fatalf("write with an empty mask: %v", err)
 	}
 	if r.Label != "Main Display" || r.Quorum != 2 || r.Impact != "outage" {
-		t.Fatalf("role after an empty mask = %+v, want it exactly as declared", r)
+		t.Fatalf("slot after an empty mask = %+v, want it exactly as declared", r)
 	}
 }
