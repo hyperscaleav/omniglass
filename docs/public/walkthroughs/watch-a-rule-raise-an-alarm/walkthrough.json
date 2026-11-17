@@ -6,7 +6,7 @@
     {
       "n": 1,
       "kind": "goto",
-      "caption": "Touch Panel 2 fills the Touch Control role of Media Lab Classroom 2. It reads healthy.",
+      "caption": "Touch Panel 2 fills the Touch Control slot of Media Lab Classroom 2. It reads healthy.",
       "still": "step-01.png"
     },
     {
@@ -55,8 +55,8 @@
   "poster": "step-07.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 48,
-    "bytes": 649621,
-    "previewBytes": 411718
+    "seconds": 45.2,
+    "bytes": 664778,
+    "previewBytes": 417220
   }
 }
