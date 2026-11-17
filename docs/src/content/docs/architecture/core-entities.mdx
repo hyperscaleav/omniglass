@@ -1143,7 +1143,7 @@ location is shared:
 `{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}`.
 A system is the logical group of components that makes a location work, and nearly every room holds
 exactly one, so it reads as the location it monitors: "Briefing Room", not its kind of space read back
-under a breadcrumb that already says Briefing Room ([ADR-0139](/architecture/decisions/#adr-0139-a-detail-view-is-one-per-system-its-location-a-card-of-context)). The kind and the standard are attributes
+under a breadcrumb that already says Briefing Room ([ADR-0139](/architecture/decisions/#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context)). The kind and the standard are attributes
 beside the label. A location holding **several** systems names each one's kind after the location
 (`SharesLocation`): "Media Lab Meeting Room" beside "Media Lab Signage", an unclassified one naming
 itself ("Media Lab Lobby Wall"), and two of one kind told apart by the ordinal their names carry
