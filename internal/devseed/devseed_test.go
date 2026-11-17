@@ -127,12 +127,12 @@ func checkDocShape(t *testing.T, doc devseed.Doc) {
 			t.Errorf("member %+v references a key not in the fixtures", m)
 		}
 	}
-	for _, ra := range doc.RoleAssignments {
+	for _, ra := range doc.SlotAssignments {
 		if !seenSys[ra.System] || !seenComp[ra.Component] {
-			t.Errorf("role assignment %+v references a key not in the fixtures", ra)
+			t.Errorf("slot assignment %+v references a key not in the fixtures", ra)
 		}
-		if ra.Role == "" {
-			t.Errorf("role assignment %+v names no role", ra)
+		if ra.Slot == "" {
+			t.Errorf("slot assignment %+v names no slot", ra)
 		}
 	}
 
@@ -419,7 +419,7 @@ func TestRunIdempotent(t *testing.T) {
 	// Membership and staffing are counted too, because they are where a resolver
 	// that zipped the fixture onto the fleet in the wrong order shows up: every
 	// name and label would still be right, and the second Run would staff a
-	// second device into a role the first Run already filled. The expected
+	// second device into a slot the first Run already filled. The expected
 	// membership count is the distinct (system, component) pairs the fixture
 	// implies: an assignment creates the membership as a side effect, so a
 	// component both listed and staffed in one system is one row, and the
@@ -428,7 +428,7 @@ func TestRunIdempotent(t *testing.T) {
 	for _, m := range fixtures.Members {
 		pairs[m.System+"\x00"+m.Component] = true
 	}
-	for _, ra := range fixtures.RoleAssignments {
+	for _, ra := range fixtures.SlotAssignments {
 		pairs[ra.System+"\x00"+ra.Component] = true
 	}
 	var members, assignments int
@@ -438,11 +438,11 @@ func TestRunIdempotent(t *testing.T) {
 	if members != len(pairs) {
 		t.Errorf("system members = %d, want %d (the distinct system-component pairs the fixture implies)", members, len(pairs))
 	}
-	if err := conn.QueryRow(ctx, `select count(*) from system_role_assignment`).Scan(&assignments); err != nil {
-		t.Fatalf("count role assignments: %v", err)
+	if err := conn.QueryRow(ctx, `select count(*) from system_slot_assignment`).Scan(&assignments); err != nil {
+		t.Fatalf("count slot assignments: %v", err)
 	}
-	if assignments != len(fixtures.RoleAssignments) {
-		t.Errorf("role assignments = %d, want %d (the fixture's own, unchanged by the second Run)", assignments, len(fixtures.RoleAssignments))
+	if assignments != len(fixtures.SlotAssignments) {
+		t.Errorf("slot assignments = %d, want %d (the fixture's own, unchanged by the second Run)", assignments, len(fixtures.SlotAssignments))
 	}
 
 	// Dependency edges lean on the gateway's duplicate refusal to be
@@ -1017,7 +1017,7 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 
 	for _, tc := range []struct {
 		room string
-		want map[string]string // role -> the component names filling it, joined
+		want map[string]string // slot -> the component names filling it, joined
 	}{
 		// Both halves mint `boardroom` in their own rooms, so the room is the
 		// address here. The shared rack staffs dsp and amplifier in BOTH,
@@ -1036,10 +1036,10 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 	} {
 		rows, err := conn.Query(ctx, `
 			select r.name, c.name
-			from system_role_assignment a
+			from system_slot_assignment a
 			join system s on s.id = a.system_id
 			join location l on l.id = s.location_id
-			join system_role r on r.id = a.role_id
+			join system_slot r on r.id = a.slot_id
 			join component c on c.id = a.component_id
 			where l.name = $1
 			order by r.name, c.name`, tc.room)
@@ -1048,22 +1048,22 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		}
 		got := map[string]string{}
 		for rows.Next() {
-			var role, comp string
-			if err := rows.Scan(&role, &comp); err != nil {
+			var slot, comp string
+			if err := rows.Scan(&slot, &comp); err != nil {
 				t.Fatalf("scan staffing: %v", err)
 			}
-			if got[role] != "" {
-				got[role] += ","
+			if got[slot] != "" {
+				got[slot] += ","
 			}
-			got[role] += comp
+			got[slot] += comp
 		}
 		if err := rows.Err(); err != nil {
 			t.Fatalf("iterate staffing: %v", err)
 		}
 		rows.Close()
-		for role, want := range tc.want {
-			if got[role] != want {
-				t.Errorf("the system in %q: role %q is filled by %q, want %q", tc.room, role, got[role], want)
+		for slot, want := range tc.want {
+			if got[slot] != want {
+				t.Errorf("the system in %q: slot %q is filled by %q, want %q", tc.room, slot, got[slot], want)
 			}
 		}
 		if len(got) != len(tc.want) {
@@ -1079,12 +1079,12 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		join system s on s.id = m.system_id
 		join component c on c.id = m.component_id
 		where s.name = 'boardroom' and c.name = 'power-1'
-		  and not exists (select 1 from system_role_assignment a
+		  and not exists (select 1 from system_slot_assignment a
 		    where a.system_id = m.system_id and a.component_id = m.component_id)`).Scan(&unstaffed); err != nil {
 		t.Fatalf("read the unstaffed member: %v", err)
 	}
 	if unstaffed != 1 {
-		t.Errorf("the power conditioner is a member of boardroom filling no role in %d rows, want 1", unstaffed)
+		t.Errorf("the power conditioner is a member of boardroom filling no slot in %d rows, want 1", unstaffed)
 	}
 }
 
@@ -1311,7 +1311,7 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 // TestFixturesMakeAnFleetWorthLookingAt guards what the fleet canvas (#630)
 // needs from the dev fleet, which is a different bar from what the earlier
 // fixtures were built to clear. Those existed to teach one thing each (a shared
-// component, a member with no role, the platform-reach lesson) and a handful of
+// component, a member with no slot, the platform-reach lesson) and a handful of
 // rows says all of that. A canvas is judged on whether an operator can read a
 // real fleet in it, and a dozen dots in one room cannot answer that either way.
 //
@@ -1417,7 +1417,7 @@ func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
 			continue
 		}
 		any := false
-		for _, a := range doc.RoleAssignments {
+		for _, a := range doc.SlotAssignments {
 			if a.System == s.Key {
 				any = true
 				break
@@ -1446,7 +1446,7 @@ func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
 	for _, m := range doc.Members {
 		note(m.Component, m.System)
 	}
-	for _, a := range doc.RoleAssignments {
+	for _, a := range doc.SlotAssignments {
 		note(a.Component, a.System)
 	}
 	crossRoot := false
@@ -1569,7 +1569,7 @@ func fixtureComponentNames(doc devseed.Doc) []string {
 }
 
 // The deployed-fleet invariant (#785): a real estate is mostly rooms whose
-// every role is staffed to quorum; commissioning is the exception that
+// every slot is staffed to quorum; commissioning is the exception that
 // carries the teaching, not the norm. This pins the ruling so a future
 // volume block cannot quietly regress the fleet back to a wall of
 // incomplete: every system in the fixture is staffed to its standard's
@@ -1581,11 +1581,11 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 		"briefing-av": "the ONE provisioning system: deployed except its scheduling panel",
 	}
 	staffed := map[string]map[string]int{}
-	for _, ra := range doc.RoleAssignments {
+	for _, ra := range doc.SlotAssignments {
 		if staffed[ra.System] == nil {
 			staffed[ra.System] = map[string]int{}
 		}
-		staffed[ra.System][ra.Role]++
+		staffed[ra.System][ra.Slot]++
 	}
 	// The archetype quorums (#796): what "deployed" means per standard.
 	mr := map[string]int{"video-bar": 1, "main-display": 1, "touch-control": 1, "scheduling-panel": 1}
@@ -1615,9 +1615,9 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 			continue
 		}
 		got := staffed[s.Key]
-		for role, q := range want {
-			if got[role] < q {
-				t.Errorf("system %q (%s) staffs %s %d/%d; a deployed room fills every role (#785), and only the named teaching cases stay short", s.Key, s.Standard, role, got[role], q)
+		for slot, q := range want {
+			if got[slot] < q {
+				t.Errorf("system %q (%s) staffs %s %d/%d; a deployed room fills every slot (#785), and only the named teaching cases stay short", s.Key, s.Standard, slot, got[slot], q)
 			}
 		}
 	}

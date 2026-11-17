@@ -234,7 +234,7 @@ var retiredIdentifiers = []BannedTerm{
 	},
 	{
 		Pattern:     regexp.MustCompile(`\bsystem_template_(version|member)\b`),
-		Replacement: "standard (the composition shape) and system_role (the slots)",
+		Replacement: "standard (the composition shape) and system_slot (the slots)",
 		Origin:      "ADR-0071",
 	},
 
@@ -339,13 +339,13 @@ var retiredIdentifiers = []BannedTerm{
 	// for raw sockets and ICMP, a template's capability manifest, a page's
 	// Design/Partial/Built status per documented capability). Only the retired
 	// catalog's own identifiers are named: the five dropped tables, the Go
-	// symbols the health rollup and role assignment used to call, the routes,
+	// symbols the health rollup and slot assignment used to call, the routes,
 	// and the permission stamp. capability-gated staffing retires with them: an
 	// occupant now satisfies its slot when its component's own verdict is
 	// healthy (internal/health), nothing about what it "provides".
 	{
-		Pattern: regexp.MustCompile(`\b(?:component_capability|product_capability|alarm_capability|system_role_capability)\b`),
-		Replacement: "the typed-slot guard (system_role_type, system_role_product) for assignment; " +
+		Pattern: regexp.MustCompile(`\b(?:component_capability|product_capability|alarm_capability|system_slot_capability)\b`),
+		Replacement: "the typed-slot guard (system_slot_type, system_slot_product) for assignment; " +
 			"a component's own verdict, from its active alarms, for health",
 		Origin: "#626",
 	},
@@ -359,7 +359,7 @@ var retiredIdentifiers = []BannedTerm{
 			"\\b(?:EffectiveCapabilities|ComponentCapabilities|CreateCapability|UpdateCapability|DeleteCapability|" +
 			"ListCapabilities|GetCapability|UpsertCapability|CapabilityPatch|SetComponentCapability|ClearComponentCapability)\\b"),
 		Replacement: "the component_type taxonomy (product classification) and the typed-slot guard " +
-			"(system_role_type, system_role_product) for assignment; nothing replaces the catalog itself",
+			"(system_slot_type, system_slot_product) for assignment; nothing replaces the catalog itself",
 		Origin: "#626",
 	},
 	{

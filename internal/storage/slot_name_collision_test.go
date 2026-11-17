@@ -12,10 +12,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// A role name means one role per system (#503, ADR-0503). The write paths that
+// A slot name means one slot per system (#503, ADR-0503). The write paths that
 // would create a collision are driven over the wire by
-// internal/api/role_name_collision_e2e_test.go; these are the two gateway-only
-// halves: a standard's role write refused by a system's own role of the name,
+// internal/api/slot_name_collision_e2e_test.go; these are the two gateway-only
+// halves: a standard's slot write refused by a system's own slot of the name,
 // and a collision that predates the rule refused by the staffing resolver
 // rather than resolved to whichever row came back first.
 
@@ -65,11 +65,11 @@ func (r *collisionRig) count(sql string, args ...any) int {
 	return n
 }
 
-// TestStandardRoleWriteRefusedBySystemsOwnRoleOfTheName: a role a conforming
+// TestStandardSlotWriteRefusedBySystemsOwnSlotOfTheName: a slot a conforming
 // system already declares itself (an operator withdrew the standard's and
 // declared their own on one room) cannot then be declared on the standard under
-// the same name, which would make the name mean two roles in that room.
-func TestStandardRoleWriteRefusedBySystemsOwnRoleOfTheName(t *testing.T) {
+// the same name, which would make the name mean two slots in that room.
+func TestStandardSlotWriteRefusedBySystemsOwnSlotOfTheName(t *testing.T) {
 	t.Parallel()
 	r := newCollisionRig(t)
 	all := scope.Set{All: true}
@@ -77,27 +77,27 @@ func TestStandardRoleWriteRefusedBySystemsOwnRoleOfTheName(t *testing.T) {
 	if _, err := r.gw.CreateSystem(r.ctx, "", storage.SystemSpec{Name: "seed-room", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("system: %v", err)
 	}
-	if _, err := r.gw.SetSystemRole(r.ctx, "", "system", "seed-room", storage.SystemRoleSpec{Name: "room-display", AcceptedTypes: []string{"display"}}); err != nil {
-		t.Fatalf("the room's own role: %v", err)
+	if _, err := r.gw.SetSystemSlot(r.ctx, "", "system", "seed-room", storage.SystemSlotSpec{Name: "room-display", AcceptedTypes: []string{"display"}}); err != nil {
+		t.Fatalf("the room's own slot: %v", err)
 	}
-	_, err := r.gw.SetSystemRole(r.ctx, "", "standard", std, storage.SystemRoleSpec{Name: "room-display", AcceptedTypes: []string{"display"}})
-	var collision *storage.RoleNameCollision
+	_, err := r.gw.SetSystemSlot(r.ctx, "", "standard", std, storage.SystemSlotSpec{Name: "room-display", AcceptedTypes: []string{"display"}})
+	var collision *storage.SlotNameCollision
 	if !errors.As(err, &collision) {
-		t.Fatalf("declaring the standard's role over the room's own = %v, want *RoleNameCollision", err)
+		t.Fatalf("declaring the standard's slot over the room's own = %v, want *SlotNameCollision", err)
 	}
-	if n := r.count(`select count(*) from system_role where name = 'room-display' and standard_id = (select id from standard where name = 'seed-std')`); n != 0 {
-		t.Fatalf("the standard's role landed over the room's own (%d rows), want it refused", n)
+	if n := r.count(`select count(*) from system_slot where name = 'room-display' and standard_id = (select id from standard where name = 'seed-std')`); n != 0 {
+		t.Fatalf("the standard's slot landed over the room's own (%d rows), want it refused", n)
 	}
-	roles, err := r.gw.EffectiveRoles(r.ctx, "seed-room", all)
+	slots, err := r.gw.EffectiveSlots(r.ctx, "seed-room", all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(roles) != 1 || roles[0].FromStandard {
-		t.Fatalf("seed-room roles = %+v, want the room's own room-display alone", roles)
+	if len(slots) != 1 || slots[0].FromStandard {
+		t.Fatalf("seed-room slots = %+v, want the room's own room-display alone", slots)
 	}
 }
 
-// TestStaffingRefusesACollisionWrittenBeforeTheRule: a system whose own role
+// TestStaffingRefusesACollisionWrittenBeforeTheRule: a system whose own slot
 // shares a name with its standard's (written straight to the table, the way a
 // database from before the rule can hold one) is refused by every staffing
 // write naming it, with both owners named, rather than bound to whichever row
@@ -111,30 +111,30 @@ func TestStaffingRefusesACollisionWrittenBeforeTheRule(t *testing.T) {
 		t.Fatalf("system: %v", err)
 	}
 	if _, err := r.conn.Exec(r.ctx, `
-		insert into system_role (owner_kind, standard_id, name, label) values ('standard', (select id from standard where name = 'seed-std'), 'table-mic', 'Table mic');
-		insert into system_role (owner_kind, system_id, name, label) values ('system', (select id from system where name = 'legacy-room'), 'table-mic', 'Second mic')`); err != nil {
+		insert into system_slot (owner_kind, standard_id, name, label) values ('standard', (select id from standard where name = 'seed-std'), 'table-mic', 'Table mic');
+		insert into system_slot (owner_kind, system_id, name, label) values ('system', (select id from system where name = 'legacy-room'), 'table-mic', 'Second mic')`); err != nil {
 		t.Fatalf("legacy collision: %v", err)
 	}
 	bar := storagetest.MintProduct(t, r.ctx, r.gw, "video-bar").Name
 	if _, err := r.gw.CreateComponent(r.ctx, "", storage.ComponentSpec{Name: "legacy-bar", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	err := r.gw.AssignRole(r.ctx, "", "legacy-room", "table-mic", "legacy-bar", all, all, all, all)
-	var collision *storage.RoleNameCollision
+	err := r.gw.AssignSlot(r.ctx, "", "legacy-room", "table-mic", "legacy-bar", all, all, all, all)
+	var collision *storage.SlotNameCollision
 	if !errors.As(err, &collision) {
-		t.Fatalf("assign into a collided name = %v, want *RoleNameCollision", err)
+		t.Fatalf("assign into a collided name = %v, want *SlotNameCollision", err)
 	}
-	if collision.Role != "table-mic" || collision.Standard != "seed-std" || collision.System != "legacy-room" {
+	if collision.Slot != "table-mic" || collision.Standard != "seed-std" || collision.System != "legacy-room" {
 		t.Fatalf("collision = %+v, want table-mic on seed-std and legacy-room", collision)
 	}
-	if n := r.count(`select count(*) from system_role_assignment`); n != 0 {
+	if n := r.count(`select count(*) from system_slot_assignment`); n != 0 {
 		t.Fatalf("%d assignments written through a collided name, want none", n)
 	}
-	// Withdrawing the system's own role, arc-scoped as always, resolves it.
-	if err := r.gw.DeleteSystemRole(r.ctx, "", "system", "legacy-room", "table-mic"); err != nil {
-		t.Fatalf("withdraw the room's role: %v", err)
+	// Withdrawing the system's own slot, arc-scoped as always, resolves it.
+	if err := r.gw.DeleteSystemSlot(r.ctx, "", "system", "legacy-room", "table-mic"); err != nil {
+		t.Fatalf("withdraw the room's slot: %v", err)
 	}
-	if err := r.gw.AssignRole(r.ctx, "", "legacy-room", "table-mic", "legacy-bar", all, all, all, all); err != nil {
+	if err := r.gw.AssignSlot(r.ctx, "", "legacy-room", "table-mic", "legacy-bar", all, all, all, all); err != nil {
 		t.Fatalf("assign after the collision is resolved: %v", err)
 	}
 }

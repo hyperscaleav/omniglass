@@ -15,7 +15,7 @@ import (
 )
 
 // SeedPlan lands everything the plan planned: the systems in their rooms, the
-// components in those rooms, each role staffed by its product's components, and
+// components in those rooms, each slot staffed by its product's components, and
 // the simulated endpoints on the components.
 func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 	t.Parallel()
@@ -26,29 +26,29 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var wantSystems, wantComponents, wantRoles int
-	type roleKey struct{ system, role, product string }
-	wantStaffing := map[roleKey]int{}
+	var wantSystems, wantComponents, wantSlots int
+	type slotKey struct{ system, slot, product string }
+	wantStaffing := map[slotKey]int{}
 	wantRoom := map[string]string{}
 	for _, site := range p.Sites {
 		for _, s := range site.Systems {
 			wantSystems++
 			wantRoom[s.Name] = s.Room
-			for _, fill := range s.Roles {
+			for _, fill := range s.Slots {
 				wantComponents += fill.Count
-				wantRoles += fill.Count
-				wantStaffing[roleKey{s.Name, fill.Role, fill.Product}] = fill.Count
+				wantSlots += fill.Count
+				wantStaffing[slotKey{s.Name, fill.Slot, fill.Product}] = fill.Count
 			}
 		}
 	}
 	if wantSystems != 20 || wantComponents != p.Totals.Components {
-		t.Fatalf("plan has %d systems and %d role fills, want 20 and %d components", wantSystems, wantComponents, p.Totals.Components)
+		t.Fatalf("plan has %d systems and %d slot fills, want 20 and %d components", wantSystems, wantComponents, p.Totals.Components)
 	}
-	// Each platform (#1747) is a component of its own, staffing no role.
+	// Each platform (#1747) is a component of its own, staffing no slot.
 	senders, _ := senderSites(p)
 	wantComponents += len(senders)
-	if res.Systems != wantSystems || res.Components != wantComponents || res.Roles != wantRoles {
-		t.Fatalf("result = %d systems, %d components, %d roles; want %d, %d, %d", res.Systems, res.Components, res.Roles, wantSystems, wantComponents, wantRoles)
+	if res.Systems != wantSystems || res.Components != wantComponents || res.Slots != wantSlots {
+		t.Fatalf("result = %d systems, %d components, %d slots; want %d, %d, %d", res.Systems, res.Components, res.Slots, wantSystems, wantComponents, wantSlots)
 	}
 
 	// Systems: each planned system exists, in its planned room, and no other
@@ -70,14 +70,14 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 		t.Fatalf("systems and rooms = %v, want %v", sortedPairs(gotRoom), sortedPairs(wantRoom))
 	}
 
-	// Role assignments: each (system, role) is staffed by the planned number of
+	// Slot assignments: each (system, slot) is staffed by the planned number of
 	// components of the planned product.
-	gotStaffing := map[roleKey]int{}
+	gotStaffing := map[slotKey]int{}
 	rows, err = conn.Query(ctx, `
 		select s.name, r.name, p.name, count(*)
-		from system_role_assignment a
+		from system_slot_assignment a
 		join system s on s.id = a.system_id
-		join system_role r on r.id = a.role_id
+		join system_slot r on r.id = a.slot_id
 		join component c on c.id = a.component_id
 		join product p on p.id = c.product_id
 		group by 1, 2, 3`)
@@ -85,20 +85,20 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	for rows.Next() {
-		var k roleKey
+		var k slotKey
 		var n int
-		if err := rows.Scan(&k.system, &k.role, &k.product, &n); err != nil {
+		if err := rows.Scan(&k.system, &k.slot, &k.product, &n); err != nil {
 			t.Fatal(err)
 		}
 		gotStaffing[k] = n
 	}
 	rows.Close()
 	if len(gotStaffing) != len(wantStaffing) {
-		t.Fatalf("%d staffed roles, want %d", len(gotStaffing), len(wantStaffing))
+		t.Fatalf("%d staffed slots, want %d", len(gotStaffing), len(wantStaffing))
 	}
 	for k, want := range wantStaffing {
 		if gotStaffing[k] != want {
-			t.Errorf("%s role %s: %d x %s, want %d", k.system, k.role, gotStaffing[k], k.product, want)
+			t.Errorf("%s slot %s: %d x %s, want %d", k.system, k.slot, gotStaffing[k], k.product, want)
 		}
 	}
 
@@ -109,14 +109,14 @@ func TestSeedPlanLandsThePlannedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := conn.QueryRow(ctx, `
-		select count(*) from system_role_assignment a
+		select count(*) from system_slot_assignment a
 		join system s on s.id = a.system_id
 		join component c on c.id = a.component_id
 		where c.location_id <> s.location_id`).Scan(&misplaced); err != nil {
 		t.Fatal(err)
 	}
 	if err := conn.QueryRow(ctx, `
-		select count(*) from system_role_assignment a
+		select count(*) from system_slot_assignment a
 		where not exists (select 1 from system_member m where m.system_id = a.system_id and m.component_id = a.component_id)`).Scan(&unmembered); err != nil {
 		t.Fatal(err)
 	}
@@ -149,9 +149,9 @@ func TestSeedPlanIsDeterministic(t *testing.T) {
 		}
 		rows, err := conn.Query(ctx, `
 			select s.name || '/' || r.name || '/' || c.name || '/' || coalesce(e.params->>'target', '')
-			from system_role_assignment a
+			from system_slot_assignment a
 			join system s on s.id = a.system_id
-			join system_role r on r.id = a.role_id
+			join system_slot r on r.id = a.slot_id
 			join component c on c.id = a.component_id
 			left join endpoint e on e.component = c.id
 			order by 1`)

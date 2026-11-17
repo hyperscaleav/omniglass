@@ -977,12 +977,12 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 	}
 }
 
-// Staffing a role IS membership (AssignRole binds the component into the system
+// Staffing a slot IS membership (AssignSlot binds the component into the system
 // on the operator's behalf), so it is a label write path with no membership
 // call in it. It gets its own test rather than a line in the invariant loop,
-// because a role assignment needs a standard, and the fixture that gives it one
+// because a slot assignment needs a standard, and the fixture that gives it one
 // would drown the loop it sits in.
-func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
+func TestStaffingASlotRestampsTheComponentItBinds(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.SystemTypeLabel}}]"); err != nil {
@@ -1004,11 +1004,11 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 	if bar.Label != "[]" {
 		t.Fatalf("an unbound component reads %q, want %q", bar.Label, "[]")
 	}
-	if err := gw.AssignRole(ctx, "", s.Name, "conf-bar", bar.ID, all, all, all, all); err != nil {
-		t.Fatalf("assign role: %v", err)
+	if err := gw.AssignSlot(ctx, "", s.Name, "conf-bar", bar.ID, all, all, all, all); err != nil {
+		t.Fatalf("assign slot: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, bar.ID); got != "[Boardroom]" {
-		t.Fatalf("after staffing a role = %q, want %q: the implicit membership is a label write path too", got, "[Boardroom]")
+		t.Fatalf("after staffing a slot = %q, want %q: the implicit membership is a label write path too", got, "[Boardroom]")
 	}
 	assertNoLabelDrift(t, gw, ctx)
 }
@@ -1018,7 +1018,7 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 // membership with it, and a component whose PRIMARY membership was one of them
 // reads a different .SystemTypeLabel from that instant. Slice 5 derived its
 // write paths from the data map and caught every EXPLICIT mover of a primary
-// membership (AddMember, RemoveMember, SetPrimaryMember, AssignRole); this is
+// membership (AddMember, RemoveMember, SetPrimaryMember, AssignSlot); this is
 // the implicit one the database performs on the gateway's behalf.
 func TestDeletingASystemRestampsItsMembers(t *testing.T) {
 	t.Parallel()

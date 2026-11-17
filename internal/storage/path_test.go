@@ -63,20 +63,20 @@ func TestParseAddressSystemPath(t *testing.T) {
 	}
 }
 
-// A role address switches plane twice: $sys to reach the owning system, then
-// $role for its role. Not in the task's required list but the grammar
+// A slot address switches plane twice: $sys to reach the owning system, then
+// $slot for its slot. Not in the task's required list but the grammar
 // explicitly reserves the accessor, so it is covered here.
-func TestParseAddressSystemRolePath(t *testing.T) {
+func TestParseAddressSystemSlotPath(t *testing.T) {
 	t.Parallel()
-	addr, err := storage.ParseAddress("boi.17c.$sys.av.$role.primary-dsp")
+	addr, err := storage.ParseAddress("boi.17c.$sys.av.$slot.primary-dsp")
 	if err != nil {
 		t.Fatalf("ParseAddress: %v", err)
 	}
 	want := &storage.Address{
 		Root: []string{"boi", "17c"},
-		Kind: storage.AddressRole,
+		Kind: storage.AddressSlot,
 		Tail: []string{"av"},
-		Role: "primary-dsp",
+		Slot: "primary-dsp",
 	}
 	if !reflect.DeepEqual(addr, want) {
 		t.Errorf("ParseAddress = %+v, want %+v", addr, want)
@@ -191,11 +191,11 @@ func TestParseAddressAccessorWithNothingAfterIsInvalid(t *testing.T) {
 	}
 }
 
-func TestParseAddressRoleOutsideSystemPathIsInvalid(t *testing.T) {
+func TestParseAddressSlotOutsideSystemPathIsInvalid(t *testing.T) {
 	t.Parallel()
-	_, err := storage.ParseAddress("boi.17c.$comp.dsp-1.$role.primary-dsp")
+	_, err := storage.ParseAddress("boi.17c.$comp.dsp-1.$slot.primary-dsp")
 	if err == nil {
-		t.Fatal("ParseAddress accepted $role within a component path")
+		t.Fatal("ParseAddress accepted $slot within a component path")
 	}
 	var invalid *storage.ErrInvalidAddress
 	if !errors.As(err, &invalid) {

@@ -85,7 +85,7 @@ terms:
         replacement: the contract a system is built to (a standard)
   - word: system slot
     plural: system slots
-    definition: A place in a system a component fills, such as a main display or a table microphone, with how many it wants and what losing it means.
+    definition: A position in a system a component fills, such as a main display or a table microphone, with how many it wants and what losing it means.
     audience: admin
     retired:
       # Banned in the spellings that carry the system sense (the noun, the tables, the Go types,

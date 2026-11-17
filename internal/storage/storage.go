@@ -256,7 +256,7 @@ type Gateway interface {
 	// ("component", "system", "location") with the read-then-action split, and
 	// returns the row's id. It is the seam for the routes that resolve their own
 	// target at the API layer because the write behind them takes no scope: the
-	// alarm verbs and the system-role declarations. read must be the caller's own
+	// alarm verbs and the system-slot declarations. read must be the caller's own
 	// <kind>:read, which is what makes the 403 safe to give.
 	ResolveActionTarget(ctx context.Context, ownerKind, ref string, read, action scope.Set) (string, error)
 
@@ -822,7 +822,7 @@ type Gateway interface {
 	AuditSimOperation(ctx context.Context, actorID, componentID string, op any) error
 	WithSimAddressLock(ctx context.Context, fn func() error) error
 	// CreateSimSystem creates a simulated system whole (the system, its
-	// components, their endpoints and role assignments) in one transaction.
+	// components, their endpoints and slot assignments) in one transaction.
 	CreateSimSystem(ctx context.Context, actorID string, spec SimSystemSpec, sc SimSystemScopes) (*SimSystem, error)
 	// CreatePlan lands a planned set of places, systems and components whole,
 	// in one transaction, each piece the ordinary create in the caller's
@@ -999,9 +999,9 @@ type Gateway interface {
 	// previous read's Now (none for a zero since).
 	CommandQueueHealth(ctx context.Context, since time.Time) (CommandQueueRead, error)
 
-	// Membership: the binding a role attaches to. Many-valued on purpose, since a
+	// Membership: the binding a slot attaches to. Many-valued on purpose, since a
 	// shared device belongs to every system it serves, which a single pointer on
-	// the component cannot express. Staffing a role creates the membership, so the
+	// the component cannot express. Staffing a slot creates the membership, so the
 	// two can never disagree.
 	ListMembers(ctx context.Context, systemName string, read scope.Set) ([]Member, error)
 	ComponentMemberships(ctx context.Context, componentName string, read scope.Set) ([]Member, error)
@@ -1037,31 +1037,31 @@ type Gateway interface {
 	ListComponentDependencies(ctx context.Context, component string, read scope.Set) (*ComponentDependencyList, error)
 	DeleteComponentDependency(ctx context.Context, actorID, component, kind, upstream string, read, update scope.Set) error
 
-	// The role tier: a system's roles resolve from its standard (inherited) and its
+	// The slot tier: a system's slots resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's
-	// component_type is not one the role's typed-slot guard accepts (#626).
-	EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error)
+	// component_type is not one the slot's typed-slot guard accepts (#626).
+	EffectiveSlots(ctx context.Context, systemName string, read scope.Set) ([]EffectiveSlot, error)
 	// Staffing takes the read/action pair for the same reason membership does
 	// (#736), and the component end the same way membership does (#510).
-	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error
-	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action, componentRead, componentAction scope.Set) error
-	// SwapPositions exchanges two occupants' positions within a role: an
+	AssignSlot(ctx context.Context, actorID, systemName, slotName, componentName string, read, action, componentRead, componentAction scope.Set) error
+	UnassignSlot(ctx context.Context, actorID, systemName, slotName, componentName string, read, action, componentRead, componentAction scope.Set) error
+	// SwapPositions exchanges two occupants' positions within a slot: an
 	// ordering change only, so it takes no read counterpart of its own
-	// (EffectiveRoles already reports the ordered result).
-	SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, read, action scope.Set) error
+	// (EffectiveSlots already reports the ordered result).
+	SwapPositions(ctx context.Context, actorID, systemName, slotName string, a, b int, read, action scope.Set) error
 	// The declaration side of the same tier: what a standard or a system declares
 	// it needs filled. ownerKind is "standard" or "system".
-	ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]SystemRole, error)
-	SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemRoleSpec) (*SystemRole, error)
-	DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, name string) error
-	// The choice side of the same tier (#626): a role can join an
-	// exclusive-or group (SystemRoleSpec.AlternateID) instead of
+	ListSystemSlots(ctx context.Context, ownerKind, ownerID string) ([]SystemSlot, error)
+	SetSystemSlot(ctx context.Context, actorID, ownerKind, ownerID string, spec SystemSlotSpec) (*SystemSlot, error)
+	DeleteSystemSlot(ctx context.Context, actorID, ownerKind, ownerID, name string) error
+	// The choice side of the same tier (#626): a slot can join an
+	// exclusive-or group (SystemSlotSpec.AlternateID) instead of
 	// contributing unconditionally. A standard's choices arrive with it
 	// (CreateStandardFromTemplate); ResolveAlternate turns the operator-facing "choice/alternate" wire
-	// reference into the id SystemRoleSpec.AlternateID expects, so the API
+	// reference into the id SystemSlotSpec.AlternateID expects, so the API
 	// layer can populate it deliberately instead of leaving it permanently
-	// unreachable through every route that declares a role. DeleteChoice and
-	// DeleteAlternate refuse while any role still names them rather than let
+	// unreachable through every route that declares a slot. DeleteChoice and
+	// DeleteAlternate refuse while any slot still names them rather than let
 	// alternate_id's ON DELETE RESTRICT surface as a bare constraint
 	// violation.
 	ResolveAlternate(ctx context.Context, ownerKind, ownerID, ref string) (string, error)

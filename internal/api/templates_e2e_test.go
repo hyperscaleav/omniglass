@@ -36,10 +36,10 @@ func TestTemplatesAPI(t *testing.T) {
 		Name     string `json:"name"`
 		Standard *struct {
 			Parent string `json:"parent"`
-			Roles  []struct {
+			Slots  []struct {
 				Name   string `json:"name"`
 				Quorum int    `json:"quorum"`
-			} `json:"roles"`
+			} `json:"slots"`
 			Metrics []struct {
 				Name string `json:"name"`
 			} `json:"metrics"`
@@ -75,12 +75,12 @@ func TestTemplatesAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/templates/mr55", nil, http.StatusOK), &one); err != nil {
 		t.Fatalf("decode one: %v", err)
 	}
-	if one.Standard == nil || one.Standard.Parent != "meeting-room" || len(one.Standard.Roles) == 0 || len(one.Standard.Metrics) == 0 {
-		t.Fatalf("mr55 = %+v, want a variant of meeting-room with roles and a metric contract", one)
+	if one.Standard == nil || one.Standard.Parent != "meeting-room" || len(one.Standard.Slots) == 0 || len(one.Standard.Metrics) == 0 {
+		t.Fatalf("mr55 = %+v, want a variant of meeting-room with slots and a metric contract", one)
 	}
-	for _, r := range one.Standard.Roles {
+	for _, r := range one.Standard.Slots {
 		if r.Quorum < 1 {
-			t.Errorf("role %s reads quorum %d, want the floor of one", r.Name, r.Quorum)
+			t.Errorf("slot %s reads quorum %d, want the floor of one", r.Name, r.Quorum)
 		}
 	}
 	c.do(viewer, http.MethodGet, "/templates/no-such-template", nil, http.StatusNotFound)

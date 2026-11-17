@@ -14,7 +14,7 @@ import (
 // component's reported identity to the system or component it names, and it
 // costs a write on both of its ends (the ADR-0510 rule). Each test drives the
 // routes as an operator or an integrator would, with principals built from
-// grants the way the role-staffing tests build theirs.
+// grants the way the slot-staffing tests build theirs.
 
 type bindingWire struct {
 	Conduit   string `json:"conduit"`

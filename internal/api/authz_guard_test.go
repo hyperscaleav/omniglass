@@ -105,7 +105,7 @@ type apiOp struct {
 	// condPerm is the x-omniglass-conditional-permission stamp: the SECOND
 	// permission a route enforces because of a reference the request carries (a
 	// component create naming a system, which writes that system's membership; a
-	// membership or role-assignment route naming a component, which writes onto
+	// membership or slot-assignment route naming a component, which writes onto
 	// it). Empty for a route with no such condition.
 	condPerm string
 }

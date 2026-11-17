@@ -55,7 +55,7 @@ var ErrSystemTypeRequiredForName = errors.New("storage: a system with no system_
 // mints one instead. One rule, no branches: a nameMint's "<resolved-stem>-<n>",
 // n the smallest ordinal whose minted name no sibling in the same placement
 // scope already holds. The number that was picked is then STORED (#681) rather
-// than left to be read back out of the name by whoever needs it. Roles,
+// than left to be read back out of the name by whoever needs it. Slots,
 // positions, and staffing feed nothing into it; :swap, assign, and unassign
 // never touch a name.
 //

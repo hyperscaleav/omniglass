@@ -2,7 +2,7 @@
 // a vertical environment described once, as site archetypes (one headquarters
 // and the kinds of office repeated around it), each archetype's location tree,
 // the standards placed at its sites as ratios, and the catalog product filling
-// each role of each standard. A size knob turns it into a concrete plan of
+// each slot of each standard. A size knob turns it into a concrete plan of
 // sites, systems and components (Resolve), the number of sites growing with
 // the size between the bounds the manifest declares. Pure: the manifest, the catalog and the
 // size come in, the plan goes out, the same plan every time.
@@ -79,7 +79,7 @@ type SiteBounds struct {
 
 // Standard is one system type the scenario places: a standard from the
 // template catalog, the system type its systems are classified under, and the
-// product filling each role it staffs.
+// product filling each slot it staffs.
 type Standard struct {
 	Name       Ref            `yaml:"name"`
 	SystemType Ref            `yaml:"system_type"`

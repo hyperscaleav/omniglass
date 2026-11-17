@@ -32,12 +32,12 @@ type scopedEntity struct {
 	typeField string // "location_type"; empty when the entity carries no type on create
 	typeValue string // a valid type id
 	// actions are the mutating routes that hang OFF this entity and resolve it
-	// as their target: a property write on it, a membership or role write on it,
+	// as their target: a property write on it, a membership or slot write on it,
 	// an alarm write on it. The entity's own PATCH is not listed here; the matrix
 	// asserts that one directly, because every entity has exactly one and it needs
 	// no description. These do need describing, because they are NOT uniform
 	// across the catalog: properties exist on all three tiers, membership and
-	// roles only on system, alarms only on component (#736).
+	// slots only on system, alarms only on component (#736).
 	actions []actionRoute
 }
 
@@ -57,7 +57,7 @@ type scopedEntity struct {
 // one thing this matrix exists to prove for all of them at once.
 type actionRoute struct {
 	// name is the subtest name, and doubles as the fixture's own unique
-	// discriminator (role names, component names) so two routes preparing the
+	// discriminator (slot names, component names) so two routes preparing the
 	// same target cannot collide.
 	name string
 	// needs are permissions the route is gated on beyond the entity's own
@@ -76,7 +76,7 @@ type actionRoute struct {
 	// ok is the status a permitted call answers.
 	ok int
 	// componentEnd marks a route that also names a COMPONENT it writes onto (a
-	// membership or a role assignment, #510): the component end has to be inside
+	// membership or a slot assignment, #510): the component end has to be inside
 	// the caller's component:update scope as well. The matrix gives its two
 	// narrow principals that authority over the rack these routes' components are
 	// made under, so the split this matrix drives stays the system's own; the
@@ -255,12 +255,12 @@ func componentActions() []actionRoute {
 	}
 }
 
-// systemActions are the membership and role writes, the routes that hang off a
+// systemActions are the membership and slot writes, the routes that hang off a
 // system. Each one that needs a component makes its own, named after the route
 // and the target, so no two prepares contend for one row.
 func systemActions() []actionRoute {
 	members := func(target, comp string) string { return "/systems/" + target + "/members/" + comp }
-	roles := func(target, role string) string { return "/systems/" + target + "/roles/" + role }
+	slots := func(target, slot string) string { return "/systems/" + target + "/slots/" + slot }
 	// makeComponent creates an orphan component the membership and staffing
 	// routes bind. It is addressed by name, and the name carries the route and
 	// the target so the component tree stays collision-free across the whole run.
@@ -269,9 +269,9 @@ func systemActions() []actionRoute {
 			map[string]any{"name": name, "product": "generic-device", "parent": matrixRack}, http.StatusCreated)
 		return name
 	}
-	declareRole := func(c *apiClient, ownerTok, target, role string) {
-		c.do(ownerTok, http.MethodPatch, roles(target, role),
-			map[string]any{"label": "Matrix role"}, http.StatusOK)
+	declareSlot := func(c *apiClient, ownerTok, target, slot string) {
+		c.do(ownerTok, http.MethodPatch, slots(target, slot),
+			map[string]any{"label": "Matrix slot"}, http.StatusOK)
 	}
 	return []actionRoute{
 		{
@@ -312,62 +312,62 @@ func systemActions() []actionRoute {
 			ok: http.StatusNoContent,
 		},
 		{
-			name: "set-system-role",
+			name: "set-system-slot",
 			request: func(target, _ string) (string, string, map[string]any) {
-				return http.MethodPatch, roles(target, "matrix-declare"),
-					map[string]any{"label": "Matrix role"}
+				return http.MethodPatch, slots(target, "matrix-declare"),
+					map[string]any{"label": "Matrix slot"}
 			},
 			ok: http.StatusOK,
 		},
 		{
-			name: "delete-system-role",
+			name: "delete-system-slot",
 			prepare: func(c *apiClient, ownerTok, target string) string {
-				declareRole(c, ownerTok, target, "matrix-withdraw")
+				declareSlot(c, ownerTok, target, "matrix-withdraw")
 				return ""
 			},
 			request: func(target, _ string) (string, string, map[string]any) {
-				return http.MethodDelete, roles(target, "matrix-withdraw"), nil
+				return http.MethodDelete, slots(target, "matrix-withdraw"), nil
 			},
 			ok: http.StatusNoContent,
 		},
 		{
-			name:         "assign-system-role",
+			name:         "assign-system-slot",
 			componentEnd: true,
 			prepare: func(c *apiClient, ownerTok, target string) string {
-				declareRole(c, ownerTok, target, "matrix-assign")
+				declareSlot(c, ownerTok, target, "matrix-assign")
 				return makeComponent(c, ownerTok, target+"-assign")
 			},
 			request: func(target, made string) (string, string, map[string]any) {
-				return http.MethodPut, roles(target, "matrix-assign") + "/assignments/" + made, nil
+				return http.MethodPut, slots(target, "matrix-assign") + "/assignments/" + made, nil
 			},
 			ok: http.StatusNoContent,
 		},
 		{
-			name:         "unassign-system-role",
+			name:         "unassign-system-slot",
 			componentEnd: true,
 			prepare: func(c *apiClient, ownerTok, target string) string {
-				declareRole(c, ownerTok, target, "matrix-unassign")
+				declareSlot(c, ownerTok, target, "matrix-unassign")
 				comp := makeComponent(c, ownerTok, target+"-unassign")
-				c.do(ownerTok, http.MethodPut, roles(target, "matrix-unassign")+"/assignments/"+comp, nil, http.StatusNoContent)
+				c.do(ownerTok, http.MethodPut, slots(target, "matrix-unassign")+"/assignments/"+comp, nil, http.StatusNoContent)
 				return comp
 			},
 			request: func(target, made string) (string, string, map[string]any) {
-				return http.MethodDelete, roles(target, "matrix-unassign") + "/assignments/" + made, nil
+				return http.MethodDelete, slots(target, "matrix-unassign") + "/assignments/" + made, nil
 			},
 			ok: http.StatusNoContent,
 		},
 		{
-			name: "swap-role-positions",
+			name: "swap-slot-positions",
 			prepare: func(c *apiClient, ownerTok, target string) string {
-				declareRole(c, ownerTok, target, "matrix-swap")
+				declareSlot(c, ownerTok, target, "matrix-swap")
 				for _, suffix := range []string{"-swap-a", "-swap-b"} {
 					comp := makeComponent(c, ownerTok, target+suffix)
-					c.do(ownerTok, http.MethodPut, roles(target, "matrix-swap")+"/assignments/"+comp, nil, http.StatusNoContent)
+					c.do(ownerTok, http.MethodPut, slots(target, "matrix-swap")+"/assignments/"+comp, nil, http.StatusNoContent)
 				}
 				return ""
 			},
 			request: func(target, _ string) (string, string, map[string]any) {
-				return http.MethodPost, roles(target, "matrix-swap") + ":swapPositions",
+				return http.MethodPost, slots(target, "matrix-swap") + ":swapPositions",
 					map[string]any{"position": 1, "with": 2}
 			},
 			ok: http.StatusNoContent,

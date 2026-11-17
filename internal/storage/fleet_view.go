@@ -15,7 +15,7 @@ import (
 // /systems and /components itself. A five-figure component list fetched to draw
 // squares is a page that never loads; a dot needs an id, a verdict, and two
 // flags, so that is all this carries. Everything an operator can only see after
-// clicking (product, tags, properties, the role chain) is deliberately absent
+// clicking (product, tags, properties, the slot chain) is deliberately absent
 // and is the drill-down read's job.
 //
 // The shape is FLAT on purpose: locations carry their parent id rather than

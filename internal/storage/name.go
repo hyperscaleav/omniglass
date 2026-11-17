@@ -46,7 +46,7 @@ var ErrEntityNameIsUUID = errors.New("storage: entity name may not be a uuid")
 // starting with a letter or digit. Shared by create and rename so both surfaces
 // agree; mirrored client-side for the inline check. It excludes `$`, `.`, `*`, `>`,
 // `/`, `#`, `%`, and `:`, none of it incidental (ADR-0089): `$` is what lets the
-// address grammar use `$comp` / `$sys` / `$role` as accessors with no word reserved
+// address grammar use `$comp` / `$sys` / `$slot` as accessors with no word reserved
 // (a location may still legitimately take the name `sys`, since `boi.17c.sys.$sys.av`
 // cannot be misread), `.` is what keeps a name to exactly one address segment, and
 // the rest are wildcards or separators in NATS, MQTT, URL escaping, and the router's

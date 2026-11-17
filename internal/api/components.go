@@ -376,7 +376,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/components/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component",
-		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
 	}, "component", "delete"), func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
 		if err := gw.DeleteComponent(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "delete")); err != nil {
@@ -437,7 +437,7 @@ func mapComponentErr(err error) error {
 	case errors.Is(err, storage.ErrComponentHasEndpoints):
 		return huma.Error409Conflict(componentEndpointsMessage(err))
 	case errors.Is(err, storage.ErrReferenced):
-		return huma.Error409Conflict("component is still referenced by another record, for example a system role it staffs")
+		return huma.Error409Conflict("component is still referenced by another record, for example a system slot it staffs")
 	case errors.Is(err, storage.ErrComponentExists):
 		return huma.Error409Conflict("component name already exists")
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
