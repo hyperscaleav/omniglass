@@ -435,7 +435,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fAgent, "agent", "", "Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate.")
-				cmd.Flags().StringVar(&fChannels, "channels", "", "The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both.")
+				cmd.Flags().StringVar(&fChannels, "channels", "", "The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp.")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the token is for (required)")
 				_ = cmd.MarkFlagRequired("description")
 				cmd.Flags().StringVar(&fRoles, "roles", "", "An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling.")

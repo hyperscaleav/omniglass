@@ -90,7 +90,9 @@ Where the build differs from the present-tense design below (each logged in the
   mint, the intersection, the plaintext ceiling, `secret:bind`, the channel allowlist and the audit `agent` column.
   OAuth 2.1 sign-in for MCP clients ([below](#mcp-clients-sign-in-with-oauth-21)) is built, refresh tokens
   and client metadata documents included.
-  Not built yet: narrowing an agent token to a location, the console's agent fields, and omnibot's marking
+  Omnibot's marking is built: its runs mint an agent token held to the `omnibot` channel, which stamps
+  `channel = 'omnibot'` on its rows ([#1166](https://github.com/hyperscaleav/omniglass/issues/1166)).
+  Not built yet: narrowing an agent token to a location and the console's agent fields
   ([#1179](https://github.com/hyperscaleav/omniglass/issues/1179)).
 - **The required permission is published per route in the OpenAPI spec**
   ([below](#the-permission-universe-published-per-route)), the **Roles view** reporting the

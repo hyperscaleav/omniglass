@@ -263,6 +263,68 @@ func TestAgentTokenChannels(t *testing.T) {
 	}
 }
 
+// An agent token minted for omnibot (#1166) is accepted over MCP alone and its
+// rows read channel omnibot; it must be minted for that channel alone; and no
+// other token obtains the channel, whatever name its client declares.
+func TestAgentTokenOmnibotChannel(t *testing.T) {
+	t.Parallel()
+	s := newMCPStack(t)
+	for _, chans := range [][]string{{"omnibot", "mcp"}, {"omnibot", "api"}} {
+		if code, body := s.c.send(s.owner, http.MethodPost, "/auth/me/tokens", map[string]any{"description": "o", "agent": "omnibot", "ttl_days": 1, "channels": chans}); code != http.StatusUnprocessableEntity {
+			t.Errorf("minting for %v = %d %s, want 422", chans, code, body)
+		}
+	}
+	if code, body := s.c.send(s.owner, http.MethodPost, "/auth/me/tokens", map[string]any{"description": "o", "agent": "claude", "ttl_days": 1, "channels": []string{"omnibot"}}); code != http.StatusUnprocessableEntity {
+		t.Errorf("minting the omnibot channel for another agent = %d %s, want 422", code, body)
+	}
+	if code, body := s.c.send(s.owner, http.MethodPost, "/auth/me/tokens", map[string]any{"description": "o", "agent": "omnibot", "ttl_days": 2, "channels": []string{"omnibot"}}); code != http.StatusUnprocessableEntity {
+		t.Errorf("minting an omnibot token for two days = %d %s, want 422", code, body)
+	}
+	bot := mintAgent(t, s.c, s.owner, map[string]any{"description": "omnibot", "agent": "omnibot", "ttl_days": 1, "channels": []string{"omnibot"}})
+	s.c.do(bot.Token, http.MethodGet, "/components", nil, http.StatusForbidden)
+	s.c.do(bot.Token, http.MethodGet, "/auth/me", nil, http.StatusOK)
+
+	if res, text := callTool(t, s.session(t, bot.Token, "omniglass-omnibot"), "create-component", map[string]any{"name": "bot-comp", "product": "generic-device"}); res.IsError {
+		t.Fatalf("omnibot's create-component: %s", text)
+	}
+	if res, text := callTool(t, s.session(t, s.owner, "omnibot"), "create-component", map[string]any{"name": "posing-comp", "product": "generic-device"}); res.IsError {
+		t.Fatalf("the posing client's create-component: %s", text)
+	}
+
+	var out struct {
+		Events []struct {
+			Agent   string         `json:"agent"`
+			Channel string         `json:"channel"`
+			New     map[string]any `json:"new"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/audit-log?resource=component&verb=create", nil, http.StatusOK), &out); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, e := range out.Events {
+		name, _ := e.New["Name"].(string)
+		switch name {
+		case "bot-comp":
+			seen[name] = true
+			if e.Agent != "omnibot" || e.Channel != "omnibot" {
+				t.Errorf("omnibot's row = agent %q channel %q, want omnibot and omnibot", e.Agent, e.Channel)
+			}
+		case "posing-comp":
+			seen[name] = true
+			if e.Agent != "" || e.Channel != "mcp" {
+				t.Errorf("a client named omnibot = agent %q channel %q, want none and mcp", e.Agent, e.Channel)
+			}
+		}
+	}
+	if !seen["bot-comp"] || !seen["posing-comp"] {
+		t.Errorf("create rows = %+v, want one per component", out.Events)
+	}
+	if code, body := s.c.send(s.owner, http.MethodGet, "/audit-log?channel=omnibot", nil); code != http.StatusOK || !strings.Contains(string(body), "bot-comp") {
+		t.Errorf("filtering the trail by channel omnibot = %d %s", code, body)
+	}
+}
+
 // TestAgentTokenCannotEscalateThroughIAM: the never-reveal ceiling is not
 // escaped by handing a credential-revealing role to a principal the agent
 // controls. Every escalation guard (granting a role, adding a group member,

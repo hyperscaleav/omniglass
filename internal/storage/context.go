@@ -43,8 +43,10 @@ const (
 	// AuditChannelMCP marks an action taken through a tool call on the MCP
 	// server: the same route, gate and scope as a direct call, arrived by MCP.
 	AuditChannelMCP AuditChannel = "mcp"
-	// AuditChannelOmnibot is reserved for the console assistant's actions
-	// (#1166); the check admits it, nothing stamps it yet.
+	// AuditChannelOmnibot marks an action omnibot, the built-in assistant,
+	// took (#1166): a tool call on the MCP server made with an agent token
+	// minted for the omnibot channel alone. The server stamps it from the
+	// credential, never from the name a client declares.
 	AuditChannelOmnibot AuditChannel = "omnibot"
 )
 
@@ -79,6 +81,15 @@ func auditChannelFrom(ctx context.Context) (channel, client any) {
 		return nil, nil
 	}
 	return string(v.channel), nullize(v.client)
+}
+
+// ReplaceAuditChannel returns a context whose audited writes record channel
+// in place of the one ctx carries, keeping the declared client. The API sets
+// it when a request's credential settles its channel (an omnibot token).
+func ReplaceAuditChannel(ctx context.Context, channel AuditChannel) context.Context {
+	v, _ := ctx.Value(auditChannelKey{}).(auditChannelValue)
+	v.channel = channel
+	return context.WithValue(ctx, auditChannelKey{}, v)
 }
 
 // AuditChannelOf returns the channel the context's request arrived through,

@@ -52,7 +52,7 @@ omniglass auth create-token --description "claude code on my laptop" \
   every request, so narrowing or removing your own access narrows or stops the agent at its next
   call. You cannot name a role wider than your own.
 - `--channels` limits where it is accepted, `api` (direct REST and the CLI) or `mcp` (optional; both
-  when omitted).
+  when omitted). `omnibot` is the channel `omniglass omnibot` mints for its own runs (below).
 
 An agent token can never reveal or copy a secret's plaintext, whatever its roles: the agent works
 with credentials only through the routes that use them server-side (polling an endpoint, issuing a
@@ -147,6 +147,23 @@ omniglass mcp call get-component-reachability --args '{"name":"panel-1"}'
 
 A tool the route refuses (no permission, a component outside your scope, a bad argument) prints the
 route's own error and exits non-zero.
+
+## Omnibot, the assistant in the CLI
+
+`omniglass omnibot` is Omniglass's own agent on the same MCP surface. Signed in as you, it mints itself a
+one-day agent token named `omnibot`, held to the `omnibot` channel, so it holds what you hold and never
+more; it revokes that token when the run ends, however it ends (Ctrl-C included). It runs read-only tools freely and stops
+before anything else to ask you on the terminal (`Run it? [y/N]`); anything but `y` declines, and the
+model hears that you declined. With no terminal to ask, it declines every write.
+
+```bash
+omniglass omnibot --replay recording.yaml "add a panel in the lobby"
+```
+
+The model is not built yet: `--replay` plays a recorded conversation (a list of the model's turns, its
+tool calls and its last answer), which is how the tests and the demo drive it. `--max-steps` bounds a
+run (10 by default). Its writes land in the audit trail as yours, tagged `agent omnibot`, on the
+`omnibot` channel.
 
 ## What the agent may assume, and what it should ask
 

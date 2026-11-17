@@ -612,7 +612,7 @@ components:
           description: The agent that took the action on the actor's behalf, from the agent token it authenticated with; absent when the person acted directly
           type: string
         channel:
-          description: "How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller"
+          description: "How the action arrived: mcp for a tool call on the MCP server, omnibot for one omnibot made; absent for a direct API call. Set by the server, never by the caller"
           type: string
         client:
           description: The name and version the MCP client declared about itself, recorded as asserted; absent when there is none
@@ -2789,13 +2789,14 @@ components:
           pattern: ^[A-Za-z0-9][A-Za-z0-9 ._-]*$
           type: string
         channels:
-          description: "The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both."
+          description: "The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp."
           items:
             enum:
               - api
               - mcp
+              - omnibot
             type: string
-          maxItems: 2
+          maxItems: 3
           type:
             - array
             - "null"

@@ -35,6 +35,7 @@ func newRoot(version, imageDigest string) *cobra.Command {
 		newLabCmd(version, imageDigest),
 		newPlatformCmd(),
 		newMCPCmd(version),
+		newOmnibotCmd(version),
 	)
 	// Generated commands: one per API operation, sharing the connection flags.
 	// The two sets compose on the same root; regeneration touches only the

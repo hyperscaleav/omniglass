@@ -21,7 +21,7 @@ export type AuditEvent = {
   old?: unknown;
   new?: unknown;
   // How the action arrived (#1162): mcp for a tool call on the MCP server,
-  // absent for a direct API call. Stamped by the server, never by a caller.
+  // omnibot for one omnibot made (#1166), absent for a direct API call. Stamped by the server, never by a caller.
   channel?: string;
   // The name and version the MCP client declared about itself, as asserted.
   client?: string;

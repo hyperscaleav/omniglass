@@ -814,7 +814,7 @@
             "type": "string"
           },
           "channel": {
-            "description": "How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller",
+            "description": "How the action arrived: mcp for a tool call on the MCP server, omnibot for one omnibot made; absent for a direct API call. Set by the server, never by the caller",
             "type": "string"
           },
           "client": {
@@ -3708,15 +3708,16 @@
             "type": "string"
           },
           "channels": {
-            "description": "The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both.",
+            "description": "The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp.",
             "items": {
               "enum": [
                 "api",
-                "mcp"
+                "mcp",
+                "omnibot"
               ],
               "type": "string"
             },
-            "maxItems": 2,
+            "maxItems": 3,
             "type": [
               "array",
               "null"

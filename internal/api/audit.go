@@ -41,7 +41,7 @@ type auditEventBody struct {
 	Old any `json:"old,omitempty" doc:"The row image before the write, absent on a create"`
 	New any `json:"new,omitempty" doc:"The row image after the write, absent on a delete"`
 	// How the action arrived (#1162): set by the server, never by a caller.
-	Channel string `json:"channel,omitempty" doc:"How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller"`
+	Channel string `json:"channel,omitempty" doc:"How the action arrived: mcp for a tool call on the MCP server, omnibot for one omnibot made; absent for a direct API call. Set by the server, never by the caller"`
 	Client  string `json:"client,omitempty" doc:"The name and version the MCP client declared about itself, recorded as asserted; absent when there is none"`
 	// Who acted on the actor's behalf (#1179): set from the agent token that
 	// authenticated the write, never by a caller.
