@@ -985,7 +985,7 @@
             "type": "string"
           },
           "seq": {
-            "description": "The message's place in the conversation, from 1",
+            "description": "The message's position in the conversation, from 1",
             "format": "int64",
             "type": "integer"
           }

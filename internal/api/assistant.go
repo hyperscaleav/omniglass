@@ -20,7 +20,7 @@ import (
 // last word; nothing on the server acts on it (ADR-2113).
 
 type assistantMessageBody struct {
-	Seq       int             `json:"seq" doc:"The message's place in the conversation, from 1"`
+	Seq       int             `json:"seq" doc:"The message's position in the conversation, from 1"`
 	Role      string          `json:"role" enum:"user,assistant,tool" doc:"Who said it"`
 	Body      json.RawMessage `json:"body" doc:"The message as the client's loop carries it on, kept as given"`
 	CreatedAt time.Time       `json:"created_at"`

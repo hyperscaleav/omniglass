@@ -604,7 +604,7 @@ export type AssistantMessageBody = {
   created_at: string;
   /** Who said it */
   role: AssistantMessageBodyRole;
-  /** The message's place in the conversation, from 1 */
+  /** The message's position in the conversation, from 1 */
   seq: number;
 };
 
