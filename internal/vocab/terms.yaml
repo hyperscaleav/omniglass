@@ -309,7 +309,7 @@ terms:
     permission: notification
   - word: notification target
     plural: notification targets
-    definition: Where a notification goes, a webhook, a mailbox, a group or a person.
+    definition: Where a notification goes, a webhook, a mailbox, a user group or a person.
     audience: admin
     collection: notification-targets
     schema: NotificationTargetBody
@@ -395,24 +395,55 @@ terms:
         pattern: '(?i)(?:^|[^-\w])workspaces?(?:$|[^-\w])'
         origin: "#872"
         replacement: detail view (an entity's own page)
-  - word: principal
-    plural: principals
-    definition: A user, a person or a machine, that roles are granted to.
-    audience: admin
-    collection: principals
-    schema: PrincipalBody
-    permission: principal
-    nav: /users
-    nav_label: Users
-  - word: principal group
-    plural: principal groups
+  # The subject a grant is given to (ADR-2036). User group comes first so a
+  # "principal group" reports the group's replacement rather than the user's.
+  # Collection, schema and permission keep principal until #2075 renames the
+  # schema, the API and the CLI; until then the retired words' allow keeps
+  # those spellings legal where prose names them as identifiers.
+  - word: user group
+    plural: user groups
     definition: A set of users granted roles together, each member inheriting the group's grants.
     audience: admin
     collection: principal-groups
     schema: GroupBody
     permission: principal_group
-    nav: /groups
-    nav_label: Groups
+    nav: /user-groups
+    retired:
+      - word: principal group
+        pattern: '(?i)\bprincipal[- ]groups?\b'
+        origin: ADR-2036
+        replacement: user group (a set of users granted roles together)
+        allow: '(?i)/principal-groups\b|`[^`]*\bprincipal[- ]groups?\b[^`]*`|\bomniglass principal-group\b|--principal-group\b'
+  - word: user
+    plural: users
+    definition: Who a role is granted to, a person who signs in or a machine user that holds tokens.
+    audience: admin
+    collection: principals
+    schema: PrincipalBody
+    permission: principal
+    nav: /users
+    retired:
+      # The noun in prose. Its identifier spellings stay legal until #2075: a
+      # code span, a route, a permission, a command, a JSON field, a path
+      # parameter and a property read. The English adjective (the principal
+      # reason) keeps the word.
+      - word: principal
+        pattern: '(?i)\bprincipals?\b'
+        origin: ADR-2036
+        replacement: user (a person or a machine user)
+        allow: '(?i)`[^`]*\bprincipals?\b[^`]*`|/principals?\b|\{principal\}|\bprincipals?:[\w*>]|"principals?"|\bomniglass principal\b|\bprincipals?\.\w|[?&]principals?=|--principal(?:-[a-z]+)?\b|\bprincipals?: \{|\bprincipal (?:axis|axes|reasons?|surfaces?|concerns?|risks?|costs?|goals?|aims?|purposes?|ones|uses?|questions?|ways?|means)\b'
+      - word: service account
+        pattern: '(?i)\bservice[- ]accounts?\b'
+        origin: ADR-2036
+        replacement: machine user (a user with no person behind it, holding tokens)
+      # Human as the kind: the noun before a user word, and the pairing with
+      # the other kind. Human as English (a human reads, human-in-the-loop, a
+      # human identifier) keeps the word; the kind value `human` stays legal
+      # in code until #2075.
+      - word: human
+        pattern: '(?i)\bhuman (?:principals?|users?|members?|kinds?|accounts?|identit(?:y|ies))\b|\bhumans? (?:and|or|vs\.?|versus) (?:service|machine)\b|\b(?:service|machine)(?: users?| principals?| accounts?)? (?:and|or) humans?\b|\bhuman/service\b'
+        origin: ADR-2036
+        replacement: person (the kind of user a human signs in as; the other kind is machine)
   - word: role
     plural: roles
     definition: A named bundle of permissions granted to users, which may inherit another role's.
