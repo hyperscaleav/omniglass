@@ -262,10 +262,10 @@ func TestAuditLogFiltersByChannelAndClient(t *testing.T) {
 	// One direct create through the API, two stamped as MCP tool calls from two
 	// declared clients (the channel is server-stamped, so the test stamps it the
 	// way the MCP dispatch does).
-	c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "direct-1"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/outposts", map[string]any{"name": "direct-1"}, http.StatusCreated)
 	for _, n := range []struct{ name, client string }{{"mcp-claude", "Claude-Code/2.1.0"}, {"mcp-cursor", "cursor/1.4"}} {
 		mcpCtx := storage.WithAuditChannel(ctx, storage.AuditChannelMCP, n.client)
-		if _, err := gw.CreateNode(mcpCtx, "", storage.NodeSpec{Name: n.name}, scope.Set{All: true}, scope.Set{All: true}); err != nil {
+		if _, err := gw.CreateOutpost(mcpCtx, "", storage.OutpostSpec{Name: n.name}, scope.Set{All: true}, scope.Set{All: true}); err != nil {
 			t.Fatalf("create %s: %v", n.name, err)
 		}
 	}
@@ -275,7 +275,7 @@ func TestAuditLogFiltersByChannelAndClient(t *testing.T) {
 		var out struct {
 			Events []auditChannelEvent `json:"events"`
 		}
-		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/audit-log?resource=node&verb=create"+query, nil, http.StatusOK), &out); err != nil {
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/audit-log?resource=outpost&verb=create"+query, nil, http.StatusOK), &out); err != nil {
 			t.Fatalf("decode audit-log: %v", err)
 		}
 		var got []string
