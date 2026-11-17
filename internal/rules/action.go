@@ -8,7 +8,7 @@ import (
 
 // The action site (#618): an action rule's `when`, a predicate over one
 // alarm transition's facts. Its bindings are the alarm fact map a
-// notification template reads (declared once in internal/storage, which a
+// notification's subject and text read (declared once in internal/storage, which a
 // test holds this struct to), in snake_case, plus the severity's rank so a
 // floor reads as a comparison (`severity_rank >= 40`, high and above).
 

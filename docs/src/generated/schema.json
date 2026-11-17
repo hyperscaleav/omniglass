@@ -1612,13 +1612,13 @@
       "pk": true
      },
      {
-      "name": "default_template",
+      "name": "default_rule",
       "type": "text",
       "nullable": false,
       "default": "''::text"
      },
      {
-      "name": "template",
+      "name": "rule",
       "type": "text",
       "nullable": true
      },

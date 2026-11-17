@@ -17,16 +17,16 @@ import (
 // The notification_type catalog (#618, #1319): what a message about an alarm
 // says. Fleet-wide reference data mirroring the command_type catalog (no scope
 // injected, read on the viewer floor); official types are read-only. A type's
-// two templates render through the shared template sandbox over the alarm
-// fact map, and :preview shows exactly what a delivery would carry.
+// subject and text are rules, rendered through the shared text/template
+// sandbox over the alarm fact map, and :preview shows exactly what a delivery would carry.
 
 type notificationTypeBody struct {
 	ID          string    `json:"id" doc:"The type's uuid, the stable form of name"`
 	Name        string    `json:"name"`
 	Label       string    `json:"label,omitempty"`
 	Description string    `json:"description,omitempty"`
-	Subject     string    `json:"subject" doc:"The one-line subject template"`
-	Text        string    `json:"text" doc:"The body text template"`
+	Subject     string    `json:"subject" doc:"The one-line subject, written in the rule language"`
+	Text        string    `json:"text" doc:"The body text, written in the rule language"`
 	Official    bool      `json:"official" doc:"Shipped with the platform and read-only"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -49,9 +49,9 @@ type notificationTypeRefInput struct {
 	Name string `path:"name" doc:"The notification type's name or uuid"`
 }
 
-// notificationTemplateDoc is the field help both templates carry: what a
-// template may read, generated from the one declaration of the fact map.
-var notificationTemplateDoc = "A template in the sandboxed language a label rule uses (the functions " +
+// notificationTemplateDoc is the field help subject and text both carry: what
+// a rule may read, generated from the one declaration of the fact map.
+var notificationTemplateDoc = "Subject and text are written in the rule language a label rule uses (the functions " +
 	strings.Join(sandbox.FuncNames(), ", ") + "; {{if}} and the builtins " + strings.Join(sandbox.Builtins(), ", ") +
 	"), reading the alarm facts " + strings.Join(storage.AlarmFactKeys(), ", ") +
 	"; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past " +
@@ -62,8 +62,8 @@ type createNotificationTypeInput struct {
 		Name        string `json:"name" minLength:"1" doc:"The type's name (lowercase kebab)"`
 		Label       string `json:"label,omitempty" required:"false" doc:"A human label"`
 		Description string `json:"description,omitempty" required:"false" doc:"What the message is for"`
-		Subject     string `json:"subject" doc:"The one-line subject template"`
-		Text        string `json:"text" doc:"The body text template"`
+		Subject     string `json:"subject" doc:"The one-line subject, written in the rule language"`
+		Text        string `json:"text" doc:"The body text, written in the rule language"`
 	}
 }
 
@@ -72,8 +72,8 @@ type updateNotificationTypeInput struct {
 	Body struct {
 		Label       *string `json:"label,omitempty" required:"false" doc:"A human label (empty clears it)"`
 		Description *string `json:"description,omitempty" required:"false" doc:"What the message is for"`
-		Subject     *string `json:"subject,omitempty" required:"false" doc:"The one-line subject template"`
-		Text        *string `json:"text,omitempty" required:"false" doc:"The body text template"`
+		Subject     *string `json:"subject,omitempty" required:"false" doc:"The one-line subject, written in the rule language"`
+		Text        *string `json:"text,omitempty" required:"false" doc:"The body text, written in the rule language"`
 	}
 }
 
@@ -83,8 +83,8 @@ type previewNotificationTypeInput struct {
 		Component  string  `json:"component" minLength:"1" doc:"The component the alarm is on, by name or dotted address"`
 		Alarm      string  `json:"alarm,omitempty" required:"false" doc:"The alarm's id; absent previews the component's most recently raised alarm"`
 		Transition string  `json:"transition,omitempty" required:"false" enum:"raised,cleared" doc:"The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise)"`
-		Subject    *string `json:"subject,omitempty" required:"false" doc:"A draft subject template to render instead of the stored one, so an editor previews before it saves"`
-		Text       *string `json:"text,omitempty" required:"false" doc:"A draft text template to render instead of the stored one"`
+		Subject    *string `json:"subject,omitempty" required:"false" doc:"A draft subject to render instead of the stored one, so an editor previews before it saves"`
+		Text       *string `json:"text,omitempty" required:"false" doc:"A draft text to render instead of the stored one"`
 	}
 }
 
@@ -93,13 +93,13 @@ type previewNotificationTypeOutput struct {
 		Subject    string          `json:"subject" doc:"The rendered subject, as a delivery would carry it"`
 		Text       string          `json:"text" doc:"The rendered text, as a delivery would carry it"`
 		Transition string          `json:"transition" enum:"raised,cleared" doc:"The edge it was rendered for"`
-		Facts      []alarmFactBody `json:"facts" doc:"The alarm facts the templates read, every key in its declared order (an absent fact is empty)"`
+		Facts      []alarmFactBody `json:"facts" doc:"The alarm facts the subject and text read, every key in its declared order (an absent fact is empty)"`
 	}
 }
 
-// alarmFactBody is one fact a notification template reads, by its key.
+// alarmFactBody is one fact a notification's subject and text read, by its key.
 type alarmFactBody struct {
-	Name  string `json:"name" doc:"The key a template reads it by ({{.Name}})"`
+	Name  string `json:"name" doc:"The key a rule reads it by ({{.Name}})"`
 	Value string `json:"value"`
 }
 
@@ -172,7 +172,7 @@ func registerNotificationTypeRoutes(api huma.API, a *authenticator, gw storage.G
 		Method:      http.MethodPatch,
 		Path:        "/notification-types/{name}",
 		Summary:     "Update a notification type",
-		Description: "Patches an operator type's label, description or templates (an absent field is unchanged). " + notificationTemplateDoc + ". An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
+		Description: "Patches an operator type's label, description, subject or text (an absent field is unchanged). " + notificationTemplateDoc + ". An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
 	}, "notification_type", "update"), func(ctx context.Context, in *updateNotificationTypeInput) (*notificationTypeOutput, error) {
 		t, err := gw.UpdateNotificationType(ctx, actorID(ctx), in.Name, storage.NotificationTypePatch{
 			Label: in.Body.Label, Description: in.Body.Description, Subject: in.Body.Subject, Text: in.Body.Text,
@@ -203,7 +203,7 @@ func registerNotificationTypeRoutes(api huma.API, a *authenticator, gw storage.G
 		Method:      http.MethodPost,
 		Path:        "/notification-types/{name}:preview",
 		Summary:     "Preview a notification type against an alarm",
-		Description: "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
+		Description: "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
 	}, "notification_type", "read"), func(ctx context.Context, in *previewNotificationTypeInput) (*previewNotificationTypeOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Body.Component, "read")
 		if err != nil {

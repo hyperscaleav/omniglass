@@ -62,14 +62,14 @@ type locationTypeBody struct {
 	Label              string            `json:"label"`
 	Icon               string            `json:"icon"`
 	AllowedParentTypes []string          `json:"allowed_parent_types"`
-	LabelRule          string            `json:"label_rule,omitempty" doc:"The label template locations of this type get; empty falls back to the global rule for locations"`
+	LabelRule          string            `json:"label_rule,omitempty" doc:"The label rule locations of this type get; empty falls back to the global rule for locations"`
 	NameRule           *nameRuleReadBody `json:"name_rule,omitempty" doc:"How the platform NAMES locations of this type; absent means an operator names every one of them"`
 	Official           bool              `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
 	Forked             bool              `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
 }
 
 // nameRuleBody is the wire shape of a location_type's name rule (#687): a
-// DECLARATION, deliberately not a template like label_rule beside it, because a
+// DECLARATION, deliberately not a rule like label_rule beside it, because a
 // name has to satisfy the slug rule and lands in a unique index other rows
 // reference, so it is refused at rule-edit time by minting from it (ADR-0102).
 //
@@ -141,7 +141,7 @@ type createLocationTypeInput struct {
 		Label              string   `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
-		LabelRule          string   `json:"label_rule,omitempty" doc:"The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile"`
+		LabelRule          string   `json:"label_rule,omitempty" doc:"The label rule locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile"`
 		// A declaration, not a template: see nameRuleBody. Omit it and an
 		// operator names every location of this type, which is the default and
 		// the state three of the four shipped types stay in.
@@ -161,7 +161,7 @@ type updateLocationTypeInput struct {
 		Label              *string       `json:"label,omitempty" doc:"A new operator-facing label"`
 		Icon               *string       `json:"icon,omitempty" doc:"A new glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes *[]string     `json:"allowed_parent_types,omitempty" doc:"Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained"`
-		LabelRule          *string       `json:"label_rule,omitempty" doc:"A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"`
+		LabelRule          *string       `json:"label_rule,omitempty" doc:"A new label rule for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"`
 		NameRule           *nameRuleBody `json:"name_rule,omitempty" doc:"A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row"`
 	}
 }
