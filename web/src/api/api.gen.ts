@@ -276,7 +276,52 @@ export type AgentClassPolicy = {
   source: AgentClassPolicySource;
 };
 
+/**
+ * The tool's operation class
+ */
+export type AgentToolPolicyClass = typeof AgentToolPolicyClass[keyof typeof AgentToolPolicyClass];
+
+
+export const AgentToolPolicyClass = {
+  read: 'read',
+  write: 'write',
+  destructive: 'destructive',
+  credential_destination: 'credential_destination',
+} as const;
+
+/**
+ * always runs; ask runs, and the client confirms with its person first; never is refused by the server
+ */
+export type AgentToolPolicyPolicy = typeof AgentToolPolicyPolicy[keyof typeof AgentToolPolicyPolicy];
+
+
+export const AgentToolPolicyPolicy = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * The layer that set the policy: the platform's class value, a role's override, or the tool's own
+ */
+export type AgentToolPolicySource = typeof AgentToolPolicySource[keyof typeof AgentToolPolicySource];
+
+
+export const AgentToolPolicySource = {
+  platform: 'platform',
+  role: 'role',
+  tool: 'tool',
+} as const;
+
 export type AgentToolPolicy = {
+  /** The tool's operation class */
+  class: AgentToolPolicyClass;
+  /** always runs; ask runs, and the client confirms with its person first; never is refused by the server */
+  policy: AgentToolPolicyPolicy;
+  /** The role whose override set the policy, when the source is role */
+  role?: string;
+  /** The layer that set the policy: the platform's class value, a role's override, or the tool's own */
+  source: AgentToolPolicySource;
   /** The tool (operation ID) an override names */
   tool: string;
 };

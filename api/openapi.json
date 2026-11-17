@@ -522,13 +522,48 @@
       "AgentToolPolicy": {
         "additionalProperties": false,
         "properties": {
+          "class": {
+            "description": "The tool's operation class",
+            "enum": [
+              "read",
+              "write",
+              "destructive",
+              "credential_destination"
+            ],
+            "type": "string"
+          },
+          "policy": {
+            "description": "always runs; ask runs, and the client confirms with its person first; never is refused by the server",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          },
+          "role": {
+            "description": "The role whose override set the policy, when the source is role",
+            "type": "string"
+          },
+          "source": {
+            "description": "The layer that set the policy: the platform's class value, a role's override, or the tool's own",
+            "enum": [
+              "platform",
+              "role",
+              "tool"
+            ],
+            "type": "string"
+          },
           "tool": {
             "description": "The tool (operation ID) an override names",
             "type": "string"
           }
         },
         "required": [
-          "tool"
+          "tool",
+          "class",
+          "policy",
+          "source"
         ],
         "type": "object"
       },

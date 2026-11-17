@@ -162,9 +162,14 @@ type agentClassPolicy struct {
 	Role   string `json:"role,omitempty" doc:"The role whose override set the policy, when the source is role"`
 }
 
+// agentToolPolicy spells out its fields rather than embedding
+// agentClassPolicy: Huma leaves an unexported embedded struct out of the schema.
 type agentToolPolicy struct {
-	Tool string `json:"tool" doc:"The tool (operation ID) an override names"`
-	agentClassPolicy
+	Tool   string `json:"tool" doc:"The tool (operation ID) an override names"`
+	Class  string `json:"class" enum:"read,write,destructive,credential_destination" doc:"The tool's operation class"`
+	Policy string `json:"policy" enum:"always,ask,never" doc:"always runs; ask runs, and the client confirms with its person first; never is refused by the server"`
+	Source string `json:"source" enum:"platform,role,tool" doc:"The layer that set the policy: the platform's class value, a role's override, or the tool's own"`
+	Role   string `json:"role,omitempty" doc:"The role whose override set the policy, when the source is role"`
 }
 
 type agentPolicyOutput struct {
@@ -205,7 +210,8 @@ func (a *authenticator) agentPolicyHandler(ctx context.Context, _ *struct{}) (*a
 			continue
 		}
 		class := operationClass(op)
-		out.Body.Tools = append(out.Body.Tools, agentToolPolicy{Tool: t, agentClassPolicy: classPolicy(class, p.ResolveTool(t, string(class), roles))})
+		d := p.ResolveTool(t, string(class), roles)
+		out.Body.Tools = append(out.Body.Tools, agentToolPolicy{Tool: t, Class: string(class), Policy: d.Policy, Source: d.Source, Role: d.Role})
 	}
 	return out, nil
 }
