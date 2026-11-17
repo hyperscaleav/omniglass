@@ -838,11 +838,11 @@ ALARMS
   none open
 
 PIPELINE      NEWEST IN  OUT  LOSS  LAST HOUR IN  OUT  LOSS
-  Node        0          0    -     0             0    -
+  Outpost     0          0    -     0             0    -
   Ingest      0          0    -     0             0    -
   end to end                  -                        -
 
-NODES  0, 0 with loss, 0 not healthy
+OUTPOSTS  0, 0 with loss, 0 not healthy
 
 FAILURES
   none
@@ -853,20 +853,20 @@ healthy
 The table is the page's answer read top down: the platform system's verdict, each server's verdict,
 build and uptime with its current figures (ingest lag, the queues, the database, retention), the
 alarms open on the servers, each pipeline hop's in, out and loss for the newest window and the last
-hour with the end to end beneath, the nodes with loss or not healthy, and every failure figure above
+hour with the end to end beneath, the outposts with loss or not healthy, and every failure figure above
 zero. `--json` prints the same reading as one object, with `healthy`, the `reasons` it is not, and
 `not_visible`, the parts the token could not read.
 
 **The exit status is the verdict**, so a script, a cron job or a probe can branch on it alone. The
 command exits nonzero, its error naming every reason, when the platform system or a server reads
-anything but healthy, an alarm is open on a server, a node is not healthy, or the newest window lost
+anything but healthy, an alarm is open on a server, an outpost is not healthy, or the newest window lost
 work end to end:
 
 ```text
 Error: the platform is not healthy: ...: ingest lag over a minute
 ```
 
-**It reads what your token may read, and says what it cannot.** The view is gated by `node:read`; the
+**It reads what your token may read, and says what it cannot.** The view is gated by `outpost:read`; the
 server figures and the pipeline need a fleet-wide (all-scope) `component:read`, and the platform
 system's verdict a fleet-wide `system:read`. A part the token cannot read prints as
 `not visible to you`, never as zero or as an empty list, and the command then exits nonzero, because a

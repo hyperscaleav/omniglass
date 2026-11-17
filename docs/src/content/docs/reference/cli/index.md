@@ -4663,6 +4663,50 @@ Example:
 omniglass outpost update <name>
 ```
 
+## `omniglass platform`
+
+Read Omniglass's own health from a running server
+
+### `omniglass platform health`
+
+Read whether the platform is keeping up, and exit nonzero when it is not
+
+```
+omniglass platform health [flags]
+```
+
+Reads the platform view (the read behind the console's Platform health page) and reduces it to
+whether Omniglass is keeping up: the system and server verdicts, open alarms, each pipeline
+hop's in, out and loss with the end to end, the outposts with loss or not healthy, ingest lag,
+the queues, the database and retention, and every failure figure above zero. It exits nonzero
+when a verdict is not healthy, an alarm is open, or the newest windows lost work end to end.
+
+It reads through the API alone with --server and --token, so it works against any deployment.
+The view is gated by outpost:read; a part the token cannot read prints as not visible to you,
+never as zero. --window reads twice and adds the database's and the telemetry stream's growth
+and rates; --every samples on an interval and writes one JSON line a sample, to --append or
+stdout; --page-clients times the console's system page under concurrent clients.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--append` | string | (none) | append each sample's line to this file (with --every) |
+| `--every` | duration | `0s` | sample on this interval, one JSON line a sample (0 reads once) |
+| `--json` | bool | `false` | print the reading as JSON |
+| `--page-clients` | int | `0` | time the console's system page with this many concurrent clients (0 skips it) |
+| `--page-loads` | int | `1` | timed system page loads a client, spread across --window |
+| `--page-system` | string | (none) | the system whose page to load (default the fleet view's first) |
+| `--samples` | int | `0` | stop after this many samples (with --every; 0 runs until interrupted) |
+| `--window` | duration | `0s` | read twice this far apart and add the growth and rates between (0 reads once) |
+
+Example:
+
+```sh
+omniglass platform health
+  omniglass platform health --json
+  omniglass platform health --window 1m --page-clients 4
+  omniglass platform health --every 5m --window 1m --append health.jsonl
+```
+
 ## `omniglass principal`
 
 Commands for the principal resource

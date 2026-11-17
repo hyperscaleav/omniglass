@@ -55,15 +55,15 @@ const healthyPlatformView = `{
     "alarms": []
   }],
   "groups": [],
-  "nodes": [
-    {"name": "node-a", "label": "Node A", "enrolled": true, "verdict": "healthy", "loss": 0},
-    {"name": "node-b", "label": "Node B", "enrolled": true, "verdict": "healthy"}
+  "outposts": [
+    {"name": "outpost-a", "label": "Outpost A", "enrolled": true, "verdict": "healthy", "loss": 0},
+    {"name": "outpost-b", "label": "Outpost B", "enrolled": true, "verdict": "healthy"}
   ],
-  "loss_hops": ["node"],
+  "loss_hops": ["outpost"],
   "pipeline": {
     "keys": [],
     "hops": [
-      {"id": "node", "label": "Node", "description": "", "component_class": "node", "keys": [], "kinds": [],
+      {"id": "outpost", "label": "Outpost", "description": "", "component_class": "outpost", "keys": [], "kinds": [],
        "total": {"newest": {"in": 100, "out": 100, "loss": 0}, "last_hour": {"in": 6000, "out": 6000, "loss": 0}},
        "by_component": []},
       {"id": "ingest", "label": "Ingest", "description": "", "component_class": "server", "keys": [], "kinds": [],
@@ -158,10 +158,10 @@ func TestPlatformHealthReadsAHealthyPlatform(t *testing.T) {
 	if _, ok := got["table-bytes"]; ok {
 		t.Errorf("table-bytes is not a headline figure; got it in %v", got)
 	}
-	if r.Nodes.Count != 2 || len(r.Nodes.Lossy) != 0 || len(r.Nodes.NotHealthy) != 0 {
-		t.Fatalf("nodes = %+v", r.Nodes)
+	if r.Outposts.Count != 2 || len(r.Outposts.Lossy) != 0 || len(r.Outposts.NotHealthy) != 0 {
+		t.Fatalf("outposts = %+v", r.Outposts)
 	}
-	if r.Pipeline == nil || len(r.Pipeline.Hops) != 2 || r.Pipeline.Hops[0].ID != "node" || r.Pipeline.Hops[0].Newest.In != 100 || r.Pipeline.Hops[1].LastHour.Out != 6000 {
+	if r.Pipeline == nil || len(r.Pipeline.Hops) != 2 || r.Pipeline.Hops[0].ID != "outpost" || r.Pipeline.Hops[0].Newest.In != 100 || r.Pipeline.Hops[1].LastHour.Out != 6000 {
 		t.Fatalf("pipeline = %+v", r.Pipeline)
 	}
 	if r.Pipeline.EndToEnd.Newest == nil || *r.Pipeline.EndToEnd.Newest != 0 {
@@ -183,7 +183,7 @@ func TestPlatformHealthPicksNonzeroFailures(t *testing.T) {
 	v.Servers[0].Groups[0].Figures[1].Value = 2 // db-slow-query-count
 	v.Servers[0].Groups[1].Figures[2].Value = 5 // push-lane-refusal-count
 	v.Servers[0].Groups[1].Figures[0].Value = 9 // ingest-lag: not a failure figure
-	v.Nodes[0].Figures = map[string]platformViewNodeFigure{"command-expired-count": {Value: 1}, "command-pending-count": {Value: 7}}
+	v.Outposts[0].Figures = map[string]platformViewOutpostFigure{"command-expired-count": {Value: 1}, "command-pending-count": {Value: 7}}
 	r := readPlatformHealth(v)
 	got := map[string]float64{}
 	for _, f := range r.Failures {
@@ -192,7 +192,7 @@ func TestPlatformHealthPicksNonzeroFailures(t *testing.T) {
 	want := map[string]float64{
 		"lab-server db-slow-query-count":     2,
 		"lab-server push-lane-refusal-count": 5,
-		"node-a command-expired-count":       1,
+		"outpost-a command-expired-count":    1,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("failures = %v, want %v", got, want)
@@ -204,21 +204,21 @@ func TestPlatformHealthPicksNonzeroFailures(t *testing.T) {
 	}
 }
 
-func TestPlatformHealthRollsUpNodes(t *testing.T) {
+func TestPlatformHealthRollsUpOutposts(t *testing.T) {
 	v := platformFixture(t)
 	loss := 0.02
-	v.Nodes[0].Loss = &loss
-	v.Nodes[1].Verdict = "degraded"
-	v.Nodes = append(v.Nodes, platformViewNode{Name: "node-c"}) // never reported: no verdict
+	v.Outposts[0].Loss = &loss
+	v.Outposts[1].Verdict = "degraded"
+	v.Outposts = append(v.Outposts, platformViewOutpost{Name: "outpost-c"}) // never reported: no verdict
 	r := readPlatformHealth(v)
-	if r.Nodes.Count != 3 {
-		t.Fatalf("count = %d, want 3", r.Nodes.Count)
+	if r.Outposts.Count != 3 {
+		t.Fatalf("count = %d, want 3", r.Outposts.Count)
 	}
-	if len(r.Nodes.Lossy) != 1 || r.Nodes.Lossy[0].Name != "node-a" || r.Nodes.Lossy[0].Loss != 0.02 {
-		t.Fatalf("lossy = %+v", r.Nodes.Lossy)
+	if len(r.Outposts.Lossy) != 1 || r.Outposts.Lossy[0].Name != "outpost-a" || r.Outposts.Lossy[0].Loss != 0.02 {
+		t.Fatalf("lossy = %+v", r.Outposts.Lossy)
 	}
-	if len(r.Nodes.NotHealthy) != 1 || r.Nodes.NotHealthy[0].Name != "node-b" || r.Nodes.NotHealthy[0].Verdict != "degraded" {
-		t.Fatalf("not healthy = %+v", r.Nodes.NotHealthy)
+	if len(r.Outposts.NotHealthy) != 1 || r.Outposts.NotHealthy[0].Name != "outpost-b" || r.Outposts.NotHealthy[0].Verdict != "degraded" {
+		t.Fatalf("not healthy = %+v", r.Outposts.NotHealthy)
 	}
 }
 
@@ -231,7 +231,7 @@ func TestPlatformHealthReasons(t *testing.T) {
 	}{
 		{"system verdict", func(v *platformView) { v.System.Verdict = "outage" }, "the platform system reads outage"},
 		{"server verdict", func(v *platformView) { v.Servers[0].Verdict = "degraded" }, "server lab-server reads degraded"},
-		{"node verdict", func(v *platformView) { v.Nodes[1].Verdict = "outage" }, "node node-b reads outage"},
+		{"outpost verdict", func(v *platformView) { v.Outposts[1].Verdict = "outage" }, "outpost outpost-b reads outage"},
 		{"alarm", func(v *platformView) {
 			v.Servers[0].Alarms = []platformViewAlarm{{Rule: "ingest-lag-high", Severity: "warning", Message: "lag"}}
 		}, "alarm open on lab-server: ingest-lag-high (warning)"},
@@ -264,7 +264,7 @@ func TestPlatformHealthNamesWhatIsNotVisible(t *testing.T) {
 	v.Servers = nil
 	v.Pipeline = nil
 	r := readPlatformHealth(v)
-	for _, part := range []string{"system verdict", "servers", "pipeline", "node figures"} {
+	for _, part := range []string{"system verdict", "servers", "pipeline", "outpost figures"} {
 		if !contains(r.NotVisible, part) {
 			t.Errorf("not visible = %v, want it to name %q", r.NotVisible, part)
 		}
@@ -407,11 +407,11 @@ func TestPlatformHealthCommandJSON(t *testing.T) {
 
 func TestPlatformHealthCommandRefusedRead(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, `{"detail":"missing permission node:read"}`, http.StatusForbidden)
+		http.Error(w, `{"detail":"missing permission outpost:read"}`, http.StatusForbidden)
 	}))
 	t.Cleanup(srv.Close)
 	_, _, err := runPlatformHealth(t, srv.URL)
-	if err == nil || !strings.Contains(err.Error(), "GET /api/v1/views/platform: 403 Forbidden") || !strings.Contains(err.Error(), "node:read") {
+	if err == nil || !strings.Contains(err.Error(), "GET /api/v1/views/platform: 403 Forbidden") || !strings.Contains(err.Error(), "outpost:read") {
 		t.Fatalf("err = %v, want the refused read and its reason", err)
 	}
 }

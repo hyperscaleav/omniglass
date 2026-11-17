@@ -54,7 +54,7 @@ func newPlatformHealthRig(t *testing.T) *platformHealthRig {
 	}
 	t.Cleanup(func() { conn.Close(ctx) })
 	// The narrow role goes in before the handler loads its role index.
-	if _, err := conn.Exec(ctx, `insert into role (name, official, permissions, inherits) values ('node-reader', false, '{node:read}', '{}')`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into role (name, official, permissions, inherits) values ('outpost-reader', false, '{outpost:read}', '{}')`); err != nil {
 		t.Fatalf("insert role: %v", err)
 	}
 	server, err := gw.EnsureServerComponent(ctx, "lab-server")
@@ -79,15 +79,15 @@ func (r *platformHealthRig) health(t *testing.T, tok string, args ...string) (st
 	return runCLI(t, append(append([]string{"platform", "health"}, args...), "--server", r.url, "--token", tok)...)
 }
 
-// nodeReader mints a service principal granted only node:read at the all
+// outpostReader mints a service principal granted only outpost:read at the all
 // scope: it may open the platform view but read none of its figures.
-func (r *platformHealthRig) nodeReader(t *testing.T) string {
+func (r *platformHealthRig) outpostReader(t *testing.T) string {
 	t.Helper()
 	var pid string
 	if err := r.conn.QueryRow(r.ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
 		t.Fatalf("insert principal: %v", err)
 	}
-	if _, err := r.conn.Exec(r.ctx, `insert into service (principal_id, name) values ($1, 'fleet-node-reader')`, pid); err != nil {
+	if _, err := r.conn.Exec(r.ctx, `insert into service (principal_id, name) values ($1, 'fleet-outpost-reader')`, pid); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	tok, hash, prefix, err := auth.NewBearerToken()
@@ -98,7 +98,7 @@ func (r *platformHealthRig) nodeReader(t *testing.T) string {
 		t.Fatalf("insert credential: %v", err)
 	}
 	if _, err := r.conn.Exec(r.ctx, `insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op)
-		values ($1, (select id from role where name = 'node-reader'), 'all', null, 'subtree')`, pid); err != nil {
+		values ($1, (select id from role where name = 'outpost-reader'), 'all', null, 'subtree')`, pid); err != nil {
 		t.Fatalf("insert grant: %v", err)
 	}
 	return tok
@@ -171,13 +171,13 @@ func TestPlatformHealthExitsNonzeroOnAnOpenAlarm(t *testing.T) {
 	}
 }
 
-// TestPlatformHealthSaysWhatTheCallerCannotSee: a token with node:read alone
+// TestPlatformHealthSaysWhatTheCallerCannotSee: a token with outpost:read alone
 // opens the view but reads no figures; the table says each hidden part is not
 // visible rather than printing it empty, and the command fails, since a reading
 // that cannot see the platform cannot vouch for it.
 func TestPlatformHealthSaysWhatTheCallerCannotSee(t *testing.T) {
 	r := newPlatformHealthRig(t)
-	tok := r.nodeReader(t)
+	tok := r.outpostReader(t)
 
 	got, err := r.health(t, tok)
 	if err == nil {
@@ -187,7 +187,7 @@ func TestPlatformHealthSaysWhatTheCallerCannotSee(t *testing.T) {
 		t.Errorf("table does not say what is hidden:\n%s", got)
 	}
 	if strings.Contains(got, "v9.9.9") {
-		t.Errorf("a node:read-only token sees the server's build:\n%s", got)
+		t.Errorf("a outpost:read-only token sees the server's build:\n%s", got)
 	}
 	if !strings.Contains(err.Error(), "not visible to you") {
 		t.Errorf("error = %q, want it to say the figures are not visible", err)

@@ -39,7 +39,7 @@ type platformView struct {
 	FiguresRead bool                  `json:"figures_read"`
 	System      *platformViewSystem   `json:"system,omitempty"`
 	Servers     []platformViewServer  `json:"servers"`
-	Nodes       []platformViewNode    `json:"nodes"`
+	Outposts    []platformViewOutpost `json:"outposts"`
 	Pipeline    *platformViewPipeline `json:"pipeline,omitempty"`
 }
 
@@ -82,14 +82,14 @@ type platformViewAlarm struct {
 	Message  string `json:"message"`
 }
 
-type platformViewNode struct {
-	Name    string                            `json:"name"`
-	Verdict string                            `json:"verdict,omitempty"`
-	Figures map[string]platformViewNodeFigure `json:"figures,omitempty"`
-	Loss    *float64                          `json:"loss,omitempty"`
+type platformViewOutpost struct {
+	Name    string                               `json:"name"`
+	Verdict string                               `json:"verdict,omitempty"`
+	Figures map[string]platformViewOutpostFigure `json:"figures,omitempty"`
+	Loss    *float64                             `json:"loss,omitempty"`
 }
 
-type platformViewNodeFigure struct {
+type platformViewOutpostFigure struct {
 	Value float64 `json:"value"`
 }
 
@@ -152,7 +152,7 @@ type platformReading struct {
 	System     *platformViewSystem             `json:"system,omitempty"`
 	Servers    []platformServerReading         `json:"servers"`
 	Failures   []platformFailure               `json:"failures"`
-	Nodes      platformNodeReading             `json:"nodes"`
+	Outposts   platformOutpostReading          `json:"outposts"`
 	Pipeline   *platformPipelineReading        `json:"pipeline,omitempty"`
 	Window     *platformWindow                 `json:"window,omitempty"`
 	Page       *labfootprint.SystemPageFigures `json:"page,omitempty"`
@@ -180,7 +180,7 @@ type platformFigureValue struct {
 }
 
 // platformFailure is a nonzero failure figure and where it was read: a
-// server's name or a node's.
+// server's name or an outpost's.
 type platformFailure struct {
 	Source   string  `json:"source"`
 	Key      string  `json:"key"`
@@ -188,18 +188,18 @@ type platformFailure struct {
 	Value    float64 `json:"value"`
 }
 
-type platformNodeReading struct {
-	Count      int                   `json:"count"`
-	Lossy      []platformNodeLoss    `json:"lossy"`
-	NotHealthy []platformNodeVerdict `json:"not_healthy"`
+type platformOutpostReading struct {
+	Count      int                      `json:"count"`
+	Lossy      []platformOutpostLoss    `json:"lossy"`
+	NotHealthy []platformOutpostVerdict `json:"not_healthy"`
 }
 
-type platformNodeLoss struct {
+type platformOutpostLoss struct {
 	Name string  `json:"name"`
 	Loss float64 `json:"loss"`
 }
 
-type platformNodeVerdict struct {
+type platformOutpostVerdict struct {
 	Name    string `json:"name"`
 	Verdict string `json:"verdict"`
 }
@@ -228,7 +228,7 @@ func readPlatformHealth(v platformView) platformReading {
 		System:     v.System,
 		Servers:    []platformServerReading{},
 		Failures:   []platformFailure{},
-		Nodes:      platformNodeReading{Count: len(v.Nodes), Lossy: []platformNodeLoss{}, NotHealthy: []platformNodeVerdict{}},
+		Outposts:   platformOutpostReading{Count: len(v.Outposts), Lossy: []platformOutpostLoss{}, NotHealthy: []platformOutpostVerdict{}},
 	}
 	if v.System == nil {
 		r.NotVisible = append(r.NotVisible, "system verdict")
@@ -243,7 +243,7 @@ func readPlatformHealth(v platformView) platformReading {
 		if v.Pipeline == nil {
 			r.NotVisible = append(r.NotVisible, "pipeline")
 		}
-		r.NotVisible = append(r.NotVisible, "node figures")
+		r.NotVisible = append(r.NotVisible, "outpost figures")
 		r.Reasons = append(r.Reasons, "the platform's figures are not visible to you")
 	}
 	for _, s := range v.Servers {
@@ -266,13 +266,13 @@ func readPlatformHealth(v platformView) platformReading {
 			}
 		}
 	}
-	for _, n := range v.Nodes {
+	for _, n := range v.Outposts {
 		if n.Loss != nil && *n.Loss > 0 {
-			r.Nodes.Lossy = append(r.Nodes.Lossy, platformNodeLoss{Name: n.Name, Loss: *n.Loss})
+			r.Outposts.Lossy = append(r.Outposts.Lossy, platformOutpostLoss{Name: n.Name, Loss: *n.Loss})
 		}
 		if n.Verdict != "" && n.Verdict != "healthy" {
-			r.Nodes.NotHealthy = append(r.Nodes.NotHealthy, platformNodeVerdict{Name: n.Name, Verdict: n.Verdict})
-			r.Reasons = append(r.Reasons, fmt.Sprintf("node %s reads %s", n.Name, n.Verdict))
+			r.Outposts.NotHealthy = append(r.Outposts.NotHealthy, platformOutpostVerdict{Name: n.Name, Verdict: n.Verdict})
+			r.Reasons = append(r.Reasons, fmt.Sprintf("outpost %s reads %s", n.Name, n.Verdict))
 		}
 		keys := make([]string, 0, len(n.Figures))
 		for k := range n.Figures {
@@ -285,7 +285,7 @@ func readPlatformHealth(v platformView) platformReading {
 			}
 		}
 	}
-	sort.SliceStable(r.Nodes.Lossy, func(i, j int) bool { return r.Nodes.Lossy[i].Loss > r.Nodes.Lossy[j].Loss })
+	sort.SliceStable(r.Outposts.Lossy, func(i, j int) bool { return r.Outposts.Lossy[i].Loss > r.Outposts.Lossy[j].Loss })
 	if p := v.Pipeline; p != nil {
 		pr := &platformPipelineReading{EndToEnd: p.EndToEndTotal, Hops: []platformHopReading{}}
 		for _, h := range p.Hops {
@@ -501,11 +501,11 @@ func newPlatformCmd() *cobra.Command {
 		Short: "Read whether the platform is keeping up, and exit nonzero when it is not",
 		Long: "Reads the platform view (the read behind the console's Platform health page) and reduces it to\n" +
 			"whether Omniglass is keeping up: the system and server verdicts, open alarms, each pipeline\n" +
-			"hop's in, out and loss with the end to end, the nodes with loss or not healthy, ingest lag,\n" +
+			"hop's in, out and loss with the end to end, the outposts with loss or not healthy, ingest lag,\n" +
 			"the queues, the database and retention, and every failure figure above zero. It exits nonzero\n" +
 			"when a verdict is not healthy, an alarm is open, or the newest windows lost work end to end.\n\n" +
 			"It reads through the API alone with --server and --token, so it works against any deployment.\n" +
-			"The view is gated by node:read; a part the token cannot read prints as not visible to you,\n" +
+			"The view is gated by outpost:read; a part the token cannot read prints as not visible to you,\n" +
 			"never as zero. --window reads twice and adds the database's and the telemetry stream's growth\n" +
 			"and rates; --every samples on an interval and writes one JSON line a sample, to --append or\n" +
 			"stdout; --page-clients times the console's system page under concurrent clients.",
@@ -745,7 +745,7 @@ func waitFor(ctx context.Context, d time.Duration) error {
 // platformNotVisible is what a part the caller cannot read prints as.
 const platformNotVisible = "not visible to you"
 
-// platformTableRows caps the node lists in the table; --json carries them all.
+// platformTableRows caps the outpost lists in the table; --json carries them all.
 const platformTableRows = 10
 
 // table prints the reading for a person.
@@ -808,17 +808,17 @@ func (r platformReading) table(w io.Writer) {
 		fmt.Fprintf(tw, "  end to end\t\t\t%s\t\t\t%s\n", formatLoss(r.Pipeline.EndToEnd.Newest), formatLoss(r.Pipeline.EndToEnd.LastHour))
 	}
 
-	fmt.Fprintf(tw, "\nNODES\t%d, %d with loss, %d not healthy\n", r.Nodes.Count, len(r.Nodes.Lossy), len(r.Nodes.NotHealthy))
-	for i, n := range r.Nodes.Lossy {
+	fmt.Fprintf(tw, "\nOUTPOSTS\t%d, %d with loss, %d not healthy\n", r.Outposts.Count, len(r.Outposts.Lossy), len(r.Outposts.NotHealthy))
+	for i, n := range r.Outposts.Lossy {
 		if i == platformTableRows {
-			fmt.Fprintf(tw, "  and %d more with loss\n", len(r.Nodes.Lossy)-i)
+			fmt.Fprintf(tw, "  and %d more with loss\n", len(r.Outposts.Lossy)-i)
 			break
 		}
 		fmt.Fprintf(tw, "  %s\tloss %s\n", n.Name, formatPlatformNumber(n.Loss))
 	}
-	for i, n := range r.Nodes.NotHealthy {
+	for i, n := range r.Outposts.NotHealthy {
 		if i == platformTableRows {
-			fmt.Fprintf(tw, "  and %d more not healthy\n", len(r.Nodes.NotHealthy)-i)
+			fmt.Fprintf(tw, "  and %d more not healthy\n", len(r.Outposts.NotHealthy)-i)
 			break
 		}
 		fmt.Fprintf(tw, "  %s\t%s\n", n.Name, n.Verdict)
@@ -826,7 +826,7 @@ func (r platformReading) table(w io.Writer) {
 
 	fmt.Fprintln(tw, "\nFAILURES")
 	if len(r.Failures) == 0 {
-		fmt.Fprintf(tw, "  %s\n", r.hidden("node figures", "none"))
+		fmt.Fprintf(tw, "  %s\n", r.hidden("outpost figures", "none"))
 	}
 	for _, f := range r.Failures {
 		key := f.Key
