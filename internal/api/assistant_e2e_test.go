@@ -41,6 +41,17 @@ func TestAConversationIsKeptForItsOwnerAlone(t *testing.T) {
 		}
 	}
 
+	// Impersonation is the exception (ADR-2113): a view-as session sees what
+	// bob sees, his conversations included, and cannot write to them.
+	var imp struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(p.c.do(p.owner, http.MethodPost, "/principals/"+p.ids["bob"]+":impersonate", map[string]any{"mode": "view_as"}, http.StatusCreated), &imp); err != nil {
+		t.Fatal(err)
+	}
+	p.c.do(imp.Token, http.MethodGet, "/assistant/conversations/triage", nil, http.StatusOK)
+	p.c.do(imp.Token, http.MethodDelete, "/assistant/conversations/triage", nil, http.StatusForbidden)
+
 	var got struct {
 		Name    string          `json:"name"`
 		Pending json.RawMessage `json:"pending"`

@@ -2,7 +2,7 @@
 title: "A person's omnibot conversations are theirs alone, and a paused run keeps only its transcript"
 date: 2026-11-17
 status: "Accepted"
-summary: "Stored omnibot conversations are read and written by their owner only, fenced by an owner predicate on every query rather than by a scope set, so no grant (the platform owner's included) reaches another person's. A run that paused on an ask keeps the call it waits on as a marker in its transcript; nothing on the server acts on it, and the owner decides it in their own client"
+summary: "Stored omnibot conversations are read and written by their owner only, fenced by an owner predicate on every query rather than by a scope set, so no grant (the platform owner's included) reaches another person's, except an impersonation session, which sees what its target sees. A run that paused on an ask keeps the call it waits on as a marker in its transcript; nothing on the server acts on it, and the owner decides it in their own client"
 refs: [2113, 1166, 2063, 2120]
 ---
 
@@ -13,7 +13,12 @@ refs: [2113, 1166, 2063, 2120]
      a non-disclosing 404 on every verb and absent from their list, an admin's and the platform
      owner's `>` included. The permission, `assistant:use`, rides `viewer`; it says who may keep
      conversations at all, never whose they may read. The scope resolver records the resource as
-     fleet-wide on purpose: it is not placed on any tier.
+     fleet-wide on purpose: it is not placed on any tier. The one exception is impersonation: a
+     view-as or act-as session is its target for every read, so it sees the target's conversations as
+     it sees the rest of what the target sees, and an act-as write is audited with the real actor.
+     Impersonation is already bounded ([identity and access](/architecture/identity-access/)): only a
+     holder whose own capabilities cover the target may start one, and an owner account cannot be
+     impersonated.
   2. **A kept transcript is not a pending approval.** A run that paused on an `ask` stores the
      conversation with a marker naming the call it waits on. The server never runs, approves,
      expires or notifies on that marker: it is the transcript's last word, kept for its owner. The

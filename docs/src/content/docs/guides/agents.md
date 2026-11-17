@@ -184,8 +184,8 @@ omnibot: conversation triage, 2 messages kept
 ```
 
 The name is lowercase kebab, unique among your own conversations; a new name starts one. Nobody else
-can read it, an admin or the platform owner included. If the run it was kept from stopped on a write it
-was waiting to ask you about, the resumed run asks that first (`Run it? [y/N]`) and carries on from
+can read it, an admin or the platform owner included, except through impersonation, which sees what
+you see. If the run it was kept from stopped on a write it was waiting to ask you about, the resumed run asks that first (`Run it? [y/N]`) and carries on from
 your answer. `omniglass assistant conversation list`, `get` and `delete` manage them, and a conversation
 nobody touches for `assistant.conversation_days` (30 by default) is deleted.
 
