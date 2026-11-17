@@ -207,7 +207,7 @@ official/custom pattern as the `*_type` catalogs ([Location Types guide](/guides
 - A **`driver`** (Generic SNMP, Kestrel Device API, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional **`version`**.
 - The capability catalog retired (#626): a product's device-class genus is now `component_type`
-  (below), and what a [system slot](#system-slots-the-slots-a-system-needs-filled) requires is a
+  (below), and what a [system slot](#system-slots-what-a-system-needs-filled) requires is a
   typed-slot guard over it, not a capability set.
 
 See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
@@ -704,7 +704,7 @@ BOM; what shipped keeps the row to the binding alone and lets `system_slot_assig
 slot.
 
 :::design[Historical: the original template-pinning proposal, superseded by ADR-0071]
-A [system slot](#system-slots-the-slots-a-system-needs-filled) would declare, per slot, a
+A [system slot](#system-slots-what-a-system-needs-filled) would declare, per slot, a
 **requirement** (a capability set a member had to provide, the retired #626 vocabulary,
 [ADR-0087](/architecture/decisions/#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability))
 plus its `health_role`; any component whose **frozen template** met the requirement could fill the
@@ -716,7 +716,7 @@ proposed before the note below states what actually shipped.
 :::
 
 :::note[What is built is the slot model above, and it is final for this point]
-The **built** slot is [`system_slot`](#system-slots-the-slots-a-system-needs-filled): declared on a
+The **built** slot is [`system_slot`](#system-slots-what-a-system-needs-filled): declared on a
 standard or a system, requiring a **typed-slot** match (#626), assigned through `system_slot_assignment`. Its
 **`impact`** replaces the `health_role` tag above (`required` / `redundant` / `informational` are
 quorum plus impact, no fourth vocabulary,
