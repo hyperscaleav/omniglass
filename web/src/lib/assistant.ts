@@ -165,9 +165,12 @@ export type RunInput = { prompt: string } | { resume: { id: string; approved: bo
 // onEvent as it arrives. A run the server refuses to start throws: RunRefused
 // for a 403, an Error naming the server's reason otherwise.
 export async function runOmnibot(name: string, input: RunInput, onEvent: (ev: AguiEvent) => void, signal?: AbortSignal): Promise<void> {
+  // The prompt carries no message id: the server reads only its role and
+  // content, and crypto.randomUUID exists only on a secure origin, so a
+  // console reached over plain http would fail before it sent.
   const body =
     "prompt" in input
-      ? { messages: [{ id: crypto.randomUUID(), role: "user", content: input.prompt }] }
+      ? { messages: [{ role: "user", content: input.prompt }] }
       : {
           messages: [],
           resume: [

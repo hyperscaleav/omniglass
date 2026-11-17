@@ -95,6 +95,15 @@ describe("the omnibot panel", () => {
     expect((screen.getByLabelText("Ask omnibot") as HTMLTextAreaElement).disabled).toBe(true);
   });
 
+  it("runs on a plain-http origin, where the browser has no crypto.randomUUID", async () => {
+    vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
+      throw new TypeError("crypto.randomUUID is not a function");
+    });
+    open();
+    send("add the lobby display");
+    await screen.findByTestId("omnibot-ask");
+  });
+
   it("runs the call once it is confirmed", async () => {
     open();
     send("add the lobby display");

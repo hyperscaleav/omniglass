@@ -112,7 +112,7 @@ describe("running omnibot", () => {
     expect(req.url).toContain("/api/v1/assistant/conversations/lobby:run");
     expect(req.method).toBe("POST");
     const body = await req.json();
-    expect(body.messages).toEqual([{ id: expect.any(String), role: "user", content: "look around" }]);
+    expect(body.messages).toEqual([{ role: "user", content: "look around" }]);
     expect(body.resume).toBeUndefined();
     expect(seen.at(-1)).toBe("RUN_FINISHED");
   });
