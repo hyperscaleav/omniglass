@@ -152,7 +152,7 @@ route's own error and exits non-zero.
 
 `omniglass omnibot` is Omniglass's own agent on the same MCP surface. Signed in as you, it mints itself a
 one-day agent token named `omnibot`, held to the `omnibot` channel, so it holds what you hold and never
-more; it revokes that token when the run ends, however it ends. It runs read-only tools freely and stops
+more; it revokes that token when the run ends, however it ends (Ctrl-C included). It runs read-only tools freely and stops
 before anything else to ask you on the terminal (`Run it? [y/N]`); anything but `y` declines, and the
 model hears that you declined. With no terminal to ask, it declines every write.
 

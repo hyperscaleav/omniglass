@@ -171,3 +171,78 @@ func TestOmnibotNeedsAPersonsToken(t *testing.T) {
 		t.Errorf("connect on an agent token = %v, want a refusal that does not echo the token", err)
 	}
 }
+
+// offerSpy is a model that remembers which tools it was offered.
+type offerSpy struct {
+	provider.Provider
+	offered map[string]bool
+}
+
+func (o *offerSpy) Next(ctx context.Context, msgs []provider.Message, tools []provider.Tool) (provider.Turn, error) {
+	o.offered = map[string]bool{}
+	for _, t := range tools {
+		o.offered[t.Name] = true
+	}
+	return o.Provider.Next(ctx, msgs, tools)
+}
+
+// A class set to never is not offered to omnibot's model, and a call forced
+// past the loop is the server's refusal, audited on the omnibot channel: the
+// channel stamp happens before the policy check, not instead of it.
+func TestOmnibotNeverIsRefusedOnItsChannel(t *testing.T) {
+	t.Parallel()
+	s := newMCPStack(t)
+	s.c.do(s.owner, http.MethodPatch, "/settings/agent", map[string]any{"write": "never"}, http.StatusOK)
+	sess, err := assistant.Connect(s.ctx, s.base, s.owner, "test")
+	if err != nil {
+		t.Fatalf("connect omnibot: %v", err)
+	}
+	t.Cleanup(func() { _ = sess.Close(context.Background()) })
+
+	rec, err := provider.ParseReplay([]byte(`
+turns:
+  - tool_calls: [{name: create-component, arguments: {name: never-bot, product: generic-device}}]
+  - text: I could not.
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := &offerSpy{Provider: rec}
+	loop := &assistant.Loop{Provider: model, Tools: sess, Confirm: func(context.Context, assistant.Proposal) (bool, error) {
+		t.Error("a never call was put to the person")
+		return true, nil
+	}}
+	out, err := loop.Run(s.ctx, "make a component")
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if model.offered["create-component"] || !model.offered["list-components"] {
+		t.Errorf("offered create-component=%v list-components=%v, want only the read", model.offered["create-component"], model.offered["list-components"])
+	}
+	if len(out.Calls) != 1 || out.Calls[0].Decision != assistant.DecisionRefused {
+		t.Errorf("calls = %+v, want the write refused in the client", out.Calls)
+	}
+
+	res, err := sess.Call(s.ctx, "create-component", map[string]any{"name": "never-bot", "product": "generic-device"})
+	if err != nil {
+		t.Fatalf("forced call: %v", err)
+	}
+	if !res.IsError {
+		t.Error("the server ran a never call from omnibot")
+	}
+	s.c.do(s.owner, http.MethodGet, "/components/never-bot", nil, http.StatusNotFound)
+
+	var trail struct {
+		Events []struct {
+			ResourceID string `json:"resource_id"`
+			Agent      string `json:"agent"`
+			Channel    string `json:"channel"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/audit-log?verb=agent_refused", nil, http.StatusOK), &trail); err != nil {
+		t.Fatal(err)
+	}
+	if len(trail.Events) != 1 || trail.Events[0].ResourceID != "create-component" || trail.Events[0].Agent != "omnibot" || trail.Events[0].Channel != "omnibot" {
+		t.Errorf("agent_refused trail = %+v, want omnibot's forced create on the omnibot channel", trail.Events)
+	}
+}

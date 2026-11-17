@@ -8,7 +8,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -46,13 +49,19 @@ func newOmnibotCmd(version string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Ctrl-C cancels the run rather than killing the process, so the
+			// deferred Close still revokes omnibot's token however the run ends.
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
 			server, token := connection(cmd)
-			sess, err := assistant.Connect(cmd.Context(), server, token, version)
+			sess, err := assistant.Connect(ctx, server, token, version)
 			if err != nil {
 				return err
 			}
 			defer func() {
-				if err := sess.Close(context.WithoutCancel(cmd.Context())); err != nil {
+				revoke, cancel := context.WithTimeout(context.WithoutCancel(ctx), revokeTimeout)
+				defer cancel()
+				if err := sess.Close(revoke); err != nil {
 					fmt.Fprintln(cmd.ErrOrStderr(), err)
 				}
 			}()
@@ -65,7 +74,7 @@ func newOmnibotCmd(version string) *cobra.Command {
 					fmt.Fprintln(cmd.ErrOrStderr(), observeLine(c))
 				},
 			}
-			out, err := loop.Run(cmd.Context(), strings.Join(pos, " "))
+			out, err := loop.Run(ctx, strings.Join(pos, " "))
 			if err != nil {
 				return err
 			}
@@ -81,6 +90,11 @@ func newOmnibotCmd(version string) *cobra.Command {
 	return cmd
 }
 
+// revokeTimeout bounds the revoke on the way out, so a server that stops
+// answering cannot hold an interrupted run open; the token then expires within
+// the day.
+const revokeTimeout = 10 * time.Second
+
 // confirmerFor asks on the command's input when that is a person: a terminal,
 // or input a caller set in its place. Piped or redirected stdin has no one to
 // ask, so every ask is declined.
@@ -95,10 +109,11 @@ func confirmerFor(cmd *cobra.Command) assistant.Confirmer {
 }
 
 // terminalConfirmer puts each proposal to the person on out and reads the
-// answer from in: only y or yes runs it.
+// answer from in: only y or yes runs it. A run cancelled while it waits (an
+// interrupt) stops waiting and ends with the cancellation.
 func terminalConfirmer(in io.Reader, out io.Writer) assistant.Confirmer {
 	r := bufio.NewReader(in)
-	return func(_ context.Context, p assistant.Proposal) (bool, error) {
+	return func(ctx context.Context, p assistant.Proposal) (bool, error) {
 		args, _ := json.Marshal(p.Arguments)
 		if p.Arguments == nil {
 			args = []byte("{}")
@@ -112,7 +127,24 @@ func terminalConfirmer(in io.Reader, out io.Writer) assistant.Confirmer {
 			title = p.Tool
 		}
 		fmt.Fprintf(out, "omnibot wants to run %s%s: %s\n  %s\nRun it? [y/N] ", p.Tool, kind, title, args)
-		line, err := r.ReadString('\n')
+		type answer struct {
+			line string
+			err  error
+		}
+		got := make(chan answer, 1)
+		go func() {
+			line, err := r.ReadString('\n')
+			got <- answer{line, err}
+		}()
+		var line string
+		var err error
+		select {
+		case <-ctx.Done():
+			fmt.Fprintln(out)
+			return false, ctx.Err()
+		case a := <-got:
+			line, err = a.line, a.err
+		}
 		if err != nil && !errors.Is(err, io.EOF) {
 			return false, err
 		}
