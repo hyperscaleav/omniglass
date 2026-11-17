@@ -212,7 +212,8 @@ The resolved policy names the layer that set each value: `omniglass auth agent-p
 class with its `source` (`platform`, `role`, with the `role` it came from, or `tool`), plus a `tools`
 list for each overridden operation. The 403 a refused agent gets says the same: that this tool, an
 agent of this role, or this class is refused. In the console, the overrides edit as JSON on the
-`agent` card of the Settings page.
+`agent` card of the Settings page: the text is the whole map, so deleting an entry from it and
+saving drops that override, and blanking it drops them all.
 
 ## Tools the agent can call
 

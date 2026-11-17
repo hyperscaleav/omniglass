@@ -79,6 +79,25 @@ describe("a map setting round trips through its JSON text", () => {
     expect(validateField(map, "")).toBeNull();
   });
 
+  // The API merges a map into what is stored, so a key the operator deleted
+  // from the text has to go back as null or it would stay set.
+  it("sends null for an entry removed from the stored map", () => {
+    const stored = { operator: { write: "never" }, viewer: { read: "ask" } };
+    expect(wireValue(map, '{"viewer":{"read":"ask"}}', stored)).toEqual({ operator: null, viewer: { read: "ask" } });
+  });
+
+  it("sends null for a class removed from inside a role's entry", () => {
+    const stored = { operator: { write: "never", destructive: "never" } };
+    expect(wireValue(map, '{"operator":{"write":"never"}}', stored)).toEqual({
+      operator: { write: "never", destructive: null },
+    });
+  });
+
+  it("clears every stored entry when the text is blanked", () => {
+    const stored = { "fleet.devices:delete": "never", "fleet.devices:list": "ask" };
+    expect(wireValue(map, "", stored)).toEqual({ "fleet.devices:delete": null, "fleet.devices:list": null });
+  });
+
   it("refuses text that is not a JSON object", () => {
     expect(validateField(map, "{nope")).toBe("must be a JSON object");
     expect(validateField(map, "[1]")).toBe("must be a JSON object");

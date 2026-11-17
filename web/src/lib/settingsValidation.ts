@@ -79,14 +79,38 @@ function parseMap(raw: string): Record<string, unknown> | null {
   }
 }
 
+function isObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+// mergePatch is the RFC 7396 patch that turns stored into draft.
+function mergePatch(stored: unknown, draft: Record<string, unknown>): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  if (isObject(stored)) {
+    for (const k of Object.keys(stored)) if (!(k in draft)) patch[k] = null;
+  }
+  for (const [k, v] of Object.entries(draft)) {
+    const was = isObject(stored) ? stored[k] : undefined;
+    patch[k] = isObject(v) && isObject(was) ? mergePatch(was, v) : v;
+  }
+  return patch;
+}
+
 // wireValue is the value a draft is written back as, by the field's generated
 // type: a list as an array (textList), a number or an integer as a JSON number,
 // anything else as the text typed. The control is a text input, so without this
 // an integer setting would go back as a string and the API would refuse it with
 // a 422 on every save (the retention windows, #417, were the first).
-export function wireValue(c: Constraint | undefined, raw: string): unknown {
+//
+// A map goes back as a merge patch against the stored map: the API merges it
+// into what is stored, so an entry the operator deleted from the text is sent
+// as null, at whatever depth it was deleted, or it would stay set.
+export function wireValue(c: Constraint | undefined, raw: string, stored?: unknown): unknown {
   if (isList(c)) return textList(raw);
-  if (isMap(c)) return parseMap(raw) ?? raw;
+  if (isMap(c)) {
+    const draft = parseMap(raw);
+    return draft === null ? raw : mergePatch(stored, draft);
+  }
   if ((c?.type === "integer" || c?.type === "number") && raw.trim() !== "" && !Number.isNaN(Number(raw))) {
     return Number(raw);
   }

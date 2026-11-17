@@ -249,7 +249,7 @@ function SettingRow(props: {
   async function save() {
     setBusy(true);
     setRowErr(null);
-    const r = await props.onPatch(props.namespace, { [props.settingKey]: wireValue(constraint(), draft()) });
+    const r = await props.onPatch(props.namespace, { [props.settingKey]: wireValue(constraint(), draft(), props.value) });
     if (!r.ok) setRowErr(r.message);
     setBusy(false);
   }
