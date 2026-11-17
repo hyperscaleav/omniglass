@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -62,7 +63,7 @@ func Connect(ctx context.Context, server, personToken, version string) (*Session
 	endpoint := strings.TrimRight(u.String(), "/") + "/mcp"
 	cs, err := mcp.Dial(ctx, endpoint, minted.Token, &sdk.Implementation{Name: "omniglass-omnibot", Version: version})
 	if err != nil {
-		_ = s.revoke(ctx)
+		_ = s.revokeOnTheWayOut(ctx)
 		return nil, fmt.Errorf("omnibot: %s", redact.Secrets(err.Error(), minted.Token, personToken))
 	}
 	s.cs = cs
@@ -92,7 +93,8 @@ func (s *Session) Call(ctx context.Context, name string, args map[string]any) (*
 
 // Close disconnects and revokes omnibot's token with the person's, so it
 // outlives the session only if the revoke cannot reach the server (it then
-// expires within the day).
+// expires within the day). The revoke still runs when ctx is already
+// cancelled, as it is on an interrupted run.
 func (s *Session) Close(ctx context.Context) error {
 	if s.cs != nil {
 		_ = s.cs.Close()
@@ -101,9 +103,23 @@ func (s *Session) Close(ctx context.Context) error {
 	if s.prefix == "" {
 		return nil
 	}
-	err := s.revoke(ctx)
+	err := s.revokeOnTheWayOut(ctx)
 	s.prefix = ""
 	return err
+}
+
+// revokeTimeout bounds the revoke on the way out, so a server that stops
+// answering cannot hold an interrupted run open; the token then expires within
+// the day.
+const revokeTimeout = 10 * time.Second
+
+// revokeOnTheWayOut revokes omnibot's token on a context that keeps ctx's
+// values but not its cancellation, so an interrupt that ends the run does not
+// also cancel the revoke.
+func (s *Session) revokeOnTheWayOut(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), revokeTimeout)
+	defer cancel()
+	return s.revoke(ctx)
 }
 
 // revoke finds omnibot's token among the person's sessions by its prefix and

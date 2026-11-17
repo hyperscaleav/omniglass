@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -59,9 +58,7 @@ func newOmnibotCmd(version string) *cobra.Command {
 				return err
 			}
 			defer func() {
-				revoke, cancel := context.WithTimeout(context.WithoutCancel(ctx), revokeTimeout)
-				defer cancel()
-				if err := sess.Close(revoke); err != nil {
+				if err := sess.Close(ctx); err != nil {
 					fmt.Fprintln(cmd.ErrOrStderr(), err)
 				}
 			}()
@@ -89,11 +86,6 @@ func newOmnibotCmd(version string) *cobra.Command {
 	cmd.Flags().IntVar(&maxSteps, "max-steps", 10, "the most model turns the run takes before it stops")
 	return cmd
 }
-
-// revokeTimeout bounds the revoke on the way out, so a server that stops
-// answering cannot hold an interrupted run open; the token then expires within
-// the day.
-const revokeTimeout = 10 * time.Second
 
 // confirmerFor asks on the command's input when that is a person: a terminal,
 // or input a caller set in its place. Piped or redirected stdin has no one to
