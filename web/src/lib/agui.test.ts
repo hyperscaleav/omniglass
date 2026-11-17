@@ -5,14 +5,17 @@ import { fileURLToPath } from "node:url";
 import { EventSchema, InterruptSchema, RunAgentInputSchema } from "@ag-ui/core/schemas";
 
 // The server narrates an omnibot run as AG-UI events (#2121). The Go package
-// that writes them records a run to a fixture (internal/assistant/agui), and
-// this test holds that fixture to the protocol's own schemas, so the server's
-// events are what any AG-UI client, the console's included, reads. Each event
-// must parse, and name only fields its type declares: the schemas let an
-// unknown field through, so a misspelt one would otherwise pass unseen.
+// that writes them records runs to fixtures (internal/assistant/agui): one
+// that pauses on an ask, and each answer to it. This test holds every fixture
+// to the protocol's own schemas, so the server's events are what any AG-UI
+// client, the console's included, reads. Each event must parse, and name only
+// fields its type declares: the schemas let an unknown field through, so a
+// misspelt one would otherwise pass unseen.
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixture = join(here, "../../../internal/assistant/agui/testdata/run.sse");
+const testdata = join(here, "../../../internal/assistant/agui/testdata");
+const fixtures = ["run.sse", "resume-approved.sse", "resume-declined.sse"];
+const read = (name: string) => events(readFileSync(join(testdata, name), "utf8"));
 
 // declared is the fields an event's type names in the protocol.
 function declared(type: string): string[] {
@@ -32,9 +35,8 @@ function events(stream: string): unknown[] {
 }
 
 describe("a server-narrated omnibot run", () => {
-  const evs = events(readFileSync(fixture, "utf8"));
-
-  it("is AG-UI events, naming only the fields each declares", () => {
+  it.each(fixtures)("%s is AG-UI events, naming only the fields each declares", (name) => {
+    const evs = read(name);
     expect(evs.length).toBeGreaterThan(0);
     for (const ev of evs) {
       const parsed = EventSchema.safeParse(ev);
@@ -44,7 +46,16 @@ describe("a server-narrated omnibot run", () => {
     }
   });
 
+  it.each(["resume-approved.sse", "resume-declined.sse"])("%s answers the call and finishes", (name) => {
+    const evs = read(name).map((ev) => EventSchema.parse(ev));
+    const result = evs.find((ev) => ev.type === "TOOL_CALL_RESULT");
+    expect(result && result.type === "TOOL_CALL_RESULT" && result.toolCallId).toBe("call-2");
+    const last = evs[evs.length - 1];
+    expect(last.type === "RUN_FINISHED" && last.outcome?.type).toBe("success");
+  });
+
   it("ends on an interrupt a client answers by resume", () => {
+    const evs = read("run.sse");
     const last = EventSchema.parse(evs[evs.length - 1]);
     expect(last.type).toBe("RUN_FINISHED");
     if (last.type !== "RUN_FINISHED" || last.outcome?.type !== "interrupt") {
@@ -64,5 +75,7 @@ describe("a server-narrated omnibot run", () => {
       resume: [{ interruptId: it0.id, status: "resolved", payload: { approved: true } }],
     });
     expect(answer.success, JSON.stringify(answer.error?.issues ?? [])).toBe(true);
+    // The answer is {approved} and nothing else.
+    expect(it0.responseSchema).toMatchObject({ required: ["approved"], additionalProperties: false });
   });
 });

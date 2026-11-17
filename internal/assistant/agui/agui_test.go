@@ -11,10 +11,34 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/assistant"
 )
 
-// fixture is the narrated run the console's conformance test validates
+// The fixtures are narrated runs the console's conformance test validates
 // against the AG-UI schemas (web/src/lib/agui.test.ts): the events this
-// package writes, recorded by this test, so the two can never disagree.
-const fixture = "testdata/run.sse"
+// package writes, recorded by these tests, so the two can never disagree. A
+// run that pauses on an ask, then each answer to it: approved, the call runs
+// and the run finishes; declined, the call never runs and the model is told.
+const (
+	fixture         = "testdata/run.sse"
+	fixtureApproved = "testdata/resume-approved.sse"
+	fixtureDeclined = "testdata/resume-declined.sse"
+)
+
+// matchFixture holds a narration to its committed fixture, rewriting it when
+// OMNIGLASS_UPDATE_FIXTURES is set.
+func matchFixture(t *testing.T, path string, got []byte) {
+	t.Helper()
+	if os.Getenv("OMNIGLASS_UPDATE_FIXTURES") != "" {
+		if err := os.WriteFile(path, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	committed, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read the fixture (OMNIGLASS_UPDATE_FIXTURES=1 writes it): %v", err)
+	}
+	if !bytes.Equal(committed, got) {
+		t.Errorf("%s is stale: rerun with OMNIGLASS_UPDATE_FIXTURES=1", path)
+	}
+}
 
 // events reads an SSE stream back into its events, in order.
 func events(t *testing.T, stream []byte) []map[string]any {
@@ -107,25 +131,51 @@ func TestRunNarratesAsAGUI(t *testing.T) {
 		t.Errorf("interrupt = %v, want call-2 waiting on its approval", in)
 	}
 	schema, _ := in["responseSchema"].(map[string]any)
-	if props, _ := schema["properties"].(map[string]any); props["approved"] == nil {
-		t.Errorf("response schema = %v, want approved", schema)
+	if props, _ := schema["properties"].(map[string]any); props["approved"] == nil || schema["additionalProperties"] != false {
+		t.Errorf("response schema = %v, want approved and nothing else", schema)
 	}
 	meta, _ := in["metadata"].(map[string]any)
 	if meta["tool"] != "create-component" {
 		t.Errorf("interrupt metadata = %v, want the proposal", meta)
 	}
 
-	if os.Getenv("OMNIGLASS_UPDATE_FIXTURES") != "" {
-		if err := os.WriteFile(fixture, buf.Bytes(), 0o644); err != nil {
-			t.Fatal(err)
+	matchFixture(t, fixture, buf.Bytes())
+}
+
+// A resume narrates the answered call: approved, it runs and its result is
+// told before the model's reply; declined, its result says it never ran.
+// Either run then finishes in success.
+func TestResumeNarratesTheAnswer(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		path     string
+		decision assistant.Decision
+		isError  bool
+		result   string
+		reply    string
+	}{
+		{fixtureApproved, assistant.DecisionCalled, false, `{"name":"lobby-display"}`, "Created lobby-display."},
+		{fixtureDeclined, assistant.DecisionDeclined, true, "the person declined this call; it did not run", "Understood, I left it alone."},
+	} {
+		var buf bytes.Buffer
+		r := NewRun(&buf, "lobby", "run-2")
+		r.Start()
+		r.Hear(assistant.Event{Kind: assistant.EventDecided, CallID: "call-2", Tool: "create-component", Decision: tc.decision})
+		r.Hear(assistant.Event{Kind: assistant.EventResult, CallID: "call-2", Tool: "create-component", Decision: tc.decision, IsError: tc.isError, Text: tc.result})
+		r.Hear(assistant.Event{Kind: assistant.EventText, Text: tc.reply})
+		r.Finish()
+		evs := events(t, buf.Bytes())
+		want := "RUN_STARTED,TOOL_CALL_RESULT,TEXT_MESSAGE_START,TEXT_MESSAGE_CONTENT,TEXT_MESSAGE_END,RUN_FINISHED"
+		if got := types(evs); strings.Join(got, ",") != want {
+			t.Fatalf("%s: events = %v, want %s", tc.path, got, want)
 		}
-	}
-	committed, err := os.ReadFile(fixture)
-	if err != nil {
-		t.Fatalf("read the fixture (OMNIGLASS_UPDATE_FIXTURES=1 writes it): %v", err)
-	}
-	if !bytes.Equal(committed, buf.Bytes()) {
-		t.Errorf("%s is stale: rerun with OMNIGLASS_UPDATE_FIXTURES=1", fixture)
+		if evs[1]["toolCallId"] != "call-2" || evs[1]["content"] != tc.result {
+			t.Errorf("%s: result = %v", tc.path, evs[1])
+		}
+		if outcome, _ := evs[5]["outcome"].(map[string]any); outcome["type"] != "success" {
+			t.Errorf("%s: finished = %v, want success", tc.path, evs[5])
+		}
+		matchFixture(t, tc.path, buf.Bytes())
 	}
 }
 

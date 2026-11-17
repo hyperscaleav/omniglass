@@ -20,5 +20,5 @@ data: {"type":"TOOL_CALL_ARGS","toolCallId":"call-2","delta":"{\"name\":\"lobby-
 
 data: {"type":"TOOL_CALL_END","toolCallId":"call-2"}
 
-data: {"type":"RUN_FINISHED","threadId":"lobby","runId":"run-1","outcome":{"type":"interrupt","interrupts":[{"id":"call-2","reason":"tool_approval","message":"omnibot asks before it runs Create a component","toolCallId":"call-2","responseSchema":{"properties":{"approved":{"type":"boolean"}},"required":["approved"],"type":"object"},"metadata":{"tool":"create-component","arguments":{"name":"lobby-display"},"title":"Create a component","destructive":false}}]}}
+data: {"type":"RUN_FINISHED","threadId":"lobby","runId":"run-1","outcome":{"type":"interrupt","interrupts":[{"id":"call-2","reason":"tool_approval","message":"omnibot asks before it runs Create a component","toolCallId":"call-2","responseSchema":{"additionalProperties":false,"properties":{"approved":{"type":"boolean"}},"required":["approved"],"type":"object"},"metadata":{"tool":"create-component","arguments":{"name":"lobby-display"},"title":"Create a component","destructive":false}}]}}
 

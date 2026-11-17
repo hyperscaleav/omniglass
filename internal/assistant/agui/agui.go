@@ -90,9 +90,10 @@ type resultEvent struct {
 // approvalSchema is how an interrupt is answered: resume it with
 // {"approved": true} to run the call, false (or a cancelled resume) to decline.
 var approvalSchema = map[string]any{
-	"type":       "object",
-	"properties": map[string]any{"approved": map[string]any{"type": "boolean"}},
-	"required":   []string{"approved"},
+	"type":                 "object",
+	"properties":           map[string]any{"approved": map[string]any{"type": "boolean"}},
+	"required":             []string{"approved"},
+	"additionalProperties": false,
 }
 
 // Run narrates one run of a conversation (the AG-UI thread) onto w.
