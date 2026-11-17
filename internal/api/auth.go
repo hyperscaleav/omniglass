@@ -1070,6 +1070,9 @@ func (a *authenticator) validateAgentMint(ctx context.Context, in *createMeToken
 	if len(b.Channels) > 1 && slices.Contains(b.Channels, agentChannelOmnibot) {
 		return huma.Error422UnprocessableEntity("an omnibot token is minted for the omnibot channel alone")
 	}
+	if slices.Contains(b.Channels, agentChannelOmnibot) && b.Agent != agentChannelOmnibot {
+		return huma.Error422UnprocessableEntity("the omnibot channel is minted for the omnibot agent alone")
+	}
 	if len(b.Roles) == 0 {
 		return nil
 	}

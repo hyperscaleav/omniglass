@@ -25,7 +25,8 @@ refs: [1166, 1161, 1179, 2048, 2063]
      and no approval queue: a declined call is never sent, and the model is told it was declined.
   4. **The channel is the credential's.** A token held to the `omnibot` channel alone is accepted
      only on the MCP server (and `/auth/me`), and `authn` stamps its rows `channel = 'omnibot'`. What
-     the MCP client declares about itself stays in `client`, as asserted.
+     the MCP client declares about itself stays in `client`, as asserted. Only the `omnibot` agent may
+     be minted for that channel, and only for it alone.
 - **Why:** the security rule that an agent never sees a credential holds by construction (the
   agent token cannot reveal plaintext, ADR-1179), and confirmation in the client is the same place
   every other MCP client confirms, so omnibot is held to no weaker and no stronger contract than

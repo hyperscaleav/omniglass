@@ -21,7 +21,7 @@ Tools say what can be done; **skills** say how the house does a job with them. E
 
 ## Provenance and audit
 
-The write attributes to the **acting principal** in [`audit_log`](/architecture/audit/), so the trail names a responsible actor on every move, and the row's **channel** marks how it arrived: `mcp` for a tool call, with the client the agent declared beside it, and `omnibot` for omnibot's own. The `omnibot` channel is stamped from the credential, never from a declared client name: only an agent token minted for the omnibot channel alone, arriving over MCP, writes it, and such a token is refused on the direct API. The marking rides alongside the actor, never replacing it.
+The write attributes to the **acting principal** in [`audit_log`](/architecture/audit/), so the trail names a responsible actor on every move, and the row's **channel** marks how it arrived: `mcp` for a tool call, with the client the agent declared beside it, and `omnibot` for omnibot's own. The `omnibot` channel is stamped from the credential, never from a declared client name: only an agent token minted for the omnibot channel alone (and only the `omnibot` agent may be), arriving over MCP, writes it, and such a token is refused on the direct API. The marking rides alongside the actor, never replacing it.
 
 :::design[Target design (ADR-0001): AI as a governed capability]
 
@@ -40,7 +40,7 @@ Every AI-produced output (an explanation, a drafted driver, a report) is **marke
 
 :::design[Human-in-the-loop gating, tracked in #1161]
 
-Mutating AI actions can require **operator sign-off**: propose, approve, execute, the approval landing in the audit trail; read and diagnostic actions run ungated within the acting principal's scope. A **policy on AI-sourced mutations**, not a separate authorization model: the gate is an extra confirmation on top of the principal's grants, never beyond them. omnibot never executes a write its user has not confirmed; an external agent's own client gates its writes from the tool annotations.
+Mutating AI actions can require **operator sign-off**, given in the person's own client from the tool's resolved policy before the call is sent: nothing waits on the server, a declined call is never sent, and a confirmed one is audited as the agent's like any other call; read and diagnostic actions run ungated within the acting principal's scope. A **policy on AI-sourced mutations**, not a separate authorization model: the gate is an extra confirmation on top of the principal's grants, never beyond them. omnibot never executes a write its user has not confirmed; an external agent's own client gates its writes from the tool annotations.
 :::
 
 omnibot's half is built (#1166): its loop reads each listed tool's resolved policy, runs an `always` tool, puts an `ask` tool to its person (a tool with no policy is treated as `ask`), and is never offered a `never` tool. A declined call does not run, and the model is told so. With no terminal to ask, every `ask` is declined. The token it runs on is minted from its person's for one day and the omnibot channel alone, and revoked when the run ends, so every call is the route's under that person's grants, audited as `omnibot` acting for them; an agent token cannot mint a token, so omnibot cannot be run on one.
