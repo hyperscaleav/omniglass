@@ -21,7 +21,7 @@ func TestAnnotate(t *testing.T) {
 	}{
 		{"a get is a read", "GET", "component:read", tooldef.Hints{}, ro},
 		{"an authn-only get is a read", "GET", "", tooldef.Hints{}, ro},
-		{"a get gated by another action still writes nothing", "GET", "principal:revoke-session", tooldef.Hints{}, ro},
+		{"a get gated by another action still writes nothing", "GET", "user:revoke-session", tooldef.Hints{}, ro},
 		{"a post gated by a read is a read (a preview, a validate)", "POST", "rule:read", tooldef.Hints{}, ro},
 		{"an admin-tier read post is a read", "POST", "secret:read:admin", tooldef.Hints{}, ro},
 		{"a create adds and destroys nothing", "POST", "component:create", tooldef.Hints{}, tooldef.Annotations{}},

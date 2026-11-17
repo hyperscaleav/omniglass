@@ -91,13 +91,13 @@ func TestIntegrationDrainedQueryWaitsForEveryLiveOutpostsSampleAfterTheTime(t *t
 		}
 	}
 	collected := storage.OutpostWriter(comp.ID, "ssh")
-	collected.Outpost = outpost.PrincipalID
+	collected.Outpost = outpost.UserID
 	collectedB := storage.OutpostWriter(comp.ID, "ssh")
-	collectedB.Outpost = outpostB.PrincipalID
+	collectedB.Outpost = outpostB.UserID
 	collectedSilent := storage.OutpostWriter(comp.ID, "ssh")
-	collectedSilent.Outpost = silent.PrincipalID
+	collectedSilent.Outpost = silent.UserID
 	collectedC := storage.OutpostWriter(comp.ID, "ssh")
-	collectedC.Outpost = outpostC.PrincipalID
+	collectedC.Outpost = outpostC.UserID
 
 	write(collected, at)
 	write(collected, at.Add(-time.Second))
@@ -131,7 +131,7 @@ func TestIntegrationDrainedQueryWaitsForEveryLiveOutpostsSampleAfterTheTime(t *t
 	// An outpost's sample dated an hour ahead, on a key the gateway does not
 	// cap at its clock.
 	plant("ahead", now.Add(time.Hour))
-	if _, err := conn.Exec(ctx, `update metric_series set collector_outpost_id = $1 where instance = 'ahead'`, outpost.PrincipalID); err != nil {
+	if _, err := conn.Exec(ctx, `update metric_series set collector_outpost_id = $1 where instance = 'ahead'`, outpost.UserID); err != nil {
 		t.Fatal(err)
 	}
 	if drained() {
@@ -236,8 +236,8 @@ func TestIntegrationDrainedQueryPassesOverAOutpostWithNoWorklist(t *testing.T) {
 	// Both collected in an earlier run and heartbeat now; outpost-waiting was
 	// restarted and is refused its first worklist, reporting none, after it
 	// once ran tasks.
-	collect(busy.PrincipalID, at.Add(-time.Second))
-	collect(waiting.PrincipalID, at.Add(-time.Second))
+	collect(busy.UserID, at.Add(-time.Second))
+	collect(waiting.UserID, at.Add(-time.Second))
 	for _, name := range []string{"outpost-busy", "outpost-waiting"} {
 		if err := gw.RecordHeartbeat(ctx, name); err != nil {
 			t.Fatal(err)
@@ -246,7 +246,7 @@ func TestIntegrationDrainedQueryPassesOverAOutpostWithNoWorklist(t *testing.T) {
 	installed("outpost-busy", 4, at.Add(-time.Hour))
 	installed("outpost-waiting", 4, at.Add(-time.Hour))
 	installed("outpost-waiting", 0, at.Add(-time.Second))
-	collect(busy.PrincipalID, at.Add(time.Second))
+	collect(busy.UserID, at.Add(time.Second))
 	if !drained() {
 		t.Fatal("not drained while an outpost with no worklist, which can land no sample, held it")
 	}
@@ -257,7 +257,7 @@ func TestIntegrationDrainedQueryPassesOverAOutpostWithNoWorklist(t *testing.T) {
 	if drained() {
 		t.Fatal("drained before an outpost that installed its worklist landed a sample past the time")
 	}
-	collect(waiting.PrincipalID, at.Add(3*time.Second))
+	collect(waiting.UserID, at.Add(3*time.Second))
 	if !drained() {
 		t.Fatal("not drained once every outpost with a worklist landed a sample past the time")
 	}

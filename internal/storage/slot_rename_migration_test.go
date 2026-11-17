@@ -18,14 +18,14 @@ const slotRenameVersion = "20261117050000"
 
 // schemaSystemRoleNames is every table, column, constraint and index in the
 // public schema whose name spells the system sense of role. The IAM role
-// table, principal_grant.role_id and its constraints are the kept sense.
+// table, user_grant.role_id (principal_grant below #2075) and its constraints are the kept sense.
 const schemaSystemRoleNames = `
 	select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
 	 where n.nspname = 'public' and relname ~ '(system_role|role_choice)'
 	union all
 	select table_name || '.' || column_name from information_schema.columns
 	 where table_schema = 'public' and column_name ~ 'role'
-	   and table_name not in ('role', 'principal_grant', 'credential', 'oauth_code')
+	   and table_name not in ('role', 'principal_grant', 'user_grant', 'credential', 'oauth_code')
 	union all
 	select conname from pg_constraint con join pg_namespace n on n.oid = con.connamespace
 	 where n.nspname = 'public' and conname ~ '(system_role|role_choice)'
@@ -82,7 +82,7 @@ func TestSlotRenameCarriesEveryRow(t *testing.T) {
 		`select count(*) from system_slot_assignment where slot_id::text = '` + slotID + `' and position = 1`,
 		`select count(*) from slot_choice where name = 'display-size'`,
 		`select count(*) from role where name = 'slot-r1'`,
-		`select count(*) from information_schema.columns where table_name = 'principal_grant' and column_name = 'role_id'`,
+		`select count(*) from information_schema.columns where table_name = 'user_grant' and column_name = 'role_id'`,
 	} {
 		var n int
 		if err := conn.QueryRow(ctx, q).Scan(&n); err != nil || n != 1 {

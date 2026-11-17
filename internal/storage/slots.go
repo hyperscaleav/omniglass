@@ -564,7 +564,7 @@ func (p *PG) assignSlotTx(ctx context.Context, tx pgx.Tx, actorID, systemName, s
 	// makes for AddMember. An absent or unreadable component is
 	// ErrComponentNotFound (so a typo is never a confusing type refusal), a
 	// readable one the caller may not write is ErrComponentForbidden. It used
-	// to resolve by existence alone, which let a principal scoped to one system
+	// to resolve by existence alone, which let a user scoped to one system
 	// staff a component it could not read. Ambiguity is judged inside
 	// componentRead, so the candidates a refusal lists are rows this caller may
 	// read.

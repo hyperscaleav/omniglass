@@ -286,14 +286,14 @@ func TestTelemetryPushAPI(t *testing.T) {
 		"properties": []map[string]any{{"name": "video-input", "value": "hdmi2"}},
 	}, http.StatusAccepted)
 
-	// PRIVILEGE ESCALATION, pinned closed. A principal can easily hold a WIDE read
+	// PRIVILEGE ESCALATION, pinned closed. A user can easily hold a WIDE read
 	// and a NARROW push: viewer over the whole fleet plus operator on one component
 	// is an ordinary shape. If the route fenced the write with the component:read
 	// scope, this caller could push telemetry to any component it can see, which is
 	// everything. The fence must be the scope that actually confers telemetry:push.
 	// It can READ bar-1, so it is owed the truthful 403 rather than a 404 that
 	// would deny a row it can see (ADR-0752, ADR-0116).
-	wideReadNarrowPush := setupScopedPrincipal(t, ctx, dsn, "wide-read-narrow-push",
+	wideReadNarrowPush := setupScopedUser(t, ctx, dsn, "wide-read-narrow-push",
 		grantSpec{role: "viewer", scopeKind: "all"},
 		grantSpec{role: "operator", scopeKind: "component", scopeID: otherID},
 	)

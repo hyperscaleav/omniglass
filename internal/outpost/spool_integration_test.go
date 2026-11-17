@@ -110,7 +110,7 @@ func newSpoolFixture(t *testing.T) spoolFixture {
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'edge-1'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'edge-1'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values

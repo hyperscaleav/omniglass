@@ -13,7 +13,7 @@ import (
 // Identity bindings over HTTP (#1385, ADR-1282): a binding ties a conduit
 // component's reported identity to the system or component it names, and it
 // costs a write on both of its ends (the ADR-0510 rule). Each test drives the
-// routes as an operator or an integrator would, with principals built from
+// routes as an operator or an integrator would, with users built from
 // grants the way the slot-staffing tests build theirs.
 
 type bindingWire struct {
@@ -33,7 +33,7 @@ type bindingListWire struct {
 }
 
 // bindingE2E is the fixture: a conduit (ucc-cloud), two rooms, a panel, and
-// the custom roles the principals are built from, inserted before the first
+// the custom roles the users are built from, inserted before the first
 // request builds the role index.
 type bindingE2E struct {
 	*staffingFixture
@@ -66,9 +66,9 @@ func newBindingE2E(t *testing.T) *bindingE2E {
 	return f
 }
 
-func (f *bindingE2E) principal(label string, grants ...grant) string {
+func (f *bindingE2E) user(label string, grants ...grant) string {
 	f.t.Helper()
-	return principalWithGrants(f.t, f.ctx, f.dsn, label, grants)
+	return userWithGrants(f.t, f.ctx, f.dsn, label, grants)
 }
 
 func bindPath(conduit, key, value string) string {
@@ -116,9 +116,9 @@ func TestIdentityBindingNeedsTheOwnerEnd(t *testing.T) {
 	t.Parallel()
 	f := newBindingE2E(t)
 	conduit := grant{role: "conduit-editor", scopeKind: "component", scopeID: f.ids["ucc-cloud"]}
-	conduitOnly := f.principal("conduit-only", conduit)
-	otherRoom := f.principal("conduit-other-room", conduit, grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-b"]})
-	reader := f.principal("conduit-room-reader", conduit,
+	conduitOnly := f.user("conduit-only", conduit)
+	otherRoom := f.user("conduit-other-room", conduit, grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-b"]})
+	reader := f.user("conduit-room-reader", conduit,
 		grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-b"]}, grant{role: "viewer", scopeKind: "all"})
 	path := bindPath("ucc-cloud", "ucc-room-id", "R-1")
 
@@ -149,9 +149,9 @@ func TestIdentityBindingNeedsTheConduitEnd(t *testing.T) {
 	t.Parallel()
 	f := newBindingE2E(t)
 	room := grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-a"]}
-	roomOnly := f.principal("room-only", room)
-	roomPanel := f.principal("room-panel", room, grant{role: "conduit-editor", scopeKind: "component", scopeID: f.ids["panel-1"]})
-	roomReader := f.principal("room-reader", room, grant{role: "conduit-editor", scopeKind: "component", scopeID: f.ids["panel-1"]}, grant{role: "viewer", scopeKind: "all"})
+	roomOnly := f.user("room-only", room)
+	roomPanel := f.user("room-panel", room, grant{role: "conduit-editor", scopeKind: "component", scopeID: f.ids["panel-1"]})
+	roomReader := f.user("room-reader", room, grant{role: "conduit-editor", scopeKind: "component", scopeID: f.ids["panel-1"]}, grant{role: "viewer", scopeKind: "all"})
 	path := bindPath("ucc-cloud", "ucc-room-id", "R-1")
 
 	// component:update is the route's own gate, so this is the middleware's
@@ -193,8 +193,8 @@ func TestIdentityBindingMoveNeedsBothOwners(t *testing.T) {
 	path := bindPath("ucc-cloud", "ucc-room-id", "R-1")
 	f.c.do(f.owner, http.MethodPut, path, ownerBody("system", "room-a"), http.StatusOK)
 	conduit := grant{role: "conduit-editor", scopeKind: "component", scopeID: f.ids["ucc-cloud"]}
-	onlyB := f.principal("only-b", conduit, grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-b"]})
-	both := f.principal("both", conduit,
+	onlyB := f.user("only-b", conduit, grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-b"]})
+	both := f.user("both", conduit,
 		grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-a"]},
 		grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-b"]})
 
@@ -235,7 +235,7 @@ func TestIdentityBindingListCountsUnreadableOwners(t *testing.T) {
 	f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-A"), ownerBody("system", "room-a"), http.StatusOK)
 	f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-B"), ownerBody("system", "room-b"), http.StatusOK)
 	f.c.do(f.owner, http.MethodPut, bindPath("ucc-cloud", "ucc-room-id", "R-P"), ownerBody("component", "panel-1"), http.StatusOK)
-	narrow := f.principal("narrow-reader",
+	narrow := f.user("narrow-reader",
 		grant{role: "conduit-editor", scopeKind: "component", scopeID: f.ids["ucc-cloud"]},
 		grant{role: "room-editor", scopeKind: "system", scopeID: f.ids["room-a"]})
 	l := f.list(narrow, "ucc-cloud")

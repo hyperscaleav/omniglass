@@ -203,12 +203,12 @@ const commandRideSQL = `left join lateral (
 var commandReadCols = `c.id, c.ts, c.component_id::text, comp.name, ct.name, c.instance, c.params, c.status,
 	c.dispatched_at, c.first_dispatched_at, c.delivery_count, c.executed_at, c.settled_at, coalesce(c.exec_error, ''), c.reply, coalesce(c.reason, ''),
 	coalesce(c.settled_by, ''), c.observed_value, c.observed_at, c.caused_event_id, c.settled_event_id,
-	coalesce(c.actor::text, ''), ` + principalIdentCols("c.actor") + `,
+	coalesce(c.actor::text, ''), ` + userIdentCols("c.actor") + `,
 	ct.settle_window_seconds, coalesce(pt.name, ''), coalesce(mt.name, ''),
 	(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.id desc limit 1),
 	(select m.value from metric_declared m where m.command_id = c.id order by m.id desc limit 1),
 	coalesce(ride.id::text, ''), coalesce(ride.name, ''),
-	coalesce((select n.name from outpost n where n.principal_id = ride.outpost_id), ''),
+	coalesce((select n.name from outpost n where n.user_id = ride.outpost_id), ''),
 	coalesce(drv.name, ''), drv.spec`
 
 // commandReadFrom joins what the read shape needs.
@@ -263,7 +263,7 @@ func scanCommandRecord(row pgx.Row, specs specCache) (*CommandRecord, error) {
 		&r.EndpointID, &r.Endpoint, &r.Outpost, &r.Driver, &spec); err != nil {
 		return nil, err
 	}
-	r.Issuer = principalIdent(username, service, outpostName)
+	r.Issuer = userIdent(username, service, outpostName)
 	// A row stored before replies were masked carries its execution error as
 	// the outpost reported it; the labeled-pair pass runs on every read, a
 	// no-op on text already masked.

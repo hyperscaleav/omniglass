@@ -46,7 +46,7 @@ import (
 //
 // storage.ErrUnresolvedRef is a name reference to one of the resources #1133
 // made addressable by name (an endpoint, a secret, a variable, a file, a
-// principal group, a principal) that resolves to no single row the caller may
+// user group, a user) that resolves to no single row the caller may
 // see: a 404 naming what was looked up, and, when more than one visible row
 // answers to it, every one of them in the spelling that does resolve. Those
 // candidates are built after the scope filter, so an absent row and an

@@ -28,8 +28,8 @@ func TestAnEmailReachesTheMailSimAndARetrySendsTheSameBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sim.Close()
-	p.human("alice", "viewer", "all", "")
-	p.human("bob", "viewer", "component", p.comps["display-2"])
+	p.person("alice", "viewer", "all", "")
+	p.person("bob", "viewer", "component", p.comps["display-2"])
 	tick := notifier.New(p.gw, egress.Options{})
 	pass := func() {
 		t.Helper()
@@ -55,12 +55,12 @@ func TestAnEmailReachesTheMailSimAndARetrySendsTheSameBytes(t *testing.T) {
 		t.Fatalf(":test = %+v, the sim got %+v", tr, got)
 	}
 
-	p.c.do(p.owner, http.MethodPost, "/principal-groups", map[string]any{"name": "on-call"}, http.StatusCreated)
+	p.c.do(p.owner, http.MethodPost, "/user-groups", map[string]any{"name": "on-call"}, http.StatusCreated)
 	for _, u := range []string{"alice", "bob"} {
-		p.c.do(p.owner, http.MethodPost, "/principal-groups/on-call/members", map[string]any{"principal_id": u}, http.StatusNoContent)
+		p.c.do(p.owner, http.MethodPost, "/user-groups/on-call/members", map[string]any{"user_id": u}, http.StatusNoContent)
 	}
-	p.c.do(p.owner, http.MethodPost, "/notification-targets", map[string]any{"name": "on-call-page", "kind": "principal_group",
-		"principal_group": "on-call", "channels": []string{"inbox", "email"}}, http.StatusCreated)
+	p.c.do(p.owner, http.MethodPost, "/notification-targets", map[string]any{"name": "on-call-page", "kind": "user_group",
+		"user_group": "on-call", "channels": []string{"inbox", "email"}}, http.StatusCreated)
 	p.c.do(p.owner, http.MethodPost, "/action-rules", map[string]any{"name": "page-on-call", "on": []string{"raised"},
 		"targets": []string{"on-call-page", "ops-mailbox"}}, http.StatusCreated)
 
@@ -165,7 +165,7 @@ func TestBindingTheRelaysSecretTakesSecretBind(t *testing.T) {
 		"fields": map[string]string{"username": "omniglass", "password": "relay-pass-1317"}}, http.StatusCreated)
 	p.c.do(p.owner, http.MethodPost, "/secrets", map[string]any{"name": "a-signing-key", "secret_type": "hmac-key", "owner_kind": "platform",
 		"fields": map[string]string{"key": "k"}}, http.StatusCreated)
-	p.human("sam", "settings-admin", "all", "")
+	p.person("sam", "settings-admin", "all", "")
 	// sam may write settings and read secrets, but not bind one.
 	if b := p.c.do(p.toks["sam"], http.MethodPatch, "/settings/notification", map[string]any{"mail_secret": "relay-login"}, http.StatusForbidden); !strings.Contains(string(b), "secret:bind") {
 		t.Fatalf("a refused relay bind = %s, want it to name secret:bind", b)
@@ -179,7 +179,7 @@ func TestBindingTheRelaysSecretTakesSecretBind(t *testing.T) {
 	p.c.do(p.owner, http.MethodPatch, "/settings/notification", map[string]any{"mail_relay": "elsewhere.example.com:587"}, http.StatusOK)
 
 	// bea may bind it but never reveal it: she rebinds and moves the relay.
-	p.human("bea", "settings-binder", "all", "")
+	p.person("bea", "settings-binder", "all", "")
 	p.c.do(p.toks["bea"], http.MethodPatch, "/settings/notification", map[string]any{"mail_secret": "relay-login"}, http.StatusOK)
 	p.c.do(p.toks["bea"], http.MethodPatch, "/settings/notification", map[string]any{"mail_relay": "smtp.example.com:587"}, http.StatusOK)
 	p.c.do(p.toks["bea"], http.MethodPost, "/secrets/relay-login:reveal", nil, http.StatusForbidden)

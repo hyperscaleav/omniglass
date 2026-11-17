@@ -15,7 +15,7 @@ import (
 
 // settingsFixture spins up a migrated, seeded gateway behind the live handler and
 // mints an admin and a viewer token, so the settings routes are exercised end to
-// end with realistically-granted principals.
+// end with realistically-granted users.
 type settingsFixture struct {
 	c      *apiClient
 	gw     storage.Gateway
@@ -36,16 +36,16 @@ func newSettingsFixture(t *testing.T) settingsFixture {
 	}
 	t.Cleanup(gw.Close)
 	// An owner must exist so the role index (lazy) loads on the first authenticated
-	// request; the admin and viewer principals carry the grants under test.
+	// request; the admin and viewer users carry the grants under test.
 	bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	return settingsFixture{
 		c:        &apiClient{t: t, ctx: ctx, base: srv.URL},
 		gw:       gw,
-		admin:    principalWithGrants(t, ctx, dsn, "settings-admin", []grant{{role: "admin", scopeKind: "all"}}),
-		viewer:   principalWithGrants(t, ctx, dsn, "settings-viewer", []grant{{role: "viewer", scopeKind: "all"}}),
-		operator: principalWithGrants(t, ctx, dsn, "settings-operator", []grant{{role: "operator", scopeKind: "all"}}),
+		admin:    userWithGrants(t, ctx, dsn, "settings-admin", []grant{{role: "admin", scopeKind: "all"}}),
+		viewer:   userWithGrants(t, ctx, dsn, "settings-viewer", []grant{{role: "viewer", scopeKind: "all"}}),
+		operator: userWithGrants(t, ctx, dsn, "settings-operator", []grant{{role: "operator", scopeKind: "all"}}),
 	}
 }
 

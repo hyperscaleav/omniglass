@@ -188,7 +188,7 @@ func TestWorklistCarriesTheSessionBlockAndRetryMovesTheRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.IssueCommand(ctx, actor, "component", "panel-1", "set-input", "", json.RawMessage(`"hdmi2"`), nil); err != nil {
@@ -293,7 +293,7 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
@@ -365,7 +365,7 @@ func TestTrustingAKeyChecksTheOfferedKeyAndAuditsBoth(t *testing.T) {
 		t.Fatalf("after trusting: pin %q, retry %d", after.HostKey, after.SessionRetry)
 	}
 	var oldKey, newKey, actorID string
-	if err := conn.QueryRow(ctx, `select coalesce(old->>'host_key', ''), coalesce(new->>'host_key', ''), coalesce(actor_principal_id::text, '')
+	if err := conn.QueryRow(ctx, `select coalesce(old->>'host_key', ''), coalesce(new->>'host_key', ''), coalesce(actor_user_id::text, '')
 		from audit_log where resource = 'endpoint' and verb = 'retry' and resource_id = $1`, ep.ID).Scan(&oldKey, &newKey, &actorID); err != nil {
 		t.Fatal(err)
 	}

@@ -99,6 +99,14 @@ func spellSeries(t *testing.T, conn *pgx.Conn, from, to string) {
 		end $$`)
 }
 
+// spellSettings renames setting_override's user column. Below #2075 it is
+// principal_id, but the readers resolve platform settings through user_id, so
+// they run with it spelled their way, spelled back before migrating.
+func spellSettings(t *testing.T, conn *pgx.Conn, from, to string) {
+	t.Helper()
+	mustExec(t, conn, `alter table setting_override rename column `+from+` to `+to)
+}
+
 // metricReads is every metric reader's answer over the planted series, as
 // JSON, so before and after compare whole.
 func metricReads(t *testing.T, gw *storage.PG) map[string]string {
@@ -142,7 +150,9 @@ func TestMetricDayPartitionsKeepEveryRow(t *testing.T) {
 	mustExec(t, conn, `create table metric_block (series_id bigint, span_start timestamptz, span text, offset_ms int4[],
 		value float8[], source_rule text, source_rule_version bigint, source_rule_id uuid)`)
 	spellSeries(t, conn, "node", "outpost")
+	spellSettings(t, conn, "principal_id", "user_id")
 	reads := metricReads(t, gw)
+	spellSettings(t, conn, "user_id", "principal_id")
 	spellSeries(t, conn, "outpost", "node")
 	mustExec(t, conn, `drop table metric_block`)
 	for name, v := range reads {

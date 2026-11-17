@@ -83,7 +83,7 @@ func TestDisruptiveDeliveryNamesItsHoldSet(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	conn.Close(ctx)

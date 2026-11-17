@@ -252,7 +252,7 @@ func (p *PG) DeleteNotificationType(ctx context.Context, actorID, ref string) er
 	// back to the official type for the transition, as a rule naming none
 	// sends. Only a platform rule, which an admin can see and edit, holds it.
 	if _, err := tx.Exec(ctx, `update action_rule set notification_type_id = null, updated_at = now()
-		where notification_type_id = $1 and owner_principal_id is not null`, before.ID); err != nil {
+		where notification_type_id = $1 and owner_user_id is not null`, before.ID); err != nil {
 		return fmt.Errorf("storage: release personal rules from notification type %q: %w", ref, err)
 	}
 	if _, err := tx.Exec(ctx, `delete from notification_type where id = $1`, before.ID); err != nil {

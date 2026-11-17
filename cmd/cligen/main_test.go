@@ -218,11 +218,11 @@ func TestBuildCommandPathParams(t *testing.T) {
 		wantPath string
 		wantArgs []string
 	}{
-		{"item get", "/principals/{id}", "get", "/api/v1/principals/%s", []string{"id"}},
-		{"collection list", "/principals", "get", "/api/v1/principals", nil},
-		{"nested collection", "/principals/{id}/grants", "get", "/api/v1/principals/%s/grants", []string{"id"}},
-		{"custom method archive", "/principals/{id}:archive", "post", "/api/v1/principals/%s:archive", []string{"id"}},
-		{"custom method resetPassword", "/principals/{id}:resetPassword", "post", "/api/v1/principals/%s:resetPassword", []string{"id"}},
+		{"item get", "/users/{id}", "get", "/api/v1/users/%s", []string{"id"}},
+		{"collection list", "/users", "get", "/api/v1/users", nil},
+		{"nested collection", "/users/{id}/grants", "get", "/api/v1/users/%s/grants", []string{"id"}},
+		{"custom method archive", "/users/{id}:archive", "post", "/api/v1/users/%s:archive", []string{"id"}},
+		{"custom method resetPassword", "/users/{id}:resetPassword", "post", "/api/v1/users/%s:resetPassword", []string{"id"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -248,15 +248,15 @@ func TestBuildCommandPathParams(t *testing.T) {
 // TestBuildCommandQueryParams asserts that an operation's OpenAPI query
 // parameters become optional cobra flags: snake_case names map to kebab-case
 // flags, the OpenAPI type picks the flag setter, and a required param is marked
-// required. The principal-list op (kind + include_archived) is the worked case.
+// required. The user-list op (kind + include_archived) is the worked case.
 func TestBuildCommandQueryParams(t *testing.T) {
 	op := operation{Parameters: []param{
-		{Name: "kind", In: "query", Description: "Optionally filter by principal kind", Schema: paramSchema{Type: "string"}},
-		{Name: "include_archived", In: "query", Description: "Include archived principals", Schema: paramSchema{Type: "boolean"}},
+		{Name: "kind", In: "query", Description: "Optionally filter by user kind", Schema: paramSchema{Type: "string"}},
+		{Name: "include_archived", In: "query", Description: "Include archived users", Schema: paramSchema{Type: "boolean"}},
 		{Name: "page", In: "query", Required: true, Schema: paramSchema{Type: "integer"}},
 		{Name: "id", In: "path", Schema: paramSchema{Type: "string"}}, // must be ignored
 	}}
-	cmd := buildCommand(spec{}, "/api/v1", "/principals", "get", op)
+	cmd := buildCommand(spec{}, "/api/v1", "/users", "get", op)
 
 	if len(cmd.Query) != 3 {
 		t.Fatalf("Query = %+v, want 3 query fields (path param excluded)", cmd.Query)
@@ -296,13 +296,13 @@ func TestBuildCommandQueryParams(t *testing.T) {
 // query string.
 func TestRenderQueryFlags(t *testing.T) {
 	op := operation{
-		OperationID: "list-principals",
-		Summary:     "List principals",
+		OperationID: "list-users",
+		Summary:     "List users",
 		Parameters: []param{
-			{Name: "include_archived", In: "query", Description: "Include archived principals", Schema: paramSchema{Type: "boolean"}},
+			{Name: "include_archived", In: "query", Description: "Include archived users", Schema: paramSchema{Type: "boolean"}},
 		},
 	}
-	cmd := buildCommand(spec{}, "/api/v1", "/principals", "get", op)
+	cmd := buildCommand(spec{}, "/api/v1", "/users", "get", op)
 	roots, err := tree([]command{cmd})
 	if err != nil {
 		t.Fatalf("tree: %v", err)

@@ -83,9 +83,9 @@ const liveWindow = 3 * outpost.DefaultHeartbeat
 // collects reads as not drained.
 func drainedQuery(at time.Time, live time.Duration) string {
 	return fmt.Sprintf(`with live as (
-			select n.principal_id from outpost n
+			select n.user_id from outpost n
 			where n.last_heartbeat_at > to_timestamp(%[2]s)
-				and exists (select 1 from metric_series s where s.collector_outpost_id = n.principal_id)
+				and exists (select 1 from metric_series s where s.collector_outpost_id = n.user_id)
 				and coalesce((select m.value <> 0 from metric m
 					join metric_series s on s.id = m.series_id
 					join metric_type mt on mt.id = s.metric_type_id
@@ -94,7 +94,7 @@ func drainedQuery(at time.Time, live time.Duration) string {
 		select case when exists (select 1 from live) and not exists (
 			select 1 from live l where not exists (
 				select 1 from metric_series s
-				where s.collector_outpost_id = l.principal_id and exists (
+				where s.collector_outpost_id = l.user_id and exists (
 					select 1 from metric m
 					where m.series_id = s.id and m.source_rule is null
 						and m.ts > to_timestamp(%[1]s) and m.ts <= clock_timestamp())))

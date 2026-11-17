@@ -185,7 +185,7 @@ type agentPolicyOutput struct {
 // tool, each naming the layer that set it, and whether the request itself is
 // held to it.
 func (a *authenticator) agentPolicyHandler(ctx context.Context, _ *struct{}) (*agentPolicyOutput, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}

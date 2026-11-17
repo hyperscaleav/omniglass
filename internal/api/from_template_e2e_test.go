@@ -90,21 +90,21 @@ func (f *instFixture) count(q string, args ...any) int {
 	return n
 }
 
-// principal makes a principal holding the custom role label (instRoles) at
+// user makes a user holding the custom role label (instRoles) at
 // the grant given, returning its token.
-func (f *instFixture) principal(label string, g grant) string {
+func (f *instFixture) user(label string, g grant) string {
 	f.t.Helper()
 	g.role = label
-	return principalWithGrants(f.t, f.ctx, f.dsn, label, []grant{g})
+	return userWithGrants(f.t, f.ctx, f.dsn, label, []grant{g})
 }
 
-// split makes a principal holding role label fleet-wide and role
+// split makes a user holding role label fleet-wide and role
 // label-placed only under the location given.
 func (f *instFixture) split(label, place string) string {
 	f.t.Helper()
-	tok := f.principal(label, grant{scopeKind: "all"})
-	if _, err := f.conn.Exec(f.ctx, `insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op)
-		select principal_id, (select id from role where name = $1), 'location', $2, 'subtree' from principal_grant
+	tok := f.user(label, grant{scopeKind: "all"})
+	if _, err := f.conn.Exec(f.ctx, `insert into user_grant (user_id, role_id, scope_kind, scope_id, scope_op)
+		select user_id, (select id from role where name = $1), 'location', $2, 'subtree' from user_grant
 		where role_id = (select id from role where name = $3) limit 1`, label+"-placed", f.locationID(place), label); err != nil {
 		f.t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestCreateComponentFromTemplateAPI(t *testing.T) {
 	if n := f.count(`select count(*) from component`); n != before {
 		t.Fatalf("scope-refused instantiates left %d components", n-before)
 	}
-	viewer := principalWithGrants(t, f.ctx, f.dsn, "inst-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewer := userWithGrants(t, f.ctx, f.dsn, "inst-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	f.c.do(viewer, http.MethodPost, "/components:createFromTemplate", map[string]any{"template": "newtron-panel-7", "location": "hq"}, http.StatusForbidden)
 }
 
@@ -204,7 +204,7 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	}
 
 	// A caller lacking component:create is refused, and no system, standard or component lands.
-	noComp := f.principal("sys-only", grant{scopeKind: "all"})
+	noComp := f.user("sys-only", grant{scopeKind: "all"})
 	f.c.do(noComp, http.MethodPost, "/systems:createFromTemplate", map[string]any{"template": "mr55-system", "location": "hq"}, http.StatusForbidden)
 	// One whose component:create reaches only annex gets past the fork and the
 	// system, is refused at the first component, and still nothing lands.
@@ -259,7 +259,7 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	}
 
 	// A caller who cannot fork, on a template whose standard is absent, is refused and nothing lands.
-	noFork := f.principal("no-fork", grant{scopeKind: "all"})
+	noFork := f.user("no-fork", grant{scopeKind: "all"})
 	before := f.count(`select count(*) from system`)
 	f.c.do(noFork, http.MethodPost, "/systems:createFromTemplate", map[string]any{"template": "ds55-system", "location": "hq"}, http.StatusForbidden)
 	if n := f.count(`select count(*) from system`); n != before {
@@ -270,7 +270,7 @@ func TestCreateSystemFromTemplateAPI(t *testing.T) {
 	f.c.do(hqOnly, http.MethodPost, "/systems:createFromTemplate", map[string]any{"template": "mr55-system", "location": "hq"}, http.StatusNotFound)
 	f.c.do(f.owner, http.MethodPost, "/systems:createFromTemplate", map[string]any{"template": "nope", "location": "hq"}, http.StatusNotFound)
 	f.c.do(f.owner, http.MethodPost, "/systems:createFromTemplate", map[string]any{"template": "mr55-system", "location": "hq", "standard": "nope"}, http.StatusNotFound)
-	viewer := principalWithGrants(t, f.ctx, f.dsn, "sys-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewer := userWithGrants(t, f.ctx, f.dsn, "sys-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	f.c.do(viewer, http.MethodPost, "/systems:createFromTemplate", map[string]any{"template": "mr55-system", "location": "hq"}, http.StatusForbidden)
 }
 
@@ -323,6 +323,6 @@ func TestCreateLocationsFromTemplateAPI(t *testing.T) {
 	// The root needs a name: no shipped type mints one.
 	f.c.do(f.owner, http.MethodPost, "/locations:createFromTemplate", map[string]any{"template": "meeting-floor", "parent": "annex"}, http.StatusUnprocessableEntity)
 	// A location-only caller cannot land the systems the subtree carries.
-	locOnly := f.principal("loc-only", grant{scopeKind: "all"})
+	locOnly := f.user("loc-only", grant{scopeKind: "all"})
 	f.c.do(locOnly, http.MethodPost, "/locations:createFromTemplate", map[string]any{"template": "meeting-floor", "parent": "annex", "name": "f1"}, http.StatusForbidden)
 }

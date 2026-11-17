@@ -200,7 +200,7 @@ func TestAViewerCannotPreviewOrRecomputeLabels(t *testing.T) {
 	c.do(tok, http.MethodPost, "/locations",
 		map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
 
-	viewerTok := principalWithGrants(t, context.Background(), dsn, "label-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, context.Background(), dsn, "label-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	for _, collection := range []string{"/components", "/systems", "/locations"} {
 		c.do(viewerTok, http.MethodPost, collection+":previewLabels", nil, http.StatusForbidden)
 		c.do(viewerTok, http.MethodPost, collection+":recomputeLabels", nil, http.StatusForbidden)
@@ -246,7 +246,7 @@ func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
 
 	// Reads the whole fleet, may update exactly one component.
 	mineID := decodeID(t, c.do(tok, http.MethodGet, "/components/mine", nil, http.StatusOK))
-	narrowTok := principalWithGrants(t, ctx, dsn, "narrow-writer", []grant{
+	narrowTok := userWithGrants(t, ctx, dsn, "narrow-writer", []grant{
 		{role: "viewer", scopeKind: "all"},
 		{role: "operator", scopeKind: "component", scopeID: mineID, scopeOp: "self"},
 	})

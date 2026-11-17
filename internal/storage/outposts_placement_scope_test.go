@@ -23,7 +23,7 @@ import (
 // This drives the gateway seam rather than the wire, because the wire cannot
 // reach it: outpost:create resolves only from an "all" grant (applicableKinds
 // admits no tier for an outpost), and every seeded role carrying outpost:* inherits the
-// viewer read floor, so a principal that can create an outpost today also reads
+// viewer read floor, so a user that can create an outpost today also reads
 // every location. The seam is where the two sets are separate arguments, so it
 // is where a narrow placement read is expressible at all, and it is where the
 // invariant is written. A role with outpost:create and no location read floor is an

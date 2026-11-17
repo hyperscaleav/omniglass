@@ -36,7 +36,7 @@ type LogLineWrite struct {
 
 // OutpostLogWrite is one of an outpost's own log lines to persist: the self-log lane
 // (ADR-0066) after the #589 split gave it an origin-true table. Outpost addresses
-// the emitting outpost by name (or principal uuid); the payload columns mirror
+// the emitting outpost by name (or user uuid); the payload columns mirror
 // LogLineWrite, minus the arc a single-origin table does not need and minus
 // Instance, which only a component's device output discriminates.
 type OutpostLogWrite struct {
@@ -203,7 +203,7 @@ func textOrNull(v any) *string {
 
 // InsertOutpostLogs writes an outpost's own log rows in one transaction: the self-log
 // sink (ADR-0066) on outpost_log. Mirrors InsertLogLines minus the arc; the outpost
-// is resolved to its principal_id so an unknown outpost is a named error rather
+// is resolved to its user_id so an unknown outpost is a named error rather
 // than an FK violation.
 func (p *PG) InsertOutpostLogs(ctx context.Context, lines []OutpostLogWrite) error {
 	if len(lines) == 0 {
@@ -362,7 +362,7 @@ func (p *PG) ListOutpostLogs(ctx context.Context, outpostName string, window tim
 		select id, ts, '' as instance, source,
 			coalesce(severity, ''), coalesce(facility, ''), message, attributes, labels, coalesce(correlation_id, '')
 		from outpost_log
-		where outpost_id = (select principal_id from outpost where name = $1) and %s
+		where outpost_id = (select user_id from outpost where name = $1) and %s
 		order by ts desc
 		limit $2`, bound), args...)
 	if err != nil {

@@ -18,7 +18,7 @@ import (
 
 // Outpost-layer sentinel errors. An outpost is the edge runtime; it is fleet-wide
 // (not tree-scoped), so its create/enroll/read paths require an all scope,
-// mirroring principals.
+// mirroring users.
 var (
 	ErrOutpostNotFound   = errors.New("storage: outpost not found")
 	ErrOutpostExists     = errors.New("storage: outpost name already exists")
@@ -27,11 +27,11 @@ var (
 )
 
 // Outpost is the edge runtime's server-side record: the detail row of its
-// kind='outpost' principal. PrincipalID is that principal's id. EnrolledAt is set
+// kind='outpost' user. UserID is that user's id. EnrolledAt is set
 // the first time the outpost claims its identity; Enrolled is a convenience derived
 // from it.
 type Outpost struct {
-	PrincipalID     string
+	UserID          string
 	Name            string
 	Label           string
 	Description     string
@@ -156,23 +156,23 @@ type Worklist struct {
 // scalar subquery: the id is what the row points at, the name is what an operator
 // reads and types. The subquery form works in a plain select and in a RETURNING
 // list alike, so the insert and update paths need no join.
-const outpostCols = `principal_id, name, coalesce(label, ''), description,
+const outpostCols = `user_id, name, coalesce(label, ''), description,
 	(select l.name from location l where l.id = outpost.location_id) as location_name, location_id,
 	last_heartbeat_at, enrolled_at, orphaned_batches, last_orphaned_at, platform_component_id, created_at, updated_at`
 
 func scanOutpost(row pgx.Row) (*Outpost, error) {
 	var n Outpost
-	if err := row.Scan(&n.PrincipalID, &n.Name, &n.Label, &n.Description, &n.LocationName, &n.LocationID, &n.LastHeartbeatAt, &n.EnrolledAt, &n.OrphanedBatches, &n.LastOrphanedAt, &n.PlatformComponentID, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := row.Scan(&n.UserID, &n.Name, &n.Label, &n.Description, &n.LocationName, &n.LocationID, &n.LastHeartbeatAt, &n.EnrolledAt, &n.OrphanedBatches, &n.LastOrphanedAt, &n.PlatformComponentID, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
 	n.Enrolled = n.EnrolledAt != nil
 	return &n, nil
 }
 
-// CreateOutpost inserts an outpost as a kind='outpost' principal plus its detail row,
-// writing the audit row in the same transaction (mirroring the human/service
+// CreateOutpost inserts an outpost as a kind='outpost' user plus its detail row,
+// writing the audit row in the same transaction (mirroring the person/machine
 // create). An outpost is fleet-wide, so creation requires an all create scope (like
-// a principal, unlike a tree-scoped location/system/component).
+// a user, unlike a tree-scoped location/system/component).
 func (p *PG) CreateOutpost(ctx context.Context, actorID string, spec OutpostSpec, create, locationRead scope.Set) (*Outpost, error) {
 	if !create.All {
 		return nil, ErrOutpostForbidden
@@ -191,11 +191,11 @@ func (p *PG) CreateOutpost(ctx context.Context, actorID string, spec OutpostSpec
 		return nil, err
 	}
 	var pid string
-	if err := tx.QueryRow(ctx, `insert into principal (kind) values ('outpost') returning id`).Scan(&pid); err != nil {
-		return nil, fmt.Errorf("storage: create outpost principal: %w", err)
+	if err := tx.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		return nil, fmt.Errorf("storage: create outpost user: %w", err)
 	}
 	n, err := scanOutpost(tx.QueryRow(ctx, `
-		insert into outpost (principal_id, name, label, description, location_id)
+		insert into outpost (user_id, name, label, description, location_id)
 		values ($1, $2, $3, $4, $5)
 		returning `+outpostCols, pid, spec.Name, labelOrNull(spec.Label), spec.Description, locationID))
 	if err != nil {
@@ -216,7 +216,7 @@ func (p *PG) CreateOutpost(ctx context.Context, actorID string, spec OutpostSpec
 		}
 		n.PlatformComponentID = &cid
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "outpost", n.PrincipalID, nil, n); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "outpost", n.UserID, nil, n); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -266,7 +266,7 @@ func (p *PG) UpdateOutpost(ctx context.Context, actorID, name string, patch Outp
 	if err != nil {
 		return nil, mapOutpostWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "outpost", after.PrincipalID, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "outpost", after.UserID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -275,14 +275,14 @@ func (p *PG) UpdateOutpost(ctx context.Context, actorID, name string, patch Outp
 	return after, nil
 }
 
-// DeleteOutpost decommissions an outpost: a hard delete of its kind='outpost' principal,
+// DeleteOutpost decommissions an outpost: a hard delete of its kind='outpost' user,
 // which cascades the outpost detail row and, through it, everything keyed to the
 // outpost, its interfaces and their derived tasks, its outpost-owned samples and tag
 // bindings, and its enrollment credential (every referencing FK is ON DELETE
 // CASCADE). An outpost is fleet-wide, so this requires an all scope, like create. An
 // unknown name is ErrOutpostNotFound. Audited before the row is gone; the actor is
 // the deleter (unaffected by the cascade) and audit_log.resource_id is plain
-// text, not a foreign key, so the deleted outpost's principal id survives there.
+// text, not a foreign key, so the deleted outpost's user id survives there.
 func (p *PG) DeleteOutpost(ctx context.Context, actorID, name string, read, action scope.Set) error {
 	if err := RejectAddressForm("outpost", name); err != nil {
 		return err
@@ -298,22 +298,22 @@ func (p *PG) DeleteOutpost(ctx context.Context, actorID, name string, read, acti
 
 	var pid string
 	var componentID *string
-	err = tx.QueryRow(ctx, `select principal_id, platform_component_id from outpost where name = $1`, name).Scan(&pid, &componentID)
+	err = tx.QueryRow(ctx, `select user_id, platform_component_id from outpost where name = $1`, name).Scan(&pid, &componentID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrOutpostNotFound
 	} else if err != nil {
 		return fmt.Errorf("storage: delete outpost lookup %q: %w", name, err)
 	}
-	// The before image carries the name. Keying on the principal id is right (a rename
+	// The before image carries the name. Keying on the user id is right (a rename
 	// must not orphan the row), but without the image the row is unresolvable: the
-	// principal is deleted in this same transaction and no API surface returns a
-	// outpost's principal_id, so "which outpost was deleted" would have no answer at all.
-	before := map[string]any{"name": name, "principal_id": pid}
+	// user is deleted in this same transaction and no API surface returns a
+	// outpost's user_id, so "which outpost was deleted" would have no answer at all.
+	before := map[string]any{"name": name, "user_id": pid}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "outpost", pid, before, nil); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, pid); err != nil {
-		return fmt.Errorf("storage: delete outpost principal: %w", err)
+	if _, err := tx.Exec(ctx, `delete from users where id = $1`, pid); err != nil {
+		return fmt.Errorf("storage: delete outpost user: %w", err)
 	}
 	// Its platform component goes with it (#1625), once the outpost row that
 	// names it is gone.
@@ -333,7 +333,7 @@ func (p *PG) DeleteOutpost(ctx context.Context, actorID, name string, read, acti
 }
 
 // SetEnrollmentToken installs the outpost's enrollment secret as a bearer
-// credential ROW on its principal (the same machinery a service bearer token
+// credential ROW on its user (the same machinery a service bearer token
 // uses), taking the hex sha256 of a freshly minted token (the cleartext is shown
 // once by the API and never stored). Re-enrolling replaces any existing bearer
 // credential, so the previous token stops working. Audited. Requires an all
@@ -365,12 +365,12 @@ func (p *PG) SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex
 	// token, then install the new one. The secret is stored only as its hash; the
 	// prefix is the outpost name, a non-secret locator for scanners and audit.
 	if _, err := tx.Exec(ctx,
-		`delete from credential where principal_id = $1 and kind = 'bearer'`, before.PrincipalID); err != nil {
+		`delete from credential where user_id = $1 and kind = 'bearer'`, before.UserID); err != nil {
 		return nil, fmt.Errorf("storage: clear outpost credential %q: %w", name, err)
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
-		before.PrincipalID, hash, name); err != nil {
+		`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
+		before.UserID, hash, name); err != nil {
 		return nil, fmt.Errorf("storage: set outpost credential %q: %w", name, err)
 	}
 	after, err := scanOutpost(tx.QueryRow(ctx, `
@@ -382,7 +382,7 @@ func (p *PG) SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex
 	}
 	// The token hash itself is never written to the audit diff (it is a secret);
 	// the audit records that an enroll happened on the outpost.
-	if err := writeAuditRes(ctx, tx, actorID, "enroll", "outpost", after.PrincipalID, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "enroll", "outpost", after.UserID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -405,10 +405,10 @@ func (p *PG) ClaimOutpost(ctx context.Context, name, tokenHashHex string) (*Outp
 		return nil, ErrEnrollmentInvalid
 	}
 	// coalesce keeps the original enrolled_at on a re-claim (idempotent). Keyed by
-	// the resolved principal id, so it stamps exactly the outpost that authenticated.
+	// the resolved user id, so it stamps exactly the outpost that authenticated.
 	n, err := scanOutpost(p.pool.QueryRow(ctx, `
 		update outpost set enrolled_at = coalesce(enrolled_at, now()), updated_at = now()
-		where principal_id = $1
+		where user_id = $1
 		returning `+outpostCols, pr.ID))
 	if err != nil {
 		return nil, fmt.Errorf("storage: mark enrolled %q: %w", name, err)
@@ -430,10 +430,10 @@ func (p *PG) AuthenticateOutpost(ctx context.Context, name, tokenHashHex string)
 
 // authenticateOutpostCredential resolves the presented token hash to a bearer
 // credential via the shared AuthenticateBearer helper and confirms the owning
-// principal is the outpost of that name. It returns a nil principal (no error) when
-// the hash matches no credential, the credential belongs to a non-outpost principal,
+// user is the outpost of that name. It returns a nil user (no error) when
+// the hash matches no credential, the credential belongs to a non-outpost user,
 // or the outpost name does not match, so callers cannot use it to enumerate outposts.
-func (p *PG) authenticateOutpostCredential(ctx context.Context, name, tokenHashHex string) (*Principal, error) {
+func (p *PG) authenticateOutpostCredential(ctx context.Context, name, tokenHashHex string) (*User, error) {
 	hash, err := hex.DecodeString(tokenHashHex)
 	if err != nil {
 		return nil, nil // a malformed hash matches nothing
@@ -445,7 +445,7 @@ func (p *PG) authenticateOutpostCredential(ctx context.Context, name, tokenHashH
 	case err != nil:
 		return nil, fmt.Errorf("storage: authenticate outpost %q: %w", name, err)
 	}
-	if pr.Kind != "outpost" || pr.Outpost == nil || pr.Outpost.Name != name {
+	if pr.Outpost == nil || pr.Outpost.Name != name {
 		return nil, nil
 	}
 	return pr, nil
@@ -508,7 +508,7 @@ func (p *PG) OutpostWorklist(ctx context.Context, name string) (Worklist, error)
 		from task t
 		join endpoint i on i.id = t.endpoint_id
 		left join driver d on d.id = i.driver_id
-		where i.outpost_id = (select principal_id from outpost where name = $1) and t.enabled = true
+		where i.outpost_id = (select user_id from outpost where name = $1) and t.enabled = true
 		order by t.id`, name)
 	if err != nil {
 		return Worklist{}, fmt.Errorf("storage: outpost worklist %q: %w", name, err)
@@ -739,7 +739,7 @@ func (p *PG) OutpostWorklist(ctx context.Context, name string) (Worklist, error)
 	// updated_at (epoch seconds) across the outpost's endpoints, 0 when none.
 	if err := p.pool.QueryRow(ctx, `
 		select coalesce(extract(epoch from max(updated_at))::bigint, 0)
-		from endpoint where outpost_id = (select principal_id from outpost where name = $1)`, name).Scan(&wl.ConfigGeneration); err != nil {
+		from endpoint where outpost_id = (select user_id from outpost where name = $1)`, name).Scan(&wl.ConfigGeneration); err != nil {
 		return Worklist{}, fmt.Errorf("storage: outpost config generation %q: %w", name, err)
 	}
 	s, err := p.platformSettings(ctx, p.pool)
@@ -762,7 +762,7 @@ func pathUpstreams(ctx context.Context, q querier, outpostName string) (map[stri
 		join component_dependency d on d.component_id = i.component and d.kind = 'path'
 		join component c on c.id = d.upstream_id
 		join endpoint u on u.component = d.upstream_id and u.outpost_id = i.outpost_id and not u.out_of_band
-		where i.outpost_id = (select principal_id from outpost where name = $1) and not i.out_of_band
+		where i.outpost_id = (select user_id from outpost where name = $1) and not i.out_of_band
 		group by i.id, d.upstream_id, c.name
 		order by i.id, d.upstream_id`, outpostName)
 	if err != nil {

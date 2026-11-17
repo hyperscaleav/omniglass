@@ -15,7 +15,7 @@ import (
 
 // TestEventTypeAPI drives the /event-types catalog over HTTP: an owner registers,
 // reads, updates, and deletes a custom event type; an official (seeded) event type is
-// read-only; a malformed name and a duplicate are rejected; an ungranted principal is
+// read-only; a malformed name and a duplicate are rejected; an ungranted user is
 // forbidden to create. Mirrors the property_type catalog e2e.
 func TestEventTypeAPI(t *testing.T) {
 	t.Parallel()
@@ -99,8 +99,8 @@ func TestEventTypeAPI(t *testing.T) {
 	// Delete the custom event type.
 	c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusNoContent)
 
-	// An ungranted principal is forbidden to create.
-	noneTok := principalWithGrants(t, ctx, dsn, "noevents", nil)
+	// An ungranted user is forbidden to create.
+	noneTok := userWithGrants(t, ctx, dsn, "noevents", nil)
 	c.do(noneTok, http.MethodPost, "/event-types", map[string]any{"name": "nope.event"}, http.StatusForbidden)
 }
 

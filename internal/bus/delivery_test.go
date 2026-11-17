@@ -622,7 +622,7 @@ func newLedgerRig(t *testing.T) ledgerRig {
 		t.Fatalf("mint token: %v", err)
 	}
 	if _, err := f.conn.Exec(f.ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('bar-1-tcp', 'tcp', (select id from component where name = 'bar-1'), (select principal_id from outpost where name = $1), '{"target":"127.0.0.1:1"}'::jsonb)`, ledgerOutpost); err != nil {
+		('bar-1-tcp', 'tcp', (select id from component where name = 'bar-1'), (select user_id from outpost where name = $1), '{"target":"127.0.0.1:1"}'::jsonb)`, ledgerOutpost); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := f.conn.Exec(f.ctx, `insert into task (id, mode, endpoint_id, enabled) values

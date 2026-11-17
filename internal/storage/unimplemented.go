@@ -54,10 +54,10 @@ func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, er
 func (UnimplementedGateway) IssueBearerCredential(context.Context, BearerIssue) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
+func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*User, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ResolvePrincipalRef(context.Context, string) (string, error) {
+func (UnimplementedGateway) ResolveUserRef(context.Context, string) (string, error) {
 	return "", nil
 }
 
@@ -68,29 +68,29 @@ func (UnimplementedGateway) ResolveUsername(context.Context, string) (string, er
 func (UnimplementedGateway) BeginImpersonation(context.Context, string, string, string, time.Duration) (string, *ImpersonationSession, error) {
 	return "", nil, nil
 }
-func (UnimplementedGateway) AuthenticateImpersonation(context.Context, []byte) (*Principal, string, string, string, error) {
+func (UnimplementedGateway) AuthenticateImpersonation(context.Context, []byte) (*User, string, string, string, error) {
 	return nil, "", "", "", nil
 }
 func (UnimplementedGateway) EndImpersonation(context.Context, string) error { return nil }
-func (UnimplementedGateway) AuthenticatePassword(context.Context, string, string) (*Principal, error) {
+func (UnimplementedGateway) AuthenticatePassword(context.Context, string, string) (*User, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) SetPassword(context.Context, string, string) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) UpdateHumanProfile(context.Context, string, HumanProfilePatch) error {
+func (UnimplementedGateway) UpdatePersonProfile(context.Context, string, PersonProfilePatch) error {
 	return nil
 }
-func (UnimplementedGateway) ListPrincipals(context.Context, scope.Set, bool) ([]Principal, error) {
+func (UnimplementedGateway) ListUsers(context.Context, scope.Set, bool) ([]User, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetPrincipal(context.Context, string, scope.Set) (*Principal, error) {
+func (UnimplementedGateway) GetUser(context.Context, string, scope.Set) (*User, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateHumanPrincipal(context.Context, string, HumanSpec, scope.Set) (*Principal, error) {
+func (UnimplementedGateway) CreatePerson(context.Context, string, PersonSpec, scope.Set) (*User, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdatePrincipalHuman(context.Context, string, string, AdminHumanPatch, scope.Set) (*Principal, error) {
+func (UnimplementedGateway) UpdatePerson(context.Context, string, string, AdminPersonPatch, scope.Set) (*User, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateGrant(context.Context, string, string, GrantSpec, scope.Set) (*Grant, error) {
@@ -122,7 +122,7 @@ func (UnimplementedGateway) RemoveGroupMember(context.Context, string, string, s
 func (UnimplementedGateway) ListGroupMembers(context.Context, string, scope.Set) ([]GroupMember, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListGroupsForPrincipal(context.Context, string, scope.Set) ([]Group, error) {
+func (UnimplementedGateway) ListGroupsForUser(context.Context, string, scope.Set) ([]Group, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateGroupGrant(context.Context, string, string, GrantSpec, scope.Set) (*Grant, error) {
@@ -134,33 +134,33 @@ func (UnimplementedGateway) RevokeGroupGrant(context.Context, string, string, st
 func (UnimplementedGateway) ListGroupGrants(context.Context, string, scope.Set) ([]Grant, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SetPrincipalActive(context.Context, string, string, bool, scope.Set) error {
+func (UnimplementedGateway) SetUserActive(context.Context, string, string, bool, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ArchivePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) ArchiveUser(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) RestorePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) RestoreUser(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) PurgePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) PurgeUser(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) SetPrincipalPassword(context.Context, string, string, string, scope.Set) error {
+func (UnimplementedGateway) SetUserPassword(context.Context, string, string, string, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) SetOwnAvatar(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ClearOwnAvatar(context.Context, string) error       { return nil }
-func (UnimplementedGateway) SetPrincipalAvatar(context.Context, string, string, string, scope.Set) error {
+func (UnimplementedGateway) SetUserAvatar(context.Context, string, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ClearPrincipalAvatar(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) ClearUserAvatar(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) GetHumanAvatar(context.Context, string) (string, bool, error) {
+func (UnimplementedGateway) GetPersonAvatar(context.Context, string) (string, bool, error) {
 	return "", false, nil
 }
-func (UnimplementedGateway) GetPrincipalAvatar(context.Context, string, scope.Set) (string, bool, error) {
+func (UnimplementedGateway) GetUserAvatar(context.Context, string, scope.Set) (string, bool, error) {
 	return "", false, nil
 }
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
@@ -196,7 +196,7 @@ func (UnimplementedGateway) IssueOAuthToken(context.Context, OAuthTokenIssue) er
 func (UnimplementedGateway) RefreshOAuthToken(context.Context, OAuthRefresh) (OAuthRefreshOutcome, error) {
 	return OAuthRefreshRefused, nil
 }
-func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)    { return false, nil }
+func (UnimplementedGateway) AnyPerson(context.Context) (bool, error)   { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
 func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
 	return nil, nil
@@ -1304,10 +1304,10 @@ func (UnimplementedGateway) SetRuleOptOut(context.Context, string, string, strin
 	return nil, ErrActionRuleNotFound
 }
 
-func (UnimplementedGateway) EnsureServicePrincipal(context.Context, string, string) (string, error) {
+func (UnimplementedGateway) EnsureMachine(context.Context, string, string) (string, error) {
 	return "", nil
 }
-func (UnimplementedGateway) SetServiceToken(context.Context, string, string, []byte, string) (bool, error) {
+func (UnimplementedGateway) SetMachineToken(context.Context, string, string, []byte, string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) EnsureRole(context.Context, string, Role) error { return nil }

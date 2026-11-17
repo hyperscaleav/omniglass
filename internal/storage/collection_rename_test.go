@@ -126,7 +126,7 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 
 	// The outpost arc, at the level it is actually guaranteed. An outpost's name is not
 	// patchable, so this renames it underneath the gateway: the point is that the
-	// interface placement is keyed by principal_id and therefore has nothing to
+	// interface placement is keyed by user_id and therefore has nothing to
 	// rewrite. The worklist resolving under the new name is the observable proof.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {

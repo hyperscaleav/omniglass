@@ -104,7 +104,7 @@ func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 	}
 	defer gw.Close()
 	pr, err := gw.AuthenticateBearer(ctx, second)
-	if err != nil || pr.Service == nil || pr.Service.Name != "sim-booking-service" {
+	if err != nil || pr.Machine == nil || pr.Machine.Name != "sim-booking-service" {
 		t.Fatalf("this run's token = %+v, %v; want the booking service", pr, err)
 	}
 	if _, err := gw.AuthenticateBearer(ctx, first); !errors.Is(err, storage.ErrCredentialNotFound) {
@@ -277,7 +277,7 @@ func TestLabScaleSeedEnrollsEverySiteOutpost(t *testing.T) {
 	for _, p := range minted {
 		hash, _ := hex.DecodeString(p.TokenHash)
 		pr, err := gw.AuthenticateBearer(ctx, hash)
-		if err != nil || pr.Service == nil || pr.Service.Name != p.Name {
+		if err != nil || pr.Machine == nil || pr.Machine.Name != p.Name {
 			t.Errorf("pusher %s's token = %+v, %v; want it to authenticate the pusher", p.Name, pr, err)
 		}
 	}
@@ -424,7 +424,7 @@ func TestLabScaleSeedKeptReEnrollsWithoutReseeding(t *testing.T) {
 	for i, p := range secondPushers {
 		hash, _ := hex.DecodeString(p.TokenHash)
 		pr, err := gw.AuthenticateBearer(ctx, hash)
-		if err != nil || pr.Service == nil || pr.Service.Name != p.Name {
+		if err != nil || pr.Machine == nil || pr.Machine.Name != p.Name {
 			t.Errorf("pusher %s's new token = %+v, %v; want it to authenticate the pusher", p.Name, pr, err)
 		}
 		old, _ := hex.DecodeString(firstPushers[i].TokenHash)

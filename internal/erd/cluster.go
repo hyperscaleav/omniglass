@@ -7,8 +7,8 @@ package erd
 // the live schema must be named here (the integration test enforces it).
 var Subsystems = []Cluster{
 	{Name: "identity", Tables: []string{
-		"principal", "human", "service", "principal_grant", "principal_group",
-		"principal_group_member", "impersonation_session",
+		"users", "person", "machine", "user_grant", "user_group",
+		"user_group_member", "impersonation_session",
 		"role", "system_slot", "system_slot_assignment",
 		"system_slot_type", "system_slot_product",
 		"slot_choice", "choice_alternate",

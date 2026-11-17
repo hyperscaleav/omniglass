@@ -128,7 +128,7 @@ func TestRunServesTheOutpostsDevicesAndFollowsChanges(t *testing.T) {
 			t.Fatal(err)
 		}
 		target := net.JoinHostPort(ip, fmt.Sprint(port+runPortShift))
-		if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ($1, 'tcp', (select id from component where name = $2), (select principal_id from outpost where name = 'edge-s'), jsonb_build_object('target', $3::text))`, name+"-tcp", name, target); err != nil {
+		if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ($1, 'tcp', (select id from component where name = $2), (select user_id from outpost where name = 'edge-s'), jsonb_build_object('target', $3::text))`, name+"-tcp", name, target); err != nil {
 			t.Fatal(err)
 		}
 		return target

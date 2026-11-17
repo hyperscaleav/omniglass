@@ -523,10 +523,10 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	})
 }
 
-// actorID is the authenticated principal id for the audit row, empty if absent
+// actorID is the authenticated user id for the audit row, empty if absent
 // (authn middleware guarantees presence on these routes).
 func actorID(ctx context.Context) string {
-	if pr, ok := principalFrom(ctx); ok {
+	if pr, ok := userFrom(ctx); ok {
 		return pr.ID
 	}
 	return ""

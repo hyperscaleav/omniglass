@@ -11,7 +11,7 @@ import (
 
 // SimPusher is one of the simulated fleet's outside actors (#1370, #1743),
 // declared as a scale scenario declares its pushers: Name is its service
-// principal, holding telemetry:push alone on Systems (fixture system keys),
+// user, holding telemetry:push alone on Systems (fixture system keys),
 // and Profile the emulator profile with a push face that pushes as it. A
 // push has no endpoint, so it counts on its collected tier alone.
 type SimPusher struct {
@@ -24,10 +24,10 @@ type SimPusher struct {
 // nothing else. An operator row, not an official one: no install ships it.
 const PusherRole = "telemetry-pusher"
 
-// GrantPusher makes service a principal that may push telemetry to the one
+// GrantPusher makes service a user that may push telemetry to the one
 // system systemID and do nothing else: the pusher role, the service, and its
 // one grant, scoped to that system alone. Idempotent; its token is the lab's
-// to set on each run (storage.SetServiceToken).
+// to set on each run (storage.SetMachineToken).
 func GrantPusher(ctx context.Context, gw storage.Gateway, actorID, service, systemID string) error {
 	if err := gw.EnsureRole(ctx, actorID, storage.Role{
 		Name: PusherRole, Permissions: []string{"telemetry:push"}, Label: "Telemetry pusher",
@@ -35,7 +35,7 @@ func GrantPusher(ctx context.Context, gw storage.Gateway, actorID, service, syst
 	}); err != nil {
 		return fmt.Errorf("devseed: pusher role: %w", err)
 	}
-	id, err := gw.EnsureServicePrincipal(ctx, actorID, service)
+	id, err := gw.EnsureMachine(ctx, actorID, service)
 	if err != nil {
 		return fmt.Errorf("devseed: pusher %s: %w", service, err)
 	}

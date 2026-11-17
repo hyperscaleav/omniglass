@@ -13,7 +13,7 @@ import (
 // column and every constraint, index, sequence and trigger named for them,
 // and rewrites the three value sets that spell the old words (a user's kind,
 // a notification target's kind, a role's permissions). This test stands a
-// database just below the rename, plants a person, a service account, an
+// database just below the rename, plants a person, a machine user, an
 // outpost and what hangs off them, and migrates forward over them.
 
 const userRenameVersion = "20261117182952"
@@ -36,11 +36,11 @@ const schemaPrincipalNames = `
 
 // TestUserRenameCarriesEveryRow: across the rename no schema name spells
 // principal, every planted subject keeps its id under its new kind (a human
-// is a person, a service account and an outpost are machines), the group,
+// is a person, a machine user and an outpost are machines), the group,
 // membership, grant and notification target keep their rows, a role's
 // permissions name the user resources in their old order, and the owner
 // guard reads the renamed grant table. Rolled back, every row sits under the old names and
-// kinds again, the outpost told from the service account by its outpost row.
+// kinds again, the outpost told from the machine user by its outpost row.
 func TestUserRenameCarriesEveryRow(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {

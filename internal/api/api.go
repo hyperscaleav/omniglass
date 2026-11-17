@@ -69,14 +69,14 @@ type options struct {
 	// version is the server's build version, reported to MCP clients.
 	version string
 	// outpostRunner reaches the outposts for on-demand runs (#1163); nil answers
-	// those routes 503. outpostRuns and outpostRunsPerPrincipal bound the runs in
+	// those routes 503. outpostRuns and outpostRunsPerUser bound the runs in
 	// flight, in all and per caller; zero takes the defaults.
-	outpostRunner                        OutpostRunner
-	outpostRuns, outpostRunsPerPrincipal int
-	// commandWaiters and commandWaitersPerPrincipal bound the command issues
+	outpostRunner                   OutpostRunner
+	outpostRuns, outpostRunsPerUser int
+	// commandWaiters and commandWaitersPerUser bound the command issues
 	// waiting on their outcome at once, in all and per caller; zero takes the
 	// defaults.
-	commandWaiters, commandWaitersPerPrincipal int
+	commandWaiters, commandWaitersPerUser int
 	// lab marks a server `omniglass lab` started (#1195); /auth/status
 	// reports it so the console shows the lab banner.
 	lab bool
@@ -147,10 +147,10 @@ func WithVersion(v string) Option { return func(o *options) { o.version = v } }
 func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
 
 // WithCommandWaitLimits bounds how many command issues may wait on their
-// outcome at once, in all and per principal (a wait past either is a 429,
+// outcome at once, in all and per user (a wait past either is a 429,
 // refused before anything is issued). Zero keeps a default.
-func WithCommandWaitLimits(total, perPrincipal int) Option {
-	return func(o *options) { o.commandWaiters, o.commandWaitersPerPrincipal = total, perPrincipal }
+func WithCommandWaitLimits(total, perUser int) Option {
+	return func(o *options) { o.commandWaiters, o.commandWaitersPerUser = total, perUser }
 }
 
 // WithTelemetryPublisher supplies the bus seam the push-ingest route publishes
@@ -285,8 +285,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/auth/me",
-		Summary:     "The authenticated principal, its permissions, and grants",
-		Description: "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
+		Summary:     "The authenticated user, its permissions, and grants",
+		Description: "Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.meHandler)
 
@@ -305,7 +305,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Method:      http.MethodPatch,
 		Path:        "/auth/me",
 		Summary:     "Update your own profile",
-		Description: "Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).",
+		Description: "Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own user).",
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.updateMeHandler)
 
@@ -324,7 +324,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Method:      http.MethodGet,
 		Path:        "/auth/me/sessions",
 		Summary:     "List your own sessions and tokens",
-		Description: "Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.",
+		Description: "Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another user's). The token secret is never returned.",
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.listMeSessionsHandler)
 
@@ -445,8 +445,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerPersonalRuleRoutes(api, a, gw)
 	registerOptOutRoutes(api, a, gw)
 	registerDraftTestRoute(api, a, gw)
-	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerPrincipal))
-	registerOutpostRunRoutes(api, a, gw, o.outpostRunner, newRunLimiter(o.outpostRuns, o.outpostRunsPerPrincipal))
+	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerUser))
+	registerOutpostRunRoutes(api, a, gw, o.outpostRunner, newRunLimiter(o.outpostRuns, o.outpostRunsPerUser))
 	registerProductPropertyRoutes(api, a, gw)
 	registerComponentPropertyRoutes(api, a, gw)
 	registerStandardPropertyRoutes(api, a, gw)
@@ -477,8 +477,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerMetricTypeRoutes(api, a, gw)
 	registerTagRoutes(api, a, gw)
 	registerFileRoutes(api, a, gw)
-	registerPrincipalRoutes(api, a, gw)
-	registerPrincipalGroupRoutes(api, a, gw)
+	registerUserRoutes(api, a, gw)
+	registerUserGroupRoutes(api, a, gw)
 	registerImpersonationRoutes(api, a, gw)
 	registerAuditRoutes(api, a, gw)
 	registerSettingsRoutes(api, a, gw, svc)

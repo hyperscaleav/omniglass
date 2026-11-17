@@ -12,11 +12,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestPrincipalAddressByUsername proves a principal route accepts a human username
-// as well as a uuid (issue #163): getting a principal by username matches getting it
+// TestUserAddressByUsername proves a user route accepts a person's username
+// as well as a uuid (issue #163): getting a user by username matches getting it
 // by uuid, a :verb custom method (archive) works by username, and an unknown
 // username is a 404, the same as an unknown id. Skipped under -short.
-func TestPrincipalAddressByUsername(t *testing.T) {
+func TestUserAddressByUsername(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -28,11 +28,11 @@ func TestPrincipalAddressByUsername(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Create alice, capture her uuid.
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{
+	created := c.do(ownerTok, "POST", "/users", map[string]string{
 		"username": "alice", "password": "orange-boat-42x",
 	}, http.StatusCreated)
 	var made struct {
@@ -42,9 +42,9 @@ func TestPrincipalAddressByUsername(t *testing.T) {
 		t.Fatalf("create alice: id missing (%v) in %s", err, created)
 	}
 
-	// Get by uuid and by username return the same principal.
-	codeU, byUUID := c.send(ownerTok, "GET", "/principals/"+made.ID, nil)
-	codeN, byName := c.send(ownerTok, "GET", "/principals/alice", nil)
+	// Get by uuid and by username return the same user.
+	codeU, byUUID := c.send(ownerTok, "GET", "/users/"+made.ID, nil)
+	codeN, byName := c.send(ownerTok, "GET", "/users/alice", nil)
 	if codeU != 200 || codeN != 200 {
 		t.Fatalf("get by uuid/username: codes %d/%d", codeU, codeN)
 	}
@@ -56,16 +56,16 @@ func TestPrincipalAddressByUsername(t *testing.T) {
 	}
 
 	// A :verb custom method resolves the username too: archive alice by name.
-	if code, body := c.send(ownerTok, "POST", "/principals/alice:archive", nil); code != http.StatusNoContent {
+	if code, body := c.send(ownerTok, "POST", "/users/alice:archive", nil); code != http.StatusNoContent {
 		t.Fatalf("archive by username: want 204, got %d (%s)", code, body)
 	}
-	// She now reads archived (get still resolves an archived principal by username).
-	if code, body := c.send(ownerTok, "GET", "/principals/alice", nil); code != 200 || !bytes.Contains(body, []byte(`"archived_at"`)) {
+	// She now reads archived (get still resolves an archived user by username).
+	if code, body := c.send(ownerTok, "GET", "/users/alice", nil); code != 200 || !bytes.Contains(body, []byte(`"archived_at"`)) {
 		t.Fatalf("archived read by username: code %d body %s", code, body)
 	}
 
 	// An unknown username is a 404, the same as an unknown id.
-	if code, _ := c.send(ownerTok, "GET", "/principals/nobody", nil); code != http.StatusNotFound {
+	if code, _ := c.send(ownerTok, "GET", "/users/nobody", nil); code != http.StatusNotFound {
 		t.Fatalf("unknown username: want 404, got %d", code)
 	}
 }

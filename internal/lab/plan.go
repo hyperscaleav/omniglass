@@ -258,7 +258,7 @@ type Options struct {
 	// Pushers are the outside actors the scenario declares (#1743), each
 	// with its token minted per run the same way: the emulator on the
 	// pusher's outpost holds the plaintext, and the seed grants the pusher's
-	// principal and sets its credential from the hash and non-secret
+	// user and sets its credential from the hash and non-secret
 	// prefix. Both lab kinds take them.
 	Pushers []Pusher
 	Owner   Owner
@@ -748,7 +748,7 @@ func ParseSiteOutpostTokenHashes(s string) (map[string]string, error) {
 
 // Pusher is one outside actor a lab runs (#1743): a pusher its scenario
 // declared, the profile its emulator device runs, the outpost whose emulator
-// runs it, and the token minted for its principal this run. Token reaches
+// runs it, and the token minted for its user this run. Token reaches
 // that outpost's env alone; TokenHash and TokenPrefix reach the seed.
 type Pusher struct {
 	Name, Profile, Outpost string
@@ -768,7 +768,7 @@ func outpostPushers(ps []Pusher, outpost string) []simoutpost.Pusher {
 }
 
 // checkPusherOutposts refuses a pusher planned onto an outpost the lab does not
-// run: its principal would be seeded and nothing would ever push for it.
+// run: its user would be seeded and nothing would ever push for it.
 func checkPusherOutposts(o Options) error {
 	outposts := map[string]bool{}
 	switch {

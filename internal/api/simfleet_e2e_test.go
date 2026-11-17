@@ -190,16 +190,16 @@ func TestSimulationFleetAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 		var pid string
-		if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
+		if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
 			t.Fatal(err)
 		}
 		for _, q := range []struct {
 			sql  string
 			args []any
 		}{
-			{`insert into service (principal_id, name) values ($1, $2)`, []any{pid, "simfleet-scoped-" + component}},
-			{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
-			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-scoped-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
+			{`insert into machine (user_id, name) values ($1, $2)`, []any{pid, "simfleet-scoped-" + component}},
+			{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
+			{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-scoped-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
 		} {
 			if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
 				t.Fatalf("%s: %v", q.sql, err)
@@ -325,7 +325,7 @@ func TestSimulationFleetAPI(t *testing.T) {
 		t.Fatalf("added = %+v, want panel-9 at the free 127.60.0.2 with one endpoint", added)
 	}
 	var driver, onOutpost string
-	if err := conn.QueryRow(ctx, `select coalesce(d.name, ''), n.name from endpoint e join outpost n on n.principal_id = e.outpost_id
+	if err := conn.QueryRow(ctx, `select coalesce(d.name, ''), n.name from endpoint e join outpost n on n.user_id = e.outpost_id
 		left join driver d on d.id = e.driver_id where e.component = (select id from component where name = 'panel-9')`).Scan(&driver, &onOutpost); err != nil {
 		t.Fatal(err)
 	}

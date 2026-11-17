@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestOutpostSchema proves the outpost table is the kind='outpost' principal detail table:
-// it is keyed by principal_id (a FK to principal), still carries the unique name
+// TestOutpostSchema proves the outpost table is the kind='outpost' user detail table:
+// it is keyed by user_id (a FK to user), still carries the unique name
 // the collection FKs reference, has enrolled_at, and no longer has the bespoke
 // enrollment_token column (the enrollment secret is a credential row now).
 // Skipped under -short.
@@ -25,8 +25,8 @@ func TestOutpostSchema(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// The detail-table shape: principal_id and enrolled_at present.
-	for _, col := range []string{"principal_id", "name", "enrolled_at"} {
+	// The detail-table shape: user_id and enrolled_at present.
+	for _, col := range []string{"user_id", "name", "enrolled_at"} {
 		var exists bool
 		if err := conn.QueryRow(ctx,
 			`select exists (select 1 from information_schema.columns where table_name = 'outpost' and column_name = $1)`,
@@ -48,7 +48,7 @@ func TestOutpostSchema(t *testing.T) {
 		t.Errorf("column outpost.enrollment_token should be gone (enrollment is a credential row)")
 	}
 
-	// principal_id is the primary key and a foreign key into principal.
+	// user_id is the primary key and a foreign key into user.
 	var pkCol string
 	if err := conn.QueryRow(ctx, `
 		select kcu.column_name
@@ -57,8 +57,8 @@ func TestOutpostSchema(t *testing.T) {
 		where tc.table_name = 'outpost' and tc.constraint_type = 'PRIMARY KEY'`).Scan(&pkCol); err != nil {
 		t.Fatalf("probe outpost primary key: %v", err)
 	}
-	if pkCol != "principal_id" {
-		t.Errorf("outpost primary key = %q, want principal_id", pkCol)
+	if pkCol != "user_id" {
+		t.Errorf("outpost primary key = %q, want user_id", pkCol)
 	}
 
 	// No name rule lives in the schema (#570). The outpost table used to carry its

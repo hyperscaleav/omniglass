@@ -56,8 +56,8 @@ func TestSimRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, q := range []string{
-		`insert into endpoint (name, transport, component, outpost_id, params) values ('dsp-1-tcp', 'tcp', (select id from component where name = 'dsp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.21.0.5:80"}'::jsonb)`,
-		`insert into endpoint (name, transport, component, outpost_id, params) values ('dsp-2-tcp', 'tcp', (select id from component where name = 'dsp-2'), (select principal_id from outpost where name = 'outpost-b'), '{"target":"127.21.0.6:80"}'::jsonb)`,
+		`insert into endpoint (name, transport, component, outpost_id, params) values ('dsp-1-tcp', 'tcp', (select id from component where name = 'dsp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.21.0.5:80"}'::jsonb)`,
+		`insert into endpoint (name, transport, component, outpost_id, params) values ('dsp-2-tcp', 'tcp', (select id from component where name = 'dsp-2'), (select user_id from outpost where name = 'outpost-b'), '{"target":"127.21.0.6:80"}'::jsonb)`,
 	} {
 		if _, err := conn.Exec(ctx, q); err != nil {
 			t.Fatalf("%s: %v", q, err)

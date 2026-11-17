@@ -104,7 +104,7 @@ func newStatusRig(t *testing.T, settle string) *statusRig {
 	}
 	t.Cleanup(func() { conn.Close(ctx) })
 	r := &statusRig{ctx: ctx, dsn: dsn, gw: gw, conn: conn, compID: comp.ID}
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&r.actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&r.actor); err != nil {
 		t.Fatal(err)
 	}
 	return r

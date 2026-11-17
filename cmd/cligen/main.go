@@ -469,7 +469,7 @@ func queryFields(op operation) []queryField {
 //
 // This replaces a rule that used only the collection nearest the leaf. That rule
 // could not distinguish two parents ending in the same noun, so
-// `/principals/{id}/grants` and `/principal-groups/{id}/grants` both became
+// `/users/{id}/grants` and `/user-groups/{id}/grants` both became
 // `grant create` and one silently shadowed the other. Across the 195 operations
 // it produced 24 collisions (`property list` seven ways), each of which had to
 // be found by a person typing it and then patched by hand in nameOverride. The

@@ -58,7 +58,7 @@ func TestLogLineIsComponentOnly(t *testing.T) {
 }
 
 // TestOutpostLogShape asserts the self-log home the split creates: outpost_log keyed
-// to outpost(principal_id) with the same cascade the old outpost arm had, and the
+// to outpost(user_id) with the same cascade the old outpost arm had, and the
 // (outpost_id, ts desc) index the newest-first list read leans on.
 func TestOutpostLogShape(t *testing.T) {
 	t.Parallel()

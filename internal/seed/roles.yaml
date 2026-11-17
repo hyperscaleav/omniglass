@@ -114,14 +114,14 @@ roles:
       - "task:*"
       - "system:create,update,delete,rename,move"
       - "location:create,update,delete,rename,move"
-      - "principal:*"
+      - "user:*"
       # read (the Users directory) and purge (the irreversible hard delete) are
-      # admin-sensitive: three-token permissions that principal:* (two tokens)
+      # admin-sensitive: three-token permissions that user:* (two tokens)
       # structurally cannot reach, so only admin (via these explicit grants) and
       # owner (via >) get the directory and the hard delete. Roles and groups gate
       # their directory the same way.
-      - "principal:read:admin"
-      - "principal:purge:admin"
+      - "user:read:admin"
+      - "user:purge:admin"
       # secret:> (not secret:*) so admin reaches the admin-sensitive tier
       # (secret:reveal:admin etc.) a two-token wildcard cannot; an admin-sensitive
       # secret is thus admin/owner-only, while operators hold the two-token actions
@@ -139,9 +139,9 @@ roles:
       # the install-wide floor under them.
       - "platform:*"
       - "settings:read,update"
-      - "principal_grant:*"
-      - "principal_group:*"
-      - "principal_group:read:admin"
+      - "user_grant:*"
+      - "user_group:*"
+      - "user_group:read:admin"
       - "outpost:*"
       - "role:read:admin"
       - "audit:read:admin"

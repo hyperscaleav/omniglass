@@ -60,7 +60,7 @@ func TestOutpostSimDevices(t *testing.T) {
 		t.Helper()
 		outpostExpr := "null"
 		if outpost != "" {
-			outpostExpr = "(select principal_id from outpost where name = '" + outpost + "')"
+			outpostExpr = "(select user_id from outpost where name = '" + outpost + "')"
 		}
 		exec(`insert into endpoint (name, transport, component, outpost_id, params) values ('` + name + `',
 			'` + typ + `',

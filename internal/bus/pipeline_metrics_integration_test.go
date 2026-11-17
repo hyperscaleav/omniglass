@@ -105,7 +105,7 @@ func TestTelemetryBatchLandsPipelineMetricsOverNATS(t *testing.T) {
 	srv := r.start(t, r.gw)
 	nc := r.enrollOutpost(t, srv)
 	if _, err := r.conn.Exec(r.ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('bar-1-tcp', 'tcp', (select id from component where name = 'bar-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+		('bar-1-tcp', 'tcp', (select id from component where name = 'bar-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := r.conn.Exec(r.ctx, `insert into task (id, mode, endpoint_id, enabled) values ('t-a', 'poll', (select id from endpoint where name = 'bar-1-tcp'), true)`); err != nil {

@@ -55,7 +55,7 @@ func TestOutpostLaneLandsEveryNativeKey(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:22"}'::jsonb)`); err != nil {
+		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values

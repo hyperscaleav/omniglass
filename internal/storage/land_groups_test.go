@@ -30,7 +30,7 @@ func newGroupFixture(t *testing.T) groupFixture {
 	err := f.conn.QueryRow(ctx, `select
 		(select id::text from component where name = 'disp-1'),
 		(select id::text from component where name = 'disp-2'),
-		(select principal_id::text from outpost where name = 'edge-1')`).Scan(&f.disp1, &f.disp2, &f.outpost)
+		(select user_id::text from outpost where name = 'edge-1')`).Scan(&f.disp1, &f.disp2, &f.outpost)
 	if err != nil {
 		t.Fatalf("read ids: %v", err)
 	}

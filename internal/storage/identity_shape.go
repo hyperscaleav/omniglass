@@ -121,7 +121,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"driver":    {Shape: ShapeKeyBearing}, "endpoint": {Shape: ShapeKeyBearing},
 	"location":      {Shape: ShapeKeyBearing},
 	"location_type": {Shape: ShapeKeyBearing}, "outpost": {Shape: ShapeKeyBearing},
-	"principal_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
+	"user_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
 	"role": {Shape: ShapeKeyBearing}, "secret": {Shape: ShapeKeyBearing},
 	"secret_type": {Shape: ShapeKeyBearing}, "standard": {Shape: ShapeKeyBearing},
 	"system": {Shape: ShapeKeyBearing}, "system_slot": {Shape: ShapeKeyBearing},
@@ -146,13 +146,13 @@ var IdentityShapes = map[string]TableIdentity{
 	"action_rule":         {Shape: ShapeKeyBearing, Reason: "page-ops-high, a subscription a notification names as what queued it"},
 
 	// A human identifier that is not a name. These are the exceptions worth stating.
-	"human": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule and its own uniqueness, not the " +
-		"entity name rule; a principal route takes it beside the uuid (#163, #1133)"},
-	"service": {Shape: ShapeHumanNotAKey, Reason: "the username analogue for kind=service: unique like one " +
-		"(#563), on its own rule rather than the entity name rule; a principal route takes it beside " +
+	"person": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule and its own uniqueness, not the " +
+		"entity name rule; a user route takes it beside the uuid (#163, #1133)"},
+	"machine": {Shape: ShapeHumanNotAKey, Reason: "the username analogue for kind=machine: unique like one " +
+		"(#563), on its own rule rather than the entity name rule; a user route takes it beside " +
 		"the uuid, and a word that is both a username and a service name addresses neither (#1133)",
-		NoLabel: "the identifier IS what every surface shows: principalIdent resolves a service " +
-			"principal to service.name, and it cannot resolve to a label, which is optional and not unique"},
+		NoLabel: "the identifier IS what every surface shows: userIdent resolves a service " +
+			"user to service.name, and it cannot resolve to a label, which is optional and not unique"},
 	"file": {Shape: ShapeHumanNotAKey, Reason: "a filename with an extension (codec-firmware-2.1.4.txt): not " +
 		"unique and already the label; a file route takes it where exactly one file the caller can see " +
 		"carries it, and the uuid always (#1133)",
@@ -199,9 +199,9 @@ var IdentityShapes = map[string]TableIdentity{
 	"metric_block_mark":  {Shape: ShapeIDOnly, Reason: "how far the block folds have gone (#1528): one row, keyed by a constant true; nothing addresses it by name"},
 	"metric_declared":    {Shape: ShapeIDOnly, Reason: "a command's intended metric row, the metric lane's declared tier (#1275); read through its command, never named"},
 	"outpost_log":        {Shape: ShapeIDOnly},
-	"principal":          {Shape: ShapeIDOnly}, "principal_grant": {Shape: ShapeIDOnly},
-	"principal_group_member": {Shape: ShapeIDOnly},
-	"product_metric":         {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
+	"users":              {Shape: ShapeIDOnly}, "user_grant": {Shape: ShapeIDOnly},
+	"user_group_member": {Shape: ShapeIDOnly},
+	"product_metric":    {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
 	"property":         {Shape: ShapeIDOnly},
 	"retired_sample":   {Shape: ShapeIDOnly, Reason: "a retired sample or event row kept for audit (ADR-1100), keyed by its lane and the row's own id; nothing addresses it by name"},
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
@@ -220,7 +220,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"calc_rule_input":      {Shape: ShapeIDOnly, Reason: "one input of a calc rule, keyed by rule and position; its alias is an expression's binding, not an address"},
 	"endpoint_live":        {Shape: ShapeIDOnly, Reason: "when an endpoint last delivered a batch, keyed by the endpoint's uuid; nothing addresses it by name"},
 	"action_rule_target":   {Shape: ShapeIDOnly, Reason: "a target an action rule sends to, keyed by rule and target; nothing addresses it by name"},
-	"action_rule_opt_out":  {Shape: ShapeIDOnly, Reason: "a person opted out of a rule, keyed by rule and principal; nothing addresses it by name"},
+	"action_rule_opt_out":  {Shape: ShapeIDOnly, Reason: "a person opted out of a rule, keyed by rule and user; nothing addresses it by name"},
 	"notification":         {Shape: ShapeIDOnly, Reason: "one message on its way, keyed by its uuid (the Idempotency-Key a receiver sees); nothing addresses it by name"},
 	"webhook_token":        {Shape: ShapeIDOnly, Reason: "a webhook endpoint's token binding, keyed by the endpoint's uuid and found by the token's digest; nothing addresses it by name"},
 	"unclaimed_source":     {Shape: ShapeIDOnly, Reason: "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name"},

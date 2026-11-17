@@ -153,7 +153,7 @@ func sweepWindow(window time.Duration, polls []time.Duration) time.Duration {
 // driver's polls and the components' probes: the worklist it sends.
 func heldTasksQuery(outpost string) string {
 	return "select count(*) from task t join endpoint i on i.id = t.endpoint_id " +
-		"join outpost n on n.principal_id = i.outpost_id " +
+		"join outpost n on n.user_id = i.outpost_id " +
 		"where t.enabled and n.name = " + sqlLiteral(outpost)
 }
 
@@ -172,7 +172,7 @@ func installedWorklistQuery(outpost string) string {
 // driverTasksQuery counts the enabled driver polls an outpost runs.
 func driverTasksQuery(outpost string) string {
 	return "select count(*) from task t join endpoint i on i.id = t.endpoint_id " +
-		"join outpost n on n.principal_id = i.outpost_id " +
+		"join outpost n on n.user_id = i.outpost_id " +
 		"where t.enabled and t.mode = 'poll' and coalesce(t.spec->>'driver','') <> '' " +
 		"and n.name = " + sqlLiteral(outpost)
 }
@@ -184,7 +184,7 @@ func pollCPUQuery(outpost string, from, to time.Time, report time.Duration) stri
 	return "select coalesce(avg(m.value),0) from metric m " +
 		"join metric_series s on s.id = m.series_id " +
 		"join metric_type mt on mt.id = s.metric_type_id " +
-		"join outpost n on n.principal_id = s.collector_outpost_id " +
+		"join outpost n on n.user_id = s.collector_outpost_id " +
 		"where mt.name = 'poll-cpu-time' and n.name = " + sqlLiteral(outpost) +
 		" and m.ts >= to_timestamp(" + epochLiteral(from.Add(report)) + ") and m.ts <= to_timestamp(" + epochLiteral(to) + ")"
 }

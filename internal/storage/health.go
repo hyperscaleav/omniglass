@@ -585,7 +585,7 @@ func ownerArcExprN(ownerKind string, n int) string {
 	case "component", "system", "location":
 		return fmt.Sprintf("$%d::uuid", n)
 	case "outpost":
-		return fmt.Sprintf("(select principal_id from outpost where name = $%d::text)", n)
+		return fmt.Sprintf("(select user_id from outpost where name = $%d::text)", n)
 	}
 	return fmt.Sprintf("$%d::text", n)
 }

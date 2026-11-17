@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// setupAllViewer inserts a service principal with a single viewer@all grant and
+// setupAllViewer inserts a service user with a single viewer@all grant and
 // returns its bearer token: an all-scope reader that still lacks outpost:create /
 // outpost:enroll, so it exercises the capability fast-reject independent of scope.
 func setupAllViewer(t *testing.T, ctx context.Context, dsn, label string) string {
@@ -27,10 +27,10 @@ func setupAllViewer(t *testing.T, ctx context.Context, dsn, label string) string
 	}
 	defer conn.Close(ctx)
 	var pid string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		t.Fatalf("insert principal: %v", err)
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, label); err != nil {
+	if _, err := conn.Exec(ctx, `insert into machine (user_id, name) values ($1, $2)`, pid, label); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	tok, hash, prefix, err := auth.NewBearerToken()
@@ -38,12 +38,12 @@ func setupAllViewer(t *testing.T, ctx context.Context, dsn, label string) string
 		t.Fatalf("mint token: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
+		`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
 		pid, hash, prefix); err != nil {
 		t.Fatalf("insert credential: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'viewer'), 'all', null)`,
+		`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'viewer'), 'all', null)`,
 		pid); err != nil {
 		t.Fatalf("insert grant: %v", err)
 	}
@@ -52,7 +52,7 @@ func setupAllViewer(t *testing.T, ctx context.Context, dsn, label string) string
 
 // TestOutpostAPI drives the outpost enrollment surface over HTTP: an owner creates a
 // outpost, mints its enrollment token, and the outpost claims its NATS credential; a
-// bad name is rejected, a wrong token is a 401, and a principal without outpost
+// bad name is rejected, a wrong token is a 401, and a user without outpost
 // capability is forbidden. Skipped under -short.
 func TestOutpostAPI(t *testing.T) {
 	t.Parallel()

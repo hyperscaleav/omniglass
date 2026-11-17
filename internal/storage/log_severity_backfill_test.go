@@ -79,7 +79,7 @@ func TestLogSeverityBackfillCanonicalizesBothTables(t *testing.T) {
 	}
 	for _, sev := range []string{"WARN", "fatal", "bogus"} {
 		mustExec(t, f.conn, `insert into outpost_log (ts, outpost_id, source, severity, message)
-			values (now(), (select principal_id from outpost where name = 'sev-outpost'), 'outpost', $1, $1)`, sev)
+			values (now(), (select user_id from outpost where name = 'sev-outpost'), 'outpost', $1, $1)`, sev)
 	}
 
 	// The backfill predates #2059, which renamed node_log; it runs here over
