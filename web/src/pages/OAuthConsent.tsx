@@ -60,6 +60,14 @@ export default function OAuthConsent() {
                         <span class="font-semibold">{c().client_name}</span> is asking to act for you over MCP. Its answer goes back to{" "}
                         <span class="font-data">{redirectHost(req!.redirect_uri)}</span>.
                       </p>
+                      <Show when={c().metadata_host}>
+                        {(host) => (
+                          <p class="text-sm" data-testid="metadata-host">
+                            It is identified by a document served from <span class="font-data">{host()}</span>. The name is the client's own; the host is the
+                            part it cannot choose.
+                          </p>
+                        )}
+                      </Show>
 
                       <fieldset class="flex flex-col gap-2">
                         <legend class="mb-1 text-sm font-semibold">Roles it may act under</legend>

@@ -90,6 +90,19 @@ describe("OAuth consent page", () => {
     });
   });
 
+  it("names the host serving a metadata document client, and no host for a registered one", async () => {
+    stub(REQ, { ...CLIENT, metadata_host: "client.example" });
+    const { unmount } = mount();
+    expect(await screen.findByText("client.example")).toBeTruthy();
+    expect(screen.getByTestId("metadata-host").textContent).toContain("served from client.example");
+    unmount();
+    vi.restoreAllMocks();
+    stub(REQ);
+    mount();
+    expect(await screen.findByText("Connect Claude Code")).toBeTruthy();
+    expect(screen.queryByTestId("metadata-host")).toBeNull();
+  });
+
   it("denies with no roles and sends access_denied back", async () => {
     const { posted, assign } = stub(REQ);
     mount();

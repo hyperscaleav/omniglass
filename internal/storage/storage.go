@@ -203,6 +203,12 @@ type Gateway interface {
 	RegisterOAuthClient(ctx context.Context, name string, redirectURIs []string) (OAuthClient, error)
 	// GetOAuthClient returns a registered OAuth client, false when there is none.
 	GetOAuthClient(ctx context.Context, id string) (OAuthClient, bool, error)
+	// GetOAuthClientByURL returns the client a metadata document URL names
+	// (#2074), false when its document has not been read.
+	GetOAuthClientByURL(ctx context.Context, metadataURL string) (OAuthClient, bool, error)
+	// UpsertOAuthMetadataClient stores what a client's metadata document says,
+	// keyed by its URL, and marks it fetched now.
+	UpsertOAuthMetadataClient(ctx context.Context, metadataURL, name string, redirectURIs []string) (OAuthClient, error)
 	// CreateOAuthCode stores the authorization code a person's consent produced.
 	CreateOAuthCode(ctx context.Context, c OAuthCode) error
 	// ConsumeOAuthCode deletes and returns a live code, false when there is none.

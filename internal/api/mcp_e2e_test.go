@@ -46,7 +46,7 @@ type mcpStack struct {
 	ctx   context.Context
 }
 
-func newMCPStack(t *testing.T) *mcpStack {
+func newMCPStack(t *testing.T, opts ...api.Option) *mcpStack {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -58,7 +58,7 @@ func newMCPStack(t *testing.T) *mcpStack {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
-	srv := httptest.NewServer(api.NewHandler(gw, api.WithVersion("test")))
+	srv := httptest.NewServer(api.NewHandler(gw, append([]api.Option{api.WithVersion("test")}, opts...)...))
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	owner := bootstrapOwnerTok(t, ctx, gw)

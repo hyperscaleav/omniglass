@@ -46,7 +46,7 @@ export function redirectHost(uri: string): string {
   }
 }
 
-export type OAuthClient = { id: string; client_name: string; redirect_uris: string[]; roles: string[] };
+export type OAuthClient = { id: string; client_name: string; redirect_uris: string[]; roles: string[]; metadata_host?: string };
 
 // fetchOAuthClient reads the registered client and the roles the caller may
 // approve for it; null when no such client is registered.
@@ -54,7 +54,7 @@ export async function fetchOAuthClient(id: string): Promise<OAuthClient | null> 
   const { data, error, response } = await api.GET("/auth/oauth-clients/{id}", { params: { path: { id } } });
   if (response.status === 404) return null;
   if (error || !data) throw new Error("Could not read the client.");
-  return { id: data.id, client_name: data.client_name, redirect_uris: data.redirect_uris ?? [], roles: data.roles ?? [] };
+  return { id: data.id, client_name: data.client_name, redirect_uris: data.redirect_uris ?? [], roles: data.roles ?? [], metadata_host: data.metadata_host };
 }
 
 // answerConsent sends the person's answer and returns where the browser goes

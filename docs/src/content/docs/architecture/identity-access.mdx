@@ -89,8 +89,7 @@ Where the build differs from the present-tense design below (each logged in the
   is issued: an AI acts through an [agent token](#agent-tokens) on a person's credential. Built: the
   mint, the intersection, the plaintext ceiling, `secret:bind`, the channel allowlist and the audit `agent` column.
   OAuth 2.1 sign-in for MCP clients ([below](#mcp-clients-sign-in-with-oauth-21)) is built, refresh tokens
-  included, without client metadata documents
-  ([#2074](https://github.com/hyperscaleav/omniglass/issues/2074)).
+  and client metadata documents included.
   Not built yet: narrowing an agent token to a location, the console's agent fields, and omnibot's marking
   ([#1179](https://github.com/hyperscaleav/omniglass/issues/1179)).
 - **The required permission is published per route in the OpenAPI spec**
@@ -813,9 +812,24 @@ Omniglass is both the resource server and the authorization server:
 - **Registration.** `POST /oauth/register` is open dynamic client registration (RFC 7591): a public
   client (no secret, `token_endpoint_auth_method` `none`), the code and refresh grants, and redirect URIs that
   are https or http on a loopback host. A registration nobody consented to within a day is pruned.
+- **Client metadata documents.** A client may skip registration and use an https URL as its
+  `client_id`, the URL serving its metadata (the MCP spec's client ID metadata document); the
+  authorization server metadata says so with `client_id_metadata_document_supported`. At authorize the
+  server fetches the document through the [egress contract](/architecture/alarms-actions/#durability-and-egress) a webhook sends through (never a private or
+  loopback address, whatever the install's allow list names, 5 KB at most), requires its `client_id` to
+  equal the URL it came from, and holds the client to the redirect URIs it lists, under the same rules
+  as a registration. The client is kept keyed by its URL and refetched after ten minutes; a refetch
+  that fails refuses the client rather than trusting the stale copy. The client is named by its URL
+  alone; its stored id is no client to the OAuth endpoints, and consent refuses a stale document. A document that fails any check is
+  a 400 with no redirect. The consent page names the host serving the document beside the client's
+  self-chosen name, since the host is the part it cannot choose. The token and refresh grants take the
+  URL as `client_id` without fetching, and, since a client may send it as an HTTP Basic username
+  (RFC 6749 2.3.1), read it from there too; a form value differing from the header is refused
+  ([ADR-2074](/architecture/decisions/#adr-2074-an-mcp-client-may-name-itself-by-a-metadata-document-url-fetched-through-egress)).
 - **Authorization.** `GET /oauth/authorize` takes the code response type, S256 PKCE and the `resource`
   (this server's `/mcp`); an unknown client or a redirect URI it did not register is a 400 with no
-  redirect, and the redirect is compared exactly. A valid request goes to the console's consent
+  redirect, and the redirect is compared exactly, except that an http loopback redirect matches on
+  any port, since a native client listens on whichever is free (OAuth 2.1, RFC 8252 section 7.3). A valid request goes to the console's consent
   page, where the signed-in person approves roles or denies. The approval
   (`authorize-oauth-client`) is a human's alone: an agent token is refused it, like minting a token,
   so an agent cannot consent for another client. Each approved role must be one the person covers.

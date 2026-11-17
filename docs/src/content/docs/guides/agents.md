@@ -21,7 +21,8 @@ claude mcp add --transport http omniglass https://omniglass.example.com/mcp
 ```
 
 The first call is refused with a pointer to the server's OAuth metadata. The client registers
-itself, opens your browser on the console's **Connect** page, and you choose the roles it may act
+itself (or, if it publishes a client metadata document, names itself by that document's URL, and the
+Connect page shows the host serving it), opens your browser on the console's **Connect** page, and you choose the roles it may act
 under (only roles whose capabilities you hold are offered). Approving hands the client a one-time
 code it exchanges, with its PKCE proof, for an **agent token** named after the client: accepted on
 MCP only, holding what the chosen roles **and** you hold, with the plaintext ceiling below. The

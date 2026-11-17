@@ -186,7 +186,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"audit_log":    {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
 	"component_dependency": {Shape: ShapeIDOnly, Reason: "a dependency edge (#1648), keyed by its dependent, upstream and kind; addressed through its dependent by kind and upstream, never named"},
 	"credential":           {Shape: ShapeIDOnly},
-	"oauth_client": {Shape: ShapeIDOnly, Reason: "an MCP client that registered itself (#2048), addressed by its client id; " +
+	"oauth_client": {Shape: ShapeIDOnly, Reason: "an MCP client that registered itself (#2048) or is named by its metadata document URL (#2074), addressed by its client id; " +
 		"the name it declared is shown at consent, is not unique and is no key"},
 	"event": {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
 	"location_type_metric": {Shape: ShapeIDOnly}, "location_type_property": {Shape: ShapeIDOnly},

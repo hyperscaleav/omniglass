@@ -300,7 +300,7 @@
     {
       "table": "oauth_client",
       "shape": "id only",
-      "reason": "an MCP client that registered itself (#2048), addressed by its client id; the name it declared is shown at consent, is not unique and is no key",
+      "reason": "an MCP client that registered itself (#2048) or is named by its metadata document URL (#2074), addressed by its client id; the name it declared is shown at consent, is not unique and is no key",
       "labelled": false
     },
     {

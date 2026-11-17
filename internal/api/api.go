@@ -47,6 +47,11 @@ type options struct {
 	// a test hands it its receiver's certificate roots. The zero value is the
 	// production client.
 	egressOpts egress.Options
+	// metadataPolicy is the allow list a client metadata document fetch
+	// runs under (#2074): empty in production, whatever the install's
+	// egress_allow says, so an unauthenticated authorize never reaches a
+	// private address. A test names its loopback document server here.
+	metadataPolicy egress.Policy
 	// natsURL is the address the node-claim reply hands back, so a node needs only
 	// the server URL to reach both the API and the bus.
 	natsURL     string
@@ -103,6 +108,13 @@ func WithLab(b bool) Option { return func(o *options) { o.lab = b } }
 // WithEgressOptions tunes the outbound client a notification target's :test
 // send uses (a test's certificate roots).
 func WithEgressOptions(e egress.Options) Option { return func(o *options) { o.egressOpts = e } }
+
+// WithMetadataFetchPolicy sets the allow list client metadata document
+// fetches run under, for a test's loopback document server; production
+// leaves it empty.
+func WithMetadataFetchPolicy(p egress.Policy) Option {
+	return func(o *options) { o.metadataPolicy = p }
+}
 
 // WithSecureCookies marks the session cookie Secure (set behind TLS).
 func WithSecureCookies(b bool) Option { return func(o *options) { o.secureCookies = b } }
@@ -211,7 +223,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 
 	// OAuth 2.1 sign-in for MCP clients (#2048, ADR-2048): the metadata,
 	// registration, authorization and token endpoints, at the root beside /mcp.
-	mountOAuth(r, gw, o.trustedProxies)
+	mountOAuth(r, gw, o.trustedProxies, o.egressOpts, o.metadataPolicy)
 
 	return r
 }

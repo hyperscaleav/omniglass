@@ -83,29 +83,35 @@ func oauthHandler(t *testing.T, name string, consent func(context.Context, strin
 		DynamicClientRegistrationConfig: &auth.DynamicClientRegistrationConfig{
 			Metadata: &oauthex.ClientRegistrationMetadata{ClientName: name, RedirectURIs: []string{oauthRedirect}},
 		},
-		AuthorizationCodeFetcher: func(ctx context.Context, args *auth.AuthorizationArgs) (*auth.AuthorizationResult, error) {
-			back, _, err := consent(ctx, args.URL)
-			if err != nil {
-				return nil, err
-			}
-			u, err := url.Parse(back)
-			if err != nil {
-				return nil, err
-			}
-			if u.Scheme+"://"+u.Host+u.Path != oauthRedirect {
-				return nil, fmt.Errorf("consent sent the browser to %s, want the registered redirect", back)
-			}
-			q := u.Query()
-			if e := q.Get("error"); e != "" {
-				return nil, errors.New(e)
-			}
-			return &auth.AuthorizationResult{Code: q.Get("code"), State: q.Get("state"), Iss: q.Get("iss")}, nil
-		},
+		AuthorizationCodeFetcher: oauthHandlerFetcher(consent),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return h
+}
+
+// oauthHandlerFetcher is the SDK's browser step played by consent: it reads the
+// code back off the redirect the console sends the browser to.
+func oauthHandlerFetcher(consent func(context.Context, string) (string, int, error)) auth.AuthorizationCodeFetcher {
+	return func(ctx context.Context, args *auth.AuthorizationArgs) (*auth.AuthorizationResult, error) {
+		back, _, err := consent(ctx, args.URL)
+		if err != nil {
+			return nil, err
+		}
+		u, err := url.Parse(back)
+		if err != nil {
+			return nil, err
+		}
+		if u.Scheme+"://"+u.Host+u.Path != oauthRedirect {
+			return nil, fmt.Errorf("consent sent the browser to %s, want the registered redirect", back)
+		}
+		q := u.Query()
+		if e := q.Get("error"); e != "" {
+			return nil, errors.New(e)
+		}
+		return &auth.AuthorizationResult{Code: q.Get("code"), State: q.Get("state"), Iss: q.Get("iss")}, nil
+	}
 }
 
 func (s *mcpStack) oauthConnect(h *auth.AuthorizationCodeHandler) (*sdk.ClientSession, error) {
