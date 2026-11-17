@@ -50,43 +50,23 @@ identity: {
     owner_kind: text {constraint: foreign_key}
     owner_ref: uuid {constraint: foreign_key}
   }
-  human: {
-    shape: sql_table
-    principal_id: uuid {constraint: primary_key}
-  }
   impersonation_session: {
     shape: sql_table
     id: uuid {constraint: primary_key}
-    real_actor_principal_id: uuid {constraint: foreign_key}
-    target_principal_id: uuid {constraint: foreign_key}
+    real_actor_user_id: uuid {constraint: foreign_key}
+    target_user_id: uuid {constraint: foreign_key}
   }
-  principal: {
+  machine: {
     shape: sql_table
-    id: uuid {constraint: primary_key}
+    user_id: uuid {constraint: primary_key}
   }
-  principal_grant: {
+  person: {
     shape: sql_table
-    id: uuid {constraint: primary_key}
-    group_id: uuid {constraint: foreign_key}
-    principal_id: uuid {constraint: foreign_key}
-    role_id: uuid {constraint: foreign_key}
-  }
-  principal_group: {
-    shape: sql_table
-    id: uuid {constraint: primary_key}
-  }
-  principal_group_member: {
-    shape: sql_table
-    group_id: uuid {constraint: primary_key}
-    principal_id: uuid {constraint: primary_key}
+    user_id: uuid {constraint: primary_key}
   }
   role: {
     shape: sql_table
     id: uuid {constraint: primary_key}
-  }
-  service: {
-    shape: sql_table
-    principal_id: uuid {constraint: primary_key}
   }
   slot_choice: {
     shape: sql_table
@@ -119,6 +99,26 @@ identity: {
     shape: sql_table
     component_type_id: uuid {constraint: primary_key}
     slot_id: uuid {constraint: primary_key}
+  }
+  user_grant: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    group_id: uuid {constraint: foreign_key}
+    role_id: uuid {constraint: foreign_key}
+    user_id: uuid {constraint: foreign_key}
+  }
+  user_group: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+  }
+  user_group_member: {
+    shape: sql_table
+    group_id: uuid {constraint: primary_key}
+    user_id: uuid {constraint: primary_key}
+  }
+  users: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
   }
 }
 
@@ -253,12 +253,12 @@ telemetry: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     notification_type_id: uuid {constraint: foreign_key}
-    owner_principal_id: uuid {constraint: foreign_key}
+    owner_user_id: uuid {constraint: foreign_key}
   }
   action_rule_opt_out: {
     shape: sql_table
-    principal_id: uuid {constraint: primary_key}
     rule_id: uuid {constraint: primary_key}
+    user_id: uuid {constraint: primary_key}
   }
   action_rule_target: {
     shape: sql_table
@@ -418,16 +418,16 @@ telemetry: {
     alarm_id: uuid {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
     notification_type_id: uuid {constraint: foreign_key}
-    recipient_principal_id: uuid {constraint: foreign_key}
+    recipient_user_id: uuid {constraint: foreign_key}
     rule_id: uuid {constraint: foreign_key}
     target_id: uuid {constraint: foreign_key}
   }
   notification_target: {
     shape: sql_table
     id: uuid {constraint: primary_key}
-    principal_group_id: uuid {constraint: foreign_key}
-    principal_id: uuid {constraint: foreign_key}
     secret_id: uuid {constraint: foreign_key}
+    user_group_id: uuid {constraint: foreign_key}
+    user_id: uuid {constraint: foreign_key}
   }
   notification_type: {
     shape: sql_table
@@ -473,7 +473,7 @@ collection: {
   }
   outpost: {
     shape: sql_table
-    principal_id: uuid {constraint: primary_key}
+    user_id: uuid {constraint: primary_key}
     location_id: uuid {constraint: foreign_key}
     platform_component_id: uuid {constraint: foreign_key}
   }
@@ -518,7 +518,7 @@ config: {
     shape: sql_table
     id: uuid {constraint: primary_key}
     oauth_client_id: uuid {constraint: foreign_key}
-    principal_id: uuid {constraint: foreign_key}
+    user_id: uuid {constraint: foreign_key}
   }
   lab_mark: {
     shape: sql_table
@@ -536,7 +536,7 @@ config: {
     shape: sql_table
     code_hash: bytea {constraint: primary_key}
     client_id: uuid {constraint: foreign_key}
-    principal_id: uuid {constraint: foreign_key}
+    user_id: uuid {constraint: foreign_key}
   }
   oauth_refresh: {
     shape: sql_table
@@ -597,8 +597,8 @@ audit: {
   audit_log: {
     shape: sql_table
     id: uuid {constraint: primary_key}
-    actor_principal_id: uuid {constraint: foreign_key}
-    real_actor_principal_id: uuid {constraint: foreign_key}
+    actor_user_id: uuid {constraint: foreign_key}
+    real_actor_user_id: uuid {constraint: foreign_key}
   }
   retired_sample: {
     shape: sql_table
@@ -606,8 +606,8 @@ audit: {
   }
 }
 
-audit.audit_log.actor_principal_id -> identity.principal.id
-audit.audit_log.real_actor_principal_id -> identity.principal.id
+audit.audit_log.actor_user_id -> identity.users.id
+audit.audit_log.real_actor_user_id -> identity.users.id
 catalog.component_type.parent_id -> catalog.component_type.id
 catalog.product.component_type_id -> catalog.component_type.id
 catalog.product.driver_id -> catalog.driver.id
@@ -629,8 +629,8 @@ collection.identity_binding.property_type_id -> telemetry.property_type.id
 collection.identity_binding.system_id -> fleet.system.id
 collection.outpost.location_id -> fleet.location.id
 collection.outpost.platform_component_id -> fleet.component.id
-collection.outpost.principal_id -> identity.principal.id
-collection.outpost_log.outpost_id -> collection.outpost.principal_id
+collection.outpost.user_id -> identity.users.id
+collection.outpost_log.outpost_id -> collection.outpost.user_id
 collection.platform_server.platform_component_id -> fleet.component.id
 collection.sim_impairment.component_id -> fleet.component.id
 collection.task.endpoint_id -> fleet.endpoint.id
@@ -639,9 +639,9 @@ collection.unbound_identity.property_type_id -> telemetry.property_type.id
 collection.webhook_token.endpoint_id -> fleet.endpoint.id
 collection.webhook_token.secret_id -> config.secret.id
 config.credential.oauth_client_id -> config.oauth_client.id
-config.credential.principal_id -> identity.principal.id
+config.credential.user_id -> identity.users.id
 config.oauth_code.client_id -> config.oauth_client.id
-config.oauth_code.principal_id -> identity.principal.id
+config.oauth_code.user_id -> identity.users.id
 config.oauth_refresh.credential_id -> config.credential.id
 config.secret.component_id -> fleet.component.id
 config.secret.location_id -> fleet.location.id
@@ -653,7 +653,7 @@ config.variable.system_id -> fleet.system.id
 content.file.sha256 -> content.blob.sha256
 content.tag_binding.component_id -> fleet.component.id
 content.tag_binding.location_id -> fleet.location.id
-content.tag_binding.outpost_id -> collection.outpost.principal_id
+content.tag_binding.outpost_id -> collection.outpost.user_id
 content.tag_binding.system_id -> fleet.system.id
 content.tag_binding.tag_id -> content.tag.id
 fleet.component.location_id -> fleet.location.id
@@ -663,7 +663,7 @@ fleet.component_dependency.component_id -> fleet.component.id
 fleet.component_dependency.upstream_id -> fleet.component.id
 fleet.endpoint.component -> fleet.component.id
 fleet.endpoint.driver_id -> catalog.driver.id
-fleet.endpoint.outpost_id -> collection.outpost.principal_id
+fleet.endpoint.outpost_id -> collection.outpost.user_id
 fleet.endpoint_live.endpoint_id -> fleet.endpoint.id
 fleet.location.location_type -> fleet.location_type.id
 fleet.location.parent_id -> fleet.location.id
@@ -681,15 +681,10 @@ identity.choice_alternate.choice_id -> identity.slot_choice.id
 identity.choice_alternate.choice_id -> identity.slot_choice.id
 identity.choice_alternate.owner_kind -> identity.slot_choice.owner_kind
 identity.choice_alternate.owner_ref -> identity.slot_choice.owner_ref
-identity.human.principal_id -> identity.principal.id
-identity.impersonation_session.real_actor_principal_id -> identity.principal.id
-identity.impersonation_session.target_principal_id -> identity.principal.id
-identity.principal_grant.group_id -> identity.principal_group.id
-identity.principal_grant.principal_id -> identity.principal.id
-identity.principal_grant.role_id -> identity.role.id
-identity.principal_group_member.group_id -> identity.principal_group.id
-identity.principal_group_member.principal_id -> identity.principal.id
-identity.service.principal_id -> identity.principal.id
+identity.impersonation_session.real_actor_user_id -> identity.users.id
+identity.impersonation_session.target_user_id -> identity.users.id
+identity.machine.user_id -> identity.users.id
+identity.person.user_id -> identity.users.id
 identity.slot_choice.standard_id -> catalog.standard.id
 identity.slot_choice.system_id -> fleet.system.id
 identity.system_slot.alternate_id -> identity.choice_alternate.id
@@ -704,18 +699,23 @@ identity.system_slot_product.product_id -> catalog.product.id
 identity.system_slot_product.slot_id -> identity.system_slot.id
 identity.system_slot_type.component_type_id -> catalog.component_type.id
 identity.system_slot_type.slot_id -> identity.system_slot.id
+identity.user_grant.group_id -> identity.user_group.id
+identity.user_grant.role_id -> identity.role.id
+identity.user_grant.user_id -> identity.users.id
+identity.user_group_member.group_id -> identity.user_group.id
+identity.user_group_member.user_id -> identity.users.id
 telemetry.action_rule.notification_type_id -> telemetry.notification_type.id
-telemetry.action_rule.owner_principal_id -> identity.principal.id
-telemetry.action_rule_opt_out.principal_id -> identity.principal.id
+telemetry.action_rule.owner_user_id -> identity.users.id
 telemetry.action_rule_opt_out.rule_id -> telemetry.action_rule.id
+telemetry.action_rule_opt_out.user_id -> identity.users.id
 telemetry.action_rule_target.rule_id -> telemetry.action_rule.id
 telemetry.action_rule_target.target_id -> telemetry.notification_target.id
-telemetry.alarm.acknowledged_by -> identity.principal.id
+telemetry.alarm.acknowledged_by -> identity.users.id
 telemetry.alarm.component_id -> fleet.component.id
 telemetry.alarm.raised_by_rule_id -> telemetry.event_rule.id
 telemetry.alarm.severity -> telemetry.severity_level.name
 telemetry.alarm_snooze.component_id -> fleet.component.id
-telemetry.alarm_snooze.snoozed_by -> identity.principal.id
+telemetry.alarm_snooze.snoozed_by -> identity.users.id
 telemetry.calc_pending.component_id -> fleet.component.id
 telemetry.calc_pending.rule_id -> telemetry.calc_rule.id
 telemetry.calc_pending.system_id -> fleet.system.id
@@ -732,7 +732,7 @@ telemetry.command.command_type_id -> telemetry.command_type.id
 telemetry.command.component_id -> fleet.component.id
 telemetry.command.dispatched_endpoint_id -> fleet.endpoint.id
 telemetry.command.location_id -> fleet.location.id
-telemetry.command.outpost_id -> collection.outpost.principal_id
+telemetry.command.outpost_id -> collection.outpost.user_id
 telemetry.command.settled_event_id -> telemetry.event.id
 telemetry.command.system_id -> fleet.system.id
 telemetry.command_type.target_metric_type_id -> telemetry.metric_type.id
@@ -742,7 +742,7 @@ telemetry.event.component_id -> fleet.component.id
 telemetry.event.derived_by_rule_id -> telemetry.event_rule.id
 telemetry.event.event_type_id -> telemetry.event_type.id
 telemetry.event.location_id -> fleet.location.id
-telemetry.event.outpost_id -> collection.outpost.principal_id
+telemetry.event.outpost_id -> collection.outpost.user_id
 telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> fleet.system.id
@@ -762,23 +762,23 @@ telemetry.metric_declared.series_id -> telemetry.metric_series.id
 telemetry.metric_series.component_id -> fleet.component.id
 telemetry.metric_series.location_id -> fleet.location.id
 telemetry.metric_series.metric_type_id -> telemetry.metric_type.id
-telemetry.metric_series.outpost_id -> collection.outpost.principal_id
+telemetry.metric_series.outpost_id -> collection.outpost.user_id
 telemetry.metric_series.system_id -> fleet.system.id
 telemetry.metric_trend.series_id -> telemetry.metric_series.id
 telemetry.notification.alarm_id -> telemetry.alarm.id
 telemetry.notification.component_id -> fleet.component.id
 telemetry.notification.notification_type_id -> telemetry.notification_type.id
-telemetry.notification.recipient_principal_id -> identity.principal.id
+telemetry.notification.recipient_user_id -> identity.users.id
 telemetry.notification.rule_id -> telemetry.action_rule.id
 telemetry.notification.target_id -> telemetry.notification_target.id
-telemetry.notification_target.principal_group_id -> identity.principal_group.id
-telemetry.notification_target.principal_id -> identity.principal.id
 telemetry.notification_target.secret_id -> config.secret.id
+telemetry.notification_target.user_group_id -> identity.user_group.id
+telemetry.notification_target.user_id -> identity.users.id
 telemetry.property.command_id -> telemetry.command.id
 telemetry.property.component_id -> fleet.component.id
 telemetry.property.event_id -> telemetry.event.id
 telemetry.property.location_id -> fleet.location.id
-telemetry.property.outpost_id -> collection.outpost.principal_id
+telemetry.property.outpost_id -> collection.outpost.user_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
 ```

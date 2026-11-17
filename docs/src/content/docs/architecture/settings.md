@@ -99,9 +99,9 @@ threshold past which the server logs and counts a query as slow, re-read each re
 ## Storage: one override table, unscoped
 
 The declared defaults and the file layer live in memory, so Postgres holds **only the override
-levels**: a single `setting_override(scope, principal_id, namespace, doc, locks, ...)` table with a
-`unique nulls not distinct (scope, principal_id, namespace)` identity (a surrogate `id` primary
-key; `principal_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a
+levels**: a single `setting_override(scope, user_id, namespace, doc, locks, ...)` table with a
+`unique nulls not distinct (scope, user_id, namespace)` identity (a surrogate `id` primary
+key; `user_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a
 CHECK naming the persisted levels, today `platform` alone, so a level the resolver would
 never read cannot be written and a future tier rename fails loudly. Restore falls out of the layer
 model: **restore a namespace** is a `DELETE` of its row, **restore everything** truncates the

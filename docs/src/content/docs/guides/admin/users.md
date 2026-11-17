@@ -14,7 +14,7 @@ builder](/guides/admin/access/#the-grant-builder) on the next page. The model un
 [identity and access](/architecture/identity-access/).
 
 Every row leads with the user's avatar, its uploaded picture when it has one and its
-initials otherwise. You see the directory only if you hold `principal:read:admin`, the
+initials otherwise. You see the directory only if you hold `user:read:admin`, the
 admin-tier read that a plain `*:read` cannot reach, so a viewer or field tech cannot enumerate
 users. Because a user is not part of any location or system tree, that grant is inherently
 **all-scope**: a location-scoped admin cannot list users.
@@ -23,7 +23,7 @@ users. Because a user is not part of any location or system tree, that grant is 
 
 - Pick a row to open its **blade**: a user's profile, the **user groups** it belongs to (open
   one to stack that group's blade over the user), and its **role grants** (each a role at a scope).
-- With `principal:create`, **New user** creates a person with a username and an optional initial
+- With `user:create`, **New user** creates a person with a username and an optional initial
   password (which must meet the **password policy**: at least 12 characters, not a common password,
   and not containing the username). **Generate** fills a strong random password, kept masked, with a
   **Copy** button to hand it over (or reveal it with the show/hide toggle). The new user can sign in right away and change that
@@ -34,7 +34,7 @@ users. Because a user is not part of any location or system tree, that grant is 
   error and blocks the submit before the round-trip (the same rules the server enforces). The
   same handle rule and inline check apply when you rename a user in edit mode. The new user's blade
   opens **directly in edit mode**, so you assign its roles right away and one **Save** commits them.
-- With `principal:update`, the footer **Edit** opens edit mode, where you change a user's label,
+- With `user:update`, the footer **Edit** opens edit mode, where you change a user's label,
   email, and **username**, or adjust its grants, and **Save** commits the lot; **Disable / Enable** sits in the
   footer's left slot, available without entering edit.
   Renaming is safe: their credentials and grants follow the account (they key on an internal id,
@@ -44,16 +44,16 @@ users. Because a user is not part of any location or system tree, that grant is 
   custom method a component, system, location, or group is renamed by. Only an administrator can
   change a username; the user cannot change their own.
 - A user has a **lifecycle** in the blade footer, escalating from reversible to permanent, and reads
-  pause to remove to destroy. The left slot is the reversible toggle: **Disable** (`principal:update`)
+  pause to remove to destroy. The left slot is the reversible toggle: **Disable** (`user:update`)
   suspends sign-in (the row reads **inactive**), **Enable** restores it. The kebab holds the stronger,
-  red steps: **Archive** (`principal:archive`) soft-deletes a user (hidden from the directory, cannot
-  sign in, reversibly), and **Purge** (`principal:purge:admin`, admin-sensitive so admin and owner only)
+  red steps: **Archive** (`user:archive`) soft-deletes a user (hidden from the directory, cannot
+  sign in, reversibly), and **Purge** (`user:purge:admin`, admin-sensitive so admin and owner only)
   permanently deletes an archived user and its grants and memberships, with a confirm. The audit trail
   is kept through a purge. An archived user shows **Restore** in the left slot; the **Show archived**
   toggle above the directory surfaces hidden accounts so you can re-find one to restore or purge. The
   **last active owner** cannot be disabled or archived, the same invariant that protects the last
   owner grant.
-- With `principal:reset-password`, the kebab on **another user's** blade holds **Reset password**: it
+- With `user:reset-password`, the kebab on **another user's** blade holds **Reset password**: it
   opens an inline panel with a password field (the same **Generate** and inline policy check as the New
   user form) and sets a new password for that user without their current one. The reset **immediately
   signs the user out of every session** (its API tokens are kept, a token not being tied to the
@@ -62,13 +62,13 @@ users. Because a user is not part of any location or system tree, that grant is 
   profile**, which verifies your current one) and on an **owner** (owners cannot be reset by anyone).
   This is a console path for what the CLI does with `omniglass set-password`; unlike that trusted
   direct-DB lane, the console reset enforces the password policy and the takeover guard.
-- With `principal:set-avatar` (an all-scope capability), a user's **Edit** blade gains an **Upload /
+- With `user:set-avatar` (an all-scope capability), a user's **Edit** blade gains an **Upload /
   Remove** picture panel: **Upload** sets that user's profile picture from an image file (JPEG, PNG, or
   WebP, normalized server-side to a small square), **Remove** clears it, and the change is audited with
   **you** as the actor. Without the capability the panel does not render, though the user's picture still
-  shows in the blade header and the directory. This is a console path for `omniglass principal setAvatar
+  shows in the blade header and the directory. This is a console path for `omniglass user setAvatar
   alice` / `removeAvatar alice` on the CLI.
-- With `principal:revoke-session`, another user's blade gains **Sessions** and **API tokens** sections:
+- With `user:revoke-session`, another user's blade gains **Sessions** and **API tokens** sections:
   every credential the account holds, listed with its `ogp_` locator, the **device** and **address** that
   created it, when it was **last active**, its expiry, and a token's **description**. **Revoke** any one, or
   use **Revoke all sessions** / **Revoke all tokens** in the blade's kebab, to cut off a lost laptop or
@@ -77,7 +77,7 @@ users. Because a user is not part of any location or system tree, that grant is 
   read-only (you can see where the account is signed in, not end it), and the affordance is hidden
   unless you hold the capability.
 
-From the CLI the same surface is `omniglass principal list` / `get` / `create` / `update` /
-`disable` / `enable` / `archive` / `restore` / `purge`, plus `principal session list alice` /
-`principal session revoke alice <session-id>` / `principal session revokeAll alice` (see the
+From the CLI the same surface is `omniglass user list` / `get` / `create` / `update` /
+`disable` / `enable` / `archive` / `restore` / `purge`, plus `user session list alice` /
+`user session revoke alice <session-id>` / `user session revokeAll alice` (see the
 [CLI reference](/reference/cli/)).

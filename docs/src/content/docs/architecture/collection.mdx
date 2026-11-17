@@ -1817,7 +1817,7 @@ The **transports** are a **code registry** the binary ships (`internal/transport
   notes={{
     label: 'The friendly string an operator reads, and the ONLY identity string they type here since the name is derived; NULL falls back to that name, verbatim',
     component_id: 'Set: pre-bound to the component; NULL: shared, resolved by match key',
-    outpost_id: 'Placement: the outpost primary key (principal_id); ON DELETE CASCADE so a purged outpost takes its endpoints',
+    outpost_id: 'Placement: the outpost primary key (user_id); ON DELETE CASCADE so a purged outpost takes its endpoints',
     params: 'The transport parameters the authoring schema validated',
     driver_id: 'Set when a driver attach authored this endpoint (#813); NULL for a bare probe endpoint',
     inputs: 'The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values',

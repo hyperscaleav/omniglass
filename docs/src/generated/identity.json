@@ -10,7 +10,7 @@
     {
       "table": "action_rule_opt_out",
       "shape": "id only",
-      "reason": "a person opted out of a rule, keyed by rule and principal; nothing addresses it by name",
+      "reason": "a person opted out of a rule, keyed by rule and user; nothing addresses it by name",
       "labelled": false
     },
     {
@@ -170,12 +170,6 @@
       "no_label": "its name is already the label, so a second string would be a second label rather than the identifier a label sits beside (#613 out of scope, D1 deferred to #755)"
     },
     {
-      "table": "human",
-      "shape": "human identifier, not a name",
-      "reason": "a username: its own rule and its own uniqueness, not the entity name rule; a principal route takes it beside the uuid (#163, #1133)",
-      "labelled": true
-    },
-    {
       "table": "identity_binding",
       "shape": "id only",
       "reason": "a conduit's identity tied to its owner, addressed by its conduit, match key and value; nothing names it",
@@ -221,6 +215,13 @@
       "table": "log_line",
       "shape": "id only",
       "labelled": false
+    },
+    {
+      "table": "machine",
+      "shape": "human identifier, not a name",
+      "reason": "the username analogue for kind=machine: unique like one (#563), on its own rule rather than the entity name rule; a user route takes it beside the uuid, and a word that is both a username and a service name addresses neither (#1133)",
+      "labelled": false,
+      "no_label": "the identifier IS what every surface shows: userIdent resolves a service user to service.name, and it cannot resolve to a label, which is optional and not unique"
     },
     {
       "table": "metric",
@@ -324,31 +325,17 @@
       "labelled": false
     },
     {
+      "table": "person",
+      "shape": "human identifier, not a name",
+      "reason": "a username: its own rule and its own uniqueness, not the entity name rule; a user route takes it beside the uuid (#163, #1133)",
+      "labelled": true
+    },
+    {
       "table": "platform_server",
       "shape": "human identifier, not a name",
       "reason": "the identity a server boots under (OMNIGLASS_SERVER_NAME, else its hostname), not an operator's name: a hostname need not be a kebab token, and the server's component carries the operator-facing name (#1627)",
       "labelled": false,
       "no_label": "no operator surface of its own: the server is shown through its platform component, which carries the label"
-    },
-    {
-      "table": "principal",
-      "shape": "id only",
-      "labelled": false
-    },
-    {
-      "table": "principal_grant",
-      "shape": "id only",
-      "labelled": false
-    },
-    {
-      "table": "principal_group",
-      "shape": "key-bearing",
-      "labelled": true
-    },
-    {
-      "table": "principal_group_member",
-      "shape": "id only",
-      "labelled": false
     },
     {
       "table": "product",
@@ -404,13 +391,6 @@
       "shape": "key-bearing",
       "proved_elsewhere": "seeded only, no create path on the gateway",
       "labelled": true
-    },
-    {
-      "table": "service",
-      "shape": "human identifier, not a name",
-      "reason": "the username analogue for kind=service: unique like one (#563), on its own rule rather than the entity name rule; a principal route takes it beside the uuid, and a word that is both a username and a service name addresses neither (#1133)",
-      "labelled": false,
-      "no_label": "the identifier IS what every surface shows: principalIdent resolves a service principal to service.name, and it cannot resolve to a label, which is optional and not unique"
     },
     {
       "table": "setting_override",
@@ -517,6 +497,26 @@
       "table": "unclaimed_source",
       "shape": "id only",
       "reason": "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name",
+      "labelled": false
+    },
+    {
+      "table": "user_grant",
+      "shape": "id only",
+      "labelled": false
+    },
+    {
+      "table": "user_group",
+      "shape": "key-bearing",
+      "labelled": true
+    },
+    {
+      "table": "user_group_member",
+      "shape": "id only",
+      "labelled": false
+    },
+    {
+      "table": "users",
+      "shape": "id only",
       "labelled": false
     },
     {

@@ -121,7 +121,7 @@ lockout window), `revoke_session` (an admin ending another user's session), and
 `agent_refused` (an agent's call the install's [agent policy](/guides/agents/#what-an-agent-may-do)
 sets to never, with `resource = 'operation'` and `resource_id` the operation's id, written as the
 agent's with its channel). Self-service
-logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'principal'` and
+logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'user'` and
 `resource_id` set to the target user's id so the trail answers "whose sessions did this admin
 revoke?". An impersonated action records **both** actors (`actor_principal_id` the impersonated user,
 `real_actor_principal_id` the admin behind it); both identifiers are **denormalized onto the row**

@@ -10,9 +10,9 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 
 :::note[Implementation status]
-Built end to end: the **user** kind of group (`principal_group` plus membership,
-group-targeted grants via `principal_grant.group_id`, the effective-grant union in the loader,
-`/principal-groups` CRUD gated by `principal_group:*`, the `:rename` custom method, and the console
+Built end to end: the **user** kind of group (`user_group` plus membership,
+group-targeted grants via `user_grant.group_id`, the effective-grant union in the loader,
+`/user-groups` CRUD gated by `user_group:*`, the `:rename` custom method, and the console
 User groups pages), as a grant **subject** only (see below).
 :::
 
@@ -38,26 +38,26 @@ A group:
 The general `group` table carries the id, kind, membership, and **weight**.
 :::
 
-What is **built** is the user arm: `principal_group` and its membership, a **grant subject**
+What is **built** is the user arm: `user_group` and its membership, a **grant subject**
 (grants attach to the group and reach its members), not an access scope (`scope_kind='group'` is
 refused today with a 422).
 
 A group's name is an ordinary entity name (`^[a-z0-9][a-z0-9-]*$`, 100 characters, a uuid refused),
 enforced by the Storage Gateway on create and on rename rather than by the request schema alone
 ([ADR-0077](/architecture/decisions/#adr-0077-a-group-name-obeys-the-entity-name-rule-tightening-a-pattern-the-code-had-excused)).
-Moving it is the `:rename` custom method, `POST /principal-groups/{group}:rename` gated by
-`principal_group:rename`; the PATCH body does not carry a name at all
+Moving it is the `:rename` custom method, `POST /user-groups/{group}:rename` gated by
+`user_group:rename`; the PATCH body does not carry a name at all
 ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
 Every group route takes the group by its name or its uuid, and a member by a username, a service
 account's name, or its uuid
 ([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)),
 each resolved only after the all-scope check, so a scoped caller learns nothing about which names
-exist (`omniglass principal-group member create night-shift --principal-id alice`). A rename moves
+exist (`omniglass user-group member create night-shift --user-id alice`). A rename moves
 nothing inside the platform, since membership and grants both key on the group's uuid.
 
-<SchemaTable table="principal_group" />
+<SchemaTable table="user_group" />
 
-<SchemaTable table="principal_group_member" />
+<SchemaTable table="user_group_member" />
 
 :::design[Entity groups on the cascade: weights, dynamic membership, and group-as-scope, tracked in #10]
 ## Placement: one specificity scale
