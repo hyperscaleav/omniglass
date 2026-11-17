@@ -48,7 +48,8 @@ There are two ways to operate, and they are the same API with the same checks be
   will do and, where one exists, the issue tracking it). The subrail's first entry, **Overview** (`/catalog`), is the
   landing: one card per group, teaching what it holds, with live catalog counts linking to each
   page; you see only the groups and entries you can enter.
-- The **top bar** shows the current section and a **Search (⌘K)** button. The console is
+- The **top bar** shows the current section, a **Search (⌘K)** button, and, if you may use the
+  assistant, an **Ask omnibot** button that opens [omnibot](/guides/agents/#omnibot-in-the-console). The console is
   dark-only today; the theme is an [Admin > Settings](/guides/admin/) value resolved by the
   settings engine, not a per-session toggle.
 - Press **⌘K** (or Ctrl-K) to open the command palette and jump to any section by name. Arrow
@@ -58,7 +59,9 @@ There are two ways to operate, and they are the same API with the same checks be
   catalog by its own name, tagged with its group (typing `products` jumps straight to
   **Catalog, under Components: Products**). Typing a group name finds everything under it, so
   `telemetry` lists Metrics, Properties, and Events. The palette offers only what you may read,
-  the same rule that hides a sidebar tab.
+  the same rule that hides a sidebar tab. If you may use the assistant, its last row is **Ask omnibot**
+  (**Ask omnibot: <your text>** once you type), which opens omnibot with that text as a draft, sent
+  only when you send it.
 - You only see what you can use: a tab you have no read grant for is **hidden**, and an
   action you cannot perform does not render. The same permission map also **guards the route**,
   so a hidden tab is an unreachable URL: typing or bookmarking a page you cannot read redirects
