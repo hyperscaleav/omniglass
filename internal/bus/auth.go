@@ -117,6 +117,10 @@ type Store interface {
 	// CompactMetricBlocks is the compacted tier's fold (#1528): closed days
 	// folded into lossless blocks on every pass, beside the raw rows.
 	CompactMetricBlocks(ctx context.Context, f storage.BlockFold) (storage.BlockCompaction, error)
+	// AssistantSettings and PruneAssistantConversations keep the stored
+	// omnibot conversations to their window (#2113).
+	AssistantSettings(ctx context.Context) (settings.AssistantSettings, error)
+	PruneAssistantConversations(ctx context.Context, before time.Time, limit int) (int64, error)
 	// PruneLogs is one chunk of one log table's severity band (#417).
 	PruneLogs(ctx context.Context, table, band string, before time.Time, limit int) (int64, error)
 	// RetentionOverrides and PruneSamplesOfType are the types with retention

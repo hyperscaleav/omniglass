@@ -183,7 +183,12 @@ var IdentityShapes = map[string]TableIdentity{
 	// Id only.
 	"alarm":        {Shape: ShapeIDOnly},
 	"alarm_snooze": {Shape: ShapeIDOnly, Reason: "a snooze on an alarm condition, keyed by component and dedup key; it is set and ended through an alarm, never named"},
-	"audit_log":    {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
+	// A person's omnibot conversation (#2113): its owner types the name, unique
+	// among their own, and only they ever see it.
+	"assistant_conversation": {Shape: ShapeKeyBearing,
+		NoLabel: "a private working name its owner picks to resume by; nobody else reads it, so there is no audience a friendlier string would be for"},
+	"assistant_message": {Shape: ShapeIDOnly, Reason: "one message of a conversation (#2113), keyed by its conversation and place in it; read as the transcript, never named"},
+	"audit_log":         {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
 	"component_dependency": {Shape: ShapeIDOnly, Reason: "a dependency edge (#1648), keyed by its dependent, upstream and kind; addressed through its dependent by kind and upstream, never named"},
 	"credential":           {Shape: ShapeIDOnly},
 	"oauth_client": {Shape: ShapeIDOnly, Reason: "an MCP client that registered itself (#2048) or is named by its metadata document URL (#2074), addressed by its client id; " +

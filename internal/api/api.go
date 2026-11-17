@@ -443,6 +443,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerNotificationRoutes(api, a, gw)
 	registerInboxRoutes(api, a, gw)
 	registerPersonalRuleRoutes(api, a, gw)
+	registerAssistantRoutes(api, a, gw)
 	registerOptOutRoutes(api, a, gw)
 	registerDraftTestRoute(api, a, gw)
 	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerPrincipal))

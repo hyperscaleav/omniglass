@@ -183,6 +183,105 @@ Example:
 omniglass alarm list
 ```
 
+## `omniglass assistant`
+
+Commands for the assistant resource
+
+### `omniglass assistant conversation`
+
+Commands for the conversation resource
+
+#### `omniglass assistant conversation append`
+
+Append a turn to one of your omnibot conversations
+
+```
+omniglass assistant conversation append <name> [flags]
+```
+
+Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--after` | int | `0` | The seq of the last message you saw (0 for an empty conversation); anything else is a 409 |
+| `--messages` | string | (none) | The new messages, in order |
+| `--pending` | string | (none) | The write the run paused on, waiting on you; absent clears it |
+| `--usage` | string | (none) | The tokens this turn spent, added to the total |
+
+Example:
+
+```sh
+omniglass assistant conversation append <name> --after <int> --messages <json>
+```
+
+#### `omniglass assistant conversation create`
+
+Start an omnibot conversation
+
+```
+omniglass assistant conversation create [flags]
+```
+
+Creates an empty conversation of your own, named or named for you. A name you already use is a 409. Audited. Gated by assistant:use.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | A name (lowercase kebab), unique among your own conversations; absent names it for you |
+
+Example:
+
+```sh
+omniglass assistant conversation create
+```
+
+#### `omniglass assistant conversation delete`
+
+Delete one of your omnibot conversations
+
+```
+omniglass assistant conversation delete <name>
+```
+
+Deletes one of your own conversations and its transcript. Anyone else's is a 404. Audited. Gated by assistant:use.
+
+Example:
+
+```sh
+omniglass assistant conversation delete <name>
+```
+
+#### `omniglass assistant conversation get`
+
+Get one of your omnibot conversations
+
+```
+omniglass assistant conversation get <name>
+```
+
+One of your own conversations with its transcript, its pending write if a run paused on one, and the tokens it has spent. Anyone else's is a 404. Gated by assistant:use.
+
+Example:
+
+```sh
+omniglass assistant conversation get <name>
+```
+
+#### `omniglass assistant conversation list`
+
+List your omnibot conversations
+
+```
+omniglass assistant conversation list
+```
+
+Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+
+Example:
+
+```sh
+omniglass assistant conversation list
+```
+
 ## `omniglass audit-log`
 
 Commands for the audit-log resource
@@ -4389,18 +4488,20 @@ Run omnibot, the built-in assistant, on a prompt or in a chat
 omniglass omnibot [prompt...] [flags]
 ```
 
-Runs omnibot, the built-in assistant, against the server's MCP tools as the person whose token it is given. It mints a one-day agent token of its own for the omnibot channel, so the audit log shows its actions as omnibot's acting for that person, and revokes the token when it finishes. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks for a credential without echo, stores it as a secret with your own token, and tells omnibot only its name, so the value never reaches the model. The model is a recording (--replay) until a live provider lands.
+Runs omnibot, the built-in assistant, against the server's MCP tools as the person whose token it is given. It mints a one-day agent token of its own for the omnibot channel, so the audit log shows its actions as omnibot's acting for that person, and revokes the token when it finishes. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks for a credential without echo, stores it as a secret with your own token, and tells omnibot only its name, so the value never reaches the model. --resume <name> keeps the conversation on the server under that name, for you alone, and picks it up where it was left; a call a paused run left waiting is put to you first. The model is a recording (--replay) until a live provider lands.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--max-steps` | int | `10` | the most model turns the run takes before it stops |
 | `--replay` | string | (none) | a recorded model to drive the run (YAML turns) |
+| `--resume` | string | (none) | keep the conversation on the server under this name, picking it up if it exists |
 
 Example:
 
 ```sh
 omniglass omnibot --replay lobby.yaml "add a display to the lobby"
   omniglass omnibot --replay lobby.yaml
+  omniglass omnibot --replay lobby.yaml --resume lobby-refit
 ```
 
 ## `omniglass outpost`

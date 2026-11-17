@@ -514,6 +514,16 @@ collection: {
 }
 
 config: {
+  assistant_conversation: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    principal_id: uuid {constraint: foreign_key}
+  }
+  assistant_message: {
+    shape: sql_table
+    conversation_id: uuid {constraint: primary_key}
+    seq: integer {constraint: primary_key}
+  }
   credential: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -638,6 +648,8 @@ collection.unbound_identity.conduit_id -> fleet.component.id
 collection.unbound_identity.property_type_id -> telemetry.property_type.id
 collection.webhook_token.endpoint_id -> fleet.endpoint.id
 collection.webhook_token.secret_id -> config.secret.id
+config.assistant_conversation.principal_id -> identity.principal.id
+config.assistant_message.conversation_id -> config.assistant_conversation.id
 config.credential.oauth_client_id -> config.oauth_client.id
 config.credential.principal_id -> identity.principal.id
 config.oauth_code.client_id -> config.oauth_client.id

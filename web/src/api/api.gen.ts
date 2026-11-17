@@ -531,6 +531,110 @@ export type AlarmTimelineOutputBody = {
 };
 
 /**
+ * Who said it
+ */
+export type AppendAssistantMessageInputRole = typeof AppendAssistantMessageInputRole[keyof typeof AppendAssistantMessageInputRole];
+
+
+export const AppendAssistantMessageInputRole = {
+  user: 'user',
+  assistant: 'assistant',
+  tool: 'tool',
+} as const;
+
+export type AppendAssistantMessageInput = {
+  /** The message as your loop carries it on */
+  body: unknown;
+  /** Who said it */
+  role: AppendAssistantMessageInputRole;
+};
+
+export type AssistantUsage = {
+  input_tokens: number;
+  output_tokens: number;
+};
+
+export type AppendAssistantConversationInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The seq of the last message you saw (0 for an empty conversation); anything else is a 409
+     * @minimum 0
+     */
+  after: number;
+  /**
+     * The new messages, in order
+     * @minItems 1
+     * @nullable
+     */
+  messages: AppendAssistantMessageInput[] | null;
+  /** The write the run paused on, waiting on you; absent clears it */
+  pending?: unknown;
+  /** The tokens this turn spent, added to the total */
+  usage?: AssistantUsage;
+};
+
+export type AssistantConversation = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  created_at: string;
+  id: string;
+  message_count: number;
+  name: string;
+  pending?: unknown;
+  updated_at: string;
+  usage: AssistantUsage;
+};
+
+/**
+ * Who said it
+ */
+export type AssistantMessageBodyRole = typeof AssistantMessageBodyRole[keyof typeof AssistantMessageBodyRole];
+
+
+export const AssistantMessageBodyRole = {
+  user: 'user',
+  assistant: 'assistant',
+  tool: 'tool',
+} as const;
+
+export type AssistantMessageBody = {
+  /** The message as the client's loop carries it on, kept as given */
+  body: unknown;
+  created_at: string;
+  /** Who said it */
+  role: AssistantMessageBodyRole;
+  /** The message's position in the conversation, from 1 */
+  seq: number;
+};
+
+export type AssistantConversationOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  created_at: string;
+  id: string;
+  message_count: number;
+  /**
+     * The transcript, in order
+     * @nullable
+     */
+  messages: AssistantMessageBody[] | null;
+  name: string;
+  pending?: unknown;
+  updated_at: string;
+  usage: AssistantUsage;
+};
+
+export type AssistantSettings = {
+  /**
+     * Days a stored omnibot conversation is kept after it last changed
+     * @minimum 1
+     * @maximum 36500
+     */
+  conversation_days: number;
+};
+
+/**
  * One recorded privileged action or sign-in, with who did it, when and to what.
  */
 export type AuditEventBody = {
@@ -1681,6 +1785,13 @@ export type CreateActionRuleInputBody = {
   targets: string[] | null;
   /** A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
   when?: string;
+};
+
+export type CreateAssistantConversationInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** A name (lowercase kebab), unique among your own conversations; absent names it for you */
+  name?: string;
 };
 
 /**
@@ -4113,6 +4224,13 @@ export type ListAlarmsOutputBody = {
   component: string;
   /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on */
   verdict: string;
+};
+
+export type ListAssistantConversationsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  conversations: AssistantConversation[] | null;
 };
 
 export type ListCalcRulesOutputBody = {
@@ -7569,6 +7687,7 @@ export type UISettings = {
 
 export type Settings = {
   agent: AgentSettings;
+  assistant: AssistantSettings;
   collection: CollectionSettings;
   database: DatabaseSettings;
   keybindings: Keybindings;
@@ -9338,6 +9457,255 @@ export const listAlarms = async (params?: ListAlarmsParams, options?: Parameters
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export type listAssistantConversationsResponse200 = {
+  data: ListAssistantConversationsOutputBody
+  status: 200
+}
+
+export type listAssistantConversationsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listAssistantConversationsResponseSuccess = (listAssistantConversationsResponse200) & {
+  headers: Headers;
+};
+export type listAssistantConversationsResponseError = (listAssistantConversationsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listAssistantConversationsResponse = (listAssistantConversationsResponseSuccess | listAssistantConversationsResponseError)
+
+export const getListAssistantConversationsUrl = () => {
+
+
+
+
+  return `/assistant/conversations`
+}
+
+/**
+ * Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+ * @summary List your omnibot conversations
+ */
+export const listAssistantConversations = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAssistantConversationsResponse> => {
+
+  return ogFetch<listAssistantConversationsResponse>(getListAssistantConversationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createAssistantConversationResponse201 = {
+  data: AssistantConversation
+  status: 201
+}
+
+export type createAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createAssistantConversationResponseSuccess = (createAssistantConversationResponse201) & {
+  headers: Headers;
+};
+export type createAssistantConversationResponseError = (createAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type createAssistantConversationResponse = (createAssistantConversationResponseSuccess | createAssistantConversationResponseError)
+
+export const getCreateAssistantConversationUrl = () => {
+
+
+
+
+  return `/assistant/conversations`
+}
+
+/**
+ * Creates an empty conversation of your own, named or named for you. A name you already use is a 409. Audited. Gated by assistant:use.
+ * @summary Start an omnibot conversation
+ */
+export const createAssistantConversation = async (createAssistantConversationInputBody?: NonReadonly<CreateAssistantConversationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createAssistantConversationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createAssistantConversationResponse>(getCreateAssistantConversationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createAssistantConversationInputBody)
+  }
+);}
+
+
+
+export type deleteAssistantConversationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type deleteAssistantConversationResponseSuccess = (deleteAssistantConversationResponse204) & {
+  headers: Headers;
+};
+export type deleteAssistantConversationResponseError = (deleteAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type deleteAssistantConversationResponse = (deleteAssistantConversationResponseSuccess | deleteAssistantConversationResponseError)
+
+export const getDeleteAssistantConversationUrl = (name: string,) => {
+
+
+
+
+  return `/assistant/conversations/${name}`
+}
+
+/**
+ * Deletes one of your own conversations and its transcript. Anyone else's is a 404. Audited. Gated by assistant:use.
+ * @summary Delete one of your omnibot conversations
+ */
+export const deleteAssistantConversation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteAssistantConversationResponse> => {
+
+  return ogFetch<deleteAssistantConversationResponse>(getDeleteAssistantConversationUrl(name),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type getAssistantConversationResponse200 = {
+  data: AssistantConversationOutputBody
+  status: 200
+}
+
+export type getAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getAssistantConversationResponseSuccess = (getAssistantConversationResponse200) & {
+  headers: Headers;
+};
+export type getAssistantConversationResponseError = (getAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type getAssistantConversationResponse = (getAssistantConversationResponseSuccess | getAssistantConversationResponseError)
+
+export const getGetAssistantConversationUrl = (name: string,) => {
+
+
+
+
+  return `/assistant/conversations/${name}`
+}
+
+/**
+ * One of your own conversations with its transcript, its pending write if a run paused on one, and the tokens it has spent. Anyone else's is a 404. Gated by assistant:use.
+ * @summary Get one of your omnibot conversations
+ */
+export const getAssistantConversation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getAssistantConversationResponse> => {
+
+  return ogFetch<getAssistantConversationResponse>(getGetAssistantConversationUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type appendAssistantConversationResponse200 = {
+  data: AssistantConversation
+  status: 200
+}
+
+export type appendAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type appendAssistantConversationResponseSuccess = (appendAssistantConversationResponse200) & {
+  headers: Headers;
+};
+export type appendAssistantConversationResponseError = (appendAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type appendAssistantConversationResponse = (appendAssistantConversationResponseSuccess | appendAssistantConversationResponseError)
+
+export const getAppendAssistantConversationUrl = (name: string,) => {
+
+
+
+
+  return `/assistant/conversations/${name}:append`
+}
+
+/**
+ * Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.
+ * @summary Append a turn to one of your omnibot conversations
+ */
+export const appendAssistantConversation = async (name: string,
+    appendAssistantConversationInputBody: NonReadonly<AppendAssistantConversationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<appendAssistantConversationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<appendAssistantConversationResponse>(getAppendAssistantConversationUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(appendAssistantConversationInputBody)
   }
 );}
 

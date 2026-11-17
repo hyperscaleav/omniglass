@@ -1300,6 +1300,27 @@ func (UnimplementedGateway) DeletePersonalRule(context.Context, string, string, 
 func (UnimplementedGateway) TestPersonalRule(context.Context, string, string, RuleDraft, scope.Set, int) ([]RuleMatch, error) {
 	return nil, ErrActionRuleNotFound
 }
+func (UnimplementedGateway) CreateAssistantConversation(context.Context, string, string, string) (*AssistantConversation, error) {
+	return nil, ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) ListAssistantConversations(context.Context, string) ([]AssistantConversation, error) {
+	return []AssistantConversation{}, nil
+}
+func (UnimplementedGateway) GetAssistantConversation(context.Context, string, string) (*AssistantConversation, []AssistantMessage, error) {
+	return nil, nil, ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) AppendAssistantMessages(context.Context, string, string, string, AssistantAppend) (*AssistantConversation, error) {
+	return nil, ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) DeleteAssistantConversation(context.Context, string, string, string) error {
+	return ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) PruneAssistantConversations(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
+func (UnimplementedGateway) AssistantSettings(context.Context) (settings.AssistantSettings, error) {
+	return settings.AssistantSettings{}, nil
+}
 func (UnimplementedGateway) SetRuleOptOut(context.Context, string, string, string, bool) (*ActionRule, error) {
 	return nil, ErrActionRuleNotFound
 }
