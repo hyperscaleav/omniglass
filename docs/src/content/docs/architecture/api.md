@@ -1305,7 +1305,7 @@ AG-UI events; it ends in an interrupt when a call waits on the person, answered 
 `resume` ([ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui)).
 It is a 503 on a server with no model, a 403 for an agent or an impersonation session, and a 409 for a
 resume that names no waiting call, a prompt while one waits, or a run while another holds the
-conversation (a run claims it before any tool runs). It is not an MCP tool.
+conversation (a run claims it before any tool runs; an append while the claim is live is a 409 too). It is not an MCP tool.
 
 The catalog is **credential-blind**
 ([ADR-2025](/architecture/decisions/#adr-2025-the-mcp-catalog-is-credential-blind-and-reads-the-fleets-alarms-in-one-call)).

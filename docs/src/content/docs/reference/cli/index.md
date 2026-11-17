@@ -199,7 +199,7 @@ Append a turn to one of your omnibot conversations
 omniglass assistant conversation append <name> [flags]
 ```
 
-Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.
+Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. While a server run holds the conversation, an append is a 409. Anyone else's is a 404. Audited without content. Gated by assistant:use.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

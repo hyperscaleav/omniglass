@@ -51,7 +51,8 @@ type AssistantMessage struct {
 // saw (After, 0 for an empty conversation), the pending write the run paused
 // on (nil clears it), and the tokens the turn spent. Run, when set, is the
 // server run appending: the conversation must still be its claim, and the
-// append frees it.
+// append frees it. With no Run, the append is refused while a run's claim is
+// live.
 type AssistantAppend struct {
 	Run      string
 	After    int
@@ -239,14 +240,16 @@ func (p *PG) AppendAssistantMessages(ctx context.Context, actorID, ownerID, name
 	if err := tx.QueryRow(ctx, `select coalesce(max(seq), 0) from assistant_message where conversation_id = $1::uuid`, before.ID).Scan(&last); err != nil {
 		return nil, fmt.Errorf("storage: last assistant message: %w", err)
 	}
-	if in.Run != "" {
-		var held *string
-		if err := tx.QueryRow(ctx, `select run_id from assistant_conversation where id = $1::uuid`, before.ID).Scan(&held); err != nil {
-			return nil, fmt.Errorf("storage: read the assistant run: %w", err)
-		}
-		if held == nil || *held != in.Run {
-			return nil, ErrAssistantConversationBusy
-		}
+	// A live lease admits only its own run's append; a run's append needs its
+	// lease, live or lapsed, still in place.
+	var held *string
+	var live bool
+	if err := tx.QueryRow(ctx, `select run_id, run_id is not null and run_until > now() from assistant_conversation where id = $1::uuid`,
+		before.ID).Scan(&held, &live); err != nil {
+		return nil, fmt.Errorf("storage: read the assistant run: %w", err)
+	}
+	if in.Run != "" && (held == nil || *held != in.Run) || in.Run == "" && live {
+		return nil, ErrAssistantConversationBusy
 	}
 	if last != in.After {
 		return nil, ErrAssistantConversationMoved

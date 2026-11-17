@@ -146,7 +146,7 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 
 		runID := in.Body.RunID
 		if runID == "" {
-			runID = prefix
+			runID = claim.Run
 		}
 		return &huma.StreamResponse{Body: func(hctx huma.Context) {
 			defer revoke()

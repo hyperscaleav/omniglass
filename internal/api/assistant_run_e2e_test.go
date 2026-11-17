@@ -300,20 +300,28 @@ func TestOmnibotRunResumesThatRaceRunTheCallOnce(t *testing.T) {
 	}
 }
 
-// Only the conversation's owner, as themselves, runs it: anyone else finds no
-// conversation, an impersonation or an agent cannot start a run, and a server
-// with no model says so.
+// Only the conversation's owner, as themselves, runs it: anyone else, an admin
+// or the platform owner included, finds no conversation to prompt or resume,
+// an impersonation or an agent cannot start a run, and a server with no model
+// says so.
 func TestOmnibotRunIsTheOwnersAlone(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t, runModel(t))
 	p.human("olga", "operator", "all", "")
 	p.human("alice", "operator", "all", "")
+	p.human("ada", "admin", "all", "")
 	p.human("rita", "reader", "all", "")
 	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "lobby"}, http.StatusCreated)
+	if _, evs := p.run(p.toks["olga"], "lobby", prompt("add the lobby display")); interruptOf(evs)["id"] != "call-2" {
+		t.Fatalf("olga's run = %v, want it waiting on call-2", evs)
+	}
 
-	for who, tok := range map[string]string{"alice": p.toks["alice"], "the platform owner": p.owner} {
+	for who, tok := range map[string]string{"alice": p.toks["alice"], "an admin": p.toks["ada"], "the platform owner": p.owner} {
 		if status, _ := p.run(tok, "lobby", prompt("hi")); status != http.StatusNotFound {
 			t.Errorf("%s runs olga's conversation: %d, want 404", who, status)
+		}
+		if status, _ := p.run(tok, "lobby", resume("call-2", "resolved", true)); status != http.StatusNotFound {
+			t.Errorf("%s answers olga's waiting call: %d, want 404", who, status)
 		}
 	}
 	if status, _ := p.run(p.toks["rita"], "lobby", prompt("hi")); status != http.StatusForbidden {
@@ -323,7 +331,7 @@ func TestOmnibotRunIsTheOwnersAlone(t *testing.T) {
 		t.Errorf("a conversation that does not exist = %d, want 404", status)
 	}
 	if status, _ := p.run(p.toks["olga"], "lobby", resume("call-1", "resolved", true)); status != http.StatusConflict {
-		t.Errorf("a resume with nothing waiting = %d, want 409", status)
+		t.Errorf("a resume naming a call that is not waiting = %d, want 409", status)
 	}
 	empty := prompt("")
 	empty["messages"] = []any{}

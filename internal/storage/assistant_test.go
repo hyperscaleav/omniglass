@@ -177,12 +177,15 @@ func TestARunClaimsItsConversation(t *testing.T) {
 	if err := f.gw.ClaimAssistantRun(f.ctx, f.ids["alice"], "chat", storage.AssistantRunClaim{Run: "r3", Until: soon}); !errors.Is(err, storage.ErrAssistantConversationNotFound) {
 		t.Fatalf("another's claim = %v, want not found", err)
 	}
-	// An append by another run is refused while the lease is r1's; r1's
-	// append lands and frees the conversation.
-	if _, err := f.gw.AppendAssistantMessages(f.ctx, bob, bob, "chat", storage.AssistantAppend{
-		Run: "r2", After: 0, Messages: []storage.AssistantMessage{msg("user", "two")},
-	}); !errors.Is(err, storage.ErrAssistantConversationBusy) {
-		t.Fatalf("an append under another's lease = %v, want busy", err)
+	// An append by another run, or by no run (a client keeping its own
+	// loop's transcript), is refused while the lease is r1's; r1's append
+	// lands and frees the conversation.
+	for _, run := range []string{"r2", ""} {
+		if _, err := f.gw.AppendAssistantMessages(f.ctx, bob, bob, "chat", storage.AssistantAppend{
+			Run: run, After: 0, Messages: []storage.AssistantMessage{msg("user", "two")},
+		}); !errors.Is(err, storage.ErrAssistantConversationBusy) {
+			t.Fatalf("an append by run %q under r1's lease = %v, want busy", run, err)
+		}
 	}
 	if _, err := f.gw.AppendAssistantMessages(f.ctx, bob, bob, "chat", storage.AssistantAppend{
 		Run: "r1", After: 0, Messages: []storage.AssistantMessage{msg("user", "one")},
@@ -211,8 +214,14 @@ func TestARunClaimsItsConversation(t *testing.T) {
 	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r7", After: 1, Until: gone}); err != nil {
 		t.Fatalf("a claim after release = %v", err)
 	}
-	// r7's lease has run out: the next claim takes the conversation.
-	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r8", After: 1, Until: soon}); err != nil {
+	// r7's lease has run out: a plain append lands over it, and the next
+	// claim takes the conversation.
+	if _, err := f.gw.AppendAssistantMessages(f.ctx, bob, bob, "chat", storage.AssistantAppend{
+		After: 1, Messages: []storage.AssistantMessage{msg("user", "three")},
+	}); err != nil {
+		t.Fatalf("an append over a lapsed lease = %v", err)
+	}
+	if err := f.gw.ClaimAssistantRun(f.ctx, bob, "chat", storage.AssistantRunClaim{Run: "r8", After: 2, Until: soon}); err != nil {
 		t.Fatalf("a claim over a lapsed lease = %v", err)
 	}
 }
