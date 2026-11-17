@@ -113,7 +113,7 @@ func (p *PG) CreateAssistantConversation(ctx context.Context, actorID, ownerID, 
 		return nil, ErrAssistantConversationNotFound
 	}
 	if name != "" {
-		if err := validateEntityName(name); err != nil {
+		if err := ValidateName("assistant_conversation", name); err != nil {
 			return nil, err
 		}
 	}

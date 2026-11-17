@@ -276,3 +276,27 @@ func TestLoopStepCeilingIsPerPrompt(t *testing.T) {
 		t.Errorf("second run = %+v, %v, want its answer within its own step", out, err)
 	}
 }
+
+// The call a paused conversation waits on is read from its transcript and the
+// tools as listed, so a stored copy cannot change what the person is asked:
+// it is the pending the run paused with, and a finished conversation waits on
+// nothing.
+func TestLoopWaitingIsTheTranscriptsOpenCall(t *testing.T) {
+	t.Parallel()
+	l := &Loop{Provider: replay(t, readThenAsk), Tools: fleet(), Pause: true}
+	out, err := l.Run(context.Background(), "add x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := l.Waiting(context.Background(), out.Messages)
+	if err != nil || !ok || !reflect.DeepEqual(got, *out.Pending) {
+		t.Fatalf("waiting = %+v, %v, %v; want the paused call %+v", got, ok, err, *out.Pending)
+	}
+	done, err := (&Loop{Provider: replay(t, "turns:\n  - text: hi\n"), Tools: fleet()}).Run(context.Background(), "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := l.Waiting(context.Background(), done.Messages); ok || err != nil {
+		t.Fatalf("a finished conversation waits (%v, %v), want nothing waiting", ok, err)
+	}
+}

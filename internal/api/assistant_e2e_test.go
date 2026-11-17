@@ -42,9 +42,11 @@ func TestAConversationIsKeptForItsOwnerAlone(t *testing.T) {
 	}
 
 	var got struct {
-		Name     string          `json:"name"`
-		Pending  json.RawMessage `json:"pending"`
-		Usage    struct{ InputTokens int64 `json:"input_tokens"` } `json:"usage"`
+		Name    string          `json:"name"`
+		Pending json.RawMessage `json:"pending"`
+		Usage   struct {
+			InputTokens int64 `json:"input_tokens"`
+		} `json:"usage"`
 		Messages []struct {
 			Seq  int             `json:"seq"`
 			Role string          `json:"role"`

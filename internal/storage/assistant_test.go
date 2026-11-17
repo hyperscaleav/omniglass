@@ -191,10 +191,10 @@ func TestRetentionPrunesAConversationByWhenItLastMoved(t *testing.T) {
 
 // The migration round-trips: down drops both tables and up brings them back.
 func TestAssistantConversationMigrationRoundTrips(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration: needs a Postgres testcontainer")
 	}
-	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	conn := connectDSN(t, dsn)
 	if err := migrate.RollbackBelow(dsn, "20261117180000"); err != nil {

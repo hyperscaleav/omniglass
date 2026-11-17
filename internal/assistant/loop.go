@@ -33,10 +33,10 @@ type Tools interface {
 
 // Proposal is a call the loop asks the person to confirm before it runs.
 type Proposal struct {
-	Tool        string
-	Title       string
-	Arguments   map[string]any
-	Destructive bool
+	Tool        string         `json:"tool"`
+	Title       string         `json:"title,omitempty"`
+	Arguments   map[string]any `json:"arguments,omitempty"`
+	Destructive bool           `json:"destructive,omitempty"`
 }
 
 // Confirmer asks the person whether a proposed call may run.
@@ -97,7 +97,7 @@ type Event struct {
 // Pending is the ask a paused run waits on: the call by its provider id, as
 // it would be proposed to the person.
 type Pending struct {
-	CallID string
+	CallID string `json:"call_id"`
 	Proposal
 }
 
@@ -140,6 +140,12 @@ func (l *Loop) Tell(text string) {
 	l.history = append(l.history, provider.Message{Role: provider.RoleUser, Text: text})
 }
 
+// Resume makes history the conversation the next Run continues: a stored
+// conversation picked up again (#2113). It replaces what the loop held.
+func (l *Loop) Resume(history []provider.Message) {
+	l.history = append([]provider.Message(nil), history...)
+}
+
 // Run sends prompt to the model and answers its calls until it replies with
 // no calls, the step ceiling is reached, or (with Pause) a call waits on its
 // owner. Each Run continues the conversation the last one left, so a chat is
@@ -164,6 +170,28 @@ func (l *Loop) Continue(ctx context.Context, history []provider.Message, approve
 	out, err := l.drive(ctx, append([]provider.Message(nil), history...), &approved)
 	l.keep(out)
 	return out, err
+}
+
+// Waiting is the call a paused conversation waits on, as it would be put to
+// the person: read from the transcript's open call and the tools as they are
+// listed now, never from a stored copy, so what is asked is what Continue
+// would run. A call to a tool no longer offered still waits, and Continue
+// refuses it.
+func (l *Loop) Waiting(ctx context.Context, history []provider.Message) (Pending, bool, error) {
+	i, ok := firstOpen(history)
+	if !ok {
+		return Pending{}, false, nil
+	}
+	tc := history[len(history)-1-countToolResults(history)].ToolCalls[i]
+	listed, err := l.Tools.List(ctx)
+	if err != nil {
+		return Pending{}, false, fmt.Errorf("list the tools: %w", err)
+	}
+	byName, _ := offerTools(listed)
+	if t := byName[tc.Name]; t != nil {
+		return Pending{CallID: tc.ID, Proposal: proposal(t, tc)}, true, nil
+	}
+	return Pending{CallID: tc.ID, Proposal: Proposal{Tool: tc.Name, Arguments: tc.Arguments}}, true, nil
 }
 
 // drive runs the conversation in msgs forward. A turn whose calls are not all

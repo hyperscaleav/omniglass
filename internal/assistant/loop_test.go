@@ -2,7 +2,9 @@ package assistant
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -225,5 +227,34 @@ func TestLoopKeepsTheConversation(t *testing.T) {
 	want := []string{"user:hi", "assistant:hello", "user:the secret lobby-community is yours to bind", "user:attach it"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("the model read %q, want %q", got, want)
+	}
+}
+
+// A stored conversation picks up where it was left (#2113): its messages,
+// kept as JSON and read back, are what the model reads before the next
+// prompt, tool calls and their answers included.
+func TestLoopResumesAStoredConversation(t *testing.T) {
+	kept := []provider.Message{
+		{Role: provider.RoleUser, Text: "what is down"},
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "c1", Name: "list-alarms", Arguments: map[string]any{"state": "firing"}}}},
+		{Role: provider.RoleTool, ToolCallID: "c1", Text: "display-1", IsError: true},
+		{Role: provider.RoleAssistant, Text: "display-1"},
+	}
+	raw, err := json.Marshal(kept)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stored []provider.Message
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		t.Fatal(err)
+	}
+	p := replay(t, "turns:\n  - text: it came back\n")
+	l := &Loop{Provider: p, Tools: fleet()}
+	l.Resume(stored)
+	if _, err := l.Run(context.Background(), "and now"); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.last) != 5 || !reflect.DeepEqual(p.last[:4], kept) || p.last[4].Text != "and now" {
+		t.Fatalf("the model read %+v, want the stored four then the prompt", p.last)
 	}
 }

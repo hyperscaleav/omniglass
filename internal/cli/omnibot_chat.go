@@ -92,7 +92,7 @@ const chatBanner = "omnibot: type a prompt; /exit or Ctrl-D ends.\n" +
 
 // chat is omnibot with no prompt on the command line: a conversation, a Run
 // per line, each continuing the last. A /secret line hands it a credential.
-func chat(ctx context.Context, con *console, stdout io.Writer, sess *assistant.Session, loop *assistant.Loop) error {
+func chat(ctx context.Context, con *console, stdout io.Writer, sess *assistant.Session, t *turns) error {
 	fmt.Fprintln(con.out, chatBanner)
 	for {
 		fmt.Fprint(con.out, "> ")
@@ -111,7 +111,7 @@ func chat(ctx context.Context, con *console, stdout io.Writer, sess *assistant.S
 		case line == "/exit":
 			return nil
 		case line == "/secret" || strings.HasPrefix(line, "/secret "):
-			if err := handCredential(ctx, con, sess, loop, strings.Fields(line)[1:]); err != nil {
+			if err := handCredential(ctx, con, sess, t.loop, strings.Fields(line)[1:]); err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
@@ -122,7 +122,7 @@ func chat(ctx context.Context, con *console, stdout io.Writer, sess *assistant.S
 			fmt.Fprintf(con.out, "omnibot: no command %s; the commands are /secret and /exit\n", strings.Fields(line)[0])
 			continue
 		}
-		out, err := loop.Run(ctx, line)
+		out, err := t.run(ctx, line)
 		if err != nil {
 			return err
 		}

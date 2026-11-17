@@ -4488,18 +4488,20 @@ Run omnibot, the built-in assistant, on a prompt or in a chat
 omniglass omnibot [prompt...] [flags]
 ```
 
-Runs omnibot, the built-in assistant, against the server's MCP tools as the person whose token it is given. It mints a one-day agent token of its own for the omnibot channel, so the audit log shows its actions as omnibot's acting for that person, and revokes the token when it finishes. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks for a credential without echo, stores it as a secret with your own token, and tells omnibot only its name, so the value never reaches the model. The model is a recording (--replay) until a live provider lands.
+Runs omnibot, the built-in assistant, against the server's MCP tools as the person whose token it is given. It mints a one-day agent token of its own for the omnibot channel, so the audit log shows its actions as omnibot's acting for that person, and revokes the token when it finishes. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks for a credential without echo, stores it as a secret with your own token, and tells omnibot only its name, so the value never reaches the model. --resume <name> keeps the conversation on the server under that name, for you alone, and picks it up where it was left; a call a paused run left waiting is put to you first. The model is a recording (--replay) until a live provider lands.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--max-steps` | int | `10` | the most model turns the run takes before it stops |
 | `--replay` | string | (none) | a recorded model to drive the run (YAML turns) |
+| `--resume` | string | (none) | keep the conversation on the server under this name, picking it up if it exists |
 
 Example:
 
 ```sh
 omniglass omnibot --replay lobby.yaml "add a display to the lobby"
   omniglass omnibot --replay lobby.yaml
+  omniglass omnibot --replay lobby.yaml --resume lobby-refit
 ```
 
 ## `omniglass outpost`
