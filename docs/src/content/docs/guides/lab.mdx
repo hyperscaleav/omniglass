@@ -1086,6 +1086,12 @@ Sampling never restarts the server: it skips the retention probe, `--backlog` de
 shorter than the `--window` it measures, and `--json`. The schedule's health on the outposts and command
 latency are not in a sample yet (#1625, #1626).
 
+A sample reads the lab from its host, through Docker. To read the same platform from anywhere else,
+with a token and the API alone, use [`omniglass platform health`](/guides/cli/#platform-health): one
+reading whose exit status is the verdict, or the same `--every`, `--window`, `--append` and
+`--page-clients` series against a server you can reach but not shell into, such as a soak's from your
+desk.
+
 ### A soak run
 
 A soak run holds a kept scale lab up for days, at production cadence, under a service manager, with

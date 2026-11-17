@@ -245,3 +245,44 @@ func TestLoadWindowStopsThePageClientsOnAFailedRead(t *testing.T) {
 		t.Errorf("%d reads arrived after the failed window returned, want none", after-at)
 	}
 }
+
+// Page clients each make their loads and the run gathers every one; no
+// clients is a run that was not measured, with no load made.
+func TestRunPageClients(t *testing.T) {
+	var made atomic.Int32
+	load := func(context.Context) PageLoad {
+		made.Add(1)
+		return PageLoad{Took: time.Millisecond, Bytes: 10}
+	}
+	run := RunPageClients(context.Background(), 3, 2, 0, load)
+	if run.Clients != 3 || len(run.Loads) != 6 || made.Load() != 6 {
+		t.Errorf("3 clients of 2 loads: clients %d, %d loads gathered, %d made; want 3, 6, 6", run.Clients, len(run.Loads), made.Load())
+	}
+	made.Store(0)
+	if run := RunPageClients(context.Background(), 0, 5, 0, load); run.Clients != 0 || run.Loads != nil || made.Load() != 0 {
+		t.Errorf("no clients: %+v with %d loads made, want an unmeasured run", run, made.Load())
+	}
+}
+
+// A load through LoadSystemPage carries the fetch it is given, so a caller
+// outside the harness (the CLI's platform health) reads with its own token.
+func TestLoadSystemPageUsesTheGivenFetch(t *testing.T) {
+	srv, asked := pageServer(t, "")
+	fetch := func(ctx context.Context, u string) (int, string, []byte, error) {
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		req.Header.Set("Authorization", "Bearer tok")
+		resp, err := srv.Client().Do(req)
+		if err != nil {
+			return 0, "", nil, err
+		}
+		defer resp.Body.Close()
+		b, err := io.ReadAll(resp.Body)
+		return resp.StatusCode, resp.Status, b, err
+	}
+	if got := LoadSystemPage(context.Background(), fetch, srv.URL, "sys-1"); got.Err != nil {
+		t.Fatal(got.Err)
+	}
+	if len(asked()) == 0 {
+		t.Error("the load made no reads through the given fetch")
+	}
+}

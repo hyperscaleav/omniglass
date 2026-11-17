@@ -812,6 +812,94 @@ omniglass metric-type setRetention tcp-connect-time --days null    # back to the
 omniglass metric-type get tcp-connect-time | jq .retention_days
 ```
 
+## Platform health
+
+`omniglass platform health` answers one question from a terminal: is Omniglass keeping up? It reads
+the platform view (the read behind the console's [Platform health](/guides/operator/platform-health/)
+page) through the API alone, with `--server` and `--token`, so it reads any deployment you hold a
+token for, and it reduces that view to one table:
+
+```sh
+omniglass platform health                                 # the table; exits 0 when healthy
+omniglass platform health --json | jq '.healthy, .reasons'
+```
+
+```text
+platform  platform  healthy
+read at   2026-11-17T04:32:22Z
+
+SERVER      VERDICT  VERSION  UP
+lab-server  healthy  v9.9.9   1h0m0s
+
+lab-server
+  Ingest Lag  2.5 s
+
+ALARMS
+  none open
+
+PIPELINE      NEWEST IN  OUT  LOSS  LAST HOUR IN  OUT  LOSS
+  Outpost     0          0    -     0             0    -
+  Ingest      0          0    -     0             0    -
+  end to end                  -                        -
+
+OUTPOSTS  0, 0 with loss, 0 not healthy
+
+FAILURES
+  none
+
+healthy
+```
+
+The table is the page's answer read top down: the platform system's verdict, each server's verdict,
+build and uptime with its current figures (ingest lag, the queues, the database, retention), the
+alarms open on the servers, each pipeline hop's in, out and loss for the newest window and the last
+hour with the end to end beneath, the outposts with loss or not healthy, and every failure figure above
+zero. `--json` prints the same reading as one object, with `healthy`, the `reasons` it is not, and
+`not_visible`, the parts the token could not read.
+
+**The exit status is the verdict**, so a script, a cron job or a probe can branch on it alone. The
+command exits nonzero, its error naming every reason, when the platform system or a server reads
+anything but healthy, an alarm is open on a server, an outpost is not healthy, or the newest window lost
+work end to end:
+
+```text
+Error: the platform is not healthy: ...: ingest lag over a minute
+```
+
+**It reads what your token may read, and says what it cannot.** The view is gated by `outpost:read`; the
+server figures and the pipeline need a fleet-wide (all-scope) `component:read`, and the platform
+system's verdict a fleet-wide `system:read`. A part the token cannot read prints as
+`not visible to you`, never as zero or as an empty list, and the command then exits nonzero, because a
+reading that cannot see the platform cannot vouch for it: run it with a token that reads the whole
+platform.
+
+Three flags turn the one reading into a measurement:
+
+- `--window 1m` reads twice, a minute apart, and adds each server figure's start, end, delta and rate
+  a minute (`.window.figures`): how fast the database and the telemetry stream grow, and whether a
+  backlog is draining or building.
+- `--page-clients 4` times the console's system page, every read a cold open makes, under four
+  concurrent clients for the reading (`.page`, the loads' milliseconds and their failures as a loss
+  ratio). `--page-loads` sets each client's loads, spread across `--window`, and `--page-system` names
+  the system whose page to open (default the fleet view's first).
+- `--every 5m` samples on an interval and writes one JSON line a sample, to standard output or to
+  the file `--append` names (opened for append, so a series stopped and started continues it).
+  `--samples N` stops after N; without it the run goes until Ctrl-C or SIGTERM, which let the sample
+  in flight finish. A sample that fails writes a line with its `error`, and the run goes on.
+
+```sh
+omniglass platform health --window 1m --page-clients 4 --json | jq '.page.system_page_ms.p95'
+omniglass platform health --every 5m --window 1m --append health.jsonl
+jq -r '[.seq, .healthy, (.reasons | join("; "))] | @tsv' health.jsonl
+```
+
+**`platform health` or `lab measure`?** Both read the same figures; they differ in what they may
+touch. [`lab measure`](/guides/lab/#measuring-a-scale-lab) drives a scale lab, reading its
+database and containers through Docker, to measure what a fleet costs, so it runs on the lab's host.
+`platform health` only reads, through the API, as the token's principal, so it is the one to point at
+a server you did not start: a deployment, a soak, a support call. It is the same read an operator gets
+on the page, minus the browser.
+
 ## Generated versus hand-written
 
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.

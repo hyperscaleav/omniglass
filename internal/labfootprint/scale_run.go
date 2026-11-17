@@ -546,33 +546,13 @@ func (h *harness) loadPages(ctx context.Context, cfg ScaleConfig, system string)
 	h.say("loading the system page with %d clients, %d loads each", cfg.PageClients, cfg.PageLoads)
 	gap := cfg.Window / time.Duration(max(cfg.PageLoads, 1))
 	base := h.env["LAB_HOST_URL"]
-	var (
-		mu sync.Mutex
-		wg sync.WaitGroup
-	)
-	for c := range cfg.PageClients {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if sleep(ctx, gap*time.Duration(c)/time.Duration(cfg.PageClients)) != nil {
-				return
-			}
-			for range cfg.PageLoads {
-				due := time.Now().Add(gap)
-				load := h.loadSystemPage(ctx, base, system)
-				mu.Lock()
-				run.Loads = append(run.Loads, load)
-				mu.Unlock()
-				if sleep(ctx, time.Until(due)) != nil {
-					return
-				}
-			}
-		}()
-	}
-	return func() PageRun {
-		wg.Wait()
-		return run
-	}
+	done := make(chan PageRun, 1)
+	go func() {
+		done <- RunPageClients(ctx, cfg.PageClients, cfg.PageLoads, gap, func(ctx context.Context) PageLoad {
+			return h.loadSystemPage(ctx, base, system)
+		})
+	}()
+	return func() PageRun { return <-done }
 }
 
 // uptime is how long the server container had been running at t, so a
