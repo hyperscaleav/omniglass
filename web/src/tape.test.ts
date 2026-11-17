@@ -105,7 +105,7 @@ describe("the house rules a tape is held to", () => {
         "Wait@90s",
         "Show",
         "",
-        "Type 'omniglass node list | jq -c .'",
+        "Type 'omniglass outpost list | jq -c .'",
         "Enter",
         "Wait",
         "Type \"x\"",
@@ -149,7 +149,7 @@ describe("the house rules a tape is held to", () => {
   });
 
   it("waits on an Enter only with a prompt Wait: a Wait+Screen or Wait+Line pattern can match the command's own typed text", () => {
-    expect(bad('Type "omniglass node list"\nEnter\nWait+Screen /node/\n')).toBe(`${F}:6: the command entered here is not waited on (a Wait) before the tape ends`);
+    expect(bad('Type "omniglass outpost list"\nEnter\nWait+Screen /outpost/\n')).toBe(`${F}:6: the command entered here is not waited on (a Wait) before the tape ends`);
     expect(bad('Type "a"\nEnter\nWait+Line /a/\nType "b"\nEnter\nWait\n')).toContain(`${F}:6: the command entered here is not waited on`);
   });
 

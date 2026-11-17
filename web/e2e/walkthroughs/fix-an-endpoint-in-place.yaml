@@ -3,7 +3,7 @@
 # checked against the driver's inputs, and samples arrive with no re-attach.
 # Its setup locations bay-2-display (a Boreal Edge 55 in Bay 2, SNMP on
 # 127.60.9.9) with no endpoint, off camera. It is its own component, not
-# set-up-monitoring's, which attaches SNMP to its component too (#1404). The edit moves the endpoint's connection fingerprint, so the node's
+# set-up-monitoring's, which attaches SNMP to its component too (#1404). The edit moves the endpoint's connection fingerprint, so the outpost's
 # poll runs at its next 2s check-in rather than waiting out the backoff the
 # wrong address built up.
 title: Fix an endpoint in place
@@ -15,7 +15,7 @@ steps:
   - goto: /components/bay-2-display?tab=configure
     caption: A display in Bay 2, with no endpoint yet.
   - click: { role: button, name: Add endpoint }
-    caption: Add an endpoint, the way a node reaches the display.
+    caption: Add an endpoint, the way an outpost reaches the display.
   - click: { role: tab, name: Attach a driver }
     caption: Attach a driver.
   - select: { target: '#new-iface-driver', value: snmp-generic }
@@ -24,8 +24,8 @@ steps:
     caption: The host is the display's address, typed one octet short.
   - type: { target: '#new-iface-input-community', text: sim-community }
     caption: The community is a secret's name, never its value.
-  - select: { target: '#new-iface-node', value: edge-hq }
-    caption: The node edge-hq collects it.
+  - select: { target: '#new-iface-outpost', value: edge-hq }
+    caption: The outpost edge-hq collects it.
   - click: { role: button, name: Attach driver }
     caption: Attach it. The endpoint opens; nothing answers at that address, so nothing is collected.
   - click: 'button:has-text("Edit") >> nth=-1'
@@ -33,7 +33,7 @@ steps:
   - type: { target: '#edit-iface-input-host', text: '.9' }
     caption: Add the missing octet. The driver checks the value, and the target moves with it.
   - click: 'button:has-text("Save") >> nth=-1'
-    caption: Save. No re-attach; the node reconnects on the new address at its next check-in.
+    caption: Save. No re-attach; the outpost reconnects on the new address at its next check-in.
   - goto: /components/bay-2-display
     caption: Its Overview reads the display as it is collected.
   - wait: { selector: '[data-testid="leaf-vitals"]:has-text("Uptime")', timeout: 15000 }

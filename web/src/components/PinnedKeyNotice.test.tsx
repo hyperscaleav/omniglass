@@ -28,7 +28,7 @@ const hostKeyRejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   endpoint: "ssh",
   label: "Panel SSH",
   transport: "ssh",
-  node: "edge-hq",
+  outpost: "edge-hq",
   last_seen: ago(2_000),
   verdict: { value: "up", ts: ago(60_000) },
   responsive: { value: "up", ts: ago(60_000) },

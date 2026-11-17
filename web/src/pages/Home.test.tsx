@@ -7,13 +7,13 @@ import Home from "./Home";
 import { PLATFORM_VIEW_KEY, type PlatformView } from "../lib/platformhealth";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
-import { NODE_DOWN_AFTER_MS, NODES_KEY, type Node } from "../lib/nodes";
+import { OUTPOST_DOWN_AFTER_MS, OUTPOSTS_KEY, type Outpost } from "../lib/outposts";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // Home's Platform tile (#1644): the platform system's verdict and how many
-// nodes are not up, opening Platform health, and shown only to a caller who
-// can read nodes (the page's own door).
+// outposts are not up, opening Platform health, and shown only to a caller who
+// can read outposts (the page's own door).
 const readAt = "2026-11-09T12:00:00Z";
 const ago = (ms: number) => new Date(Date.parse(readAt) - ms).toISOString();
 const view: PlatformView = {
@@ -23,10 +23,10 @@ const view: PlatformView = {
   system: { id: uuidFor("platform"), name: "omniglass-platform", verdict: "degraded" },
   servers: [],
   groups: [],
-  loss_hops: ["node"],
-  nodes: [
+  loss_hops: ["outpost"],
+  outposts: [
     { name: "edge-a", label: "", enrolled: true, last_heartbeat_at: ago(1000) },
-    { name: "edge-b", label: "", enrolled: true, last_heartbeat_at: ago(NODE_DOWN_AFTER_MS + 1) },
+    { name: "edge-b", label: "", enrolled: true, last_heartbeat_at: ago(OUTPOST_DOWN_AFTER_MS + 1) },
     { name: "edge-c", label: "", enrolled: false },
   ],
 };
@@ -37,7 +37,7 @@ const fleet = (openAlarms?: number): FleetView => ({
   systems: ["hq-huddle", "depot-huddle", "lab-rack"].map((name) => ({ id: uuidFor(name), name, label: "", verdict: "healthy", dots: [] })),
   ...(openAlarms === undefined ? {} : { open_alarms: openAlarms }),
 });
-const nodeRows: Node[] = ["edge-a", "edge-b"].map((name) => ({ name, enrolled: true, tags: {} }));
+const outpostRows: Outpost[] = ["edge-a", "edge-b"].map((name) => ({ name, enrolled: true, tags: {} }));
 
 // A refused platform view (null) mounts on the production retry default, so
 // only the tile's own retry policy can surface the refusal promptly.
@@ -45,7 +45,7 @@ function mount(me: Me, platform: PlatformView | null = view, fleetData: FleetVie
   const qc = new QueryClient({ defaultOptions: { queries: platform ? { staleTime: Infinity, retry: false } : { staleTime: Infinity } } });
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...LOCATIONS_KEY], []);
-  qc.setQueryData([...NODES_KEY], nodeRows);
+  qc.setQueryData([...OUTPOSTS_KEY], outpostRows);
   if (fleetData) qc.setQueryData([...FLEET_VIEW_KEY], fleetData);
   if (platform) qc.setQueryData([...PLATFORM_VIEW_KEY], platform);
   let path = () => "";
@@ -71,24 +71,24 @@ afterEach(() => {
 });
 
 describe("Home Platform tile", () => {
-  it("shows the platform verdict and the nodes not up, and opens Platform health", async () => {
-    const { path } = mount(meWith(["node:read", "system:read"]));
+  it("shows the platform verdict and the outposts not up, and opens Platform health", async () => {
+    const { path } = mount(meWith(["outpost:read", "system:read"]));
     const tile = screen.getByTestId("home-platform");
     expect(tile).toHaveTextContent("degraded");
-    expect(tile).toHaveTextContent("2 nodes not up");
+    expect(tile).toHaveTextContent("2 outposts not up");
     fireEvent.click(tile);
     await waitFor(() => expect(path()).toBe("/platform"));
   });
 
-  it("is absent for a caller without node:read", () => {
+  it("is absent for a caller without outpost:read", () => {
     mount(meWith(["location:read"]));
     expect(screen.queryByTestId("home-platform")).toBeNull();
     expect(screen.queryByText("Collectors")).toBeNull();
   });
 
-  // node:read held only for some locations is refused by the view: the tile says
+  // outpost:read held only for some locations is refused by the view: the tile says
   // which read it needs rather than reading the platform forever.
-  it("on a refusal reads that it needs a fleet-wide node read", async () => {
+  it("on a refusal reads that it needs a fleet-wide outpost read", async () => {
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : String(input);
       const refused = url.includes("/views/platform");
@@ -97,9 +97,9 @@ describe("Home Platform tile", () => {
         headers: { "content-type": "application/json" },
       }));
     }));
-    mount(meWith(["node:read"]), null);
+    mount(meWith(["outpost:read"]), null);
     const tile = screen.getByTestId("home-platform");
-    await waitFor(() => expect(tile).toHaveTextContent("needs a fleet-wide node read"));
+    await waitFor(() => expect(tile).toHaveTextContent("needs a fleet-wide outpost read"));
     expect(tile).not.toHaveTextContent("reading the platform");
   });
 });
@@ -109,7 +109,7 @@ describe("Home Platform tile", () => {
 // state, never a dash under "collection pending".
 describe("Home count tiles", () => {
   it("show the seeded counts and none reads as collection pending", async () => {
-    mount(meWith(["location:read", "node:read", "system:read"]));
+    mount(meWith(["location:read", "outpost:read", "system:read"]));
     await waitFor(() => expect(screen.getByTestId("home-open-alarms")).toHaveTextContent("4"));
     expect(screen.getByTestId("home-systems")).toHaveTextContent("3");
     expect(screen.getByTestId("home-collectors")).toHaveTextContent("2");
@@ -117,11 +117,11 @@ describe("Home count tiles", () => {
   });
 
   it("opens the Systems and Collectors lists on click", async () => {
-    const { path } = mount(meWith(["location:read", "node:read"]));
+    const { path } = mount(meWith(["location:read", "outpost:read"]));
     fireEvent.click(await screen.findByRole("button", { name: /Systems/ }));
     await waitFor(() => expect(path()).toBe("/systems"));
     fireEvent.click(await screen.findByRole("button", { name: /Collectors/ }));
-    await waitFor(() => expect(path()).toBe("/nodes"));
+    await waitFor(() => expect(path()).toBe("/outposts"));
   });
 
   // /alarms is a stub page until the alarm list lands, so the tile is not a link.

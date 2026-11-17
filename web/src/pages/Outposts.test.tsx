@@ -2,8 +2,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import { Router, Route } from "@solidjs/router";
-import Nodes from "./Nodes";
-import { NODES_KEY, type Node } from "../lib/nodes";
+import Outposts from "./Outposts";
+import { OUTPOSTS_KEY, type Outpost } from "../lib/outposts";
 import { TASKS_KEY, type Task } from "../lib/tasks";
 import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { LOCATIONS_KEY, type Location } from "../lib/locations";
@@ -11,15 +11,15 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { toasts } from "../lib/toast";
 
-// The Nodes page is a config over the shared FlatList: a row per collection node,
+// The Outposts page is a config over the shared FlatList: a row per collection outpost,
 // each labelled by its label (the name/key is the subtitle), a row opening
 // the read-edit-save blade (facts, editable identity, the derived Tasks panel, and
 // Enroll / Re-enroll in the kebab), and a create Drawer. Data is seeded into the
 // query cache so no server is needed; the enroll / update fetches are faked where a
 // test drives them.
 const now = Date.now();
-const seed: Node[] = [
-  { name: "edge-hq", label: "HQ Edge Node", location: "hq", enrolled: true, description: "HQ closet", last_heartbeat_at: new Date(now).toISOString(), tags: { environment: "prod" } }, // up
+const seed: Outpost[] = [
+  { name: "edge-hq", label: "HQ Edge Outpost", location: "hq", enrolled: true, description: "HQ closet", last_heartbeat_at: new Date(now).toISOString(), tags: { environment: "prod" } }, // up
   { name: "edge-east", label: "East Edge", enrolled: true, last_heartbeat_at: new Date(now - 11 * 60_000).toISOString(), tags: {} }, // down (stale)
   { name: "edge-new", enrolled: false, tags: {} }, // never checked in, no label -> labels by key
 ];
@@ -27,11 +27,11 @@ const locSeed: Location[] = [
   { name: "hq", label: "HQ", location_type: "campus" } as Location,
   { name: "east", label: "East", location_type: "campus" } as Location,
 ];
-const taskSeed: Task[] = [{ id: "t-hq", endpoint_id: uuidFor("if-hq"), mode: "poll", enabled: true, node: "edge-hq" }];
-const ifaceSeed: Endpoint[] = [{ id: uuidFor("if-hq"), name: "disp-1-tcp", transport: "tcp", component: "disp-1", node: "edge-hq" }];
+const taskSeed: Task[] = [{ id: "t-hq", endpoint_id: uuidFor("if-hq"), mode: "poll", enabled: true, outpost: "edge-hq" }];
+const ifaceSeed: Endpoint[] = [{ id: uuidFor("if-hq"), name: "disp-1-tcp", transport: "tcp", component: "disp-1", outpost: "edge-hq" }];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
-const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["node:read"], grants: [] };
+const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["outpost:read"], grants: [] };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -39,10 +39,10 @@ function json(body: unknown, status = 200) {
 
 // lateLocations starts the location directory EMPTY, so a test can deliver it
 // after the blade is open and reproduce the order the placement picker actually
-// hits: the node is in hand well before the directory answers.
+// hits: the outpost is in hand well before the directory answers.
 function mount(me: Me, lateLocations = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...NODES_KEY], seed);
+  qc.setQueryData([...OUTPOSTS_KEY], seed);
   qc.setQueryData([...LOCATIONS_KEY], lateLocations ? [] : locSeed);
   qc.setQueryData([...TASKS_KEY], taskSeed);
   qc.setQueryData([...ENDPOINTS_KEY], ifaceSeed);
@@ -51,7 +51,7 @@ function mount(me: Me, lateLocations = false) {
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
-          <Route path="*" component={Nodes} />
+          <Route path="*" component={Outposts} />
         </Router>
       </QueryClientProvider>
     )),
@@ -59,16 +59,16 @@ function mount(me: Me, lateLocations = false) {
   );
 }
 
-describe("Nodes page", () => {
+describe("Outposts page", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     window.history.pushState({}, "", "/");
   });
 
-  // ?n=<name> deep-links to a node's blade, the door Platform health's
+  // ?n=<name> deep-links to an outpost's blade, the door Platform health's
   // secondary link opens (#1644).
   it("opens the blade a ?n= deep link names", async () => {
-    window.history.pushState({}, "", "/nodes?n=edge-hq");
+    window.history.pushState({}, "", "/outposts?n=edge-hq");
     mount(owner);
     const blade = await screen.findByRole("dialog");
     expect(within(blade).getByText("HQ closet")).toBeTruthy();
@@ -76,10 +76,10 @@ describe("Nodes page", () => {
 
   it("labels each row by its label (key as subtitle), falling back to the key, with the status pill", () => {
     const { getByText, getAllByText } = mount(owner);
-    expect(getByText("HQ Edge Node")).toBeTruthy(); // the row's label
+    expect(getByText("HQ Edge Outpost")).toBeTruthy(); // the row's label
     expect(getByText(/edge-hq/)).toBeTruthy(); // key + location in the subtitle
     expect(getByText("East Edge")).toBeTruthy();
-    // A node with no label falls back to its key, and the shared identity
+    // An outpost with no label falls back to its key, and the shared identity
     // cell suppresses the subtitle when the two are the same string, so the key
     // reads once rather than twice.
     expect(getAllByText("edge-new").length).toBe(1);
@@ -89,34 +89,34 @@ describe("Nodes page", () => {
     expect(getByText("never")).toBeTruthy();
   });
 
-  it("hides the create affordance without node:create, shows it with", () => {
+  it("hides the create affordance without outpost:create, shows it with", () => {
     const { queryByText, unmount } = mount(reader);
-    expect(queryByText("New node")).toBeNull();
+    expect(queryByText("New outpost")).toBeNull();
     unmount();
     mount(owner);
-    expect(screen.getByText("New node")).toBeTruthy();
+    expect(screen.getByText("New outpost")).toBeTruthy();
   });
 
-  it("gives node:update an Edit action that edits label, location, and description", async () => {
+  it("gives outpost:update an Edit action that edits label, location, and description", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      if (url.includes("/nodes/edge-hq") && method === "PATCH") {
+      if (url.includes("/outposts/edge-hq") && method === "PATCH") {
         return json({ name: "edge-hq", label: "HQ Prod", location: "east", enrolled: true });
       }
-      return json({ nodes: seed });
+      return json({ outposts: seed });
     });
 
     mount(owner);
-    fireEvent.click(screen.getByText("HQ Edge Node"));
+    fireEvent.click(screen.getByText("HQ Edge Outpost"));
     const blade = await screen.findByRole("dialog");
     // Read mode shows the identity; the name (key) is present but not an input.
     expect(within(blade).getByText("HQ closet")).toBeTruthy();
 
     fireEvent.click(within(blade).getByLabelText("Edit"));
     // The label input carries the current value; the name is not editable.
-    const nameField = within(blade).getByDisplayValue("HQ Edge Node");
+    const nameField = within(blade).getByDisplayValue("HQ Edge Outpost");
     fireEvent.input(nameField, { target: { value: "HQ Prod" } });
     fireEvent.click(within(blade).getByText("Save"));
 
@@ -126,14 +126,14 @@ describe("Nodes page", () => {
     });
   });
 
-  it("shows the node's own placement when the location directory answers after edit opened", async () => {
-    // The blade opens on the node, which is already in the list query; the
+  it("shows the outpost's own placement when the location directory answers after edit opened", async () => {
+    // The blade opens on the outpost, which is already in the list query; the
     // location directory is a separate query that can answer later. A <select>
     // keeps no value it has no option for, so the placement picker used to read
-    // "(unplaced)" on a placed node until something else made the value change
+    // "(unplaced)" on a placed outpost until something else made the value change
     // (#772). Delivered by hand, so the gap is deterministic, never a sleep.
     const { qc } = mount(owner, true);
-    fireEvent.click(screen.getByText("HQ Edge Node"));
+    fireEvent.click(screen.getByText("HQ Edge Outpost"));
     const blade = await screen.findByRole("dialog");
     fireEvent.click(within(blade).getByLabelText("Edit"));
     const picker = () => within(blade).getByLabelText("Location") as HTMLSelectElement;
@@ -146,28 +146,28 @@ describe("Nodes page", () => {
     expect(picker().value).toBe("hq");
   });
 
-  it("hides Edit and Re-enroll for a reader (no node:update / node:enroll)", async () => {
+  it("hides Edit and Re-enroll for a reader (no outpost:update / outpost:enroll)", async () => {
     mount(reader);
-    fireEvent.click(screen.getByText("HQ Edge Node"));
+    fireEvent.click(screen.getByText("HQ Edge Outpost"));
     const blade = await screen.findByRole("dialog");
     await within(blade).findByText("Enrolled");
     expect(within(blade).queryByLabelText("Edit")).toBeNull();
     expect(within(blade).queryByText(/Re-?enroll/i)).toBeNull();
-    expect(within(blade).queryByText("Delete")).toBeNull(); // no node:delete
+    expect(within(blade).queryByText("Delete")).toBeNull(); // no outpost:delete
   });
 
-  it("offers a gated Delete that confirms then calls DELETE /nodes/{name}", async () => {
+  it("offers a gated Delete that confirms then calls DELETE /outposts/{name}", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      if (url.includes("/nodes/edge-hq") && method === "DELETE") return new Response(null, { status: 204 });
-      return json({ nodes: seed });
+      if (url.includes("/outposts/edge-hq") && method === "DELETE") return new Response(null, { status: 204 });
+      return json({ outposts: seed });
     });
 
     mount(owner);
-    fireEvent.click(screen.getByText("HQ Edge Node"));
+    fireEvent.click(screen.getByText("HQ Edge Outpost"));
     const blade = await screen.findByRole("dialog");
     fireEvent.click(within(blade).getByText("Delete"));
 
@@ -178,9 +178,9 @@ describe("Nodes page", () => {
     });
   });
 
-  it("folds the node's derived tasks into a read-only panel on the detail blade", async () => {
+  it("folds the outpost's derived tasks into a read-only panel on the detail blade", async () => {
     mount(owner);
-    fireEvent.click(screen.getByText("HQ Edge Node"));
+    fireEvent.click(screen.getByText("HQ Edge Outpost"));
     const blade = await screen.findByRole("dialog");
     await within(blade).findByText("Tasks");
     expect(await within(blade).findByText("disp-1-tcp")).toBeTruthy();
@@ -198,11 +198,11 @@ describe("Nodes page", () => {
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
       if (url.includes(":enroll") && method === "POST") return json({ name: "edge-hq", token: "og_tok_SECRET" });
-      return json({ nodes: seed });
+      return json({ outposts: seed });
     });
 
     mount(owner);
-    fireEvent.click(screen.getByText("HQ Edge Node"));
+    fireEvent.click(screen.getByText("HQ Edge Outpost"));
     const blade = await screen.findByRole("dialog");
     // Re-enroll is a secondary action in the kebab, not the primary slot.
     fireEvent.click(within(blade).getByLabelText("More actions"));
@@ -218,7 +218,7 @@ describe("Nodes page", () => {
     await waitFor(() => expect(screen.queryByDisplayValue("og_tok_SECRET")).toBeNull());
   });
 
-  it("creates a node without enrolling it, then opens its blade with Enroll as the primary action", async () => {
+  it("creates an outpost without enrolling it, then opens its blade with Enroll as the primary action", async () => {
     const calls: string[] = [];
     let created = false;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -227,40 +227,40 @@ describe("Nodes page", () => {
       const method = typeof input === "string" ? "GET" : req.method;
       if (method !== "GET") calls.push(`${method} ${new URL(url, "http://x").pathname}`);
       if (url.includes(":enroll") && method === "POST") return json({ name: "edge-2", token: "og_new_TOKEN" });
-      if (url.endsWith("/nodes") && method === "POST") {
+      if (url.endsWith("/outposts") && method === "POST") {
         created = true;
         return json({ name: "edge-2", enrolled: false, tags: {} }, 201);
       }
-      return json({ nodes: created ? [...seed, { name: "edge-2", enrolled: false, tags: {} }] : seed });
+      return json({ outposts: created ? [...seed, { name: "edge-2", enrolled: false, tags: {} }] : seed });
     });
 
     mount(owner);
-    fireEvent.click(screen.getByText("New node"));
+    fireEvent.click(screen.getByText("New outpost"));
     const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
     fireEvent.input(nameInput, { target: { value: "edge-2" } });
     // The create form also carries label + location (parity with components).
     expect(screen.getByLabelText("Location")).toBeTruthy();
     // The copy no longer promises a token.
     expect(screen.queryByText(/mints/i)).toBeNull();
-    fireEvent.click(screen.getByText("Create node"));
+    fireEvent.click(screen.getByText("Create outpost"));
     await waitFor(() => expect(screen.queryByLabelText("Name")).toBeNull()); // the create drawer closes
 
-    // The new node's blade opens with Enroll as its primary action (not the kebab).
+    // The new outpost's blade opens with Enroll as its primary action (not the kebab).
     const blade = await screen.findByRole("dialog");
     expect((await within(blade).findByRole("button", { name: "Enroll" })).closest("ul")).toBeNull();
-    expect(toasts().map((t) => t.title)).toContain("Node created. Enroll it when the device is ready.");
+    expect(toasts().map((t) => t.title)).toContain("Outpost created. Enroll it when the device is ready.");
     // Exactly one write, and none to :enroll; no token is on screen.
-    expect(calls).toEqual(["POST /api/v1/nodes"]);
+    expect(calls).toEqual(["POST /api/v1/outposts"]);
     expect(screen.queryByLabelText("Enrollment token")).toBeNull();
   });
 
-  it("enrolls an unenrolled node from its primary Enroll button and reveals the token", async () => {
+  it("enrolls an unenrolled outpost from its primary Enroll button and reveals the token", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
       if (url.includes(":enroll") && method === "POST") return json({ name: "edge-new", token: "og_first_TOKEN" });
-      return json({ nodes: seed });
+      return json({ outposts: seed });
     });
 
     mount(owner);
@@ -272,32 +272,32 @@ describe("Nodes page", () => {
     expect(await screen.findByDisplayValue("og_first_TOKEN")).toBeTruthy();
   });
 
-  it("keeps Re-enroll in the kebab for an enrolled node, with no primary Enroll", async () => {
+  it("keeps Re-enroll in the kebab for an enrolled outpost, with no primary Enroll", async () => {
     mount(owner);
-    fireEvent.click(screen.getByText("HQ Edge Node"));
+    fireEvent.click(screen.getByText("HQ Edge Outpost"));
     const blade = await screen.findByRole("dialog");
     await within(blade).findByText("Enrolled");
     expect(within(blade).queryByRole("button", { name: "Enroll" })).toBeNull();
   });
 
-  it("lets node:create without node:enroll create a node, and hides Enroll on its blade", async () => {
-    const creator: Me = { principal: { id: "c", kind: "human" }, permissions: ["node:read", "node:create"], grants: [] };
+  it("lets outpost:create without outpost:enroll create an outpost, and hides Enroll on its blade", async () => {
+    const creator: Me = { principal: { id: "c", kind: "human" }, permissions: ["outpost:read", "outpost:create"], grants: [] };
     let created = false;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      if (url.endsWith("/nodes") && method === "POST") {
+      if (url.endsWith("/outposts") && method === "POST") {
         created = true;
         return json({ name: "edge-2", enrolled: false, tags: {} }, 201);
       }
-      return json({ nodes: created ? [...seed, { name: "edge-2", enrolled: false, tags: {} }] : seed });
+      return json({ outposts: created ? [...seed, { name: "edge-2", enrolled: false, tags: {} }] : seed });
     });
 
     mount(creator);
-    fireEvent.click(screen.getByText("New node"));
+    fireEvent.click(screen.getByText("New outpost"));
     fireEvent.input(await screen.findByLabelText("Name"), { target: { value: "edge-2" } });
-    fireEvent.click(screen.getByText("Create node"));
+    fireEvent.click(screen.getByText("Create outpost"));
     await waitFor(() => expect(screen.queryByLabelText("Name")).toBeNull());
 
     const blade = await screen.findByRole("dialog");
@@ -309,17 +309,17 @@ describe("Nodes page", () => {
   // The create form's two identity fields are coupled by lib/entities: the operator
   // types the label, the address follows it, and hand-editing the address claims it
   // so a later relabel cannot rewrite what they typed.
-  it("derives the node name from the label until the name is hand-edited", async () => {
+  it("derives the outpost name from the label until the name is hand-edited", async () => {
     mount(owner);
-    fireEvent.click(screen.getByText("New node"));
+    fireEvent.click(screen.getByText("New outpost"));
     const display = (await screen.findByLabelText("Label")) as HTMLInputElement;
     const name = screen.getByLabelText("Name") as HTMLInputElement;
 
-    fireEvent.input(display, { target: { value: "HQ Closet Node" } });
-    expect(name.value).toBe("hq-closet-node");
+    fireEvent.input(display, { target: { value: "HQ Closet Outpost" } });
+    expect(name.value).toBe("hq-closet-outpost");
 
     fireEvent.input(name, { target: { value: "edge-hq-1" } });
-    fireEvent.input(display, { target: { value: "HQ Closet Node 2" } });
+    fireEvent.input(display, { target: { value: "HQ Closet Outpost 2" } });
     expect(name.value).toBe("edge-hq-1");
   });
 });

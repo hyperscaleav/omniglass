@@ -7,7 +7,7 @@ import Templates from "./Templates";
 import { TEMPLATES_KEY, type Template } from "../lib/templates";
 import { ME_KEY, type Me } from "../lib/auth";
 import { LOCATIONS_KEY, type Location } from "../lib/locations";
-import { NODES_KEY } from "../lib/nodes";
+import { OUTPOSTS_KEY } from "../lib/outposts";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
 import { DRIVERS_KEY } from "../lib/drivers";
@@ -81,7 +81,7 @@ function mount(path: string, me: Me = admin, held: Standard[] = standards, roles
   qc.setQueryData([...TEMPLATES_KEY], catalog);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...LOCATIONS_KEY], [hq, west]);
-  qc.setQueryData([...NODES_KEY], [{ name: "lab-node", enrolled: true, tags: {} }]);
+  qc.setQueryData([...OUTPOSTS_KEY], [{ name: "lab-outpost", enrolled: true, tags: {} }]);
   qc.setQueryData([...STANDARDS_KEY], held);
   for (const [id, r] of Object.entries(roles)) qc.setQueryData([...standardRolesKey(id)], r);
   qc.setQueryData([...PRODUCTS_KEY], []);
@@ -187,15 +187,15 @@ describe("Templates page", () => {
     const b = await blade("Meeting Room 55, staffed");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
     const form = await screen.findByTestId("start-form-system");
-    // An address with no node is refused before submit.
+    // An address with no outpost is refused before submit.
     fireEvent.input(within(form).getAllByPlaceholderText("unattached")[0], { target: { value: "10.0.0.5" } });
-    expect(await within(form).findByText("An address needs a node to place its endpoint on.")).toBeInTheDocument();
+    expect(await within(form).findByText("An address needs an outpost to place its endpoint on.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /start system/i })).toBeDisabled();
-    fireEvent.change(within(form).getByLabelText("Node"), { target: { value: "lab-node" } });
+    fireEvent.change(within(form).getByLabelText("Outpost"), { target: { value: "lab-outpost" } });
     fireEvent.click(screen.getByRole("button", { name: /start system/i }));
     // Lands on the id the answer carries, with the standards it created and what it left to attach.
     await waitFor(() => expect(landed).toBe(`/systems/${SYS_ID}?created_standards=meeting-room%2Cmr55&unattached=1&from=mr55-system`));
-    expect(sent).toEqual({ template: "mr55-system", location: "hq.west", node: "lab-node", attach: { "video-bar": [{ host: "10.0.0.5" }] } });
+    expect(sent).toEqual({ template: "mr55-system", location: "hq.west", outpost: "lab-outpost", attach: { "video-bar": [{ host: "10.0.0.5" }] } });
   });
 
   it("shows the API's refusal and lands nowhere", async () => {
@@ -264,11 +264,11 @@ describe("Templates page", () => {
     const b = await blade("Boreal Edge 55 display");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
     const form = await screen.findByTestId("start-form-component");
-    fireEvent.change(within(form).getByLabelText("Node"), { target: { value: "lab-node" } });
+    fireEvent.change(within(form).getByLabelText("Outpost"), { target: { value: "lab-outpost" } });
     fireEvent.input(within(form).getByLabelText("Address"), { target: { value: "10.0.0.20" } });
     fireEvent.click(screen.getByRole("button", { name: /start component/i }));
     await waitFor(() => expect(landed).toBe(`/components/${COMP_ID}?from=boreal-edge-55`));
-    expect(sent).toEqual({ template: "boreal-edge-55", location: "hq", node: "lab-node", inputs: { host: "10.0.0.20" } });
+    expect(sent).toEqual({ template: "boreal-edge-55", location: "hq", outpost: "lab-outpost", inputs: { host: "10.0.0.20" } });
   });
 
   it("names everything a deploy-shaped caller lacks, and offers no Start", async () => {

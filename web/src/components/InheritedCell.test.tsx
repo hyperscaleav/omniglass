@@ -43,7 +43,7 @@ describe("InheritedCell", () => {
     expect(container.textContent).toContain(EMPTY_VALUE);
   });
 
-  // An empty string is the wire's spelling of "this node declares no fact of its
+  // An empty string is the wire's spelling of "this outpost declares no fact of its
   // own" (#716), so it has to fall back exactly as an absent field does.
   it("treats an empty own value as stating nothing, the way the wire spells it", () => {
     const { container } = render(() => <InheritedCell own="" resolved="from-above" />);
@@ -73,7 +73,7 @@ describe("InheritedCell", () => {
     expect(cellOf(inherited.container).className).toBe(cellOf(stated.container).className);
     expect(cellOf(stated.container).className).toContain("text-base-content/60");
     // Nothing else separates them either: no mark on one and not the other, and
-    // no extra node on either.
+    // no extra outpost on either.
     expect(inherited.container.querySelectorAll("button")).toHaveLength(0);
     expect(stated.container.querySelectorAll("button")).toHaveLength(0);
   });

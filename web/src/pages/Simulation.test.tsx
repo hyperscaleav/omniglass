@@ -45,8 +45,8 @@ const simRow = (id: string, name: string, hits: number, extra: Partial<SimCompon
 
 const fleet = (hits: [number, number], connected = true): SimFleet => ({
   connected,
-  nodes: [{
-    node: "edge-hq", connected, last_seen: new Date().toISOString(),
+  outposts: [{
+    outpost: "edge-hq", connected, last_seen: new Date().toISOString(),
     capabilities: { low_ports: false, net_admin: false, port_offset: 10000 },
     impairments: { available: false, reason: "impairments are off; run the simulator with --impairments" },
     components: [
@@ -62,7 +62,7 @@ const components: Component[] = [
 ];
 
 const componentSim: ComponentSim = {
-  simulated: true, node: "edge-hq", connected: true, address: "127.60.0.2", product: "boreal-edge-55", profile: "boreal-edge-86",
+  simulated: true, outpost: "edge-hq", connected: true, address: "127.60.0.2", product: "boreal-edge-55", profile: "boreal-edge-86",
   summary: "Boreal Edge 86-inch 4K commercial display", variants: ["boreal-edge-86", "boreal-edge-55"],
   activity: simRow(DISPLAY, "display-1", 7),
   impairments: { available: false, reason: "impairments are off; run the simulator with --impairments" },
@@ -140,7 +140,7 @@ describe("the Simulation sidebar door", () => {
     current = { fleet: fleet([0, 0], false) };
     stubFetch();
     mount(() => <Sidebar collapsed={false} onToggle={() => {}} />);
-    expect(await screen.findByText("Nodes")).toBeTruthy();
+    expect(await screen.findByText("Outposts")).toBeTruthy();
     expect(screen.queryByText("Simulation")).toBeNull();
   });
 
@@ -153,7 +153,7 @@ describe("the Simulation sidebar door", () => {
 });
 
 describe("the Simulation page", () => {
-  it("renders the node card and a table row per simulated component, the impaired one marked", async () => {
+  it("renders the outpost card and a table row per simulated component, the impaired one marked", async () => {
     current = { fleet: fleet([3, 0]) };
     stubFetch();
     mount(() => <Simulation />);
@@ -173,16 +173,16 @@ describe("the Simulation page", () => {
     expect(within(rows[0]).queryByTestId("sim-impairment-chip")).toBeNull();
     expect(within(rows[1]).getByTestId("sim-state").textContent).toBe("running");
     expect(within(rows[1]).getByTestId("sim-impairment-chip").textContent).toBe("unplugged");
-    expect(screen.getByTestId("node-hits").textContent).toBe("3");
+    expect(screen.getByTestId("outpost-hits").textContent).toBe("3");
     expect(screen.getByText("unavailable")).toBeTruthy();
-    // One node: no Node column.
-    expect(within(screen.getByTestId("sim-table")).queryByRole("columnheader", { name: "Node" })).toBeNull();
+    // One outpost: no Outpost column.
+    expect(within(screen.getByTestId("sim-table")).queryByRole("columnheader", { name: "Outpost" })).toBeNull();
     expect(screen.getByRole("button", { name: /Add simulated component/ })).toBeTruthy();
   });
 
   it("shows a failed and a starting component by their state, the impairment set on the starting one marked not applied", async () => {
     const f = fleet([0, 0]);
-    f.nodes![0].components = [
+    f.outposts![0].components = [
       simRow(DISPLAY, "display-1", 0, { status: "failed", serving: false }),
       simRow(DSP, "dsp-1", 0, { status: "starting", serving: false, impairment: { latency_ms: 150, loss_pct: 2.5 } }),
     ];
@@ -198,7 +198,7 @@ describe("the Simulation page", () => {
 
   it("filters by state, and by the impairment's words", async () => {
     const f = fleet([0, 0]);
-    f.nodes![0].components = [
+    f.outposts![0].components = [
       simRow(DISPLAY, "display-1", 0, { status: "failed", serving: false }),
       simRow(DSP, "dsp-1", 0, { impaired: true, impairment: { latency_ms: 150, loss_pct: 2.5 } }),
     ];
@@ -218,15 +218,15 @@ describe("the Simulation page", () => {
     await waitFor(() => expect(screen.getAllByTestId("sim-row").map((r) => r.dataset.component)).toEqual([DSP]));
   });
 
-  it("adds a Node column when more than one node serves", async () => {
-    const west = { ...fleet([0, 0]).nodes![0], node: "edge-west", components: [simRow(uuidFor("sim-west"), "display-9", 0)] };
-    current = { fleet: { connected: true, nodes: [fleet([0, 0]).nodes![0], west] } };
+  it("adds an Outpost column when more than one outpost serves", async () => {
+    const west = { ...fleet([0, 0]).outposts![0], outpost: "edge-west", components: [simRow(uuidFor("sim-west"), "display-9", 0)] };
+    current = { fleet: { connected: true, outposts: [fleet([0, 0]).outposts![0], west] } };
     stubFetch();
     mount(() => <Simulation />);
     const rows = await screen.findAllByTestId("sim-row");
     expect(rows).toHaveLength(3);
-    expect(within(screen.getByTestId("sim-table")).getByRole("columnheader", { name: "Node" })).toBeTruthy();
-    expect(screen.getAllByTestId("sim-node")).toHaveLength(2);
+    expect(within(screen.getByTestId("sim-table")).getByRole("columnheader", { name: "Outpost" })).toBeTruthy();
+    expect(screen.getAllByTestId("sim-outpost")).toHaveLength(2);
   });
 
   it("highlights a row when its hit count rises between reads, only that row, and not on first load", async () => {
@@ -275,7 +275,7 @@ describe("the Simulation page", () => {
   });
 
   it("teaches and offers the add path when a simulator serves nothing yet", async () => {
-    current = { fleet: { connected: true, nodes: [{ ...fleet([0, 0]).nodes![0], components: [] }] } };
+    current = { fleet: { connected: true, outposts: [{ ...fleet([0, 0]).outposts![0], components: [] }] } };
     stubFetch();
     mount(() => <Simulation />);
     const empty = await screen.findByTestId("sim-empty");
@@ -368,7 +368,7 @@ describe("the component page's Simulation section", () => {
     expect(screen.queryByTestId("leaf-simulation")).toBeNull();
   });
 
-  // A node, an address or a hit count in monospace sits on its label's
+  // An outpost, an address or a hit count in monospace sits on its label's
   // baseline, not above it (#1379's review).
   it("aligns each simulation value on its label's baseline", async () => {
     stubFetch();
@@ -546,8 +546,8 @@ describe("the Simulation page's writes and stale state", () => {
     return r;
   }
 
-  it("adds a simulated component with a POST to the node, then closes", async () => {
-    stubFetch({ "POST /nodes/edge-hq/simulation/components": { component: "lab-display-1", address: "127.60.0.4" } });
+  it("adds a simulated component with a POST to the outpost, then closes", async () => {
+    stubFetch({ "POST /outposts/edge-hq/simulation/components": { component: "lab-display-1", address: "127.60.0.4" } });
     await openAdd();
     fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
@@ -560,7 +560,7 @@ describe("the Simulation page's writes and stale state", () => {
   });
 
   it("surfaces the server's refusal of an add and keeps the form open", async () => {
-    stubFetch({ "POST /nodes/edge-hq/simulation/components": new Answer(409, { title: "Conflict", status: 409, detail: "component lab-display-1 already exists" }) });
+    stubFetch({ "POST /outposts/edge-hq/simulation/components": new Answer(409, { title: "Conflict", status: 409, detail: "component lab-display-1 already exists" }) });
     await openAdd();
     fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
@@ -572,7 +572,7 @@ describe("the Simulation page's writes and stale state", () => {
   });
 
   it("shows every field's hint when an incomplete form is submitted", async () => {
-    current = { fleet: { connected: true, nodes: [fleet([0, 0]).nodes![0], { ...fleet([0, 0]).nodes![0], node: "edge-west" }] } };
+    current = { fleet: { connected: true, outposts: [fleet([0, 0]).outposts![0], { ...fleet([0, 0]).outposts![0], outpost: "edge-west" }] } };
     stubFetch();
     await openAdd();
     const name = await screen.findByLabelText("Name");
@@ -580,7 +580,7 @@ describe("the Simulation page's writes and stale state", () => {
     fireEvent.submit(name.closest("form")!);
     expect(await screen.findByText("Name the new component.")).toBeTruthy();
     expect(screen.getByText("Choose a simulated product.")).toBeTruthy();
-    expect(screen.getByText("Choose the node whose simulator serves it.")).toBeTruthy();
+    expect(screen.getByText("Choose the outpost whose simulator serves it.")).toBeTruthy();
     expect(calls.some((c) => c.method === "POST")).toBe(false);
   });
 
@@ -613,7 +613,7 @@ const meetingPlan: SimSystemPlan = {
 };
 const systemMaker: Me = {
   principal: { id: "u-sm", kind: "human" }, human: { username: "system-maker" },
-  permissions: ["simulation:read", "simulation:update", "system:create", "system:update", "component:read", "component:create", "endpoint:create", "standard:read", "system_type:read", "system:read", "node:read"], grants: [],
+  permissions: ["simulation:read", "simulation:update", "system:create", "system:update", "component:read", "component:create", "endpoint:create", "standard:read", "system_type:read", "system:read", "outpost:read"], grants: [],
 };
 const noSystemUpdate: Me = {
   principal: { id: "u-ns", kind: "human" }, human: { username: "no-system-update" },
@@ -664,7 +664,7 @@ describe("adding a simulated system", () => {
   // principal holding system:create is never without it and it has no row here.
   for (const perm of [
     "simulation:update", "system:create", "system:update", "component:create", "endpoint:create",
-    "standard:read", "system_type:read", "node:read",
+    "standard:read", "system_type:read", "outpost:read",
   ]) {
     it(`hides the action from a principal missing ${perm}`, async () => {
       stubFetch();
@@ -727,8 +727,8 @@ describe("adding a simulated system", () => {
 
   it("sends the standard, the type and only what was filled, then closes, refreshes the fleet and names the system", async () => {
     stubFetch({
-      "POST /nodes/edge-hq/simulation/systems": new Answer(201, {
-        system: "room-system-7", system_id: uuidFor("sys-room-7"), node: "edge-hq",
+      "POST /outposts/edge-hq/simulation/systems": new Answer(201, {
+        system: "room-system-7", system_id: uuidFor("sys-room-7"), outpost: "edge-hq",
         components: [
           { component: "display-1", role: "display", product: "boreal-edge-55", address: "127.60.0.4" },
           { component: "display-2", role: "display", product: "boreal-edge-55", address: "127.60.0.5" },
@@ -745,7 +745,7 @@ describe("adding a simulated system", () => {
     fireEvent.click(add);
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
     const post = calls.find((c) => c.method === "POST")!;
-    expect(post.path).toBe("/nodes/edge-hq/simulation/systems");
+    expect(post.path).toBe("/outposts/edge-hq/simulation/systems");
     expect(post.body).toEqual({ standard: "meeting-room", system_type: "room-system" });
     await waitFor(() => expect(screen.queryByRole("button", { name: "Add system" })).toBeNull());
     const note = await screen.findByTestId("sim-system-added");
@@ -765,7 +765,7 @@ describe("adding a simulated system", () => {
   });
 
   it("sends a typed name and a chosen location", async () => {
-    stubFetch({ "POST /nodes/edge-hq/simulation/systems": new Answer(201, { system: "lab-room", system_id: uuidFor("sys-lab"), node: "edge-hq", components: [], unstaffed: [] }) });
+    stubFetch({ "POST /outposts/edge-hq/simulation/systems": new Answer(201, { system: "lab-room", system_id: uuidFor("sys-lab"), outpost: "edge-hq", components: [], unstaffed: [] }) });
     const { qc } = await openAddSystem();
     qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("loc-a"), name: "boardroom-a", label: "Boardroom A", path: "hq.boardroom-a" }]);
     await fill();
@@ -779,12 +779,12 @@ describe("adding a simulated system", () => {
   });
 
   for (const [status, title, detail] of [
-    [409, "Conflict", "no simulator is connected to node edge-hq"],
+    [409, "Conflict", "no simulator is connected to outpost edge-hq"],
     [422, "Unprocessable Entity", "nothing in standard meeting-room can be simulated"],
     [403, "Forbidden", "missing permission system:update"],
   ] as const) {
     it(`surfaces a ${status} in the form and keeps it open`, async () => {
-      stubFetch({ "POST /nodes/edge-hq/simulation/systems": new Answer(status, { title, status, detail }) });
+      stubFetch({ "POST /outposts/edge-hq/simulation/systems": new Answer(status, { title, status, detail }) });
       await openAddSystem();
       await fill();
       const add = screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement;

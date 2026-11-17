@@ -11,7 +11,7 @@ import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { COMPONENTS_KEY } from "../lib/components";
-import { NODES_KEY } from "../lib/nodes";
+import { OUTPOSTS_KEY } from "../lib/outposts";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
 import { DRIVERS_KEY } from "../lib/drivers";
@@ -79,7 +79,7 @@ function mount(path: string, me: Me = admin, standards: Standard[] = []) {
   qc.setQueryData([...SYSTEMS_KEY], []);
   qc.setQueryData([...SYSTEM_TYPES_KEY], []);
   qc.setQueryData([...COMPONENTS_KEY], []);
-  qc.setQueryData([...NODES_KEY], [{ name: "lab-node", enrolled: true, tags: {} }]);
+  qc.setQueryData([...OUTPOSTS_KEY], [{ name: "lab-outpost", enrolled: true, tags: {} }]);
   qc.setQueryData([...STANDARDS_KEY], standards);
   qc.setQueryData([...PRODUCTS_KEY], []);
   qc.setQueryData([...DRIVERS_KEY], []);
@@ -155,11 +155,11 @@ describe("CreatePage's From a template", () => {
     expect(offered(picker)).toEqual(["boreal-edge-55"]);
     fireEvent.change(picker, { target: { value: "boreal-edge-55" } });
     const form = await screen.findByTestId("start-form-component");
-    fireEvent.change(within(form).getByLabelText("Node"), { target: { value: "lab-node" } });
+    fireEvent.change(within(form).getByLabelText("Outpost"), { target: { value: "lab-outpost" } });
     fireEvent.input(within(form).getByLabelText("Address"), { target: { value: "10.0.0.20" } });
     fireEvent.click(screen.getByRole("button", { name: "Start component" }));
     await waitFor(() => expect(landed).toBe(`/components/${uuidFor("c-1")}?from=boreal-edge-55`));
-    expect(posts.find((p) => p.url.includes("FromTemplate"))?.body).toEqual({ template: "boreal-edge-55", location: "hq", node: "lab-node", inputs: { host: "10.0.0.20" } });
+    expect(posts.find((p) => p.url.includes("FromTemplate"))?.body).toEqual({ template: "boreal-edge-55", location: "hq", outpost: "lab-outpost", inputs: { host: "10.0.0.20" } });
   });
 
   it("refuses submit while the caller lacks what the start writes, naming it", async () => {

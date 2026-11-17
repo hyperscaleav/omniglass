@@ -40,7 +40,7 @@ function command(over: Partial<Command>): Command {
     issued_at: at(3),
     endpoint: "wss",
     endpoint_id: uuidFor("cmd-ep"),
-    node: "edge-hq",
+    outpost: "edge-hq",
     driver: "kestrel-ws",
     issuer: "dev",
     issuer_id: uuidFor("cmd-dev"),
@@ -76,12 +76,12 @@ const rows: Command[] = [
     reason: "observed hdmi3, the intended value",
     observed: { value: "hdmi3" as unknown as Command["intended"], at: at(100) },
     endpoint: undefined,
-    node: undefined,
+    outpost: undefined,
     driver: undefined,
     issued_at: at(110),
     settled_at: at(100),
   }),
-  command({ id: 1, status: "timed-out", phase: "timed-out", settled_by: "window", reason: "queued for node edge-dark, which did not take it within its 15s settle window", issued_at: at(300), settled_at: at(285) }),
+  command({ id: 1, status: "timed-out", phase: "timed-out", settled_by: "window", reason: "queued for outpost edge-dark, which did not take it within its 15s settle window", issued_at: at(300), settled_at: at(285) }),
 ];
 
 const operator: Me = { principal: { id: "op", kind: "human" }, permissions: ["*:read", "command:issue"], grants: [] };
@@ -165,7 +165,7 @@ describe("CommandsPanel", () => {
     expect(detail.textContent).toContain("dev");
   });
 
-  it("tells a redelivered command's first delivery and how many times a node took it", () => {
+  it("tells a redelivered command's first delivery and how many times an outpost took it", () => {
     const issued = Date.now() - 70_000;
     const iso = (ms: number) => new Date(issued + ms).toISOString();
     mount({

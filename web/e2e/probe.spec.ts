@@ -85,9 +85,9 @@ async function settle(page: Page, surface: string) {
   try {
     await page.addScriptTag({ path: AXE });
     const violations = await page.evaluate(async () => {
-      const axe = (window as unknown as { axe: { run: (c: Document, o: unknown) => Promise<{ violations: { id: string; impact: string; help: string; nodes: unknown[] }[] }> } }).axe;
+      const axe = (window as unknown as { axe: { run: (c: Document, o: unknown) => Promise<{ violations: { id: string; impact: string; help: string; outposts: unknown[] }[] }> } }).axe;
       const r = await axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa"] } });
-      return r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.length }));
+      return r.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, outposts: v.outposts.length }));
     });
     for (const v of violations) emit({ kind: "axe", surface, ...v });
   } catch (e) {

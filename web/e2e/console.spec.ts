@@ -150,7 +150,7 @@ test.describe("operator console", () => {
 
     // Clean up after the run, and prove on the way that a component placed
     // nowhere is still findable: it sits in the outline's "Placed nowhere you
-    // can see" node, whose row blade carries the confirm-delete (#799).
+    // can see" outpost, whose row blade carries the confirm-delete (#799).
     page.on("dialog", (d) => d.accept());
     await page.goto("/web/explore");
     await page.getByRole("button", { name: "Expand Placed nowhere you can see" }).click();
@@ -377,7 +377,7 @@ test.describe("operator console", () => {
     expect((await page.request.delete(`/api/v1/notification-targets/${target}`)).ok()).toBeTruthy();
   });
 
-  test("platform health: the Home tile opens the page, which names the build, its verdict and a row per node", async ({ page }) => {
+  test("platform health: the Home tile opens the page, which names the build, its verdict and a row per outpost", async ({ page }) => {
     await page.goto("/web/");
     const tile = page.getByTestId("home-platform");
     await expect(tile).toContainText(/not up/);
@@ -392,28 +392,28 @@ test.describe("operator console", () => {
     await expect(header.getByTestId("platform-verdict")).toContainText(/healthy|incomplete|degraded|outage/);
     await expect(page.getByTestId("platform-lab")).toBeVisible();
 
-    // A row for every enrolled node, and a checkin figure on each that has
+    // A row for every enrolled outpost, and a checkin figure on each that has
     // checked in (the empty scenario enrolls none; the read-platform-health
     // walkthrough drives a live row).
-    const nodes = (await (await page.request.get("/api/v1/nodes")).json()) as {
-      nodes?: { name: string; enrolled: boolean; last_heartbeat_at?: string }[];
+    const outposts = (await (await page.request.get("/api/v1/outposts")).json()) as {
+      outposts?: { name: string; enrolled: boolean; last_heartbeat_at?: string }[];
     };
-    for (const n of (nodes.nodes ?? []).filter((x) => x.enrolled)) {
-      const row = page.getByTestId(`platform-node-${n.name}`);
+    for (const n of (outposts.outposts ?? []).filter((x) => x.enrolled)) {
+      const row = page.getByTestId(`platform-outpost-${n.name}`);
       await expect(row).toBeVisible();
       if (n.last_heartbeat_at) await expect(row.locator("[data-figure=checkin-age]")).not.toHaveText(/not reported/);
     }
   });
 
   // The closed loop (#1647), on the second lab run.sh brings up: the dev fleet
-  // with its node and the simulator beside it, nothing impaired. Once the ring
-  // holds a window the section reads measured for every node, and a healthy
+  // with its outpost and the simulator beside it, nothing impaired. Once the ring
+  // holds a window the section reads measured for every outpost, and a healthy
   // lab loses nothing at any hop: every gap reads 0 (or no figure, where the
   // sim does not observe the hop), and every protocol with a poll target
   // reached the simulator: requests it received, or, for a probe that only
   // connects or logs in and asks nothing (ssh, telnet), connections its
   // listener accepted.
-  test("platform health @simulator: every simulated node reads measured, no gap open, every polled protocol reached", async ({ page }) => {
+  test("platform health @simulator: every simulated outpost reads measured, no gap open, every polled protocol reached", async ({ page }) => {
     test.skip(!process.env.OG_E2E_SIMULATOR, "needs a lab with a simulator (run.sh's second phase)");
     test.setTimeout(150_000);
     await page.goto("/web/platform");
@@ -441,12 +441,12 @@ test.describe("operator console", () => {
       .toMatch(/^measured polled(,measured polled)*$/);
 
     for (const card of await cards.all()) {
-      const node = await card.getAttribute("data-testid");
+      const outpost = await card.getAttribute("data-testid");
       const gaps = await card.getByTestId("platform-sim-gap").evaluateAll((els) =>
         els.map((e) => ({ gap: e.getAttribute("data-gap"), protocol: e.getAttribute("data-protocol"), ratio: e.getAttribute("data-ratio") })),
       );
-      expect(gaps.length, `${node} reads its gaps`).toBeGreaterThan(0);
-      for (const g of gaps) expect(["0", ""], `${node} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
+      expect(gaps.length, `${outpost} reads its gaps`).toBeGreaterThan(0);
+      for (const g of gaps) expect(["0", ""], `${outpost} ${g.gap} ${g.protocol} ratio`).toContain(g.ratio);
 
       const polled = await card.getByTestId("platform-sim-protocol").evaluateAll((els) =>
         els.map((e) => ({
@@ -456,9 +456,9 @@ test.describe("operator console", () => {
           received: Number(e.getAttribute("data-received")),
         })),
       );
-      expect(polled.filter((p) => p.targets > 0).length, `${node} has a polled protocol`).toBeGreaterThan(0);
-      expect(polled.some((p) => p.targets > 0 && p.received > 0), `${node} received a polled request`).toBe(true);
-      for (const p of polled.filter((x) => x.targets > 0)) expect(p.received + p.accepted, `${node} ${p.protocol} received or accepted`).toBeGreaterThan(0);
+      expect(polled.filter((p) => p.targets > 0).length, `${outpost} has a polled protocol`).toBeGreaterThan(0);
+      expect(polled.some((p) => p.targets > 0 && p.received > 0), `${outpost} received a polled request`).toBe(true);
+      for (const p of polled.filter((x) => x.targets > 0)) expect(p.received + p.accepted, `${outpost} ${p.protocol} received or accepted`).toBeGreaterThan(0);
     }
   });
 
@@ -471,7 +471,7 @@ test.describe("operator console", () => {
     const flow = page.getByTestId("pipeline");
     await expect(flow).toBeVisible();
 
-    // The hops are the view's, in its order; the empty scenario enrolls no node,
+    // The hops are the view's, in its order; the empty scenario enrolls no outpost,
     // so a hop here may carry nothing yet (not reported, never a fake 0) and the
     // find-where-work-is-lost walkthrough drives the live figures on the dev lab.
     const view = (await (await page.request.get("/api/v1/views/platform")).json()) as { pipeline?: Pipeline };
@@ -512,7 +512,7 @@ test.describe("operator console", () => {
     // boot, the ingest lag one window after a batch commits.
     test.setTimeout(240_000);
 
-    // The empty scenario runs no node, so nothing is ingested on its own: push
+    // The empty scenario runs no outpost, so nothing is ingested on its own: push
     // one sample through the ingest lane, a few seconds old, so the server has a
     // lag to report.
     const name = `e2e-ingest-${Date.now()}`;

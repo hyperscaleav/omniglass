@@ -5,7 +5,7 @@
 // run. Raw logs are never handed to a model: the reduction is deterministic,
 // grouped, ranked, and capped in bytes, so a run's cost to read is bounded
 // however much the run saw. Pure, with no dependencies, so the unit tests and
-// the probe's node load it alike.
+// the probe's outpost load it alike.
 //
 // Raw events (every one carries `surface`, the route or walkthrough it was
 // seen on, as "route:<path>" or "walkthrough:<id>"):
@@ -15,7 +15,7 @@
 //   { kind: 'pageerror', text }                         an uncaught page error
 //   { kind: 'response', method, url, status, ms }       an API response and its time
 //   { kind: 'vitals', lcp, cls }                        the surface's web vitals
-//   { kind: 'axe', id, impact, help, nodes }            one accessibility rule violated
+//   { kind: 'axe', id, impact, help, outposts }            one accessibility rule violated
 //   { kind: 'walkthrough', ok, step, reason, still }    a replayed walkthrough's outcome, and the
 //                                                       frame it failed on (beside digest.json)
 
@@ -123,17 +123,17 @@ const byteLength = (s) => new TextEncoder().encode(s).length;
 export function reduce(events, overrides = {}, templates = []) {
   const b = { ...DEFAULT_BUDGETS, ...overrides };
   const matchers = routeMatchers(templates);
-  /** @type {Map<string, { kind: string, key: string, severity: Finding['severity'], count: number, surfaces: Set<string>, detail: string, nodes: number }>} */
+  /** @type {Map<string, { kind: string, key: string, severity: Finding['severity'], count: number, surfaces: Set<string>, detail: string, outposts: number }>} */
   const found = new Map();
-  const add = (/** @type {string} */ kind, /** @type {string} */ key, /** @type {Finding['severity']} */ severity, /** @type {string} */ surface, /** @type {string} */ detail, nodes = 0) => {
+  const add = (/** @type {string} */ kind, /** @type {string} */ key, /** @type {Finding['severity']} */ severity, /** @type {string} */ surface, /** @type {string} */ detail, outposts = 0) => {
     const id = `${kind}:${key}`;
     let f = found.get(id);
     if (!f) {
-      f = { kind, key, severity, count: 0, surfaces: new Set(), detail, nodes: 0 };
+      f = { kind, key, severity, count: 0, surfaces: new Set(), detail, outposts: 0 };
       found.set(id, f);
     }
     f.count++;
-    f.nodes += nodes;
+    f.outposts += outposts;
     // One key, one detail, whatever order its events came in: the smallest.
     if (detail < f.detail) f.detail = detail;
     if (surface) f.surfaces.add(surface);
@@ -182,7 +182,7 @@ export function reduce(events, overrides = {}, templates = []) {
         break;
       case 'axe': {
         const sev = e.impact === 'critical' || e.impact === 'serious' ? 'medium' : 'low';
-        add('a11y', e.id, sev, e.surface, normalizeText(`${e.impact ?? 'unknown'}: ${e.help ?? e.id}`, b.maxTextChars), Number(e.nodes) || 0);
+        add('a11y', e.id, sev, e.surface, normalizeText(`${e.impact ?? 'unknown'}: ${e.help ?? e.id}`, b.maxTextChars), Number(e.outposts) || 0);
         break;
       }
       case 'walkthrough':
@@ -215,7 +215,7 @@ export function reduce(events, overrides = {}, templates = []) {
     severity: f.severity,
     count: f.count,
     surfaces: [...f.surfaces].sort().slice(0, MAX_SURFACES),
-    detail: f.kind === 'a11y' ? `${f.detail} (${f.nodes} nodes across ${f.surfaces.size} surfaces)` : f.detail,
+    detail: f.kind === 'a11y' ? `${f.detail} (${f.outposts} outposts across ${f.surfaces.size} surfaces)` : f.detail,
   }));
   const ranked = all.sort(
     (x, y) => SEVERITY_RANK[x.severity] - SEVERITY_RANK[y.severity] || y.count - x.count || `${x.kind}:${x.key}`.localeCompare(`${y.kind}:${y.key}`),

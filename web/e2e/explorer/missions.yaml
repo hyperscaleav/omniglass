@@ -61,7 +61,7 @@ missions:
     goal: Give a device an endpoint, attach a driver, and watch real samples arrive.
     scenario: dev
     lenses: [ux, design]
-    surfaces: [web/src/pages/ComponentLeaf.tsx, web/src/pages/Drivers.tsx, internal/api/endpoints.go, internal/collection, internal/node]
+    surfaces: [web/src/pages/ComponentLeaf.tsx, web/src/pages/Drivers.tsx, internal/api/endpoints.go, internal/collection, internal/outpost]
     done: The device's view shows samples newer than the moment the endpoint was created.
 
   - id: read-only-audit

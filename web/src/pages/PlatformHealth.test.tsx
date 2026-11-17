@@ -4,14 +4,14 @@ import { fireEvent, render, screen, waitFor, within } from "@solidjs/testing-lib
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import PlatformHealth from "./PlatformHealth";
-import { NOT_WIRED, PLATFORM_SIM_KEY, PLATFORM_VIEW_KEY, WARMING_UP, type PlatformServer, type PlatformSimNode, type PlatformSimulation, type PlatformView } from "../lib/platformhealth";
+import { NOT_WIRED, PLATFORM_SIM_KEY, PLATFORM_VIEW_KEY, WARMING_UP, type PlatformServer, type PlatformSimOutpost, type PlatformSimulation, type PlatformView } from "../lib/platformhealth";
 import { SIMULATION_KEY, type SimFleet } from "../lib/simulation";
-import { NODE_DOWN_AFTER_MS } from "../lib/nodes";
+import { OUTPOST_DOWN_AFTER_MS } from "../lib/outposts";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // The Platform health page (#1644): a header (the build running, its uptime,
-// the platform verdict linking to its system, a lab badge) over a node table
+// the platform verdict linking to its system, a lab badge) over an outpost table
 // whose columns are the groups the view returns. The view is seeded into the
 // query cache, so no server is needed; every clock is the body's read_at.
 const readAt = "2026-11-09T12:00:00Z";
@@ -26,27 +26,27 @@ const full: PlatformView = {
   system: { id: uuidFor("platform"), name: "omniglass-platform", verdict: "degraded" },
   servers: [{ component: uuidFor("server"), name: "lab-server", version: "v9.9.9", started_at: ago((2 * 3600 + 5 * 60) * 1000), verdict: "healthy", groups: [], alarms: [] }],
   groups: [
-    { name: "checkin", label: "Checkin", keys: [{ name: "checkin-age", label: "Check-in Age", unit: "s", description: "Seconds since the node last checked in." }] },
-    { name: "commands", label: "Commands", keys: [{ name: "command-pending-count", label: "Pending Commands", unit: "", description: "Commands waiting on the node." }] },
+    { name: "checkin", label: "Checkin", keys: [{ name: "checkin-age", label: "Check-in Age", unit: "s", description: "Seconds since the outpost last checked in." }] },
+    { name: "commands", label: "Commands", keys: [{ name: "command-pending-count", label: "Pending Commands", unit: "", description: "Commands waiting on the outpost." }] },
   ],
-  nodes: [
+  outposts: [
     {
       name: "edge-alpha", label: "Edge Alpha", enrolled: true, last_heartbeat_at: ago(3000),
       component: uuidFor("alpha"), verdict: "healthy", loss: 0.03,
       figures: { "checkin-age": { value: 3, observed_at: ago(3000) } },
     },
     {
-      name: "edge-bravo", label: "", enrolled: true, last_heartbeat_at: ago(NODE_DOWN_AFTER_MS + 1),
+      name: "edge-bravo", label: "", enrolled: true, last_heartbeat_at: ago(OUTPOST_DOWN_AFTER_MS + 1),
       component: uuidFor("bravo"), verdict: "outage",
       figures: { "checkin-age": { value: 400, observed_at: ago(1000) }, "command-pending-count": { value: 0, observed_at: ago(1000) } },
     },
   ],
-  loss_hops: ["node"],
+  loss_hops: ["outpost"],
   pipeline: {
     keys: [{ name: "delivery-loss-ratio", label: "Delivery Loss", unit: "", description: "The share of what went in that did not come out." }],
     hops: [
       {
-        id: "node", label: "Node", description: "The node's spool.", component_class: "node",
+        id: "outpost", label: "Outpost", description: "The outpost's spool.", component_class: "outpost",
         keys: ["delivery-in-count", "delivery-out-count", "delivery-loss-ratio"],
         kinds: [{ kind: "metric", newest: { in: 10, out: 10, loss: 0 }, last_hour: { in: 100, out: 97, loss: 0.03 } }],
         total: { newest: { in: 10, out: 10, loss: 0 }, last_hour: { in: 100, out: 97, loss: 0.03 } },
@@ -105,7 +105,7 @@ function emptySeries() {
 // page's own retry policy can surface the refusal promptly.
 // The simulator fleet is seeded disconnected unless a test connects one, so
 // the simulation section's condition is the test's to set.
-const disconnected: SimFleet = { connected: false, nodes: [] };
+const disconnected: SimFleet = { connected: false, outposts: [] };
 function mount(view: PlatformView | null, sim: { me?: Me; fleet?: SimFleet; body?: PlatformSimulation } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: view ? { staleTime: Infinity, retry: false } : { staleTime: Infinity } } });
   if (view) qc.setQueryData([...PLATFORM_VIEW_KEY], view);
@@ -156,73 +156,73 @@ describe("PlatformHealth page", () => {
   // its catalog description.
   it("renders one column per key, by group, each headed with its catalog description", async () => {
     mount(full);
-    const table = screen.getByTestId("platform-nodes");
+    const table = screen.getByTestId("platform-outposts");
     expect(within(table).getByText("Checkin")).toBeInTheDocument();
     expect(within(table).getByText("Commands")).toBeInTheDocument();
     const trigger = within(table).getByRole("button", { name: "Check-in Age" });
     expect(trigger.closest("th")).not.toHaveAttribute("title");
     fireEvent.keyDown(document.body, { key: "Tab" });
     trigger.focus();
-    expect(await screen.findByText("Seconds since the node last checked in.")).toBeInTheDocument();
+    expect(await screen.findByText("Seconds since the outpost last checked in.")).toBeInTheDocument();
   });
 
-  it("gives each node a row: the pill at read_at, its figures, not reported for a missing one, and its verdict as the row's tone", () => {
+  it("gives each outpost a row: the pill at read_at, its figures, not reported for a missing one, and its verdict as the row's tone", () => {
     mount(full);
-    const alpha = screen.getByTestId("platform-node-edge-alpha");
+    const alpha = screen.getByTestId("platform-outpost-edge-alpha");
     expect(within(alpha).getByText("up")).toBeInTheDocument();
     expect(within(alpha).getByText("3 s")).toBeInTheDocument();
     expect(within(alpha).getByText("not reported")).toBeInTheDocument();
-    const bravo = screen.getByTestId("platform-node-edge-bravo");
+    const bravo = screen.getByTestId("platform-outpost-edge-bravo");
     expect(within(bravo).getByText("down")).toBeInTheDocument();
     expect(within(bravo).getByText("0")).toBeInTheDocument();
     expect(bravo).toHaveAttribute("data-verdict", "outage");
     expect(bravo.className).toContain("bg-error/5");
   });
 
-  // Where work is lost (#1646): the pipeline sits above the node table, and
-  // each node's Loss group is its own hops' composed ratio, headed with a
+  // Where work is lost (#1646): the pipeline sits above the outpost table, and
+  // each outpost's Loss group is its own hops' composed ratio, headed with a
   // tooltip that names those hops.
-  it("draws the pipeline above the node table", () => {
+  it("draws the pipeline above the outpost table", () => {
     mount(full);
     const pipeline = screen.getByTestId("pipeline");
-    expect(within(pipeline).getByTestId("pipeline-hop-node")).toBeInTheDocument();
+    expect(within(pipeline).getByTestId("pipeline-hop-outpost")).toBeInTheDocument();
     expect(within(pipeline).getByTestId("pipeline-end-to-end")).toHaveTextContent("3%");
   });
 
-  it("shows each node's composed loss under a Loss group, not reported for a node with none", async () => {
+  it("shows each outpost's composed loss under a Loss group, not reported for an outpost with none", async () => {
     mount(full);
-    const table = screen.getByTestId("platform-nodes");
+    const table = screen.getByTestId("platform-outposts");
     expect(within(table).getByText("Loss")).toBeInTheDocument();
-    const alpha = screen.getByTestId("platform-node-edge-alpha");
+    const alpha = screen.getByTestId("platform-outpost-edge-alpha");
     const alphaLoss = alpha.querySelector('[data-figure="loss"]')!;
     expect(alphaLoss).toHaveTextContent("3%");
     expect(alphaLoss.className).toContain("text-error");
-    const bravoLoss = screen.getByTestId("platform-node-edge-bravo").querySelector('[data-figure="loss"]')!;
+    const bravoLoss = screen.getByTestId("platform-outpost-edge-bravo").querySelector('[data-figure="loss"]')!;
     expect(bravoLoss).toHaveTextContent("not reported");
-    const trigger = within(table).getByRole("button", { name: "Node Loss" });
+    const trigger = within(table).getByRole("button", { name: "Outpost Loss" });
     fireEvent.keyDown(document.body, { key: "Tab" });
     trigger.focus();
-    expect(await screen.findByText(/own node hop took in over the last hour/)).toBeInTheDocument();
+    expect(await screen.findByText(/own outpost hop took in over the last hour/)).toBeInTheDocument();
   });
 
-  it("opens a row onto its platform component, with a secondary link to the node's blade", () => {
+  it("opens a row onto its platform component, with a secondary link to the outpost's blade", () => {
     mount(full);
-    const alpha = screen.getByTestId("platform-node-edge-alpha");
+    const alpha = screen.getByTestId("platform-outpost-edge-alpha");
     expect(within(alpha).getByRole("link", { name: "Edge Alpha" })).toHaveAttribute("href", `/web/components/${uuidFor("alpha")}`);
-    expect(within(alpha).getByRole("link", { name: "Open edge-alpha in Nodes" })).toHaveAttribute("href", "/web/nodes?n=edge-alpha");
+    expect(within(alpha).getByRole("link", { name: "Open edge-alpha in Outposts" })).toHaveAttribute("href", "/web/outposts?n=edge-alpha");
   });
 
-  it("without platform reach renders the node rows and the fleet-wide-read line, with no console error", () => {
+  it("without platform reach renders the outpost rows and the fleet-wide-read line, with no console error", () => {
     const errors = vi.spyOn(console, "error");
     const bare: PlatformView = {
       read_at: readAt, lab: false, figures_read: false, servers: [], groups: full.groups,
       system: null as unknown as undefined,
-      nodes: [{ name: "edge-alpha", label: "", enrolled: true, last_heartbeat_at: ago(1000) }, { name: "edge-new", label: "", enrolled: false }],
-      loss_hops: ["node"],
+      outposts: [{ name: "edge-alpha", label: "", enrolled: true, last_heartbeat_at: ago(1000) }, { name: "edge-new", label: "", enrolled: false }],
+      loss_hops: ["outpost"],
     };
     mount(bare);
-    expect(screen.getByTestId("platform-node-edge-alpha")).toBeInTheDocument();
-    expect(screen.getByTestId("platform-node-edge-new")).toBeInTheDocument();
+    expect(screen.getByTestId("platform-outpost-edge-alpha")).toBeInTheDocument();
+    expect(screen.getByTestId("platform-outpost-edge-new")).toBeInTheDocument();
     expect(screen.getByTestId("platform-reach")).toHaveTextContent(/fleet-wide read/);
     expect(screen.queryByTestId("platform-lab")).toBeNull();
     expect(screen.queryByTestId("platform-verdict")).toBeNull();
@@ -232,18 +232,18 @@ describe("PlatformHealth page", () => {
     expect(errors).not.toHaveBeenCalled();
   });
 
-  // A scoped node read is refused (403): the page says which read it needs at
+  // A scoped outpost read is refused (403): the page says which read it needs at
   // once, instead of a loading line that never resolves.
-  it("on a refusal says the page needs a fleet-wide node read, with no loading line", async () => {
+  it("on a refusal says the page needs a fleet-wide outpost read, with no loading line", async () => {
     refuse();
     mount(null);
     const refusal = await screen.findByRole("alert");
-    expect(refusal).toHaveTextContent(/fleet-wide node read/);
+    expect(refusal).toHaveTextContent(/fleet-wide outpost read/);
     // A refusal is an answer about the caller's read, not a fault: warning, not error.
     expect(refusal.className).toContain("alert-warning");
     expect(refusal.className).not.toContain("alert-error");
     expect(screen.queryByText(/Loading the platform/)).toBeNull();
-    expect(screen.queryByTestId("platform-nodes")).toBeNull();
+    expect(screen.queryByTestId("platform-outposts")).toBeNull();
   });
 
   it("gives each server its own panel set, the first one open, each panel the groups and ranked routes the view returns, in order", () => {
@@ -443,12 +443,12 @@ describe("PlatformHealth page", () => {
 
 // With a simulator (#1647): the section keys on the nav's "simulator"
 // condition, a simulation reader with a simulator connected, never on lab.
-const connected: SimFleet = { connected: true, nodes: [] };
-const measured: PlatformSimNode = {
-  node: "edge-alpha", state: "measured", start: ago(600_000), end: ago(60_000), brackets: 11, error: "",
+const connected: SimFleet = { connected: true, outposts: [] };
+const measured: PlatformSimOutpost = {
+  outpost: "edge-alpha", state: "measured", start: ago(600_000), end: ago(60_000), brackets: 11, error: "",
   gaps: [
     { gap: "connect-not-accepted", protocol: "", count: 0, in: 40, ratio: 0, masked: 0, masked_by: "connections still in the kernel backlog at the end read", answered_late: 0, reading: "loss" },
-    { gap: "sent-not-received", protocol: "http", count: 30, in: 120, ratio: 0.25, masked: 0, masked_by: "requests in flight at the node's end read", answered_late: 0, reading: "impaired" },
+    { gap: "sent-not-received", protocol: "http", count: 30, in: 120, ratio: 0.25, masked: 0, masked_by: "requests in flight at the outpost's end read", answered_late: 0, reading: "impaired" },
     { gap: "published-not-landed", protocol: "", count: 2, in: 40, ratio: 0.05, masked: 1, masked_by: "receipts landed in the margin before the window", answered_late: 0, reading: "loss" },
     { gap: "sent-not-received", protocol: "icmp", count: 0, in: 0, ratio: null, masked: 0, masked_by: "", answered_late: 0, reading: "not observed by the sim" },
   ],
@@ -457,7 +457,7 @@ const measured: PlatformSimNode = {
   in_flight_high: 2, queue_depth: null, busy_workers: null,
   devices: [{ component_id: uuidFor("display"), component: "lobby-display", received: { http: 90 }, impaired: true, unhit: false }],
 };
-const simBody = (nodes: PlatformSimNode[]): PlatformSimulation => ({ read_at: readAt, window_seconds: 600, bracket_seconds: 60, nodes });
+const simBody = (outposts: PlatformSimOutpost[]): PlatformSimulation => ({ read_at: readAt, window_seconds: 600, bracket_seconds: 60, outposts });
 
 describe("PlatformHealth with a simulator", () => {
   it("is absent with no simulator connected, even on a lab instance", () => {
@@ -466,8 +466,8 @@ describe("PlatformHealth with a simulator", () => {
   });
 
   it("is absent for a principal who cannot read simulation", () => {
-    const nodeReader: Me = { principal: { id: "n", kind: "human" }, permissions: ["node:read", "component:read"], grants: [] };
-    mount(full, { me: nodeReader, fleet: connected, body: simBody([measured]) });
+    const outpostReader: Me = { principal: { id: "n", kind: "human" }, permissions: ["outpost:read", "component:read"], grants: [] };
+    mount(full, { me: outpostReader, fleet: connected, body: simBody([measured]) });
     expect(screen.queryByTestId("platform-simulation")).toBeNull();
   });
 
@@ -497,7 +497,7 @@ describe("PlatformHealth with a simulator", () => {
   });
 
   it("while warming up says why and shows no gap and no number", () => {
-    const warming: PlatformSimNode = { ...measured, state: "warming up", start: null, end: null, brackets: 1, gaps: null, protocols: [], devices: [] };
+    const warming: PlatformSimOutpost = { ...measured, state: "warming up", start: null, end: null, brackets: 1, gaps: null, protocols: [], devices: [] };
     mount(full, { fleet: connected, body: simBody([warming]) });
     const card = screen.getByTestId("platform-sim-edge-alpha");
     expect(within(card).getByTestId("platform-sim-note")).toHaveTextContent(WARMING_UP);

@@ -11,7 +11,7 @@ import { byLabel, entityLabel } from "../lib/entities";
 import { nameStemError } from "../lib/validate";
 import { type TreeNode } from "../lib/treeselect";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
-import { NODES_KEY, listNodes } from "../lib/nodes";
+import { OUTPOSTS_KEY, listOutposts } from "../lib/outposts";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { COMPONENTS_KEY } from "../lib/components";
@@ -33,7 +33,7 @@ import {
   standardBody,
   landingHref,
   missingNeeds,
-  needsNode,
+  needsOutpost,
   permText,
   locationRef,
   locationValue,
@@ -150,17 +150,17 @@ function extras(made: { standards_created?: string[] | null; to_attach?: string[
   return out;
 }
 
-function NodeSelect(props: { value: string; onChange: (v: string) => void; needed: boolean }): JSX.Element {
+function OutpostSelect(props: { value: string; onChange: (v: string) => void; needed: boolean }): JSX.Element {
   const me = useMe();
-  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: listNodes, enabled: can(me.data, "node", "read") }));
+  const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: listOutposts, enabled: can(me.data, "outpost", "read") }));
   // byLabel stays here (#757): ListNodes serves `order by name`, so the label
   // order the picker reads is composed client-side.
-  const sorted = createMemo(() => [...(nodes.data ?? [])].sort(byLabel));
+  const sorted = createMemo(() => [...(outposts.data ?? [])].sort(byLabel));
   return (
     <FieldRow
-      label="Node"
-      info="The node an attached endpoint is placed on, so its collection reaches the component. Needed only when you give an address."
-      hint={props.needed ? "An address needs a node to place its endpoint on." : undefined}
+      label="Outpost"
+      info="The outpost an attached endpoint is placed on, so its collection reaches the component. Needed only when you give an address."
+      hint={props.needed ? "An address needs an outpost to place its endpoint on." : undefined}
     >
       <select class="select select-bordered w-full" classList={{ "select-error": props.needed }} value={props.value} onChange={(e) => props.onChange(e.currentTarget.value)}>
         <option value="">None</option>
@@ -236,7 +236,7 @@ function ComponentForm(props: StartFormProps): JSX.Element {
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: can(me.data, "product", "read") }));
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers, enabled: can(me.data, "driver", "read") }));
   const secrets = useQuery(() => ({ queryKey: SECRETS_KEY, queryFn: listSecrets, enabled: can(me.data, "secret", "read") }));
-  const [d, setD] = createSignal<Omit<ComponentDraft, "location">>({ name: "", label: "", node: "", address: "", secrets: {} });
+  const [d, setD] = createSignal<Omit<ComponentDraft, "location">>({ name: "", label: "", outpost: "", address: "", secrets: {} });
   const set = <K extends keyof Omit<ComponentDraft, "location">>(k: K, v: ComponentDraft[K]) => setD({ ...d(), [k]: v });
   // The secret inputs the template's driver declares, for the secret names you give.
   const secretInputs = createMemo(() => {
@@ -250,7 +250,7 @@ function ComponentForm(props: StartFormProps): JSX.Element {
   // Attaching writes an endpoint; without endpoint:create the component lands unattached.
   const mayAttach = () => can(me.data, "endpoint", "create");
   const missing = useMissing(props, held, () => ({ address: !!d().address.trim() }));
-  const noNode = () => needsNode(d());
+  const noOutpost = () => needsOutpost(d());
   const { busy, err, submit } = useSubmit(async () => {
     const made = await createComponentFromTemplate(componentBody(props.template.name, { ...d(), location: location.value() }));
     await Promise.all([qc.invalidateQueries({ queryKey: COMPONENTS_KEY }), qc.invalidateQueries({ queryKey: FLEET_VIEW_KEY })]);
@@ -261,7 +261,7 @@ function ComponentForm(props: StartFormProps): JSX.Element {
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => missing().length > 0 || noNode() || !!nameStemError(d().name.trim()),
+    disabled: () => missing().length > 0 || noOutpost() || !!nameStemError(d().name.trim()),
   });
   return (
     <form class="flex flex-col gap-4" data-testid="start-form-component" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
@@ -273,7 +273,7 @@ function ComponentForm(props: StartFormProps): JSX.Element {
       <NameField value={d().name} onInput={(v) => set("name", v)} placeholder="minted from its type" info="Optional. Empty mints one from its type, as any component's name is." />
       <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={props.template.label} />
       <Show when={mayAttach()} fallback={<NoAttach />}>
-      <NodeSelect value={d().node} onChange={(v) => set("node", v)} needed={noNode()} />
+      <OutpostSelect value={d().outpost} onChange={(v) => set("outpost", v)} needed={noOutpost()} />
       <FieldRow label="Address" info="The host its driver reaches it at. Given, the endpoint attaches with the template's preset under it; empty, the component lands unattached and you attach it later.">
         <input class="input input-bordered w-full font-data" autocomplete="off" placeholder="10.0.0.20" value={d().address} onInput={(e) => set("address", e.currentTarget.value)} />
       </FieldRow>
@@ -311,7 +311,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
   const me = useMe();
   const location = useCarriedLocation(props.location);
   const { standards, held, byName } = useHeldStandards();
-  const [d, setD] = createSignal<Omit<SystemDraft, "location">>({ name: "", label: "", standard: "", node: "", addresses: {} });
+  const [d, setD] = createSignal<Omit<SystemDraft, "location">>({ name: "", label: "", standard: "", outpost: "", addresses: {} });
   // The standard the plan builds to: the form's choice, else the template's. When
   // the fleet holds it the slots are its roles, else the template's it creates.
   const planStandard = () => d().standard || props.template.system?.standard || "";
@@ -327,7 +327,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
     set("addresses", { ...d().addresses, [role]: list });
   };
   const options = createMemo(() => standards.data ?? []);
-  const noNode = () => needsNode(d());
+  const noOutpost = () => needsOutpost(d());
   const { busy, err, submit } = useSubmit(async () => {
     const made = await createSystemFromTemplate(systemBody(props.template.name, { ...d(), location: location.value() }));
     await Promise.all([
@@ -343,7 +343,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => missing().length > 0 || noNode() || !!nameStemError(d().name.trim()),
+    disabled: () => missing().length > 0 || noOutpost() || !!nameStemError(d().name.trim()),
   });
   return (
     <form class="flex flex-col gap-4" data-testid="start-form-system" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
@@ -361,7 +361,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
         </select>
       </FieldRow>
       <Show when={mayAttach()} fallback={<NoAttach />}>
-      <NodeSelect value={d().node} onChange={(v) => set("node", v)} needed={noNode()} />
+      <OutpostSelect value={d().outpost} onChange={(v) => set("outpost", v)} needed={noOutpost()} />
       <section class="flex flex-col gap-2">
         <Eyebrow label="Addresses" hint="One per component, by role, as many as the standard it is built to asks for (yours of that name when you hold one). A component given an address lands attached through its driver with the template's preset; the rest land unattached and are yours to attach later." />
         <For each={slots()}>
