@@ -117,4 +117,18 @@ describe("Drawer action rail", () => {
     expect(screen.getByRole("button", { name: "Done" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create token" })).toBeNull();
   });
+
+  // A conversation's composer is no form submit: the body owns it, pinned under
+  // the scroll so the transcript scrolls and the composer stays (#1167).
+  it("pins a footer slot below the scrolling body", () => {
+    render(() => (
+      <Drawer open={true} onClose={() => {}} title="omnibot" footer={<textarea aria-label="Message" />}>
+        <div>transcript</div>
+      </Drawer>
+    ));
+    const box = screen.getByLabelText("Message");
+    const body = screen.getByText("transcript").parentElement!;
+    expect(body.contains(box)).toBe(false);
+    expect(body.nextElementSibling?.contains(box)).toBe(true);
+  });
 });
