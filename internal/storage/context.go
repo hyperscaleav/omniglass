@@ -43,7 +43,14 @@ const (
 	// AuditChannelMCP marks an action taken through a tool call on the MCP
 	// server: the same route, gate and scope as a direct call, arrived by MCP.
 	AuditChannelMCP AuditChannel = "mcp"
+	// AuditChannelOmnibot is reserved for the console assistant's actions
+	// (#1166); the check admits it, nothing stamps it yet.
+	AuditChannelOmnibot AuditChannel = "omnibot"
 )
+
+// AuditChannels is every channel audit_log.channel can hold, in the check's
+// order; the API's channel filter offers these plus AuditChannelDirect.
+var AuditChannels = []AuditChannel{AuditChannelMCP, AuditChannelOmnibot}
 
 // auditChannelKey is the context key under which the MCP dispatch sets the
 // channel and the declaring client. Unexported, with WithAuditChannel the only

@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import { ListAuditLogChannel } from "../api/api.gen";
 import type { FilterKey } from "./predicate";
 
 // The audit data layer: a thin typed wrapper over the generated client for the
@@ -34,6 +35,10 @@ export const DIRECT_CHANNEL = "direct";
 
 // channelOf is the channel a row arrived through, direct when it carries none.
 export const channelOf = (e: AuditEvent): string => e.channel || DIRECT_CHANNEL;
+
+// KNOWN_CHANNELS is every value the API's channel filter takes, from the
+// generated enum, so the facet offers a channel before any loaded row has it.
+export const KNOWN_CHANNELS: string[] = Object.values(ListAuditLogChannel);
 
 export const AUDIT_KEY = ["audit-log"] as const;
 
@@ -130,9 +135,9 @@ export const auditFilterKeys: FilterKey<AuditEvent>[] = [
   { key: "action", type: "string", hint: "exact", get: (e) => e.verb, values: (rows) => uniqSorted(rows.map((e) => e.verb)) },
   { key: "resource", type: "string", hint: "exact", get: (e) => e.resource, values: (rows) => uniqSorted(rows.map((e) => e.resource)) },
   { key: "id", type: "string", hint: "substring", get: (e) => `${resourceLabel(e)} ${e.resource_id ?? ""}` },
-  // Direct is always offered: it is the channel most rows have, and the one
-  // that answers "what did NOT come through an agent?".
-  { key: "channel", type: "string", hint: "exact", get: channelOf, values: (rows) => uniqSorted([DIRECT_CHANNEL, ...rows.map(channelOf)]) },
+  // Every known channel is offered, direct included: it is the channel most
+  // rows have, and the one that answers "what did NOT come through an agent?".
+  { key: "channel", type: "string", hint: "exact", get: channelOf, values: (rows) => uniqSorted([...KNOWN_CHANNELS, ...rows.map(channelOf)]) },
   { key: "client", type: "string", hint: "substring", get: (e) => e.client ?? "", values: (rows) => uniqSorted(rows.map((e) => e.client ?? "")) },
   { key: "agent", type: "string", hint: "exact", get: (e) => e.agent ?? "", values: (rows) => uniqSorted(rows.map((e) => e.agent ?? "")) },
 ];

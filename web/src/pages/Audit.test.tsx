@@ -26,7 +26,8 @@ const seed: AuditEvent[] = [
       Name: "ssh", host_key: "SHA256:7yS0pJqk0m3wQ2v9W6dXn1bT8cHf4LrZ5aEoGuKiMNs",
       Params: { target: "127.60.0.19:22", timeout: "5s" }, Inputs: { host: "127.60.0.19", login: "touch-panel-login" },
     },
-  },  // An agent's change through the MCP server (#1178): the channel is server-
+  },
+  // An agent's change through the MCP server (#1178): the channel is server-
   // stamped, the client is what the MCP client declared, and the agent is the
   // name its agent token was minted with.
   {

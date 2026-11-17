@@ -96,6 +96,13 @@ func TestAuditRowCarriesItsChannelAndClient(t *testing.T) {
 	if _, err := conn.Exec(ctx, `insert into audit_log (verb, resource, channel) values ('create', 'probe', 'console')`); err == nil {
 		t.Error("an unknown channel was accepted, want the check to refuse it")
 	}
+	// Every channel the Go vocabulary names, which the API's filter offers, is
+	// one the check admits.
+	for _, c := range storage.AuditChannels {
+		if _, err := conn.Exec(ctx, `insert into audit_log (verb, resource, channel) values ('create', 'probe', $1)`, string(c)); err != nil {
+			t.Errorf("channel %q refused by the check: %v", c, err)
+		}
+	}
 }
 
 // The client is what an MCP client declared about itself, so it is held to a

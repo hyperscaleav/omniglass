@@ -94,3 +94,12 @@ describe("resourceLabel", () => {
     expect(resourceLabel(labelEv("credential", {}, "u-alice"))).toBe("u-alice");
   });
 });
+
+describe("channel facet", () => {
+  // The facet offers every channel the API filters on, not only the ones on the
+  // loaded page, so an operator can ask for omnibot rows before one is loaded.
+  it("offers every known channel even when no row carries it", () => {
+    const channel = auditFilterKeys.find((k) => k.key === "channel")!;
+    expect(channel.values!(rows)).toEqual(["direct", "mcp", "omnibot"]);
+  });
+});
