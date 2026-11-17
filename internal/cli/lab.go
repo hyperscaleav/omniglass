@@ -598,6 +598,10 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 			return err
 		}
 	}
+	// The server reads the lab's omnibot recording as it starts (#2121).
+	if err := lab.WriteOmnibotReplay(cfg().DataDir); err != nil {
+		return err
+	}
 	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Outpost: present, Summary: summary}))
 	return nil
 }

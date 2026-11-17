@@ -68,7 +68,8 @@ type appendAssistantConversationInput struct {
 	}
 }
 
-func registerAssistantRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+func registerAssistantRoutes(api huma.API, a *authenticator, gw storage.Gateway, o options) {
+	registerAssistantRunRoute(api, a, gw, o)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-assistant-conversations",
 		Method:      http.MethodGet,
@@ -132,7 +133,7 @@ func registerAssistantRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPost,
 		Path:        "/assistant/conversations/{name}:append",
 		Summary:     "Append a turn to one of your omnibot conversations",
-		Description: "Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.",
+		Description: "Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. While a server run holds the conversation, an append is a 409. Anyone else's is a 404. Audited without content. Gated by assistant:use.",
 	}, "assistant", "use"), func(ctx context.Context, in *appendAssistantConversationInput) (*assistantConversationSummaryOutput, error) {
 		app := storage.AssistantAppend{After: in.Body.After, Pending: in.Body.Pending}
 		if string(app.Pending) == "null" {
@@ -172,6 +173,8 @@ func mapAssistantErr(err error) error {
 		return huma.Error404NotFound("no such conversation of yours")
 	case errors.Is(err, storage.ErrAssistantConversationExists):
 		return huma.Error409Conflict("you already have a conversation by that name")
+	case errors.Is(err, storage.ErrAssistantConversationBusy):
+		return huma.Error409Conflict("another run holds this conversation; wait for it to end and read it again")
 	case errors.Is(err, storage.ErrAssistantConversationMoved):
 		return huma.Error409Conflict("the conversation has moved on since you read it; read it again and append after its last message")
 	case errors.Is(err, storage.ErrInvalidEntityName):

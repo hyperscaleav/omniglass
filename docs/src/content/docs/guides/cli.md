@@ -924,7 +924,9 @@ on the page, minus the browser.
   that drives those tools as its own agent token and asks you on the terminal before any write
   ([omnibot](/guides/agents/#omnibot-the-assistant-in-the-cli)), and with `--resume <name>` carries on
   a conversation the generated `assistant conversation` commands list and delete
-  ([carrying a conversation on](/guides/agents/#carrying-a-conversation-on)). The MCP tools are generated
+  ([carrying a conversation on](/guides/agents/#carrying-a-conversation-on)); the generated
+  `assistant conversation run` runs omnibot on the server instead and prints its AG-UI event stream
+  ([running omnibot on the server](/guides/agents/#running-omnibot-on-the-server)). The MCP tools are generated
   too, by `cmd/mcpgen` from the same OpenAPI document.
 
 To add a hand-written command, write a `newXxxCmd()` returning a `*cobra.Command` and add

@@ -416,6 +416,36 @@ export type AgentSettings = {
   write: AgentSettingsWrite;
 };
 
+export type AguiMessageInput = {
+  /** Text, or an array of parts whose text parts are read */
+  content?: unknown;
+  id?: string;
+  /** Who said it; only the last user message is read */
+  role: string;
+  [key: string]: unknown;
+ };
+
+/**
+ * resolved answers it with the payload; cancelled declines it
+ */
+export type AguiResumeInputStatus = typeof AguiResumeInputStatus[keyof typeof AguiResumeInputStatus];
+
+
+export const AguiResumeInputStatus = {
+  resolved: 'resolved',
+  cancelled: 'cancelled',
+} as const;
+
+export type AguiResumeInput = {
+  /** The interrupt being answered: the call the run waits on */
+  interruptId: string;
+  /** The answer, {"approved": true} to run the call */
+  payload?: unknown;
+  /** resolved answers it with the payload; cancelled declines it */
+  status: AguiResumeInputStatus;
+  [key: string]: unknown;
+ };
+
 /**
  * A raised problem on a component, with a severity, from the moment it raises until it clears.
  */
@@ -7536,6 +7566,26 @@ export type RuleMatchBody = {
   transition: RuleMatchBodyTransition;
 };
 
+export type RunAssistantConversationInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The client's view of the conversation; only its last user message is read, as the prompt
+     * @nullable
+     */
+  messages?: AguiMessageInput[] | null;
+  /**
+     * The answer to the interrupt the last run ended on
+     * @nullable
+     */
+  resume?: AguiResumeInput[] | null;
+  /** The run's id, echoed in its events */
+  runId?: string;
+  /** Ignored: the conversation is the thread */
+  threadId?: string;
+  [key: string]: unknown;
+ };
+
 export type RunEndpointPollOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -9680,7 +9730,7 @@ export const getAppendAssistantConversationUrl = (name: string,) => {
 }
 
 /**
- * Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.
+ * Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. While a server run holds the conversation, an append is a 409. Anyone else's is a 404. Audited without content. Gated by assistant:use.
  * @summary Append a turn to one of your omnibot conversations
  */
 export const appendAssistantConversation = async (name: string,
@@ -9706,6 +9756,65 @@ return ogFetch<appendAssistantConversationResponse>(getAppendAssistantConversati
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(appendAssistantConversationInputBody)
+  }
+);}
+
+
+
+export type runAssistantConversationResponse200 = {
+  data: void
+  status: 200
+}
+
+export type runAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type runAssistantConversationResponseSuccess = (runAssistantConversationResponse200) & {
+  headers: Headers;
+};
+export type runAssistantConversationResponseError = (runAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type runAssistantConversationResponse = (runAssistantConversationResponseSuccess | runAssistantConversationResponseError)
+
+export const getRunAssistantConversationUrl = (name: string,) => {
+
+
+
+
+  return `/assistant/conversations/${name}:run`
+}
+
+/**
+ * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. A server with no model is a 503. Gated by assistant:use.
+ * @summary Run omnibot on one of your conversations
+ */
+export const runAssistantConversation = async (name: string,
+    runAssistantConversationInputBody: NonReadonly<RunAssistantConversationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<runAssistantConversationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<runAssistantConversationResponse>(getRunAssistantConversationUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(runAssistantConversationInputBody)
   }
 );}
 

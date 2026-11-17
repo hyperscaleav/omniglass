@@ -199,7 +199,7 @@ Append a turn to one of your omnibot conversations
 omniglass assistant conversation append <name> [flags]
 ```
 
-Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.
+Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. While a server run holds the conversation, an append is a 409. Anyone else's is a 404. Audited without content. Gated by assistant:use.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -280,6 +280,29 @@ Example:
 
 ```sh
 omniglass assistant conversation list
+```
+
+#### `omniglass assistant conversation run`
+
+Run omnibot on one of your conversations
+
+```
+omniglass assistant conversation run <name> [flags]
+```
+
+Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. A server with no model is a 503. Gated by assistant:use.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--messages` | string | (none) | The client's view of the conversation; only its last user message is read, as the prompt |
+| `--resume` | string | (none) | The answer to the interrupt the last run ended on |
+| `--runId` | string | (none) | The run's id, echoed in its events |
+| `--threadId` | string | (none) | Ignored: the conversation is the thread |
+
+Example:
+
+```sh
+omniglass assistant conversation run <name>
 ```
 
 ## `omniglass audit-log`

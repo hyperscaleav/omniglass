@@ -19,6 +19,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/hyperscaleav/omniglass/internal/assistant/provider"
 	"github.com/hyperscaleav/omniglass/internal/clientaddr"
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
@@ -96,6 +97,13 @@ type options struct {
 	// log is where a route logs a failure it answers without its cause.
 	// Unset is slog.Default.
 	log *slog.Logger
+	// omnibotModel is the model a server-side omnibot run (#2121) asks. Nil
+	// answers :run 503: the server has no model to run omnibot with.
+	omnibotModel provider.Provider
+	// self is the handler being built, so a server-side run calls its tools
+	// back through the same router a direct call takes. Set at request time
+	// only: the spec dump has none.
+	self http.Handler
 }
 
 // Option configures NewHandler.
@@ -143,6 +151,10 @@ func WithLogger(l *slog.Logger) Option { return func(o *options) { o.log = l } }
 // WithVersion sets the build version the MCP server reports to its clients.
 func WithVersion(v string) Option { return func(o *options) { o.version = v } }
 
+// WithOmnibotModel is the model a server-side omnibot run asks (#2121): a
+// recording in the lab and in tests until a live provider lands.
+func WithOmnibotModel(p provider.Provider) Option { return func(o *options) { o.omnibotModel = p } }
+
 // WithNatsURL sets the advertised NATS URL returned by the outpost-claim exchange.
 func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
 
@@ -186,6 +198,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 		o.log = slog.Default()
 	}
 	r := chi.NewRouter()
+	o.self = r
 	r.Route("/api/v1", func(sub chi.Router) {
 		// Time every request first, so its duration covers the whole API
 		// stack; the route template it records is read after the router ran.
@@ -443,7 +456,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerNotificationRoutes(api, a, gw)
 	registerInboxRoutes(api, a, gw)
 	registerPersonalRuleRoutes(api, a, gw)
-	registerAssistantRoutes(api, a, gw)
+	registerAssistantRoutes(api, a, gw, o)
 	registerOptOutRoutes(api, a, gw)
 	registerDraftTestRoute(api, a, gw)
 	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerUser))

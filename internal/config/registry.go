@@ -60,6 +60,8 @@ var Registry = []Var{
 		Doc: "optional operator settings file (JSON or YAML), the layer between code defaults and the DB override"},
 	{Key: "OMNIGLASS_READY_FILE", Scope: "server",
 		Doc: "path the server writes once it serves: a JSON object of the addresses it bound (addr, nats_addr) and the bus URL it advertises (nats_url), for a supervisor or test that asked for port 0; cleared at boot, removed at a graceful shutdown"},
+	{Key: "OMNIGLASS_OMNIBOT_REPLAY", Scope: "server",
+		Doc: "path to a recorded model the server's omnibot plays, turn by turn as each conversation stands, for a demo or a test; unset, the server has no model and a run is refused"},
 	{Key: "OMNIGLASS_ENCRYPTION_KEY", Scope: "server",
 		Doc: "base64 32-byte encryption key, the key-encryption key every secret is sealed under at rest; wins over the key file"},
 	{Key: "OMNIGLASS_ENCRYPTION_KEY_FILE", Scope: "server",

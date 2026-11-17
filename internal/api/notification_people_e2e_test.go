@@ -33,7 +33,7 @@ type people struct {
 	comps map[string]string
 }
 
-func newPeople(t *testing.T) *people {
+func newPeople(t *testing.T, opts ...api.Option) *people {
 	t.Helper()
 	ctx := context.Background()
 	dsn := seededDSN(t)
@@ -54,7 +54,7 @@ func newPeople(t *testing.T) *people {
 		t.Fatal(err)
 	}
 	conn.Close(ctx)
-	srv := httptest.NewServer(api.NewHandler(gw))
+	srv := httptest.NewServer(api.NewHandler(gw, opts...))
 	t.Cleanup(srv.Close)
 	p := &people{t: t, ctx: ctx, dsn: dsn, gw: gw, c: &apiClient{t: t, ctx: ctx, base: srv.URL},
 		owner: bootstrapOwnerTok(t, ctx, gw), toks: map[string]string{}, ids: map[string]string{}, comps: map[string]string{}}

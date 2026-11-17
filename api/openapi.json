@@ -567,6 +567,50 @@
         ],
         "type": "object"
       },
+      "AguiMessageInput": {
+        "additionalProperties": true,
+        "properties": {
+          "content": {
+            "description": "Text, or an array of parts whose text parts are read"
+          },
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "description": "Who said it; only the last user message is read",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "type": "object"
+      },
+      "AguiResumeInput": {
+        "additionalProperties": true,
+        "properties": {
+          "interruptId": {
+            "description": "The interrupt being answered: the call the run waits on",
+            "type": "string"
+          },
+          "payload": {
+            "description": "The answer, {\"approved\": true} to run the call"
+          },
+          "status": {
+            "description": "resolved answers it with the payload; cancelled declines it",
+            "enum": [
+              "resolved",
+              "cancelled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "interruptId",
+          "status"
+        ],
+        "type": "object"
+      },
       "AlarmBody": {
         "additionalProperties": false,
         "description": "A raised problem on a component, with a severity, from the moment it raises until it clears.",
@@ -14353,6 +14397,49 @@
         ],
         "type": "object"
       },
+      "RunAssistantConversationInputBody": {
+        "additionalProperties": true,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "/api/v1/schemas/RunAssistantConversationInputBody.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "messages": {
+            "description": "The client's view of the conversation; only its last user message is read, as the prompt",
+            "items": {
+              "$ref": "#/components/schemas/AguiMessageInput"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "resume": {
+            "description": "The answer to the interrupt the last run ended on",
+            "items": {
+              "$ref": "#/components/schemas/AguiResumeInput"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "runId": {
+            "description": "The run's id, echoed in its events",
+            "type": "string"
+          },
+          "threadId": {
+            "description": "Ignored: the conversation is the thread",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "RunEndpointPollOutputBody": {
         "additionalProperties": false,
         "properties": {
@@ -19865,7 +19952,7 @@
     },
     "/assistant/conversations/{name}:append": {
       "post": {
-        "description": "Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. Anyone else's is a 404. Audited without content. Gated by assistant:use.",
+        "description": "Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. While a server run holds the conversation, an append is a 409. Anyone else's is a 404. Audited without content. Gated by assistant:use.",
         "operationId": "append-assistant-conversation",
         "parameters": [
           {
@@ -19912,6 +19999,51 @@
           }
         },
         "summary": "Append a turn to one of your omnibot conversations",
+        "x-omniglass-permission": "assistant:use"
+      }
+    },
+    "/assistant/conversations/{name}:run": {
+      "post": {
+        "description": "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. A server with no model is a 503. Gated by assistant:use.",
+        "operationId": "run-assistant-conversation",
+        "parameters": [
+          {
+            "description": "Your conversation's name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "description": "Your conversation's name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunAssistantConversationInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Run omnibot on one of your conversations",
         "x-omniglass-permission": "assistant:use"
       }
     },

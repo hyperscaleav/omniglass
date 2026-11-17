@@ -122,6 +122,16 @@ export interface paths {
       error: og.appendAssistantConversationResponseError["data"];
     };
   };
+  "/assistant/conversations/{name}:run": {
+    post: {
+      path: { "name": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.runAssistantConversation>[1]>;
+      bodyRequired: true;
+      data: og.runAssistantConversationResponseSuccess["data"];
+      error: og.runAssistantConversationResponseError["data"];
+    };
+  };
   "/audit-log": {
     get: {
       path: never;
