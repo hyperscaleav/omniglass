@@ -36,9 +36,9 @@ refs: [2113, 1166, 2063, 2120]
 - **Context:** An unattended run (an event rule's omnibot step, #2126) has no terminal to ask on. The
   2026-11-16 ruling keeps approvals client-side with no server-side pending approvals; this is how a
   paused run survives until its owner returns without the server holding a decision.
-- **Limits:** Usage is totalled only when a client reports it, and the recorded provider reports none.
-  A run killed between proposing a call and storing its marker leaves an open call with no marker;
-  resuming it does not ask that call. The console panel is #1167.
+- **Limits:** Usage is totalled only when a client reports it, and the recorded provider reports none (the relay's per-turn usage is #2111).
+  A transcript stored with an open call and no marker (a client that keeps a turn without its marker;
+  the CLI keeps both in one append) is not asked about that call on resume (#2129). The console panel is #1167.
 - **Not chosen:**
   - **Scope-fenced conversations** (an admin reads anyone's). A transcript can hold what a person
     pasted; it is theirs like a draft, and the audit trail, not the transcript, is what an admin reads.
