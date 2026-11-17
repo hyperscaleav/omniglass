@@ -51,7 +51,7 @@ func writesSample(sql string) bool {
 var dynamicTableWriters = map[string]string{
 	"writeLabelChanges": "the label column of location, system and component (a scopeTable)",
 	"stamp":             "a liveness stamp table (endpoint_live), never a sample table",
-	"RenameCatalog":    "the name column of a renameable catalog (renameableCatalogs: vendor, driver, product, standard, location_type), never a sample table",
+	"RenameCatalog":     "the name column of a renameable catalog (renameableCatalogs: vendor, driver, product, standard, location_type), never a sample table",
 	"setTypeRetention":  "the retention_days column of a type catalog (metric_type, property_type, #417), never a sample table",
 }
 

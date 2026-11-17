@@ -57,8 +57,8 @@ func TestAnUnlabelledCatalogRowSortsLast(t *testing.T) {
 
 	cases := []struct {
 		catalog string
-		create   func(t *testing.T, name, label string)
-		list     func(t *testing.T) []row
+		create  func(t *testing.T, name, label string)
+		list    func(t *testing.T) []row
 	}{
 		{
 			catalog: "vendor",
