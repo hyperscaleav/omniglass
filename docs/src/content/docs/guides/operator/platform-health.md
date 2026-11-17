@@ -411,6 +411,11 @@ gap open and clear.
 
 ## From the CLI
 
+`omniglass platform health` reads this page for a terminal or a script: the verdicts, the open alarms,
+each hop's loss and the end to end, the nodes with loss, and every failure above zero, as one table or
+`--json`, exiting nonzero when the platform is not healthy or a part of it is not visible to the token.
+The [CLI guide](/guides/cli/#platform-health) teaches it, with its sampling flags.
+
 The page is one read of the platform view, so `omniglass view platform list` returns the same
 answer: the system verdict, each server's build and start time with its panel groups (each key's
 current figure, a ranked key's routes, and the alarms open on the server), the node key groups,

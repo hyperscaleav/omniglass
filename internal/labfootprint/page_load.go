@@ -145,10 +145,20 @@ func (m pageMetric) seriesRead() string {
 	return r
 }
 
-// loadSystemPage loads the system page once against base, as a cold open
+// PageFetch GETs a URL with the reader's credentials and reads the whole
+// body: its status code and line, and the body. Any status is returned with
+// its body; only a transport failure is an error.
+type PageFetch func(ctx context.Context, url string) (int, string, []byte, error)
+
+// loadSystemPage is LoadSystemPage with the harness's fetch.
+func (h *harness) loadSystemPage(ctx context.Context, base, systemID string) PageLoad {
+	return LoadSystemPage(ctx, h.fetch, base, systemID)
+}
+
+// LoadSystemPage loads the system page once against base, as a cold open
 // does: every read at once, the series reads as soon as the metrics read
 // names them. The load fails on the first read that does not answer 200.
-func (h *harness) loadSystemPage(ctx context.Context, base, systemID string) PageLoad {
+func LoadSystemPage(ctx context.Context, fetch PageFetch, base, systemID string) PageLoad {
 	start := time.Now()
 	var (
 		mu    sync.Mutex
@@ -157,7 +167,7 @@ func (h *harness) loadSystemPage(ctx context.Context, base, systemID string) Pag
 		first error
 	)
 	read := func(path string) []byte {
-		code, status, body, err := h.fetch(ctx, base+"/api/v1"+path)
+		code, status, body, err := fetch(ctx, base+"/api/v1"+path)
 		mu.Lock()
 		defer mu.Unlock()
 		bytes += int64(len(body))
@@ -212,6 +222,42 @@ func (h *harness) loadSystemPage(ctx context.Context, base, systemID string) Pag
 	}
 	wg.Wait()
 	return PageLoad{Took: time.Since(start), Bytes: bytes, Err: first}
+}
+
+// RunPageClients runs clients loading the page at once, each loads times at
+// gap apart, the clients staggered across one gap so their loads overlap as
+// operators' would. It returns when every client is done or ctx ends. No
+// clients is a run that was not measured.
+func RunPageClients(ctx context.Context, clients, loads int, gap time.Duration, load func(context.Context) PageLoad) PageRun {
+	run := PageRun{Clients: clients}
+	if clients <= 0 {
+		return run
+	}
+	var (
+		mu sync.Mutex
+		wg sync.WaitGroup
+	)
+	for c := range clients {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if sleep(ctx, gap*time.Duration(c)/time.Duration(clients)) != nil {
+				return
+			}
+			for range loads {
+				due := time.Now().Add(gap)
+				l := load(ctx)
+				mu.Lock()
+				run.Loads = append(run.Loads, l)
+				mu.Unlock()
+				if sleep(ctx, time.Until(due)) != nil {
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	return run
 }
 
 // PickPageSystem is the id of the system the page load opens, from the fleet

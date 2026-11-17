@@ -33,6 +33,7 @@ func newRoot(version, imageDigest string) *cobra.Command {
 		newSeedDevCmd(),
 		newSimCmd(),
 		newLabCmd(version, imageDigest),
+		newPlatformCmd(),
 		newMCPCmd(version),
 	)
 	// Generated commands: one per API operation, sharing the connection flags.
