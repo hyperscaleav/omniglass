@@ -399,13 +399,13 @@ var retiredIdentifiers = []BannedTerm{
 			`\b(?:to|can|may|will|must|would|should|you|we|they|who|which) place\b|` +
 			`\bplaces? (?:a|an|one|its|it|them|the|each|every)\b|\bbindings? places\b`),
 	}, {
-		// Type has one meaning (ADR-2034): the registry row that says what
+		// Type has one meaning (ADR-2034): the catalog row that says what
 		// kind of thing an instance is. Genus was a second word for that row
 		// (the device-class genus, a top-level genus) and retires from every
 		// operator surface. ADR titles keep it, and their anchors pass because
 		// the scan strips link targets.
 		Pattern:     regexp.MustCompile(`(?i)\bgenus\b|\bgenera\b`),
-		Replacement: "type (the registry row that says what kind of thing an instance is: a component type, a system type)",
+		Replacement: "type (the catalog row that says what kind of thing an instance is: a component type, a system type)",
 		Origin:      "ADR-2034",
 	},
 }
@@ -462,7 +462,7 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "web", "src", "components", "SimComponentDrawer.tsx"),
 	filepath.Join("..", "..", "web", "src", "components", "SimulationSection.tsx"),
 	// The catalog pages' shared copy, where the retired word for a type
-	// registry row survived until ADR-2034.
+	// catalog row survived until ADR-2034.
 	filepath.Join("..", "..", "web", "src", "lib", "catalog.ts"),
 	// The product pages, whose create-form hint carried "genus" past the
 	// ADR-2034 sweep because nothing scanned them.

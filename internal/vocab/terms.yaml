@@ -204,7 +204,7 @@ terms:
         pattern: '(?i)\bregistr(?:y|ies)\b'
         origin: ADR-2035
         replacement: catalog (the rows the fleet is typed by)
-        allow: '(?i)\btransport registr(?:y|ies)\b|\bregistry (?:transports?|entry|entries)\b|\bcode registry\b|\bregistry of diagnostics\b|\bgenerated registry\b|\bgenerated from the registry\b|\b(?:env|environment|namespace|simulator|blade|pages|skills?|container|npm|package|wire|permission) registry\b|\bto a registry\b|\bregistry credential\b|\basks the registry\b|\bregistry=\{\w*registry\}'
+        allow: '(?i)\btransport registr(?:y|ies)\b|\bregistry (?:transports?|entry|entries)\b|\bcode registry\b|\bregistry of diagnostics\b|\bgenerated registry\b|\bgenerated from the registry\b|\b(?:env|environment|namespace|simulator|blade|pages|skills?|container|npm|package|wire|permission) registry\b|\bto a registry\b|\bregistry credential\b|\basks the registry\b|\bregistry=\{\w*registry\}|\bregistry: \{'
   - word: metric type
     plural: metric types
     definition: A numeric signal in the catalog, the series a sample measures, with its unit and precision.
