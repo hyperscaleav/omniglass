@@ -11,7 +11,7 @@ import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 // System Types (Catalog > Systems: Types): the coarse space taxonomy
 // (ADR-0096), on the same official/custom FlatList pattern as Component Types
 // and tree-shaped by parent_id. The catalog is NOT the standard: the type says
-// what kind of space this is, the standard says which blueprint it is built to.
+// what kind of space this is, the standard says which contract it is built to.
 // Every identity fact (stem, abbrev, icon) inherits down the tree unless a node
 // overrides it, and there is no reparent leg, so a custom type's placement is
 // fixed at create.

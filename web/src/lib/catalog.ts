@@ -110,7 +110,7 @@ export type CatalogGroup = {
 // left: Rules went live with the event rules (#921), notifications with #618,
 // and the three Templates slots with the template catalog (#1329, closing #615,
 // #616 and #617): each opens /templates filtered, and the Systems slot reaches
-// standard templates too, since a standard is the system-side blueprint a
+// standard templates too, since a standard is the system-side contract a
 // system template is built to. Group copy follows the direction axis: Telemetry is what you
 // receive, Actions is what you send or run.
 export const CATALOG_GROUPS: CatalogGroup[] = [
@@ -157,7 +157,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Systems",
-    copy: "A system type is the coarse kind of space a system is (a boardroom, a classroom, a video wall); a standard is the blueprint it conforms to, the properties every conforming system exposes.",
+    copy: "A system type is the coarse kind of space a system is (a boardroom, a classroom, a video wall); a standard is the contract it is built to, the properties every conforming system exposes.",
     entries: [
       { label: "Standards", path: "/standards", gate: ["standard", "read"], key: STANDARDS_KEY, list: listStandards },
       // "Types": the Systems header already says where it lives (mirrors the

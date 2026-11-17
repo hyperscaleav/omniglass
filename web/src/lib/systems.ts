@@ -5,7 +5,7 @@ import { api } from "../api/client";
 // primary system by id; the Components page consumes this list to resolve those
 // ids to readable names and to populate the system picker.
 //
-// A system optionally conforms to a STANDARD (the blueprint that declares its
+// A system optionally conforms to a STANDARD (the contract that declares its
 // property contract, the system-side counterpart of a product). It is optional: a
 // one-off system that conforms to no standard is first class.
 //

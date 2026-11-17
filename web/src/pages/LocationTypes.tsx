@@ -436,7 +436,7 @@ export function CreateLocationTypeForm(p: { onCreated: (t: LocationType) => void
 }
 
 // NameRuleEditor: the whole of a location type's name rule, which after ADR-0102
-// is a DECLARATION rather than a template, so it is a checkbox, a stem, and one
+// is a DECLARATION rather than a rule string, so it is a checkbox, a stem, and one
 // more checkbox. Its presence is the opt-in (there is no boolean beside it in
 // the data, so there is none here either): unchecking it is the clear #692 gave
 // the wire, which now lives inside the editor instead of as a button beside it.
