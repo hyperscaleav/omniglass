@@ -153,6 +153,17 @@ describe("the house rules a tape is held to", () => {
     expect(bad('Type "a"\nEnter\nWait+Line /a/\nType "b"\nEnter\nWait\n')).toContain(`${F}:6: the command entered here is not waited on`);
   });
 
+  it("lets a tape answer a running command's own prompt, once a pattern its typed text cannot match has shown it", () => {
+    const ask = 'Type "omniglass omnibot go"\nEnter\nWait+Screen /Run it\\?/\nType "y"\nEnter\nWait+Screen /second/\nType "n"\nEnter\nWait\n';
+    expect(() => ok(ask)).not.toThrow();
+    // The answer still has to end on a prompt Wait.
+    expect(bad('Type "omniglass omnibot go"\nEnter\nWait+Screen /Run it/\nType "y"\nEnter\n')).toContain("before the tape ends");
+    // A pattern the answer itself could match proves nothing.
+    expect(bad('Type "omniglass omnibot go"\nEnter\nWait+Screen /Run/\nType "Run"\nEnter\nWait+Screen /Run/\nType "y"\nEnter\nWait\n')).toContain(
+      `${F}:9: the command entered here is not waited on`,
+    );
+  });
+
   it("refuses a second command smuggled onto a Hide, Show or Wait line, since VHS reads several to a line", () => {
     expect(bad(`Hide Set FontSize 40\n${CMD}`)).toBe(`${F}:5: Hide takes nothing after it`);
     expect(bad(`Hide\nType "a"\nEnter\nWait\nShow Env VHS_PUBLISH "true"\n${CMD}`)).toBe(`${F}:9: Show takes nothing after it`);
