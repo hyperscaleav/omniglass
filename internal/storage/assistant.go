@@ -19,7 +19,7 @@ import (
 // included, finds nothing (the non-disclosing ErrAssistantConversationNotFound,
 // ADR-2113). Its pending field holds the write a paused run waits on; it is
 // the transcript's last word, not a server-side approval, since nothing on the
-// server ever acts on it.
+// server ever acts on it (ADR-2113.2).
 
 // AssistantUsage is the tokens a conversation has spent.
 type AssistantUsage struct {

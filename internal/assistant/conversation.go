@@ -16,7 +16,7 @@ import (
 // and written with the person's own token, and only its owner can reach it.
 // The server keeps the transcript and the call a paused run waits on; it
 // approves nothing, so whoever continues it decides that call in their own
-// client (ADR-2113).
+// client (ADR-2113.2).
 type Conversation struct {
 	s    *Session
 	name string

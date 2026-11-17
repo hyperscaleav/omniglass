@@ -13,5 +13,5 @@ names the last message it saw or is a 409, and every write is audited without co
 `assistant.conversation_days` (30) after it last moved. On the CLI, `omniglass omnibot --resume <name>`
 carries a conversation on, and when its last run paused on a write it asks that call first: the stored
 pending is only a marker, and the proposal is rebuilt from the transcript's open call and the live
-tools, so a marker naming no open call is refused (`internal/cli/omnibot_resume_test.go`). ADR-2113
+tools, so a marker naming no open call is refused (`internal/cli/omnibot_resume_test.go`). ADR-2113.2
 records why a kept transcript is not a server-side pending approval.

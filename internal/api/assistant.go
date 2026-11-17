@@ -17,7 +17,7 @@ import (
 // assistant:use and is owner-only: the ownership predicate rides every query,
 // so anyone else's conversation, the platform owner's view included, is a
 // non-disclosing 404. A paused run's pending write is kept as the transcript's
-// last word; nothing on the server acts on it (ADR-2113).
+// last word; nothing on the server acts on it (ADR-2113.2).
 
 type assistantMessageBody struct {
 	Seq       int             `json:"seq" doc:"The message's position in the conversation, from 1"`

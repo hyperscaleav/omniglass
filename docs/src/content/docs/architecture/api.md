@@ -1299,7 +1299,7 @@ those protocol routes sit outside the OpenAPI document, their shapes fixed by th
 
 omnibot's conversations are a person's own resource under `/assistant/conversations` (list, get,
 create, `{name}:append`, delete), gated by `assistant:use` and owner-only: anyone else's is a 404, and
-an append that does not name the conversation's last message is a 409 ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone-and-a-paused-run-keeps-only-its-transcript)).
+an append that does not name the conversation's last message is a 409 ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone)).
 
 The catalog is **credential-blind**
 ([ADR-2025](/architecture/decisions/#adr-2025-the-mcp-catalog-is-credential-blind-and-reads-the-fleets-alarms-in-one-call)).

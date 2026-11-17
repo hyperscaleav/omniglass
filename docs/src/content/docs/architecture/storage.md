@@ -560,7 +560,7 @@ The server prunes the two sample tables to a window each
 namespace that any signed-in caller reads), and the hourly trends to `retention.trend_days` (730,
 [above](#the-narrow-metric-lane)). The compacted tier's blocks are not pruned yet: they go with their
 series, and the block prune is #1574. A stored omnibot conversation goes `assistant.conversation_days`
-(30) after it last moved, its messages with it ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone-and-a-paused-run-keeps-only-its-transcript)). Each window is whole days from 1 to 36,500. The pass runs at server start, beside
+(30) after it last moved, its messages with it ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone)). Each window is whole days from 1 to 36,500. The pass runs at server start, beside
 the receipt prune, and again an hour later, or a minute later while a lane is behind.
 
 Every prune goes through the **`PruneSamples`** gateway primitive, which carries the one
