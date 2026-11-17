@@ -1,12 +1,13 @@
 import { For, Match, Show, Switch, createEffect, createSignal, onCleanup } from "solid-js";
 import Button from "./Button";
 import Drawer from "./Drawer";
-import OmnibotStep from "./OmnibotStep";
+import OmnibotStep, { StepArgs } from "./OmnibotStep";
 import CreateSecretForm from "./CreateSecretForm";
 import { Bot, Key, Plus } from "./icons";
 import {
   answer,
   ask,
+  closed,
   fail,
   initialRun,
   reduce,
@@ -59,6 +60,7 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
         setConversation(name);
       }
       await runOmnibot(name, input, (ev) => setState((s) => reduce(s, ev)), controller.signal);
+      setState(closed);
     } catch (err) {
       if (controller.signal.aborted) return;
       const message = err instanceof Error ? err.message : describeError(err);
@@ -178,6 +180,9 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
             {(i) => (
               <div data-testid="omnibot-ask" class="rounded-box border border-warning/50 bg-warning/5 p-3 text-sm">
                 <p class="font-medium">Omnibot asks before it runs {i().title}</p>
+                <div class="mt-1.5">
+                  <StepArgs args={i().arguments} testid="omnibot-ask-args" />
+                </div>
                 <Show when={i().destructive}>
                   <p class="mt-1 text-xs text-error">This cannot be undone.</p>
                 </Show>

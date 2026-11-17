@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { answer, ask, initialRun, readEvents, reduce, runOmnibot, RunRefused, type RunState, type Step } from "./assistant";
+import { answer, ask, closed, initialRun, readEvents, reduce, runOmnibot, RunRefused, type RunState, type Step } from "./assistant";
 
 // The panel's data layer (#1167): the reader turns a :run stream into AG-UI
 // events, and the reducer folds them into what the panel shows. The fixtures
@@ -89,6 +89,14 @@ describe("folding a run into the panel", () => {
     s = reduce(s, { type: "RUN_ERROR", message: "the run stopped: the model", code: "run" });
     expect(s.status).toBe("error");
     expect(s.error).toBe("the run stopped: the model");
+  });
+
+  it("ends a run whose stream closed while it still worked, and leaves a settled one alone", () => {
+    const s = closed(ask(initialRun, "x"));
+    expect(s.status).toBe("error");
+    expect(s.error).toContain("ended before it finished");
+    const done = reduce(ask(initialRun, "x"), { type: "RUN_FINISHED", threadId: "t", runId: "r" });
+    expect(closed(done)).toBe(done);
   });
 
   it("joins text deltas of one message", () => {

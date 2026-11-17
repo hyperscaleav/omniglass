@@ -260,10 +260,11 @@ and its arguments. A tool the console knows how to show reads the way the consol
 elsewhere: a component is a link to its page, reachability is each endpoint's ladder. Any other tool,
 or a result that is not what its renderer reads, gets a plain card; the raw result is one click away
 under either. A call your [agent policy](#what-an-agent-may-do) asks about stops the run on a confirm
-card, and its own card reads **Waiting for you**: **Confirm** runs it, **Decline** leaves it alone and omnibot hears why, and the card marks
+card that names the call and lists the arguments it would run with, and its own card reads **Waiting for you**: **Confirm** runs it, **Decline** leaves it alone and omnibot hears why, and the card marks
 which. A destructive call says it cannot be undone. A run that reaches its step limit says so, and
 asking again carries on from there; one the server refuses (an agent or impersonation session cannot
-run omnibot) or that fails names the reason.
+run omnibot) or that fails names the reason. A run whose connection closes before it finished says
+that it ended early, rather than looking busy for good; ask again to carry on.
 
 **Add a credential** is the console's `/secret`: it creates the secret with your token through the
 same form as Values > Secrets, and puts only `secret <name>` in your draft, so omnibot learns the

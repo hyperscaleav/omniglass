@@ -85,10 +85,12 @@ function pretty(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v, null, 2);
 }
 
-function Args(p: { args: Record<string, unknown> }) {
+// StepArgs lists a call's arguments, on its step card and on the confirm
+// card that asks about it.
+export function StepArgs(p: { args: Record<string, unknown>; testid?: string }) {
   return (
     <Show when={Object.keys(p.args).length > 0}>
-      <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+      <dl data-testid={p.testid} class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
         <For each={Object.entries(p.args)}>
           {([k, v]) => (
             <>
@@ -128,7 +130,7 @@ export default function OmnibotStep(props: { step: Step; waiting?: boolean }) {
           <span class="badge badge-sm badge-ghost">Running</span>
         </Show>
       </div>
-      <Args args={props.step.args} />
+      <StepArgs args={props.step.args} />
       <Show when={parsed() !== undefined}>
         <div class="mt-2">{view()}</div>
         <details class="mt-1.5 text-xs" open={!view()}>

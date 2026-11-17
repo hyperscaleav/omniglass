@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@solidjs/testing-library";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import { readFileSync } from "node:fs";
@@ -92,6 +92,7 @@ describe("the omnibot panel", () => {
     expect(screen.getByText("Let me look.")).toBeTruthy();
     expect(screen.getAllByTestId("omnibot-step")).toHaveLength(2);
     expect(screen.getByTestId("omnibot-ask").textContent).toContain("Create a component");
+    expect(within(screen.getByTestId("omnibot-ask")).getByTestId("omnibot-ask-args").textContent).toContain("lobby-display");
     expect(screen.getByText("Waiting for you")).toBeTruthy();
     expect((screen.getByLabelText("Ask omnibot") as HTMLTextAreaElement).disabled).toBe(true);
   });
@@ -137,6 +138,23 @@ describe("the omnibot panel", () => {
     send("second");
     await waitFor(() => expect(calls.filter((c) => c.url.includes(":run"))).toHaveLength(2));
     expect(calls.filter((c) => c.url.endsWith("/assistant/conversations"))).toHaveLength(1);
+  });
+
+  it("shows it is working while the run streams", async () => {
+    runReply = () => new Response(new ReadableStream(), { headers: { "Content-Type": "text/event-stream" } });
+    open();
+    send("look around");
+    expect((await screen.findByTestId("omnibot-working")).textContent).toContain("Working");
+  });
+
+  it("says the run ended when its stream closes before the run finished", async () => {
+    runReply = () => sse(fixture("run.sse").split("\n\n").slice(0, 3).join("\n\n") + "\n\n");
+    open();
+    send("look around");
+    const status = await screen.findByTestId("omnibot-status");
+    expect(status.dataset.status).toBe("error");
+    expect(status.textContent).toContain("ended before it finished");
+    expect((screen.getByLabelText("Ask omnibot") as HTMLTextAreaElement).disabled).toBe(false);
   });
 
   it("says when the run stopped at its step limit", async () => {

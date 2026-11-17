@@ -70,6 +70,13 @@ export function fail(s: RunState, message: string, refused = false): RunState {
   return { ...s, status: refused ? "refused" : "error", error: message, interrupt: undefined };
 }
 
+// closed settles a run whose stream has closed: a run still working never
+// finished (a dropped connection, a server gone mid-run), so it ends in an
+// error rather than leaving the panel busy for good.
+export function closed(s: RunState): RunState {
+  return s.status === "working" ? fail(s, "The run ended before it finished. Ask again to carry on.") : s;
+}
+
 function objectOf(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
