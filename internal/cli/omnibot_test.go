@@ -29,7 +29,7 @@ func TestOmnibotConfirmerAsksThePerson(t *testing.T) {
 		want bool
 	}{{"y\n", true}, {"YES\n", true}, {"n\n", false}, {"\n", false}, {"", false}, {"maybe\n", false}} {
 		var asked bytes.Buffer
-		got, err := terminalConfirmer(strings.NewReader(tc.in), &asked)(context.Background(), p)
+		got, err := terminalConfirmer(newConsole(strings.NewReader(tc.in), &asked))(context.Background(), p)
 		if err != nil || got != tc.want {
 			t.Errorf("answer %q = %v, %v; want %v", tc.in, got, err, tc.want)
 		}
@@ -56,6 +56,30 @@ func TestOmnibotObserveLine(t *testing.T) {
 	} {
 		if got := observeLine(tc.call); got != tc.want {
 			t.Errorf("observeLine(%+v) = %q, want %q", tc.call, got, tc.want)
+		}
+	}
+}
+
+// /secret takes a name, a type, and an owner that is the platform unless a
+// location or component is named (#2112).
+func TestOmnibotParseCredential(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want assistant.Credential
+		ok   bool
+	}{
+		{[]string{"lobby", "snmp-community"}, assistant.Credential{Name: "lobby", Type: "snmp-community", OwnerKind: "platform"}, true},
+		{[]string{"lobby", "snmp-community", "location:hq"}, assistant.Credential{Name: "lobby", Type: "snmp-community", OwnerKind: "location", Owner: "hq"}, true},
+		{[]string{"lobby", "snmp-community", "component:amp-9"}, assistant.Credential{Name: "lobby", Type: "snmp-community", OwnerKind: "component", Owner: "amp-9"}, true},
+		{[]string{"lobby"}, assistant.Credential{}, false},
+		{[]string{"lobby", "snmp-community", "hq"}, assistant.Credential{}, false},
+		{[]string{"lobby", "snmp-community", "location:"}, assistant.Credential{}, false},
+		{[]string{"lobby", "snmp-community", "platform:x"}, assistant.Credential{}, false},
+		{[]string{"lobby", "snmp-community", "location:hq", "extra"}, assistant.Credential{}, false},
+	} {
+		got, err := parseCredential(tc.args)
+		if (err == nil) != tc.ok || got != tc.want {
+			t.Errorf("parseCredential(%q) = %+v, %v; want %+v, ok %v", tc.args, got, err, tc.want, tc.ok)
 		}
 	}
 }

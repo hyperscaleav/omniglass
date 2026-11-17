@@ -262,3 +262,17 @@ func TestLoopEventsDecideBeforeTheCallRuns(t *testing.T) {
 		t.Errorf("seen = %v, want %v", seen, want)
 	}
 }
+
+// The step ceiling bounds one prompt's run, not the chat: earlier prompts'
+// turns do not count against the next.
+func TestLoopStepCeilingIsPerPrompt(t *testing.T) {
+	t.Parallel()
+	l := &Loop{Provider: replay(t, "turns:\n  - text: one\n  - text: two\n"), Tools: fleet(), MaxSteps: 1}
+	if _, err := l.Run(context.Background(), "first"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := l.Run(context.Background(), "second")
+	if err != nil || out.Stopped || out.Text != "two" {
+		t.Errorf("second run = %+v, %v, want its answer within its own step", out, err)
+	}
+}

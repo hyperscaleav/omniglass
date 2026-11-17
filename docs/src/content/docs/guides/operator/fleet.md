@@ -20,17 +20,18 @@ screenshots:
     #
     # A mask is painted at the size of what it resolves to, and a since-line
     # or an age changes width with the clock (#773, #1081), so no mask on this
-    # page names the text alone. The header and alarm rows are masked whole
-    # (`xpath=ancestor::div[1]`, stretched to their card) because the standard,
-    # the size and the alarm's controls follow the age on the same line and
-    # move when it does. Activity's incident entries carry a stamp or a
-    # duration on every line and are masked whole (`xpath=ancestor::li[1]`),
-    # as are its logs and the charts. The summary card declares a box instead,
-    # since its since line ends its row.
+    # page names the text alone. The header row is masked whole
+    # (`xpath=ancestor::div[1]`, stretched to its card) because the standard and
+    # the size follow the since-line on the same line and move when it does.
+    # The alarm's controls follow its age the same way, and their buttons cast
+    # a shadow below the row's own box, so the Why card is masked whole: a row
+    # mask left that sliver live, moving with the age (#2117). Activity's
+    # incident entries carry a stamp or a duration on every line and are masked
+    # whole (`xpath=ancestor::li[1]`), as are its logs and the charts. The summary
+    # card declares a box instead, since its since line ends its row.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - "text=/unacknowledged/ >> xpath=ancestor::div[1]"
-      - "text=/acknowledged/ >> xpath=ancestor::div[1]"
+      - "[data-testid=leaf-alarms]"
   - id: fleet-configure
     path: /web/systems/huddle?tab=configure
     alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, slots, properties, tags)."

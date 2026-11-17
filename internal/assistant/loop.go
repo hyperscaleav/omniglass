@@ -128,14 +128,28 @@ type Loop struct {
 	MaxSteps int
 	// Events, when set, hears each step of the run as it happens.
 	Events func(Event)
+
+	// history is the conversation so far, so each Run continues the last.
+	history []provider.Message
+}
+
+// Tell adds a note from the person to the conversation without asking the
+// model anything; the model reads it with the next prompt. A credential's
+// reference reaches the model this way, never its value.
+func (l *Loop) Tell(text string) {
+	l.history = append(l.history, provider.Message{Role: provider.RoleUser, Text: text})
 }
 
 // Run sends prompt to the model and answers its calls until it replies with
 // no calls, the step ceiling is reached, or (with Pause) a call waits on its
-// owner. A call the transport cannot make ends the run with its error: the
-// session is gone, not the tool refused.
+// owner. Each Run continues the conversation the last one left, so a chat is
+// a Run per prompt. A call the transport cannot make ends the run with its
+// error: the session is gone, not the tool refused.
 func (l *Loop) Run(ctx context.Context, prompt string) (Outcome, error) {
-	return l.drive(ctx, []provider.Message{{Role: provider.RoleUser, Text: prompt}}, nil)
+	msgs := append(append([]provider.Message(nil), l.history...), provider.Message{Role: provider.RoleUser, Text: prompt})
+	out, err := l.drive(ctx, msgs, nil)
+	l.keep(out)
+	return out, err
 }
 
 // Continue resumes a paused run from its conversation (an Outcome's
@@ -147,7 +161,9 @@ func (l *Loop) Continue(ctx context.Context, history []provider.Message, approve
 	if _, ok := firstOpen(history); !ok {
 		return Outcome{}, errors.New("continue: no call is waiting in this conversation")
 	}
-	return l.drive(ctx, append([]provider.Message(nil), history...), &approved)
+	out, err := l.drive(ctx, append([]provider.Message(nil), history...), &approved)
+	l.keep(out)
+	return out, err
 }
 
 // drive runs the conversation in msgs forward. A turn whose calls are not all
@@ -164,11 +180,7 @@ func (l *Loop) drive(ctx context.Context, msgs []provider.Message, decided *bool
 		max = defaultMaxSteps
 	}
 	var out Outcome
-	for _, m := range msgs {
-		if m.Role == provider.RoleAssistant {
-			out.Steps++
-		}
-	}
+	out.Steps = turnsSincePerson(msgs)
 	for {
 		if msgs, err = l.answerTurn(ctx, msgs, byName, &out, decided); err != nil || out.Pending != nil {
 			out.Messages = msgs
@@ -252,6 +264,26 @@ func firstOpen(msgs []provider.Message) (int, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// keep makes a run's conversation the one the next Run continues. A run that
+// never reached the model (the tools could not be listed) leaves it as it was.
+func (l *Loop) keep(out Outcome) {
+	if out.Messages != nil {
+		l.history = out.Messages
+	}
+}
+
+// turnsSincePerson is how many model turns follow the person's last message:
+// the steps the run in progress has taken, not the whole conversation's.
+func turnsSincePerson(msgs []provider.Message) int {
+	n := 0
+	for i := len(msgs) - 1; i >= 0 && msgs[i].Role != provider.RoleUser; i-- {
+		if msgs[i].Role == provider.RoleAssistant {
+			n++
+		}
+	}
+	return n
 }
 
 // countToolResults is how many tool results end the conversation.
