@@ -21,7 +21,7 @@ along those grants, so what an administrator sees is what they are allowed to ch
 Every task on these pages has two front doors, and they call the same API with the same checks:
 
 - **The console.** The **Admin** area of the [web console](/guides/operator/) holds Users,
-  Roles, Groups, Settings, and Audit. Secrets and Variables have moved to the **Values**
+  Roles, User groups, Settings, and Audit. Secrets and Variables have moved to the **Values**
   group. A tab you have no read grant for is hidden and its route refused, so the console never
   paints a page you cannot use.
 - **The CLI.** The same surfaces are generated commands on the [`omniglass` CLI](/guides/cli/)
