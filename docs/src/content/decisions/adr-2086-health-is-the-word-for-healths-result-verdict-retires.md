@@ -3,7 +3,7 @@ title: "Health is the word for health's result; verdict retires"
 date: 2026-11-17
 status: Accepted
 summary: "A system's, location's or component's result is its health (a system's health is degraded), not its verdict: the verdict and verdicts fields, component_verdict, the System and Reach verdict bodies, list-system-verdicts, the Go and console identifiers and the docs prose follow. Reach's per-endpoint up/down result takes its own word, reachability, and a command's settlement verdict is its settlement. Verdict stays only where it is a judgment of a test (the soak and perf gates, a subscription or target test). The vocabulary table's verdict key becomes health"
-refs: [2086, 2029, 2038, 2030]
+refs: [2086, 2029, 2038, 2030, 2102, 2103, 2104]
 ---
 
 - **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
@@ -37,7 +37,9 @@ refs: [2086, 2029, 2038, 2030]
     the kept senses above in its Allow pattern. Until the rename lands the key keeps its name;
     this decision already rewrites the four value terms' definitions and the system term's to
     say health.
-  - The renames are one follow-up issue under the taxonomy epic. Surfaces that change:
+  - The renames land as three follow-up issues under the taxonomy epic, in order: the API, Go
+    and CLI (#2102), the console (#2103), then the docs, the vocabulary key and the denylist
+    (#2104). Surfaces that change:
     - **API:** the `verdict` field on ten health bodies (`FleetDotBody`, `FleetHealthOutputBody`,
       `FleetLocationBody`, `FleetSystemBody`, `HealthSystemBody`, `HealthTransitionBody`,
       `ListAlarmsOutputBody`, `PlatformOutpostBody`, `PlatformServerBody`, `PlatformSystemBody`)
