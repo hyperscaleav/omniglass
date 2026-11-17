@@ -62,11 +62,7 @@ func newOmnibotCmd(version string) *cobra.Command {
 				MaxSteps: maxSteps,
 				Confirm:  confirmerFor(cmd),
 				Observe: func(c assistant.Call) {
-					mark := "ok"
-					if c.IsError {
-						mark = "error"
-					}
-					fmt.Fprintf(cmd.ErrOrStderr(), "omnibot: %s %s (%s)\n", c.Decision, c.Tool, mark)
+					fmt.Fprintln(cmd.ErrOrStderr(), observeLine(c))
 				},
 			}
 			out, err := loop.Run(cmd.Context(), strings.Join(pos, " "))
@@ -129,4 +125,17 @@ func terminalConfirmer(in io.Reader, out io.Writer) assistant.Confirmer {
 		}
 		return false, nil
 	}
+}
+
+// observeLine is a call's line on stderr. Only a call that ran has an outcome;
+// a declined or refused one never ran, so it carries none.
+func observeLine(c assistant.Call) string {
+	line := fmt.Sprintf("omnibot: %s %s", c.Decision, c.Tool)
+	if c.Decision != assistant.DecisionCalled {
+		return line
+	}
+	if c.IsError {
+		return line + " (error)"
+	}
+	return line + " (ok)"
 }

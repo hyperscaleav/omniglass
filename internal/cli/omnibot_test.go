@@ -40,3 +40,22 @@ func TestOmnibotConfirmerAsksThePerson(t *testing.T) {
 		}
 	}
 }
+
+// Each call the model asked for gets one line on stderr: a call that ran says
+// whether it failed, while a declined or refused one never ran, so it carries
+// no outcome to mistake for a failure.
+func TestOmnibotObserveLine(t *testing.T) {
+	for _, tc := range []struct {
+		call assistant.Call
+		want string
+	}{
+		{assistant.Call{Tool: "get-component", Decision: assistant.DecisionCalled}, "omnibot: called get-component (ok)"},
+		{assistant.Call{Tool: "get-component", Decision: assistant.DecisionCalled, IsError: true}, "omnibot: called get-component (error)"},
+		{assistant.Call{Tool: "set-component-tag", Decision: assistant.DecisionDeclined, IsError: true}, "omnibot: declined set-component-tag"},
+		{assistant.Call{Tool: "delete-component", Decision: assistant.DecisionRefused, IsError: true}, "omnibot: refused delete-component"},
+	} {
+		if got := observeLine(tc.call); got != tc.want {
+			t.Errorf("observeLine(%+v) = %q, want %q", tc.call, got, tc.want)
+		}
+	}
+}
