@@ -11912,7 +11912,7 @@ components:
       type: object
     SystemBody:
       additionalProperties: false
-      description: The unit Omniglass monitors, a set of components in one location that works as one, carrying one health verdict.
+      description: The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own.
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.

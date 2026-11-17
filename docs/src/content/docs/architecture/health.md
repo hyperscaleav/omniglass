@@ -13,6 +13,12 @@ verdict, an outage component no longer occupies the role it fills, an impaired r
 system by a declared impact) carried on the ordinary sample pipeline: stored, queried, and trended
 like any other signal.
 
+What health produces is named by the concept: a system, a location and a component each **have a
+health**, one of `healthy`, `incomplete`, `degraded` and `outage` ("the system's health is degraded"),
+and an endpoint's up/down result is its **reachability**, an input to health rather than a health
+of its own ([ADR-2086](/architecture/decisions/#adr-2086-health-is-the-word-for-healths-result-verdict-retires)). The API, the code and the
+rest of this page still call the value a verdict until that rename lands.
+
 :::note[Partial]
 Built today: the **`alarm`** table (component-local, impairing its component wholesale), **`impact`**
 on a `system_role`, the **rollup** from component through system to location, and the **recorded
