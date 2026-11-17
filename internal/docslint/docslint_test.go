@@ -459,6 +459,55 @@ func TestADR2031NodeAsTheCollectorFires(t *testing.T) {
 	}
 }
 
+// TestADR2032SystemRoleFires proves the system-role entry catches what a
+// system needs filled in every spelling the rename carried (the prose noun,
+// the tables, the Go types, the routes, the accessor, the CLI subgroup) and
+// passes the senses role keeps: the IAM role an operator is granted, its
+// routes and permissions, and the ARIA role attribute.
+func TestADR2032SystemRoleFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2032") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"the system role is impaired",
+		"Each system role carries a quorum and an impact.",
+		"the `system_role` table",
+		"a row in `system_role_assignment`",
+		"`ListSystemRoles` resolves the effective set",
+		"`PUT /systems/{name}/roles/{role}` declares one",
+		"`GET /standards/{id}/roles` lists them",
+		"a lookup through `$role.display`",
+		"the `role_choice` table holds the alternates",
+		"a role assignment names the component",
+		"`omniglass system role assign`",
+		"the effective roles of a system",
+	} {
+		if !fires(line) {
+			t.Errorf("system role passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"the operator role grants",
+		"`GET /roles` lists them",
+		"a grant needs `role:read`",
+		"the viewer and operator roles ship seeded",
+		"an agent token is bounded by the roles its person chose",
+		`<div role="button" tabindex="0">`,
+		"the Admin Roles page",
+		"`omniglass role list`",
+		"`principal_grant.role_id` names the role",
+	} {
+		if fires(line) {
+			t.Errorf("role in a kept sense fired: %q", line)
+		}
+	}
+}
+
 // TestADR2035RegistryAsTheCatalogFires proves the registry-as-the-catalog entry
 // catches the word where it names the database rows the fleet is typed by, and
 // passes the lookups compiled into the binary that keep it: the transport
