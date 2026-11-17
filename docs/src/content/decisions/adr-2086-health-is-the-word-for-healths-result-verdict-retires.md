@@ -45,8 +45,8 @@ refs: [2086, 2029, 2038, 2030]
       `SystemVerdictBody` and `SystemVerdictsOutputBody` become `SystemHealthEntryBody` and
       `SystemHealthListOutputBody`, its `verdicts` list `systems`; the operation
       `list-system-verdicts` becomes `list-system-health`. On reach, the endpoint's `verdict`
-      becomes `reachability` and `ReachVerdictBody` becomes `ReachReadingBody` (the same body
-      also carries the `responsive` and `authenticated` rungs, so it names a reading, not the
+      becomes `reachability` and `ReachVerdictBody` becomes `ReachReadingBody` (`ReachEndpointBody`'s
+      `responsive` and `authenticated` rungs are the same type, so it names one reading, not the
       overall result). Route paths do not change: `GET /systems:health` and the two
       `/{name}/health` explanations already say health.
     - **Schema:** none. The recorded series is already the `og.health` property, and no column
