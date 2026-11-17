@@ -12,7 +12,7 @@ import (
 
 // The endpoint rename (#811, ADR-0073 and the naming ruling on #603): the
 // interface table becomes endpoint, its type FK becomes a transport name the
-// Go catalog validates, the interface_type table retires, and the rename
+// Go registry validates, the interface_type table retires, and the rename
 // carries everything that spells the old noun: the task arc's column, the
 // role permission strings, and the canonical endpoint-reachable datapoint.
 //
