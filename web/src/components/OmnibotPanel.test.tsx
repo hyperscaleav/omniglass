@@ -140,6 +140,20 @@ describe("the omnibot panel", () => {
     expect(calls.filter((c) => c.url.endsWith("/assistant/conversations"))).toHaveLength(1);
   });
 
+  it("keeps the latest of the run in view as it streams", async () => {
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    open();
+    send("add the lobby display");
+    await screen.findByTestId("omnibot-ask");
+    const end = screen.getByTestId("omnibot-end");
+    expect(end.parentElement?.lastElementChild).toBe(end);
+    await waitFor(() => expect(scrolled.at(-1)).toBe(end));
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
   it("shows it is working while the run streams", async () => {
     runReply = () => new Response(new ReadableStream(), { headers: { "Content-Type": "text/event-stream" } });
     open();

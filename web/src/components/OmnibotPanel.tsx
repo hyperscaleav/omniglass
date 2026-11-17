@@ -34,7 +34,7 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   const [draft, setDraft] = createSignal("");
   const [credential, setCredential] = createSignal(false);
   let controller: AbortController | undefined;
-  let scroller: HTMLDivElement | undefined;
+  let end: HTMLDivElement | undefined;
   let composer: HTMLTextAreaElement | undefined;
 
   // A prompt handed in (the command palette's query) seeds the composer.
@@ -43,10 +43,11 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   });
   onCleanup(() => controller?.abort());
 
-  // The latest item stays in view as the run streams.
+  // The latest item stays in view as the run streams: the drawer's body is
+  // what scrolls, so the transcript's last element brings itself into it.
   createEffect(() => {
     state();
-    scroller?.scrollTo?.({ top: scroller.scrollHeight });
+    end?.scrollIntoView?.({ block: "end" });
   });
 
   const busy = () => state().status === "working" || state().status === "pending";
@@ -150,7 +151,7 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
         }
         footer={composerBar}
       >
-        <div ref={scroller} class="flex flex-col gap-3">
+        <div class="flex flex-col gap-3">
           <Show when={state().items.length === 0}>
             <div data-testid="omnibot-empty" class="flex flex-col gap-2 text-sm text-base-content/70">
               <p>
@@ -220,6 +221,7 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
               </div>
             </Match>
           </Switch>
+          <div ref={end} data-testid="omnibot-end" />
         </div>
       </Drawer>
       <Drawer open={credential()} onClose={() => setCredential(false)} title="Add a credential">
