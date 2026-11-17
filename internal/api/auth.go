@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -218,8 +219,11 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 		roleIDs = append(roleIDs, g.Role)
 	}
 	opID := ctx.Operation().OperationID
-	channel := storage.AuditChannelOf(ctx.Context())
+	channel := requestChannel(pr.Agent, storage.AuditChannelOf(ctx.Context()))
 	c := huma.WithValue(ctx, principalCtxKey, pr)
+	if channel != storage.AuditChannelOf(ctx.Context()) {
+		c = huma.WithContext(c, storage.ReplaceAuditChannel(c.Context(), channel))
+	}
 	if pr.Agent != nil {
 		// An agent token (#1179): the principal is the person who minted it, the
 		// agent acts on their behalf. It is accepted only on the channels it was
@@ -288,7 +292,7 @@ var agentCeilingActions = []string{"reveal", "enroll"}
 // ceilingChannels are the channels whose every request is an agent's, whatever
 // the credential: a tool call on the MCP server is made by the model the person
 // connected, so it is held to the agent ceiling even on a personal token.
-var ceilingChannels = map[storage.AuditChannel]bool{storage.AuditChannelMCP: true}
+var ceilingChannels = map[storage.AuditChannel]bool{storage.AuditChannelMCP: true, storage.AuditChannelOmnibot: true}
 
 // agentRefusedOps are the self-service lanes an agent token is refused on: it
 // cannot mint a token (one that would outlive or out-reach it), change its
@@ -310,6 +314,21 @@ func agentCeiling(pr *storage.Principal, channel storage.AuditChannel) bool {
 // agentChannelAPI is the channel name an agent token's allowlist uses for a
 // direct API call, which carries no audit channel.
 const agentChannelAPI = "api"
+
+// agentChannelOmnibot is the channel an omnibot agent token is minted for:
+// alone, never alongside another (#1166).
+const agentChannelOmnibot = string(storage.AuditChannelOmnibot)
+
+// requestChannel settles the channel a request arrived through. An MCP tool
+// call made with an agent token minted for the omnibot channel alone is
+// omnibot's; every other request keeps the channel its transport set. The
+// credential decides, so no client obtains the channel by declaring a name.
+func requestChannel(agent *storage.AgentCredential, channel storage.AuditChannel) storage.AuditChannel {
+	if channel == storage.AuditChannelMCP && agent != nil && len(agent.Channels) == 1 && agent.Channels[0] == agentChannelOmnibot {
+		return storage.AuditChannelOmnibot
+	}
+	return channel
+}
 
 // agentChannelAccepted reports whether an agent token minted for the listed
 // channels is accepted on the request's channel. No list accepts any channel.
@@ -1016,7 +1035,7 @@ type createMeTokenInput struct {
 		TTLDays     int      `json:"ttl_days,omitempty" minimum:"1" maximum:"365" doc:"Days until the token expires (default 90, maximum 365; required for an agent token)"`
 		Agent       string   `json:"agent,omitempty" maxLength:"100" pattern:"^[A-Za-z0-9][A-Za-z0-9 ._-]*$" doc:"Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate."`
 		Roles       []string `json:"roles,omitempty" maxItems:"20" doc:"An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling."`
-		Channels    []string `json:"channels,omitempty" maxItems:"2" uniqueItems:"true" enum:"api,mcp" doc:"The channels an agent token is accepted on: api (direct calls) and mcp (the MCP server). Omit to accept both."`
+		Channels    []string `json:"channels,omitempty" maxItems:"3" uniqueItems:"true" enum:"api,mcp,omnibot" doc:"The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp."`
 	}
 }
 
@@ -1047,6 +1066,9 @@ func (a *authenticator) validateAgentMint(ctx context.Context, in *createMeToken
 	}
 	if b.TTLDays == 0 {
 		return huma.Error422UnprocessableEntity("an agent token needs an explicit ttl_days")
+	}
+	if len(b.Channels) > 1 && slices.Contains(b.Channels, agentChannelOmnibot) {
+		return huma.Error422UnprocessableEntity("an omnibot token is minted for the omnibot channel alone")
 	}
 	if len(b.Roles) == 0 {
 		return nil
