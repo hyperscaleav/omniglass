@@ -453,7 +453,7 @@ export type AlarmBody = {
 };
 
 export type AlarmFactBody = {
-  /** The key a template reads it by ({{.Name}}) */
+  /** The key a rule reads it by ({{.Name}}) */
   name: string;
   value: string;
 };
@@ -1633,7 +1633,7 @@ export type ComponentTypeBody = {
   /** The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent */
   inherited_stem_source?: string;
   label: string;
-  /** The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components */
+  /** The label rule instances of this type get; empty inherits the nearest ancestor's, then the global rule for components */
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -1887,7 +1887,7 @@ export type CreateComponentTypeInputBody = {
      * @minLength 1
      */
   label: string;
-  /** A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. */
+  /** A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422. */
   label_rule?: string;
   /**
      * The globally unique name
@@ -2229,7 +2229,7 @@ export type CreateLocationTypeInputBody = {
      * @minLength 1
      */
   label: string;
-  /** The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile */
+  /** The label rule locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile */
   label_rule?: string;
   /**
      * The globally unique name (e.g. wing); "root" is reserved
@@ -2465,9 +2465,9 @@ export type CreateNotificationTypeInputBody = {
      * @minLength 1
      */
   name: string;
-  /** The one-line subject template */
+  /** The one-line subject, written in the rule language */
   subject: string;
-  /** The body text template */
+  /** The body text, written in the rule language */
   text: string;
 };
 
@@ -2585,7 +2585,7 @@ export type CreateProductInputBody = {
      * @minLength 1
      */
   label: string;
-  /** A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. */
+  /** A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422. */
   label_rule?: string;
   /**
      * The globally unique name; renameable
@@ -2839,7 +2839,7 @@ export type CreateSystemTypeInputBody = {
      * @minLength 1
      */
   label: string;
-  /** The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile */
+  /** The label rule systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile */
   label_rule?: string;
   /**
      * The globally unique name
@@ -4431,7 +4431,7 @@ export type LocationTypeBody = {
   /** The location type's uuid, the stable handle that survives a rename */
   id: string;
   label: string;
-  /** The label template locations of this type get; empty falls back to the global rule for locations */
+  /** The label rule locations of this type get; empty falls back to the global rule for locations */
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -4704,9 +4704,9 @@ export type NotificationTypeBody = {
   name: string;
   /** Shipped with the platform and read-only */
   official: boolean;
-  /** The one-line subject template */
+  /** The one-line subject, written in the rule language */
   subject: string;
-  /** The body text template */
+  /** The body text, written in the rule language */
   text: string;
   updated_at: string;
 };
@@ -4911,7 +4911,7 @@ export type ProductBody = {
   id: string;
   kind: ProductBodyKind;
   label: string;
-  /** The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule */
+  /** The label rule instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule */
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -5162,7 +5162,7 @@ export type ListStandardRolesOutputBody = {
 };
 
 /**
- * A blueprint a system conforms to, declaring the roles it fills and the properties every conforming system exposes.
+ * The contract a system is built to, declaring the roles it fills and the properties every conforming system exposes.
  */
 export type StandardBody = {
   /** A URL to the JSON Schema for this object. */
@@ -5229,7 +5229,7 @@ export type SystemTypeBody = {
   /** The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent */
   inherited_stem_source?: string;
   label: string;
-  /** The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems */
+  /** The label rule systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems */
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -5299,7 +5299,7 @@ export type SystemBody = {
   standard?: string;
   /** The standard's uuid; the stable form of standard */
   standard_id?: string;
-  /** The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to. */
+  /** The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to. */
   system_type?: string;
   /** The system_type's uuid; the stable form of system_type */
   system_type_id?: string;
@@ -5897,7 +5897,7 @@ export const NotificationSettingsMailSecurity = {
 } as const;
 
 export type NotificationSettings = {
-  /** The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty */
+  /** The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a notification's subject and text read. Empty leaves Link empty */
   console_url: string;
   /** The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here */
   egress_allow: string[];
@@ -6675,9 +6675,9 @@ export type PreviewNotificationTypeInputBody = {
      * @minLength 1
      */
   component: string;
-  /** A draft subject template to render instead of the stored one, so an editor previews before it saves */
+  /** A draft subject to render instead of the stored one, so an editor previews before it saves */
   subject?: string;
-  /** A draft text template to render instead of the stored one */
+  /** A draft text to render instead of the stored one */
   text?: string;
   /** The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) */
   transition?: PreviewNotificationTypeInputBodyTransition;
@@ -6698,7 +6698,7 @@ export type PreviewNotificationTypeOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * The alarm facts the templates read, every key in its declared order (an absent fact is empty)
+     * The alarm facts the subject and text read, every key in its declared order (an absent fact is empty)
      * @nullable
      */
   facts: AlarmFactBody[] | null;
@@ -8101,7 +8101,7 @@ export type UpdateComponentTypeInputBody = {
   icon?: string;
   /** A new operator-facing label */
   label?: string;
-  /** A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. */
+  /** A new label rule; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. */
   label_rule?: string;
   /**
      * A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).
@@ -8229,7 +8229,7 @@ export type UpdateLocationTypeInputBody = {
   icon?: string;
   /** A new operator-facing label */
   label?: string;
-  /** A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels */
+  /** A new label rule for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels */
   label_rule?: string;
   /** A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row */
   name_rule?: NameRuleBody;
@@ -8292,9 +8292,9 @@ export type UpdateNotificationTypeInputBody = {
   description?: string;
   /** A human label (empty clears it) */
   label?: string;
-  /** The one-line subject template */
+  /** The one-line subject, written in the rule language */
   subject?: string;
-  /** The body text template */
+  /** The body text, written in the rule language */
   text?: string;
 };
 
@@ -8375,7 +8375,7 @@ export type UpdateProductInputBody = {
   kind?: UpdateProductInputBodyKind;
   /** A new operator-facing label */
   label?: string;
-  /** A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. */
+  /** A new label rule; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. */
   label_rule?: string;
   /** A new parent product, by handle or uuid; an empty string clears it */
   parent_product_id?: string;
@@ -8460,7 +8460,7 @@ export type UpdateSystemTypeInputBody = {
   icon?: string;
   /** A new operator-facing label */
   label?: string;
-  /** A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels */
+  /** A new label rule for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels */
   label_rule?: string;
   /**
      * A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).
@@ -18500,7 +18500,7 @@ export const getCreateNotificationTypeUrl = () => {
 }
 
 /**
- * Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+ * Registers an operator notification type (official=false). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
  * @summary Create a notification type
  */
 export const createNotificationType = async (createNotificationTypeInputBody: NonReadonly<CreateNotificationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNotificationTypeResponse> => {
@@ -18705,7 +18705,7 @@ export const getUpdateNotificationTypeUrl = (name: string,) => {
 }
 
 /**
- * Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+ * Patches an operator type's label, description, subject or text (an absent field is unchanged). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
  * @summary Update a notification type
  */
 export const updateNotificationType = async (name: string,
@@ -18764,7 +18764,7 @@ export const getPreviewNotificationTypeUrl = (name: string,) => {
 }
 
 /**
- * Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+ * Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
  * @summary Preview a notification type against an alarm
  */
 export const previewNotificationType = async (name: string,
@@ -23267,7 +23267,7 @@ export const getListStandardsUrl = () => {
 }
 
 /**
- * Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.
+ * Lists the standard catalog, ordered alphabetically by label. A standard is the contract a system is built to. Gated by standard:read.
  * @summary List standards
  */
 export const listStandards = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listStandardsResponse> => {
@@ -24086,7 +24086,7 @@ export const getListSystemTypesUrl = () => {
 }
 
 /**
- * Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+ * Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.
  * @summary List system types
  */
 export const listSystemTypes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemTypesResponse> => {

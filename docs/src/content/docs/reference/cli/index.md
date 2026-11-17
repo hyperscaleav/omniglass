@@ -2156,7 +2156,7 @@ Creates a custom (non-official) component_type, optionally under a parent. Gated
 | `--default-tags` | string | (none) | Tags every instance of this type starts with |
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
-| `--label-rule` | string | (none) | A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. |
+| `--label-rule` | string | (none) | A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent component_type, by name or uuid; omit for a root type |
 | `--stem` | string | (none) | The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens. |
@@ -2231,7 +2231,7 @@ Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tag
 | `--default-tags` | string | (none) | Replaces the default-tag set; omit to leave unchanged |
 | `--icon` | string | (none) | A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--label` | string | (none) | A new operator-facing label |
-| `--label-rule` | string | (none) | A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. |
+| `--label-rule` | string | (none) | A new label rule; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. |
 | `--stem` | string | (none) | A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). |
 
 Example:
@@ -3637,7 +3637,7 @@ Creates a custom (non-official) location_type, optionally with the label_rule lo
 | `--allowed-parent-types` | string | (none) | location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
-| `--label-rule` | string | (none) | The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile |
+| `--label-rule` | string | (none) | The label rule locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name (e.g. wing); "root" is reserved |
 | `--name-rule` | string | (none) | How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name |
 
@@ -3844,7 +3844,7 @@ Patches a location_type's label, icon, allowed parents, label_rule or name_rule.
 | `--allowed-parent-types` | string | (none) | Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained |
 | `--icon` | string | (none) | A new glyph key; the console falls back to map-pin when empty |
 | `--label` | string | (none) | A new operator-facing label |
-| `--label-rule` | string | (none) | A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels |
+| `--label-rule` | string | (none) | A new label rule for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels |
 | `--name-rule` | string | (none) | A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row |
 | `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
 
@@ -4250,15 +4250,15 @@ Create a notification type
 omniglass notification-type create [flags]
 ```
 
-Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+Registers an operator notification type (official=false). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the message is for |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The type's name (lowercase kebab) |
-| `--subject` | string | (none) | The one-line subject template |
-| `--text` | string | (none) | The body text template |
+| `--subject` | string | (none) | The one-line subject, written in the rule language |
+| `--text` | string | (none) | The body text, written in the rule language |
 
 Example:
 
@@ -4322,14 +4322,14 @@ Preview a notification type against an alarm
 omniglass notification-type preview <name> [flags]
 ```
 
-Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--alarm` | string | (none) | The alarm's id; absent previews the component's most recently raised alarm |
 | `--component` | string | (none) | The component the alarm is on, by name or dotted address |
-| `--subject` | string | (none) | A draft subject template to render instead of the stored one, so an editor previews before it saves |
-| `--text` | string | (none) | A draft text template to render instead of the stored one |
+| `--subject` | string | (none) | A draft subject to render instead of the stored one, so an editor previews before it saves |
+| `--text` | string | (none) | A draft text to render instead of the stored one |
 | `--transition` | string | (none) | The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) |
 
 Example:
@@ -4366,14 +4366,14 @@ Update a notification type
 omniglass notification-type update <name> [flags]
 ```
 
-Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+Patches an operator type's label, description, subject or text (an absent field is unchanged). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the message is for |
 | `--label` | string | (none) | A human label (empty clears it) |
-| `--subject` | string | (none) | The one-line subject template |
-| `--text` | string | (none) | The body text template |
+| `--subject` | string | (none) | The one-line subject, written in the rule language |
+| `--text` | string | (none) | The body text, written in the rule language |
 
 Example:
 
@@ -5322,7 +5322,7 @@ Creates a custom (non-official) product, classified under a component_type. kind
 | `--icon` | string | (none) | A product-level icon override; unset inherits the component_type's icon |
 | `--kind` | string | (none) | What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly. |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
-| `--label-rule` | string | (none) | A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. |
+| `--label-rule` | string | (none) | A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name; renameable |
 | `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | The vendor, by handle or uuid |
@@ -5532,7 +5532,7 @@ Patches a custom product's label, vendor, driver, kind, component_type, icon, la
 | `--icon` | string | (none) | A new icon override; an empty string clears it, so the product inherits its component_type's icon |
 | `--kind` | string | (none) | A new product class |
 | `--label` | string | (none) | A new operator-facing label |
-| `--label-rule` | string | (none) | A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. |
+| `--label-rule` | string | (none) | A new label rule; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. |
 | `--parent-product-id` | string | (none) | A new parent product, by handle or uuid; an empty string clears it |
 | `--vendor-id` | string | (none) | A new vendor, by handle or uuid; an empty string clears it |
 
@@ -6351,7 +6351,7 @@ List standards
 omniglass standard list
 ```
 
-Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.
+Lists the standard catalog, ordered alphabetically by label. A standard is the contract a system is built to. Gated by standard:read.
 
 Example:
 
@@ -7418,7 +7418,7 @@ Creates a custom (non-official) system_type, optionally under a parent and optio
 | `--abbrev` | string | (none) | A compact form of label; omit to inherit the parent's |
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
-| `--label-rule` | string | (none) | The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile |
+| `--label-rule` | string | (none) | The label rule systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent system_type, by name or uuid; omit for a root type |
 | `--stem` | string | (none) | The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from. |
@@ -7453,7 +7453,7 @@ List system types
 omniglass system-type list
 ```
 
-Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.
 
 Example:
 
@@ -7476,7 +7476,7 @@ Patches a custom system_type's label, stem, icon, abbrev, or label_rule. An unpa
 | `--abbrev` | string | (none) | A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--icon` | string | (none) | A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--label` | string | (none) | A new operator-facing label |
-| `--label-rule` | string | (none) | A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels |
+| `--label-rule` | string | (none) | A new label rule for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels |
 | `--stem` | string | (none) | A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). |
 
 Example:
