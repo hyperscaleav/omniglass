@@ -140,7 +140,7 @@ func TestValidateNameAcceptsRealNames(t *testing.T) {
 		"component":     "hq-boardroom-dsp",
 		"location":      "rm215a",
 		"vendor":        "crestron",
-		"node":          "node-1",
+		"outpost":       "outpost-1",
 		"property_type": "endpoint-reachable",
 		"event_type":    "call-started",
 		"command_type":  "set-input",

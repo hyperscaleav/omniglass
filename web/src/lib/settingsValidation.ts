@@ -18,7 +18,7 @@ export function constraintFor(ns: string, key: string): Constraint | undefined {
 
 // settingKeys is every key a namespace's card lists: the keys the effective
 // document resolved, and every key the generated schema declares. A setting with
-// no declared default (a node log window, #1350) is absent from the effective
+// no declared default (an outpost log window, #1350) is absent from the effective
 // document until someone sets it, and a card listing only resolved keys would
 // leave it unsettable from the console.
 export function settingKeys(ns: string, resolved: Record<string, unknown>): string[] {

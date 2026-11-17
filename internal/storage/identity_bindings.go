@@ -26,7 +26,7 @@ var (
 	// property type: the key is typed and shared by every driver reporting it.
 	ErrIdentityBindingKeyUnregistered = errors.New("storage: identity binding match key is not a registered property type")
 	// ErrIdentityBindingOwnerKind is an owner that is neither a component nor a
-	// system: a location or a node owns no observed sample (ADR-0422).
+	// system: a location or an outpost owns no observed sample (ADR-0422).
 	ErrIdentityBindingOwnerKind = errors.New("storage: an identity binding's owner is a component or a system")
 	// ErrIdentityBindingValue is an identity value outside 1 to 256 characters.
 	ErrIdentityBindingValue = errors.New("storage: an identity value is 1 to 256 characters")

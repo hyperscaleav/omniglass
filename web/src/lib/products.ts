@@ -59,7 +59,7 @@ export type CreateProduct = {
   label: string;
   kind: ProductKind;
   // The component_type this product is classified under, by name or uuid;
-  // every product must belong to one of the tree's nodes (the generics fit
+  // every product must belong to a type in that tree (the generics fit
   // anything not yet modeled more specifically).
   component_type: string;
   vendor_id?: string;

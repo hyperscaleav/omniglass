@@ -138,7 +138,7 @@ func TestEveryTaskFieldRoundTripsThroughTheGroupedWire(t *testing.T) {
 
 // A reply with no endpoints list, as a server built before the grouped wire
 // sends, fails the pull. Read as no tasks, it would tear down every session the
-// node holds; failed, the node keeps its last worklist.
+// outpost holds; failed, the outpost keeps its last worklist.
 func TestAFlatReplyDoesNotDecode(t *testing.T) {
 	var got WorklistReply
 	err := json.Unmarshal([]byte(`{"tasks":[{"id":"a","mode":"poll","endpoint_name":"tcp","transport":"tcp"}],"config_generation":1,"report_seconds":60}`), &got)

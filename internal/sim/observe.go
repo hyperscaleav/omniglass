@@ -9,14 +9,14 @@ import (
 )
 
 // What an endpoint observed (#1639): every simulated endpoint counts what it
-// served, so a lab can reconcile what a node sent against what reached the
+// served, so a lab can reconcile what an outpost sent against what reached the
 // device and how the device answered, hop by hop. One endpointObservation
 // per engine, shared by every device it serves; each device holds a pointer
 // to its own fixed row, so the hot path is a fixed number of atomic adds, no
 // map lookup and no allocation. Nothing resets on read: a reader brackets a
 // window with two snapshots and takes the difference.
 //
-// Three units, matched one for one with the node's RequestTally:
+// Three units, matched one for one with the outpost's RequestTally:
 //   - a connection, counted where a TCP face accepts it, with an open gauge;
 //   - a request, one exchange (the unit each protocol logs as one RequestLog),
 //     begun when it arrives and ended with one Outcome;

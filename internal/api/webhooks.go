@@ -26,7 +26,7 @@ import (
 // authenticates the post, its listeners map the body onto any lane, and the
 // batch is published on the push lane, whose writer admits only collected
 // keys. The route carries no principal, so it is on the ungated allow-list
-// by necessity, as POST /nodes:claim is: the sender is not a principal, and
+// by necessity, as POST /outposts:claim is: the sender is not a principal, and
 // the endpoint's scheme is the authentication.
 //
 // Senders retry on anything but 2xx, so the answers are a contract: 202

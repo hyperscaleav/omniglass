@@ -305,22 +305,22 @@ var nameOverride = map[string]([]string){
 	// CLI emits (HEAD is not generated).
 	"verify-webhook":  {"webhook", "verify"},
 	"receive-webhook": {"webhook", "receive"},
-	// A node has one simulator: a singular read, not a list.
-	"get-node-simulation": {"node", "simulation"},
+	// An outpost has one simulator: a singular read, not a list.
+	"get-outpost-simulation": {"outpost", "simulation"},
 	// A component has one impairment: read and set, not list and update.
 	"get-component-impairment": {"component", "impairment", "get"},
 	"set-component-impairment": {"component", "impairment", "set"},
 	// The simulated fleet: one group for the fleet, its catalog and adding a
 	// device; a component's own simulation beside its impairment.
-	"get-simulation":                {"simulation", "get"},
-	"list-simulation-profiles":      {"simulation", "profiles"},
-	"add-node-simulation-component": {"simulation", "add-component"},
-	"plan-simulation-system":        {"simulation", "plan-system"},
-	"add-node-simulation-system":    {"simulation", "add-system"},
-	"get-component-simulation":      {"component", "simulation", "get"},
-	"fire-component-simulation":     {"component", "simulation", "fire"},
-	"login":                         {"auth", "login"},
-	"logout":                        {"auth", "logout"},
+	"get-simulation":                   {"simulation", "get"},
+	"list-simulation-profiles":         {"simulation", "profiles"},
+	"add-outpost-simulation-component": {"simulation", "add-component"},
+	"plan-simulation-system":           {"simulation", "plan-system"},
+	"add-outpost-simulation-system":    {"simulation", "add-system"},
+	"get-component-simulation":         {"component", "simulation", "get"},
+	"fire-component-simulation":        {"component", "simulation", "fire"},
+	"login":                            {"auth", "login"},
+	"logout":                           {"auth", "logout"},
 }
 
 func buildCommands(doc spec, base string) []command {

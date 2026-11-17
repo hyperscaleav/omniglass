@@ -2,8 +2,8 @@ package lab
 
 import (
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
-	"github.com/hyperscaleav/omniglass/internal/node"
-	"github.com/hyperscaleav/omniglass/internal/simnode"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
+	"github.com/hyperscaleav/omniglass/internal/simoutpost"
 
 	"fmt"
 	"slices"
@@ -12,7 +12,7 @@ import (
 )
 
 func testOptions() Options {
-	return Options{Image: "omniglass:dev", Port: DefaultPort, NodeToken: "tok", NodeTokenHash: "abc",
+	return Options{Image: "omniglass:dev", Port: DefaultPort, OutpostToken: "tok", OutpostTokenHash: "abc",
 		Owner: Owner{Host: "box", PID: 42}}
 }
 
@@ -28,11 +28,11 @@ func TestPlanDefaults(t *testing.T) {
 	for _, svc := range s.Services() {
 		names = append(names, svc.Name)
 	}
-	if !slices.Equal(names, []string{"db", "seed", "server", "node"}) {
-		t.Fatalf("services %v, want db, seed, server, node in start order", names)
+	if !slices.Equal(names, []string{"db", "seed", "server", "outpost"}) {
+		t.Fatalf("services %v, want db, seed, server, outpost in start order", names)
 	}
-	if s.DB.Image != PostgresImage || s.Server.Image != "omniglass:dev" || s.Node.Image != "omniglass:dev" {
-		t.Fatalf("images db=%s server=%s node=%s", s.DB.Image, s.Server.Image, s.Node.Image)
+	if s.DB.Image != PostgresImage || s.Server.Image != "omniglass:dev" || s.Outpost.Image != "omniglass:dev" {
+		t.Fatalf("images db=%s server=%s outpost=%s", s.DB.Image, s.Server.Image, s.Outpost.Image)
 	}
 }
 
@@ -76,38 +76,38 @@ func TestPlanListenAndPort(t *testing.T) {
 	}
 }
 
-// NET_ADMIN is held by the node alone, as root inside its own container, with
+// NET_ADMIN is held by the outpost alone, as root inside its own container, with
 // the ping sysctl; the server and the database hold no added capability.
-func TestPlanPrivilegeSitsOnTheNodeOnly(t *testing.T) {
+func TestPlanPrivilegeSitsOnTheOutpostOnly(t *testing.T) {
 	s, err := Plan(testOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, svc := range s.Services() {
-		if svc.Name == "node" {
+		if svc.Name == "outpost" {
 			continue
 		}
 		if len(svc.CapAdd) != 0 || svc.User != "" || len(svc.Sysctls) != 0 {
 			t.Errorf("%s: caps %v user %q sysctls %v, want none", svc.Name, svc.CapAdd, svc.User, svc.Sysctls)
 		}
 	}
-	n := s.Node
+	n := s.Outpost
 	if !slices.Equal(n.CapAdd, []string{"NET_ADMIN"}) || n.User != "0:0" {
-		t.Fatalf("node caps %v user %q", n.CapAdd, n.User)
+		t.Fatalf("outpost caps %v user %q", n.CapAdd, n.User)
 	}
-	// The range admits root (the node's user) and distroless nonroot (65532),
+	// The range admits root (the outpost's user) and distroless nonroot (65532),
 	// and stays inside the 65537 groups a standard rootless Docker maps
 	// (/etc/subgid's 65536 plus the user's own): a group outside the mapping
-	// makes the kernel refuse the write and the node never starts (#1506).
+	// makes the kernel refuse the write and the outpost never starts (#1506).
 	var low, high int
 	if _, err := fmt.Sscanf(n.Sysctls["net.ipv4.ping_group_range"], "%d %d", &low, &high); err != nil {
-		t.Fatalf("node sysctls %v: %v", n.Sysctls, err)
+		t.Fatalf("outpost sysctls %v: %v", n.Sysctls, err)
 	}
 	if low != 0 || high < 65532 || high > 65536 {
 		t.Fatalf("ping_group_range %d %d, want 0 through at least 65532 and at most 65536", low, high)
 	}
 	if !slices.Contains(n.Cmd, "--simulate") || !slices.Contains(n.Cmd, "--impairments") {
-		t.Fatalf("node cmd %v, want node run --simulate --impairments", n.Cmd)
+		t.Fatalf("outpost cmd %v, want outpost run --simulate --impairments", n.Cmd)
 	}
 }
 
@@ -153,40 +153,40 @@ func TestPlanLabelsEveryResource(t *testing.T) {
 	}
 }
 
-// The node runs with a token minted for this run, and the seed gets only its
-// hash, so the database never holds a usable node secret from the lab.
-func TestPlanNodeTokenFlow(t *testing.T) {
+// The outpost runs with a token minted for this run, and the seed gets only its
+// hash, so the database never holds a usable outpost secret from the lab.
+func TestPlanOutpostTokenFlow(t *testing.T) {
 	s, err := Plan(testOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(s.Node.Env, "OMNIGLASS_NODE_TOKEN=tok") {
-		t.Fatalf("node env %v, want the run's token", s.Node.Env)
+	if !slices.Contains(s.Outpost.Env, "OMNIGLASS_OUTPOST_TOKEN=tok") {
+		t.Fatalf("outpost env %v, want the run's token", s.Outpost.Env)
 	}
 	for _, e := range s.Seed.Env {
 		if strings.Contains(e, "=tok") {
 			t.Fatalf("the seed sees the plaintext token: %s", e)
 		}
 	}
-	if !slices.Contains(s.Seed.Env, "OMNIGLASS_LAB_NODE_TOKEN_HASH=abc") {
+	if !slices.Contains(s.Seed.Env, "OMNIGLASS_LAB_OUTPOST_TOKEN_HASH=abc") {
 		t.Fatalf("seed env %v, want the token's hash", s.Seed.Env)
 	}
 }
 
-// A declared pusher's token (#1743) flows as a node's does: minted per run,
-// the emulator on the pusher's node holds the plaintext, and the seed gets
+// A declared pusher's token (#1743) flows as an outpost's does: minted per run,
+// the emulator on the pusher's outpost holds the plaintext, and the seed gets
 // only its hash and its non-secret prefix, to set the pusher's credential.
 // The token is in no other service's env and not in a config hash.
 func TestPlanPusherTokenFlow(t *testing.T) {
 	o := testOptions()
-	o.Pushers = []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Node: NodeName,
+	o.Pushers = []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Outpost: OutpostName,
 		Token: "bk_0a0b0c0d_secret", TokenHash: "pushhash", TokenPrefix: "0a0b0c0d"}}
 	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := simnode.PushersEnv + "=sim-booking-service=booking-service:bk_0a0b0c0d_secret"; !slices.Contains(s.Node.Env, want) {
-		t.Fatalf("node env %v, want %s", s.Node.Env, want)
+	if want := simoutpost.PushersEnv + "=sim-booking-service=booking-service:bk_0a0b0c0d_secret"; !slices.Contains(s.Outpost.Env, want) {
+		t.Fatalf("outpost env %v, want %s", s.Outpost.Env, want)
 	}
 	if want := PusherTokensEnv + "=sim-booking-service=pushhash:0a0b0c0d"; !slices.Contains(s.Seed.Env, want) {
 		t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
@@ -198,38 +198,38 @@ func TestPlanPusherTokenFlow(t *testing.T) {
 			}
 		}
 	}
-	if h := configHash(s.Node); strings.Contains(h, "secret") {
-		t.Fatal("the node's config hash carries the token")
+	if h := configHash(s.Outpost); strings.Contains(h, "secret") {
+		t.Fatal("the outpost's config hash carries the token")
 	}
 }
 
-// A scale lab's pushers (#1743) each ride their own site's node: every site
-// node's emulator holds the plaintext of its site's pushers and no other's,
+// A scale lab's pushers (#1743) each ride their own site's outpost: every site
+// outpost's emulator holds the plaintext of its site's pushers and no other's,
 // and the one seed gets every pusher's hash and prefix.
-func TestPlanScaleLabGivesEachSiteNodeItsOwnPushers(t *testing.T) {
+func TestPlanScaleLabGivesEachSiteOutpostItsOwnPushers(t *testing.T) {
 	o := scaleOptions()
 	o.Pushers = []Pusher{
-		{Name: "hq-booking-1", Profile: "booking-service", Node: "edge-hq", Token: "bk_1_hq", TokenHash: "hhq", TokenPrefix: "p1"},
-		{Name: "branch-01-booking-1", Profile: "booking-service", Node: "edge-branch-01", Token: "bk_2_br", TokenHash: "hbr", TokenPrefix: "p2"},
+		{Name: "hq-booking-1", Profile: "booking-service", Outpost: "edge-hq", Token: "bk_1_hq", TokenHash: "hhq", TokenPrefix: "p1"},
+		{Name: "branch-01-booking-1", Profile: "booking-service", Outpost: "edge-branch-01", Token: "bk_2_br", TokenHash: "hbr", TokenPrefix: "p2"},
 	}
 	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]string{
-		"edge-hq":          simnode.PushersEnv + "=hq-booking-1=booking-service:bk_1_hq",
+		"edge-hq":          simoutpost.PushersEnv + "=hq-booking-1=booking-service:bk_1_hq",
 		"edge-regional-01": "",
-		"edge-branch-01":   simnode.PushersEnv + "=branch-01-booking-1=booking-service:bk_2_br",
+		"edge-branch-01":   simoutpost.PushersEnv + "=branch-01-booking-1=booking-service:bk_2_br",
 	}
-	for _, n := range s.Nodes {
+	for _, n := range s.Outposts {
 		var got string
 		for _, e := range n.Env {
-			if strings.HasPrefix(e, simnode.PushersEnv+"=") && e != simnode.PushersEnv+"=" {
+			if strings.HasPrefix(e, simoutpost.PushersEnv+"=") && e != simoutpost.PushersEnv+"=" {
 				got = e
 			}
 		}
 		if got != want[n.Name] {
-			t.Errorf("node %s carries pushers %q, want %q", n.Name, got, want[n.Name])
+			t.Errorf("outpost %s carries pushers %q, want %q", n.Name, got, want[n.Name])
 		}
 	}
 	if w := PusherTokensEnv + "=hq-booking-1=hhq:p1,branch-01-booking-1=hbr:p2"; !slices.Contains(s.Seed.Env, w) {
@@ -242,13 +242,13 @@ func TestPlanScaleLabGivesEachSiteNodeItsOwnPushers(t *testing.T) {
 	}
 }
 
-// A pusher planned onto a node the lab does not run would never push, so the
+// A pusher planned onto an outpost the lab does not run would never push, so the
 // plan refuses it rather than seed a principal nothing holds.
-func TestPlanRefusesAPusherOnNoNode(t *testing.T) {
+func TestPlanRefusesAPusherOnNoOutpost(t *testing.T) {
 	o := scaleOptions()
-	o.Pushers = []Pusher{{Name: "x-booking-1", Profile: "booking-service", Node: "edge-nowhere", Token: "t", TokenHash: "h", TokenPrefix: "p"}}
+	o.Pushers = []Pusher{{Name: "x-booking-1", Profile: "booking-service", Outpost: "edge-nowhere", Token: "t", TokenHash: "h", TokenPrefix: "p"}}
 	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "edge-nowhere") {
-		t.Fatalf("plan with a pusher on no node: %v, want refused naming the node", err)
+		t.Fatalf("plan with a pusher on no outpost: %v, want refused naming the outpost", err)
 	}
 }
 
@@ -292,7 +292,7 @@ func TestPlanVolumes(t *testing.T) {
 // in the console shows within seconds, but it may run for days, and a probe
 // on every check-in writes most of its rows. A script's throwaway lab probes
 // every 2s: it lives for minutes, and a walkthrough that waits on a probe's
-// verdict is recorded against a budget. Since #1634 a probe runs on the node's
+// verdict is recorded against a budget. Since #1634 a probe runs on the outpost's
 // own timer, never the check-in, so every lab names its interval.
 func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	flag := func(cmd []string, name string) string {
@@ -306,10 +306,10 @@ func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := flag(s.Node.Cmd, "--probe-every"); got != "10s" {
-		t.Fatalf("a learner's lab: --probe-every %q in %v, want 10s", got, s.Node.Cmd)
+	if got := flag(s.Outpost.Cmd, "--probe-every"); got != "10s" {
+		t.Fatalf("a learner's lab: --probe-every %q in %v, want 10s", got, s.Outpost.Cmd)
 	}
-	if got := flag(s.Node.Cmd, "--heartbeat"); got != "2s" {
+	if got := flag(s.Outpost.Cmd, "--heartbeat"); got != "2s" {
 		t.Fatalf("a learner's lab: --heartbeat %q, want 2s", got)
 	}
 	o := testOptions()
@@ -317,36 +317,36 @@ func TestPlanProbesALearnersLabEvery10s(t *testing.T) {
 	if s, err = Plan(o); err != nil {
 		t.Fatal(err)
 	}
-	if got := flag(s.Node.Cmd, "--probe-every"); got != "2s" {
-		t.Fatalf("a throwaway lab: --probe-every %q in %v, want 2s", got, s.Node.Cmd)
+	if got := flag(s.Outpost.Cmd, "--probe-every"); got != "2s" {
+		t.Fatalf("a throwaway lab: --probe-every %q in %v, want 2s", got, s.Outpost.Cmd)
 	}
-	if got := flag(s.Node.Cmd, "--heartbeat"); got != "2s" {
+	if got := flag(s.Outpost.Cmd, "--heartbeat"); got != "2s" {
 		t.Fatalf("a throwaway lab: --heartbeat %q, want 2s", got)
 	}
 }
 
-// A lab with no node (#1267) is a throwaway lab whose seed is told so: it
-// lays the fleet down unwired and enrolls nothing, so no node runs. A
+// A lab with no outpost (#1267) is a throwaway lab whose seed is told so: it
+// lays the fleet down unwired and enrolls nothing, so no outpost runs. A
 // learner's lab is refused one, and a lab without the option seeds as ever.
-func TestPlanNoNode(t *testing.T) {
+func TestPlanNoOutpost(t *testing.T) {
 	s, err := Plan(testOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if slices.Contains(s.Seed.Cmd, "--no-node") {
-		t.Fatalf("a lab with its node: the seed runs %v, want no --no-node", s.Seed.Cmd)
+	if slices.Contains(s.Seed.Cmd, "--no-outpost") {
+		t.Fatalf("a lab with its outpost: the seed runs %v, want no --no-outpost", s.Seed.Cmd)
 	}
 	o := testOptions()
-	o.NoNode = true
+	o.NoOutpost = true
 	if _, err := Plan(o); err == nil || !strings.Contains(err.Error(), "--ephemeral") {
-		t.Fatalf("a learner's lab with no node: %v, want a refusal naming --ephemeral", err)
+		t.Fatalf("a learner's lab with no outpost: %v, want a refusal naming --ephemeral", err)
 	}
 	o.Project, o.Ephemeral = "shots-1", true
 	if s, err = Plan(o); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(s.Seed.Cmd, "--no-node") {
-		t.Fatalf("a throwaway lab with no node: the seed runs %v, want --no-node", s.Seed.Cmd)
+	if !slices.Contains(s.Seed.Cmd, "--no-outpost") {
+		t.Fatalf("a throwaway lab with no outpost: the seed runs %v, want --no-outpost", s.Seed.Cmd)
 	}
 }
 
@@ -385,7 +385,7 @@ func TestPlanPlatformHistory(t *testing.T) {
 // delivery and poll figures as the recording ends, so the walkthrough
 // profile's seed sets collection.report_seconds to 10. A learner's lab keeps
 // the platform's setting (an operator's change to it survives a restart), as
-// does a throwaway lab with no node, which has no collection to report and
+// does a throwaway lab with no outpost, which has no collection to report and
 // whose pages hold still for the docs shots.
 func TestPlanWalkthroughLabReportsEvery10s(t *testing.T) {
 	flag := func(cmd []string, name string) string {
@@ -410,20 +410,20 @@ func TestPlanWalkthroughLabReportsEvery10s(t *testing.T) {
 	if got := flag(s.Seed.Cmd, "--report-seconds"); got != "10" {
 		t.Fatalf("a throwaway lab: --report-seconds %q in %v, want 10", got, s.Seed.Cmd)
 	}
-	o.NoNode = true
+	o.NoOutpost = true
 	if s, err = Plan(o); err != nil {
 		t.Fatal(err)
 	}
 	if slices.Contains(s.Seed.Cmd, "--report-seconds") {
-		t.Fatalf("a throwaway lab with no node: the seed runs %v, want the report window left as it is", s.Seed.Cmd)
+		t.Fatalf("a throwaway lab with no outpost: the seed runs %v, want the report window left as it is", s.Seed.Cmd)
 	}
 }
 
-// A cadence profile (#1277) names how often the lab's node checks in and
+// A cadence profile (#1277) names how often the lab's outpost checks in and
 // probes, so the lab footprint can measure a lab at the product's default
 // cadence beside the lab's own. A lab given none keeps the cadence it has
 // always run at, an unknown one is refused, and each profile lands on the
-// node's command line as its heartbeat and probe interval.
+// outpost's command line as its heartbeat and probe interval.
 func TestPlanCadenceProfiles(t *testing.T) {
 	flag := func(cmd []string, name string) string {
 		i := slices.Index(cmd, name)
@@ -445,9 +445,9 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		{"", true, "2s", "2s", "2s", "2s", "1s"},
 		{"lab", true, "2s", "10s", "5s", "2s", "10s"},
 		{"walkthrough", false, "2s", "2s", "2s", "2s", "1s"},
-		// The product's own: the node's and the simulator's defaults, so
+		// The product's own: the outpost's and the simulator's defaults, so
 		// the profile cannot drift from what a deployment runs.
-		{"default", true, node.DefaultHeartbeat.String(), node.DefaultProbeEvery.String(), node.DefaultWorklistEvery.String(), simnode.DefaultPoll.String(), "1m"},
+		{"default", true, outpost.DefaultHeartbeat.String(), outpost.DefaultProbeEvery.String(), outpost.DefaultWorklistEvery.String(), simoutpost.DefaultPoll.String(), "1m"},
 	}
 	for _, c := range cases {
 		o := testOptions()
@@ -459,21 +459,21 @@ func TestPlanCadenceProfiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("cadence %q: %v", c.cadence, err)
 		}
-		if got := flag(s.Node.Cmd, "--heartbeat"); got != c.heartbeat {
-			t.Errorf("cadence %q: --heartbeat %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.heartbeat)
+		if got := flag(s.Outpost.Cmd, "--heartbeat"); got != c.heartbeat {
+			t.Errorf("cadence %q: --heartbeat %q in %v, want %s", c.cadence, got, s.Outpost.Cmd, c.heartbeat)
 		}
-		if got := flag(s.Node.Cmd, "--poll"); got != c.simPoll {
-			t.Errorf("cadence %q: --poll %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.simPoll)
+		if got := flag(s.Outpost.Cmd, "--poll"); got != c.simPoll {
+			t.Errorf("cadence %q: --poll %q in %v, want %s", c.cadence, got, s.Outpost.Cmd, c.simPoll)
 		}
-		if got := flag(s.Node.Cmd, "--worklist-every"); got != c.worklist {
-			t.Errorf("cadence %q: --worklist-every %q in %v, want %s", c.cadence, got, s.Node.Cmd, c.worklist)
+		if got := flag(s.Outpost.Cmd, "--worklist-every"); got != c.worklist {
+			t.Errorf("cadence %q: --worklist-every %q in %v, want %s", c.cadence, got, s.Outpost.Cmd, c.worklist)
 		}
-		if got := flag(s.Node.Cmd, "--probe-every"); got != c.probe {
-			t.Errorf("cadence %q: --probe-every %q in %v, want %q", c.cadence, got, s.Node.Cmd, c.probe)
+		if got := flag(s.Outpost.Cmd, "--probe-every"); got != c.probe {
+			t.Errorf("cadence %q: --probe-every %q in %v, want %q", c.cadence, got, s.Outpost.Cmd, c.probe)
 		}
 		// The server is told the bracket its closed loop takes and the
-		// cadence its node runs at (#1647), so Platform health counts the
-		// poll targets the node really ran.
+		// cadence its outpost runs at (#1647), so Platform health counts the
+		// poll targets the outpost really ran.
 		env := map[string]string{}
 		for _, kv := range s.Server.Env {
 			k, v, _ := strings.Cut(kv, "=")
@@ -489,7 +489,7 @@ func TestPlanCadenceProfiles(t *testing.T) {
 			t.Errorf("cadence %q: closed-loop probe interval %q, want %q", c.cadence, got, c.probe)
 		}
 		if _, err := closedloop.ParseSettings(closedloop.RawSettings{Bracket: env["OMNIGLASS_CLOSED_LOOP_BRACKET"],
-			Heartbeat: env["OMNIGLASS_CLOSED_LOOP_HEARTBEAT"], ProbeEvery: env["OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"]}, node.DefaultHeartbeat); err != nil {
+			Heartbeat: env["OMNIGLASS_CLOSED_LOOP_HEARTBEAT"], ProbeEvery: env["OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"]}, outpost.DefaultHeartbeat); err != nil {
 			t.Errorf("cadence %q: the server would refuse its closed-loop settings: %v", c.cadence, err)
 		}
 	}
@@ -503,7 +503,7 @@ func TestPlanCadenceProfiles(t *testing.T) {
 func scaleOptions() Options {
 	o := testOptions()
 	o.Project, o.Ephemeral, o.Scenario, o.Systems = "omniglass-scale", true, "corporate", 100
-	o.SiteNodes = []SiteNode{
+	o.SiteOutposts = []SiteOutpost{
 		{Name: "edge-hq", Token: "t-hq", TokenHash: "h-hq", Components: 230},
 		{Name: "edge-regional-01", Token: "t-r1", TokenHash: "h-r1", Components: 68},
 		{Name: "edge-branch-01", Token: "t-b1", TokenHash: "h-b1", Components: 24},
@@ -511,36 +511,36 @@ func scaleOptions() Options {
 	return o
 }
 
-// A scale lab runs one node container per site, in place of the dev node,
-// each enrolled as its site's node with its own token, and each with the
-// privilege the dev node has and nothing more.
-func TestPlanScaleLabRunsOneNodePerSite(t *testing.T) {
+// A scale lab runs one outpost container per site, in place of the dev outpost,
+// each enrolled as its site's outpost with its own token, and each with the
+// privilege the dev outpost has and nothing more.
+func TestPlanScaleLabRunsOneOutpostPerSite(t *testing.T) {
 	o := scaleOptions()
 	s, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Node.Name != "" {
-		t.Fatalf("a scale lab planned the dev node %s", s.Node.Name)
+	if s.Outpost.Name != "" {
+		t.Fatalf("a scale lab planned the dev outpost %s", s.Outpost.Name)
 	}
-	if len(s.Nodes) != len(o.SiteNodes) {
-		t.Fatalf("%d node containers for %d sites", len(s.Nodes), len(o.SiteNodes))
+	if len(s.Outposts) != len(o.SiteOutposts) {
+		t.Fatalf("%d outpost containers for %d sites", len(s.Outposts), len(o.SiteOutposts))
 	}
 	containers := map[string]bool{}
-	for i, n := range s.Nodes {
-		site := o.SiteNodes[i]
-		if !slices.Contains(n.Env, "OMNIGLASS_NODE_NAME="+site.Name) || !slices.Contains(n.Env, "OMNIGLASS_NODE_TOKEN="+site.Token) {
-			t.Errorf("node %s env %v does not enroll it as %s with its own token", n.Name, n.Env, site.Name)
+	for i, n := range s.Outposts {
+		site := o.SiteOutposts[i]
+		if !slices.Contains(n.Env, "OMNIGLASS_OUTPOST_NAME="+site.Name) || !slices.Contains(n.Env, "OMNIGLASS_OUTPOST_TOKEN="+site.Token) {
+			t.Errorf("outpost %s env %v does not enroll it as %s with its own token", n.Name, n.Env, site.Name)
 		}
 		if containers[n.Container] {
 			t.Errorf("container %s planned twice", n.Container)
 		}
 		containers[n.Container] = true
 		if n.Labels[LabelComposeService] != n.Name || n.Labels[LabelComposeHash] == "" {
-			t.Errorf("node %s labels %v", n.Name, n.Labels)
+			t.Errorf("outpost %s labels %v", n.Name, n.Labels)
 		}
 		if !slices.Equal(n.CapAdd, []string{"NET_ADMIN"}) || n.Publish != nil {
-			t.Errorf("node %s caps %v publish %v", n.Name, n.CapAdd, n.Publish)
+			t.Errorf("outpost %s caps %v publish %v", n.Name, n.CapAdd, n.Publish)
 		}
 	}
 	var names []string
@@ -554,8 +554,8 @@ func TestPlanScaleLabRunsOneNodePerSite(t *testing.T) {
 }
 
 // The scale lab's seed resolves the scenario at the size and enrolls every
-// site's node from the hashes it is handed, never the tokens.
-func TestPlanScaleLabSeedEnrollsEverySiteNode(t *testing.T) {
+// site's outpost from the hashes it is handed, never the tokens.
+func TestPlanScaleLabSeedEnrollsEverySiteOutpost(t *testing.T) {
 	o := scaleOptions()
 	s, err := Plan(o)
 	if err != nil {
@@ -567,16 +567,16 @@ func TestPlanScaleLabSeedEnrollsEverySiteNode(t *testing.T) {
 	}
 	var hashes string
 	for _, e := range s.Seed.Env {
-		if v, ok := strings.CutPrefix(e, SiteNodeTokenHashesEnv+"="); ok {
+		if v, ok := strings.CutPrefix(e, SiteOutpostTokenHashesEnv+"="); ok {
 			hashes = v
 		}
-		for _, n := range o.SiteNodes {
+		for _, n := range o.SiteOutposts {
 			if strings.Contains(e, n.Token) {
 				t.Errorf("the seed's env %q carries %s's token", e, n.Name)
 			}
 		}
 	}
-	got, err := ParseSiteNodeTokenHashes(hashes)
+	got, err := ParseSiteOutpostTokenHashes(hashes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -586,7 +586,7 @@ func TestPlanScaleLabSeedEnrollsEverySiteNode(t *testing.T) {
 }
 
 // A kept scale lab (#1633) tells its seed so, with a hidden --keep: the seed
-// then keeps the fleet a database already holds and re-enrolls its nodes. A
+// then keeps the fleet a database already holds and re-enrolls its outposts. A
 // throwaway one's seed carries no --keep, so a database holding data stays
 // refused.
 func TestPlanScaleLabSeedCarriesKeepOnlyWhenKept(t *testing.T) {
@@ -721,19 +721,19 @@ func TestPlanScaleLabNeedsASize(t *testing.T) {
 		t.Fatal("a scale lab with no size planned")
 	}
 	o = scaleOptions()
-	o.NoNode = true
+	o.NoOutpost = true
 	if _, err := Plan(o); err == nil {
-		t.Fatal("a scale lab with no node planned")
+		t.Fatal("a scale lab with no outpost planned")
 	}
 }
 
-func TestParseSiteNodeTokenHashesRefusesAMalformedPair(t *testing.T) {
+func TestParseSiteOutpostTokenHashesRefusesAMalformedPair(t *testing.T) {
 	for _, s := range []string{"edge-hq", "=h", "edge-hq=", "a=b,c"} {
-		if _, err := ParseSiteNodeTokenHashes(s); err == nil {
+		if _, err := ParseSiteOutpostTokenHashes(s); err == nil {
 			t.Errorf("%q parsed", s)
 		}
 	}
-	if got, err := ParseSiteNodeTokenHashes(""); err != nil || len(got) != 0 {
+	if got, err := ParseSiteOutpostTokenHashes(""); err != nil || len(got) != 0 {
 		t.Errorf("empty: %v %v", got, err)
 	}
 }
@@ -826,71 +826,71 @@ func TestFleetOf(t *testing.T) {
 	}
 }
 
-// #1892: every lab node runs inside the limits an edge box would give it: one
+// #1892: every lab outpost runs inside the limits an edge box would give it: one
 // CPU, so its automatic lane count is one figure on any host, and memory
 // sized from the cost model for its site's components, with the Go runtime
 // told where the wall is so it collects before the kernel kills. The
 // database, the seed and the server run unbounded.
-func TestPlanBoundsEveryNodeAndOnlyTheNodes(t *testing.T) {
-	// Each site above the floor and none alike, so a node sized from the
+func TestPlanBoundsEveryOutpostAndOnlyTheOutposts(t *testing.T) {
+	// Each site above the floor and none alike, so an outpost sized from the
 	// wrong site, or from none, shows.
 	sized := scaleOptions()
-	for i := range sized.SiteNodes {
-		sized.SiteNodes[i].Components = 600 + 400*i
+	for i := range sized.SiteOutposts {
+		sized.SiteOutposts[i].Components = 600 + 400*i
 	}
 	for _, o := range []Options{testOptions(), scaleOptions(), sized} {
 		s, err := Plan(o)
 		if err != nil {
 			t.Fatal(err)
 		}
-		components := map[string]int{NodeName: 0}
+		components := map[string]int{OutpostName: 0}
 		if o.Scale() {
 			components = map[string]int{}
-			for _, n := range o.SiteNodes {
+			for _, n := range o.SiteOutposts {
 				components[n.Name] = n.Components
 			}
 		}
-		nodes := 0
+		outposts := 0
 		for _, svc := range s.Services() {
-			if svc.Name == "node" {
-				svc.Name = NodeName
+			if svc.Name == "outpost" {
+				svc.Name = OutpostName
 			}
-			c, isNode := components[svc.Name]
-			if !isNode {
+			c, isOutpost := components[svc.Name]
+			if !isOutpost {
 				if svc.CPUs != 0 || svc.MemoryBytes != 0 {
 					t.Errorf("%s capped at %g CPUs and %d bytes, want no cap", svc.Name, svc.CPUs, svc.MemoryBytes)
 				}
 				continue
 			}
-			nodes++
-			if svc.CPUs != NodeCPUs || svc.MemoryBytes != NodeMemoryLimit(c) {
-				t.Errorf("node %s capped at %g CPUs and %d bytes, want %g and %d for %d components",
-					svc.Name, svc.CPUs, svc.MemoryBytes, NodeCPUs, NodeMemoryLimit(c), c)
+			outposts++
+			if svc.CPUs != OutpostCPUs || svc.MemoryBytes != OutpostMemoryLimit(c) {
+				t.Errorf("outpost %s capped at %g CPUs and %d bytes, want %g and %d for %d components",
+					svc.Name, svc.CPUs, svc.MemoryBytes, OutpostCPUs, OutpostMemoryLimit(c), c)
 			}
 			if want := GoMemLimitEnv(svc.MemoryBytes); !slices.Contains(svc.Env, want) {
-				t.Errorf("node %s env %v, want %s", svc.Name, svc.Env, want)
+				t.Errorf("outpost %s env %v, want %s", svc.Name, svc.Env, want)
 			}
 		}
-		if nodes != len(components) {
-			t.Errorf("%d bounded nodes, want %d", nodes, len(components))
+		if outposts != len(components) {
+			t.Errorf("%d bounded outposts, want %d", outposts, len(components))
 		}
 	}
 }
 
-// A node's memory cap is twice the cost model's figure for its components,
+// An outpost's memory cap is twice the cost model's figure for its components,
 // never under a floor that holds a small site's collector peaks.
-func TestNodeMemoryLimit(t *testing.T) {
+func TestOutpostMemoryLimit(t *testing.T) {
 	for _, tc := range []struct {
 		components int
 		wantMiB    int64
 	}{
-		{0, 512},     // the dev lab's node, sized by the floor
+		{0, 512},     // the dev lab's outpost, sized by the floor
 		{143, 512},   // a 3,000-system lab's branch: 2 x (36 + 128.7) = 329.4, under the floor
 		{467, 913},   // a regional: 2 x (36 + 420.3) = 912.6, rounded up
 		{1609, 2969}, // the hq: 2 x (36 + 1448.1) = 2968.2, rounded up
 	} {
-		if got := NodeMemoryLimit(tc.components); got != tc.wantMiB<<20 {
-			t.Errorf("NodeMemoryLimit(%d) = %d MiB, want %d", tc.components, got>>20, tc.wantMiB)
+		if got := OutpostMemoryLimit(tc.components); got != tc.wantMiB<<20 {
+			t.Errorf("OutpostMemoryLimit(%d) = %d MiB, want %d", tc.components, got>>20, tc.wantMiB)
 		}
 	}
 }
@@ -907,9 +907,9 @@ func TestGoMemLimitEnv(t *testing.T) {
 // a service with no cap hashes as it did before caps existed, so an uncapped
 // server or database is not recreated by the change.
 func TestConfigHashCarriesTheLimits(t *testing.T) {
-	s := Service{Image: "omniglass", Cmd: []string{"node", "run"}}
+	s := Service{Image: "omniglass", Cmd: []string{"outpost", "run"}}
 	// The hash this service had before #1892.
-	if got, want := configHash(s), "9c772cfd57bf0d9a19dbe779fdea521c6d688624050feee41de0fa2e374313e8"; got != want {
+	if got, want := configHash(s), "223f28fb9e41be1b699cb80a84f83db519a526d4e493ac1f2ddc4e7456c34042"; got != want {
 		t.Errorf("uncapped config hash = %s, want %s as before caps", got, want)
 	}
 	seen := map[string]string{}
@@ -928,12 +928,12 @@ func TestConfigHashCarriesTheLimits(t *testing.T) {
 }
 
 // WithImage re-points the omniglass image's services (the seed, the server,
-// the node and every site's node) and nothing else, leaving the receiver
+// the outpost and every site's outpost) and nothing else, leaving the receiver
 // as it was.
 func TestSpecWithImageRepointsOnlyTheOmniglassServices(t *testing.T) {
 	o := testOptions()
 	o.Systems, o.Scenario = 20, "corporate"
-	o.SiteNodes = []SiteNode{{Name: "edge-a", Token: "t", TokenHash: "h"}, {Name: "edge-b", Token: "t", TokenHash: "h"}}
+	o.SiteOutposts = []SiteOutpost{{Name: "edge-a", Token: "t", TokenHash: "h"}, {Name: "edge-b", Token: "t", TokenHash: "h"}}
 	spec, err := Plan(o)
 	if err != nil {
 		t.Fatal(err)
@@ -942,18 +942,18 @@ func TestSpecWithImageRepointsOnlyTheOmniglassServices(t *testing.T) {
 	if got.Seed.Image != "sha256:pinned" || got.Server.Image != "sha256:pinned" {
 		t.Errorf("seed %q server %q, want the pinned image", got.Seed.Image, got.Server.Image)
 	}
-	if len(got.Nodes) != 2 {
-		t.Fatalf("%d site nodes, want 2", len(got.Nodes))
+	if len(got.Outposts) != 2 {
+		t.Fatalf("%d site outposts, want 2", len(got.Outposts))
 	}
-	for _, n := range got.Nodes {
+	for _, n := range got.Outposts {
 		if n.Image != "sha256:pinned" {
-			t.Errorf("site node %s runs %q, want the pinned image", n.Name, n.Image)
+			t.Errorf("site outpost %s runs %q, want the pinned image", n.Name, n.Image)
 		}
 	}
 	if got.DB.Image != PostgresImage {
 		t.Errorf("the database runs %q, want %q", got.DB.Image, PostgresImage)
 	}
-	if spec.Server.Image != o.Image || spec.Nodes[0].Image != o.Image {
-		t.Errorf("the receiver changed: server %q node %q", spec.Server.Image, spec.Nodes[0].Image)
+	if spec.Server.Image != o.Image || spec.Outposts[0].Image != o.Image {
+		t.Errorf("the receiver changed: server %q outpost %q", spec.Server.Image, spec.Outposts[0].Image)
 	}
 }

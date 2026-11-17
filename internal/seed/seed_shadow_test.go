@@ -47,7 +47,7 @@ func TestSeedAlwaysUpsertsAnOfficialRowAndAnOperatorsOfTheSameNameShadowsIt(t *t
 		t.Fatal(err)
 	}
 	// A shipped metric an operator could name a property after: not a reserved
-	// key (the node's own, closed to an operator-created type), and named
+	// key (the outpost's own, closed to an operator-created type), and named
 	// nowhere else in the seed.
 	var clash string
 	for _, m := range facts.MetricTypes {

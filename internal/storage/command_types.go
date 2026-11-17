@@ -23,7 +23,7 @@ import (
 //
 // Disruptive marks a command that takes its device down (reboot, #1651): its
 // delivery closes the gates of every endpoint of the component on the
-// delivering node. QuietSeconds is how long the node runs nothing against
+// delivering outpost. QuietSeconds is how long the outpost runs nothing against
 // them; after it each reopens on its own first up verdict, and HoldSeconds is
 // the counted backstop. Neither is the settle window.
 //
@@ -357,7 +357,7 @@ func checkPowerOutletParam(disruptive bool, param string) error {
 //
 // A command opens an intended value on its target and its reply lands as an
 // observation of it, so the target's writer class must admit a command
-// (ADR-0161): a native probe key is the node's observation, health the
+// (ADR-0161): a native probe key is the outpost's observation, health the
 // rollup's, a calc rule's output that rule's. The create, the retarget and the
 // seed all resolve here, and the issue holds the stored target to the same
 // check, so a command type stored before this refusal opens nothing either.

@@ -205,7 +205,7 @@ var componentConfig = scopedConfig[Component]{
 	scan: scanComponent, idOf: func(c *Component) string { return c.ID },
 	notFound: ErrComponentNotFound, forbidden: ErrComponentForbidden, occupied: ErrComponentOccupied,
 	attachPaths: attachComponentPaths,
-	// A node's platform component goes only with its node (#1625). A component
+	// An outpost's platform component goes only with its outpost (#1625). A component
 	// that still owns endpoints is occupied too (#138): the FK would SET NULL
 	// their component and strand them, and their tasks, in the all-scope-only
 	// bucket, so the delete is refused instead of cascaded (#528 owns cascade).
@@ -430,7 +430,7 @@ func (p *PG) createComponentTx(ctx context.Context, tx pgx.Tx, actorID string, s
 		} else if err != nil {
 			return nil, err
 		}
-		// A node's platform component takes no child (#1625).
+		// An outpost's platform component takes no child (#1625).
 		if err := refusePlatformComponent(ctx, tx, parent.ID); err != nil {
 			return nil, err
 		}
@@ -620,7 +620,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	if err != nil {
 		return nil, err
 	}
-	// A node's platform component stays the node product (#1625); its label
+	// An outpost's platform component stays the outpost product (#1625); its label
 	// is the operator's like any row's.
 	if patch.ProductName != nil {
 		if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
@@ -741,7 +741,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 		return nil, err
 	}
 	if namePatch != nil {
-		if err := announceNodesOf(ctx, tx, pathDependentNodesSQL, after.ID); err != nil {
+		if err := announceOutpostsOf(ctx, tx, pathDependentOutpostsSQL, after.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -794,7 +794,7 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 	if err != nil {
 		return nil, err
 	}
-	// A node's platform component stays unplaced in the platform system
+	// An outpost's platform component stays unplaced in the platform system
 	// (#1625).
 	if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
 		return nil, err
@@ -949,16 +949,16 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 	// A re-minted name reaches its path dependents.
 	switch {
 	case !sameOptional(before.ParentID, after.ParentID):
-		if err := announceNodesOf(ctx, tx, subtreeComponentNodesSQL, after.ID); err != nil {
+		if err := announceOutpostsOf(ctx, tx, subtreeComponentOutpostsSQL, after.ID); err != nil {
 			return nil, err
 		}
 	case !sameOptional(before.LocationID, after.LocationID):
-		if err := announceNodesOf(ctx, tx, componentNodesSQL, after.ID); err != nil {
+		if err := announceOutpostsOf(ctx, tx, componentOutpostsSQL, after.ID); err != nil {
 			return nil, err
 		}
 	}
 	if namePatch != nil {
-		if err := announceNodesOf(ctx, tx, pathDependentNodesSQL, after.ID); err != nil {
+		if err := announceOutpostsOf(ctx, tx, pathDependentOutpostsSQL, after.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -1011,7 +1011,7 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 	if err != nil {
 		return nil, err
 	}
-	// A node's platform component keeps its node's name (#1625).
+	// An outpost's platform component keeps its outpost's name (#1625).
 	if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
 		return nil, err
 	}
@@ -1032,7 +1032,7 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 		return nil, err
 	}
 	// A path dependent's task carries this component's name as its upstream.
-	if err := announceNodesOf(ctx, tx, pathDependentNodesSQL, after.ID); err != nil {
+	if err := announceOutpostsOf(ctx, tx, pathDependentOutpostsSQL, after.ID); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "component", after.ID, before, after); err != nil {
@@ -1069,7 +1069,7 @@ func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read,
 	if err != nil {
 		return nil, err
 	}
-	// A node's platform component keeps its node's name (#1625).
+	// An outpost's platform component keeps its outpost's name (#1625).
 	if err := refusePlatformComponent(ctx, tx, before.ID); err != nil {
 		return nil, err
 	}
@@ -1093,7 +1093,7 @@ func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read,
 		return nil, err
 	}
 	// A path dependent's task carries this component's name as its upstream.
-	if err := announceNodesOf(ctx, tx, pathDependentNodesSQL, after.ID); err != nil {
+	if err := announceOutpostsOf(ctx, tx, pathDependentOutpostsSQL, after.ID); err != nil {
 		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "reset", "component", after.ID, before, after); err != nil {
@@ -1107,17 +1107,17 @@ func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read,
 
 // ComponentEndpoint is one placement-bound connection owned by a component: the
 // unit the reachability panel iterates. Params is the raw endpoint jsonb (target,
-// port, and settings); NodeName is the probing node (nullable). The verdict,
+// port, and settings); OutpostName is the probing outpost (nullable). The verdict,
 // layer signals, and history are read separately per (component, key, endpoint).
 type ComponentEndpoint struct {
 	// ID is the endpoint's uuid, the address its custom methods take
 	// (POST /endpoints/{id}:retry, #1059).
-	ID        string
-	Name      string
-	Label     string
-	Transport string
-	NodeName  string
-	Params    []byte
+	ID          string
+	Name        string
+	Label       string
+	Transport   string
+	OutpostName string
+	Params      []byte
 	// LastSeenAt is when an ingest batch the endpoint's task delivered last
 	// landed, by the server's clock, to within liveStampEvery; nil when
 	// none has (#933).
@@ -1170,7 +1170,7 @@ func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([
 		return nil, err
 	}
 	rows, err := p.pool.Query(ctx, `
-		select i.id::text, i.name, coalesce(i.label, ''), i.transport, coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params, l.last_seen_at,
+		select i.id::text, i.name, coalesce(i.label, ''), i.transport, coalesce((select n.name from outpost n where n.principal_id = i.outpost_id), ''), i.params, l.last_seen_at,
 			i.transport <> all($2::text[]) and (exists (select 1 from task t where t.endpoint_id = i.id and t.mode = 'listen' and t.enabled)
 				or exists (select 1 from driver d where d.id = i.driver_id and d.spec ? 'session'))
 		from endpoint i
@@ -1184,7 +1184,7 @@ func (p *PG) ListComponentEndpoints(ctx context.Context, componentRef string) ([
 	var out []ComponentEndpoint
 	for rows.Next() {
 		var it ComponentEndpoint
-		if err := rows.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.NodeName, &it.Params, &it.LastSeenAt, &it.HoldsSession); err != nil {
+		if err := rows.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.OutpostName, &it.Params, &it.LastSeenAt, &it.HoldsSession); err != nil {
 			return nil, fmt.Errorf("storage: scan endpoint for %s: %w", componentRef, err)
 		}
 		out = append(out, it)

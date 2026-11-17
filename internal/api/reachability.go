@@ -31,7 +31,7 @@ const reachHistoryWindow = 24 * time.Hour
 
 // The reasons a verdict is still null (reachEndpointBody.Pending, #981).
 const (
-	pendingNoNode        = "no-node"
+	pendingNoOutpost     = "no-outpost"
 	pendingAwaitingProbe = "awaiting-probe"
 )
 
@@ -41,7 +41,7 @@ const (
 // (ADR-0150, ADR-0155), rejectionKey the gate a terminal refusal holds
 // (ADR-0158) and rejectionReasonKey why it holds (#1110); the console's
 // session pill, ladder and refusal notice read them (#1059). Each is the
-// probekeys declaration the node emits from, ruled node-only there (#1080).
+// probekeys declaration the outpost emits from, ruled outpost-only there (#1080).
 const (
 	verdictKey         = probekeys.EndpointReachable
 	responsiveKey      = probekeys.EndpointResponsive
@@ -88,9 +88,9 @@ type reachHistoryBody struct {
 // reachSessionBody is an endpoint's held session (#1059): the latest
 // session-state, when it changed, and the session-reason beside it.
 type reachSessionBody struct {
-	State  string    `json:"state" enum:"establishing,up,recovering,down,rejected" doc:"The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves)"`
+	State  string    `json:"state" enum:"establishing,up,recovering,down,rejected" doc:"The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the outpost dials no more until the endpoint's connection fingerprint moves)"`
 	TS     time.Time `json:"ts" doc:"When the session last changed state: a state is stored only on a transition, so a session is judged by the endpoint's last_seen, not by this"`
-	Reason string    `json:"reason,omitempty" doc:"Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent. Cut to 500 characters; the property's series keeps the whole"`
+	Reason string    `json:"reason,omitempty" doc:"Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the outpost of anything it sent. Cut to 500 characters; the property's series keeps the whole"`
 }
 
 // reachRejectionBody is the gate a terminal refusal holds (ADR-0158): the
@@ -100,16 +100,16 @@ type reachSessionBody struct {
 type reachRejectionBody struct {
 	Rung       string    `json:"rung" enum:"reachable,responsive,authenticated" doc:"The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves"`
 	Class      string    `json:"class" doc:"The refusal's class: auth, host-key, certificate or protocol"`
-	Reason     string    `json:"reason,omitempty" doc:"Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the node of anything it sent. Published beside the gate by whatever the node was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the node recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole"`
-	TS         time.Time `json:"ts" doc:"When the node last published the gate: a retry that lifts it and a refusal that sets it again each move it"`
-	PinnedKey  string    `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all"`
+	Reason     string    `json:"reason,omitempty" doc:"Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the outpost of anything it sent. Published beside the gate by whatever the outpost was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the outpost recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole"`
+	TS         time.Time `json:"ts" doc:"When the outpost last published the gate: a retry that lifts it and a refusal that sets it again each move it"`
+	PinnedKey  string    `json:"pinned_key,omitempty" doc:"A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the outpost refused against it. Present with offered_key or not at all"`
 	OfferedKey string    `json:"offered_key,omitempty" doc:"A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{endpoint}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409)"`
 }
 
 // reachGateReasonBody is a reason other than a refusal the endpoint's gate
 // holds (#1650): its kind, since when, and the task that added it.
 type reachGateReasonBody struct {
-	Kind      string    `json:"kind" doc:"The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe)"`
+	Kind      string    `json:"kind" doc:"The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe)"`
 	Since     time.Time `json:"since" doc:"When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's"`
 	Source    string    `json:"source" doc:"What added the reason: for disrupted, the command (command-<id>); for unreachable, the reachability probe's task id; for upstream, the uuid of the component it is held by: the root of the chain (a gateway behind a gateway names the one whose own gate is closed), or the direct upstream once that one opens and waits on its own probe"`
 	Component string    `json:"component,omitempty" doc:"An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind"`
@@ -119,7 +119,7 @@ type reachGateReasonBody struct {
 // handshake (tls #1035, https #902): how it verifies, the key it pins, the
 // latest handshake time, and the certificate's expiry and days left.
 type reachTLSBody struct {
-	Mode        string     `json:"mode" doc:"How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)"`
+	Mode        string     `json:"mode" doc:"How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the outpost's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice)"`
 	Key         string     `json:"key,omitempty" doc:"The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; served in pin mode alone, and absent before first use"`
 	HandshakeMS *float64   `json:"handshake_ms,omitempty" doc:"The latest probe's handshake time in milliseconds (tls-handshake-time); absent until the component answers one"`
 	Expires     *time.Time `json:"expires,omitempty" doc:"The not-after of the certificate the latest probe accepted (tls-certificate-expiry); absent until one is accepted, and while a certificate gate holds (the probe then connects only, so the value would be the last accepted certificate's, not the one offered now)"`
@@ -132,15 +132,15 @@ type reachEndpointBody struct {
 	Label         string                `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
 	Transport     string                `json:"transport" doc:"The transport (icmp, tcp, ...)"`
 	Address       string                `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
-	Node          string                `json:"node,omitempty" doc:"The node that probes this endpoint"`
+	Outpost       string                `json:"outpost,omitempty" doc:"The outpost that probes this endpoint"`
 	LastSeen      *time.Time            `json:"last_seen,omitempty" doc:"When the endpoint last delivered a batch, by the server's clock and to within a few seconds, whatever it carried (any lane, any series, an unchanged value); absent until one lands"`
 	Verdict       *reachVerdictBody     `json:"verdict" doc:"The latest reachability verdict, or null if none yet (pending says why)"`
-	Pending       string                `json:"pending,omitempty" enum:"no-node,awaiting-probe" doc:"Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"`
+	Pending       string                `json:"pending,omitempty" enum:"no-outpost,awaiting-probe" doc:"Why verdict is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored"`
 	Responsive    *reachVerdictBody     `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
 	Authenticated *reachVerdictBody     `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted, or a held session's login passed), present only when a credential was tried"`
 	Session       *reachSessionBody     `json:"session,omitempty" doc:"The endpoint's held session, while it is configured to hold one (a standing listen task, or a driver declaring a session): its latest state, when it changed, and why"`
 	Rejection     *reachRejectionBody   `json:"rejection,omitempty" doc:"The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds"`
-	GateReasons   []reachGateReasonBody `json:"gate_reasons,omitempty" doc:"Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection"`
+	GateReasons   []reachGateReasonBody `json:"gate_reasons,omitempty" doc:"Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the outpost published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection"`
 	TLS           *reachTLSBody         `json:"tls,omitempty" doc:"A tls or https endpoint's handshake and certificate: its verification mode, pinned key, handshake time, expiry and days left; absent on every other transport"`
 	Webhook       *endpointWebhookBody  `json:"webhook,omitempty" doc:"A webhook endpoint's block (#1024): a push endpoint has no ladder and reads last_seen (last heard) in place of a verdict, never down for silence; its scheme, whether it is signed, its token's secret and what its scheme refused. Absent on every dialed transport"`
 	Layers        []reachLayerBody      `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
@@ -204,7 +204,7 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 }
 
 // nameUpstreams serves each upstream reason's component name beside the uuid
-// the node published as its source (#1652), resolved under the caller's read:
+// the outpost published as its source (#1652), resolved under the caller's read:
 // a component outside it, or gone, leaves the name absent rather than
 // disclosing it. Each source is looked up once per read.
 func nameUpstreams(ctx context.Context, gw storage.Gateway, read scope.Set, rows []reachEndpointBody) error {
@@ -246,7 +246,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 		Label:     it.Label,
 		Transport: it.Transport,
 		Address:   addressFromParams(it.Params),
-		Node:      it.NodeName,
+		Outpost:   it.OutpostName,
 		Layers:    []reachLayerBody{},
 		History:   []reachHistoryBody{},
 	}
@@ -270,7 +270,7 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	if verdict != nil {
 		row.Verdict = &reachVerdictBody{Value: verdict.Value, TS: verdict.TS}
 	}
-	row.Pending = pendingReason(row.Node, row.Verdict)
+	row.Pending = pendingReason(row.Outpost, row.Verdict)
 	responsive, err := gw.LatestProperty(ctx, comp, responsiveKey, it.Name)
 	if err != nil {
 		return row, err
@@ -371,22 +371,22 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	return row, nil
 }
 
-// pendingReason says why an endpoint has no verdict yet: no node assigned
-// means nothing will ever probe it, an assigned node just has not landed its
+// pendingReason says why an endpoint has no verdict yet: no outpost assigned
+// means nothing will ever probe it, an assigned outpost just has not landed its
 // first probe. A row with a verdict is waiting on nothing (#981).
-func pendingReason(node string, verdict *reachVerdictBody) string {
+func pendingReason(outpost string, verdict *reachVerdictBody) string {
 	switch {
 	case verdict != nil:
 		return ""
-	case node == "":
-		return pendingNoNode
+	case outpost == "":
+		return pendingNoOutpost
 	default:
 		return pendingAwaitingProbe
 	}
 }
 
 // udpResponseKey and snmpResponseKey time an answered request rung (#1037,
-// #821), ruled node-only like every probe timing.
+// #821), ruled outpost-only like every probe timing.
 const (
 	udpResponseKey  = probekeys.UDPResponseTime
 	snmpResponseKey = probekeys.SNMPResponseTime
@@ -420,7 +420,7 @@ func composeRequestLayer(ctx context.Context, gw storage.Gateway, comp, instance
 }
 
 // The tls facts a probe and a session land (#1035), each the probekeys
-// declaration the node emits from, ruled node-only there. tlsKeyKey is the
+// declaration the outpost emits from, ruled outpost-only there. tlsKeyKey is the
 // property the pin rides (served as the pin in force, EndpointKeyPin).
 const (
 	tlsKeyKey       = probekeys.TLSCertificate
@@ -446,7 +446,7 @@ func composeTLS(ctx context.Context, gw storage.Gateway, comp string, it storage
 	}
 	if out.Mode == "pin" {
 		// The pin in force: the operator's declared key (set through
-		// :retry), else the one the node trusted on first use. The
+		// :retry), else the one the outpost trusted on first use. The
 		// observed series alone would keep the first-use key after an
 		// operator accepts a new one, since a delivered pin is not
 		// published back (ADR-0161).
@@ -498,7 +498,7 @@ func capReason(s string) string {
 
 // parseRejection reads an endpoint-rejection value (rejection.Parse) into the
 // rung and class it holds at, with a key refusal's two keys. The fingerprint
-// is dropped: a digest of the connection's inputs, it is the node's to compare
+// is dropped: a digest of the connection's inputs, it is the outpost's to compare
 // and says nothing an operator acts on. Anything else (none, a malformed
 // value, a rung the ladder does not have) is no gate.
 func parseRejection(v string) *reachRejectionBody {

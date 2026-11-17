@@ -5,7 +5,7 @@ import "strconv"
 // A principal's IDENTIFIER is the string that names it wherever an operator
 // reads a TRAIL rather than a row: the actor on an audit entry, the person on
 // an acknowledged alarm, a member on a group roster. It is a human's username,
-// a service account's name, or a node's name, in that order, and it is empty
+// a service account's name, or an outpost's name, in that order, and it is empty
 // only when a principal has no profile row at all.
 //
 // It is not a label. Both sources are identifiers, which is what
@@ -55,26 +55,26 @@ import "strconv"
 //     write; the alarm write path pins its statement count as an exact equation
 //     (alarm_cost_test.go) that counts that insert.
 //
-// # A node resolves to its own name
+// # An outpost resolves to its own name
 //
-// `node` is the third profiled principal kind and it is the third source here
-// (#738). It was not, for one slice: `principal_label` never read `node.name`,
+// `outpost` is the third profiled principal kind and it is the third source here
+// (#738). It was not, for one slice: `principal_label` never read `outpost.name`,
 // and #564 preserved that shape deliberately so a refactor about WHERE the
 // answer lives changed nothing about WHAT it says. The cost of preserving it was
-// a node principal resolving to the empty string in every position this file
+// an outpost principal resolving to the empty string in every position this file
 // serves, which is a blank actor on an audit row: the kind of thing found much
 // later, from a trail that cannot say who.
 //
-// The node's own `name` is the identifier, for the same reason the other two
+// The outpost's own `name` is the identifier, for the same reason the other two
 // columns are. It is the only operator-visible handle the row has, it is unique
-// (`node_name_key`, beside `human_username_key` and `service_name_key`,
+// (`outpost_name_key`, beside `human_username_key` and `service_name_key`,
 // ADR-0111), and it is already the fleet address and the NATS subject token, so
 // it is the string an operator would recognise in a trail. `label` is a
 // label and cannot be one: it is optional and it is not unique, and the audit
 // trail denormalizes this string as bare text where nothing survives beside it.
 //
-// Nothing seeds a node principal with a grant today, so no shipped fleet
-// reaches this; the resolution is what a node acting WOULD read as, and the
+// Nothing seeds an outpost principal with a grant today, so no shipped fleet
+// reaches this; the resolution is what an outpost acting WOULD read as, and the
 // arithmetic of adding a third source (one more LEFT JOIN per resolution, one
 // more correlated sub-select on the two positions a join cannot reach) is the
 // same shape the measurement below already covers.
@@ -93,7 +93,7 @@ type principalIdentSource struct{ table, column string }
 var principalIdentSources = []principalIdentSource{
 	{"human", "username"},
 	{"service", "name"},
-	{"node", "name"},
+	{"outpost", "name"},
 }
 
 // principalIdent is the resolution: the first source that is present. Absence is

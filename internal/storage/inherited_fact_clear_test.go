@@ -14,7 +14,7 @@ import (
 // and `icon` on component_type and system_type are nullable and inherited: NULL
 // means "walk to the nearest ancestor that sets one". #677 and #656 stopped both
 // consoles writing "" over a NULL, which was destroying the walk; what neither
-// could then express is the OPPOSITE move, a node that has its own value going
+// could then express is the OPPOSITE move, an outpost that has its own value going
 // back to inheriting its parent's.
 //
 // The instrument is the house three-state string sentinel already live on

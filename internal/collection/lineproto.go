@@ -24,7 +24,7 @@ type LineExchanger interface {
 }
 
 // maxLineAnswer bounds one answer line so a device that never terminates cannot
-// exhaust the node.
+// exhaust the outpost.
 const maxLineAnswer = 64 * 1024
 
 // NewLineExchanger returns the real dialer-backed exchanger.
@@ -52,7 +52,7 @@ func (e *lineExchanger) Exchange(ctx context.Context, target, line string, timeo
 	}
 	// Bound the answer: a device that never sends a newline would otherwise let
 	// the read grow until the deadline (hundreds of MB on a fast LAN), and the
-	// node is the whole collection agent for its placement.
+	// outpost is the whole collection agent for its placement.
 	answer, err := bufio.NewReader(io.LimitReader(conn, maxLineAnswer)).ReadString('\n')
 	if err != nil {
 		if len(answer) >= maxLineAnswer {

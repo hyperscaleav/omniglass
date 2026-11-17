@@ -278,7 +278,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 // agentCeilingActions are the actions an agent principal never holds, whatever
 // its roles (#1179): each puts a credential's plaintext in the caller's hands,
 // and an agent's hands are a model's context. reveal (and the copy gated by it)
-// returns a secret's plaintext; enroll mints a node's enrollment token, itself
+// returns a secret's plaintext; enroll mints an outpost's enrollment token, itself
 // a credential. Everything else the person may do, their agent may do (#2047):
 // secret:bind hands a credential to a target without showing it, so an agent
 // binds what its person may bind, audited as the agent's and approved on the

@@ -12,14 +12,14 @@ import (
 	"time"
 	"unicode/utf8"
 	// The zone database rides the binary, so a payload time read in a
-	// declared zone parses on a node whose image carries none.
+	// declared zone parses on an outpost whose image carries none.
 	_ "time/tzdata"
 
 	"github.com/hyperscaleav/omniglass/internal/logline"
 )
 
 // The compiled runtime unit and its interpreter (#814). Attach bakes each spec
-// function into a task spec (internal/storage); the node parses that spec back
+// function into a task spec (internal/storage); the outpost parses that spec back
 // into a BakedFunction and interprets fetched payloads against it: locate each
 // emit, apply its declared transform, type it by its baked lane. Interpretation
 // is pure (payload in, samples and faults out); fetching lives with the
@@ -151,7 +151,7 @@ type Emitted struct {
 }
 
 // ClampWindow is how far ahead of its arrival a payload's time may claim to
-// be before it lands at arrival instead (#1145 decision 3): the node-probe
+// be before it lands at arrival instead (#1145 decision 3): the outpost-probe
 // cap's figure (ADR-0161 point 7).
 const ClampWindow = 5 * time.Minute
 

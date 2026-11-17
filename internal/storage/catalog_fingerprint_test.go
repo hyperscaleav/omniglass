@@ -126,9 +126,9 @@ func TestCatalogFingerprintCoversThePlannedRelations(t *testing.T) {
 
 // plannedRelations collects every "Relation Name" in an EXPLAIN (FORMAT JSON)
 // tree, subplans included.
-func plannedRelations(node any) []string {
+func plannedRelations(outpost any) []string {
 	var out []string
-	switch n := node.(type) {
+	switch n := outpost.(type) {
 	case map[string]any:
 		for k, v := range n {
 			if name, ok := v.(string); ok && k == "Relation Name" {

@@ -60,7 +60,7 @@ func newFakeEngine(published string) *fakeEngine {
 			DevImageFor("abc123"): {VersionLabel: "abc123"},
 			PostgresImage:         {},
 		},
-		seedLog:   FormatSeedResult(SeedResult{Node: true, Summary: "the dev fleet, seeded on this lab's first run"}),
+		seedLog:   FormatSeedResult(SeedResult{Outpost: true, Summary: "the dev fleet, seeded on this lab's first run"}),
 		published: published,
 		host:      HostResources{MemBytes: 32 << 30, CPUs: 12},
 	}
@@ -214,7 +214,7 @@ func fakeServer(t *testing.T) *httptest.Server {
 		http.SetCookie(w, &http.Cookie{Name: "og_session", Value: "s", Path: "/"})
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("GET /api/v1/nodes/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/v1/outposts/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
@@ -254,12 +254,12 @@ func TestRunBringsTheLabUpAndReportsTheConsole(t *testing.T) {
 	if lab.BaseURL != srv.URL || !strings.HasSuffix(lab.ConsoleURL, "/web") {
 		t.Fatalf("base %q console %q", lab.BaseURL, lab.ConsoleURL)
 	}
-	want := []string{"network omniglass-lab_default", "container db", "container seed", "container server", "container node"}
+	want := []string{"network omniglass-lab_default", "container db", "container seed", "container server", "container outpost"}
 	if strings.Join(eng.created, ",") != strings.Join(want, ",") {
 		t.Fatalf("created %v, want %v", eng.created, want)
 	}
 	if len(eng.containers) != 3 {
-		t.Fatalf("%d containers left running, want db, server and node (the seed is removed once it is done)", len(eng.containers))
+		t.Fatalf("%d containers left running, want db, server and outpost (the seed is removed once it is done)", len(eng.containers))
 	}
 	for _, line := range []string{"1 of 1 simulated endpoints up", "1 broken on purpose", "the login dev / dev works"} {
 		if !strings.Contains(out.String(), line) {
@@ -285,7 +285,7 @@ func TestRunCreatesTheImageContainersFromTheCheckedImageID(t *testing.T) {
 	if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	for _, svc := range []string{"seed", "server", "node"} {
+	for _, svc := range []string{"seed", "server", "outpost"} {
 		if got := eng.ran[svc]; got != checked {
 			t.Errorf("the %s container was created from %q, want the checked image ID %q", svc, got, checked)
 		}
@@ -295,8 +295,8 @@ func TestRunCreatesTheImageContainersFromTheCheckedImageID(t *testing.T) {
 	}
 }
 
-// A scale lab's node for every site is created from that same ID.
-func TestScaleRunCreatesEverySiteNodeFromTheCheckedImageID(t *testing.T) {
+// A scale lab's outpost for every site is created from that same ID.
+func TestScaleRunCreatesEverySiteOutpostFromTheCheckedImageID(t *testing.T) {
 	srv := scaleServer(t, testSites, nil, nil)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
 	cfg := scaleConfig()
@@ -466,13 +466,13 @@ func TestFreshRemovesTheVolumesFirst(t *testing.T) {
 	}
 }
 
-// A node that never gets every endpoint up still yields a lab, saying what
+// An outpost that never gets every endpoint up still yields a lab, saying what
 // is pending, rather than taking it down.
 func TestRunSaysWhatIsPendingWhenCollectionIsSlow(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/healthz", func(w http.ResponseWriter, _ *http.Request) {})
 	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("GET /api/v1/nodes/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/v1/outposts/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {

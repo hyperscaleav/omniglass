@@ -17,7 +17,7 @@ func TestPlatformRefusalsAnswerConflictOnEveryRoute(t *testing.T) {
 	t.Parallel()
 	mappers := map[string]func(error) error{
 		"system": mapSystemErr, "component": mapComponentErr, "member": mapMemberErr,
-		"role": mapRoleErr, "node": mapNodeErr,
+		"role": mapRoleErr, "outpost": mapOutpostErr,
 	}
 	sentinels := []error{
 		storage.ErrPlatformSystemReserved, storage.ErrPlatformTypeReserved,

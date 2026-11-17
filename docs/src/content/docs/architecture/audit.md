@@ -43,12 +43,12 @@ drawer. See [implementation status](/architecture/status/).
   keeps their rows, and alarm retention (#1339) will remove cleared ones. Several other writers still
   write an update with no before image or a delete with no image (#1444) ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
-  human, service, or node. The read resolves it to the actor's **identifier**, a human's username, a
-  service account's name, or a node's name, through the gateway's one resolution
+  human, service, or outpost. The read resolves it to the actor's **identifier**, a human's username, a
+  service account's name, or an outpost's name, through the gateway's one resolution
   ([ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)),
   falling back to the snapshot on the row once that principal is purged. All three profiled kinds
-  resolve, so only a principal with no profile row at all reads empty; a **node** actor read blank
-  until [#738](https://github.com/hyperscaleav/omniglass/issues/738) made `node.name` the third
+  resolve, so only a principal with no profile row at all reads empty; an **outpost** actor read blank
+  until [#738](https://github.com/hyperscaleav/omniglass/issues/738) made `outpost.name` the third
   source. Nothing here surfaces a raw uuid where a name was expected.
 - **How it arrived rides beside the actor.** A row carries `channel` and `client`: an
   [MCP](/architecture/api/#also-an-mcp-surface) tool call's row reads `channel = 'mcp'` and the name
@@ -126,7 +126,7 @@ revoke?". An impersonated action records **both** actors (`actor_principal_id` t
 trail stays attributable after its actor is purged
 ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it)).
 What gets written there is the actor's **identifier**, a human's username, a service account's name,
-or a node's name, and the platform's answer to which one belongs to the gateway rather than to the schema: the
+or an outpost's name, and the platform's answer to which one belongs to the gateway rather than to the schema: the
 stored function that used to resolve it retired, so the order is stated once in Go and rendered into
 the statements the gateway binds
 ([ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)).

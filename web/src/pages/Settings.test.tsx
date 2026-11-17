@@ -227,7 +227,7 @@ describe("Settings page", () => {
     expect(screen.queryByText(/platform:update/)).toBeNull();
   });
   it("lists a declared key the cascade leaves unset, as not set, and saves it", async () => {
-    // A node log window (#1350) has no declared default, so the effective
+    // An outpost log window (#1350) has no declared default, so the effective
     // document leaves it out; the page still offers it from the generated
     // schema, or an admin could never set it from the console.
     const calls: { url: string; body: unknown }[] = [];
@@ -242,10 +242,10 @@ describe("Settings page", () => {
       locks: {},
     };
     mount(retentionRead);
-    expect(await screen.findByText("node_log_debug_days")).toBeTruthy();
+    expect(await screen.findByText("outpost_log_debug_days")).toBeTruthy();
     expect(screen.getAllByText("not set").length).toBeGreaterThan(0);
     enterEdit();
-    const input = screen.getByRole("textbox", { name: "node_log_debug_days" }) as HTMLInputElement;
+    const input = screen.getByRole("textbox", { name: "outpost_log_debug_days" }) as HTMLInputElement;
     expect(input.value).toBe("");
     // A blank optional row is not set, not invalid: no error until it is typed in.
     expect(screen.queryByText(/whole number/i)).toBeNull();
@@ -253,13 +253,13 @@ describe("Settings page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.length).toBe(1));
     expect(calls[0].url).toContain("/settings/retention");
-    expect(calls[0].body).toEqual({ node_log_debug_days: 1 });
+    expect(calls[0].body).toEqual({ outpost_log_debug_days: 1 });
   });
 
   it("teaches an unset key's resolution: no level holds it, and what it follows", async () => {
     mount({ values: { retention: { log_debug_days: 3 } }, sources: { "retention.log_debug_days": "default" }, locks: {} });
-    await screen.findByText("node_log_debug_days");
-    const row = settingKeys("retention", { log_debug_days: 3 }).indexOf("node_log_debug_days");
+    await screen.findByText("outpost_log_debug_days");
+    const row = settingKeys("retention", { log_debug_days: 3 }).indexOf("outpost_log_debug_days");
     fireEvent.click(screen.getAllByLabelText("Show resolution")[row]);
     expect(await screen.findByText(/Not set at any level/)).toBeTruthy();
     expect(screen.getByText(/unset follows log_debug_days/)).toBeTruthy();

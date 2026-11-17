@@ -6,7 +6,7 @@ import (
 )
 
 // The endpoint-rejection value (ADR-0158, #1078): the gate a terminal refusal
-// holds, written by the node and read back by the node (a restart adopts it),
+// holds, written by the outpost and read back by the outpost (a restart adopts it),
 // the server (a :retry checks a trusted key against it) and the reachability
 // read (the console names both keys from it). One shape, read in one place.
 
@@ -49,7 +49,7 @@ func TestHalfAKeyPairIsNoEvidence(t *testing.T) {
 	}
 }
 
-func TestParseReadsWhatTheNodePublishes(t *testing.T) {
+func TestParseReadsWhatTheOutpostPublishes(t *testing.T) {
 	cases := []struct {
 		in   string
 		ok   bool

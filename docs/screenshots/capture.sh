@@ -6,9 +6,9 @@ set -euo pipefail
 # and the server in lab mode, with the Playwright capture in a container on the
 # lab's own network.
 #
-# The lab runs with --no-node: the dev fleet without the simulated fleet's
+# The lab runs with --no-outpost: the dev fleet without the simulated fleet's
 # wiring (whose hundred-odd audited endpoint creates would fill the pages it
-# photographs) and no node collecting, so every page holds still between
+# photographs) and no outpost collecting, so every page holds still between
 # captures. The lab's banner is a fact about the lab, not the product the docs
 # teach, so the capture hides it (docs-shots.mjs) and the shots show the console
 # an operator runs.
@@ -54,7 +54,7 @@ BASELINE="${DOCS_SHOTS_BASELINE:-docs/screenshots/baseline}"
 lab_init ogshots
 # --platform-history: an hour of made-up server figures, so platform health's
 # sparklines draw full lines; for a capture only, never a learner's lab (#1790).
-STACK_SCENARIO=dev lab_up --no-node --platform-history
+STACK_SCENARIO=dev lab_up --no-outpost --platform-history
 
 # A couple of secrets so the Secrets surface renders real rows. LOUD on
 # failure: every CLI write here lands an audit row, so a write that silently

@@ -254,7 +254,7 @@ type platformViewWire struct {
 			Description string `json:"description"`
 		} `json:"keys"`
 	} `json:"groups"`
-	Nodes []struct {
+	Outposts []struct {
 		Name      string `json:"name"`
 		Component string `json:"component"`
 		Verdict   string `json:"verdict"`
@@ -263,7 +263,7 @@ type platformViewWire struct {
 			ObservedAt time.Time `json:"observed_at"`
 		} `json:"figures"`
 		Loss *float64 `json:"loss"`
-	} `json:"nodes"`
+	} `json:"outposts"`
 	LossHops []string              `json:"loss_hops"`
 	Pipeline *platformPipelineWire `json:"pipeline"`
 }
@@ -308,7 +308,7 @@ type platformPipelineWire struct {
 // platformRigRoute is the slowest route the rig's server sampled.
 const platformRigRoute = "GET /api/v1/components/{name} 2xx"
 
-// platformViewRig is a seeded platform with one node carrying a figure and a
+// platformViewRig is a seeded platform with one outpost carrying a figure and a
 // server carrying its boot identity, served by a lab handler.
 type platformViewRig struct {
 	ctx       context.Context
@@ -316,7 +316,7 @@ type platformViewRig struct {
 	c         *apiClient
 	owner     string
 	startedAt time.Time
-	node      string
+	outpost   string
 	server    string
 }
 
@@ -331,20 +331,20 @@ func newPlatformViewRig(t *testing.T) *platformViewRig {
 	t.Cleanup(gw.Close)
 	r := &platformViewRig{ctx: ctx, dsn: dsn, owner: bootstrapOwnerTok(t, ctx, gw)}
 	// The narrow roles go in before the handler loads its role index.
-	r.role(t, "node-reader", "node:read")
+	r.role(t, "outpost-reader", "outpost:read")
 	r.role(t, "placed-reader", "component:read", "system:read")
 	r.role(t, "component-reader", "component:read")
 	srv := httptest.NewServer(api.NewHandler(gw, api.WithLab(true)))
 	t.Cleanup(srv.Close)
 	r.c = &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	r.c.do(r.owner, http.MethodPost, "/nodes", map[string]any{"name": "edge-alpha"}, http.StatusCreated)
-	nodes, err := gw.ListNodes(ctx, scope.Set{All: true})
-	if err != nil || len(nodes) != 1 || nodes[0].PlatformComponentID == nil {
-		t.Fatalf("nodes = %+v, %v; want edge-alpha with its platform component", nodes, err)
+	r.c.do(r.owner, http.MethodPost, "/outposts", map[string]any{"name": "edge-alpha"}, http.StatusCreated)
+	outposts, err := gw.ListOutposts(ctx, scope.Set{All: true})
+	if err != nil || len(outposts) != 1 || outposts[0].PlatformComponentID == nil {
+		t.Fatalf("outposts = %+v, %v; want edge-alpha with its platform component", outposts, err)
 	}
 	if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{
-		{ComponentID: *nodes[0].PlatformComponentID, Key: writerclass.CheckinAge, Value: 7, TS: time.Now().UTC()},
+		{ComponentID: *outposts[0].PlatformComponentID, Key: writerclass.CheckinAge, Value: 7, TS: time.Now().UTC()},
 	}); err != nil {
 		t.Fatalf("record a checkin age: %v", err)
 	}
@@ -352,7 +352,7 @@ func newPlatformViewRig(t *testing.T) *platformViewRig {
 	if err != nil {
 		t.Fatalf("ensure server component: %v", err)
 	}
-	r.node, r.server = *nodes[0].PlatformComponentID, server
+	r.outpost, r.server = *outposts[0].PlatformComponentID, server
 	r.startedAt = time.Date(2026, 11, 9, 9, 30, 0, 0, time.UTC)
 	if err := gw.RecordServerIdentity(ctx, server, "v9.9.9", r.startedAt); err != nil {
 		t.Fatalf("record server identity: %v", err)
@@ -407,7 +407,7 @@ func (r *platformViewRig) role(t *testing.T, name string, perms ...string) {
 // TestPlatformViewAPIServesTheSeededViewer: the seeded Viewer role, an
 // all-scope reader, gets the whole page in one call: the platform system, the
 // server's build and start time, the column groups with their catalog facts,
-// and the node's figure. A key the node never reported is absent.
+// and the outpost's figure. A key the outpost never reported is absent.
 func TestPlatformViewAPIServesTheSeededViewer(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -441,10 +441,10 @@ func TestPlatformViewAPIServesTheSeededViewer(t *testing.T) {
 		checkin.Keys[0].Label == "" || checkin.Keys[0].Description == "" {
 		t.Errorf("checkin group = %+v, want checkin-age with its catalog label and description", checkin)
 	}
-	if len(w.Nodes) != 1 || w.Nodes[0].Name != "edge-alpha" || w.Nodes[0].Component == "" {
-		t.Fatalf("nodes = %+v, want edge-alpha with its component", w.Nodes)
+	if len(w.Outposts) != 1 || w.Outposts[0].Name != "edge-alpha" || w.Outposts[0].Component == "" {
+		t.Fatalf("outposts = %+v, want edge-alpha with its component", w.Outposts)
 	}
-	n := w.Nodes[0]
+	n := w.Outposts[0]
 	if got, ok := n.Figures[writerclass.CheckinAge]; !ok || got.Value != 7 {
 		t.Errorf("edge-alpha checkin-age = %+v (present %v), want 7", got, ok)
 	}
@@ -482,7 +482,7 @@ func TestPlatformViewAPIServesTheSeededViewer(t *testing.T) {
 	}
 }
 
-// TestPlatformViewAPIOmitsWhatTheCallerCannotRead: a fleet-wide node:read
+// TestPlatformViewAPIOmitsWhatTheCallerCannotRead: a fleet-wide outpost:read
 // holder whose component and system reads are location-scoped sees every row,
 // but no figure, verdict, server or system: the platform components are
 // unplaced, so a scoped read never reaches them. figures_read says why the
@@ -494,8 +494,8 @@ func TestPlatformViewAPIOmitsWhatTheCallerCannotRead(t *testing.T) {
 	}
 	r := newPlatformViewRig(t)
 	hq := r.location(t, "hq")
-	tok := principalWithGrants(t, r.ctx, r.dsn, "fleet-node-reader", []grant{
-		{role: "node-reader", scopeKind: "all"},
+	tok := principalWithGrants(t, r.ctx, r.dsn, "fleet-outpost-reader", []grant{
+		{role: "outpost-reader", scopeKind: "all"},
 		{role: "placed-reader", scopeKind: "location", scopeID: hq},
 	})
 	w := r.read(t, tok)
@@ -512,28 +512,28 @@ func TestPlatformViewAPIOmitsWhatTheCallerCannotRead(t *testing.T) {
 	if strings.Contains(raw, platformRigRoute) || strings.Contains(raw, writerclass.IngestLag) {
 		t.Errorf("a location-scoped component read carries a server figure: %s", raw)
 	}
-	if len(w.Nodes) != 1 || w.Nodes[0].Name != "edge-alpha" {
-		t.Fatalf("nodes = %+v, want the edge-alpha row", w.Nodes)
+	if len(w.Outposts) != 1 || w.Outposts[0].Name != "edge-alpha" {
+		t.Fatalf("outposts = %+v, want the edge-alpha row", w.Outposts)
 	}
-	if w.Nodes[0].Figures != nil || w.Nodes[0].Verdict != "" {
-		t.Errorf("edge-alpha figures = %v, verdict = %q, want both omitted", w.Nodes[0].Figures, w.Nodes[0].Verdict)
+	if w.Outposts[0].Figures != nil || w.Outposts[0].Verdict != "" {
+		t.Errorf("edge-alpha figures = %v, verdict = %q, want both omitted", w.Outposts[0].Figures, w.Outposts[0].Verdict)
 	}
 	if len(w.Groups) == 0 {
 		t.Error("groups missing: the columns are the catalog's, readable without a component read")
 	}
 }
 
-// TestPlatformViewAPIRefusesWithoutAFleetWideNodeRead: no node:read is a 403
-// at the gate, and a location-scoped node:read is a 403 from the read, never
-// an empty table that reads as "no nodes".
-func TestPlatformViewAPIRefusesWithoutAFleetWideNodeRead(t *testing.T) {
+// TestPlatformViewAPIRefusesWithoutAFleetWideOutpostRead: no outpost:read is a 403
+// at the gate, and a location-scoped outpost:read is a 403 from the read, never
+// an empty table that reads as "no outposts".
+func TestPlatformViewAPIRefusesWithoutAFleetWideOutpostRead(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	r := newPlatformViewRig(t)
 	hq := r.location(t, "hq")
-	none := principalWithGrants(t, r.ctx, r.dsn, "no-node-read", []grant{{role: "component-reader", scopeKind: "all"}})
+	none := principalWithGrants(t, r.ctx, r.dsn, "no-outpost-read", []grant{{role: "component-reader", scopeKind: "all"}})
 	r.c.do(none, http.MethodGet, "/views/platform", nil, http.StatusForbidden)
 
 	located := principalWithGrants(t, r.ctx, r.dsn, "hq-viewer", []grant{{role: "viewer", scopeKind: "location", scopeID: hq}})
@@ -544,7 +544,7 @@ func TestPlatformViewAPIRefusesWithoutAFleetWideNodeRead(t *testing.T) {
 // comes back in the order an item crosses the hops (storage's
 // PlatformPipelineHops, the one declaration), each hop carrying its catalog
 // keys and its per-kind in, out and loss; edge-alpha's row carries its Loss
-// over the node hop, and loss_hops names the hop it composes. A kind no hop
+// over the outpost hop, and loss_hops names the hop it composes. A kind no hop
 // carried is absent, never a 0.
 func TestPlatformViewAPIServesThePipelineHopByHop(t *testing.T) {
 	t.Parallel()
@@ -562,7 +562,7 @@ func TestPlatformViewAPIServesThePipelineHopByHop(t *testing.T) {
 	for _, w := range []struct {
 		id      string
 		in, out float64
-	}{{r.node, 20, 19}, {r.server, 19, 19}} {
+	}{{r.outpost, 20, 19}, {r.server, 19, 19}} {
 		ms = append(ms,
 			storage.PlatformMetric{ComponentID: w.id, Key: writerclass.DeliveryInCount, Instance: "metric", Value: w.in, TS: at},
 			storage.PlatformMetric{ComponentID: w.id, Key: writerclass.DeliveryOutCount, Instance: "metric", Value: w.out, TS: at},
@@ -587,13 +587,13 @@ func TestPlatformViewAPIServesThePipelineHopByHop(t *testing.T) {
 	if len(w.Pipeline.Keys) != 3 || w.Pipeline.Keys[0].Description == "" {
 		t.Errorf("pipeline keys = %+v, want the three delivery keys with their catalog descriptions", w.Pipeline.Keys)
 	}
-	node := w.Pipeline.Hops[0]
-	if len(node.Kinds) != 1 || node.Kinds[0].Kind != "metric" || node.Kinds[0].LastHour.In != 20 || node.Kinds[0].LastHour.Out != 19 ||
-		node.Kinds[0].LastHour.Loss == nil || *node.Kinds[0].LastHour.Loss != 0.05 {
-		t.Errorf("node hop kinds = %+v, want metric 20 in, 19 out, 0.05 over the hour", node.Kinds)
+	outpost := w.Pipeline.Hops[0]
+	if len(outpost.Kinds) != 1 || outpost.Kinds[0].Kind != "metric" || outpost.Kinds[0].LastHour.In != 20 || outpost.Kinds[0].LastHour.Out != 19 ||
+		outpost.Kinds[0].LastHour.Loss == nil || *outpost.Kinds[0].LastHour.Loss != 0.05 {
+		t.Errorf("outpost hop kinds = %+v, want metric 20 in, 19 out, 0.05 over the hour", outpost.Kinds)
 	}
-	if len(node.ByComponent) != 1 || node.ByComponent[0].Component != r.node || node.ByComponent[0].Name == "" {
-		t.Errorf("node hop components = %+v, want edge-alpha's platform component", node.ByComponent)
+	if len(outpost.ByComponent) != 1 || outpost.ByComponent[0].Component != r.outpost || outpost.ByComponent[0].Name == "" {
+		t.Errorf("outpost hop components = %+v, want edge-alpha's platform component", outpost.ByComponent)
 	}
 	if ingest := w.Pipeline.Hops[1]; len(ingest.ByComponent) != 1 || ingest.ByComponent[0].Component != r.server {
 		t.Errorf("ingest hop components = %+v, want the server's", ingest.ByComponent)
@@ -601,26 +601,26 @@ func TestPlatformViewAPIServesThePipelineHopByHop(t *testing.T) {
 	if len(w.Pipeline.EndToEnd) != 1 || w.Pipeline.EndToEnd[0].Kind != "metric" || w.Pipeline.EndToEnd[0].LastHour == nil {
 		t.Errorf("end to end = %+v, want the metric kind alone: no other kind was carried", w.Pipeline.EndToEnd)
 	}
-	if len(w.LossHops) != 1 || w.LossHops[0] != "node" {
-		t.Errorf("loss_hops = %v, want [node]", w.LossHops)
+	if len(w.LossHops) != 1 || w.LossHops[0] != "outpost" {
+		t.Errorf("loss_hops = %v, want [outpost]", w.LossHops)
 	}
-	if l := w.Nodes[0].Loss; l == nil || *l != 0.05 {
+	if l := w.Outposts[0].Loss; l == nil || *l != 0.05 {
 		t.Errorf("edge-alpha loss = %v, want 0.05", l)
 	}
 
 	hq := r.location(t, "hq")
-	scoped := r.read(t, principalWithGrants(t, r.ctx, r.dsn, "fleet-node-reader", []grant{
-		{role: "node-reader", scopeKind: "all"},
+	scoped := r.read(t, principalWithGrants(t, r.ctx, r.dsn, "fleet-outpost-reader", []grant{
+		{role: "outpost-reader", scopeKind: "all"},
 		{role: "placed-reader", scopeKind: "location", scopeID: hq},
 	}))
-	if scoped.Pipeline != nil || scoped.Nodes[0].Loss != nil {
-		t.Errorf("a location-scoped component read got pipeline %+v, loss %v; want both omitted", scoped.Pipeline, scoped.Nodes[0].Loss)
+	if scoped.Pipeline != nil || scoped.Outposts[0].Loss != nil {
+		t.Errorf("a location-scoped component read got pipeline %+v, loss %v; want both omitted", scoped.Pipeline, scoped.Outposts[0].Loss)
 	}
 }
 
-// TestPlatformViewIsStampedNodeRead: the generated reference names the
-// page's door, so a reader searching it for node:read finds this read.
-func TestPlatformViewIsStampedNodeRead(t *testing.T) {
+// TestPlatformViewIsStampedOutpostRead: the generated reference names the
+// page's door, so a reader searching it for outpost:read finds this read.
+func TestPlatformViewIsStampedOutpostRead(t *testing.T) {
 	t.Parallel()
 	raw, err := os.ReadFile("../../api/openapi.json")
 	if err != nil {
@@ -639,8 +639,8 @@ func TestPlatformViewIsStampedNodeRead(t *testing.T) {
 	if !ok {
 		t.Fatal("GET /views/platform is not in the spec")
 	}
-	if op.OperationID != "get-platform-view" || op.Permission != "node:read" {
-		t.Errorf("GET /views/platform = %+v, want get-platform-view stamped node:read", op)
+	if op.OperationID != "get-platform-view" || op.Permission != "outpost:read" {
+		t.Errorf("GET /views/platform = %+v, want get-platform-view stamped outpost:read", op)
 	}
 }
 
@@ -649,8 +649,8 @@ func TestPlatformViewIsStampedNodeRead(t *testing.T) {
 type platformSimulationWire struct {
 	WindowSeconds  int `json:"window_seconds"`
 	BracketSeconds int `json:"bracket_seconds"`
-	Nodes          []struct {
-		Node     string     `json:"node"`
+	Outposts       []struct {
+		Outpost  string     `json:"outpost"`
 		State    string     `json:"state"`
 		Start    *time.Time `json:"start"`
 		End      *time.Time `json:"end"`
@@ -689,13 +689,13 @@ type platformSimulationWire struct {
 			Received    map[string]int64 `json:"received"`
 			Impaired    bool             `json:"impaired"`
 		} `json:"devices"`
-	} `json:"nodes"`
+	} `json:"outposts"`
 }
 
 // TestPlatformSimulationViewAPI drives the closed loop the Platform health
-// page reads with a simulator connected: a ring over a node's simulator,
-// its node and the receipts it landed, read over HTTP. The figures span
-// every component the node simulates, so a location-scoped component read is
+// page reads with a simulator connected: a ring over an outpost's simulator,
+// its outpost and the receipts it landed, read over HTTP. The figures span
+// every component the outpost simulates, so a location-scoped component read is
 // a 404 (the section is not there for that caller), and no simulation:read
 // is the gate's 403. Receipts count by landed_at, only inside the window and
 // its margin.
@@ -715,15 +715,15 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	r.role(t, "loop-sim-reader", "simulation:read", "component:read")
 	r.role(t, "loop-component-reader", "component:read")
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "site-a"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	panel, _ := lineProtocolProduct(t, ctx, gw)
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &panel}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	comp, node := "panel-1", "site-a"
-	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &node,
+	comp, outpost := "panel-1", "site-a"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Outpost: &outpost,
 		Params: []byte(`{"target":"127.60.0.1:51325"}`)}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -737,7 +737,7 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Tick k is k minutes past base: the node opened 6k connections and sent
+	// Tick k is k minutes past base: the outpost opened 6k connections and sent
 	// 60k http requests, which the sim accepted, received and answered, and
 	// the bus acknowledged 6k batches.
 	base := time.Now().UTC().Add(-time.Hour).Truncate(time.Minute)
@@ -747,11 +747,11 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	hub.Pulled("site-a", collection.SimCapabilities{}, []string{panelID})
 	observe := func(k int) {
 		n := int64(100 + 60*k)
-		sim := collection.SimObservation{Node: "site-a", At: at(k), FleetGeneration: 1, Started: base.Add(-time.Hour),
+		sim := collection.SimObservation{Outpost: "site-a", At: at(k), FleetGeneration: 1, Started: base.Add(-time.Hour),
 			Protocols: []collection.SimProtocolObservation{{Protocol: "http", Accepted: n / 10, Received: n, Answered: n}}}
 		hub.observation = map[string]collection.EndpointObservation{"site-a": {
 			SimBefore: sim,
-			Node: collection.RequestTallySnapshot{Node: "site-a", At: at(k), Started: base.Add(-time.Hour),
+			Outpost: collection.RequestTallySnapshot{Outpost: "site-a", At: at(k), Started: base.Add(-time.Hour),
 				Transports: []collection.TallyCounters{{Transport: "http", Connections: n / 10, Sent: n, Answered: n}}, BatchesAcknowledged: int64(10 + 6*k)},
 			SimAfter: sim,
 		}}
@@ -761,7 +761,7 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 		}
 		hub.Report("site-a", collection.SimHitBatch{Hits: hits})
 	}
-	ring := closedloop.NewRing(api.NewSimLoopSource(hub, gw, closedloop.NodeCadence{Heartbeat: 30 * time.Second}), func() time.Time { return at(tick) }, 2, time.Minute)
+	ring := closedloop.NewRing(api.NewSimLoopSource(hub, gw, closedloop.OutpostCadence{Heartbeat: 30 * time.Second}), func() time.Time { return at(tick) }, 2, time.Minute)
 
 	srv := httptest.NewServer(api.NewHandler(gw, api.WithSimHub(hub), api.WithClosedLoopRing(ring)))
 	defer srv.Close()
@@ -774,8 +774,8 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 		if err := json.Unmarshal(raw, &w); err != nil {
 			t.Fatalf("decode %s: %v", raw, err)
 		}
-		if w.Nodes == nil {
-			t.Fatalf("nodes = null in %s, want an array", raw)
+		if w.Outposts == nil {
+			t.Fatalf("outposts = null in %s, want an array", raw)
 		}
 		return w
 	}
@@ -788,9 +788,9 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	r.c.do(located, http.MethodGet, path, nil, http.StatusNotFound)
 	reader := principalWithGrants(t, ctx, dsn, "loop-reader", []grant{{role: "loop-sim-reader", scopeKind: "all"}})
 
-	// Before the ring has bracketed anything, an admin reads no node.
-	if w := read(r.owner); len(w.Nodes) != 0 || w.WindowSeconds != 120 || w.BracketSeconds != 60 {
-		t.Fatalf("before any bracket: %+v, want no nodes over a 2-bracket window", w)
+	// Before the ring has bracketed anything, an admin reads no outpost.
+	if w := read(r.owner); len(w.Outposts) != 0 || w.WindowSeconds != 120 || w.BracketSeconds != 60 {
+		t.Fatalf("before any bracket: %+v, want no outposts over a 2-bracket window", w)
 	}
 
 	// The window will be tick 0 to tick 2, its receipts counted at tick 3.
@@ -814,7 +814,7 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 		observe(tick)
 		ring.Take(ctx, []string{"site-a"})
 	}
-	if w := read(reader); len(w.Nodes) != 1 || w.Nodes[0].State != closedloop.WindowWarmingUp || w.Nodes[0].Gaps != nil || w.Nodes[0].Start != nil {
+	if w := read(reader); len(w.Outposts) != 1 || w.Outposts[0].State != closedloop.WindowWarmingUp || w.Outposts[0].Gaps != nil || w.Outposts[0].Start != nil {
 		t.Fatalf("two brackets in: %+v, want site-a warming up with no figure", w)
 	}
 	for ; tick < 4; tick++ {
@@ -823,11 +823,11 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 	}
 
 	w := read(reader)
-	if len(w.Nodes) != 1 {
-		t.Fatalf("nodes = %+v, want site-a", w.Nodes)
+	if len(w.Outposts) != 1 {
+		t.Fatalf("outposts = %+v, want site-a", w.Outposts)
 	}
-	n := w.Nodes[0]
-	if n.Node != "site-a" || n.State != closedloop.WindowMeasured || n.Error != "" ||
+	n := w.Outposts[0]
+	if n.Outpost != "site-a" || n.State != closedloop.WindowMeasured || n.Error != "" ||
 		n.Start == nil || !n.Start.Equal(start) || n.End == nil || !n.End.Equal(end) {
 		t.Fatalf("site-a = %+v, want measured from %s to %s", n, start, end)
 	}
@@ -857,17 +857,17 @@ func TestPlatformSimulationViewAPI(t *testing.T) {
 		t.Fatalf("protocols = %+v, want http's window deltas (12 connections, 120 requests) and tcp's one poll target", n.Protocols)
 	}
 	if n.QueueDepth != nil || n.BusyWorkers != nil {
-		t.Fatalf("queue %v, busy %v: want both null (not wired yet) from a node that reports neither", n.QueueDepth, n.BusyWorkers)
+		t.Fatalf("queue %v, busy %v: want both null (not wired yet) from an outpost that reports neither", n.QueueDepth, n.BusyWorkers)
 	}
 	if len(n.Devices) != 1 || n.Devices[0].ComponentID != panelID || n.Devices[0].Component != "panel-1" || n.Devices[0].Received["tcp"] != 12 {
 		t.Fatalf("devices = %+v, want panel-1 with its 12 tcp hits over the window", n.Devices)
 	}
 
-	// A handler with no ring (no simulator anywhere) reads no node.
+	// A handler with no ring (no simulator anywhere) reads no outpost.
 	bare := httptest.NewServer(api.NewHandler(gw))
 	defer bare.Close()
 	var empty platformSimulationWire
-	if err := json.Unmarshal((&apiClient{t: t, ctx: ctx, base: bare.URL}).do(r.owner, http.MethodGet, path, nil, http.StatusOK), &empty); err != nil || empty.Nodes == nil || len(empty.Nodes) != 0 {
-		t.Fatalf("no ring: %+v, %v; want an empty nodes array", empty, err)
+	if err := json.Unmarshal((&apiClient{t: t, ctx: ctx, base: bare.URL}).do(r.owner, http.MethodGet, path, nil, http.StatusOK), &empty); err != nil || empty.Outposts == nil || len(empty.Outposts) != 0 {
+		t.Fatalf("no ring: %+v, %v; want an empty outposts array", empty, err)
 	}
 }

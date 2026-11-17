@@ -58,24 +58,24 @@ type commandBody struct {
 	TargetKind          string              `json:"target_kind,omitempty" enum:"property,metric" doc:"The lane of the value it sets; absent for a fire-and-forget command"`
 	Target              string              `json:"target,omitempty" doc:"The property or metric it sets, by name"`
 	Status              string              `json:"status" enum:"issued,settled,failed,timed-out" doc:"The recorded status: issued until a terminal settled, failed, or timed-out"`
-	Phase               string              `json:"phase" enum:"queued,delivered,awaiting-reply,awaiting-observation,settled,failed,timed-out" doc:"Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status"`
-	SettleMode          string              `json:"settle_mode" enum:"reply,observation,none" doc:"How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it)"`
+	Phase               string              `json:"phase" enum:"queued,delivered,awaiting-reply,awaiting-observation,settled,failed,timed-out" doc:"Where it sits now: queued for its outpost; delivered to it (a binding that settles on observation, or a fire-and-forget command its outpost's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status"`
+	SettleMode          string              `json:"settle_mode" enum:"reply,observation,none" doc:"How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its outpost's execution report decides it)"`
 	SettleWindowSeconds int                 `json:"settle_window_seconds" doc:"How long it waits for its evidence"`
 	Deadline            time.Time           `json:"deadline" doc:"When its window closes (its settle window, or a fire-and-forget command's delivery window); a command still issued past it is timed out by the next sweep"`
-	SettledBy           string              `json:"settled_by,omitempty" enum:"issue,reply,observation,window" doc:"What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report"`
+	SettledBy           string              `json:"settled_by,omitempty" enum:"issue,reply,observation,window" doc:"What decided it, once terminal: its reply (for a fire-and-forget command, its outpost's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report"`
 	Reason              string              `json:"reason,omitempty" doc:"Why it reached its terminal status, in words: the reply that confirmed it, the value observed instead, where it stopped when it timed out"`
-	ExecError           string              `json:"exec_error,omitempty" doc:"The execution's failure, as its node reported it, masked of credentials"`
+	ExecError           string              `json:"exec_error,omitempty" doc:"The execution's failure, as its outpost reported it, masked of credentials"`
 	Reply               *string             `json:"reply,omitempty" doc:"The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands"`
 	Observed            *commandObservation `json:"observed,omitempty" doc:"The sample of its target that decided it, when an observation did"`
 	IssuedAt            time.Time           `json:"issued_at" doc:"When it was issued"`
-	DeliveredAt         *time.Time          `json:"delivered_at,omitempty" doc:"When a node last took it from its queue"`
-	FirstDeliveredAt    *time.Time          `json:"first_delivered_at,omitempty" doc:"When a node first took it from its queue; a redelivery moves delivered_at, not this"`
-	DeliveryCount       int                 `json:"delivery_count" doc:"How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again"`
-	ExecutedAt          *time.Time          `json:"executed_at,omitempty" doc:"When its node's execution report landed"`
+	DeliveredAt         *time.Time          `json:"delivered_at,omitempty" doc:"When an outpost last took it from its queue"`
+	FirstDeliveredAt    *time.Time          `json:"first_delivered_at,omitempty" doc:"When an outpost first took it from its queue; a redelivery moves delivered_at, not this"`
+	DeliveryCount       int                 `json:"delivery_count" doc:"How many times an outpost has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again"`
+	ExecutedAt          *time.Time          `json:"executed_at,omitempty" doc:"When its outpost's execution report landed"`
 	SettledAt           *time.Time          `json:"settled_at,omitempty" doc:"When it reached its terminal status"`
-	Endpoint            string              `json:"endpoint,omitempty" doc:"The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it"`
+	Endpoint            string              `json:"endpoint,omitempty" doc:"The endpoint it rides, by name: the one an outpost took it over, else the one an outpost would (its driver binds the type); absent when no endpoint can carry it"`
 	EndpointID          string              `json:"endpoint_id,omitempty" doc:"The endpoint's uuid"`
-	Node                string              `json:"node,omitempty" doc:"The node that endpoint is placed on, by name"`
+	Outpost             string              `json:"outpost,omitempty" doc:"The outpost that endpoint is placed on, by name"`
 	Driver              string              `json:"driver,omitempty" doc:"The driver whose binding renders and settles it, by name"`
 	Issuer              string              `json:"issuer,omitempty" doc:"Who issued it, by name; empty once that principal is purged (the audit log keeps the name)"`
 	IssuerID            string              `json:"issuer_id,omitempty" doc:"The issuer's uuid, the actor on the command's audit row"`
@@ -98,7 +98,7 @@ func toCommandBody(r *storage.CommandRecord) commandBody {
 		Status: r.Status, Phase: r.Phase, SettleMode: r.SettleMode, SettleWindowSeconds: r.SettleWindowSeconds, Deadline: r.Deadline,
 		SettledBy: r.SettledBy, Reason: r.Reason, ExecError: r.ExecError, Reply: r.Reply,
 		IssuedAt: r.IssuedAt, DeliveredAt: r.DeliveredAt, FirstDeliveredAt: r.FirstDeliveredAt, DeliveryCount: r.DeliveryCount, ExecutedAt: r.ExecutedAt, SettledAt: r.SettledAt,
-		Endpoint: r.Endpoint, EndpointID: r.EndpointID, Node: r.Node, Driver: r.Driver,
+		Endpoint: r.Endpoint, EndpointID: r.EndpointID, Outpost: r.Outpost, Driver: r.Driver,
 		Issuer: r.Issuer, IssuerID: r.IssuerID, CausedEventID: r.CausedEventID, SettledEventID: r.SettledEventID,
 	}
 	if r.ObservedAt != nil && len(r.ObservedValue) > 0 {
@@ -138,7 +138,7 @@ const (
 	defaultCommandWaiters             = 64
 	defaultCommandWaitersPerPrincipal = 4
 	// The poll behind a wait starts quick (a reply settles a command within
-	// a node's cycle) and backs off to once a second.
+	// an outpost's cycle) and backs off to once a second.
 	commandWaitFirstPoll = 100 * time.Millisecond
 	commandWaitMaxPoll   = time.Second
 )
@@ -251,7 +251,7 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway, w
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/commands/{id}",
 		Summary:     "Read a command",
-		Description: "One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.",
+		Description: "One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, outpost and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.",
 	}, "command", "read"), func(ctx context.Context, in *commandPathInput) (*commandOutput, error) {
 		compID, err := resolveCommandReader(ctx, a, gw, in.Name)
 		if err != nil {

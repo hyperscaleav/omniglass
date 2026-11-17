@@ -6,7 +6,7 @@
 // Gateway's job, not this package's; rbac answers capability only.
 //
 // Permissions are colon-delimited token paths, matched like NATS subjects (which
-// the node path already uses, so the whole stack shares one wildcard convention):
+// the outpost path already uses, so the whole stack shares one wildcard convention):
 //
 //   - a literal token matches itself;
 //   - `*` matches exactly one token;

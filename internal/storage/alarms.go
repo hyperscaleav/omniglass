@@ -46,7 +46,7 @@ type Alarm struct {
 	// unacknowledged (the queue an operator works), raised and acknowledged
 	// (somebody is on it), or cleared having never been acknowledged.
 	// AcknowledgedBy is the acknowledger's IDENTIFIER, not their uuid and not a
-	// label: a human's username, a service account's name, or a node's name,
+	// label: a human's username, a service account's name, or an outpost's name,
 	// resolved by principalIdent. It is what an operator surface renders
 	// (ADR-0062), and it reads empty once that principal is purged, while
 	// audit_log keeps the identifier it denormalized.
@@ -140,15 +140,15 @@ func snoozeOf(col string) string {
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
-	var ackUsername, ackServiceName, ackNodeName *string
-	var snzUsername, snzServiceName, snzNodeName *string
+	var ackUsername, ackServiceName, ackOutpostName *string
+	var snzUsername, snzServiceName, snzOutpostName *string
 	if err := row.Scan(&a.ID, &a.ComponentID, &a.ComponentName, &a.Severity, &a.Message,
-		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackNodeName,
-		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzNodeName); err != nil {
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackOutpostName,
+		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzOutpostName); err != nil {
 		return nil, err
 	}
-	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName, ackNodeName)
-	a.SnoozedBy = principalIdent(snzUsername, snzServiceName, snzNodeName)
+	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName, ackOutpostName)
+	a.SnoozedBy = principalIdent(snzUsername, snzServiceName, snzOutpostName)
 	return &a, nil
 }
 

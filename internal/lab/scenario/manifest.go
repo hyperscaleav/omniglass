@@ -87,8 +87,8 @@ type Standard struct {
 	Line       int            `yaml:"-"`
 }
 
-// Archetype is one kind of site, each site a campus with its own node (one
-// node per site, #1357): the buildings its rooms are spread over, the ratio of
+// Archetype is one kind of site, each site a campus with its own outpost (one
+// outpost per site, #1357): the buildings its rooms are spread over, the ratio of
 // each standard among its systems, and how many systems a site of it
 // typically has (TypicalSystems), which weighs its share of the size. The
 // headquarters is placed exactly once; every other archetype is repeated, its
@@ -189,8 +189,8 @@ func (b *Building) UnmarshalYAML(n *yaml.Node) error {
 	return decodeKnown(n, (*plain)(b), "name", "floors")
 }
 
-// decodeKnown decodes a mapping node refusing a key it does not list: a
-// misspelt key is a refusal, not a silently empty field. It decodes the node
+// decodeKnown decodes a mapping outpost refusing a key it does not list: a
+// misspelt key is a refusal, not a silently empty field. It decodes the outpost
 // itself, so the lines nested names keep are the file's own.
 func decodeKnown(n *yaml.Node, v any, keys ...string) error {
 	if n.Kind != yaml.MappingNode {

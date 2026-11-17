@@ -494,7 +494,7 @@ type Gateway interface {
 	// DriverSpecFindings checks a spec by the write-time rules and writes
 	// nothing (#1163): no findings is a spec a save accepts.
 	DriverSpecFindings(ctx context.Context, raw []byte) ([]driver.Finding, error)
-	// PlanDriverPreview plans a preview: the tasks a node runs to read a
+	// PlanDriverPreview plans a preview: the tasks an outpost runs to read a
 	// spec's polls once against a target, secrets unsealed only where the
 	// caller may bind them (#2047), the asking audited (#1163).
 	PlanDriverPreview(ctx context.Context, actorID string, in PreviewInput) (*PreviewPlan, error)
@@ -503,8 +503,8 @@ type Gateway interface {
 	PlanEndpointRun(ctx context.Context, actorID, ref, poll string, read, action scope.Set) (*EndpointPoll, error)
 
 	// The task tier: read-only over DERIVED collection work. A task is not
-	// operator-authored: it is derived when an interface is created (the node's
-	// unit of work over that connection) and carries no node column (its placement
+	// operator-authored: it is derived when an interface is created (the outpost's
+	// unit of work over that connection) and carries no outpost column (its placement
 	// projects from the interface). Reads cascade through the interface's owning
 	// component, the same component-tier cascade as the interface itself.
 	ListTasks(ctx context.Context, read scope.Set) ([]Task, error)
@@ -633,10 +633,10 @@ type Gateway interface {
 	GetComponentCommand(ctx context.Context, componentID string, id int64) (*CommandRecord, error)
 	ListComponentCommands(ctx context.Context, componentID string, f CommandFilter) ([]CommandRecord, error)
 
-	// The observed-metric sink, for the writer a batch speaks for (NodeWriter
+	// The observed-metric sink, for the writer a batch speaks for (OutpostWriter
 	// or PushWriter), held to each key's writer class (ADR-0161).
 	// reject-not-project is applied by the caller (collection.Registry) before
-	// the write. The reads serve the observed series only: the node's account,
+	// the write. The reads serve the observed series only: the outpost's account,
 	// never a declared, intended or calculated row beside it.
 	InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricSampleWrite) error
 	LatestMetric(ctx context.Context, componentName, key string) (*MetricSample, error)
@@ -652,9 +652,9 @@ type Gateway interface {
 	InsertPropertySamples(ctx context.Context, w KeyWriter, evs []PropertySampleWrite) error
 	LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error)
 	// EndpointKeyPin is the key an ssh or tls endpoint pins in force: the
-	// operator's declared pin, else the key the node trusted on first use.
+	// operator's declared pin, else the key the outpost trusted on first use.
 	// The declared row is the pin's path (ADR-0161), read here as the pin
-	// alone, never as the node's observation.
+	// alone, never as the outpost's observation.
 	EndpointKeyPin(ctx context.Context, componentName, endpoint, transport string) (string, error)
 	PropertyTransitions(ctx context.Context, componentName, key, instance string, window time.Duration) ([]PropertySample, error)
 	// LandBatch is the ingest's write (#311, ADR-0311): one batch's every
@@ -670,7 +670,7 @@ type Gateway interface {
 	RecordTermedBatch(ctx context.Context, b TermedBatch) error
 	PruneTelemetryReceipts(ctx context.Context, before time.Time, batch int) (int64, error)
 	// CountTelemetryReceipts and ListClosedLoopPollTargets are the server's
-	// closed-loop window reads (ADR-1647): a node's receipts around a window,
+	// closed-loop window reads (ADR-1647): an outpost's receipts around a window,
 	// and the poll targets the sim should see hit.
 	CountTelemetryReceipts(ctx context.Context, batchPrefix string, from, start, end, next time.Time) (ReceiptWindow, error)
 	ListClosedLoopPollTargets(ctx context.Context) ([]ClosedLoopPollTarget, error)
@@ -745,10 +745,10 @@ type Gateway interface {
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
 	// neither insert has a registry gate. log_line is component-owned (#589);
-	// a node's self-logs land on node_log via InsertNodeLogs. ListComponentLogs
-	// backs the component log panel; ListNodeLogs backs the node self-log panel.
+	// an outpost's self-logs land on outpost_log via InsertOutpostLogs. ListComponentLogs
+	// backs the component log panel; ListOutpostLogs backs the outpost self-log panel.
 	InsertLogLines(ctx context.Context, lines []LogLineWrite) error
-	InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error
+	InsertOutpostLogs(ctx context.Context, lines []OutpostLogWrite) error
 	// The component and system reads take a LogFilter (#1145): a severity
 	// threshold and a source, either empty for all; the sources reads list
 	// the channels the window carries, the filter's facet.
@@ -758,42 +758,42 @@ type Gateway interface {
 	// naming its writer (#793).
 	ListSystemLogs(ctx context.Context, systemID string, window time.Duration, limit int, filter LogFilter) ([]LogLine, error)
 	ListSystemLogSources(ctx context.Context, systemID string, window time.Duration) ([]string, error)
-	ListNodeLogs(ctx context.Context, nodeName string, window time.Duration, limit int) ([]LogLine, error)
+	ListOutpostLogs(ctx context.Context, outpostName string, window time.Duration, limit int) ([]LogLine, error)
 
-	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
+	// The outpost tier: the edge runtime's enrollment lifecycle and worklist. An outpost
 	// is fleet-wide (all-scope create/enroll/read, like a principal). The claim,
-	// authenticate, heartbeat, and worklist paths are the node's own lane (gated by
-	// the enrollment token or the node's NATS subject grant, not RBAC scope).
+	// authenticate, heartbeat, and worklist paths are the outpost's own lane (gated by
+	// the enrollment token or the outpost's NATS subject grant, not RBAC scope).
 	//
 	// locationRead is the PLACEMENT's scope on both write paths, the same set a
 	// system and a component create take for the same reference (#700, #705):
-	// create says who may write a node, this says which locations it may name.
-	CreateNode(ctx context.Context, actorID string, spec NodeSpec, create, locationRead scope.Set) (*Node, error)
-	UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action, locationRead scope.Set) (*Node, error)
-	DeleteNode(ctx context.Context, actorID, name string, read, action scope.Set) error
+	// create says who may write an outpost, this says which locations it may name.
+	CreateOutpost(ctx context.Context, actorID string, spec OutpostSpec, create, locationRead scope.Set) (*Outpost, error)
+	UpdateOutpost(ctx context.Context, actorID, name string, patch OutpostPatch, read, action, locationRead scope.Set) (*Outpost, error)
+	DeleteOutpost(ctx context.Context, actorID, name string, read, action scope.Set) error
 	// EnsurePlatform is the boot seed's platform step (#1625): it creates the
-	// reserved platform system if absent and gives every node without one its
+	// reserved platform system if absent and gives every outpost without one its
 	// platform component. Idempotent.
 	EnsurePlatform(ctx context.Context) error
 	// EnsureServerComponent is a server's boot step (#1627): the platform
 	// component of the server booting under identity, created the first time
 	// that identity boots.
 	EnsureServerComponent(ctx context.Context, identity string) (string, error)
-	SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error)
-	ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error)
-	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
+	SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Outpost, error)
+	ClaimOutpost(ctx context.Context, name, tokenHashHex string) (*Outpost, error)
+	AuthenticateOutpost(ctx context.Context, name, tokenHashHex string) (bool, error)
 	RecordHeartbeat(ctx context.Context, name string) error
-	// RecordOrphanedBatches counts a node's batches the confinement fence
+	// RecordOrphanedBatches counts an outpost's batches the confinement fence
 	// orphaned (#1200), once per flush rather than per batch.
 	RecordOrphanedBatches(ctx context.Context, name string, batches int64, at time.Time) error
-	NodeWorklist(ctx context.Context, name string) (Worklist, error)
-	// The command wire (#815): a node's pending queue, resolved and rendered,
+	OutpostWorklist(ctx context.Context, name string) (Worklist, error)
+	// The command wire (#815): an outpost's pending queue, resolved and rendered,
 	// and its execution reports.
-	PendingNodeCommands(ctx context.Context, name string) ([]CommandDelivery, error)
+	PendingOutpostCommands(ctx context.Context, name string) ([]CommandDelivery, error)
 	RecordCommandExecution(ctx context.Context, name string, commandID int64, execErr, reply string) error
 	// SweepCommandSettlements judges issued commands whose settle window has passed.
 	SweepCommandSettlements(ctx context.Context) error
-	// NodeSimDevices lists the components a simulator beside the node serves,
+	// OutpostSimDevices lists the components a simulator beside the outpost serves,
 	// within the component read scope.
 	// EnsureServicePrincipal and SetServiceToken are the trusted lane's
 	// (#1370): a service principal found or created by name, and its one
@@ -801,23 +801,23 @@ type Gateway interface {
 	EnsureServicePrincipal(ctx context.Context, actorID, name string) (string, error)
 	EnsureRole(ctx context.Context, actorID string, r Role) error
 	SetServiceToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error)
-	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
-	// NodeSimWebhooks reads the webhook subscription of each simulated
-	// component on the node (ADR-1370), keyed by component id: only for the
+	OutpostSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
+	// OutpostSimWebhooks reads the webhook subscription of each simulated
+	// component on the outpost (ADR-1370), keyed by component id: only for the
 	// simulator's own device list, never an operator's read.
-	NodeSimWebhooks(ctx context.Context, name string) (map[string]SimWebhook, error)
-	// WorklistChanges announces each node a committed write changed the
-	// worklist of (#1945), until ctx ends; the bus nudges that node to pull.
+	OutpostSimWebhooks(ctx context.Context, name string) (map[string]SimWebhook, error)
+	// WorklistChanges announces each outpost a committed write changed the
+	// worklist of (#1945), until ctx ends; the bus nudges that outpost to pull.
 	WorklistChanges(ctx context.Context) (<-chan string, error)
 	// GetSimImpairment and SetSimImpairment read and record what is broken on
 	// a simulated component (by resolved id; the caller checks scope).
 	GetSimImpairment(ctx context.Context, componentID string) (impair.Impairment, error)
 	SetSimImpairment(ctx context.Context, actorID, componentID string, imp impair.Impairment) (impair.Impairment, error)
-	// ComponentSimNode, SimAddressesInUse and AuditSimOperation back the
-	// console's simulation surfaces: the node whose simulator serves a
+	// ComponentSimOutpost, SimAddressesInUse and AuditSimOperation back the
+	// console's simulation surfaces: the outpost whose simulator serves a
 	// component, the addresses a new simulated device must avoid, and the
 	// audit row for an operation fired at one.
-	ComponentSimNode(ctx context.Context, componentID string) (string, error)
+	ComponentSimOutpost(ctx context.Context, componentID string) (string, error)
 	SimAddressesInUse(ctx context.Context) (map[string]bool, error)
 	AuditSimOperation(ctx context.Context, actorID, componentID string, op any) error
 	WithSimAddressLock(ctx context.Context, fn func() error) error
@@ -828,14 +828,14 @@ type Gateway interface {
 	// in one transaction, each piece the ordinary create in the caller's
 	// scope with its own audit row (#827).
 	CreatePlan(ctx context.Context, actorID string, plan Plan, sc PlanScopes) (*Planned, error)
-	// ResolveTaskOwner binds a task's owner component and confines the node to its
+	// ResolveTaskOwner binds a task's owner component and confines the outpost to its
 	// own tasks, for the telemetry ingest consumer.
-	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)
-	// ResolveTaskOwners is ResolveTaskOwner for every task of one node's
+	ResolveTaskOwner(ctx context.Context, taskID, outpostName string) (TaskOwner, bool, error)
+	// ResolveTaskOwners is ResolveTaskOwner for every task of one outpost's
 	// batch in one read (#1582); a task it refuses is absent from the map.
-	ResolveTaskOwners(ctx context.Context, nodeName string, taskIDs []string) (map[string]TaskOwner, error)
-	GetNode(ctx context.Context, name string, read scope.Set) (*Node, error)
-	ListNodes(ctx context.Context, read scope.Set) ([]Node, error)
+	ResolveTaskOwners(ctx context.Context, outpostName string, taskIDs []string) (map[string]TaskOwner, error)
+	GetOutpost(ctx context.Context, name string, read scope.Set) (*Outpost, error)
+	ListOutposts(ctx context.Context, read scope.Set) ([]Outpost, error)
 
 	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
 	// cascade resolver. A secret is owned on the exclusive arc (platform or one of
@@ -991,10 +991,10 @@ type Gateway interface {
 	// RecordPlatformMetrics lands the process's own observations on the
 	// platform components, written by the process (#1625).
 	RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) error
-	// NodeCheckins reads every claimed node's platform component and the time
+	// OutpostCheckins reads every claimed outpost's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
-	NodeCheckins(ctx context.Context) ([]NodeCheckin, error)
-	// CommandQueueHealth reads every node's command queue (#1626): the
+	OutpostCheckins(ctx context.Context) ([]OutpostCheckin, error)
+	// CommandQueueHealth reads every outpost's command queue (#1626): the
 	// pending, oldest and stuck now, and the redelivered and expired since the
 	// previous read's Now (none for a zero since).
 	CommandQueueHealth(ctx context.Context, since time.Time) (CommandQueueRead, error)
@@ -1114,13 +1114,13 @@ type Gateway interface {
 	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
 
 	// PlatformView is the read behind the Platform health page (#1644): the
-	// platform system's verdict, each server's identity, and one row per node
+	// platform system's verdict, each server's identity, and one row per outpost
 	// with its platform component's latest figure per PlatformViewGroups key,
 	// in a fixed number of statements. The three sets answer three
-	// permissions: node:read for the rows (all-scope, else ErrNodeForbidden),
+	// permissions: outpost:read for the rows (all-scope, else ErrOutpostForbidden),
 	// system:read for the platform verdict, component:read for the figures,
 	// verdicts and server identity; short of all-scope, each is omitted.
-	PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope.Set) (*PlatformView, error)
+	PlatformView(ctx context.Context, outpostRead, sysRead, compRead scope.Set) (*PlatformView, error)
 	// RecordServerIdentity writes the server's version and boot start time on
 	// its platform component (#1644).
 	RecordServerIdentity(ctx context.Context, componentID, version string, startedAt time.Time) error

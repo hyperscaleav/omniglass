@@ -25,7 +25,7 @@ const rejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   endpoint: "telnet",
   label: "Panel login",
   transport: "telnet",
-  node: "edge-hq",
+  outpost: "edge-hq",
   last_seen: ago(2_000),
   verdict: { value: "up", ts: ago(60_000) },
   responsive: { value: "up", ts: ago(60_000) },
@@ -198,7 +198,7 @@ describe("SessionNotice", () => {
     expect(onFix).toHaveBeenCalledOnce();
   });
 
-  it("explains a down session without offering a retry the node is already making", () => {
+  it("explains a down session without offering a retry the outpost is already making", () => {
     const down = rejected({ session: { state: "down", ts: ago(5_000), reason: "5 consecutive attempts failed, last: dial tcp 127.60.0.9:23: i/o timeout" }, rejection: undefined });
     const { getByTestId, queryByRole } = mountNotice(down);
     expect(getByTestId("session-reason").textContent).toMatch(/5 consecutive attempts failed/);
@@ -222,7 +222,7 @@ describe("SessionNotice for a probe's gate, no session held", () => {
     endpoint: transport,
     label: `Panel ${transport}`,
     transport,
-    node: "edge-hq",
+    outpost: "edge-hq",
     last_seen: ago(2_000),
     verdict: { value: "down", ts: ago(60_000) },
     responsive: { value: rung === "responsive" ? "down" : "up", ts: ago(60_000) },

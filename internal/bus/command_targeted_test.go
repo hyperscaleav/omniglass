@@ -42,15 +42,15 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "projector-1"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('pj-ip', 'tcp', $1::uuid, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.7:4352"}'::jsonb)`, comp.ID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('pj-ip', 'tcp', $1::uuid, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.7:4352"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
@@ -67,7 +67,7 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: "lamp-mode", Label: "Lamp mode", DataType: "string"}); err != nil {
 		t.Fatalf("property type: %v", err)
 	}
-	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-pj", "node-a")
+	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-pj", "outpost-a")
 	if err != nil || !ok {
 		t.Fatalf("resolve task owner: ok=%v err=%v", ok, err)
 	}
@@ -77,10 +77,10 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 	land := func(id, mode string) {
 		t.Helper()
 		now = now.Add(fingerprintEvery)
-		if err := s.land(ctx, id, &ogv1.TelemetryBatch{TaskId: "t-pj", NodeId: "node-a",
+		if err := s.land(ctx, id, &ogv1.TelemetryBatch{TaskId: "t-pj", OutpostId: "outpost-a",
 			Properties: []*ogv1.PropertySample{{Name: "lamp-mode", ValueJson: `"` + mode + `"`}}},
-			ingestBinding{LogNode: "node-a", SampleOwner: &owner, Arc: componentArc(owner),
-				Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
+			ingestBinding{LogOutpost: "outpost-a", SampleOwner: &owner, Arc: componentArc(owner),
+				Writer: storage.OutpostWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
 			t.Fatalf("land %s: %v", id, err)
 		}
 	}

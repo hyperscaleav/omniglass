@@ -495,7 +495,7 @@ func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
 	}
 
 	// A patch that says nothing about the label leaves it alone, which is what
-	// makes a node reassignment safe.
+	// makes an outpost reassignment safe.
 	kept, err := gw.UpdateEndpoint(ctx, "", first.ID, storage.EndpointPatch{Params: []byte(`{"target":"10.0.0.9"}`)}, all, all)
 	if err != nil {
 		t.Fatalf("retarget: %v", err)

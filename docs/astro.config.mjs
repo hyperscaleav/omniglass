@@ -43,6 +43,8 @@ export default defineConfig({
     '/guides/operator/inventory/': '/guides/operator/fleet/',
     // Walkthroughs became one of a demo's two recorders (#1132).
     '/contributing/walkthroughs/': '/contributing/demos/',
+    // The collecting process became the outpost (ADR-2031, #2059).
+    '/architecture/nodes/': '/architecture/outposts/',
   },
   integrations: [
     // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
@@ -129,7 +131,7 @@ export default defineConfig({
             { label: 'API', slug: 'architecture/api' },
             { label: 'Messaging', slug: 'architecture/messaging' },
             // the foundations underneath
-            { label: 'Nodes', slug: 'architecture/nodes' },
+            { label: 'Outposts', slug: 'architecture/outposts' },
             { label: 'Simulation', slug: 'architecture/simulation' },
             { label: 'Storage', slug: 'architecture/storage' },
             { label: 'Data model', slug: 'architecture/data-model' },

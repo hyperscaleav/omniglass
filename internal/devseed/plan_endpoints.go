@@ -90,8 +90,8 @@ func seedPlanEndpoints(ctx context.Context, gw storage.Gateway, actorID string, 
 	}
 	for _, e := range planned {
 		comp := compIDs[e.Comp]
-		node := opts.nodeOf(rows.Components[e.Comp].Site)
-		spec := storage.EndpointSpec{Component: &comp, Node: node, SecretRead: all, SecretBind: all, CanAdmin: true}
+		outpost := opts.outpostOf(rows.Components[e.Comp].Site)
+		spec := storage.EndpointSpec{Component: &comp, Outpost: outpost, SecretRead: all, SecretBind: all, CanAdmin: true}
 		if e.Driver != "" {
 			drv := e.Driver
 			if in != nil && in.done == nil {
@@ -124,12 +124,12 @@ func seedPlanEndpoints(ctx context.Context, gw storage.Gateway, actorID string, 
 	return len(planned), induced, nil
 }
 
-// nodeOf is the node a site's endpoints are placed on, nil for none: NodeFor's
-// answer for the site, else Node.
-func (o PlanOptions) nodeOf(site string) *string {
-	n := o.Node
-	if o.NodeFor != nil {
-		if f := o.NodeFor(site); f != "" {
+// outpostOf is the outpost a site's endpoints are placed on, nil for none: OutpostFor's
+// answer for the site, else Outpost.
+func (o PlanOptions) outpostOf(site string) *string {
+	n := o.Outpost
+	if o.OutpostFor != nil {
+		if f := o.OutpostFor(site); f != "" {
 			n = f
 		}
 	}

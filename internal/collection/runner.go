@@ -32,7 +32,7 @@ const (
 	defaultICMPCount   = 1
 )
 
-// Sample is one observation produced by a probe or computed by the node: a
+// Sample is one observation produced by a probe or computed by the outpost: a
 // canonical name, a value, a timestamp, and labels. A metric rides Value (float);
 // a state verdict (endpoint-reachable) rides Text with IsText set, so the same
 // list carries both to buildBatch, which maps a text sample to the proto
@@ -56,7 +56,7 @@ type Sample struct {
 	Facility   string
 	Source     string
 	// Clamped marks a payload time past the clamp window ahead of arrival,
-	// landed at arrival instead (#1145): the node says so in its self-log.
+	// landed at arrival instead (#1145): the outpost says so in its self-log.
 	Clamped bool
 	// Emit is a driver emit's index in its function, which tells apart two
 	// that share a name in a plain poll's change memory.
@@ -70,7 +70,7 @@ type Sample struct {
 
 // WireIdentity is a sample's identity as the wire carries it (#1386): nil
 // when it carries none, so an unidentified sample encodes as it always did.
-// The node's batch builder and the webhook's both use it.
+// The outpost's batch builder and the webhook's both use it.
 func WireIdentity(id *driver.Identity) *ogv1.Identity {
 	if id == nil {
 		return nil
@@ -88,24 +88,24 @@ func FromEmitted(e driver.Emitted) Sample {
 	return s
 }
 
-// TCPTask is the parsed tcp reachability unit a node runs: the dial target
-// (host:port) and the connect timeout. The node builds it from a worklist task's
+// TCPTask is the parsed tcp reachability unit an outpost runs: the dial target
+// (host:port) and the connect timeout. The outpost builds it from a worklist task's
 // interface params.
 type TCPTask struct {
 	Target  string
 	Timeout time.Duration
 }
 
-// ICMPTask is the parsed icmp (ping) reachability unit a node runs: the echo
+// ICMPTask is the parsed icmp (ping) reachability unit an outpost runs: the echo
 // target (host or IP), how many echoes to send, and the per-run timeout. The
-// node builds it from a worklist task's interface params.
+// outpost builds it from a worklist task's interface params.
 type ICMPTask struct {
 	Target  string
 	Count   int
 	Timeout time.Duration
 }
 
-// Runner runs a node's collection tasks against injected probe primitives. It
+// Runner runs an outpost's collection tasks against injected probe primitives. It
 // assigns NO component identity: produced samples carry only the measurement,
 // and the owning component is bound server-side at ingest from the task's
 // interface. Checkpoint 3 wired the tcp probe; checkpoint 4 adds the icmp probe;
@@ -171,7 +171,7 @@ type PingResult struct {
 // Pinger is the ICMP probe boundary, faked in unit tests so collection logic is
 // hermetic (no raw sockets, no privilege). A target that does not echo is DATA:
 // Received==0 with a down Reason (Timedout / Prohibited / Unreachable). err is
-// reserved for the one inconclusive case, a node that cannot do ICMP at all (or
+// reserved for the one inconclusive case, an outpost that cannot do ICMP at all (or
 // an unresolvable host), which the caller treats as no sample, never as down.
 type Pinger interface {
 	Ping(ctx context.Context, target string, count int, timeout time.Duration) (PingResult, error)
@@ -181,7 +181,7 @@ type Pinger interface {
 // always emits icmp-reachable (up if any echo returned, else down, a property) carrying
 // the verdict reason as a label, and emits icmp-rtt-avg (ms) ONLY when reachable
 // (absent when unreachable). A target that does not answer is data, not an error;
-// err is returned only when the node cannot attempt the probe at all (no ICMP
+// err is returned only when the outpost cannot attempt the probe at all (no ICMP
 // capability, or an unresolvable host), so the caller skips the task rather than
 // recording a false down.
 func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Sample, error) {
@@ -218,7 +218,7 @@ func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Sample, error) 
 // the seed catalogs, and the responds/auth verdict properties beside
 // endpoint-reachable. EventCollectionFailed is the occurrence a task lands
 // when its payload or config cannot be used, never a silent drop; declared in
-// probekeys, so it is ruled node-only with the rest (#1086).
+// probekeys, so it is ruled outpost-only with the rest (#1086).
 const (
 	SignalHTTPResponseTime      = probekeys.HTTPResponseTime
 	SignalSSHHandshakeTime      = probekeys.SSHHandshakeTime
@@ -228,7 +228,7 @@ const (
 	EventCollectionFailed       = probekeys.CollectionFailed
 )
 
-// HTTPTask is the parsed http reachability-plus-responsiveness unit a node
+// HTTPTask is the parsed http reachability-plus-responsiveness unit an outpost
 // runs: the request target (host:port), the per-attempt timeout, and for
 // https the trust its handshake runs under (#902); nil TLS is plain http.
 type HTTPTask struct {
@@ -236,7 +236,7 @@ type HTTPTask struct {
 	Timeout time.Duration
 	TLS     *TLSTrust
 	// Tally is the transport the probe counts under (#1647): http by
-	// default, websocket for a websocket endpoint's probe, so the node's
+	// default, websocket for a websocket endpoint's probe, so the outpost's
 	// row pairs with the listener the sim counts it on.
 	Tally TallyTransport
 }
@@ -365,7 +365,7 @@ func (r *Runner) CollectSSH(ctx context.Context, t SSHTask) ([]Sample, error) {
 }
 
 // CollectSSHResult is CollectSSH with the probe's own result, which the
-// node's gate reads (#1060): a refused credential, a changed host key.
+// outpost's gate reads (#1060): a refused credential, a changed host key.
 func (r *Runner) CollectSSHResult(ctx context.Context, t SSHTask) ([]Sample, SSHResult, error) {
 	if t.Target == "" {
 		return nil, SSHResult{}, fmt.Errorf("collection: ssh task: empty target")

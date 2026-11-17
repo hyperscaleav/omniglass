@@ -25,13 +25,13 @@ func TestAlarmOneOpenPerCondition(t *testing.T) {
 	}
 
 	first, err := gw.RaiseAlarm(ctx, "", "codec-1", storage.AlarmSpec{
-		Severity: "high", Message: "node down", DedupKey: "node-down",
+		Severity: "high", Message: "outpost down", DedupKey: "outpost-down",
 	})
 	if err != nil {
 		t.Fatalf("raise 1: %v", err)
 	}
 	again, err := gw.RaiseAlarm(ctx, "", "codec-1", storage.AlarmSpec{
-		Severity: "high", Message: "node down (still)", DedupKey: "node-down",
+		Severity: "high", Message: "outpost down (still)", DedupKey: "outpost-down",
 	})
 	if err != nil {
 		t.Fatalf("raise 2: %v", err)
@@ -54,7 +54,7 @@ func TestAlarmOneOpenPerCondition(t *testing.T) {
 		t.Fatalf("clear: %v", err)
 	}
 	fresh, err := gw.RaiseAlarm(ctx, "", "codec-1", storage.AlarmSpec{
-		Severity: "high", Message: "node down again", DedupKey: "node-down",
+		Severity: "high", Message: "outpost down again", DedupKey: "outpost-down",
 	})
 	if err != nil {
 		t.Fatalf("raise after clear: %v", err)

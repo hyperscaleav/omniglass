@@ -47,7 +47,7 @@ cd web && npm run dev         # terminal 2: the console from source with hot rel
 
 The Vite dev server proxies to `http://127.0.0.1:8080`; for a lab on another `--port`, set
 `OMNIGLASS_LAB_URL` (`OMNIGLASS_LAB_URL=http://127.0.0.1:8081 npm run dev`). A change to server,
-node or simulator Go code needs `make` again (the image rebuilds from cache), then the lab.
+outpost or simulator Go code needs `make` again (the image rebuilds from cache), then the lab.
 
 ## Workflow
 

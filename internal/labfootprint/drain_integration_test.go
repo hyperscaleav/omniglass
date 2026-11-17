@@ -13,15 +13,15 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The ingest lanes have drained past a time once every live node that
-// collects has landed a sample it probed after it: a node's sample probed at
-// or before the time, a sample no node collected (a webhook count the server
+// The ingest lanes have drained past a time once every live outpost that
+// collects has landed a sample it probed after it: an outpost's sample probed at
+// or before the time, a sample no outpost collected (a webhook count the server
 // writes outside the lanes), and a sample stamped in the database's future do
-// not drain it, and one node's sample says nothing of another's lane (#1896).
-// A node that heartbeated within the live window before the time is waited
-// for though it has not heartbeated since, and a node silent for longer than
+// not drain it, and one outpost's sample says nothing of another's lane (#1896).
+// An outpost that heartbeated within the live window before the time is waited
+// for though it has not heartbeated since, and an outpost silent for longer than
 // the window is not.
-func TestIntegrationDrainedQueryWaitsForEveryLiveNodesSampleAfterTheTime(t *testing.T) {
+func TestIntegrationDrainedQueryWaitsForEveryLiveOutpostsSampleAfterTheTime(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -37,19 +37,19 @@ func TestIntegrationDrainedQueryWaitsForEveryLiveNodesSampleAfterTheTime(t *test
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all)
+	outpost, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	nodeB, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-b"}, all, all)
+	outpostB, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-b"}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	silent, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-silent"}, all, all)
+	silent, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-silent"}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	nodeC, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-c"}, all, all)
+	outpostC, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-c"}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,31 +90,31 @@ func TestIntegrationDrainedQueryWaitsForEveryLiveNodesSampleAfterTheTime(t *test
 			t.Fatal(err)
 		}
 	}
-	collected := storage.NodeWriter(comp.ID, "ssh")
-	collected.Node = node.PrincipalID
-	collectedB := storage.NodeWriter(comp.ID, "ssh")
-	collectedB.Node = nodeB.PrincipalID
-	collectedSilent := storage.NodeWriter(comp.ID, "ssh")
-	collectedSilent.Node = silent.PrincipalID
-	collectedC := storage.NodeWriter(comp.ID, "ssh")
-	collectedC.Node = nodeC.PrincipalID
+	collected := storage.OutpostWriter(comp.ID, "ssh")
+	collected.Outpost = outpost.PrincipalID
+	collectedB := storage.OutpostWriter(comp.ID, "ssh")
+	collectedB.Outpost = outpostB.PrincipalID
+	collectedSilent := storage.OutpostWriter(comp.ID, "ssh")
+	collectedSilent.Outpost = silent.PrincipalID
+	collectedC := storage.OutpostWriter(comp.ID, "ssh")
+	collectedC.Outpost = outpostC.PrincipalID
 
 	write(collected, at)
 	write(collected, at.Add(-time.Second))
 	write(collectedB, at.Add(-time.Second))
 	write(collectedSilent, at.Add(-time.Second))
 	write(collectedC, at.Add(-time.Second))
-	// node-a and node-b heartbeated after the time (a heartbeat reaches the
-	// server outside the lanes); node-c last heartbeated just before it, inside
-	// the live window, as a node whose next heartbeat is not due yet does;
-	// node-silent last spoke longer than the window before it.
-	for _, name := range []string{"node-a", "node-b"} {
+	// outpost-a and outpost-b heartbeated after the time (a heartbeat reaches the
+	// server outside the lanes); outpost-c last heartbeated just before it, inside
+	// the live window, as an outpost whose next heartbeat is not due yet does;
+	// outpost-silent last spoke longer than the window before it.
+	for _, name := range []string{"outpost-a", "outpost-b"} {
 		if err := gw.RecordHeartbeat(ctx, name); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for name, hb := range map[string]time.Time{"node-c": at.Add(-time.Second), "node-silent": at.Add(-liveWindow - time.Second)} {
-		if _, err := conn.Exec(ctx, `update node set last_heartbeat_at = $1 where name = $2`, hb, name); err != nil {
+	for name, hb := range map[string]time.Time{"outpost-c": at.Add(-time.Second), "outpost-silent": at.Add(-liveWindow - time.Second)} {
+		if _, err := conn.Exec(ctx, `update outpost set last_heartbeat_at = $1 where name = $2`, hb, name); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -126,37 +126,37 @@ func TestIntegrationDrainedQueryWaitsForEveryLiveNodesSampleAfterTheTime(t *test
 			t.Fatal(err)
 		}
 	}
-	// A sample no node collected, as the server writes a webhook's counts.
+	// A sample no outpost collected, as the server writes a webhook's counts.
 	plant("server", at.Add(time.Second))
-	// A node's sample dated an hour ahead, on a key the gateway does not
+	// An outpost's sample dated an hour ahead, on a key the gateway does not
 	// cap at its clock.
 	plant("ahead", now.Add(time.Hour))
-	if _, err := conn.Exec(ctx, `update metric_series set collector_node_id = $1 where instance = 'ahead'`, node.PrincipalID); err != nil {
+	if _, err := conn.Exec(ctx, `update metric_series set collector_outpost_id = $1 where instance = 'ahead'`, outpost.PrincipalID); err != nil {
 		t.Fatal(err)
 	}
 	if drained() {
-		t.Fatal("drained before any node's sample probed after the time landed")
+		t.Fatal("drained before any outpost's sample probed after the time landed")
 	}
 	write(collected, at.Add(time.Second))
 	if drained() {
-		t.Fatal("drained once node-a's sample after the time landed, while node-b's lane may still hold its batches")
+		t.Fatal("drained once outpost-a's sample after the time landed, while outpost-b's lane may still hold its batches")
 	}
 	write(collectedB, at.Add(2*time.Second))
 	if drained() {
-		t.Fatal("drained before node-c's sample after the time landed, though node-c heartbeated inside the live window")
+		t.Fatal("drained before outpost-c's sample after the time landed, though outpost-c heartbeated inside the live window")
 	}
 	write(collectedC, at.Add(3*time.Second))
 	if !drained() {
-		t.Fatal("not drained once every live node's sample probed after the time landed")
+		t.Fatal("not drained once every live outpost's sample probed after the time landed")
 	}
 }
 
-// A node that collected in an earlier run and now heartbeats with no worklist
-// (its latest worklist-task-count is 0, as a node refused its first worklist
+// An outpost that collected in an earlier run and now heartbeats with no worklist
+// (its latest worklist-task-count is 0, as an outpost refused its first worklist
 // reports while it waits, ADR-1882) runs no task, so it lands no sample and
 // does not hold the drain; the measure goes on to read its pull loss. Once it
 // installs a worklist it is waited for again (#2008).
-func TestIntegrationDrainedQueryPassesOverANodeWithNoWorklist(t *testing.T) {
+func TestIntegrationDrainedQueryPassesOverAOutpostWithNoWorklist(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -172,11 +172,11 @@ func TestIntegrationDrainedQueryPassesOverANodeWithNoWorklist(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	busy, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-busy"}, all, all)
+	busy, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-busy"}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	waiting, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-waiting"}, all, all)
+	waiting, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-waiting"}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,58 +207,58 @@ func TestIntegrationDrainedQueryPassesOverANodeWithNoWorklist(t *testing.T) {
 		}
 		return ok
 	}
-	collect := func(nodeID string, ts time.Time) {
+	collect := func(outpostID string, ts time.Time) {
 		t.Helper()
-		w := storage.NodeWriter(comp.ID, "ssh")
-		w.Node = nodeID
+		w := storage.OutpostWriter(comp.ID, "ssh")
+		w.Outpost = outpostID
 		if err := gw.InsertMetricSamples(ctx, w, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: comp.ID,
 			Key: "tcp-connect-time", Instance: "ssh", Value: 1, TS: ts}}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// installed lands a worklist-task-count on the node's platform component
-	// with no collector, as the node-self report lands under the platform
+	// installed lands a worklist-task-count on the outpost's platform component
+	// with no collector, as the outpost-self report lands under the platform
 	// writer.
-	installed := func(node string, tasks float64, ts time.Time) {
+	installed := func(outpost string, tasks float64, ts time.Time) {
 		t.Helper()
 		if _, err := conn.Exec(ctx, storagetest.WideMetricInsert("ts, owner_kind, component_id, metric_type_id, value",
 			`select $1::timestamptz, 'component', n.platform_component_id, mt.id, $3::float8
-			from node n, metric_type mt where n.name = $2 and mt.name = 'worklist-task-count'`),
-			ts, node, tasks); err != nil {
+			from outpost n, metric_type mt where n.name = $2 and mt.name = 'worklist-task-count'`),
+			ts, outpost, tasks); err != nil {
 			t.Fatal(err)
 		}
 	}
 	var platform *string
-	if err := conn.QueryRow(ctx, `select platform_component_id::text from node where name = 'node-waiting'`).Scan(&platform); err != nil || platform == nil {
-		t.Fatalf("node-waiting has no platform component to report on: %v", err)
+	if err := conn.QueryRow(ctx, `select platform_component_id::text from outpost where name = 'outpost-waiting'`).Scan(&platform); err != nil || platform == nil {
+		t.Fatalf("outpost-waiting has no platform component to report on: %v", err)
 	}
 
-	// Both collected in an earlier run and heartbeat now; node-waiting was
+	// Both collected in an earlier run and heartbeat now; outpost-waiting was
 	// restarted and is refused its first worklist, reporting none, after it
 	// once ran tasks.
 	collect(busy.PrincipalID, at.Add(-time.Second))
 	collect(waiting.PrincipalID, at.Add(-time.Second))
-	for _, name := range []string{"node-busy", "node-waiting"} {
+	for _, name := range []string{"outpost-busy", "outpost-waiting"} {
 		if err := gw.RecordHeartbeat(ctx, name); err != nil {
 			t.Fatal(err)
 		}
 	}
-	installed("node-busy", 4, at.Add(-time.Hour))
-	installed("node-waiting", 4, at.Add(-time.Hour))
-	installed("node-waiting", 0, at.Add(-time.Second))
+	installed("outpost-busy", 4, at.Add(-time.Hour))
+	installed("outpost-waiting", 4, at.Add(-time.Hour))
+	installed("outpost-waiting", 0, at.Add(-time.Second))
 	collect(busy.PrincipalID, at.Add(time.Second))
 	if !drained() {
-		t.Fatal("not drained while a node with no worklist, which can land no sample, held it")
+		t.Fatal("not drained while an outpost with no worklist, which can land no sample, held it")
 	}
 
-	// node-waiting installs its worklist: it runs tasks again, so its lane is
+	// outpost-waiting installs its worklist: it runs tasks again, so its lane is
 	// waited for until it lands a sample past the time.
-	installed("node-waiting", 4, at.Add(2*time.Second))
+	installed("outpost-waiting", 4, at.Add(2*time.Second))
 	if drained() {
-		t.Fatal("drained before a node that installed its worklist landed a sample past the time")
+		t.Fatal("drained before an outpost that installed its worklist landed a sample past the time")
 	}
 	collect(waiting.PrincipalID, at.Add(3*time.Second))
 	if !drained() {
-		t.Fatal("not drained once every node with a worklist landed a sample past the time")
+		t.Fatal("not drained once every outpost with a worklist landed a sample past the time")
 	}
 }

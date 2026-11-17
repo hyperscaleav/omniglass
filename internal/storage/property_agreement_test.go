@@ -11,7 +11,7 @@ import (
 )
 
 // #1202: an observed property value is stored as the JSON string of its text
-// form (the node lane's propertyText), a declared or intended one as typed
+// form (the outpost lane's propertyText), a declared or intended one as typed
 // jsonb. Two values that mean the same typed value must agree to every
 // reader that compares the provenances: reconciliation's drift and a
 // settleable command's verdict.
@@ -33,7 +33,7 @@ func (r *settleRig) land(t *testing.T, key, text string) {
 }
 
 // reconciliationOf declares want on the display (nil declares nothing), lands
-// observed (the text the node lane stores) on the one instance, and returns
+// observed (the text the outpost lane stores) on the one instance, and returns
 // the key's reconciliation.
 func (r *settleRig) reconciliationOf(t *testing.T, key, dataType, want, observed string) *storage.PropertyReconciliation {
 	t.Helper()

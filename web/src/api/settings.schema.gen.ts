@@ -155,29 +155,29 @@ export const settingsSchema = {
       "maximum": 36500,
       "format": "int64"
     },
-    "node_log_debug_days": {
-      "description": "Days a node's own debug log line is kept; unset follows log_debug_days",
+    "outpost_log_debug_days": {
+      "description": "Days an outpost's own debug log line is kept; unset follows log_debug_days",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,
       "format": "int64"
     },
-    "node_log_error_days": {
-      "description": "Days a node's own error, critical, alert or emergency log line is kept; unset follows log_error_days",
+    "outpost_log_error_days": {
+      "description": "Days an outpost's own error, critical, alert or emergency log line is kept; unset follows log_error_days",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,
       "format": "int64"
     },
-    "node_log_info_days": {
-      "description": "Days a node's own info or notice log line, or one with no severity, is kept; unset follows log_info_days",
+    "outpost_log_info_days": {
+      "description": "Days an outpost's own info or notice log line, or one with no severity, is kept; unset follows log_info_days",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,
       "format": "int64"
     },
-    "node_log_warning_days": {
-      "description": "Days a node's own warning log line is kept; unset follows log_warning_days",
+    "outpost_log_warning_days": {
+      "description": "Days an outpost's own warning log line is kept; unset follows log_warning_days",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,

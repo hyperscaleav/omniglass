@@ -468,8 +468,8 @@ describe("the map tab (#791)", () => {
   // A health poll that lands a fresh payload must not rebuild the markers
   // (#1074 review): a rebuilt marker drops keyboard focus and closes an open
   // tooltip every few seconds. Markers are keyed by their slot in the
-  // declaration, so the same position keeps its node across a poll.
-  it("keeps each marker's node across a health poll, so focus and an open tooltip survive", async () => {
+  // declaration, so the same position keeps its outpost across a poll.
+  it("keeps each marker's outpost across a health poll, so focus and an open tooltip survive", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     const before = screen.getByTestId("mapmarker-room-mic-1");
     // A real change (a new transition), so structural sharing hands the page

@@ -29,7 +29,7 @@ Type `demo_until 120 'omniglass mcp call get-component-reachability --args "{\"n
 Enter
 Wait@150s
 Show
-Type `omniglass mcp call get-component-reachability --args "{\"name\":\"$panel\"}" | jq -c '.endpoints[] | {endpoint, transport, node}'`
+Type `omniglass mcp call get-component-reachability --args "{\"name\":\"$panel\"}" | jq -c '.endpoints[] | {endpoint, transport, outpost}'`
 Enter
 Wait
 Type "# A refusal is the route's own: the tool errors with its detail"

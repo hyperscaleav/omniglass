@@ -22,7 +22,7 @@ import {
   windowText,
   type GapTone,
   type PlatformSimGap,
-  type PlatformSimNode,
+  type PlatformSimOutpost,
 } from "../lib/platformhealth";
 
 // Platform health's simulation section (#1647): with a simulator connected,
@@ -93,8 +93,8 @@ export default function PlatformSimulation() {
         </Show>
         <Show when={sim.data}>
           {(v) => (
-            <For each={v().nodes} fallback={<div class="text-sm text-base-content/50">No node has a simulator checking in yet.</div>}>
-              {(n) => <SimNode node={n} />}
+            <For each={v().outposts} fallback={<div class="text-sm text-base-content/50">No outpost has a simulator checking in yet.</div>}>
+              {(n) => <SimOutpost outpost={n} />}
             </For>
           )}
         </Show>
@@ -103,36 +103,36 @@ export default function PlatformSimulation() {
   );
 }
 
-function SimNode(props: { node: PlatformSimNode }) {
-  const note = () => simStateNote(props.node);
+function SimOutpost(props: { outpost: PlatformSimOutpost }) {
+  const note = () => simStateNote(props.outpost);
   return (
-    <div class="card border border-base-300 bg-base-100" data-testid={`platform-sim-${props.node.node}`} data-state={props.node.state}>
+    <div class="card border border-base-300 bg-base-100" data-testid={`platform-sim-${props.outpost.outpost}`} data-state={props.outpost.state}>
       <div class="card-body gap-4 p-5">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <div class="flex items-baseline gap-2">
-            <span class="font-semibold">{props.node.node}</span>
-            <span class="badge badge-sm bg-base-content/10 text-base-content/70 border-transparent" data-testid="platform-sim-state">{props.node.state}</span>
+            <span class="font-semibold">{props.outpost.outpost}</span>
+            <span class="badge badge-sm bg-base-content/10 text-base-content/70 border-transparent" data-testid="platform-sim-state">{props.outpost.state}</span>
           </div>
-          <Show when={props.node.start && props.node.end}>
-            <span class="text-xs text-base-content/50">{fmtTime(props.node.start!)} to {fmtTime(props.node.end!)}</span>
+          <Show when={props.outpost.start && props.outpost.end}>
+            <span class="text-xs text-base-content/50">{fmtTime(props.outpost.start!)} to {fmtTime(props.outpost.end!)}</span>
           </Show>
         </div>
-        <Show when={props.node.error}>
-          <div role="alert" class="alert alert-soft alert-error text-sm">The last bracket failed: {props.node.error}</div>
+        <Show when={props.outpost.error}>
+          <div role="alert" class="alert alert-soft alert-error text-sm">The last bracket failed: {props.outpost.error}</div>
         </Show>
         <Show when={note()}>
           {(t) => <div role="note" class="text-sm text-base-content/60" data-testid="platform-sim-note">{t()}</div>}
         </Show>
         <div class="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3">
-          <Figure label="Batches landed" tip="Telemetry receipts the server landed for this node over the window, counted by landed_at, with the margin before it and the bracket after it." value={note() ? null : String(props.node.receipts.landed)} />
-          <Figure label="Sim in flight, high" tip="The most requests the node's simulator held at once over every protocol: the simulator's own count." value={note() ? null : String(props.node.in_flight_high)} />
-          <Figure label="Queue depth" tip="The node's dispatch queue depth. The node does not report it to the server yet." value={wiredText(props.node.queue_depth)} muted={props.node.queue_depth == null} />
-          <Figure label="Busy workers" tip="The node's busy-worker high water. The node does not report it to the server yet." value={wiredText(props.node.busy_workers)} muted={props.node.busy_workers == null} />
+          <Figure label="Batches landed" tip="Telemetry receipts the server landed for this outpost over the window, counted by landed_at, with the margin before it and the bracket after it." value={note() ? null : String(props.outpost.receipts.landed)} />
+          <Figure label="Sim in flight, high" tip="The most requests the outpost's simulator held at once over every protocol: the simulator's own count." value={note() ? null : String(props.outpost.in_flight_high)} />
+          <Figure label="Queue depth" tip="The outpost's dispatch queue depth. The outpost does not report it to the server yet." value={wiredText(props.outpost.queue_depth)} muted={props.outpost.queue_depth == null} />
+          <Figure label="Busy workers" tip="The outpost's busy-worker high water. The outpost does not report it to the server yet." value={wiredText(props.outpost.busy_workers)} muted={props.outpost.busy_workers == null} />
         </div>
         <Show when={!note()}>
-          <GapTable gaps={props.node.gaps} />
-          <ProtocolTable node={props.node} />
-          <DeviceTable node={props.node} />
+          <GapTable gaps={props.outpost.gaps} />
+          <ProtocolTable outpost={props.outpost} />
+          <DeviceTable outpost={props.outpost} />
         </Show>
       </div>
     </div>
@@ -170,7 +170,7 @@ function GapTable(props: { gaps: PlatformSimGap[] | null }) {
             <th class="text-right">
               <span class="inline-flex items-center gap-1">
                 Loss ratio
-                <InfoTip text="Lost at the hop over what went into it, from the simulator's and the node's counters at the window's two ends. 0 is healthy." label="Loss ratio" />
+                <InfoTip text="Lost at the hop over what went into it, from the simulator's and the outpost's counters at the window's two ends. 0 is healthy." label="Loss ratio" />
               </span>
             </th>
             <th class="text-right">Lost / in</th>
@@ -204,7 +204,7 @@ function GapTable(props: { gaps: PlatformSimGap[] | null }) {
   );
 }
 
-function ProtocolTable(props: { node: PlatformSimNode }) {
+function ProtocolTable(props: { outpost: PlatformSimOutpost }) {
   return (
     <div class="overflow-x-auto rounded-box border border-base-300">
       <table class="table table-sm" data-testid="platform-sim-protocols">
@@ -212,7 +212,7 @@ function ProtocolTable(props: { node: PlatformSimNode }) {
           <tr>
             <th>Protocol</th>
             <Head label="Accepted" tip="Connections the simulator's listeners on the protocol accepted over the window; 0 for a connectionless protocol. A probe that only connects, or logs in and asks nothing, draws a connection and no request." />
-            <Head label="Received" tip="Requests the simulator received on the protocol over the window: the simulator's count, not the node's." />
+            <Head label="Received" tip="Requests the simulator received on the protocol over the window: the simulator's count, not the outpost's." />
             <Head label="Answered" tip="Requests the simulator answered over the window." />
             <Head label="p95 service" tip="The simulator's own service time, 95th percentile, in milliseconds; a dash when it timed nothing." />
             <Head label="Poll targets" tip="Enabled poll targets on the protocol, from the server's task table, each due at least twice over the window." />
@@ -220,7 +220,7 @@ function ProtocolTable(props: { node: PlatformSimNode }) {
           </tr>
         </thead>
         <tbody>
-          <For each={props.node.protocols ?? []} fallback={<tr><td colSpan={7} class="text-base-content/50">No protocol drew a connection or a request over the window.</td></tr>}>
+          <For each={props.outpost.protocols ?? []} fallback={<tr><td colSpan={7} class="text-base-content/50">No protocol drew a connection or a request over the window.</td></tr>}>
             {(p) => (
               <tr data-testid="platform-sim-protocol" data-protocol={p.protocol} data-accepted={p.accepted} data-received={p.received} data-poll-targets={p.poll_targets}>
                 <td>{p.protocol}</td>
@@ -250,7 +250,7 @@ function Head(props: { label: string; tip: string }): JSX.Element {
   );
 }
 
-function DeviceTable(props: { node: PlatformSimNode }) {
+function DeviceTable(props: { outpost: PlatformSimOutpost }) {
   return (
     <div class="overflow-x-auto rounded-box border border-base-300">
       <table class="table table-sm" data-testid="platform-sim-devices">
@@ -262,7 +262,7 @@ function DeviceTable(props: { node: PlatformSimNode }) {
           </tr>
         </thead>
         <tbody>
-          <For each={sortDevices(props.node.devices)} fallback={<tr><td colSpan={3} class="text-base-content/50">The simulator serves no device on this node.</td></tr>}>
+          <For each={sortDevices(props.outpost.devices)} fallback={<tr><td colSpan={3} class="text-base-content/50">The simulator serves no device on this outpost.</td></tr>}>
             {(d) => (
               <tr data-testid="platform-sim-device" data-component={d.component_id} data-received={deviceReceived(d)} classList={{ "bg-warning/5": d.unhit }}>
                 <td>

@@ -21,8 +21,8 @@ func TestLabFactsMatchCommitted(t *testing.T) {
 	if string(committed) != string(fresh) {
 		t.Error("docs/src/generated/lab.json drifted from the planner or the walkthroughs: run make gen and commit the result")
 	}
-	if !strings.Contains(string(fresh), `"node"`) || !strings.Contains(string(fresh), "NET_ADMIN") {
-		t.Fatal("the facts lack the node and its NET_ADMIN")
+	if !strings.Contains(string(fresh), `"outpost"`) || !strings.Contains(string(fresh), "NET_ADMIN") {
+		t.Fatal("the facts lack the outpost and its NET_ADMIN")
 	}
 	for _, want := range []string{`"cadences"`, `"walkthrough"`, `"probe_every"`, `"30s"`} {
 		if !strings.Contains(string(fresh), want) {

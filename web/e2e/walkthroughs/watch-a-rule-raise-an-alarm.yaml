@@ -6,9 +6,9 @@
 # role of the system Media Lab Classroom 2, so the alarm takes that system to
 # degraded.
 #
-# The wait is real time, and the 60s budget counts it. The node finds the
+# The wait is real time, and the 60s budget counts it. The outpost finds the
 # panel down on its first check-in after the simulator's next 2s pull (the
-# lab's node checks in every 2s, internal/lab) and the
+# lab's outpost checks in every 2s, internal/lab) and the
 # probe's timeout; the rule then holds for its seeded 15s fire sustain
 # (internal/seed/event_rules.yaml) and opens the alarm on the server's 5s
 # sweep tick; and the system's view shows it on its next 5s poll.

@@ -20,7 +20,7 @@ import (
 // next batch past the fingerprint's interval (#1928; each batch here lands one
 // interval after the last). A metric type created between two batches is accepted by
 // the second; a calc rule that starts writing that metric moves the key's
-// writer class (ADR-0161), so the next node sample of it is dropped by the
+// writer class (ADR-0161), so the next outpost sample of it is dropped by the
 // consumer's lane check rather than landed.
 func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 	if testing.Short() {
@@ -42,22 +42,22 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('ssh', 'ssh', $1::uuid, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1:22"}'::jsonb)`, comp.ID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('ssh', 'ssh', $1::uuid, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
 		('t-ssh', 'poll', (select id from endpoint where name = 'ssh'), true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
-	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-ssh", "node-a")
+	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-ssh", "outpost-a")
 	if err != nil || !ok {
 		t.Fatalf("resolve task owner: ok=%v err=%v", ok, err)
 	}
@@ -66,9 +66,9 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 	s.registry.now = func() time.Time { return now }
 	land := func() error {
 		now = now.Add(fingerprintEvery)
-		return s.land(ctx, "", &ogv1.TelemetryBatch{TaskId: "t-ssh", NodeId: "node-a",
+		return s.land(ctx, "", &ogv1.TelemetryBatch{TaskId: "t-ssh", OutpostId: "outpost-a",
 			Metrics: []*ogv1.MetricSample{{Name: "cache-probe", Value: 1}}},
-			ingestBinding{LogNode: "node-a", SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)})
+			ingestBinding{LogOutpost: "outpost-a", SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.OutpostWriter(owner.ComponentID, owner.EndpointName)})
 	}
 	rows := func() int {
 		t.Helper()
@@ -100,7 +100,7 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 	}
 
 	// A calc rule starts writing the metric: its writer class moves, and the
-	// next node sample of it is refused, not landed.
+	// next outpost sample of it is refused, not landed.
 	if _, err := conn.Exec(ctx, `insert into calc_rule (name, owner_kind, reduce, output_lane, output_metric_type_id)
 		values ('cache-probe-calc', 'component', '{}', 'metric', (select id from metric_type where name = 'cache-probe'))`); err != nil {
 		t.Fatalf("insert calc rule: %v", err)
@@ -109,7 +109,7 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 		t.Fatalf("third batch: %v", err)
 	}
 	if n := rows(); n != 1 {
-		t.Fatalf("a node sample of a calc rule's output landed: %d rows, want 1 (its writer class drops it)", n)
+		t.Fatalf("an outpost sample of a calc rule's output landed: %d rows, want 1 (its writer class drops it)", n)
 	}
 }
 
@@ -162,7 +162,7 @@ func hasMetric(reg collection.Registry, name string) bool {
 // fingerprint at once, inside the interval, so a type created moments before
 // its first sample is honored rather than refused until the interval runs
 // out. A name the read confirms no catalog holds forces no further read
-// until the interval passes, so a node sending an unknown name pays one extra
+// until the interval passes, so an outpost sending an unknown name pays one extra
 // read an interval, not one a batch.
 func TestRegistryReadsAtOnceForANameItLacks(t *testing.T) {
 	now := time.Date(2026, 11, 14, 4, 0, 0, 0, time.UTC)

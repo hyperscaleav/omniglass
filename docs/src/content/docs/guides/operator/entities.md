@@ -447,20 +447,20 @@ From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unac
 
 A component's **Activity** tab carries its **Commands** above its events: what the component was told
 and where each command stands, newest first. A command in flight wears its phase, **queued** (waiting
-for its node to take it), **delivered** (its node has it, and the next observation settles it),
+for its outpost to take it), **delivered** (its outpost has it, and the next observation settles it),
 **awaiting reply** or **awaiting observation**, with its settle window counting down beside it; a
 terminal one reads **settled**, **failed** or **timed out**, with why. Hover the phase for what it
 means for that command. A fire-and-forget command such as a reboot has nothing to observe, so its
-node's report decides it: **settled** once the node carried it out, **failed** when it could not,
+outpost's report decides it: **settled** once the outpost carried it out, **failed** when it could not,
 and **timed out** when no report arrives within ten minutes of its issue. The list refreshes every second while anything is in flight.
 
 The arrow at a row's end opens the command in place: its **arc**, the issue's time and each later
-step (delivered to its node, answered, settled) as how long after the issue it came; **why** it
+step (delivered to its outpost, answered, settled) as how long after the issue it came; **why** it
 settled, failed or timed out; how it **settles** (from the component's reply or an observation of
-what it sets), its window, the **endpoint**, **node** and **driver** that carried it, and who
+what it sets), its window, the **endpoint**, **outpost** and **driver** that carried it, and who
 **issued** it; and the **evidence**: the component's **reply** (the endpoint's login and anything it labels a
 credential masked before it was stored, or withheld when that login could not be read), or the **observed** sample that matched. A timed-out command says where it stopped:
-queued for a node that never took it, delivered with no answer, or answered with nothing observed
+queued for an outpost that never took it, delivered with no answer, or answered with nothing observed
 after.
 
 **Issue a command** (with `command:issue`, which the **Operator** role carries) sits in the section's

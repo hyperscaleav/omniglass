@@ -122,7 +122,7 @@ automated. The steps, before the release workflow is dispatched:
 1. Build the release candidate's image and binary from one commit, and start the soak on the test
    host as the [soak run](/guides/lab/#a-soak-run) describes. Note the time it starts.
 2. Leave it for 7 days.
-3. Judge it, from any machine that reaches the soak's server, with a token that reads nodes,
+3. Judge it, from any machine that reaches the soak's server, with a token that reads outposts,
    systems and components over everything:
 
    ```bash
@@ -142,7 +142,7 @@ the database. It passes when all of these hold:
 | The soak ran | at least 7 days (`--since` to `--until`, now by default) |
 | A platform alarm still open | none, however old |
 | A platform alarm raised in the window | open no longer than `--tolerance` (default 30 minutes) |
-| A loss ratio on the page (each hop, kind, component and node, the newest window and the last hour, the end to end, the worklist pull) | 0 |
+| A loss ratio on the page (each hop, kind, component and outpost, the newest window and the last hour, the end to end, the worklist pull) | 0 |
 
 A reading that cannot answer fails rather than passes: no build reported, two builds among the
 servers, no loss ratio on the page, a token that cannot read the whole page, or an alarm history

@@ -79,12 +79,12 @@ const (
 	KindComponent EntityKind = "component"
 	KindSystem    EntityKind = "system"
 	KindLocation  EntityKind = "location"
-	KindNode      EntityKind = "node"
+	KindOutpost   EntityKind = "outpost"
 )
 
 // EntityKinds is the ordered set of bindable entity kinds, for validation and
 // the create form's applies_to picker.
-var EntityKinds = []EntityKind{KindComponent, KindSystem, KindLocation, KindNode}
+var EntityKinds = []EntityKind{KindComponent, KindSystem, KindLocation, KindOutpost}
 
 // ValidKind reports whether k is a known bindable entity kind.
 func ValidKind(k EntityKind) bool {

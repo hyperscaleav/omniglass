@@ -77,25 +77,25 @@ func (r pipelineRig) latest(t *testing.T, key, instance string) float64 {
 	return m.Value
 }
 
-// enrollNode makes node-a with a token and connects it to srv.
-func (r pipelineRig) enrollNode(t *testing.T, srv *bus.Server) *nats.Conn {
+// enrollOutpost makes outpost-a with a token and connects it to srv.
+func (r pipelineRig) enrollOutpost(t *testing.T, srv *bus.Server) *nats.Conn {
 	t.Helper()
 	all := scope.Set{All: true}
-	if _, err := r.gw.CreateNode(r.ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node-a: %v", err)
+	if _, err := r.gw.CreateOutpost(r.ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost-a: %v", err)
 	}
-	if _, err := r.gw.SetEnrollmentToken(r.ctx, "", "node-a", hashHex("secret-a"), all); err != nil {
-		t.Fatalf("mint node-a: %v", err)
+	if _, err := r.gw.SetEnrollmentToken(r.ctx, "", "outpost-a", hashHex("secret-a"), all); err != nil {
+		t.Fatalf("mint outpost-a: %v", err)
 	}
-	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("node-a", "secret-a"), nats.CustomInboxPrefix(collection.InboxPrefix("node-a")))
+	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("outpost-a", "secret-a"), nats.CustomInboxPrefix(collection.InboxPrefix("outpost-a")))
 	if err != nil {
-		t.Fatalf("node-a connect: %v", err)
+		t.Fatalf("outpost-a connect: %v", err)
 	}
 	t.Cleanup(nc.Close)
 	return nc
 }
 
-// TestTelemetryBatchLandsPipelineMetricsOverNATS: a batch a node publishes
+// TestTelemetryBatchLandsPipelineMetricsOverNATS: a batch an outpost publishes
 // lands, and the window it landed in reports its lag, its samples and the
 // consumer's backlog on the server's platform component. A group the fence
 // drops landed nothing, so it counts toward neither, and reads as the
@@ -103,9 +103,9 @@ func (r pipelineRig) enrollNode(t *testing.T, srv *bus.Server) *nats.Conn {
 func TestTelemetryBatchLandsPipelineMetricsOverNATS(t *testing.T) {
 	r := newPipelineRig(t)
 	srv := r.start(t, r.gw)
-	nc := r.enrollNode(t, srv)
-	if _, err := r.conn.Exec(r.ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('bar-1-tcp', 'tcp', (select id from component where name = 'bar-1'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+	nc := r.enrollOutpost(t, srv)
+	if _, err := r.conn.Exec(r.ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('bar-1-tcp', 'tcp', (select id from component where name = 'bar-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := r.conn.Exec(r.ctx, `insert into task (id, mode, endpoint_id, enabled) values ('t-a', 'poll', (select id from endpoint where name = 'bar-1-tcp'), true)`); err != nil {
@@ -113,9 +113,9 @@ func TestTelemetryBatchLandsPipelineMetricsOverNATS(t *testing.T) {
 	}
 
 	sampled := time.Now().UTC().Add(-3 * time.Second)
-	// t-ghost is no task of node-a's: the fence drops its group, so its
+	// t-ghost is no task of outpost-a's: the fence drops its group, so its
 	// sample, an hour late, is no landing and moves no figure.
-	publishEvent(t, nc, "node-a", &ogv1.TelemetryBatch{NodeId: "node-a", Groups: []*ogv1.TaskGroup{
+	publishEvent(t, nc, "outpost-a", &ogv1.TelemetryBatch{OutpostId: "outpost-a", Groups: []*ogv1.TaskGroup{
 		{TaskId: "t-a", Ts: timestamppb.New(sampled), Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 11}, {Name: "tcp-open", Value: 1}}},
 		{TaskId: "t-ghost", Ts: timestamppb.New(sampled.Add(-time.Hour)), Metrics: []*ogv1.MetricSample{{Name: "tcp-open", Value: 0}}},
 	}})
@@ -288,7 +288,7 @@ func TestAHeldRedeliveryCountsNoLanding(t *testing.T) {
 
 // TestAPushsRefusedSampleReadsAsTheServersLoss: a push's sample the server
 // refuses at derivation (a key the catalog does not hold) came in and never
-// went out, so the API lane reads it as the server hop's loss the way a node
+// went out, so the API lane reads it as the server hop's loss the way an outpost
 // batch's refusal reads (#1659); the push's other kinds read no loss.
 func TestAPushsRefusedSampleReadsAsTheServersLoss(t *testing.T) {
 	r := newPipelineRig(t)
@@ -383,7 +383,7 @@ type failRequests struct {
 	hold         chan struct{}
 }
 
-func (s *failRequests) PendingNodeCommands(context.Context, string) ([]storage.CommandDelivery, error) {
+func (s *failRequests) PendingOutpostCommands(context.Context, string) ([]storage.CommandDelivery, error) {
 	s.pulls.Add(1)
 	return nil, errors.New("the database blinked")
 }
@@ -403,18 +403,18 @@ func TestRequestFailuresAreCounted(t *testing.T) {
 	store := &failRequests{PG: r.gw, hold: make(chan struct{})}
 	srv := r.start(t, store)
 	t.Cleanup(func() { close(store.hold) }) // before the bus shuts down
-	nc := r.enrollNode(t, srv)
+	nc := r.enrollOutpost(t, srv)
 
 	logs := &syncBuffer{}
 	prior := slog.Default()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
 	defer slog.SetDefault(prior)
 
-	if _, err := nc.Request(collection.CommandSubject("node-a"), nil, 500*time.Millisecond); err == nil {
+	if _, err := nc.Request(collection.CommandSubject("outpost-a"), nil, 500*time.Millisecond); err == nil {
 		t.Fatal("a command pull whose read failed was answered")
 	}
 	for range 3 {
-		publishHeartbeat(t, nc, "node-a")
+		publishHeartbeat(t, nc, "outpost-a")
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for store.beats.Load() < 3 {
@@ -429,8 +429,8 @@ func TestRequestFailuresAreCounted(t *testing.T) {
 	if len(warned) != 1 {
 		t.Fatalf("two failed heartbeats logged %d warnings, want one for the run: %v", len(warned), warned)
 	}
-	if warned[0]["level"] != "WARN" || warned[0]["node"] != "node-a" {
-		t.Fatalf("the heartbeat failure logged %v, want a WARN naming node-a", warned[0])
+	if warned[0]["level"] != "WARN" || warned[0]["outpost"] != "outpost-a" {
+		t.Fatalf("the heartbeat failure logged %v, want a WARN naming outpost-a", warned[0])
 	}
 	if n := r.latest(t, writerclass.BusRequestFailureCount, "command-pull"); n != 1 {
 		t.Fatalf("bus-request-failure-count[command-pull] = %v, want 1", n)

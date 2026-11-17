@@ -12,7 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/simfleet"
 )
 
-// SweepPoint is one step of a driver sweep (#1871): the node's task count
+// SweepPoint is one step of a driver sweep (#1871): the outpost's task count
 // and a figure read at it (working-set bytes, or millicores).
 type SweepPoint struct {
 	Tasks int
@@ -20,7 +20,7 @@ type SweepPoint struct {
 }
 
 // SlopeFit is the least-squares line through a sweep's steps. PerTask is the
-// cost one more task adds; Intercept is the line at zero tasks, the node's
+// cost one more task adds; Intercept is the line at zero tasks, the outpost's
 // own floor. Residual is the largest step's distance from the line over the
 // line's rise across the sweep, so 0.1 is a step off by a tenth of what the
 // sweep's tasks cost.
@@ -168,7 +168,7 @@ func ShippedDriverSweep() ([]DriverTarget, []DriverSkip) {
 		func(d string) bool { _, ok := simfleet.Attach[d]; return ok })
 }
 
-// DriverStep is what the sweep read at one step: the node's driver task
+// DriverStep is what the sweep read at one step: the outpost's driver task
 // count, its cgroup working set and CPU over the window, and the mean
 // poll-cpu-time its polls reported over the same window (0 with no tasks).
 type DriverStep struct {
@@ -179,14 +179,14 @@ type DriverStep struct {
 	PollCPUMillis   float64 `json:"poll_cpu_ms"`
 }
 
-// DriverCost is one measured driver: what a task of it costs the node in
+// DriverCost is one measured driver: what a task of it costs the outpost in
 // memory and CPU, and what one run costs by the cgroup and by the polling
 // thread's own clock (#1870). ThreadShare is the thread clock over the
 // cgroup: the part of a run the clock sees, the rest being work the run
 // hands to other goroutines (a held session's reader, the report, the GC).
-// MemoryWarmBytes is the node's one-off jump when its first tasks land (its
+// MemoryWarmBytes is the outpost's one-off jump when its first tasks land (its
 // lanes start, its heap grows to working size), apart from the slope; a
-// loaded line that starts below the idle node shows no jump, and leaves it
+// loaded line that starts below the idle outpost shows no jump, and leaves it
 // at zero with why in WarmNotMeasured. Memory and CPU are judged apart: a
 // figure whose steps are not a line is left at zero with its reason in
 // MemoryNotMeasured or CPUNotMeasured. StepTasks is the step the driver was
@@ -254,7 +254,7 @@ func AssembleDriverCost(t DriverTarget, steps []DriverStep, memResidual, cpuResi
 		if warm := memFit.Intercept - idle; hasIdle && warm >= 0 {
 			c.MemoryWarmBytes = warm
 		} else if hasIdle {
-			c.WarmNotMeasured = fmt.Sprintf("%s warm: the loaded line starts %.1f MiB below the idle node, "+
+			c.WarmNotMeasured = fmt.Sprintf("%s warm: the loaded line starts %.1f MiB below the idle outpost, "+
 				"so the first tasks filled heap it already held and no jump shows", t.Driver, -warm/(1<<20))
 		}
 	}

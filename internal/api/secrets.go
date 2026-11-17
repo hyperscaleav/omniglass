@@ -135,7 +135,7 @@ func (a *authenticator) canSecretAdmin(ctx context.Context, action string) bool 
 // notification target, the mail relay): the secret read scope a reference
 // resolves under, the secret:bind scope it may be bound under, and the bind
 // admin tier for an admin-sensitive one. Every such write makes the server or a
-// node send the plaintext wherever the target points, without the caller ever
+// outpost send the plaintext wherever the target points, without the caller ever
 // seeing it, so it is its own action, distinct from reveal (#2047). An agent
 // acting for its person holds the person's bind: binding is never plaintext
 // out, so the agent ceiling (#1179) leaves it.

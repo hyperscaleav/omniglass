@@ -35,7 +35,7 @@ type renameableRegistry struct {
 // renameableRegistries are the registries RenameRegistry moves the name of. The
 // catalogs keyed by telemetry name (metric, property, event and command types),
 // component_type, system_type and secret_type are not here yet: a catalog key is
-// also what a node, a driver spec and an integration push by name, which a
+// also what an outpost, a driver spec and an integration push by name, which a
 // rename has to answer for first (#1188).
 var renameableRegistries = map[string]renameableRegistry{
 	"vendor":        {stamped: true},
@@ -44,7 +44,7 @@ var renameableRegistries = map[string]renameableRegistry{
 	"standard":      {stamped: true},
 	"location_type": {carry: carryLocationTypeName},
 	// A notification type is referenced only by uuid (an action rule's
-	// foreign key) and is nothing a node or a driver pushes by name (#618).
+	// foreign key) and is nothing an outpost or a driver pushes by name (#618).
 	"notification_type": {stamped: true},
 }
 
@@ -131,11 +131,11 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 
 // carryDriverName re-derives the tasks of every endpoint attached through the
 // driver: each derived task bakes the driver's name into its spec, and its id
-// hashes the spec, so without this the node would keep running tasks under a
+// hashes the spec, so without this the outpost would keep running tasks under a
 // name the registry no longer has, and the next unrelated driver edit would
 // take the churn instead. It is the re-derive a version change runs (#823):
 // superseded tasks retire, the new ones take their place, and each endpoint is
-// bumped so its node picks the set up.
+// bumped so its outpost picks the set up.
 func carryDriverName(ctx context.Context, tx pgx.Tx, rowID, _, _ string) error {
 	return rederiveDriverTasks(ctx, tx, rowID)
 }

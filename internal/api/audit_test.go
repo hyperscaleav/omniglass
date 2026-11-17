@@ -152,7 +152,7 @@ type auditDiffEvent struct {
 
 // TestAuditDiffRoundTrip pins the second half of "who changed this, and to
 // what?": the audit read carries the old/new images every fleet mutation has
-// always written (#473). A node create/update round-trips through GET
+// always written (#473). An outpost create/update round-trips through GET
 // /audit-log as a one-sided create image plus a full before/after pair, and a
 // secret create's audit body carries metadata only, never the sealed field
 // material (the redaction the write side promises).
@@ -171,8 +171,8 @@ func TestAuditDiffRoundTrip(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
-	c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "probe-1", "label": "Probe"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/nodes/probe-1", map[string]any{"label": "Probe One"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPost, "/outposts", map[string]any{"name": "probe-1", "label": "Probe"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPatch, "/outposts/probe-1", map[string]any{"label": "Probe One"}, http.StatusOK)
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "comm", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{"community": "hunter2-sealed-material"},
@@ -192,7 +192,7 @@ func TestAuditDiffRoundTrip(t *testing.T) {
 	}
 
 	var created, updated *auditDiffEvent
-	for _, e := range list("?resource=node") {
+	for _, e := range list("?resource=outpost") {
 		switch e.Verb {
 		case "create":
 			created = &e
@@ -201,19 +201,19 @@ func TestAuditDiffRoundTrip(t *testing.T) {
 		}
 	}
 	if created == nil || updated == nil {
-		t.Fatal("node create/update events not found")
+		t.Fatal("outpost create/update events not found")
 	}
 	if created.Old != nil {
-		t.Errorf("node create carries an old image: %v", created.Old)
+		t.Errorf("outpost create carries an old image: %v", created.Old)
 	}
 	if created.New == nil || created.New["Name"] != "probe-1" {
-		t.Errorf("node create new image missing or wrong: %v", created.New)
+		t.Errorf("outpost create new image missing or wrong: %v", created.New)
 	}
 	if updated.Old == nil || updated.New == nil {
-		t.Fatalf("node update must carry both images, got old=%v new=%v", updated.Old, updated.New)
+		t.Fatalf("outpost update must carry both images, got old=%v new=%v", updated.Old, updated.New)
 	}
 	if updated.Old["Label"] != "Probe" || updated.New["Label"] != "Probe One" {
-		t.Errorf("node update diff wrong: old=%v new=%v", updated.Old["Label"], updated.New["Label"])
+		t.Errorf("outpost update diff wrong: old=%v new=%v", updated.Old["Label"], updated.New["Label"])
 	}
 
 	secrets := list("?resource=secret")

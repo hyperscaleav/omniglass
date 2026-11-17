@@ -899,7 +899,7 @@ Registers a custom command type (official=false). The name must be a single keba
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
-| `--disruptive` | bool | `false` | The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again |
+| `--disruptive` | bool | `false` | The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering outpost until each reads up again |
 | `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The command type name (lowercase kebab) |
@@ -1184,7 +1184,7 @@ Read a command
 omniglass component command get <name> <id>
 ```
 
-One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, outpost and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
 
 Arguments:
   <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1283,7 +1283,7 @@ Start a component from a template
 omniglass component createFromTemplate [flags]
 ```
 
-Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no outpost a 422.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1291,7 +1291,7 @@ Creates one component from a component template at a location: its product and t
 | `--label` | string | (none) | The component's label |
 | `--location` | string | (none) | The location the component sits in, by name or dotted path |
 | `--name` | string | (none) | The component's name; minted as an unnamed create mints it when empty |
-| `--node` | string | (none) | The node the endpoint is placed on; needed when inputs carry an address |
+| `--outpost` | string | (none) | The outpost the endpoint is placed on; needed when inputs carry an address |
 | `--template` | string | (none) | The component template, by name |
 
 Example:
@@ -1331,7 +1331,7 @@ Record that a component depends on another
 omniglass component dependency create <name> [flags]
 ```
 
-Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's outpost its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
 
 Arguments:
   <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1552,7 +1552,7 @@ Bind an identity a conduit reports to its owner
 omniglass component identity-binding update <name> <key> <value> [flags]
 ```
 
-Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or an outpost owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
 
 Arguments:
   <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1560,7 +1560,7 @@ Arguments:
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--owner` | string | (none) | Name or uuid of the owner the identity's values land on, or a dotted address |
-| `--owner-kind` | string | (none) | What kind of owner the identity names. A component or a system; a location or a node owns no observed sample, so neither is an owner here |
+| `--owner-kind` | string | (none) | What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here |
 
 Example:
 
@@ -1580,7 +1580,7 @@ Get what is broken on a simulated device
 omniglass component impairment get <name>
 ```
 
-The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its outpost when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
 
 Arguments:
   <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1599,7 +1599,7 @@ Break or repair a simulated device
 omniglass component impairment set <name> [flags]
 ```
 
-Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's outpost applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
 
 Arguments:
   <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -1645,7 +1645,7 @@ omniglass component listTags <name>
 Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1936,7 +1936,7 @@ omniglass component removeTag <name> [flags]
 Removes a key's value from a component. Gated by component:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2025,7 +2025,7 @@ omniglass component setTag <name> [flags]
 Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2050,7 +2050,7 @@ Fire an operation at a simulated component
 omniglass component simulation fire <name> [flags]
 ```
 
-Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+Asks the simulator beside the component's outpost to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
 
 Arguments:
   <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -2078,7 +2078,7 @@ Get a component's simulation
 omniglass component simulation get <name>
 ```
 
-Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
+Whether a component is simulated (it has an endpoint on an outpost and a product a simulator profile simulates) and, when it is, its outpost, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
 
 Arguments:
   <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -2317,27 +2317,27 @@ omniglass driver list
 
 ### `omniglass driver preview`
 
-Preview a driver spec's polls through a node
+Preview a driver spec's polls through an outpost
 
 ```
 omniglass driver preview [flags]
 ```
 
-Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+Runs a driver spec's polls once through the outpost named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the outpost holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the outpost and on each secret used. Gated by driver:preview.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--driver` | string | (none) | A stored driver to preview, by name; or give spec |
 | `--inputs` | string | (none) | The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target |
-| `--node` | string | (none) | The node that runs the preview, by name: the one that reaches the target |
+| `--outpost` | string | (none) | The outpost that runs the preview, by name: the one that reaches the target |
 | `--polls` | string | (none) | The polls to run, by name; absent runs every poll |
 | `--spec` | string | (none) | A driver spec to preview inline, unsaved; or give driver |
-| `--timeout-seconds` | int | `0` | How long the node may take for the whole preview (default 15, at most 30) |
+| `--timeout-seconds` | int | `0` | How long the outpost may take for the whole preview (default 15, at most 30) |
 
 Example:
 
 ```sh
-omniglass driver preview --node node
+omniglass driver preview --outpost outpost
 ```
 
 ### `omniglass driver rename`
@@ -2422,8 +2422,8 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | `--driver` | string | (none) | Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions |
 | `--inputs` | string | (none) | The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest |
 | `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for |
-| `--node` | string | (none) | Node placement, by name or id |
 | `--out-of-band` | bool | `false` | Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open |
+| `--outpost` | string | (none) | Outpost placement, by name or id |
 | `--params` | string | (none) | Address/target settings (jsonb); an attach derives them from the inputs instead |
 | `--transport` | string | (none) | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
@@ -2499,11 +2499,11 @@ Run an endpoint's poll now
 omniglass endpoint poll run <endpoint> <poll> [flags]
 ```
 
-Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--timeout-seconds` | int | `0` | How long the node may take (default 15, at most 30) |
+| `--timeout-seconds` | int | `0` | How long the outpost may take (default 15, at most 30) |
 
 Example:
 
@@ -2519,7 +2519,7 @@ Retry an endpoint's gated connections
 omniglass endpoint retry <endpoint> [flags]
 ```
 
-Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the outpost recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
 
 Arguments:
   <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -2527,7 +2527,7 @@ Arguments:
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--certificate` | string | (none) | A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged |
-| `--host-key` | string | (none) | The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
+| `--host-key` | string | (none) | The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the outpost's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
 
 Example:
 
@@ -2562,7 +2562,7 @@ Update an endpoint
 omniglass endpoint update <endpoint> [flags]
 ```
 
-Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's outpost placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 Arguments:
   <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
@@ -2571,8 +2571,8 @@ Arguments:
 |---|---|---|---|
 | `--inputs` | string | (none) | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it |
 | `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
-| `--node` | string | (none) | Reassign the node placement, by name or id |
 | `--out-of-band` | bool | `false` | Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone |
+| `--outpost` | string | (none) | Reassign the outpost placement, by name or id |
 | `--params` | string | (none) | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
 | `--transport` | string | (none) | The transport: a driver-attached endpoint takes only one its driver speaks |
 
@@ -3010,13 +3010,13 @@ Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory
 omniglass lab measure [flags]
 ```
 
-Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the busiest ingest lane's busy fraction and service time a batch, the console's fleet view response times, the retention pass's drain rate, each telemetry kind's delivery loss across the node hop and the ingest hop (in, out, loss, deduplicated and the cause of any loss), the node lane and the push lane apart, each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the replies that reached the node), and the node lane's end-to-end loss a kind. It writes the same figures as JSON so two runs compare.
+Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the busiest ingest lane's busy fraction and service time a batch, the console's fleet view response times, the retention pass's drain rate, each telemetry kind's delivery loss across the outpost hop and the ingest hop (in, out, loss, deduplicated and the cause of any loss), the outpost lane and the push lane apart, each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the replies that reached the outpost), and the outpost lane's end-to-end loss a kind. It writes the same figures as JSON so two runs compare.
 
 With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale lab of that size, measures it, and removes it, so the one command is the whole run.
 
 When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the reason and the age of the newest landed sample under the table, and every other figure still prints. The consumer lane row is read from the server's periodic `ingest lane` log line, a line a lane, and needs two of a lane's tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.
 
-The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has landed one minted after it and the server's ingest lanes have acknowledged, landed or dropped at the bound, every batch the stream held once all of those were published (its ack floor past the stream's last sequence), so a consumer that never empties under steady load still settles; then it reconciles each batch's ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them (self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.
+The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each outpost's, and the server's for the push lane) has landed one minted after it and the server's ingest lanes have acknowledged, landed or dropped at the bound, every batch the stream held once all of those were published (its ack floor past the stream's last sequence), so a consumer that never empties under steady load still settles; then it reconciles each batch's ledger against what landed. The outpost hop is what each outpost minted against what its spool shipped: a batch its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them (self-log overflow, encode failure) read under their cause. The ingest hop is what the outpost (or the server, for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; a boot that did not settle prints unsettled with its outpost (or as the push lane), and no ratio is read from it. A boot its outpost followed with another boot (the outpost restarted with batches still spooled) is read as far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.
 
 Every database read the measure makes runs under what its run has left, and never longer than ten minutes: the database itself stops a read at that bound, and a run that is interrupted cancels the read in flight, so no measure leaves a query running against the lab it measured.
 
@@ -3039,7 +3039,7 @@ The retention probe plants a backlog of aged property rows and restarts the serv
 | `--page-system` | string | (none) | the system whose page the clients load, by name; empty loads the fleet view's first |
 | `--samples` | int | `0` | stop after this many samples; 0 samples until interrupted |
 | `--scenario` | string | `corporate` | the scale scenario a --systems lab runs |
-| `--settle-timeout` | duration | `5m0s` | how long the delivery read waits for every node's and the push lane's batches from the window to land before naming a boot unsettled; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
+| `--settle-timeout` | duration | `5m0s` | how long the delivery read waits for every outpost's and the push lane's batches from the window to land before naming a boot unsettled; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
 | `--systems` | int | `0` | bring up a throwaway scale lab of this many systems, measure it and remove it; 0 measures the one already running |
 | `--warmup` | duration | `2m0s` | how long the lab runs before the window starts (once, before the first sample) |
 | `--window` | duration | `5m0s` | the window the rates, growth and usage are read over |
@@ -3087,7 +3087,7 @@ Brings up --runs throwaway scale labs one after another, each measured with the 
 
 The exact figures (every closed-loop gap, an ingest lag not measured, redeliveries, each kind's delivery loss) fail at any value but 0. The host-independent figures (rows a minute, growth and WAL per system, samples a batch) gate on any host. The host-dependent figures (latency, CPU, memory, fleet view time) gate only on the host the baseline was generated on; on another they read reported. A gated figure is the median of the runs, and fails only past its tolerance and past the runs' combined spread. Runs that spread past the tolerance read noisy, which does not fail. A figure better than its tolerance reads improved: refresh the baseline.
 
-Runs are invalid, and no figure is compared, when they measured another fleet, window or device set than the baseline's, or a node restarted, changed fleet or carried an impairment during the window.
+Runs are invalid, and no figure is compared, when they measured another fleet, window or device set than the baseline's, or an outpost restarted, changed fleet or carried an impairment during the window.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3103,19 +3103,19 @@ Runs are invalid, and no figure is compared, when they measured another fleet, w
 
 #### `omniglass lab perf drivers`
 
-Measure what each shipped driver's polls cost a node, and write the table the docs render
+Measure what each shipped driver's polls cost an outpost, and write the table the docs render
 
 ```
 omniglass lab perf drivers [flags]
 ```
 
-Brings up a throwaway lab with no fleet and, for each shipped driver in turn, a node of its own with the simulator beside it in its network namespace, so the node's cgroup holds only the node's work. Each driver is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the node's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm cost), with the threads' own CPU per run from poll-cpu-time beside it. A driver whose memory does not fit a line is swept again on a fresh node at four times the step, up to --max-step-tasks, since a cheap driver's few KiB a task is inside the noise at a small step. A figure that still does not fit is listed as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.
+Brings up a throwaway lab with no fleet and, for each shipped driver in turn, an outpost of its own with the simulator beside it in its network namespace, so the outpost's cgroup holds only the outpost's work. Each driver is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the outpost's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm cost), with the threads' own CPU per run from poll-cpu-time beside it. A driver whose memory does not fit a line is swept again on a fresh outpost at four times the step, up to --max-step-tasks, since a cheap driver's few KiB a task is inside the noise at a small step. A figure that still does not fit is listed as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.
 
 The table is a host's: run it on the host class it describes, then run `go run ./cmd/labgen` and commit both files in a reviewed change.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--image` | string | (none) | the omniglass image the lab and the sweep's nodes run (lab run's --image); empty is this binary's own build |
+| `--image` | string | (none) | the omniglass image the lab and the sweep's outposts run (lab run's --image); empty is this binary's own build |
 | `--max-step-tasks` | int | `6400` | the biggest step a driver whose memory does not show is swept again at; 0 sweeps each driver once |
 | `--only` | stringSlice | `[]` | sweep only these drivers; empty sweeps every shipped one |
 | `--out` | string | `internal/labfootprint/drivercost/shipped.json` | where to write the table, relative to the working directory: run it from the repository's root |
@@ -3125,13 +3125,13 @@ The table is a host's: run it on the host class it describes, then run `go run .
 
 ### `omniglass lab run`
 
-Bring up a lab: omniglass, its database and a node collecting from a simulated fleet, until Ctrl-C
+Bring up a lab: omniglass, its database and an outpost collecting from a simulated fleet, until Ctrl-C
 
 ```
 omniglass lab run [flags]
 ```
 
-Brings up a working omniglass on this machine's Docker as one compose project of three containers: Postgres, the server, and the edge node edge-hq running the simulator in its own process, serving the seeded dev fleet. The node collects from the fleet for real, and impairments work. It prints what it is doing while it comes up, then the console's address and the login, and holds until Ctrl-C, which removes the containers and the network and keeps the data for the next run.
+Brings up a working omniglass on this machine's Docker as one compose project of three containers: Postgres, the server, and the edge outpost edge-hq running the simulator in its own process, serving the seeded dev fleet. The outpost collects from the fleet for real, and impairments work. It prints what it is doing while it comes up, then the console's address and the login, and holds until Ctrl-C, which removes the containers and the network and keeps the data for the next run.
 
 Docker is the only requirement. Only the console is published, on 127.0.0.1 (--listen moves it, and says what that exposes). A binary built by make runs the image the same make built; a release binary runs its release's image. The lab's database is marked as a lab's, and a lab and a real server refuse each other's database.
 
@@ -3158,9 +3158,9 @@ Print pass or fail for a soak: no platform alarm left open or open too long, eve
 omniglass lab soak verdict [flags]
 ```
 
-Judges a soak from what the platform says about itself, and nothing else: it reads, through the API (--server and --token, or $OMNIGLASS_SERVER and $OMNIGLASS_TOKEN), the platform system's alarm history and the Platform health page, and prints pass or fail with every reason. The token needs read over nodes, systems and components, all of them, since a verdict from part of the page would pass what it could not see.
+Judges a soak from what the platform says about itself, and nothing else: it reads, through the API (--server and --token, or $OMNIGLASS_SERVER and $OMNIGLASS_TOKEN), the platform system's alarm history and the Platform health page, and prints pass or fail with every reason. The token needs read over outposts, systems and components, all of them, since a verdict from part of the page would pass what it could not see.
 
-Pass: the soak ran at least 7 days (--since to --until), no platform alarm is still open, none raised in the window was open longer than --tolerance, and every loss ratio on the page (each hop, kind and node, the newest window and the last hour, the end to end, the worklist pull) is 0. A reading that cannot answer fails: no build reported, no loss ratio on the page, an alarm history the API cut short, or two builds among the servers.
+Pass: the soak ran at least 7 days (--since to --until), no platform alarm is still open, none raised in the window was open longer than --tolerance, and every loss ratio on the page (each hop, kind and outpost, the newest window and the last hour, the end to end, the worklist pull) is 0. A reading that cannot answer fails: no build reported, no loss ratio on the page, an alarm history the API cut short, or two builds among the servers.
 
 With --record-dir it also writes the release record, one file named for the build, which the release commits: docs/src/content/soak-records from the repository's root. The exit status is 1 on a fail.
 
@@ -3332,7 +3332,7 @@ omniglass location listTags <name>
 Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3494,7 +3494,7 @@ omniglass location removeTag <name> [flags]
 Removes a key's value from a location. Gated by location:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3581,7 +3581,7 @@ omniglass location setTag <name> [flags]
 Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4041,290 +4041,6 @@ omniglass migrate
 
 Applies every embedded migration the database has not run. Migrations only move forward, so a database a newer release migrated is refused, naming its newest migration and the newest this binary knows: run that release or a later one.
 
-## `omniglass node`
-
-Commands for the node resource
-
-### `omniglass node claim`
-
-Claim a node identity in exchange for its NATS credential
-
-```
-omniglass node claim [flags]
-```
-
-The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--name` | string | (none) | The node name the enrollment was minted for |
-| `--token` | string | (none) | The one-time enrollment token from node create, exchanged here for the node's NATS credential |
-
-Example:
-
-```sh
-omniglass node claim --name name --token token
-```
-
-### `omniglass node create`
-
-Create a node
-
-```
-omniglass node create [flags]
-```
-
-Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--description` | string | (none) | Free-form operator notes about the node |
-| `--label` | string | (none) | Operator label; falls back to the name when empty |
-| `--location` | string | (none) | Optional location the node sits in, by name or id (descriptive placement, not scope) |
-| `--name` | string | (none) | Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot |
-
-Example:
-
-```sh
-omniglass node create --name name
-```
-
-### `omniglass node delete`
-
-Delete a node
-
-```
-omniglass node delete <name>
-```
-
-Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
-
-Example:
-
-```sh
-omniglass node delete <name>
-```
-
-### `omniglass node enroll`
-
-Mint a node's enrollment token
-
-```
-omniglass node enroll <name>
-```
-
-Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
-
-Example:
-
-```sh
-omniglass node enroll <name>
-```
-
-### `omniglass node get`
-
-Get a node
-
-```
-omniglass node get <name>
-```
-
-Fetches a node by name. Requires an all-scope read. Gated by node:read.
-
-Example:
-
-```sh
-omniglass node get <name>
-```
-
-### `omniglass node list`
-
-List nodes
-
-```
-omniglass node list
-```
-
-Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.
-
-Example:
-
-```sh
-omniglass node list
-```
-
-### `omniglass node listTags`
-
-List tags on a node
-
-```
-omniglass node listTags <name>
-```
-
-Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
-
-Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
-
-Example:
-
-```sh
-omniglass node listTags <name>
-```
-
-### `omniglass node log`
-
-Commands for the log resource
-
-#### `omniglass node log list`
-
-List a node's recent self-logs
-
-```
-omniglass node log list <name>
-```
-
-Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass node log list <name>
-```
-
-### `omniglass node removeTag`
-
-Remove a tag value from a node
-
-```
-omniglass node removeTag <name> [flags]
-```
-
-Removes a key's value from a node. Gated by node:update.
-
-Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--key` | string | (none) | The tag key to remove |
-
-Example:
-
-```sh
-omniglass node removeTag <name> --key key
-```
-
-### `omniglass node run`
-
-Run the edge node: claim, pull the worklist, and heartbeat over NATS
-
-```
-omniglass node run [flags]
-```
-
-Runs the edge node: claims its NATS credential with the enrollment token, pulls its worklist, collects, and heartbeats until interrupted. Outbound-only: the node dials the server, never the reverse.
-
---simulate also runs the simulator in the same process, serving the simulated components placed on this node on its own loopback (each on its 127.x address), with this node's identity: one process, one enrollment, nothing to arrange between them. --impairments, --port-offset and --poll are the simulator's and are refused without --simulate. `omniglass sim run` is the same simulator as a process of its own, beside a node.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--heartbeat` | duration | `30s` | heartbeat interval |
-| `--impairments` | bool | `false` | with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container) |
-| `--lane-workers` | string | `auto` | how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled; auto sizes them from the CPU and memory the node may use (env OMNIGLASS_LANE_WORKERS) |
-| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
-| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
-| `--poll` | duration | `10s` | with --simulate: how often the simulator re-pulls its component list |
-| `--port-offset` | int | `0` | with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
-| `--probe-every` | duration | `30s` | how often each reachability probe runs, on the node's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
-| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--session-dials` | int | `16` | how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS) |
-| `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this node on its own loopback |
-| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
-| `--worklist-every` | duration | `30s` | how often the node pulls its worklist, apart from the heartbeat; a change to the node's worklist nudges it to pull at once, and only a lost nudge waits for this pull |
-
-### `omniglass node setTag`
-
-Set a tag value on a node
-
-```
-omniglass node setTag <name> [flags]
-```
-
-Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.
-
-Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
-| `--value` | string | (none) | The bound value |
-
-Example:
-
-```sh
-omniglass node setTag <name> --key key --value value
-```
-
-### `omniglass node simulation`
-
-Get a node's simulator
-
-```
-omniglass node simulation <name>
-```
-
-The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
-
-Example:
-
-```sh
-omniglass node simulation <name>
-```
-
-#### `omniglass node simulation observation`
-
-Commands for the observation resource
-
-##### `omniglass node simulation observation list`
-
-Get a node's endpoint observation
-
-```
-omniglass node simulation observation list <name>
-```
-
-What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.
-
-Example:
-
-```sh
-omniglass node simulation observation list <name>
-```
-
-### `omniglass node update`
-
-Update a node
-
-```
-omniglass node update <name> [flags]
-```
-
-Patches a node's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--description` | string | (none) | New free-form operator notes |
-| `--label` | string | (none) | A new operator-facing label |
-| `--location` | string | (none) | Set the node's location by name or id, or "" to clear it |
-
-Example:
-
-```sh
-omniglass node update <name>
-```
-
 ## `omniglass notification`
 
 Commands for the notification resource
@@ -4663,6 +4379,290 @@ Example:
 
 ```sh
 omniglass notification-type update <name>
+```
+
+## `omniglass outpost`
+
+Commands for the outpost resource
+
+### `omniglass outpost claim`
+
+Claim an outpost identity in exchange for its NATS credential
+
+```
+omniglass outpost claim [flags]
+```
+
+The outpost-facing exchange: an outpost presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The outpost name the enrollment was minted for |
+| `--token` | string | (none) | The one-time enrollment token from outpost create, exchanged here for the outpost's NATS credential |
+
+Example:
+
+```sh
+omniglass outpost claim --name name --token token
+```
+
+### `omniglass outpost create`
+
+Create an outpost
+
+```
+omniglass outpost create [flags]
+```
+
+Registers an edge outpost server-side (day-one enrollment: create, then :enroll to mint its token). Gated by outpost:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | Free-form operator notes about the outpost |
+| `--label` | string | (none) | Operator label; falls back to the name when empty |
+| `--location` | string | (none) | Optional location the outpost sits in, by name or id (descriptive placement, not scope) |
+| `--name` | string | (none) | Globally unique outpost name (lowercase letters, digits, and hyphens); it is also the outpost's NATS subject token, which is why the rule forbids a dot |
+
+Example:
+
+```sh
+omniglass outpost create --name name
+```
+
+### `omniglass outpost delete`
+
+Delete an outpost
+
+```
+omniglass outpost delete <name>
+```
+
+Decommissions an outpost: a hard delete that cascades its endpoints, their derived tasks, its outpost-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by outpost:delete.
+
+Example:
+
+```sh
+omniglass outpost delete <name>
+```
+
+### `omniglass outpost enroll`
+
+Mint an outpost's enrollment token
+
+```
+omniglass outpost enroll <name>
+```
+
+Mints (or re-mints) the outpost's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by outpost:enroll.
+
+Example:
+
+```sh
+omniglass outpost enroll <name>
+```
+
+### `omniglass outpost get`
+
+Get an outpost
+
+```
+omniglass outpost get <name>
+```
+
+Fetches an outpost by name. Requires an all-scope read. Gated by outpost:read.
+
+Example:
+
+```sh
+omniglass outpost get <name>
+```
+
+### `omniglass outpost list`
+
+List outposts
+
+```
+omniglass outpost list
+```
+
+Lists the edge outposts. An outpost is fleet-wide, so listing requires an all-scope read. Gated by outpost:read.
+
+Example:
+
+```sh
+omniglass outpost list
+```
+
+### `omniglass outpost listTags`
+
+List tags on a outpost
+
+```
+omniglass outpost listTags <name>
+```
+
+Lists the tags bound directly on a outpost (not the resolved cascade). Gated by outpost:read.
+
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+Example:
+
+```sh
+omniglass outpost listTags <name>
+```
+
+### `omniglass outpost log`
+
+Commands for the log resource
+
+#### `omniglass outpost log list`
+
+List an outpost's recent self-logs
+
+```
+omniglass outpost log list <name>
+```
+
+Returns the outpost's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the outpost), newest first, bounded to the last 24 hours. Gated by outpost:read; an out-of-scope outpost is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass outpost log list <name>
+```
+
+### `omniglass outpost removeTag`
+
+Remove a tag value from a outpost
+
+```
+omniglass outpost removeTag <name> [flags]
+```
+
+Removes a key's value from a outpost. Gated by outpost:update.
+
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key to remove |
+
+Example:
+
+```sh
+omniglass outpost removeTag <name> --key key
+```
+
+### `omniglass outpost run`
+
+Run the edge outpost: claim, pull the worklist, and heartbeat over NATS
+
+```
+omniglass outpost run [flags]
+```
+
+Runs the edge outpost: claims its NATS credential with the enrollment token, pulls its worklist, collects, and heartbeats until interrupted. Outbound-only: the outpost dials the server, never the reverse.
+
+--simulate also runs the simulator in the same process, serving the simulated components placed on this outpost on its own loopback (each on its 127.x address), with this outpost's identity: one process, one enrollment, nothing to arrange between them. --impairments, --port-offset and --poll are the simulator's and are refused without --simulate. `omniglass sim run` is the same simulator as a process of its own, beside an outpost.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--impairments` | bool | `false` | with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the outpost's own (a container) |
+| `--lane-workers` | string | `auto` | how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled; auto sizes them from the CPU and memory the outpost may use (env OMNIGLASS_LANE_WORKERS) |
+| `--name` | string | (none) | this outpost's registered name (env OMNIGLASS_OUTPOST_NAME) |
+| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--poll` | duration | `10s` | with --simulate: how often the simulator re-pulls its component list |
+| `--port-offset` | int | `0` | with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
+| `--probe-every` | duration | `30s` | how often each reachability probe runs, on the outpost's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--session-dials` | int | `16` | how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_OUTPOST_SESSION_DIALS) |
+| `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this outpost on its own loopback |
+| `--token` | string | (none) | enrollment token from POST /outposts/{name}:enroll (env OMNIGLASS_OUTPOST_TOKEN) |
+| `--worklist-every` | duration | `30s` | how often the outpost pulls its worklist, apart from the heartbeat; a change to the outpost's worklist nudges it to pull at once, and only a lost nudge waits for this pull |
+
+### `omniglass outpost setTag`
+
+Set a tag value on a outpost
+
+```
+omniglass outpost setTag <name> [flags]
+```
+
+Binds a value for a key on a outpost. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by outpost:update.
+
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
+| `--value` | string | (none) | The bound value |
+
+Example:
+
+```sh
+omniglass outpost setTag <name> --key key --value value
+```
+
+### `omniglass outpost simulation`
+
+Get an outpost's simulator
+
+```
+omniglass outpost simulation <name>
+```
+
+The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.
+
+Example:
+
+```sh
+omniglass outpost simulation <name>
+```
+
+#### `omniglass outpost simulation observation`
+
+Commands for the observation resource
+
+##### `omniglass outpost simulation observation list`
+
+Get an outpost's endpoint observation
+
+```
+omniglass outpost simulation observation list <name>
+```
+
+What the simulated endpoints beside an outpost saw arrive and how each request settled, and what the outpost tallied sending, read in that order: the simulator, then the outpost, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the outpost simulates. An outpost that does not exist is a 404; no simulator answering, or the outpost not answering, a 503.
+
+Example:
+
+```sh
+omniglass outpost simulation observation list <name>
+```
+
+### `omniglass outpost update`
+
+Update an outpost
+
+```
+omniglass outpost update <name> [flags]
+```
+
+Patches an outpost's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by outpost:update.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | New free-form operator notes |
+| `--label` | string | (none) | A new operator-facing label |
+| `--location` | string | (none) | Set the outpost's location by name or id, or "" to clear it |
+
+Example:
+
+```sh
+omniglass outpost update <name>
 ```
 
 ## `omniglass principal`
@@ -5273,7 +5273,7 @@ Creates a custom (non-official) product, classified under a component_type. kind
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
+| `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to a type in that tree. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
 | `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
 | `--icon` | string | (none) | A product-level icon override; unset inherits the component_type's icon |
 | `--kind` | string | (none) | What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly. |
@@ -5803,7 +5803,7 @@ Populate a fresh dev database with a small example fleet so a dev stack comes up
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--scenario` | string | `dev` | the fleet to seed (see the list above) |
-| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev node for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (a lab's node collects from them) |
+| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev outpost for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (a lab's outpost collects from them) |
 | `--sim-port-offset` | int | `0` | the lift the simulator applies to ports below 1024, which the simulated fleet's endpoints target: 0 for one that binds the real ports (in a container, as the lab's does), or the --port-offset of a simulator run unprivileged on a host |
 
 ## `omniglass server`
@@ -5814,7 +5814,7 @@ Run the control-plane server (HTTP API)
 omniglass server
 ```
 
-Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP API on OMNIGLASS_ADDR and hosts the embedded NATS bus nodes connect to on OMNIGLASS_NATS_ADDR. Either address may name port 0, which binds whatever free port the kernel hands out; set OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to nodes). A file already at that path is cleared first thing at boot, and the server removes its own at a graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather than picking one and hoping it stays free. Configured by environment; see the deployment guides.
+Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP API on OMNIGLASS_ADDR and hosts the embedded NATS bus outposts connect to on OMNIGLASS_NATS_ADDR. Either address may name port 0, which binds whatever free port the kernel hands out; set OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to outposts). A file already at that path is cleared first thing at boot, and the server removes its own at a graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather than picking one and hoping it stays free. Configured by environment; see the deployment guides.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6084,7 +6084,7 @@ omniglass severity-level update <name>
 
 ## `omniglass sim`
 
-Simulate the devices placed on a node
+Simulate the devices placed on an outpost
 
 ### `omniglass sim mail`
 
@@ -6104,22 +6104,22 @@ Serves SMTP on --listen and keeps every message it accepts, writing each as one 
 
 ### `omniglass sim run`
 
-Serve the node's simulated devices and follow changes until interrupted
+Serve the outpost's simulated devices and follow changes until interrupted
 
 ```
 omniglass sim run [flags]
 ```
 
-Serves each component placed on the node whose product has a simulator profile and whose endpoints target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
+Serves each component placed on the outpost whose product has a simulator profile and whose endpoints target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--impairments` | bool | `false` | apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the simulator's own (a pod or container) |
-| `--name` | string | (none) | the node this simulator runs beside (env OMNIGLASS_NODE_NAME) |
+| `--name` | string | (none) | the outpost this simulator runs beside (env OMNIGLASS_OUTPOST_NAME) |
 | `--poll` | duration | `10s` | how often to re-pull the device list |
 | `--port-offset` | int | `0` | lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
 | `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | that node's enrollment token (env OMNIGLASS_NODE_TOKEN) |
+| `--token` | string | (none) | that outpost's enrollment token (env OMNIGLASS_OUTPOST_TOKEN) |
 
 ## `omniglass simulation`
 
@@ -6133,7 +6133,7 @@ Add a simulated component
 omniglass simulation add-component <name> [flags]
 ```
 
-Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
+Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the outpost: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the outpost's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. An outpost with no simulator connected is a 409, and a product no profile simulates a 422.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6155,7 +6155,7 @@ Add a simulated system
 omniglass simulation add-system <name> [flags]
 ```
 
-Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
+Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6178,7 +6178,7 @@ Get the simulated fleet
 omniglass simulation get
 ```
 
-Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+Every outpost a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees an outpost's simulator when its component read scope holds at least one component the outpost simulates (an all-scope reader sees all of them); no outpost read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
 
 Example:
 
@@ -6626,7 +6626,7 @@ Creates a system from a system template at a location, built to the standard you
 | `--label` | string | (none) | The system's label |
 | `--location` | string | (none) | The location the system and its components sit in, by name or dotted path |
 | `--name` | string | (none) | The system's name; minted from its type when empty |
-| `--node` | string | (none) | The node the endpoints are placed on; needed when any component attaches |
+| `--outpost` | string | (none) | The outpost the endpoints are placed on; needed when any component attaches |
 | `--standard` | string | (none) | A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name |
 | `--template` | string | (none) | The system template, by name |
 
@@ -6759,7 +6759,7 @@ omniglass system listTags <name>
 Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -7087,7 +7087,7 @@ omniglass system removeTag <name> [flags]
 Removes a key's value from a system. Gated by system:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -7317,7 +7317,7 @@ omniglass system setTag <name> [flags]
 Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
 
 Arguments:
-  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -7624,7 +7624,7 @@ Push telemetry for an owner
 omniglass telemetry push [flags]
 ```
 
-Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key a node writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is a node's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
+Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -7729,7 +7729,7 @@ List the sources no endpoint claims
 omniglass unclaimed-source list
 ```
 
-The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as nodes are.
+The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by outpost:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as outposts are.
 
 Example:
 
@@ -7982,7 +7982,7 @@ Read Omniglass's own health in one call
 omniglass view platform list
 ```
 
-Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.
+Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.
 
 Example:
 
@@ -8002,7 +8002,7 @@ Read what each simulator saw against what the platform collected
 omniglass view platform simulation list
 ```
 
-Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+Returns the read behind the Platform health page's simulation section: one row per outpost with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. An outpost reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
 
 Example:
 

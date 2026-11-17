@@ -20,9 +20,9 @@ import {
   hopFigure,
   lossPercent,
   lossTinted,
-  nodeLossHint,
-  nodeLossText,
-  nodePill,
+  outpostLossHint,
+  outpostLossText,
+  outpostPill,
   pipelineKinds,
   endToEndFigure,
   PANEL_SERIES_HOURS,
@@ -43,7 +43,7 @@ import {
   type PlatformPipelineHop,
   type PlatformView,
 } from "./platformhealth";
-import { NODE_DOWN_AFTER_MS } from "./nodes";
+import { OUTPOST_DOWN_AFTER_MS } from "./outposts";
 
 // The Platform health page's pure core (#1644): the columns, the uptime, a
 // figure's text and the liveness pill, all derived from one view body and
@@ -57,7 +57,7 @@ const view = (over: Partial<PlatformView> = {}): PlatformView => ({
   figures_read: true,
   servers: [],
   groups: [
-    { name: "checkin", label: "Checkin", keys: [{ name: "checkin-age", label: "Check-in Age", unit: "s", description: "Seconds since the node last checked in." }] },
+    { name: "checkin", label: "Checkin", keys: [{ name: "checkin-age", label: "Check-in Age", unit: "s", description: "Seconds since the outpost last checked in." }] },
     {
       name: "commands",
       label: "Commands",
@@ -67,8 +67,8 @@ const view = (over: Partial<PlatformView> = {}): PlatformView => ({
       ],
     },
   ],
-  nodes: [],
-  loss_hops: ["node"],
+  outposts: [],
+  loss_hops: ["outpost"],
   ...over,
 });
 
@@ -77,7 +77,7 @@ describe("platformColumns", () => {
     const cols = platformColumns(view());
     expect(cols.map((c) => c.key)).toEqual(["checkin-age", "command-pending-count", "command-pending-age"]);
     expect(cols.map((c) => c.group)).toEqual(["Checkin", "Commands", "Commands"]);
-    expect(cols[0].description).toBe("Seconds since the node last checked in.");
+    expect(cols[0].description).toBe("Seconds since the outpost last checked in.");
   });
 
   it("renders a group the page has never heard of, because the page holds no key list", () => {
@@ -102,70 +102,70 @@ describe("serverUptime", () => {
 });
 
 describe("figureText", () => {
-  const node = { name: "edge-a", label: "", enrolled: true, figures: { "checkin-age": { value: 0, observed_at: readAt } } };
+  const outpost = { name: "edge-a", label: "", enrolled: true, figures: { "checkin-age": { value: 0, observed_at: readAt } } };
 
   it("renders a reported zero as zero, with its unit", () => {
-    expect(figureText(node, { key: "checkin-age", unit: "s" })).toBe("0 s");
+    expect(figureText(outpost, { key: "checkin-age", unit: "s" })).toBe("0 s");
   });
 
-  it("renders a figure the node never reported as not reported, never as 0", () => {
-    expect(figureText(node, { key: "command-pending-count", unit: "" })).toBe("not reported");
+  it("renders a figure the outpost never reported as not reported, never as 0", () => {
+    expect(figureText(outpost, { key: "command-pending-count", unit: "" })).toBe("not reported");
   });
 
   it("renders a row without figures (no platform reach) as not reported", () => {
-    expect(figureText({ ...node, figures: undefined }, { key: "checkin-age", unit: "s" })).toBe("not reported");
+    expect(figureText({ ...outpost, figures: undefined }, { key: "checkin-age", unit: "s" })).toBe("not reported");
   });
 
   it("trims a fractional value to two decimal places", () => {
-    const n = { ...node, figures: { "checkin-age": { value: 2.3456, observed_at: readAt } } };
+    const n = { ...outpost, figures: { "checkin-age": { value: 2.3456, observed_at: readAt } } };
     expect(figureText(n, { key: "checkin-age", unit: "s" })).toBe("2.35 s");
   });
 
   it("renders a ratio column as the Loss column does, a percent", () => {
-    const n = { ...node, figures: { "worklist-pull-loss-ratio": { value: 1, observed_at: readAt }, "x-ratio": { value: 0.25, observed_at: readAt } } };
+    const n = { ...outpost, figures: { "worklist-pull-loss-ratio": { value: 1, observed_at: readAt }, "x-ratio": { value: 0.25, observed_at: readAt } } };
     expect(figureText(n, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe("100%");
     expect(figureText(n, { key: "x-ratio", unit: "ratio" })).toBe("25%");
-    expect(figureText(node, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe("not reported");
+    expect(figureText(outpost, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe("not reported");
   });
 });
 
 describe("figureTinted", () => {
-  const node = { name: "edge-a", label: "", enrolled: true, figures: { "worklist-pull-loss-ratio": { value: 1, observed_at: readAt }, "command-pending-count": { value: 4, observed_at: readAt } } };
+  const outpost = { name: "edge-a", label: "", enrolled: true, figures: { "worklist-pull-loss-ratio": { value: 1, observed_at: readAt }, "command-pending-count": { value: 4, observed_at: readAt } } };
 
   it("tints a ratio column above 0, as the Loss column's one rule", () => {
-    expect(figureTinted(node, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe(true);
-    expect(figureTinted({ ...node, figures: { "worklist-pull-loss-ratio": { value: 0, observed_at: readAt } } }, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe(false);
+    expect(figureTinted(outpost, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe(true);
+    expect(figureTinted({ ...outpost, figures: { "worklist-pull-loss-ratio": { value: 0, observed_at: readAt } } }, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe(false);
   });
 
   it("tints no count and no unreported ratio", () => {
-    expect(figureTinted(node, { key: "command-pending-count", unit: "" })).toBe(false);
-    expect(figureTinted({ ...node, figures: undefined }, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe(false);
+    expect(figureTinted(outpost, { key: "command-pending-count", unit: "" })).toBe(false);
+    expect(figureTinted({ ...outpost, figures: undefined }, { key: "worklist-pull-loss-ratio", unit: "ratio" })).toBe(false);
   });
 });
 
-describe("nodePill", () => {
+describe("outpostPill", () => {
   const at = (ageMs: number) => ({ name: "edge-a", label: "", enrolled: true, last_heartbeat_at: new Date(readMs - ageMs).toISOString() });
 
-  it("is nodeStatus at read_at: a heartbeat exactly the down window before reads up", () => {
-    expect(nodePill(at(NODE_DOWN_AFTER_MS), readAt)).toBe("up");
+  it("is outpostStatus at read_at: a heartbeat exactly the down window before reads up", () => {
+    expect(outpostPill(at(OUTPOST_DOWN_AFTER_MS), readAt)).toBe("up");
   });
 
   it("reads down one millisecond past the window", () => {
-    expect(nodePill(at(NODE_DOWN_AFTER_MS + 1), readAt)).toBe("down");
+    expect(outpostPill(at(OUTPOST_DOWN_AFTER_MS + 1), readAt)).toBe("down");
   });
 
-  it("reads never for a node that has not checked in", () => {
-    expect(nodePill({ name: "edge-new", label: "", enrolled: false }, readAt)).toBe("never");
+  it("reads never for an outpost that has not checked in", () => {
+    expect(outpostPill({ name: "edge-new", label: "", enrolled: false }, readAt)).toBe("never");
   });
 
-  it("counts the nodes whose pill is not up", () => {
-    const v = view({ nodes: [at(1000), at(NODE_DOWN_AFTER_MS + 1), { name: "edge-new", label: "", enrolled: false }] });
+  it("counts the outposts whose pill is not up", () => {
+    const v = view({ outposts: [at(1000), at(OUTPOST_DOWN_AFTER_MS + 1), { name: "edge-new", label: "", enrolled: false }] });
     expect(notUpCount(v)).toBe(2);
   });
 });
 
 
-// A refusal is an answer, not an outage (#1644): a scoped node read is a 403
+// A refusal is an answer, not an outage (#1644): a scoped outpost read is a 403
 // the server will give again, so the query stops at once and says why, where
 // a 5xx or a dropped connection is retried like any read.
 describe("retryPlatformView", () => {
@@ -184,7 +184,7 @@ describe("retryPlatformView", () => {
 describe("platformRefusal", () => {
   it("names the read a 403 lacks, not the server's bare forbidden", () => {
     expect(platformRefusal({ status: 403, title: "Forbidden", detail: "forbidden" })).toBe(PLATFORM_REFUSED);
-    expect(PLATFORM_REFUSED).toMatch(/fleet-wide node read/);
+    expect(PLATFORM_REFUSED).toMatch(/fleet-wide outpost read/);
   });
 
   it("is the error's own message otherwise", () => {
@@ -208,7 +208,7 @@ describe("sortGaps", () => {
     ]).map((g) => g.gap);
     expect(got).toEqual(["published-not-landed", "received-not-settled", "connect-not-accepted", "answered-not-returned", "sent-not-received"]);
   });
-  it("reads a warming-up node's null gaps as none", () => {
+  it("reads a warming-up outpost's null gaps as none", () => {
     expect(sortGaps(null)).toEqual([]);
   });
 });
@@ -309,10 +309,10 @@ describe("lossTinted", () => {
 const fig = (inn: number, out: number) => ({ in: inn, out, ...(inn > 0 ? { loss: (inn - out) / inn } : {}) });
 const span = (inn: number, out: number) => ({ newest: fig(inn, out), last_hour: fig(inn, out) });
 const hop = (over: Partial<PlatformPipelineHop> = {}): PlatformPipelineHop => ({
-  id: "node",
-  label: "Node",
-  description: "The node's spool.",
-  component_class: "node",
+  id: "outpost",
+  label: "Outpost",
+  description: "The outpost's spool.",
+  component_class: "outpost",
   keys: ["delivery-in-count", "delivery-out-count", "delivery-loss-ratio"],
   kinds: [
     { kind: "metric", ...span(100, 99) },
@@ -355,23 +355,23 @@ describe("pipelineKinds and endToEndFigure", () => {
   });
 });
 
-// A node's Loss group is its composed ratio over its own hops; a node that
+// An outpost's Loss group is its composed ratio over its own hops; an outpost that
 // recorded nothing reads not reported, never 0.
-describe("nodeLossText", () => {
-  const node = { name: "edge-a", label: "", enrolled: true };
+describe("outpostLossText", () => {
+  const outpost = { name: "edge-a", label: "", enrolled: true };
 
-  it("shows the node's composed ratio", () => {
-    expect(nodeLossText({ ...node, loss: 0 })).toBe("0%");
-    expect(nodeLossText({ ...node, loss: 0.03 })).toBe("3%");
+  it("shows the outpost's composed ratio", () => {
+    expect(outpostLossText({ ...outpost, loss: 0 })).toBe("0%");
+    expect(outpostLossText({ ...outpost, loss: 0.03 })).toBe("3%");
   });
 
-  it("reads a node with no loss figure as not reported", () => {
-    expect(nodeLossText(node)).toBe("not reported");
+  it("reads an outpost with no loss figure as not reported", () => {
+    expect(outpostLossText(outpost)).toBe("not reported");
   });
 
   it("names the hops the figure composes in its hint", () => {
-    expect(nodeLossHint(view())).toMatch(/node hop/);
-    expect(nodeLossHint(view({ loss_hops: ["node", "sim"] }))).toMatch(/node and sim hops/);
+    expect(outpostLossHint(view())).toMatch(/outpost hop/);
+    expect(outpostLossHint(view({ loss_hops: ["outpost", "sim"] }))).toMatch(/outpost and sim hops/);
   });
 });
 

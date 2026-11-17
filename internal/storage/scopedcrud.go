@@ -234,7 +234,7 @@ func loadByRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref s
 // every dotted body reference, producing a 404 that names the entity being
 // PATCHED rather than the reference that failed to resolve. With it, the
 // same thirteen existing folds (components.go, systems.go, locations.go,
-// secrets.go, variables.go, role_declarations.go, nodes.go) run unchanged
+// secrets.go, variables.go, role_declarations.go, outposts.go) run unchanged
 // for all three reference forms: name, uuid, and address. mapRefErr's own
 // *ErrPathNotFound case (matched via errors.As on the concrete type, which
 // does not consult Unwrap) still fires first and wins for the path-PARAMETER
@@ -841,14 +841,14 @@ func resolveScoped[T any](ctx context.Context, q querier, cfg scopedConfig[T], n
 // resolves its owner exactly once here instead of scope-checking it and then
 // re-resolving the same reference for the arc.
 //
-// node is on the arc but has no scope tree of its own (its refusals are
-// all-or-nothing, ErrNodeForbidden, decided before a resolve is reached), so it
+// outpost is on the arc but has no scope tree of its own (its refusals are
+// all-or-nothing, ErrOutpostForbidden, decided before a resolve is reached), so it
 // resolves by existence through ownerArcValue and ignores both sets, matching
 // what ownerInScope already does for it. That resolve accepts a uuid as well as
-// a name, where the pair it replaces on this path did not: ownerInScope's node
-// arm existence-checked `where name = $1` only, so a node property addressed by
+// a name, where the pair it replaces on this path did not: ownerInScope's outpost
+// arm existence-checked `where name = $1` only, so an outpost property addressed by
 // uuid was reported absent by the guard before ownerArcValue ever got to resolve
-// it. No route reaches a node property today (the three property surfaces are
+// it. No route reaches an outpost property today (the three property surfaces are
 // component, system, and location), so this fixes nothing an operator could hit
 // and is recorded because it is a behaviour change and not a refactor.
 func (p *PG) resolveTargetID(ctx context.Context, q querier, ownerKind, ref string, read, action scope.Set) (string, error) {
@@ -871,7 +871,7 @@ func (p *PG) resolveTargetID(ctx context.Context, q querier, ownerKind, ref stri
 			return "", err
 		}
 		return v.ID, nil
-	case "node":
+	case "outpost":
 		return p.ownerArcValue(ctx, q, ownerKind, ref)
 	}
 	return "", ErrUnknownOwnerKind

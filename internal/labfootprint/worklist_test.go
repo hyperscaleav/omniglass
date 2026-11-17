@@ -7,13 +7,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// The worklist read (#1868) takes each node's worst observed worklist pull
-// loss over the window, by node name, from the nodes' own platform
-// components, starting from every node so none drops out.
-func TestWorklistQueryReadsEachNodesWorstPullLoss(t *testing.T) {
+// The worklist read (#1868) takes each outpost's worst observed worklist pull
+// loss over the window, by outpost name, from the outposts' own platform
+// components, starting from every outpost so none drops out.
+func TestWorklistQueryReadsEachOutpostsWorstPullLoss(t *testing.T) {
 	q := WorklistQuery(at(0), at(600))
 	for _, want := range []string{"'" + writerclass.WorklistPullLossRatio + "'", "max(m.value)", "n.name",
-		"from node n", "left join", "w.component_id = n.platform_component_id",
+		"from outpost n", "left join", "w.component_id = n.platform_component_id",
 		"s.provenance in ('observed', 'calculated')", "to_timestamp(" + epoch(at(0)) + ")", "to_timestamp(" + epoch(at(600)) + ")"} {
 		if !strings.Contains(q, want) {
 			t.Errorf("the worklist query has no %q:\n%s", want, q)
@@ -21,7 +21,7 @@ func TestWorklistQueryReadsEachNodesWorstPullLoss(t *testing.T) {
 	}
 }
 
-// The parse keeps one ratio a node and lists the nodes with no ratio; a
+// The parse keeps one ratio an outpost and lists the outposts with no ratio; a
 // ratio that is no number, or out of [0, 1], is an error.
 func TestParseWorklist(t *testing.T) {
 	got, unreported, err := ParseWorklist("edge-hq|1\nedge-a|0\nedge-b|\n\nnot a line\n")
@@ -41,8 +41,8 @@ func TestParseWorklist(t *testing.T) {
 	}
 }
 
-// The worklist_loss family reads one figure a node, named for it: 0 passes,
-// a node whose pulls failed fails and says what share, a node that reported
+// The worklist_loss family reads one figure an outpost, named for it: 0 passes,
+// an outpost whose pulls failed fails and says what share, an outpost that reported
 // nothing fails as missing, and a run with no reading is not measured
 // rather than clean.
 func TestWorklistLossFamily(t *testing.T) {
@@ -75,15 +75,15 @@ func TestWorklistLossFamily(t *testing.T) {
 		t.Errorf("an unread run read %+v, want one missing reading saying why", got)
 	}
 	r.WorklistNotRead = ""
-	if got := fam.Read(r); len(got) != 1 || !got[0].Missing || !strings.Contains(got[0].Note, "no node") {
-		t.Errorf("a run with no node read %+v, want one missing reading", got)
+	if got := fam.Read(r); len(got) != 1 || !got[0].Missing || !strings.Contains(got[0].Note, "no outpost") {
+		t.Errorf("a run with no outpost read %+v, want one missing reading", got)
 	}
 }
 
-// The printed report carries the worklist row (#1868): the worst node's share
-// named, 0 % when every node pulled clean, the unreported nodes counted, and
+// The printed report carries the worklist row (#1868): the worst outpost's share
+// named, 0 % when every outpost pulled clean, the unreported outposts counted, and
 // "not measured" with a footer saying why when the read failed or found no
-// node.
+// outpost.
 func TestScaleTableWorklistRow(t *testing.T) {
 	cases := []struct {
 		name string
@@ -91,19 +91,19 @@ func TestScaleTableWorklistRow(t *testing.T) {
 		want []string
 	}{
 		{"clean", ScaleRun{Worklist: map[string]float64{"edge-hq": 0, "edge-a": 0}},
-			[]string{"worklist pull loss           0 %   (2 nodes)\n"}},
-		{"one node", ScaleRun{Worklist: map[string]float64{"edge-hq": 0}},
-			[]string{"worklist pull loss           0 %   (1 node)\n"}},
+			[]string{"worklist pull loss           0 %   (2 outposts)\n"}},
+		{"one outpost", ScaleRun{Worklist: map[string]float64{"edge-hq": 0}},
+			[]string{"worklist pull loss           0 %   (1 outpost)\n"}},
 		{"stale", ScaleRun{Worklist: map[string]float64{"edge-hq": 1, "edge-a": 0.5, "edge-b": 0}},
-			[]string{"worklist pull loss           100 % on edge-hq   (2 of 3 nodes refused)\n"}},
+			[]string{"worklist pull loss           100 % on edge-hq   (2 of 3 outposts refused)\n"}},
 		{"unreported", ScaleRun{Worklist: map[string]float64{"edge-hq": 0}, WorklistUnreported: []string{"edge-a"}},
-			[]string{"worklist pull loss           0 %   (2 nodes, 1 unreported)\n"}},
+			[]string{"worklist pull loss           0 %   (2 outposts, 1 unreported)\n"}},
 		{"none reported", ScaleRun{WorklistUnreported: []string{"edge-a"}},
-			[]string{"worklist pull loss           unreported   (1 node)\n"}},
+			[]string{"worklist pull loss           unreported   (1 outpost)\n"}},
 		{"unread", ScaleRun{WorklistGap: "the database did not answer"},
 			[]string{"worklist pull loss           not measured\n", "worklist pull loss not measured: the database did not answer\n"}},
-		{"no node", ScaleRun{},
-			[]string{"worklist pull loss           not measured\n", "worklist pull loss not measured: the lab holds no node to read\n"}},
+		{"no outpost", ScaleRun{},
+			[]string{"worklist pull loss           not measured\n", "worklist pull loss not measured: the lab holds no outpost to read\n"}},
 	}
 	for _, c := range cases {
 		got := SummarizeScale(c.run).Table()

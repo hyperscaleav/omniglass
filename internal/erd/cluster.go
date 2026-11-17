@@ -44,12 +44,12 @@ var Subsystems = []Cluster{
 		"reserved_key",
 	}},
 	{Name: "collection", Tables: []string{
-		"node", "task", "node_log",
+		"outpost", "task", "outpost_log",
 		// platform_server maps a server's identity to the platform component
-		// its own measures land on (#1627), as a node's row does a node's.
+		// its own measures land on (#1627), as an outpost's row does an outpost's.
 		"platform_server",
 		// sim_impairment is what an operator broke on a simulated device (#889),
-		// applied by the simulator beside its node.
+		// applied by the simulator beside its outpost.
 		"sim_impairment",
 		// The webhook transport (#1024): a webhook endpoint's token binding,
 		// and the inbox of senders no endpoint claims.

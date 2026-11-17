@@ -12,10 +12,10 @@ Type `omniglass location createFromTemplate --template meeting-floor --parent hq
 Enter
 Wait
 
-Type "# One more system, at a room, with its touch panel attached on the node"
+Type "# One more system, at a room, with its touch panel attached on the outpost"
 Enter
 Wait
-Type `omniglass system createFromTemplate --template mr55-system --location hq.west.level-7.mr-1 --name mr-1-b --node edge-hq --attach '{"touch-control":[{"host":"127.0.0.9"}]}' | jq -c '{system, standard, standards_created, components: [.components[] | "\(.role) \(.attached)"]}'`
+Type `omniglass system createFromTemplate --template mr55-system --location hq.west.level-7.mr-1 --name mr-1-b --outpost edge-hq --attach '{"touch-control":[{"host":"127.0.0.9"}]}' | jq -c '{system, standard, standards_created, components: [.components[] | "\(.role) \(.attached)"]}'`
 Enter
 Wait
 

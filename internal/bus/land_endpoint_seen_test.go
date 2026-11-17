@@ -18,7 +18,7 @@ import (
 // receipt of any batch its task delivered (#931, #933), not to a sample's own
 // timestamp or series: a driver's instanced series counts, a property-only
 // driver whose value never changes (the property lane writes transitions
-// only) stays fresh, and a sample dated ahead by the node's clock does not
+// only) stays fresh, and a sample dated ahead by the outpost's clock does not
 // carry the stamp into the future.
 func TestLandStampsEndpointSeen(t *testing.T) {
 	if testing.Short() {
@@ -40,30 +40,30 @@ func TestLandStampsEndpointSeen(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('snmp', 'snmp', $1::uuid, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1"}'::jsonb)`, comp.ID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('snmp', 'snmp', $1::uuid, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
 		('t-snmp', 'poll', (select id from endpoint where name = 'snmp'), true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
-	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-snmp", "node-a")
+	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-snmp", "outpost-a")
 	if err != nil || !ok {
 		t.Fatalf("resolve task owner: ok=%v err=%v", ok, err)
 	}
 	s := &Server{store: gw}
 	land := func(ev *ogv1.TelemetryBatch) {
 		t.Helper()
-		ev.TaskId, ev.NodeId = "t-snmp", "node-a"
-		if err := s.land(ctx, "", ev, ingestBinding{SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
+		ev.TaskId, ev.OutpostId = "t-snmp", "outpost-a"
+		if err := s.land(ctx, "", ev, ingestBinding{SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.OutpostWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
 			t.Fatalf("land: %v", err)
 		}
 	}
@@ -105,7 +105,7 @@ func TestLandStampsEndpointSeen(t *testing.T) {
 	land(&ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{up}})
 	fresh("an unchanged property")
 
-	// A sample dated an hour ahead by the node's clock.
+	// A sample dated an hour ahead by the outpost's clock.
 	age()
 	land(&ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "uptime", Value: 2, Ts: timestamppb.New(time.Now().Add(time.Hour))}}})
 	fresh("a future-dated sample")

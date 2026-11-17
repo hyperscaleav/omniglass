@@ -12,7 +12,7 @@ sidebar:
 :::caution[Design: the ViewResult contract is entirely unbuilt]
 The framework on this page is not built: there is no `view` table, no `ViewResult` shape, no
 `/views/{id}:run` route, and no renderer library. Today's read side is typed CRUD `GET`s plus six
-hand-written composed reads (reachability, events, the component and node log
+hand-written composed reads (reachability, events, the component and outpost log
 reads, the fleet projection at `GET /views/fleet`, the first route actually served under
 `/views/`, and the platform projection at `GET /views/platform`, the second, behind
 [Platform health](/guides/operator/platform-health/), with its closed-loop read at

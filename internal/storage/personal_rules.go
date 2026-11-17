@@ -56,7 +56,7 @@ const PersonalRuleCap = 50
 var ErrPersonalRuleCap = errors.New("storage: a person may own at most 50 personal rules")
 
 // ErrPersonalRuleOwner is a personal rule for a principal that is not a
-// person: a service or a node is no one to tell.
+// person: a service or an outpost is no one to tell.
 var ErrPersonalRuleOwner = errors.New("storage: a personal rule belongs to a person")
 
 // ListPersonalRules lists the owner's rules, by name.

@@ -1,7 +1,7 @@
 import type { JSX } from "solid-js";
 import { Show } from "solid-js";
 
-// Page scaffold: an optional breadcrumb slot, a title (string or node) + optional
+// Page scaffold: an optional breadcrumb slot, a title (string or outpost) + optional
 // subtitle and right-aligned actions, then the page body, stacked with the
 // density gap. Inventory pages built on TreeList drop the H1 (the top bar
 // already labels the page) and pass their own header in children.

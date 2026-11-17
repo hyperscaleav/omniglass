@@ -119,7 +119,7 @@ func TestRuleSweepSerializesWithIngest(t *testing.T) {
 }
 
 // A sustain is timed by when the server received the sample, not by the
-// node's clock: a node running a minute behind does not get its fire
+// outpost's clock: an outpost running a minute behind does not get its fire
 // sustain waived on the next sweep.
 func TestRuleSustainTimedByServerReceipt(t *testing.T) {
 	t.Parallel()

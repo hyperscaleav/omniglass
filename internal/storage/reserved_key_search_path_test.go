@@ -15,7 +15,7 @@ import (
 // A reserved key held in both tiers resolves to nothing in SQL too (#1447),
 // as ResolveNameLane resolves it for the ingest registry. An operator held
 // local/ssh-host-key before a release reserved the name and shipped og's row
-// beside theirs: no reader serves the operator's frozen values as the node's.
+// beside theirs: no reader serves the operator's frozen values as the outpost's.
 // An unreserved name an operator holds beside a shipped one still reaches
 // theirs.
 func TestAReservedKeyHeldInBothTiersReachesNoReader(t *testing.T) {
@@ -109,7 +109,7 @@ func TestAReservedKeyHeldInBothTiersReachesNoReader(t *testing.T) {
 		t.Errorf("PropertyTransitions(%s) = %+v (%v), want none", reserved, got, err)
 	}
 	if pin, err := gw.EndpointKeyPin(ctx, "disp-1", "ssh", "ssh"); err != nil || pin != "" {
-		t.Errorf("the ssh key pin reads %q (%v), want none: the operator's frozen value is not the node's", pin, err)
+		t.Errorf("the ssh key pin reads %q (%v), want none: the operator's frozen value is not the outpost's", pin, err)
 	}
 
 	// The unreserved key: the operator's row answers, in the registry and in

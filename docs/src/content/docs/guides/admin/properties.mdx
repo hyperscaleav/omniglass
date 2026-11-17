@@ -89,7 +89,7 @@ Declaring `serial-number`, `firmware-version`, and `model-number` on a Samsung Q
 every QM55 in the fleet carry those three, with the same names and the same types, without touching
 a component. Declaring `room-capacity` on Huddle Room does the same for every huddle room. Type and
 validation are **not** repeated in the contract, they stay on the catalog entry, so a property means
-one thing everywhere. A contract cannot declare a **reserved** key (a node's own probe and session
+one thing everywhere. A contract cannot declare a **reserved** key (an outpost's own probe and session
 keys such as `endpoint-reachable` or `ssh-host-key`, the platform's `health`): its value is only its
 writer's to give, so a default would stand in for it, and the save is refused naming the key
 ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)). A line saved
@@ -134,9 +134,9 @@ rest of the detail, and **Cancel** discards them.
 - **An instance with no classifier is all off contract.** A **productless** component and a **one-off
   system** (one conforming to no standard) have no contract at all, so everything they carry is off
   contract. Nothing breaks; the panel simply shows one group.
-- **A node's own facts are not yours to set.** A property of the `node-probe` writer class (a
+- **An outpost's own facts are not yours to set.** A property of the `outpost-probe` writer class (a
   reachability verdict, a held session's state, the gate, a trusted host key or tls certificate) is the
-  node's observation, and `health` is the rollup's, so setting one is refused (422) naming the key; a
+  outpost's observation, and `health` is the rollup's, so setting one is refused (422) naming the key; a
   key you trust is pinned through the endpoint's **Retry** instead
   ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)).
 - An instance in a scope you cannot reach is **not found**, not forbidden: the panel resolves

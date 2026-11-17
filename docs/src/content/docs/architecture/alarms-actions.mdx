@@ -29,7 +29,7 @@ component stops occupying its slots; a lesser alarm degrades the component but l
 (#626: an alarm no longer names what it degrades).
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
-sustains held by a durable streak and a sweep, five official rules (`reachability-lost`; `node-silent` on a node's own component; `ingest-lag-high`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
+sustains held by a durable streak and a sweep, five official rules (`reachability-lost`; `outpost-silent` on an outpost's own component; `ingest-lag-high`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
 live state, and the console's **Rules** and **Severity** pages. The **event-to-alarm edge** (#938,
 [ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)):
 a rule's alarm is optional (an informational rule raises none), it writes typed events at each edge of
@@ -351,7 +351,7 @@ serializes with an arriving sample on the same series, so a recovery landing as 
 never leaves the alarm open. A rule write serializes with the samples judged by the rule too: an
 ingest holds the rule for its batch, so a disable, delete or narrowing waits for an in-flight batch and
 then clears whatever it raised. Sustains are timed by the **server's receipt** of each sample, never by the
-sample's own timestamp, so a node whose clock runs behind neither skips nor stretches a sustain (which
+sample's own timestamp, so an outpost whose clock runs behind neither skips nor stretches a sustain (which
 sample is newest is still decided by that timestamp). Only a **material** edit restarts a rule's
 streaks (its key, criteria, clear criteria, selector or sustains); a label, description, message,
 severity or event type edit leaves them running, since the event types change what the rule writes at
@@ -389,11 +389,11 @@ is `outage` and losing it drops the role below quorum; otherwise the system read
 impact says, and a component that fills no role moves no system. The second, `ingest-lag-high`,
 watches Omniglass itself: the server's `ingest-lag-max` held over 30 s for 2 minutes opens a
 `warning` alarm on the server's platform component, and a window back at 30 s or under clears it
-([messaging](/architecture/messaging/#measuring-the-pipeline)). `node-silent` opens a `high` alarm on
-a claimed node's platform component once its `checkin-age`, which the server writes for every claimed
-node every 15 s, reads past 90 s (three missed 30 s heartbeats), with no sustain of its own since the
-age is one; the node's next heartbeat brings the age back under and clears it
-([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)). `disk-nearly-full` opens a
+([messaging](/architecture/messaging/#measuring-the-pipeline)). `outpost-silent` opens a `high` alarm on
+a claimed outpost's platform component once its `checkin-age`, which the server writes for every claimed
+outpost every 15 s, reads past 90 s (three missed 30 s heartbeats), with no sustain of its own since the
+age is one; the outpost's next heartbeat brings the age back under and clears it
+([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)). `disk-nearly-full` opens a
 `warning` alarm on the server's platform component when `data-dir-disk-used-ratio` holds over 0.9 for
 2 minutes, and clears only at 0.85 or under, so a disk at the line does not flap
 ([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
@@ -643,7 +643,7 @@ omniglass action-rule create --name page-on-call --on '["raised"]' \
 **The group is expanded at the transition**, not when the rule is written: the alarm's own transaction
 reads the membership as it stands, so a member added later is told on the next alarm and a removed one
 is not, with no rule edited. Recipients are people: only active, unarchived **human** members are told
-(a service account or a node in the group is skipped). Each person gets **one row per channel**, with
+(a service account or an outpost in the group is skipped). Each person gets **one row per channel**, with
 their own delivery state; a person one rule reaches twice (two of its groups, or a group and directly)
 is told once.
 
@@ -805,7 +805,7 @@ state directly:
 
 - **kinds**: a `webhook` action with a per-target
   body, `run` (execute a command; edge realization in [templates](/architecture/templates/) /
-  [nodes](/architecture/nodes/));
+  [outposts](/architecture/outposts/));
 - a **multistep** action is a **flow**, carrying workflow state (current step, waiting, branches).
 
 Still design on the rule: triggers on **events** and **labels** as well as alarm transitions,
@@ -1068,4 +1068,4 @@ with the [rule families](/architecture/calculations/).
 An abstract action (`reboot`) resolves to different concrete commands by component type / model
 through the cascade, so one `reboot` targets a heterogeneous fleet and each device runs the command
 its model declares; the edge dispatch and the `command` declaration live in
-[templates](/architecture/templates/) / [nodes](/architecture/nodes/).
+[templates](/architecture/templates/) / [outposts](/architecture/outposts/).

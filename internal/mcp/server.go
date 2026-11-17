@@ -27,7 +27,7 @@ import (
 
 // instructions is what the server tells an agent on connect: how the tools
 // behave, so it uses them the way the API means them to be used.
-const instructions = `Omniglass is the observability and control plane for an AV and IT fleet: places, systems, components, the edge nodes that reach them, and the endpoints and drivers that collect from them. Every tool is one API operation, run with your token: you see and change exactly what your permissions and scope allow, and every change is audited as yours. Address a resource by its name (or its dotted address); an id works too. A tool that is not read-only changes the fleet: confirm it with your user before calling it. An error is the route's own problem+json, and its detail says what to fix.`
+const instructions = `Omniglass is the observability and control plane for an AV and IT fleet: places, systems, components, the edge outposts that reach them, and the endpoints and drivers that collect from them. Every tool is one API operation, run with your token: you see and change exactly what your permissions and scope allow, and every change is audited as yours. Address a resource by its name (or its dotted address); an id works too. A tool that is not read-only changes the fleet: confirm it with your user before calling it. An error is the route's own problem+json, and its detail says what to fix.`
 
 // sessionTimeout closes an MCP session no request has touched for this long.
 const sessionTimeout = 30 * time.Minute

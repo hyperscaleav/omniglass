@@ -134,7 +134,7 @@ func resolveSystemTypeParent(ctx context.Context, gw storage.Gateway, ref string
 
 // registerSystemTypeRoutes wires the system_type registry surface: list (the
 // tree, flattened with parent links), create/update/delete of custom
-// (non-official) nodes. Gated by system_type:read|create|update|delete; read
+// (non-official) outposts. Gated by system_type:read|create|update|delete; read
 // sits in the viewer floor (*:read), the mutations at the admin tier, the same
 // split component_type and location_type use.
 func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {

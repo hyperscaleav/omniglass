@@ -2099,7 +2099,7 @@ alarms:
 # (the simulated panel's nvp-telnet face, admin / newtron). Its password was
 # rotated, and this endpoint still logs in with the secret holding the old
 # one: the panel answers "auth rejected", the driver declares that terminal,
-# and a live node reads the session rejected after one attempt, with the
+# and a live outpost reads the session rejected after one attempt, with the
 # panel's own words beside Retry. Pointing the endpoint's login at the rotated
 # secret moves the connection fingerprint and the session comes up, which is
 # the walkthrough (fix-a-rejected-session). The host is the panel's simulated
@@ -2115,7 +2115,7 @@ sim_secrets:
   # band): Boardroom A's copy wins for the room's components, and touch-a has a
   # copy of its own, which wins on that one panel with the room's and the
   # platform's shadowed beneath it. Chosen because only the huddle panel's
-  # console uses this name, outside the room: a node refuses a name with more
+  # console uses this name, outside the room: an outpost refuses a name with more
   # than one copy cascading onto a component (#820), so the name planted here
   # must be one no endpoint in the subtree references. The seed lands these two
   # after every endpoint, since an attach refuses a name that has two copies.
@@ -2161,7 +2161,7 @@ sim_secrets:
 
 sim_endpoints:
   # The meeting platform's webhooks (#1024, #1282): a server-hosted endpoint,
-  # so no node and no address. Its token is minted at creation. The driver's
+  # so no outpost and no address. Its token is minted at creation. The driver's
   # room-naming listeners declare the ucc-room-id identity, so each post
   # lands on the system bound to its room (the bindings below). Point the
   # simulated ucc-platform at this endpoint's URL (its POST /api/webhooks,
@@ -2187,7 +2187,7 @@ sim_endpoints:
     label: Panel over TLS
   # And NVP as datagrams on 51327 (its nvp-udp face, #1037), which drops a
   # seeded 5% of datagrams each way, so the driver's retries are always at
-  # work. No listen port: the node binds one of its own, and the panel
+  # work. No listen port: the outpost binds one of its own, and the panel
   # pushes to the source of SUBSCRIBE INPUT. Setting the endpoint's
   # listen-port input rebinds it there, and moves its fingerprint.
   - component: huddle-touch
@@ -2196,7 +2196,7 @@ sim_endpoints:
   # A changed host key worth showing (#1078). The briefing location's touch panel
   # also answers NVP over its ssh console (admin / newtron, the rotated
   # secret), and this endpoint pins the host key the panel presented before it
-  # was reimaged. The simulated panel's own key never matches it: a live node refuses the connection before
+  # was reimaged. The simulated panel's own key never matches it: a live outpost refuses the connection before
   # logging in and reads the session rejected, class host-key, naming both
   # keys beside Trust this key. Trusting the offered key makes it the pin and
   # the session comes up, which is the walkthrough (trust-a-changed-host-key).
@@ -2211,7 +2211,7 @@ sim_endpoints:
   # A refusal on an endpoint holding no session worth showing (#1110). The
   # auditorium's touch panel answers SNMP, and this endpoint reads its
   # community from the secret holding the one the panel's agent refuses: a
-  # live node's reachability probe meets authorizationError, gates the
+  # live outpost's reachability probe meets authorizationError, gates the
   # endpoint at the session rung and sends no further get, and the console
   # shows the refusal's reason beside Retry with no session pill. Pointing
   # the community at the fleet's own secret (sim-community) lifts the gate.
@@ -2299,7 +2299,7 @@ sim_identity_bindings:
 # /telemetry:push, owned by the location's system. Its principal holds
 # telemetry:push alone, scoped to its systems, so it can push nowhere else
 # and read nothing. The lab mints its token on every run, as it does the
-# node's, and the emulator beside the node pushes with it. A push has no
+# outpost's, and the emulator beside the outpost pushes with it. A push has no
 # endpoint, so it counts on its collected tier alone.
 sim_pushers:
   - { name: sim-booking-service, profile: booking-service, systems: [boardroom-a] }

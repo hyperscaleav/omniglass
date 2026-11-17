@@ -22,7 +22,7 @@ import (
 )
 
 // TestWorklistReplySizeMeasure is the measurement behind #1579: the corporate
-// plan seeded with a node per site, each node's worklist built through the
+// plan seeded with an outpost per site, each outpost's worklist built through the
 // path the server answers from (buildWorklistReply, then json.Marshal) and its
 // bytes reported against max payload. It is a probe, not a gate: set
 // WORKLIST_MEASURE to the sizes (e.g. 100,1000) to run it.
@@ -41,8 +41,8 @@ func TestWorklistReplySizeMeasure(t *testing.T) {
 }
 
 // corporateFleet is the corporate plan at systems seeded on a fresh database,
-// a node per site (named by nodeOf), with the headquarters' archetype name.
-func corporateFleet(t *testing.T, systems int) (gw *storage.PG, plan *scenario.Plan, hq string, nodeOf func(site string) string) {
+// an outpost per site (named by outpostOf), with the headquarters' archetype name.
+func corporateFleet(t *testing.T, systems int) (gw *storage.PG, plan *scenario.Plan, hq string, outpostOf func(site string) string) {
 	t.Helper()
 	m, err := scenario.Shipped("corporate")
 	if err != nil {
@@ -72,24 +72,24 @@ func corporateFleet(t *testing.T, systems int) (gw *storage.PG, plan *scenario.P
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	nodeOf = func(site string) string { return "edge-" + site }
+	outpostOf = func(site string) string { return "edge-" + site }
 	for _, s := range plan.Sites {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: nodeOf(s.Name), Label: s.Name}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: outpostOf(s.Name), Label: s.Name}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := devseed.SeedPlan(ctx, gw, "", plan, devseed.PlanOptions{Endpoints: true, NodeFor: nodeOf}); err != nil {
+	if _, err := devseed.SeedPlan(ctx, gw, "", plan, devseed.PlanOptions{Endpoints: true, OutpostFor: outpostOf}); err != nil {
 		t.Fatal(err)
 	}
-	return gw, plan, hq, nodeOf
+	return gw, plan, hq, outpostOf
 }
 
 func measureWorklists(t *testing.T, systems int) {
-	gw, plan, hq, nodeOf := corporateFleet(t, systems)
+	gw, plan, hq, outpostOf := corporateFleet(t, systems)
 	srv := &Server{store: gw}
-	worst, worstNode := 0, ""
+	worst, worstOutpost := 0, ""
 	for _, s := range plan.Sites {
-		reply, err := srv.buildWorklistReply(context.Background(), nodeOf(s.Name))
+		reply, err := srv.buildWorklistReply(context.Background(), outpostOf(s.Name))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -98,24 +98,24 @@ func measureWorklists(t *testing.T, systems int) {
 			t.Fatal(err)
 		}
 		if s.Archetype == hq {
-			t.Logf("HQ %s: %d tasks, %d bytes, %d gzipped (%.0f%% of max payload %d)", nodeOf(s.Name), len(reply.Tasks), len(b), wireBytes(t, b), 100*float64(wireBytes(t, b))/DefaultMaxPayload, DefaultMaxPayload)
+			t.Logf("HQ %s: %d tasks, %d bytes, %d gzipped (%.0f%% of max payload %d)", outpostOf(s.Name), len(reply.Tasks), len(b), wireBytes(t, b), 100*float64(wireBytes(t, b))/DefaultMaxPayload, DefaultMaxPayload)
 			learnPins(&reply)
 			pinned, err := json.Marshal(reply)
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Logf("HQ %s with every https pin learned: %d bytes, %d gzipped", nodeOf(s.Name), len(pinned), wireBytes(t, pinned))
+			t.Logf("HQ %s with every https pin learned: %d bytes, %d gzipped", outpostOf(s.Name), len(pinned), wireBytes(t, pinned))
 			flat, err := json.Marshal(flatWorklist{Tasks: reply.Tasks, ConfigGeneration: reply.ConfigGeneration, ReportSeconds: reply.ReportSeconds})
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Logf("HQ %s pinned, as the flat wire before #1583: %d bytes, %d gzipped", nodeOf(s.Name), len(flat), wireBytes(t, flat))
+			t.Logf("HQ %s pinned, as the flat wire before #1583: %d bytes, %d gzipped", outpostOf(s.Name), len(flat), wireBytes(t, flat))
 		}
 		if len(b) > worst {
-			worst, worstNode = len(b), nodeOf(s.Name)
+			worst, worstOutpost = len(b), outpostOf(s.Name)
 		}
 	}
-	t.Logf("%d systems, %d sites: largest worklist %s at %d bytes", systems, len(plan.Sites), worstNode, worst)
+	t.Logf("%d systems, %d sites: largest worklist %s at %d bytes", systems, len(plan.Sites), worstOutpost, worst)
 }
 
 // wireBytes is a reply's size as the bus carries it, gzipped past the
@@ -129,7 +129,7 @@ func wireBytes(t *testing.T, raw []byte) int {
 	return len(body)
 }
 
-// learnPins gives every https endpoint the key pin a node learns on its first
+// learnPins gives every https endpoint the key pin an outpost learns on its first
 // handshake (#1872): a distinct SHA256 fingerprint per endpoint, on each of its
 // tasks, as the server sends it once the pin is stored.
 func learnPins(reply *collection.WorklistReply) {

@@ -17,7 +17,7 @@ import (
 
 // TestPrincipalIdentPrefersTheUsername pins the order in the one place it can
 // be checked without a database at all: a human's username outranks a service
-// account's name, which outranks a node's name, and a principal with none of
+// account's name, which outranks an outpost's name, and a principal with none of
 // the three reads as empty rather than as something invented.
 func TestPrincipalIdentPrefersTheUsername(t *testing.T) {
 	t.Parallel()
@@ -25,15 +25,15 @@ func TestPrincipalIdentPrefersTheUsername(t *testing.T) {
 		name     string
 		username *string
 		service  *string
-		node     *string
+		outpost  *string
 		want     string
 	}{
 		{"a human", strp("jordan"), nil, nil, "jordan"},
 		{"a service account", nil, strp("ingest-bot"), nil, "ingest-bot"},
-		{"a node", nil, nil, strp("edge-1"), "edge-1"},
+		{"an outpost", nil, nil, strp("edge-1"), "edge-1"},
 		{"none of them, which is a purged principal", nil, nil, nil, ""},
 		{"a human that somehow also has a service row", strp("jordan"), strp("ingest-bot"), nil, "jordan"},
-		{"a service row that somehow also has a node row", nil, strp("ingest-bot"), strp("edge-1"), "ingest-bot"},
+		{"a service row that somehow also has an outpost row", nil, strp("ingest-bot"), strp("edge-1"), "ingest-bot"},
 		// Absence is NULL and nothing else, which is what the bound coalesce
 		// means by it. All three columns are NOT NULL, so this state cannot
 		// exist; it is pinned because treating "" as absent here and not there
@@ -41,9 +41,9 @@ func TestPrincipalIdentPrefersTheUsername(t *testing.T) {
 		{"an empty username is present, not absent, exactly as coalesce reads it", strp(""), strp("ingest-bot"), nil, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := storage.ExportPrincipalIdent(tc.username, tc.service, tc.node); got != tc.want {
+			if got := storage.ExportPrincipalIdent(tc.username, tc.service, tc.outpost); got != tc.want {
 				t.Errorf("principalIdent(%v, %v, %v) = %q, want %q",
-					deref(tc.username), deref(tc.service), deref(tc.node), got, tc.want)
+					deref(tc.username), deref(tc.service), deref(tc.outpost), got, tc.want)
 			}
 		})
 	}
@@ -73,7 +73,7 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 	// principalIdentSources would do, so the expected value is stated here rather
 	// than left to the callers' tests to imply.
 	//
-	// A node's answer is its own name (#738): it is the third profiled kind and
+	// An outpost's answer is its own name (#738): it is the third profiled kind and
 	// the third source, so every kind the schema can produce resolves to
 	// something an operator recognises and only a purged principal reads empty.
 	for _, tc := range []struct {
@@ -83,14 +83,14 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 	}{
 		{"human", insertPrincipalOfKind(t, conn, "human"), "jordan-ops"},
 		{"service", insertPrincipalOfKind(t, conn, "service"), "ingest-bot"},
-		{"node", insertPrincipalOfKind(t, conn, "node"), "edge-1"},
+		{"outpost", insertPrincipalOfKind(t, conn, "outpost"), "edge-1"},
 		{"unknown", "00000000-0000-0000-0000-000000000000", ""},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
 			// The sub-select shape: projected, then folded in Go.
-			var subUser, subSvc, subNode *string
+			var subUser, subSvc, subOutpost *string
 			if err := conn.QueryRow(ctx,
-				`select `+storage.ExportPrincipalIdentCols("$1::uuid"), tc.id).Scan(&subUser, &subSvc, &subNode); err != nil {
+				`select `+storage.ExportPrincipalIdentCols("$1::uuid"), tc.id).Scan(&subUser, &subSvc, &subOutpost); err != nil {
 				t.Fatalf("project the sub-select sources: %v", err)
 			}
 			// The same shape folded into one bound expression, which is what a
@@ -103,21 +103,21 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 			// The JOIN shape, which is a different PLAN of the same policy and
 			// drifts from it exactly as readily: projected, and folded in SQL for
 			// the ORDER BY position.
-			var joinUser, joinSvc, joinNode, joinFold *string
+			var joinUser, joinSvc, joinOutpost, joinFold *string
 			if err := conn.QueryRow(ctx,
 				`select `+storage.ExportPrincipalIdentJoinedCols("pi")+`, `+storage.ExportPrincipalIdentJoinedSQL("pi")+
 					` from principal p`+storage.ExportPrincipalIdentJoins("pi", "p.id")+` where p.id = $1::uuid`,
-				tc.id).Scan(&joinUser, &joinSvc, &joinNode, &joinFold); err != nil && tc.kind != "unknown" {
+				tc.id).Scan(&joinUser, &joinSvc, &joinOutpost, &joinFold); err != nil && tc.kind != "unknown" {
 				t.Fatalf("project the joined sources: %v", err)
 			}
 
-			inGo := storage.ExportPrincipalIdent(subUser, subSvc, subNode)
+			inGo := storage.ExportPrincipalIdent(subUser, subSvc, subOutpost)
 			for _, other := range []struct {
 				shape string
 				got   string
 			}{
 				{"the expression it binds", orEmpty(bound)},
-				{"the join it projects", storage.ExportPrincipalIdent(joinUser, joinSvc, joinNode)},
+				{"the join it projects", storage.ExportPrincipalIdent(joinUser, joinSvc, joinOutpost)},
 				{"the join it sorts on", orEmpty(joinFold)},
 			} {
 				// The unknown id matches no principal row at all, so the join
@@ -141,15 +141,15 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 }
 
 // TestEverySurfaceNamesTheKindThatActed is #738's acceptance, and it drives all
-// three profiled kinds through all three surfaces rather than the node alone.
+// three profiled kinds through all three surfaces rather than the outpost alone.
 //
 // The invariant test above proves the SHAPES agree and what they agree on. It
 // cannot prove that the surfaces reading those shapes hand the answer back:
 // every one of them projects the sources and folds them in Go, so a fold reading
 // one column fewer than its query returned is a defect only a surface can show.
-// A node acting is the reason to write it (it read blank everywhere before this
+// An outpost acting is the reason to write it (it read blank everywhere before this
 // slice), and a human and a service account ride beside it because a surface
-// that named nobody would otherwise pass on the node row alone.
+// that named nobody would otherwise pass on the outpost row alone.
 func TestEverySurfaceNamesTheKindThatActed(t *testing.T) {
 	t.Parallel()
 	gw, dsn := secretGateway(t)
@@ -166,7 +166,7 @@ func TestEverySurfaceNamesTheKindThatActed(t *testing.T) {
 	}{
 		{"human", "jordan-ops"},
 		{"service", "ingest-bot"},
-		{"node", "edge-1"},
+		{"outpost", "edge-1"},
 	}
 	ids := make(map[string]string, len(kinds))
 	for _, k := range kinds {
@@ -280,8 +280,8 @@ func insertPrincipalOfKind(t *testing.T, conn *pgx.Conn, kind string) string {
 		profile = `insert into human (principal_id, username) values ($1, 'jordan-ops')`
 	case "service":
 		profile = `insert into service (principal_id, name) values ($1, 'ingest-bot')`
-	case "node":
-		profile = `insert into node (principal_id, name) values ($1, 'edge-1')`
+	case "outpost":
+		profile = `insert into outpost (principal_id, name) values ($1, 'edge-1')`
 	}
 	if _, err := conn.Exec(ctx, profile, pid); err != nil {
 		t.Fatalf("insert %s profile: %v", kind, err)

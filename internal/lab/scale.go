@@ -16,7 +16,7 @@ import (
 )
 
 // The scale lab (#1554) is a resolved scenario plan brought up as a
-// multi-site deployment: the database, the server, and one node per site,
+// multi-site deployment: the database, the server, and one outpost per site,
 // each simulating its site's components. What it needs of the host grows with
 // the plan, so it is estimated from measured costs before anything starts,
 // and a size the host cannot fit is refused, naming the largest that fits.
@@ -50,35 +50,35 @@ func (f Footprint) plus(g Footprint, n int) Footprint {
 }
 
 // CostModel prices a scale lab: the server and Postgres together (Base), each
-// site's node container on its own (Node), and each simulated component
-// (Component, its simulator's share and its node's collection from it).
+// site's outpost container on its own (Outpost), and each simulated component
+// (Component, its simulator's share and its outpost's collection from it).
 type CostModel struct {
-	Base, Node, Component Footprint
+	Base, Outpost, Component Footprint
 }
 
 // MeasuredCost is the cost model as measured with docker stats on a 12-core,
 // 32 GiB dev host (scripts/scale-lab.sh, settled 30 seconds after ready) at
 // --systems 20 (3 sites, 67 components) and --systems 100 (3 sites, 322
-// components). A node container took about 40 MiB at 6 to 24 components, 72
+// components). An outpost container took about 40 MiB at 6 to 24 components, 72
 // at 68 and 199 at 230: 36 MiB plus 0.7 MiB a component, rounded up for the
 // small sites. The server and Postgres took 180 MiB at 67 components and
 // 223 at 322: 170 MiB plus 0.17 MiB a component. CPU is the mean of spiky
 // samples: the server and Postgres a tenth of a core at 67 components and
-// three tenths at 322, a node a hundredth or less. That Postgres ran stock,
+// three tenths at 322, an outpost a hundredth or less. That Postgres ran stock,
 // its 128 MB of shared buffers barely touched; a scale lab's buffers are
 // sized to the host (#1930) and fill as it runs, so Need counts them apart.
 // A re-measure of a scale lab reads its filled buffers in Base: take them
 // out before updating Base, or Need counts them twice.
 var MeasuredCost = CostModel{
 	Base:      Footprint{MemMiB: 170, CPU: 0.05},
-	Node:      Footprint{MemMiB: 36, CPU: 0.01},
+	Outpost:   Footprint{MemMiB: 36, CPU: 0.01},
 	Component: Footprint{MemMiB: 0.9, CPU: 0.001},
 }
 
 // Estimate is what a lab of sites sites and components simulated components
 // takes of the host.
 func (m CostModel) Estimate(sites, components int) Footprint {
-	return m.Base.plus(m.Node, sites).plus(m.Component, components)
+	return m.Base.plus(m.Outpost, sites).plus(m.Component, components)
 }
 
 // Need is what a lab of sites sites and components simulated components
@@ -193,10 +193,10 @@ type ScaleRun struct {
 
 // scaleTotals is the plan the options carry: its sites and components.
 func scaleTotals(o Options) (sites, components int) {
-	for _, n := range o.SiteNodes {
+	for _, n := range o.SiteOutposts {
 		components += n.Components
 	}
-	return len(o.SiteNodes), components
+	return len(o.SiteOutposts), components
 }
 
 // Capacity is a scale lab's estimate against a host, and the decision: it

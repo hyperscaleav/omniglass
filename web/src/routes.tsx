@@ -9,7 +9,7 @@ import Components from "./pages/Components";
 import Profile from "./pages/Profile";
 import Subscriptions from "./pages/Subscriptions";
 import Inbox from "./pages/Inbox";
-import Nodes from "./pages/Nodes";
+import Outposts from "./pages/Outposts";
 import PlatformHealth from "./pages/PlatformHealth";
 import Simulation from "./pages/Simulation";
 import Users from "./pages/Users";
@@ -62,7 +62,7 @@ export const PAGES: Record<string, Component> = {
   OAuthConsent,
   Subscriptions,
   Inbox,
-  Nodes,
+  Outposts,
   PlatformHealth,
   Simulation,
   Users,

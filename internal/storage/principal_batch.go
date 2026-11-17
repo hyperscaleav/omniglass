@@ -26,7 +26,7 @@ import (
 // The kind profile is a UNION over the three profile tables rather than a query
 // per kind PRESENT in the page. A branch per kind would be flat in page size too,
 // but its cost would depend on the MIX (a directory holding humans, service
-// accounts and nodes costing two statements more than one holding only humans),
+// accounts and outposts costing two statements more than one holding only humans),
 // and a count that varies with the fixture's composition is a count no assertion
 // can state as a number.
 
@@ -56,7 +56,7 @@ func (p *PG) loadPrincipals(ctx context.Context, prs []Principal) error {
 //
 // The three profile tables have three different shapes, so the union widens them
 // to one: column three is the kind's own identifying string (a human's username,
-// a service's name, a node's name) and the human-only columns are padded on the
+// a service's name, an outpost's name) and the human-only columns are padded on the
 // other two branches. A principal of a profiled kind with no profile row is a
 // broken invariant, and it is reported here with the same error the single-row
 // path raises rather than silently returning a principal with a nil profile.
@@ -69,8 +69,8 @@ func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[s
 		 select principal_id, 'service'::text, name, '', '', false, false, null::timestamptz
 		   from service where principal_id = any($1::uuid[])
 		  union all
-		 select principal_id, 'node'::text, name, '', '', false, false, null::timestamptz
-		   from node where principal_id = any($1::uuid[])`, ids)
+		 select principal_id, 'outpost'::text, name, '', '', false, false, null::timestamptz
+		   from outpost where principal_id = any($1::uuid[])`, ids)
 	if err != nil {
 		return fmt.Errorf("storage: load principal profiles: %w", err)
 	}
@@ -96,8 +96,8 @@ func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[s
 			}
 		case "service":
 			pr.Service = &ServiceProfile{Name: ident}
-		case "node":
-			pr.Node = &NodeProfile{Name: ident}
+		case "outpost":
+			pr.Outpost = &OutpostProfile{Name: ident}
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -107,7 +107,7 @@ func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[s
 		pr := at[id]
 		missing := (pr.Kind == "human" && pr.Human == nil) ||
 			(pr.Kind == "service" && pr.Service == nil) ||
-			(pr.Kind == "node" && pr.Node == nil)
+			(pr.Kind == "outpost" && pr.Outpost == nil)
 		if missing {
 			return fmt.Errorf("storage: load %s: %w", pr.Kind, pgx.ErrNoRows)
 		}

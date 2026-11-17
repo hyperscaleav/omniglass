@@ -287,11 +287,11 @@ func TestAStandardTheOldSeedPlantedIsTheOperators(t *testing.T) {
 
 // TestADriverRenameRederivesItsTasks: every task a driver derives bakes the
 // driver's name into its spec (and its id hashes the spec), so a rename that
-// only moved the column would leave the node running tasks under a name the
+// only moved the column would leave the outpost running tasks under a name the
 // registry no longer has, and hand the churn to the next unrelated edit. The
 // rename re-derives the attached endpoints' tasks in its own transaction, as a
 // version change does (#823): every driver task carries the new name, the
-// endpoint is bumped so the node picks the set up, and a later label edit moves
+// endpoint is bumped so the outpost picks the set up, and a later label edit moves
 // nothing.
 func TestADriverRenameRederivesItsTasks(t *testing.T) {
 	t.Parallel()
@@ -315,12 +315,12 @@ func TestADriverRenameRederivesItsTasks(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-n"}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-n"}, all, all); err != nil {
-		t.Fatalf("node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-n"}, all, all); err != nil {
+		t.Fatalf("outpost: %v", err)
 	}
-	comp, name, node := "panel-n", "panel-proto", "edge-n"
+	comp, name, outpost := "panel-n", "panel-proto", "edge-n"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &name, Component: &comp, Node: &node,
+		Driver: &name, Component: &comp, Outpost: &outpost,
 		Inputs: map[string]string{"host": "10.20.4.62"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
@@ -373,7 +373,7 @@ func TestADriverRenameRederivesItsTasks(t *testing.T) {
 		}
 	}
 	if !epUpdated().After(stampedBefore) {
-		t.Error("the endpoint was not bumped, so the node would keep the old task set")
+		t.Error("the endpoint was not bumped, so the outpost would keep the old task set")
 	}
 
 	// The churn happened at the rename, so an unrelated edit moves nothing.

@@ -259,20 +259,20 @@ func TestSiblingSubsystemsSameParentRefused(t *testing.T) {
 	}
 }
 
-// TestNodeNameStaysGlobal pins the one tree-shaped-looking name that #627
-// deliberately leaves alone: a node's name is also its NATS subject, a wire
-// identity outside any placement, so node_name_key stays a plain global
+// TestOutpostNameStaysGlobal pins the one tree-shaped-looking name that #627
+// deliberately leaves alone: an outpost's name is also its NATS subject, a wire
+// identity outside any placement, so outpost_name_key stays a plain global
 // UNIQUE(name) rather than gaining placement buckets.
-func TestNodeNameStaysGlobal(t *testing.T) {
+func TestOutpostNameStaysGlobal(t *testing.T) {
 	t.Parallel()
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-node"}, all, all); err != nil {
-		t.Fatalf("first node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-outpost"}, all, all); err != nil {
+		t.Fatalf("first outpost: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-node"}, all, all); !errors.Is(err, storage.ErrNodeExists) {
-		t.Fatalf("second node with the same name = %v, want ErrNodeExists", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-outpost"}, all, all); !errors.Is(err, storage.ErrOutpostExists) {
+		t.Fatalf("second outpost with the same name = %v, want ErrOutpostExists", err)
 	}
 }
 

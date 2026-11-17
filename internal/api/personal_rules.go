@@ -268,7 +268,7 @@ func mapPersonalRuleErr(err error) error {
 		return huma.Error409Conflict("you own the most personal rules a person may (50); delete one first")
 	}
 	if errors.Is(err, storage.ErrPersonalRuleOwner) {
-		return huma.Error422UnprocessableEntity("a personal rule belongs to a person: a service account or a node is no one to tell")
+		return huma.Error422UnprocessableEntity("a personal rule belongs to a person: a service account or an outpost is no one to tell")
 	}
 	return mapActionRuleErr(err)
 }

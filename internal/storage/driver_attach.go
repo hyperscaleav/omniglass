@@ -418,7 +418,7 @@ func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) 
 }
 
 // bakeEmits resolves each emit's lane (the compile step of the authoring
-// model, ADR-0135) into the shared runtime unit the node parses back
+// model, ADR-0135) into the shared runtime unit the outpost parses back
 // (driver.BakedEmit), so the two sides can never drift on the shape. An emit
 // the writer ruling refuses (ADR-0161), which only a spec stored before the
 // refusal can carry, is never baked: the boot audit names it instead.
@@ -553,7 +553,7 @@ func deriveDriverTasks(ctx context.Context, tx pgx.Tx, endpointID string, plan *
 // written where missing, and the driver tasks it no longer derives are
 // retired. Ids are content hashes, so an unchanged function keeps its row and
 // a spec that changed nothing touches nothing; an endpoint whose tasks did
-// change has its updated_at bumped, which moves the node's config generation.
+// change has its updated_at bumped, which moves the outpost's config generation.
 func rederiveDriverTasks(ctx context.Context, tx pgx.Tx, driverID string) error {
 	d, err := scanDriver(tx.QueryRow(ctx, `select `+driverCols+` from driver where id = $1`, driverID))
 	if err != nil {

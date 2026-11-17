@@ -79,7 +79,7 @@ func TestAntiPatternCatalog(t *testing.T) {
 func TestBannedPatternsStaySane(t *testing.T) {
 	current := []string{
 		"property_type", "the property catalog", "a sample lands in metric",
-		"the current value cache", "source_event_id", "omniglass node run",
+		"the current value cache", "source_event_id", "omniglass outpost run",
 		"ListShell", "FlatList", "TreeList", "UpsertPropertyType",
 		"value_type on the variable", // a live column, distinct from the retired data-type usage
 		// ADR-0071 redefines "template" rather than retiring the word, so the prose
@@ -389,7 +389,7 @@ func TestADR2030PlaceAsANounFires(t *testing.T) {
 		"N inlined copies are N places to drift",
 		"a lab is never a place for real data",
 		"`corporate` places one booking service a site",
-		"a node delete re-places its tasks",
+		"an outpost delete re-places its tasks",
 		"`group_weight` places a group",
 		"where you place them, escaped",
 		"is not a number in the first place",
@@ -400,6 +400,61 @@ func TestADR2030PlaceAsANounFires(t *testing.T) {
 	} {
 		if fires(line) {
 			t.Errorf("legitimate English fired: %q", line)
+		}
+	}
+}
+
+// TestADR2031NodeAsTheCollectorFires proves the node-as-the-collector entry
+// catches the retired noun in every spelling the rename carried (the prose
+// noun, the column, the env prefix, the route, the permission, the command)
+// and passes the senses the word keeps: a node of a tree, a DOM node, a
+// query plan's scan node, the Node.js runtime and its node: imports, the
+// explore ?node= parameter, and the D2 shape class the diagrams share.
+func TestADR2031NodeAsTheCollectorFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2031") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"the node polls each endpoint on its interval",
+		"A node holding a worklist heartbeats.",
+		"Every node in the fleet reports its loss.",
+		"the `node_id` column on endpoint_assignment",
+		"set `OMNIGLASS_NODE_TOKEN` before the first start",
+		"`GET /nodes` lists them",
+		"a role granting `node:read`",
+		"run `omniglass node run` on the edge host",
+		"the omniglass-node component",
+	} {
+		if !fires(line) {
+			t.Errorf("node as the collector passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"a tree node carries its children",
+		"the leaf node wins over its ancestor nodes",
+		"the deepest node wins",
+		"A scan node can name an index",
+		"a focusable node hidden from assistive tech",
+		"the root node of the forest",
+		"a DOM node the test queries",
+		"built with Node.js 22",
+		"import { readFile } from 'node:fs'",
+		"import path from \"node:path\"",
+		"web/node_modules is not committed",
+		"the explore view's `?node=` parameter",
+		"node e2e/shot.mjs out.png",
+		"classes: { node: { style.border-radius: 8 } }",
+		"  node: { style.border-radius: 8 }",
+		`  db: "Postgres" { class: node; shape: cylinder }`,
+		"a grant on this node only",
+	} {
+		if fires(line) {
+			t.Errorf("node in a kept sense fired: %q", line)
 		}
 	}
 }

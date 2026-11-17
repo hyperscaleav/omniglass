@@ -212,13 +212,13 @@ func TestParseAddressMidPathAccessorIsInvalid(t *testing.T) {
 }
 
 // RejectAddressForm is the companion check for the 22 registry routes whose
-// names stay a single global kebab token (node, tag, and the four lane
+// names stay a single global kebab token (outpost, tag, and the four lane
 // types): #627's address grammar covers only component/system/location, and
 // a dotted ref sent to one of these must be refused explicitly, never fall
 // through to a bare 404 that never says why it missed.
 func TestRejectAddressFormRefusesADottedRefForARegistryKind(t *testing.T) {
 	t.Parallel()
-	err := storage.RejectAddressForm("node", "boi.17c")
+	err := storage.RejectAddressForm("outpost", "boi.17c")
 	if err == nil {
 		t.Fatal("RejectAddressForm accepted a dotted ref for a single-token registry")
 	}
@@ -226,8 +226,8 @@ func TestRejectAddressFormRefusesADottedRefForARegistryKind(t *testing.T) {
 	if !errors.As(err, &notAccepted) {
 		t.Fatalf("got %T, want *storage.ErrAddressNotAccepted", err)
 	}
-	if notAccepted.Kind != "node" {
-		t.Errorf("Kind = %q, want %q", notAccepted.Kind, "node")
+	if notAccepted.Kind != "outpost" {
+		t.Errorf("Kind = %q, want %q", notAccepted.Kind, "outpost")
 	}
 	if !strings.Contains(err.Error(), "single token") {
 		t.Errorf("message %q does not say a name of this kind is a single token", err.Error())
@@ -244,8 +244,8 @@ func TestRejectAddressFormRefusesALeadingAccessor(t *testing.T) {
 func TestRejectAddressFormPassesOrdinaryNamesAndUUIDs(t *testing.T) {
 	t.Parallel()
 	const uuid = "019f8754-3a1b-7c2d-8e4f-5a6b7c8d9e0f"
-	for _, ref := range []string{"node-1", uuid, "icmp-rtt-avg"} {
-		if err := storage.RejectAddressForm("node", ref); err != nil {
+	for _, ref := range []string{"outpost-1", uuid, "icmp-rtt-avg"} {
+		if err := storage.RejectAddressForm("outpost", ref); err != nil {
 			t.Errorf("RejectAddressForm(%q) = %v, want nil", ref, err)
 		}
 	}

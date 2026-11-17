@@ -29,7 +29,7 @@ func TestSimulationBodyConnectedWindow(t *testing.T) {
 	}
 }
 
-// The simulator's list of impaired devices covers its whole node; a caller
+// The simulator's list of impaired devices covers its whole outpost; a caller
 // sees only the ids of devices in its own view.
 func TestSimulationBodyKeepsImpairedToVisibleDevices(t *testing.T) {
 	t.Parallel()

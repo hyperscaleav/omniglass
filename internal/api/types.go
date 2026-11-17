@@ -42,7 +42,7 @@ import (
 // unrecognized accessor, a segment failing the entity name rule): a 422, the
 // caller's Msg verbatim. storage.ErrAddressNotAccepted is a dotted or
 // accessor-bearing ref sent to a registry whose names stay a single global
-// token (node, tag, the four lane types): also a 422, naming the kind.
+// token (outpost, tag, the four lane types): also a 422, naming the kind.
 //
 // storage.ErrUnresolvedRef is a name reference to one of the resources #1133
 // made addressable by name (an endpoint, a secret, a variable, a file, a

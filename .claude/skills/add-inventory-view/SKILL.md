@@ -1,6 +1,6 @@
 ---
 name: add-inventory-view
-description: Use when adding an operator-console page for an inventory-class entity (a scoped resource with list/tree + CRUD, e.g. interfaces, nodes, tasks, types, tags). Covers the rail (generated typed client + hand-written ListView config), the data layer, the page config, routing/nav, the test rail, and the invariants (id-as-address facets, edit-only-mutable-fields, cycle-safe parent, authz). NOT for dashboards/alarms/explore/learn surfaces, which need their own primitives.
+description: Use when adding an operator-console page for an inventory-class entity (a scoped resource with list/tree + CRUD, e.g. interfaces, outposts, tasks, types, tags). Covers the rail (generated typed client + hand-written ListView config), the data layer, the page config, routing/nav, the test rail, and the invariants (id-as-address facets, edit-only-mutable-fields, cycle-safe parent, authz). NOT for dashboards/alarms/explore/learn surfaces, which need their own primitives.
 ---
 
 # Add an inventory-class console view
@@ -34,11 +34,11 @@ timeseries/graph/board shaped and each needs its own primitive. Do not bend `Lis
 
 2. **Page config** `web/src/pages/<Entity>.tsx`:
    - `useQuery` the entity (and any list it resolves ids against, e.g. systems/locations).
-   - Build the node forest in a `createMemo`: `id` = the entity **address (name)**, `display`,
+   - Build the forest in a `createMemo`: `id` = the entity **address (name)**, `display`,
      `children` from `parent_id`. Resolve foreign ids (`system_id`, `location_id`) to readable
      names from their own lists.
    - The `ListConfig`: `entity {name, plural}` (name doubles as the **authz resource**),
-     `storageKey`, `nodes` (the memo accessor), `focus: () => params.name`, `columns` /
+     `storageKey`, `outposts` (the memo accessor), `focus: () => params.name`, `columns` /
      `columnKeys` / `defaultCols`, `cellFor`, `filterKeys`, `sortVal`, a shared `detail(n, ctx)`
      used by both `renderDetail` (full page) and `renderBlade`, `FormBody`, `onOpenNode` /
      `onBack` (router navigate), `onDelete`. Optional `widgets` (structure-only, see below).
@@ -50,7 +50,7 @@ timeseries/graph/board shaped and each needs its own primitive. Do not bend `Lis
    `STUBS`.
 
 4. **Nav** `web/src/lib/nav.ts`: flip the child's `live: true` and set its `resource` to the
-   page's authz resource (the same string its server route gates on, e.g. `"node"`). The sidebar
+   page's authz resource (the same string its server route gates on, e.g. `"outpost"`). The sidebar
    hides the tab from a principal without `<resource>:read` (`filterNav`). Until the page ships,
    leave it `!live` with no resource; the dimmed "soon" item + shared `Placeholder` cover it (set
    the child's `issue` to link its tracking issue).
@@ -71,17 +71,17 @@ timeseries/graph/board shaped and each needs its own primitive. Do not bend `Lis
 
 ## Invariants and gotchas
 
-- **`node.id` is the entity address (name), globally unique.** `/<entity>/:name` focuses it.
+- **`outpost.id` is the entity address (name), globally unique.** `/<entity>/:name` focuses it.
 - **Facet on a stable unique key, not a label.** Labels collide; a facet/cross-nav
   keyed on them is ambiguous. Facet on the address (`get` returns it), and set `valueLabel` to the
   label for the suggestion.
 - **Edit form sends only the API-mutable fields** (the PATCH body: usually `label` +
   `*_type`). `name`, `parent`, and placement are create-only; show them read-only when editing.
-- **Parent `<select>` excludes the node itself and its descendants** (cycle prevention).
+- **Parent `<select>` excludes the row itself and its descendants** (cycle prevention).
 - **Authorization** is a UI hint over the server: `ListView` gates create/update/delete by
   `cfg.entity.name` as the resource. Never rely on it for enforcement.
 - **Blades are ephemeral (no URL); the full page is the addressable deep link.** Opening a form
-  closes any open blade. The blade stack holds ids, not node refs, so it survives a refetch.
+  closes any open blade. The blade stack holds ids, not outpost refs, so it survives a refetch.
 - **Live screens show real API fields only.** No invented health/metrics (those arrive with
   `component.state`). Summary widgets for this class are structure/count based; health/alarm
   widgets wait on that backend.

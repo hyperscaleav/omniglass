@@ -453,7 +453,7 @@ func TestResolveDedupRoots(t *testing.T) {
 // a tree table, and Resolve stamps every set with the resource it was resolved
 // for so the gateway can ask exactly that.
 func TestRegisteredSeparatesADecisionFromAnOmission(t *testing.T) {
-	for _, r := range []string{"component", "command", "telemetry", "secret", "node", "platform"} {
+	for _, r := range []string{"component", "command", "telemetry", "secret", "outpost", "platform"} {
 		if !scope.Registered(r) {
 			t.Errorf("Registered(%q) = false, want true", r)
 		}
@@ -462,8 +462,8 @@ func TestRegisteredSeparatesADecisionFromAnOmission(t *testing.T) {
 		t.Error("Registered(widget) = true, want false: nothing registers it")
 	}
 	for _, tier := range []string{"location", "system", "component"} {
-		if scope.Covers("node", tier) {
-			t.Errorf("Covers(node, %s) = true, want false: a fleet-wide resource has no tier", tier)
+		if scope.Covers("outpost", tier) {
+			t.Errorf("Covers(outpost, %s) = true, want false: a fleet-wide resource has no tier", tier)
 		}
 	}
 	g := []scope.Grant{{Role: "operator", ScopeKind: "component", ScopeID: "C"}}

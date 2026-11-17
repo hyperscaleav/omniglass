@@ -530,8 +530,8 @@ func (p *PG) recomputeMovedLocation(ctx context.Context, q txQuerier, moved owne
 // to tell "healthy since we started watching" from "never evaluated".
 // ownerID is an id for a component/system/location owner (recomputeChain
 // always has one, via ownerRef; SystemHealth and LocationHealth resolve their
-// own before calling healthTransitions below), a name for a node (unchanged;
-// node names stay globally unique). See ownerArcExprN.
+// own before calling healthTransitions below), a name for an outpost (unchanged;
+// outpost names stay globally unique). See ownerArcExprN.
 func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v health.Verdict) error {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
@@ -573,7 +573,7 @@ func recordHealth(ctx context.Context, q txQuerier, ownerKind, ownerID string, v
 // Every caller across all four files resolves the reference to an id once,
 // before it ever reaches this expression (recomputeChain's ownerRef in this
 // file; ownerArcValue in the others), so ownerID is always already an id for
-// these three kinds, never a bare name. A node stays name-resolved: node names
+// these three kinds, never a bare name. An outpost stays name-resolved: outpost names
 // remain globally unique (they ride NATS subjects), so there is nothing to
 // convert.
 func ownerArcExpr(ownerKind string) string { return ownerArcExprN(ownerKind, 2) }
@@ -584,8 +584,8 @@ func ownerArcExprN(ownerKind string, n int) string {
 	switch ownerKind {
 	case "component", "system", "location":
 		return fmt.Sprintf("$%d::uuid", n)
-	case "node":
-		return fmt.Sprintf("(select principal_id from node where name = $%d::text)", n)
+	case "outpost":
+		return fmt.Sprintf("(select principal_id from outpost where name = $%d::text)", n)
 	}
 	return fmt.Sprintf("$%d::text", n)
 }
@@ -1265,7 +1265,7 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 // the same ordered flip sequence the reachability strip reads, on the owner arc
 // rather than the component-and-instance one. ownerID follows recordHealth's
 // contract (see ownerArcExprN): an id for component/system/location, a name for
-// node. The window's boundary is the database's own (tsSince, #719).
+// outpost. The window's boundary is the database's own (tsSince, #719).
 func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, window time.Duration) ([]HealthTransition, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {

@@ -76,7 +76,7 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
 | [`get-driver`](#get-driver) | Get a driver | `driver:read` | read-only, idempotent |
 | [`update-driver`](#update-driver) | Update a driver | `driver:update` | destructive |
-| [`preview-driver`](#preview-driver) | Preview a driver spec's polls through a node | `driver:preview` | destructive, open-world |
+| [`preview-driver`](#preview-driver) | Preview a driver spec's polls through an outpost | `driver:preview` | destructive, open-world |
 | [`validate-driver-spec`](#validate-driver-spec) | Check a driver spec without saving it | `driver:read` | read-only, idempotent |
 | [`list-endpoints`](#list-endpoints) | List endpoints in scope | `endpoint:read` | read-only, idempotent |
 | [`create-endpoint`](#create-endpoint) | Create an endpoint | `endpoint:create` | open-world |
@@ -100,11 +100,11 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`list-location-metrics`](#list-location-metrics) | List a location's effective metrics | `location:read` | read-only, idempotent |
 | [`list-location-properties`](#list-location-properties) | List a location's effective properties | `location:read` | read-only, idempotent |
 | [`create-locations-from-template`](#create-locations-from-template) | Start a subtree of locations from a template | `location:create` | adds |
-| [`list-nodes`](#list-nodes) | List nodes | `node:read` | read-only, idempotent |
-| [`get-node`](#get-node) | Get a node | `node:read` | read-only, idempotent |
-| [`list-node-logs`](#list-node-logs) | List a node's recent self-logs | `node:read` | read-only, idempotent |
 | [`preview-notification-type`](#preview-notification-type) | Preview a notification type against an alarm | `notification_type:read` | read-only, idempotent |
 | [`list-notification`](#list-notification) | List notifications | `notification:read` | read-only, idempotent |
+| [`list-outposts`](#list-outposts) | List outposts | `outpost:read` | read-only, idempotent |
+| [`get-outpost`](#get-outpost) | Get an outpost | `outpost:read` | read-only, idempotent |
+| [`list-outpost-logs`](#list-outpost-logs) | List an outpost's recent self-logs | `outpost:read` | read-only, idempotent |
 | [`list-products`](#list-products) | List products | `product:read` | read-only, idempotent |
 | [`get-product`](#get-product) | Get a product | `product:read` | read-only, idempotent |
 | [`list-secret-types`](#list-secret-types) | List secret types | `secret:read` | read-only, idempotent |
@@ -128,7 +128,7 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`list-templates`](#list-templates) | List templates | `template:read` | read-only, idempotent |
 | [`get-template`](#get-template) | Get a template | `template:read` | read-only, idempotent |
 | [`list-transports`](#list-transports) | List the transports the platform speaks | `endpoint:read` | read-only, idempotent |
-| [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `node:read` | read-only, idempotent |
+| [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `outpost:read` | read-only, idempotent |
 | [`list-vendors`](#list-vendors) | List vendors | `vendor:read` | read-only, idempotent |
 
 ## `list-alarms`
@@ -453,7 +453,7 @@ The component's command history, newest first, each command whole (as the single
 
 Read a command
 
-One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, outpost and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
 
 - Route: `GET /api/v1/components/{name}/commands/{id}`
 - Gate: `command:read`
@@ -505,7 +505,7 @@ This component's dependency edges both ways: its upstreams (what it depends on) 
 
 Record that a component depends on another
 
-Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's outpost its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
 
 - Route: `POST /api/v1/components/{name}/dependencies`
 - Gate: `component:update`
@@ -586,7 +586,7 @@ The identity bindings of this conduit component: each value it reports under a m
 
 Bind an identity a conduit reports to its owner
 
-Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or an outpost owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
 
 - Route: `PUT /api/v1/components/{name}/identity-bindings/{key}/{value}`
 - Gate: `component:update`
@@ -598,7 +598,7 @@ Ties this value, reported by the conduit component under this match key, to one 
 | `key` | string | yes | The match key, a registered property type |
 | `name` | string | yes | Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 | `owner` | string | yes | Name or uuid of the owner the identity's values land on, or a dotted address |
-| `owner_kind` | string | yes | What kind of owner the identity names. A component or a system; a location or a node owns no observed sample, so neither is an owner here |
+| `owner_kind` | string | yes | What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here |
 | `value` | string | yes | The identity value the conduit reports, 1 to 256 characters |
 
 ## `delete-identity-binding`
@@ -748,7 +748,7 @@ Lists the tags bound directly on a component (not the resolved cascade). Gated b
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. |
+| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token. |
 
 ## `remove-component-tag`
 
@@ -764,7 +764,7 @@ Removes a key's value from a component. Gated by component:update.
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `key` | string | yes | The tag key to remove |
-| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. |
+| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token. |
 
 ## `set-component-tag`
 
@@ -780,14 +780,14 @@ Binds a value for a key on a component. The key must exist and apply to this ent
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `key` | string | yes | The tag key (must exist and apply to this kind) |
-| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token. |
+| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token. |
 | `value` | string | yes | The bound value |
 
 ## `create-component-from-template`
 
 Start a component from a template
 
-Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no outpost a 422.
 
 - Route: `POST /api/v1/components:createFromTemplate`
 - Gate: `component:create`
@@ -800,7 +800,7 @@ Creates one component from a component template at a location: its product and t
 | `label` | string | no | The component's label |
 | `location` | string | no | The location the component sits in, by name or dotted path |
 | `name` | string | no | The component's name; minted as an unnamed create mints it when empty |
-| `node` | string | no | The node the endpoint is placed on; needed when inputs carry an address |
+| `outpost` | string | no | The outpost the endpoint is placed on; needed when inputs carry an address |
 | `template` | string | yes | The component template, by name |
 
 ## `list-drivers`
@@ -868,9 +868,9 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 
 ## `preview-driver`
 
-Preview a driver spec's polls through a node
+Preview a driver spec's polls through an outpost
 
-Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+Runs a driver spec's polls once through the outpost named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the outpost holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the outpost and on each secret used. Gated by driver:preview.
 
 - Route: `POST /api/v1/drivers:preview`
 - Gate: `driver:preview`
@@ -881,10 +881,10 @@ Runs a driver spec's polls once through the node named, against the target its i
 |---|---|---|---|
 | `driver` | string | no | A stored driver to preview, by name; or give spec |
 | `inputs` | object | no | The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target |
-| `node` | string | yes | The node that runs the preview, by name: the one that reaches the target |
+| `outpost` | string | yes | The outpost that runs the preview, by name: the one that reaches the target |
 | `polls` | array | no | The polls to run, by name; absent runs every poll |
 | `spec` | any | no | A driver spec to preview inline, unsaved; or give driver |
-| `timeout_seconds` | integer | no | How long the node may take for the whole preview (default 15, at most 30) |
+| `timeout_seconds` | integer | no | How long the outpost may take for the whole preview (default 15, at most 30) |
 
 ## `validate-driver-spec`
 
@@ -930,8 +930,8 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | `driver` | string | no | Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions |
 | `inputs` | object | no | The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest |
 | `label` | string | no | What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for |
-| `node` | string | no | Node placement, by name or id |
 | `out_of_band` | boolean | no | Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open |
+| `outpost` | string | no | Outpost placement, by name or id |
 | `params` | any | no | Address/target settings (jsonb); an attach derives them from the inputs instead |
 | `transport` | string | no | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
@@ -954,7 +954,7 @@ Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An end
 
 Update an endpoint
 
-Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's outpost placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 - Route: `PATCH /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:update`
@@ -966,8 +966,8 @@ Patches an endpoint's node placement, params, label, out-of-band mark, or (drive
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
 | `inputs` | object | no | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it |
 | `label` | string | no | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
-| `node` | string | no | Reassign the node placement, by name or id |
 | `out_of_band` | boolean | no | Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone |
+| `outpost` | string | no | Reassign the outpost placement, by name or id |
 | `params` | any | no | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
 | `transport` | string | no | The transport: a driver-attached endpoint takes only one its driver speaks |
 
@@ -990,7 +990,7 @@ Deletes an endpoint, refused while a task still references it. Gated by endpoint
 
 Run an endpoint's poll now
 
-Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
 
 - Route: `POST /api/v1/endpoints/{endpoint}/polls/{poll}:run`
 - Gate: `endpoint:run`
@@ -1001,13 +1001,13 @@ Runs one of an attached endpoint's polls now, on the node that holds the endpoin
 |---|---|---|---|
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> or its id |
 | `poll` | string | yes | The poll to run, by its function name |
-| `timeout_seconds` | integer | no | How long the node may take (default 15, at most 30) |
+| `timeout_seconds` | integer | no | How long the outpost may take (default 15, at most 30) |
 
 ## `retry-endpoint`
 
 Retry an endpoint's gated connections
 
-Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the outpost recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
 
 - Route: `POST /api/v1/endpoints/{endpoint}:retry`
 - Gate: `endpoint:retry`
@@ -1018,7 +1018,7 @@ Moves the endpoint's retry counter, which is part of its connection fingerprint:
 |---|---|---|---|
 | `certificate` | string | no | A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged |
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
-| `host_key` | string | no | The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
+| `host_key` | string | no | The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the outpost's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
 
 ## `rotate-endpoint-token`
 
@@ -1254,48 +1254,6 @@ Creates a subtree of locations from a location template under a parent location 
 | `parent` | string | no | The location the subtree sits under, by name or dotted path; omitted makes it a new top |
 | `template` | string | yes | The location template, by name |
 
-## `list-nodes`
-
-List nodes
-
-Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.
-
-- Route: `GET /api/v1/nodes`
-- Gate: `node:read`
-- Assume: read-only, idempotent
-- Agent class: read
-- Arguments: none
-
-## `get-node`
-
-Get a node
-
-Fetches a node by name. Requires an all-scope read. Gated by node:read.
-
-- Route: `GET /api/v1/nodes/{name}`
-- Gate: `node:read`
-- Assume: read-only, idempotent
-- Agent class: read
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | yes | The node's unique name |
-
-## `list-node-logs`
-
-List a node's recent self-logs
-
-Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.
-
-- Route: `GET /api/v1/nodes/{name}/logs`
-- Gate: `node:read`
-- Assume: read-only, idempotent
-- Agent class: read
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | yes | The node's unique name |
-
 ## `preview-notification-type`
 
 Preview a notification type against an alarm
@@ -1333,6 +1291,48 @@ The messages sent, on their way, or failed about alarms, newest first, filtered 
 | `limit` | integer | no | At most this many, newest first (default 100) |
 | `status` | string | no | Only those in this status |
 | `target` | string | no | Only those to this target, by name |
+
+## `list-outposts`
+
+List outposts
+
+Lists the edge outposts. An outpost is fleet-wide, so listing requires an all-scope read. Gated by outpost:read.
+
+- Route: `GET /api/v1/outposts`
+- Gate: `outpost:read`
+- Assume: read-only, idempotent
+- Agent class: read
+- Arguments: none
+
+## `get-outpost`
+
+Get an outpost
+
+Fetches an outpost by name. Requires an all-scope read. Gated by outpost:read.
+
+- Route: `GET /api/v1/outposts/{name}`
+- Gate: `outpost:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The outpost's unique name |
+
+## `list-outpost-logs`
+
+List an outpost's recent self-logs
+
+Returns the outpost's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the outpost), newest first, bounded to the last 24 hours. Gated by outpost:read; an out-of-scope outpost is a non-disclosing 404.
+
+- Route: `GET /api/v1/outposts/{name}/logs`
+- Gate: `outpost:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The outpost's unique name |
 
 ## `list-products`
 
@@ -1628,7 +1628,7 @@ Creates a system from a system template at a location, built to the standard you
 | `label` | string | no | The system's label |
 | `location` | string | no | The location the system and its components sit in, by name or dotted path |
 | `name` | string | no | The system's name; minted from its type when empty |
-| `node` | string | no | The node the endpoints are placed on; needed when any component attaches |
+| `outpost` | string | no | The outpost the endpoints are placed on; needed when any component attaches |
 | `standard` | string | no | A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name |
 | `template` | string | yes | The system template, by name |
 
@@ -1690,10 +1690,10 @@ Lists the transport registry: the wires an endpoint can speak over, a build-time
 
 List the sources no endpoint claims
 
-The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as nodes are.
+The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by outpost:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as outposts are.
 
 - Route: `GET /api/v1/unclaimed-sources`
-- Gate: `node:read`
+- Gate: `outpost:read`
 - Assume: read-only, idempotent
 - Agent class: read
 - Arguments: none

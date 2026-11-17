@@ -36,7 +36,7 @@ type SNMPGetter interface {
 func NewSNMPGetter() SNMPGetter { return &snmpGetter{} }
 
 // NewTalliedSNMPGetter is the real getter counting each datagram it sends on
-// the node's tally (#1639).
+// the outpost's tally (#1639).
 func NewTalliedSNMPGetter(tally *RequestTally) SNMPGetter { return &snmpGetter{tally: tally} }
 
 type snmpGetter struct{ tally *RequestTally }

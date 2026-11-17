@@ -141,7 +141,7 @@ fleet: {
     id: uuid {constraint: primary_key}
     component: uuid {constraint: foreign_key}
     driver_id: uuid {constraint: foreign_key}
-    node_name: uuid {constraint: foreign_key}
+    outpost_id: uuid {constraint: foreign_key}
   }
   endpoint_live: {
     shape: sql_table
@@ -312,7 +312,7 @@ telemetry: {
     component_id: uuid {constraint: foreign_key}
     dispatched_endpoint_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
-    node_id: uuid {constraint: foreign_key}
+    outpost_id: uuid {constraint: foreign_key}
     settled_event_id: bigint {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
@@ -330,7 +330,7 @@ telemetry: {
     derived_by_rule_id: uuid {constraint: foreign_key}
     event_type_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
-    node_id: uuid {constraint: foreign_key}
+    outpost_id: uuid {constraint: foreign_key}
     source_event_id: bigint {constraint: foreign_key}
     source_log_line_id: bigint {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
@@ -391,7 +391,7 @@ telemetry: {
     component_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
     metric_type_id: uuid {constraint: foreign_key}
-    node_id: uuid {constraint: foreign_key}
+    outpost_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
   metric_trend: {
@@ -440,7 +440,7 @@ telemetry: {
     component_id: uuid {constraint: foreign_key}
     event_id: bigint {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
-    node_id: uuid {constraint: foreign_key}
+    outpost_id: uuid {constraint: foreign_key}
     property_type_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
@@ -471,16 +471,16 @@ collection: {
     property_type_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
   }
-  node: {
+  outpost: {
     shape: sql_table
     principal_id: uuid {constraint: primary_key}
     location_id: uuid {constraint: foreign_key}
     platform_component_id: uuid {constraint: foreign_key}
   }
-  node_log: {
+  outpost_log: {
     shape: sql_table
     id: bigint {constraint: primary_key}
-    node_id: uuid {constraint: foreign_key}
+    outpost_id: uuid {constraint: foreign_key}
   }
   platform_server: {
     shape: sql_table
@@ -587,7 +587,7 @@ content: {
     id: uuid {constraint: primary_key}
     component_id: uuid {constraint: foreign_key}
     location_id: uuid {constraint: foreign_key}
-    node_id: uuid {constraint: foreign_key}
+    outpost_id: uuid {constraint: foreign_key}
     system_id: uuid {constraint: foreign_key}
     tag_id: uuid {constraint: foreign_key}
   }
@@ -627,10 +627,10 @@ collection.identity_binding.component_id -> fleet.component.id
 collection.identity_binding.conduit_id -> fleet.component.id
 collection.identity_binding.property_type_id -> telemetry.property_type.id
 collection.identity_binding.system_id -> fleet.system.id
-collection.node.location_id -> fleet.location.id
-collection.node.platform_component_id -> fleet.component.id
-collection.node.principal_id -> identity.principal.id
-collection.node_log.node_id -> collection.node.principal_id
+collection.outpost.location_id -> fleet.location.id
+collection.outpost.platform_component_id -> fleet.component.id
+collection.outpost.principal_id -> identity.principal.id
+collection.outpost_log.outpost_id -> collection.outpost.principal_id
 collection.platform_server.platform_component_id -> fleet.component.id
 collection.sim_impairment.component_id -> fleet.component.id
 collection.task.endpoint_id -> fleet.endpoint.id
@@ -653,7 +653,7 @@ config.variable.system_id -> fleet.system.id
 content.file.sha256 -> content.blob.sha256
 content.tag_binding.component_id -> fleet.component.id
 content.tag_binding.location_id -> fleet.location.id
-content.tag_binding.node_id -> collection.node.principal_id
+content.tag_binding.outpost_id -> collection.outpost.principal_id
 content.tag_binding.system_id -> fleet.system.id
 content.tag_binding.tag_id -> content.tag.id
 fleet.component.location_id -> fleet.location.id
@@ -663,7 +663,7 @@ fleet.component_dependency.component_id -> fleet.component.id
 fleet.component_dependency.upstream_id -> fleet.component.id
 fleet.endpoint.component -> fleet.component.id
 fleet.endpoint.driver_id -> catalog.driver.id
-fleet.endpoint.node_name -> collection.node.principal_id
+fleet.endpoint.outpost_id -> collection.outpost.principal_id
 fleet.endpoint_live.endpoint_id -> fleet.endpoint.id
 fleet.location.location_type -> fleet.location_type.id
 fleet.location.parent_id -> fleet.location.id
@@ -732,7 +732,7 @@ telemetry.command.command_type_id -> telemetry.command_type.id
 telemetry.command.component_id -> fleet.component.id
 telemetry.command.dispatched_endpoint_id -> fleet.endpoint.id
 telemetry.command.location_id -> fleet.location.id
-telemetry.command.node_id -> collection.node.principal_id
+telemetry.command.outpost_id -> collection.outpost.principal_id
 telemetry.command.settled_event_id -> telemetry.event.id
 telemetry.command.system_id -> fleet.system.id
 telemetry.command_type.target_metric_type_id -> telemetry.metric_type.id
@@ -742,7 +742,7 @@ telemetry.event.component_id -> fleet.component.id
 telemetry.event.derived_by_rule_id -> telemetry.event_rule.id
 telemetry.event.event_type_id -> telemetry.event_type.id
 telemetry.event.location_id -> fleet.location.id
-telemetry.event.node_id -> collection.node.principal_id
+telemetry.event.outpost_id -> collection.outpost.principal_id
 telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
 telemetry.event.system_id -> fleet.system.id
@@ -762,7 +762,7 @@ telemetry.metric_declared.series_id -> telemetry.metric_series.id
 telemetry.metric_series.component_id -> fleet.component.id
 telemetry.metric_series.location_id -> fleet.location.id
 telemetry.metric_series.metric_type_id -> telemetry.metric_type.id
-telemetry.metric_series.node_id -> collection.node.principal_id
+telemetry.metric_series.outpost_id -> collection.outpost.principal_id
 telemetry.metric_series.system_id -> fleet.system.id
 telemetry.metric_trend.series_id -> telemetry.metric_series.id
 telemetry.notification.alarm_id -> telemetry.alarm.id
@@ -778,7 +778,7 @@ telemetry.property.command_id -> telemetry.command.id
 telemetry.property.component_id -> fleet.component.id
 telemetry.property.event_id -> telemetry.event.id
 telemetry.property.location_id -> fleet.location.id
-telemetry.property.node_id -> collection.node.principal_id
+telemetry.property.outpost_id -> collection.outpost.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
 ```
@@ -800,8 +800,8 @@ telemetry.property.system_id -> fleet.system.id
   the typed registries (`metric_type`, `property_type`, `event_type`,
   `command_type`) over the bare-noun data tables (`metric`, `property`, `event`,
   `command`, `log_line`) and the alarms raised off them (`alarm`).
-- **collection** - where and how telemetry is gathered: the nodes that run probes,
-  the tasks they execute, and the `node_log` self-log lane.
+- **collection** - where and how telemetry is gathered: the outposts that run probes,
+  the tasks they execute, and the `outpost_log` self-log lane.
 - **config** - the settings, variables, secrets, and credentials that parameterize
   everything above.
 - **content** - the cross-cutting attachments: blobs, files, and the tag bindings

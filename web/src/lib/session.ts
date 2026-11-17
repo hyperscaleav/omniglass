@@ -3,7 +3,7 @@ import type { ReachRejectionBody, ReachSessionBody } from "../api/api.gen";
 import { can, type Me } from "./auth";
 import { STALENESS_WINDOW_MS, lastSeenAt, layerUp, type ReachEndpoint } from "./reachability";
 
-// A held session as the console reads it (#1059): the state the node last
+// A held session as the console reads it (#1059): the state the outpost last
 // published for an endpoint's session (ADR-0150, ADR-0155), aged by what the
 // endpoint has delivered since, and the reachability ladder the layered gate
 // climbs (ADR-0158). Pure: the reachability read carries every value, and
@@ -13,7 +13,7 @@ export type ReachSession = ReachSessionBody;
 export type ReachRejection = ReachRejectionBody;
 export type SessionState = ReachSession["state"];
 
-// stale is not a state the node publishes: it is the read's verdict on a state
+// stale is not a state the outpost publishes: it is the read's verdict on a state
 // whose endpoint has delivered nothing for the staleness window, so the last
 // thing the session said may no longer be true (ADR-0150 point 2).
 export type SessionWord = SessionState | "stale";
@@ -39,7 +39,7 @@ export function sessionWord(iface: ReachEndpoint, now: number = Date.now()): Ses
 export type Notice = { kind: "rejected" | "down"; reason: string; waitTS: string };
 
 // What each class refuses, for a gate that carries no reason of its own (one
-// published before the node said why): the class is named either way.
+// published before the outpost said why): the class is named either way.
 const CLASS_REFUSED: Record<string, string> = {
   auth: "the component refused the credential",
   "host-key": "the component presented a host key that is not the one pinned",
@@ -61,9 +61,9 @@ export function retryMark(iface: ReachEndpoint): string {
 // since the refusal is what needs fixing however old it is. Its reason is the
 // gate's (the refusal's own words, which a restart never overwrites), else a
 // rejected session's (one published before the gate carried a reason), else
-// the class. A restarted node starts a session rejected under the gate it
-// adopted, and that session's reason is then the node's placeholder, which is
-// why the gate's leads. A down session says why the node gave up for now,
+// the class. A restarted outpost starts a session rejected under the gate it
+// adopted, and that session's reason is then the outpost's placeholder, which is
+// why the gate's leads. A down session says why the outpost gave up for now,
 // while it is fresh. Everything else is not news.
 export function endpointNotice(iface: ReachEndpoint, now: number = Date.now()): Notice | null {
   const s = iface.session;
@@ -149,10 +149,10 @@ export function ladderObserved(iface: ReachEndpoint): boolean {
 // its driver's scheme (#902). An auth gate on one of these holds the polls.
 const CREDENTIALED_POLLS = new Set(["snmp", "http", "https"]);
 
-// pollsHeld reports a gate beneath which the node sends no stateless poll
+// pollsHeld reports a gate beneath which the outpost sends no stateless poll
 // (#1110): a poll is sent at the transport rung, or at the session rung where
 // it carries the credential, and a gate at or below that rung holds it (the
-// node's statelessRung). A login refused over a transport whose polls carry no
+// outpost's statelessRung). A login refused over a transport whose polls carry no
 // credential holds none, and neither does a gate beside a held session: its
 // polls ride the session, which says for itself whether they run.
 export function pollsHeld(iface: ReachEndpoint): boolean {
@@ -213,11 +213,11 @@ export function retryRefusal(me: Me | null | undefined): string | null {
 // publish time), and when. Kept in the query cache rather than in one notice, so
 // every notice for the endpoint (the component's Collection card and the
 // endpoint's blade show one each) holds the retry, and neither can stack a
-// second redial while the node has not picked up the first.
+// second redial while the outpost has not picked up the first.
 export type RetryPending = { ts: string; at: number };
 export const RETRY_PENDING_KEY = (endpointID: string) => ["session-retry", endpointID] as const;
 
-// RETRY_WAIT_MS bounds how long a retry is held in hand: past it, a node that
+// RETRY_WAIT_MS bounds how long a retry is held in hand: past it, an outpost that
 // never answered (offline, the endpoint moved) no longer keeps Retry spinning.
 export const RETRY_WAIT_MS = 60_000;
 
@@ -228,7 +228,7 @@ export function retryWaiting(pending: RetryPending | null | undefined, mark: str
 }
 
 // retryEndpoint moves the endpoint's retry counter (POST /endpoints/{endpoint}:retry):
-// its connection fingerprint moves, so a gate a refusal holds lifts and the node
+// its connection fingerprint moves, so a gate a refusal holds lifts and the outpost
 // redials once at its next check-in. Audited server-side.
 export async function retryEndpoint(id: string): Promise<void> {
   const { error } = await api.POST("/endpoints/{endpoint}:retry", { params: { path: { endpoint: id } }, body: {} });
@@ -261,17 +261,17 @@ export function keyNoun(cls: string): string {
 
 // keyChangedHint teaches the refusal itself, on the notice's eyebrow.
 export function keyChangedHint(cls: string): string {
-  return `The component presented a ${keyNoun(cls)} that is not the one pinned, so the node refused the connection before logging in or sending anything. It dials no more until someone trusts the offered key or retries the endpoint.`;
+  return `The component presented a ${keyNoun(cls)} that is not the one pinned, so the outpost refused the connection before logging in or sending anything. It dials no more until someone trusts the offered key or retries the endpoint.`;
 }
 
 // What the two keys are, taught on their labels.
 export const PINNED_KEY_HINT =
-  "The key the node holds the component to: trusted on the first connection, or set by someone who trusted a change. Every connection must present it.";
+  "The key the outpost holds the component to: trusted on the first connection, or set by someone who trusted a change. Every connection must present it.";
 export const OFFERED_KEY_HINT =
-  "The key the component presented instead, on the connection the node refused. Nothing logs in or sends a command past a key that does not match the pin.";
+  "The key the component presented instead, on the connection the outpost refused. Nothing logs in or sends a command past a key that does not match the pin.";
 
 // Why a key changes, taught one hover at a time in the confirm: two causes are
-// routine, and the third is the reason the node refuses at all.
+// routine, and the third is the reason the outpost refuses at all.
 export const KEY_CHANGE_CAUSES: { label: string; hint: string }[] = [
   {
     label: "Reinstalled",
@@ -283,7 +283,7 @@ export const KEY_CHANGE_CAUSES: { label: string; hint: string }[] = [
   },
   {
     label: "Man in the middle",
-    hint: "Something between the node and the component, answering in its place to read what the node sends (credentials, commands). Never trust a change nobody can account for: compare the offered key with the component's own console first.",
+    hint: "Something between the outpost and the component, answering in its place to read what the outpost sends (credentials, commands). Never trust a change nobody can account for: compare the offered key with the component's own console first.",
   },
 ];
 
@@ -295,7 +295,7 @@ export function trustRefusal(me: Me | null | undefined): string | null {
 }
 
 // trustOfferedKey declares key as the endpoint's new pin and retries it (POST
-// /endpoints/{endpoint}:retry with host_key): the node redials onto it once. key is
+// /endpoints/{endpoint}:retry with host_key): the outpost redials onto it once. key is
 // exactly the one the operator was shown; the server refuses (409) any key the
 // refusal on record does not name, so a confirm answered against a record that
 // moved since cannot pin it. Audited server-side with both keys and the actor.

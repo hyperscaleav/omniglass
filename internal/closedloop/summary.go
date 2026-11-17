@@ -16,10 +16,10 @@ type Quantiles struct {
 	N   int     `json:"n"`
 }
 
-// EndpointReport is the closed loop over every node.
+// EndpointReport is the closed loop over every outpost.
 type EndpointReport struct {
 	Protocols []EndpointProtocol `json:"protocols"`
-	Nodes     []EndpointNode     `json:"nodes"`
+	Outposts  []EndpointOutpost  `json:"outposts"`
 	GapTotals []GapTotal         `json:"gap_totals"`
 	Gaps      []ClosedLoopGap    `json:"gaps"`
 	// WorstFaces are the faces that most often saw two requests at once,
@@ -27,9 +27,9 @@ type EndpointReport struct {
 	WorstFaces []EndpointFace `json:"worst_faces_since_start"`
 }
 
-// EndpointProtocol is one protocol's window, summed over the nodes: the sim's
+// EndpointProtocol is one protocol's window, summed over the outposts: the sim's
 // counters from the first read to the last, the service time merged across
-// nodes, and each node's in-flight high water.
+// outposts, and each outpost's in-flight high water.
 type EndpointProtocol struct {
 	Protocol      string `json:"protocol"`
 	Accepted      int64  `json:"accepted"`
@@ -41,7 +41,7 @@ type EndpointProtocol struct {
 	Withheld      int64  `json:"withheld"`
 	StreamsOpened int64  `json:"streams_opened"`
 	// PollTargets is how many enabled poll targets the window should have
-	// drawn on this protocol at least twice, over every node.
+	// drawn on this protocol at least twice, over every outpost.
 	PollTargets  int64   `json:"poll_targets"`
 	Overlapped   int64   `json:"overlapped"`
 	OverlapRatio float64 `json:"overlap_ratio"`
@@ -50,19 +50,19 @@ type EndpointProtocol struct {
 	InFlightHigh map[string]int64 `json:"in_flight_high"`
 }
 
-// EndpointNode is one node's concurrency: the most requests its sim held at
-// once over every protocol, beside the node's own dispatch gauges (nil when
+// EndpointOutpost is one outpost's concurrency: the most requests its sim held at
+// once over every protocol, beside the outpost's own dispatch gauges (nil when
 // no pool reports one yet).
-type EndpointNode struct {
-	Node               string `json:"node"`
+type EndpointOutpost struct {
+	Outpost            string `json:"outpost"`
 	ArrivalHigh        int64  `json:"arrival_high"`
-	DispatchQueueDepth *int64 `json:"node_dispatch_queue_depth"`
-	BusyWorkers        *int64 `json:"node_busy_workers"`
+	DispatchQueueDepth *int64 `json:"outpost_dispatch_queue_depth"`
+	BusyWorkers        *int64 `json:"outpost_busy_workers"`
 	Impaired           bool   `json:"impaired"`
 	Restarted          bool   `json:"restarted"`
 }
 
-// GapTotal is one gap summed over the nodes.
+// GapTotal is one gap summed over the outposts.
 type GapTotal struct {
 	Gap          string `json:"gap"`
 	Loss         int64  `json:"loss"`
@@ -75,9 +75,9 @@ type GapTotal struct {
 // worstFaceCount is how many overlapping faces the report names.
 const worstFaceCount = 5
 
-// EndpointFace is one overlapping face on a node.
+// EndpointFace is one overlapping face on an outpost.
 type EndpointFace struct {
-	Node string `json:"node"`
+	Outpost string `json:"outpost"`
 	collection.SimFaceOverlap
 }
 
@@ -108,10 +108,10 @@ func (r *EndpointReport) row(name string) *EndpointProtocol {
 	return &r.Protocols[len(r.Protocols)-1]
 }
 
-// SummarizeEndpoints reconciles every node and sums the window.
-func SummarizeEndpoints(brackets []NodeBracket) EndpointReport {
-	bs := append([]NodeBracket(nil), brackets...)
-	sort.Slice(bs, func(i, j int) bool { return bs[i].Node < bs[j].Node })
+// SummarizeEndpoints reconciles every outpost and sums the window.
+func SummarizeEndpoints(brackets []OutpostBracket) EndpointReport {
+	bs := append([]OutpostBracket(nil), brackets...)
+	sort.Slice(bs, func(i, j int) bool { return bs[i].Outpost < bs[j].Outpost })
 	var r EndpointReport
 	latency := map[string][]uint64{}
 	for _, b := range bs {
@@ -119,7 +119,7 @@ func SummarizeEndpoints(brackets []NodeBracket) EndpointReport {
 		r.Gaps = append(r.Gaps, gaps...)
 		s1, s2 := b.Start.SimBefore, b.End.SimAfter
 		from, to := s1.At, s2.At
-		n := EndpointNode{Node: b.Node, Impaired: impaired(b), Restarted: len(gaps) == 1 && gaps[0].Reading == ReadingRestarted}
+		n := EndpointOutpost{Outpost: b.Outpost, Impaired: impaired(b), Restarted: len(gaps) == 1 && gaps[0].Reading == ReadingRestarted}
 		arrivals := map[int64]int64{}
 		for _, p2 := range s2.Protocols {
 			p1 := s1.Protocol(p2.Protocol)
@@ -136,7 +136,7 @@ func SummarizeEndpoints(brackets []NodeBracket) EndpointReport {
 				ep.Overlapped += p2.Overlapped - p1.Overlapped
 				latency[p2.Protocol] = obsstat.MergeLatency(latency[p2.Protocol], obsstat.SubtractLatency(p2.Latency, p1.Latency))
 			}
-			ep.InFlightHigh[b.Node] = obsstat.HighWater(p2.InFlightHigh, from, to)
+			ep.InFlightHigh[b.Outpost] = obsstat.HighWater(p2.InFlightHigh, from, to)
 			for _, e := range p2.InFlightHigh {
 				if e.Epoch >= obsstat.EpochOf(from) && e.Epoch <= obsstat.EpochOf(to) {
 					arrivals[e.Epoch] += e.Max
@@ -151,17 +151,17 @@ func SummarizeEndpoints(brackets []NodeBracket) EndpointReport {
 				r.row(p).PollTargets++
 			}
 		}
-		if g := b.End.Node.QueueDepth; g != nil {
+		if g := b.End.Outpost.QueueDepth; g != nil {
 			v := g.High(from, to)
 			n.DispatchQueueDepth = &v
 		}
-		if g := b.End.Node.BusyWorkers; g != nil {
+		if g := b.End.Outpost.BusyWorkers; g != nil {
 			v := g.High(from, to)
 			n.BusyWorkers = &v
 		}
-		r.Nodes = append(r.Nodes, n)
+		r.Outposts = append(r.Outposts, n)
 		for _, f := range s2.Faces {
-			r.WorstFaces = append(r.WorstFaces, EndpointFace{Node: b.Node, SimFaceOverlap: f})
+			r.WorstFaces = append(r.WorstFaces, EndpointFace{Outpost: b.Outpost, SimFaceOverlap: f})
 		}
 	}
 	sort.Slice(r.Protocols, func(i, j int) bool { return r.Protocols[i].Protocol < r.Protocols[j].Protocol })

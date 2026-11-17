@@ -37,7 +37,7 @@ type simStandardInput struct {
 }
 
 type addSimSystemInput struct {
-	Name string `path:"name" doc:"The node whose simulator serves the system's components"`
+	Name string `path:"name" doc:"The outpost whose simulator serves the system's components"`
 	Body struct {
 		Standard   string  `json:"standard" minLength:"1" doc:"The standard the system is built to; its roles decide the components"`
 		SystemType string  `json:"system_type" minLength:"1" doc:"The system's type, which also mints its name when none is given"`
@@ -57,7 +57,7 @@ type addSimSystemOutput struct {
 	Body struct {
 		System     string                      `json:"system"`
 		SystemID   string                      `json:"system_id" doc:"The new system's id, the stable address a link to it uses."`
-		Node       string                      `json:"node"`
+		Outpost    string                      `json:"outpost"`
 		Components []addSimSystemComponentBody `json:"components"`
 		Unstaffed  []simRoleFillBody           `json:"unstaffed" doc:"The roles nothing simulated could fill, left short."`
 	}
@@ -98,7 +98,7 @@ func simAttachable(ctx context.Context, a *authenticator, gw storage.Gateway) fu
 }
 
 // simEndpointSpecs turns planned endpoints into endpoint creates; the
-// component, node and secret reach are filled by the caller.
+// component, outpost and secret reach are filled by the caller.
 func simEndpointSpecs(eps []simfleet.Endpoint) []storage.EndpointSpec {
 	out := make([]storage.EndpointSpec, 0, len(eps))
 	for _, e := range eps {
@@ -207,14 +207,14 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 	})
 
 	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
-		OperationID:   "add-node-simulation-system",
+		OperationID:   "add-outpost-simulation-system",
 		Method:        http.MethodPost,
-		Path:          "/nodes/{name}/simulation/systems",
+		Path:          "/outposts/{name}/simulation/systems",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Add a simulated system",
-		Description:   "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
+		Description:   "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
 	}, "simulation", "update"), "secret", "bind"), func(ctx context.Context, in *addSimSystemInput) (*addSimSystemOutput, error) {
-		needs := [][2]string{{"system", "create"}, {"system", "update"}, {"system", "read"}, {"component", "create"}, {"component", "update"}, {"endpoint", "create"}, {"node", "read"}}
+		needs := [][2]string{{"system", "create"}, {"system", "update"}, {"system", "read"}, {"component", "create"}, {"component", "update"}, {"endpoint", "create"}, {"outpost", "read"}}
 		if in.Body.Location != nil && *in.Body.Location != "" {
 			needs = append(needs, [2]string{"location", "read"})
 		}
@@ -223,8 +223,8 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 				return nil, huma.Error403Forbidden(fmt.Sprintf("adding a simulated system also needs %s:%s", need[0], need[1]))
 			}
 		}
-		if _, err := gw.GetNode(ctx, in.Name, a.scopeFor(ctx, "node", "read")); err != nil {
-			return nil, mapNodeErr(err)
+		if _, err := gw.GetOutpost(ctx, in.Name, a.scopeFor(ctx, "outpost", "read")); err != nil {
+			return nil, mapOutpostErr(err)
 		}
 		var st struct {
 			seen       bool
@@ -256,7 +256,7 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		drivers := simDrivers(products)
 		attachable := simAttachable(ctx, a, gw)
 		out := &addSimSystemOutput{}
-		out.Body.Node = in.Name
+		out.Body.Outpost = in.Name
 		out.Body.Unstaffed = []simRoleFillBody{}
 		for _, f := range plan.Roles {
 			if f.Count == 0 {
@@ -298,8 +298,8 @@ func registerSimSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 			}
 			systemType, standard := in.Body.SystemType, in.Body.Standard
 			spec := storage.SimSystemSpec{
-				System: storage.SystemSpec{Name: in.Body.SystemName, SystemTypeID: &systemType, StandardID: &standard, LocationName: in.Body.Location},
-				Node:   in.Name,
+				System:  storage.SystemSpec{Name: in.Body.SystemName, SystemTypeID: &systemType, StandardID: &standard, LocationName: in.Body.Location},
+				Outpost: in.Name,
 			}
 			for i, s := range slots {
 				if len(addrs[i].Endpoints) == 0 {

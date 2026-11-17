@@ -77,12 +77,12 @@ describe("endpointNotice", () => {
     expect(endpointNotice(e, now)).toEqual({ kind: "rejected", reason: "auth: auth rejected", waitTS: ago(1_000) });
   });
 
-  // A restarted node starts the session rejected under the gate it adopted,
-  // and the session's reason is then the node's placeholder; the gate keeps
+  // A restarted outpost starts the session rejected under the gate it adopted,
+  // and the session's reason is then the outpost's placeholder; the gate keeps
   // the refusal's own words (review of #1110), so they lead.
   it("reads the gate's reason over a restarted session's placeholder", () => {
     const e = ep({
-      session: { state: "rejected", ts: ago(1_000), reason: "auth: refused under this connection fingerprint before the node restarted" },
+      session: { state: "rejected", ts: ago(1_000), reason: "auth: refused under this connection fingerprint before the outpost restarted" },
       rejection: gate({ reason: "auth: auth rejected" }),
     });
     expect(endpointNotice(e, now)?.reason).toBe("auth: auth rejected");
@@ -283,7 +283,7 @@ describe("retry", () => {
   });
 
   // A retry is in hand until the session moves or the wait runs out, so a
-  // node that never answers does not keep Retry spinning forever.
+  // outpost that never answers does not keep Retry spinning forever.
   it("holds a retry until the session moves or the wait runs out", () => {
     const pending = { ts: ago(30_000), at: now - 1_000 };
     expect(retryWaiting(pending, ago(30_000), now)).toBe(true);

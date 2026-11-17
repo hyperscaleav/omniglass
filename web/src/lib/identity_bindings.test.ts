@@ -50,8 +50,8 @@ describe("refusalWords", () => {
     );
   });
   it("says a 422 is a binding the rules refuse, then why", () => {
-    expect(refusalWords({ status: 422, detail: "a location or a node owns no observed sample" })).toBe(
-      "Not a valid binding: a location or a node owns no observed sample",
+    expect(refusalWords({ status: 422, detail: "a location or an outpost owns no observed sample" })).toBe(
+      "Not a valid binding: a location or an outpost owns no observed sample",
     );
   });
   it("falls back to the server's words for anything else", () => {
