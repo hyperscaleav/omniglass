@@ -14438,6 +14438,24 @@ paths:
           schema:
             description: Filter to the events one agent took on its person's behalf (the name its agent token was minted with)
             type: string
+        - description: Filter to the events that arrived through one channel; direct is a plain API call, with no channel
+          explode: false
+          in: query
+          name: channel
+          schema:
+            description: Filter to the events that arrived through one channel; direct is a plain API call, with no channel
+            enum:
+              - direct
+              - mcp
+              - omnibot
+            type: string
+        - description: Filter to the events whose declared MCP client contains this term, case-insensitively
+          explode: false
+          in: query
+          name: client
+          schema:
+            description: Filter to the events whose declared MCP client contains this term, case-insensitively
+            type: string
       responses:
         "200":
           content:

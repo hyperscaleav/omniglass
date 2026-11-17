@@ -2,7 +2,7 @@ import { For, Show, createSignal, onMount, type JSX } from "solid-js";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import KVStacked from "../components/KVStacked";
-import { type AuditEvent, AUDIT_PAGE, AUDIT_LOADING_ROWS, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel } from "../lib/audit";
+import { type AuditEvent, AUDIT_PAGE, AUDIT_LOADING_ROWS, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel, channelOf } from "../lib/audit";
 import { diffFields, type DiffRow } from "../lib/auditdiff";
 
 // Audit: the read-only audit trail, now a config over the shared FlatList (the flat
@@ -28,6 +28,26 @@ const VERB_FAMILY: Record<string, string> = {
 };
 const verbClass = (verb: string): string => `badge-soft ${VERB_FAMILY[verb] ?? "badge-ghost"}`;
 
+// A channel pill names how a row arrived, in the same soft treatment as the
+// verbs. A direct write (no channel) takes no pill: the column marks only the
+// rows that came through something other than a plain API call.
+const CHANNEL_FAMILY: Record<string, string> = { mcp: "badge-secondary", omnibot: "badge-accent" };
+const channelClass = (channel: string): string => `badge-soft ${CHANNEL_FAMILY[channel] ?? "badge-ghost"}`;
+
+// What a channel proves and what it does not, taught where it is read.
+const CHANNEL_HINT =
+  "How the call reached the server: mcp is a tool call on the MCP server, direct a plain API call. " +
+  "The server stamps it, so no caller can claim one. It says how the call arrived, not what held the token: " +
+  "an agent token names its agent, but a script holding a person's token still reads as direct.";
+
+// The agent tag rides beside the person it acted for, the way "as bob" rides
+// beside an impersonator: the person is accountable, the agent is who acted.
+const AgentTag = (p: { agent?: string }) => (
+  <Show when={p.agent}>
+    <span class="badge badge-soft badge-secondary badge-xs whitespace-nowrap" title="The agent that acted on this person's behalf, from its agent token">agent {p.agent}</span>
+  </Show>
+);
+
 const when = (ts: string): string => {
   const d = new Date(ts);
   return isNaN(d.getTime()) ? ts : d.toLocaleString();
@@ -39,15 +59,28 @@ const columns: FlatColumn<AuditEvent>[] = [
   { key: "when", label: "When", width: "190px", cell: (e) => <span class="whitespace-nowrap tnum text-xs text-base-content/60">{when(e.ts)}</span> },
   {
     key: "who", label: "Who", cell: (e) => (
-      <span class="text-sm">
+      <span class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
         <span class="font-data">{accountableLabel(e)}</span>
         <Show when={e.real_actor}>
-          <span class="ml-1.5 badge badge-soft badge-warning badge-xs" title="Acted while impersonating this principal">as {actorLabel(e)}</span>
+          <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap" title="Acted while impersonating this principal">as {actorLabel(e)}</span>
         </Show>
+        <AgentTag agent={e.agent} />
       </span>
     ),
   },
-  { key: "action", label: "Action", width: "150px", cell: (e) => <span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span> },
+  {
+    key: "channel", label: "Channel", width: "170px", cell: (e) => (
+      <Show when={e.channel}>
+        <span class="flex flex-col items-start gap-0.5">
+          <span data-testid="audit-channel" class={`badge badge-sm ${channelClass(e.channel!)} font-data`}>{e.channel}</span>
+          <Show when={e.client}>
+            <span class="font-data text-[11px] text-base-content/50 truncate self-stretch" title={e.client}>{e.client}</span>
+          </Show>
+        </span>
+      </Show>
+    ),
+  },
+  { key: "action", label: "Action", width: "120px", cell: (e) => <span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span> },
   { key: "resource", label: "Resource", width: "170px", cell: (e) => <span class="font-data text-xs text-base-content/70">{e.resource}</span> },
   { key: "id", label: "Id", cell: (e) => <span class="font-data text-[11px] text-base-content/40" title={e.resource_id && e.resource_id !== resourceLabel(e) ? e.resource_id : undefined}>{resourceLabel(e)}</span> },
 ];
@@ -85,16 +118,37 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
         <KVStacked
           label="Who"
           value={
-            <span class="text-sm">
+            <span class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
               <span class="font-data">{accountableLabel(e)}</span>
               <Show when={e.real_actor}>
-                <span class="ml-1.5 badge badge-soft badge-warning badge-xs">as {actorLabel(e)}</span>
+                <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap">as {actorLabel(e)}</span>
               </Show>
+              <AgentTag agent={e.agent} />
             </span>
           }
         />
         <KVStacked label="Action" value={<span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span>} />
         <KVStacked label="Resource" value={<span class="font-data text-xs" title={e.resource_id || undefined}>{e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>} />
+        <KVStacked
+          label="Channel"
+          hint={CHANNEL_HINT}
+          value={
+            <Show when={e.channel} fallback={<span class="font-data text-xs text-base-content/60">{channelOf(e)}</span>}>
+              <span class={`badge badge-sm ${channelClass(e.channel!)} font-data`}>{e.channel}</span>
+            </Show>
+          }
+        />
+        <Show when={e.client}>
+          <KVStacked
+            label="Client"
+            value={
+              <span class="flex flex-col">
+                <span class="font-data text-xs wrap-break-word">{e.client}</span>
+                <span class="text-xs text-base-content/50">as the agent reported it</span>
+              </span>
+            }
+          />
+        </Show>
       </div>
       <div class="flex flex-col gap-1.5">
         <span class="eyebrow">Change</span>
@@ -198,7 +252,7 @@ export default function Audit() {
           fill: true,
           error,
           filterKeys: auditFilterKeys,
-          filterPlaceholder: "filter by who, action, resource, id",
+          filterPlaceholder: "filter by who, action, resource, id, channel, client",
           columns,
           empty: "No events yet.",
           detail: (e) => ({

@@ -56,7 +56,10 @@ drawer. See [implementation status](/architecture/status/).
   call carries neither. The MCP dispatch sets them on the request context, which no HTTP header or body
   reaches, so a caller cannot claim a channel, and a check holds the column to the channels the server
   knows ([ADR-1162](/architecture/decisions/#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token)).
-  `GET /audit-log` returns both.
+  `GET /audit-log` returns and filters on both ([reading the trail](#reading-the-trail)), and the
+  console's [audit page](/guides/admin/audit/) shows them: a Channel column with a pill over the
+  declared client (empty on a direct row), the agent tagged beside the person, `channel`, `client`
+  and `agent` facets, and a drawer that names the client as the agent reported it.
 - **An AI-taken action is one row.** An AI tool acts with a bearer token as a `human` or `service`
   principal, so the actor is that principal, and the channel is the AI-sourced marking riding
   alongside the row ([AI](/architecture/ai/)).
@@ -96,7 +99,8 @@ The read-audit granularity: per-resource opt-in versus a global verbosity settin
 
 `GET /audit-log` is gated by the admin-sensitive `audit:read:admin`, out of a two-token wildcard's
 reach, so only admin and owner see the security trail. Rows return newest first, filterable by
-`resource` and `verb`, paged backward with `before` plus `limit` (default 100, capped at 500), each
+`resource`, `verb`, `agent`, `channel` (`direct` for the rows with none, a plain API call) and
+`client` (a case-insensitive contains, since a client's version moves), paged backward with `before` plus `limit` (default 100, capped at 500), each
 carrying the `old` and `new` images the write recorded: a create only `new`, a delete only `old`, an
 update both, auth events neither. Redaction is the write side's (sealed secret material and
 credential hashes never enter an image); the read passes images through verbatim. An image carries a

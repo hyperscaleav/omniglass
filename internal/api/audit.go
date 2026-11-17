@@ -20,6 +20,8 @@ type auditListInput struct {
 	Verb     string `query:"verb" doc:"Filter to one verb (e.g. login, create)"`
 	Before   string `query:"before" doc:"Only events strictly older than this RFC3339 timestamp (paging backward)"`
 	Agent    string `query:"agent" doc:"Filter to the events one agent took on its person's behalf (the name its agent token was minted with)"`
+	Channel  string `query:"channel" enum:"direct,mcp,omnibot" doc:"Filter to the events that arrived through one channel; direct is a plain API call, with no channel"`
+	Client   string `query:"client" doc:"Filter to the events whose declared MCP client contains this term, case-insensitively"`
 }
 
 type auditEventBody struct {
@@ -76,7 +78,7 @@ func registerAuditRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Summary:     "List audit-trail events",
 		Description: "Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).",
 	}, "audit", "read", "admin"), func(ctx context.Context, in *auditListInput) (*auditListOutput, error) {
-		entries, err := gw.ListAuditLog(ctx, storage.AuditFilter{Limit: in.Limit, Resource: in.Resource, Verb: in.Verb, Before: in.Before, Agent: in.Agent})
+		entries, err := gw.ListAuditLog(ctx, storage.AuditFilter{Limit: in.Limit, Resource: in.Resource, Verb: in.Verb, Before: in.Before, Agent: in.Agent, Channel: in.Channel, Client: in.Client})
 		if err != nil {
 			return nil, huma.Error500InternalServerError("list audit log")
 		}

@@ -280,6 +280,8 @@ func generatedCommands() []*cobra.Command {
 				var qVerb string
 				var qBefore string
 				var qAgent string
+				var qChannel string
+				var qClient string
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List audit-trail events",
@@ -304,6 +306,12 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("agent") {
 							q.Set("agent", fmt.Sprintf("%v", qAgent))
 						}
+						if cmd.Flags().Changed("channel") {
+							q.Set("channel", fmt.Sprintf("%v", qChannel))
+						}
+						if cmd.Flags().Changed("client") {
+							q.Set("client", fmt.Sprintf("%v", qClient))
+						}
 						if enc := q.Encode(); enc != "" {
 							path += "?" + enc
 						}
@@ -315,6 +323,8 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&qVerb, "verb", "", "Filter to one verb (e.g. login, create)")
 				cmd.Flags().StringVar(&qBefore, "before", "", "Only events strictly older than this RFC3339 timestamp (paging backward)")
 				cmd.Flags().StringVar(&qAgent, "agent", "", "Filter to the events one agent took on its person's behalf (the name its agent token was minted with)")
+				cmd.Flags().StringVar(&qChannel, "channel", "", "Filter to the events that arrived through one channel; direct is a plain API call, with no channel")
+				cmd.Flags().StringVar(&qClient, "client", "", "Filter to the events whose declared MCP client contains this term, case-insensitively")
 				return cmd
 			}()
 			return cmd

@@ -228,3 +228,80 @@ func TestAuditDiffRoundTrip(t *testing.T) {
 		t.Errorf("secret audit new image missing metadata: %v", secrets[0].New)
 	}
 }
+
+type auditChannelEvent struct {
+	Verb     string `json:"verb"`
+	Resource string `json:"resource"`
+	New      struct {
+		Name string `json:"name"`
+	} `json:"new"`
+	Channel string `json:"channel"`
+	Client  string `json:"client"`
+}
+
+// TestAuditLogFiltersByChannelAndClient pins the channel and client narrowing
+// on GET /audit-log (#1178): channel=mcp keeps only rows that arrived over MCP,
+// channel=direct only rows with no channel, and client keeps the rows whose
+// declared client contains the term, case-insensitively, so a search for
+// "claude" finds every version of one client. An unknown channel is a 422, not
+// an empty page.
+func TestAuditLogFiltersByChannelAndClient(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+
+	// One direct create through the API, two stamped as MCP tool calls from two
+	// declared clients (the channel is server-stamped, so the test stamps it the
+	// way the MCP dispatch does).
+	c.do(ownerTok, http.MethodPost, "/outposts", map[string]any{"name": "direct-1"}, http.StatusCreated)
+	for _, n := range []struct{ name, client string }{{"mcp-claude", "Claude-Code/2.1.0"}, {"mcp-cursor", "cursor/1.4"}} {
+		mcpCtx := storage.WithAuditChannel(ctx, storage.AuditChannelMCP, n.client)
+		if _, err := gw.CreateOutpost(mcpCtx, "", storage.OutpostSpec{Name: n.name}, scope.Set{All: true}, scope.Set{All: true}); err != nil {
+			t.Fatalf("create %s: %v", n.name, err)
+		}
+	}
+
+	names := func(query string) []string {
+		t.Helper()
+		var out struct {
+			Events []auditChannelEvent `json:"events"`
+		}
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/audit-log?resource=outpost&verb=create"+query, nil, http.StatusOK), &out); err != nil {
+			t.Fatalf("decode audit-log: %v", err)
+		}
+		var got []string
+		for _, e := range out.Events {
+			got = append(got, e.New.Name)
+		}
+		return got
+	}
+	for _, tc := range []struct {
+		query string
+		want  string
+	}{
+		{"", "mcp-cursor,mcp-claude,direct-1"},
+		{"&channel=mcp", "mcp-cursor,mcp-claude"},
+		{"&channel=direct", "direct-1"},
+		{"&channel=omnibot", ""},
+		{"&client=claude", "mcp-claude"},
+		{"&client=CURSOR", "mcp-cursor"},
+		{"&channel=direct&client=claude", ""},
+	} {
+		if got := strings.Join(names(tc.query), ","); got != tc.want {
+			t.Errorf("audit-log%s: got [%s], want [%s]", tc.query, got, tc.want)
+		}
+	}
+
+	if code, _ := c.send(ownerTok, http.MethodGet, "/audit-log?channel=console", nil); code != http.StatusUnprocessableEntity {
+		t.Errorf("unknown channel: want 422, got %d", code)
+	}
+}

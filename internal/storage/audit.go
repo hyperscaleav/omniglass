@@ -46,7 +46,17 @@ type AuditFilter struct {
 	Before   string
 	// Agent, when set, keeps only the rows that agent took (#1179).
 	Agent string
+	// Channel, when set, keeps only the rows that arrived through it (#1178):
+	// AuditChannelDirect for rows with no channel, else a channel's name.
+	Channel string
+	// Client, when set, keeps only the rows whose declared client contains it,
+	// case-insensitively, so one term matches every version of a client.
+	Client string
 }
+
+// AuditChannelDirect is the channel filter value for a row with no channel: a
+// direct API call. It is a filter term only, never stored.
+const AuditChannelDirect = "direct"
 
 const auditDefaultLimit = 100
 const auditMaxLimit = 500
@@ -86,6 +96,8 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		  and ($3 = '' or a.verb = $3)
 		  and ($4 = '' or a.ts < $4::timestamptz)
 		  and ($5 = '' or a.agent = $5)
+		  and ($6 = '' or ($6 = '`+AuditChannelDirect+`' and a.channel is null) or a.channel = $6)
+		  and ($7 = '' or strpos(lower(a.client), lower($7)) > 0)
 		-- seq (the DB-assigned identity) is the true write sequence; ts is a
 		-- display fact, and the uuidv7 id is a clock in disguise. Both stamp
 		-- kinds invert across transactions (a slow tx commits after a later
@@ -94,7 +106,7 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		-- order flap between two reads of the same trail (#780).
 		order by a.seq desc
 		limit $1`,
-		limit, f.Resource, f.Verb, f.Before, f.Agent)
+		limit, f.Resource, f.Verb, f.Before, f.Agent, f.Channel, f.Client)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list audit log: %w", err)
 	}
