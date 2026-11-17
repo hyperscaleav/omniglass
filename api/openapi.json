@@ -324,6 +324,48 @@
         ],
         "type": "object"
       },
+      "AgentClassOverride": {
+        "additionalProperties": false,
+        "properties": {
+          "credential_destination": {
+            "description": "Policy for this role's agents' calls that may point a stored credential somewhere",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          },
+          "destructive": {
+            "description": "Policy for this role's agents' writes that overwrite or delete",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          },
+          "read": {
+            "description": "Policy for this role's agents' reads",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          },
+          "write": {
+            "description": "Policy for this role's agents' writes that create or act",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AgentClassPolicy": {
         "additionalProperties": false,
         "properties": {
@@ -345,11 +387,25 @@
               "never"
             ],
             "type": "string"
+          },
+          "role": {
+            "description": "The role whose override set the policy, when the source is role",
+            "type": "string"
+          },
+          "source": {
+            "description": "The layer that set the policy: the platform's class value, a role's override, or the tool's own",
+            "enum": [
+              "platform",
+              "role",
+              "tool"
+            ],
+            "type": "string"
           }
         },
         "required": [
           "class",
-          "policy"
+          "policy",
+          "source"
         ],
         "type": "object"
       },
@@ -370,9 +426,19 @@
             "type": "boolean"
           },
           "classes": {
-            "description": "The install's resolved policy for each operation class",
+            "description": "The resolved policy for each operation class, for the caller's roles",
             "items": {
               "$ref": "#/components/schemas/AgentClassPolicy"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "tools": {
+            "description": "The resolved policy for each tool the install overrides; every other tool takes its class's",
+            "items": {
+              "$ref": "#/components/schemas/AgentToolPolicy"
             },
             "type": [
               "array",
@@ -382,7 +448,8 @@
         },
         "required": [
           "applies",
-          "classes"
+          "classes",
+          "tools"
         ],
         "type": "object"
       },
@@ -419,6 +486,20 @@
             ],
             "type": "string"
           },
+          "roles": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AgentClassOverride"
+            },
+            "description": "Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter",
+            "type": "object"
+          },
+          "tools": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter",
+            "type": "object"
+          },
           "write": {
             "default": "ask",
             "description": "Policy for an agent's writes that create or act (a POST that is not a read)",
@@ -435,6 +516,19 @@
           "write",
           "destructive",
           "credential_destination"
+        ],
+        "type": "object"
+      },
+      "AgentToolPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "description": "The tool (operation ID) an override names",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool"
         ],
         "type": "object"
       },
@@ -19851,7 +19945,7 @@
     },
     "/auth/me/agent-policy": {
       "get": {
-        "description": "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
+        "description": "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. Each class names the layer that set it (platform, role, or tool), and an overridden tool is listed with its own policy; the strictest layer wins. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
         "operationId": "get-auth-me-agent-policy",
         "responses": {
           "200": {

@@ -10,7 +10,7 @@ import {
   useRestoreNamespace,
   useRestoreAllDefaults,
 } from "../lib/settings";
-import { constraintFor, isList, listText, settingKeys, validateField, wireValue } from "../lib/settingsValidation";
+import { constraintFor, isList, isMap, listText, objectText, settingKeys, validateField, wireValue } from "../lib/settingsValidation";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (the declared defaults, the operator
@@ -205,11 +205,18 @@ function SettingRow(props: {
 }) {
   // The generated constraint decides how a value is read and written, so a
   // list-valued setting shows as one line of comma-separated entries and goes
-  // back as a JSON array. Deciding from the SCHEMA rather than from the value
-  // keeps a list that resolved empty editable as a list.
+  // back as a JSON array, and a map shows and saves as its JSON. Deciding from
+  // the SCHEMA rather than from the value keeps a list that resolved empty
+  // editable as a list.
   const constraint = () => constraintFor(props.namespace, props.settingKey);
   const current = () =>
-    props.value == null ? "" : isList(constraint()) ? listText(props.value) : String(props.value);
+    props.value == null
+      ? ""
+      : isList(constraint())
+        ? listText(props.value)
+        : isMap(constraint())
+          ? objectText(props.value)
+          : String(props.value);
   const [draft, setDraft] = createSignal(current());
   const [expanded, setExpanded] = createSignal(false);
   const [busy, setBusy] = createSignal(false);

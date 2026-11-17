@@ -188,6 +188,32 @@ refused, so a refused agent can always learn why. And no agent may change the po
 or restoring the `agent` settings, or restoring every setting, is refused to it whatever the classes
 say, so only its person can loosen what binds it.
 
+### Narrowing it by role or by tool
+
+The classes above are the install's floor. Two narrower layers in the same `agent` settings sit on
+top of it, and each can only make an agent's policy stricter, never looser:
+
+- **`roles`**, keyed by role name, sets a class for the agents of anyone granted that role. An
+  operator's agent can be kept from writing while an owner's agent is not.
+- **`tools`**, keyed by operation ID (the MCP tool's name), sets one operation, so `create-component`
+  can be `never` while every other write stays `ask`.
+
+```bash
+omniglass setting update agent --body '{"roles":{"operator":{"write":"never"}}}'   # operators' agents: no writes
+omniglass setting update agent --body '{"tools":{"delete-component":"never"}}'      # no agent deletes a component
+omniglass setting update agent --body '{"roles":{"operator":null}}'                 # drop one override
+```
+
+Resolution is **strictest wins** (`always`, then `ask`, then `never`) across the class, every role
+the person is granted (directly or through a group), and the tool. A role naming a looser value than
+the class changes nothing, and so does a tool set to `always` under an `ask` class. An unknown role,
+an unknown tool, or one of the two exempt reads is refused with a 422 when the override is written.
+The resolved policy names the layer that set each value: `omniglass auth agent-policy` answers each
+class with its `source` (`platform`, `role`, with the `role` it came from, or `tool`), plus a `tools`
+list for each overridden operation. The 403 a refused agent gets says the same: that this tool, an
+agent of this role, or this class is refused. In the console, the overrides edit as JSON on the
+`agent` card of the Settings page.
+
 ## Tools the agent can call
 
 The catalog is curated: an operation is a tool only when it is stamped for MCP at its route, and the

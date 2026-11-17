@@ -13,21 +13,40 @@ import (
 // an agent token over REST and any token over MCP alike, auditing the refusal
 // as the agent's. A fresh install refuses nothing. Skipped under -short.
 
+type agentDecision struct {
+	Tool   string `json:"tool"`
+	Class  string `json:"class"`
+	Policy string `json:"policy"`
+	Source string `json:"source"`
+	Role   string `json:"role"`
+}
+
 type agentPolicy struct {
-	Applies bool `json:"applies"`
-	Classes []struct {
-		Class  string `json:"class"`
-		Policy string `json:"policy"`
-	} `json:"classes"`
+	Applies bool            `json:"applies"`
+	Classes []agentDecision `json:"classes"`
+	Tools   []agentDecision `json:"tools"`
 }
 
 func (p agentPolicy) of(class string) string {
+	return p.class(class).Policy
+}
+
+func (p agentPolicy) class(class string) agentDecision {
 	for _, c := range p.Classes {
 		if c.Class == class {
-			return c.Policy
+			return c
 		}
 	}
-	return ""
+	return agentDecision{}
+}
+
+func (p agentPolicy) tool(name string) agentDecision {
+	for _, c := range p.Tools {
+		if c.Tool == name {
+			return c
+		}
+	}
+	return agentDecision{}
 }
 
 func readAgentPolicy(t *testing.T, s *mcpStack, tok string) agentPolicy {
@@ -207,5 +226,90 @@ func TestAgentPolicyMarksEveryListedTool(t *testing.T) {
 	s.c.do(s.owner, http.MethodPatch, "/settings/agent", map[string]any{"destructive": "never"}, http.StatusOK)
 	if p := listedPolicy(t, s, cs)["delete-component-dependency"]; p != "destructive/never" {
 		t.Errorf("after setting destructive to never, delete-component-dependency listed as %q", p)
+	}
+}
+
+// A role override (#2088) narrows the platform policy for the people who hold
+// that role and no one else, and the resolved policy names the role that set
+// it. An override for a role the install does not have is refused.
+func TestAgentRoleOverrideNarrowsOnlyItsHolders(t *testing.T) {
+	t.Parallel()
+	s := newMCPStack(t)
+	var alice struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &alice); err != nil {
+		t.Fatal(err)
+	}
+	s.c.do(s.owner, http.MethodPost, "/principals/"+alice.ID+"/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated)
+	aliceAgent := mintAgent(t, s.c, loginBearer(t, s.c, "alice", "orange-boat-42x"), map[string]any{"description": "ops", "agent": "ops-bot", "ttl_days": 1})
+	ownerAgent := mintAgent(t, s.c, s.owner, map[string]any{"description": "claude", "agent": "claude", "ttl_days": 1})
+
+	s.c.do(s.owner, http.MethodPatch, "/settings/agent", map[string]any{"roles": map[string]any{"no-such-role": map[string]any{"write": "never"}}}, http.StatusUnprocessableEntity)
+	s.c.do(s.owner, http.MethodPatch, "/settings/agent", map[string]any{"roles": map[string]any{"operator": map[string]any{"write": "never"}}}, http.StatusOK)
+
+	s.c.do(aliceAgent.Token, http.MethodPost, "/components", map[string]any{}, http.StatusForbidden)
+	s.c.do(ownerAgent.Token, http.MethodPost, "/components", map[string]any{}, http.StatusUnprocessableEntity)
+
+	if d := readAgentPolicy(t, s, aliceAgent.Token).class("write"); d.Policy != "never" || d.Source != "role" || d.Role != "operator" {
+		t.Errorf("alice's agent write = %+v, want never from the operator role", d)
+	}
+	if d := readAgentPolicy(t, s, ownerAgent.Token).class("write"); d.Policy != "ask" || d.Source != "platform" || d.Role != "" {
+		t.Errorf("owner's agent write = %+v, want the platform's ask", d)
+	}
+
+	// A null drops the override, as a merge patch does at any depth.
+	s.c.do(s.owner, http.MethodPatch, "/settings/agent", map[string]any{"roles": map[string]any{"operator": map[string]any{"write": nil}}}, http.StatusOK)
+	s.c.do(aliceAgent.Token, http.MethodPost, "/components", map[string]any{}, http.StatusUnprocessableEntity)
+}
+
+// A per-tool never (#2088) refuses that one tool to an agent, over REST and
+// MCP, while the rest of its class runs; the listing and the resolved policy
+// name the tool as the layer that set it. A tool the API does not have is
+// refused, so a typo cannot leave the tool it meant unrestricted.
+func TestAgentToolOverrideRefusesOneTool(t *testing.T) {
+	t.Parallel()
+	s := newMCPStack(t)
+	agent := mintAgent(t, s.c, s.owner, map[string]any{"description": "claude", "agent": "claude", "ttl_days": 1})
+
+	s.c.do(s.owner, http.MethodPatch, "/settings/agent", map[string]any{"tools": map[string]any{"create-componnet": "never"}}, http.StatusUnprocessableEntity)
+	s.c.do(s.owner, http.MethodPatch, "/settings/agent", map[string]any{"tools": map[string]any{"get-auth-me-agent-policy": "never"}}, http.StatusUnprocessableEntity)
+	s.c.do(s.owner, http.MethodPatch, "/settings/agent", map[string]any{"tools": map[string]any{"create-componnet": nil}}, http.StatusOK)
+	s.c.do(s.owner, http.MethodPatch, "/settings/agent", map[string]any{"tools": map[string]any{"create-component": "never", "create-location": "always"}}, http.StatusOK)
+
+	s.c.do(agent.Token, http.MethodPost, "/components", map[string]any{}, http.StatusForbidden)
+	s.c.do(agent.Token, http.MethodPost, "/locations", map[string]any{}, http.StatusUnprocessableEntity)
+	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{}, http.StatusUnprocessableEntity)
+
+	p := readAgentPolicy(t, s, agent.Token)
+	if d := p.tool("create-component"); d.Class != "write" || d.Policy != "never" || d.Source != "tool" {
+		t.Errorf("create-component resolved as %+v, want write never from the tool", d)
+	}
+	if d := p.tool("create-location"); d.Policy != "ask" || d.Source != "platform" {
+		t.Errorf("create-location resolved as %+v, want the platform's ask (a tool never widens)", d)
+	}
+	if d := p.class("write"); d.Policy != "ask" {
+		t.Errorf("write class = %+v, want ask", d)
+	}
+
+	cs := s.session(t, s.owner, "tool-override")
+	listed := listedPolicy(t, s, cs)
+	if listed["create-component"] != "write/never" || listed["create-location"] != "write/ask" {
+		t.Errorf("listed create-component %q and create-location %q, want write/never and write/ask", listed["create-component"], listed["create-location"])
+	}
+	if res, text := callTool(t, cs, "create-component", map[string]any{"name": "x", "product": "generic-device"}); !res.IsError {
+		t.Errorf("create-component ran over MCP with its tool set to never: %s", text)
+	}
+
+	var trail struct {
+		Events []struct {
+			ResourceID string `json:"resource_id"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodGet, "/audit-log?verb=agent_refused", nil, http.StatusOK), &trail); err != nil {
+		t.Fatal(err)
+	}
+	if len(trail.Events) != 2 || trail.Events[0].ResourceID != "create-component" || trail.Events[1].ResourceID != "create-component" {
+		t.Errorf("agent_refused trail = %+v, want create-component over REST and MCP", trail.Events)
 	}
 }

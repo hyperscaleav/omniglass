@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { listText, textList, validateField, wireValue } from "./settingsValidation";
+import { listText, objectText, textList, validateField, wireValue } from "./settingsValidation";
 
 describe("validateField", () => {
   it("rejects a value outside the enum", () => {
@@ -62,5 +62,27 @@ describe("wireValue", () => {
   });
   it("writes a string field as typed", () => {
     expect(wireValue({ type: "string" }, "omniglass-dark")).toBe("omniglass-dark");
+  });
+});
+
+describe("a map setting round trips through its JSON text", () => {
+  const map = { type: "object" };
+
+  it("reads a stored map as JSON and writes the text back as the object", () => {
+    const stored = { operator: { write: "never" } };
+    expect(objectText(stored)).toBe('{"operator":{"write":"never"}}');
+    expect(wireValue(map, objectText(stored))).toEqual(stored);
+  });
+
+  it("writes a blank map as an empty object", () => {
+    expect(wireValue(map, "  ")).toEqual({});
+    expect(validateField(map, "")).toBeNull();
+  });
+
+  it("refuses text that is not a JSON object", () => {
+    expect(validateField(map, "{nope")).toBe("must be a JSON object");
+    expect(validateField(map, "[1]")).toBe("must be a JSON object");
+    expect(validateField(map, '"x"')).toBe("must be a JSON object");
+    expect(validateField(map, '{"create-component":"never"}')).toBeNull();
   });
 });

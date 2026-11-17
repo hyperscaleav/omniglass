@@ -125,6 +125,11 @@ type authenticator struct {
 	index  rbac.RoleIndex
 	idxErr error
 
+	// ops is every registered operation by ID, built on first use (after
+	// registration), for the agent policy's per-tool layer (#2088).
+	opsOnce sync.Once
+	ops     map[string]*huma.Operation
+
 	// perms is the set of every capability the route surface declares through
 	// gated(), keyed by the ":"-joined token string ("location:read",
 	// "audit:read:admin"). It is the permission universe: the read side (the roles
@@ -234,7 +239,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	// The install's agent policy (#2063): a request under the agent ceiling is
 	// refused an operation whose class is set to never, here in authn so a REST
 	// call with an agent token and a tool call over MCP are refused alike.
-	if agentCeiling(pr, channel) && !a.enforceAgentPolicy(ctx, c.Context(), pr.ID) {
+	if agentCeiling(pr, channel) && !a.enforceAgentPolicy(ctx, c.Context(), pr.ID, roleIDs) {
 		return
 	}
 	c = huma.WithValue(c, permsCtxKey, constrainPerms(idx.Flatten(roleIDs), idx, pr.Agent, agentCeiling(pr, channel)))

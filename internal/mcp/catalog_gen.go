@@ -45,7 +45,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "get-auth-me-agent-policy",
 		Title:       "What the install lets an agent do",
-		Description: "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
+		Description: "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. Each class names the layer that set it (platform, role, or tool), and an overridden tool is listed with its own policy; the strictest layer wins. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
 		Method:      "GET",
 		Path:        "/auth/me/agent-policy",
 		Permission:  "",

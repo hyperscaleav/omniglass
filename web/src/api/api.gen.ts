@@ -170,6 +170,65 @@ export type AddSimSystemOutputBody = {
 };
 
 /**
+ * Policy for this role's agents' calls that may point a stored credential somewhere
+ */
+export type AgentClassOverrideCredentialDestination = typeof AgentClassOverrideCredentialDestination[keyof typeof AgentClassOverrideCredentialDestination];
+
+
+export const AgentClassOverrideCredentialDestination = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for this role's agents' writes that overwrite or delete
+ */
+export type AgentClassOverrideDestructive = typeof AgentClassOverrideDestructive[keyof typeof AgentClassOverrideDestructive];
+
+
+export const AgentClassOverrideDestructive = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for this role's agents' reads
+ */
+export type AgentClassOverrideRead = typeof AgentClassOverrideRead[keyof typeof AgentClassOverrideRead];
+
+
+export const AgentClassOverrideRead = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for this role's agents' writes that create or act
+ */
+export type AgentClassOverrideWrite = typeof AgentClassOverrideWrite[keyof typeof AgentClassOverrideWrite];
+
+
+export const AgentClassOverrideWrite = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+export type AgentClassOverride = {
+  /** Policy for this role's agents' calls that may point a stored credential somewhere */
+  credential_destination?: AgentClassOverrideCredentialDestination;
+  /** Policy for this role's agents' writes that overwrite or delete */
+  destructive?: AgentClassOverrideDestructive;
+  /** Policy for this role's agents' reads */
+  read?: AgentClassOverrideRead;
+  /** Policy for this role's agents' writes that create or act */
+  write?: AgentClassOverrideWrite;
+};
+
+/**
  * The operation class
  */
 export type AgentClassPolicyClass = typeof AgentClassPolicyClass[keyof typeof AgentClassPolicyClass];
@@ -194,11 +253,32 @@ export const AgentClassPolicyPolicy = {
   never: 'never',
 } as const;
 
+/**
+ * The layer that set the policy: the platform's class value, a role's override, or the tool's own
+ */
+export type AgentClassPolicySource = typeof AgentClassPolicySource[keyof typeof AgentClassPolicySource];
+
+
+export const AgentClassPolicySource = {
+  platform: 'platform',
+  role: 'role',
+  tool: 'tool',
+} as const;
+
 export type AgentClassPolicy = {
   /** The operation class */
   class: AgentClassPolicyClass;
   /** always runs; ask runs, and the client confirms with its person first; never is refused by the server */
   policy: AgentClassPolicyPolicy;
+  /** The role whose override set the policy, when the source is role */
+  role?: string;
+  /** The layer that set the policy: the platform's class value, a role's override, or the tool's own */
+  source: AgentClassPolicySource;
+};
+
+export type AgentToolPolicy = {
+  /** The tool (operation ID) an override names */
+  tool: string;
 };
 
 export type AgentPolicyOutputBody = {
@@ -207,10 +287,15 @@ export type AgentPolicyOutputBody = {
   /** Whether this request is an agent's (an agent token, or any request over MCP), so the policy governs it */
   applies: boolean;
   /**
-     * The install's resolved policy for each operation class
+     * The resolved policy for each operation class, for the caller's roles
      * @nullable
      */
   classes: AgentClassPolicy[] | null;
+  /**
+     * The resolved policy for each tool the install overrides; every other tool takes its class's
+     * @nullable
+     */
+  tools: AgentToolPolicy[] | null;
 };
 
 /**
@@ -250,6 +335,16 @@ export const AgentSettingsRead = {
 } as const;
 
 /**
+ * Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter
+ */
+export type AgentSettingsRoles = {[key: string]: AgentClassOverride};
+
+/**
+ * Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter
+ */
+export type AgentSettingsTools = {[key: string]: string};
+
+/**
  * Policy for an agent's writes that create or act (a POST that is not a read)
  */
 export type AgentSettingsWrite = typeof AgentSettingsWrite[keyof typeof AgentSettingsWrite];
@@ -268,6 +363,10 @@ export type AgentSettings = {
   destructive: AgentSettingsDestructive;
   /** Policy for an agent's reads (a GET, or a POST gated on a read permission) */
   read: AgentSettingsRead;
+  /** Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter */
+  roles?: AgentSettingsRoles;
+  /** Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter */
+  tools?: AgentSettingsTools;
   /** Policy for an agent's writes that create or act (a POST that is not a read) */
   write: AgentSettingsWrite;
 };
@@ -9849,7 +9948,7 @@ export const getGetAuthMeAgentPolicyUrl = () => {
 }
 
 /**
- * Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
+ * Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. Each class names the layer that set it (platform, role, or tool), and an overridden tool is listed with its own policy; the strictest layer wins. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
  * @summary What the install lets an agent do
  */
 export const getAuthMeAgentPolicy = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getAuthMeAgentPolicyResponse> => {
