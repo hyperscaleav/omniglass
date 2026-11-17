@@ -253,7 +253,7 @@ type LocationType struct {
 	// NameRule is this type's opt-in to GENERATING the names of the locations
 	// it classifies (#687), nullable: null means an operator names every one of
 	// them, which is where all four shipped types stay (ADR-0103). Unlike
-	// LabelRule it is a declaration rather than a template, and unlike
+	// LabelRule it is a declaration rather than a rule string, and unlike
 	// LabelRule it has no tier above it to defer to: a name either comes from
 	// this rule or from the operator (ADR-0102).
 	NameRule *NameRule
