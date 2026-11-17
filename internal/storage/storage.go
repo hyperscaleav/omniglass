@@ -236,16 +236,16 @@ type Gateway interface {
 	// UpsertLocationType installs or updates a shipped (official) location type
 	// by name, the boot-seed phase's write. Idempotent and AUTHORITATIVE, so a
 	// value a release withdraws is withdrawn from a fleet that already seeded
-	// it (#703); an operator's version of the row lives in registry_shadow and
+	// it (#703); an operator's version of the row lives in catalog_shadow and
 	// is resolved over it, never stomped by this.
 	UpsertLocationType(ctx context.Context, lt LocationType) error
 	// ListLocationTypes returns every location type, alphabetically by label,
 	// each resolved over its operator shadow. GetLocationType resolves one.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
 	GetLocationType(ctx context.Context, ref string) (*LocationType, error)
-	// The location_type registry CRUD (capability-only, unscoped). Create writes a
+	// The location_type catalog CRUD (capability-only, unscoped). Create writes a
 	// custom (official=false) row; an update of a shipped row FORKS it into
-	// registry_shadow (ADR-0095) and RestoreLocationType discards the fork;
+	// catalog_shadow (ADR-0095) and RestoreLocationType discards the fork;
 	// delete refuses an official row and one still referenced by a location.
 	CreateLocationType(ctx context.Context, actorID string, lt LocationType) (*LocationType, error)
 	UpdateLocationType(ctx context.Context, actorID, ref string, patch LocationTypePatch) (*LocationType, error)
@@ -334,7 +334,7 @@ type Gateway interface {
 	SystemNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
-	// The component tier: a type registry and scoped CRUD, on the same helpers.
+	// The component tier: a type catalog and scoped CRUD, on the same helpers.
 	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
 	// ListComponentEndpoints returns a component's interfaces (the reachability
@@ -378,9 +378,9 @@ type Gateway interface {
 	ComponentNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteComponent(ctx context.Context, actorID, name string, read, action scope.Set) error
 
-	// The component_make registry: a flat manufacturer registry (Cisco,
+	// The component_make catalog: a flat manufacturer catalog (Cisco,
 	// Crestron, ...), same shape and official-read-only guard as the type
-	// registries above but with no tree and no in-use delete guard in this
+	// catalogs above but with no tree and no in-use delete guard in this
 	// slice (component_model will reference it later).
 	UpsertVendor(ctx context.Context, v Vendor) error
 	ListVendors(ctx context.Context) ([]Vendor, error)
@@ -395,7 +395,7 @@ type Gateway interface {
 	UpdateDriver(ctx context.Context, actorID, id string, patch DriverPatch) (*Driver, error)
 	DeleteDriver(ctx context.Context, actorID, id string) error
 
-	// The component_type registry: the hierarchical taxonomy a product is
+	// The component_type catalog: the hierarchical taxonomy a product is
 	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
 	// and TypeIsWithin read the ancestor chain in one recursive query and fold it in Go.
 	// ReconcileReservedKeys makes reserved_key exactly names (#1447): the
@@ -445,7 +445,7 @@ type Gateway interface {
 	ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error)
 	TypeIsWithin(ctx context.Context, id, ancestor uuid.UUID) (bool, error)
 
-	// The system_type registry: the coarse taxonomy of what kind of space a
+	// The system_type catalog: the coarse taxonomy of what kind of space a
 	// system is (a boardroom, a classroom, a video wall), the system-side
 	// counterpart of component_type and a different question from standard,
 	// which stays the blueprint a system conforms to.
@@ -465,11 +465,11 @@ type Gateway interface {
 	UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error)
 	DeleteProduct(ctx context.Context, actorID, id string) error
 
-	// RenameRegistry moves a registry row's name (vendor, driver, product,
+	// RenameCatalog moves a catalog row's name (vendor, driver, product,
 	// standard, location_type; #555, ADR-0555), addressed by name or uuid, and
 	// returns its uuid. Official rows keep their names; the rename is audited
 	// in its transaction and carries any by-value reference along.
-	RenameRegistry(ctx context.Context, actorID, table, ref, newName string) (string, error)
+	RenameCatalog(ctx context.Context, actorID, table, ref, newName string) (string, error)
 
 	// The interface tier: operator CRUD over placement-bound connections. An
 	// interface is not a scope-tree entity of its own; it hangs off a component
@@ -510,7 +510,7 @@ type Gateway interface {
 	ListTasks(ctx context.Context, read scope.Set) ([]Task, error)
 	GetTask(ctx context.Context, id string, read scope.Set) (*Task, error)
 
-	// The collection registries: fleet-wide reference data (no scope.Set),
+	// The collection catalogs: fleet-wide reference data (no scope.Set),
 	// seeded official and operator-extensible at org/template scope later.
 	UpsertPropertyType(ctx context.Context, prop PropertyType) error
 	ListPropertyTypes(ctx context.Context) ([]PropertyType, error)
@@ -518,7 +518,7 @@ type Gateway interface {
 	CreatePropertyType(ctx context.Context, actorID string, spec PropertyTypeSpec) (*PropertyType, error)
 	UpdatePropertyType(ctx context.Context, actorID, name string, patch PropertyTypePatch) (*PropertyType, error)
 	DeletePropertyType(ctx context.Context, actorID, name string) error
-	// The metric_type registry (#587): the numeric lane of the catalog, split
+	// The metric_type catalog (#587): the numeric lane of the catalog, split
 	// from property_type so the numeric facts (unit, precision) live with the
 	// series keys they describe.
 	UpsertMetricType(ctx context.Context, mt MetricType) error
@@ -528,10 +528,10 @@ type Gateway interface {
 	UpdateMetricType(ctx context.Context, actorID, name string, patch MetricTypePatch) (*MetricType, error)
 	DeleteMetricType(ctx context.Context, actorID, name string) error
 
-	// The event_type registry (ADR-0063 #395): the occurrence keyspace, the twin of
+	// The event_type catalog (ADR-0063 #395): the occurrence keyspace, the twin of
 	// property_type. Seeded official and operator-extensible; a registered event_type
 	// name routes an occurrence to the event sink.
-	// Event rules (#918): read like a registry, written with an all-scope
+	// Event rules (#918): read like a catalog, written with an all-scope
 	// grant; official rules read-only. A read's visible set is the caller's
 	// component read scope, which fences the live state (counts, open alarms,
 	// streaks) to the components it admits.
@@ -543,7 +543,7 @@ type Gateway interface {
 	// its uuid, so nothing inside the platform moves with it.
 	RenameEventRule(ctx context.Context, actorID, name, newName string, action scope.Set) (*EventRule, error)
 	DeleteEventRule(ctx context.Context, actorID, name string, action scope.Set) error
-	// Calc rules (#995): read like a registry, written with an all-scope
+	// Calc rules (#995): read like a catalog, written with an all-scope
 	// grant; official rules read-only. A ref is a rule's name or uuid.
 	ListCalcRules(ctx context.Context) ([]CalcRule, error)
 	GetCalcRule(ctx context.Context, ref string) (*CalcRule, error)
@@ -582,7 +582,7 @@ type Gateway interface {
 	// took a sample past from, and corrects any rule state that disagrees
 	// with it; it returns the mark to read past next.
 	ReconcileEventRules(ctx context.Context, st *RuleReconcileState) error
-	// The severity level registry (#917): official levels from the boot seed,
+	// The severity level catalog (#917): official levels from the boot seed,
 	// operator levels created, renamed, recolored, re-ranked and deleted.
 	UpsertSeverityLevel(ctx context.Context, l SeverityLevel) error
 	ListSeverityLevels(ctx context.Context) ([]SeverityLevel, error)
@@ -594,18 +594,18 @@ type Gateway interface {
 	DeleteSeverityLevel(ctx context.Context, actorID, name string, action scope.Set) error
 	UpsertEventType(ctx context.Context, et EventType) error
 	ListEventTypes(ctx context.Context) ([]EventType, error)
-	// CatalogFingerprint digests the rows the ingest sample registry is built
-	// from, so the consumer rebuilds its registry only when it changes (#1279).
+	// CatalogFingerprint digests the rows the ingest sample catalog is built
+	// from, so the consumer rebuilds its catalog only when it changes (#1279).
 	CatalogFingerprint(ctx context.Context) (string, error)
 	// CommandTargetedProperties is the property type names some command type
-	// targets, for the consumer to keep beside its registry (#1299).
+	// targets, for the consumer to keep beside its catalog (#1299).
 	CommandTargetedProperties(ctx context.Context) (map[string]bool, error)
 	GetEventType(ctx context.Context, name string) (*EventType, error)
 	CreateEventType(ctx context.Context, actorID string, spec EventTypeSpec) (*EventType, error)
 	UpdateEventType(ctx context.Context, actorID, name string, patch EventTypePatch) (*EventType, error)
 	DeleteEventType(ctx context.Context, actorID, name string) error
 
-	// The command_type registry (ADR-0063 #396): the driver-owned catalog of what a
+	// The command_type catalog (ADR-0063 #396): the driver-owned catalog of what a
 	// component can be told, the "do" half. Seeded official and operator-extensible.
 	UpsertCommandType(ctx context.Context, ct CommandType) error
 	ListCommandTypes(ctx context.Context) ([]CommandType, error)
@@ -635,7 +635,7 @@ type Gateway interface {
 
 	// The observed-metric sink, for the writer a batch speaks for (OutpostWriter
 	// or PushWriter), held to each key's writer class (ADR-0161).
-	// reject-not-project is applied by the caller (collection.Registry) before
+	// reject-not-project is applied by the caller (collection.Catalog) before
 	// the write. The reads serve the observed series only: the outpost's account,
 	// never a declared, intended or calculated row beside it.
 	InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricSampleWrite) error
@@ -744,7 +744,7 @@ type Gateway interface {
 	PropertyCarriedIn(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window time.Duration) (*string, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
-	// neither insert has a registry gate. log_line is component-owned (#589);
+	// neither insert has a catalog gate. log_line is component-owned (#589);
 	// an outpost's self-logs land on outpost_log via InsertOutpostLogs. ListComponentLogs
 	// backs the component log panel; ListOutpostLogs backs the outpost self-log panel.
 	InsertLogLines(ctx context.Context, lines []LogLineWrite) error
@@ -837,7 +837,7 @@ type Gateway interface {
 	GetOutpost(ctx context.Context, name string, read scope.Set) (*Outpost, error)
 	ListOutposts(ctx context.Context, read scope.Set) ([]Outpost, error)
 
-	// The secret tier: a shape registry, scoped CRUD, an audited reveal, and the
+	// The secret tier: a shape catalog, scoped CRUD, an audited reveal, and the
 	// cascade resolver. A secret is owned on the exclusive arc (platform or one of
 	// the three trees) and encrypted at rest; ResolveSecrets is the per-component
 	// effective-value view down the structural cascade.
@@ -862,7 +862,7 @@ type Gateway interface {
 
 	// The variable tier: a typed, cascade-resolved plaintext value (a macro),
 	// owned on the same exclusive arc as a secret but shown in the clear (no
-	// registry, no crypto, no reveal). ResolveVariables is the per-component
+	// catalog, no crypto, no reveal). ResolveVariables is the per-component
 	// effective-value view down the structural cascade. A variable reference is
 	// addressed the way a secret's is (#1133).
 	ListVariables(ctx context.Context, read scope.Set) ([]Variable, error)
@@ -1172,7 +1172,7 @@ type Gateway interface {
 	DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error
 	DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error
 
-	// The notification_type registry (#618): official types from the boot
+	// The notification_type catalog (#618): official types from the boot
 	// seed, operator types created, patched and deleted; a type addressed by
 	// name or uuid. Preview renders against one alarm and writes nothing.
 	UpsertNotificationType(ctx context.Context, t NotificationType) error
@@ -1204,7 +1204,7 @@ type Gateway interface {
 	// MergePatchNotificationSettings patches the notification namespace,
 	// judging the mail relay's secret binding on the result (the bind right).
 	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingOverride, error)
-	// The action rule (#618): reads registry-shaped, writes all-scope.
+	// The action rule (#618): reads catalog-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
 	GetActionRule(ctx context.Context, ref string) (*ActionRule, error)
 	CreateActionRule(ctx context.Context, actorID string, spec ActionRuleSpec, create scope.Set) (*ActionRule, error)

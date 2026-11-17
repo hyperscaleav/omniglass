@@ -29,7 +29,7 @@ type calcInputReadBody struct {
 	Alias         string `json:"alias" doc:"The name the reduce's expression binds the input by"`
 	Key           string `json:"key" doc:"The key's name now"`
 	KeyID         string `json:"key_id" doc:"The key's uuid, which the rule holds it by"`
-	Lane          string `json:"lane" enum:"property,metric" doc:"Which registry the key is in"`
+	Lane          string `json:"lane" enum:"property,metric" doc:"Which catalog the key is in"`
 	WindowSeconds int    `json:"window_seconds,omitempty" required:"false" doc:"The window the input reads its key over, in seconds; absent for an input that reads current values"`
 }
 
@@ -61,7 +61,7 @@ type calcRuleBody struct {
 	Inputs       []calcInputReadBody `json:"inputs" doc:"The keys the rule reads, each by the alias its reduce uses"`
 	Reduce       calcReduceBody      `json:"reduce" doc:"How the inputs reduce into the output: an expression over their aliases"`
 	OutputKey    string              `json:"output_key" doc:"The property or metric the rule writes"`
-	OutputLane   string              `json:"output_lane" enum:"property,metric" doc:"Which lane the output key is on, derived from the registries"`
+	OutputLane   string              `json:"output_lane" enum:"property,metric" doc:"Which lane the output key is on, derived from the catalogs"`
 	Enabled      bool                `json:"enabled" doc:"Whether the rule runs; an enabled rule is part of the key graph"`
 	Official     bool                `json:"official" doc:"Shipped with the platform and read-only"`
 	Version      int                 `json:"version" doc:"Bumps on every update"`
@@ -71,7 +71,7 @@ type calcRuleBody struct {
 	Pending      int                 `json:"owners_pending" doc:"How many owners the caller may read are marked for the next tick (on the list)"`
 	Unsupported  int                 `json:"owners_unsupported" doc:"How many owners the caller may read the rule last wrote nothing for: an input missing, a system with no members (on the list)"`
 	Errors       int                 `json:"owners_failed" doc:"How many owners the caller may read the rule last failed on (on the list)"`
-	CalcError    *calcErrorBody      `json:"calc_error,omitempty" required:"false" doc:"Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled"`
+	CalcError    *calcErrorBody      `json:"calc_error,omitempty" required:"false" doc:"Why the stored reduce does not compile against the catalogs as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled"`
 	CalcWarnings []calcErrorBody     `json:"calc_warnings,omitempty" required:"false" doc:"The warnings the stored reduce compiles with (a likely mistake, such as an input it never names), each with its code; notes only, never a fault: the rule computes all the same"`
 }
 
@@ -162,7 +162,7 @@ type renameCalcRuleInput struct {
 
 // registerCalcRuleRoutes wires calc rule authoring (#995, epic #525): rules
 // that derive an output key on each owner from aliased inputs, gated rule:*
-// like event rules (ADR-0144 ruling 2). A rule reads like a registry
+// like event rules (ADR-0144 ruling 2). A rule reads like a catalog
 // (rule:read from any grant); writing one takes an all-scope grant, since a
 // rule reaches the whole fleet. Official rules are read-only.
 func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -172,7 +172,7 @@ func registerCalcRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/calc-rules",
 		Summary:     "List calc rules",
-		Description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.",
+		Description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, _ *struct{}) (*listCalcRulesOutput, error) {
 		rs, err := gw.ListCalcRules(ctx)
 		if err != nil {

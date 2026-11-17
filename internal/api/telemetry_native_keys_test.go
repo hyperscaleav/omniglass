@@ -156,7 +156,7 @@ func TestTelemetryPushRefusesNativeKeys(t *testing.T) {
 	}
 
 	// Casing and spacing variants of an outpost-only key never reach an outpost's
-	// series: each is refused (as outpost-only, before the registry's exact,
+	// series: each is refused (as outpost-only, before the catalog's exact,
 	// lowercase lookup would refuse it as unregistered).
 	for _, variant := range []string{"TCP-Open", "Endpoint-Reachable", " session-state", "endpoint-rejection ", "SSH-HOST-KEY"} {
 		r := push(map[string]any{

@@ -8,36 +8,36 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The registry rename (#555, ADR-0555): the door ADR-0062 promised. A registry
+// The catalog rename (#555, ADR-0555): the door ADR-0062 promised. A catalog
 // took a uuid primary key and a renameable name so that a typo or a rebrand
 // could be corrected, every foreign key holding the uuid; until this, nothing
-// but raw SQL could move a registry's name. The rename is the house custom
-// method (ADR-0076), one primitive for every registry it covers rather than a
+// but raw SQL could move a catalog's name. The rename is the house custom
+// method (ADR-0076), one primitive for every catalog it covers rather than a
 // name field on five patch structs, and it is the same act on each: validate
 // the new name, refuse an official row, move the one column, carry the
-// registry's own by-value references along, and audit it in the transaction.
+// catalog's own by-value references along, and audit it in the transaction.
 
-// ErrRegistryNotRenameable is a rename naming a table outside the set below: a
-// table that is not a registry, or a registry whose rename has ripples this
+// ErrCatalogNotRenameable is a rename naming a table outside the set below: a
+// table that is not a catalog, or a catalog whose rename has ripples this
 // primitive does not carry yet. Refused by name rather than attempted.
-var ErrRegistryNotRenameable = errors.New("storage: table is not a renameable registry")
+var ErrCatalogNotRenameable = errors.New("storage: table is not a renameable catalog")
 
-// renameableRegistry describes one registry the rename covers.
-type renameableRegistry struct {
+// renameableCatalog describes one catalog the rename covers.
+type renameableCatalog struct {
 	// stamped says the table carries an updated_at the rename stamps.
 	stamped bool
-	// carry rewrites the places this registry's name is stored BY VALUE rather
-	// than through the uuid, inside the rename's transaction. Nil for a registry
+	// carry rewrites the places this catalog's name is stored BY VALUE rather
+	// than through the uuid, inside the rename's transaction. Nil for a catalog
 	// referenced only by uuid.
 	carry func(ctx context.Context, tx pgx.Tx, rowID, oldName, newName string) error
 }
 
-// renameableRegistries are the registries RenameRegistry moves the name of. The
+// renameableCatalogs are the catalogs RenameCatalog moves the name of. The
 // catalogs keyed by telemetry name (metric, property, event and command types),
 // component_type, system_type and secret_type are not here yet: a catalog key is
 // also what an outpost, a driver spec and an integration push by name, which a
 // rename has to answer for first (#1188).
-var renameableRegistries = map[string]renameableRegistry{
+var renameableCatalogs = map[string]renameableCatalog{
 	"vendor":        {stamped: true},
 	"driver":        {stamped: true, carry: carryDriverName},
 	"product":       {stamped: true},
@@ -48,7 +48,7 @@ var renameableRegistries = map[string]renameableRegistry{
 	"notification_type": {stamped: true},
 }
 
-// RenameRegistry moves a registry row's name, addressed by its current name or
+// RenameCatalog moves a catalog row's name, addressed by its current name or
 // its uuid, and returns the row's uuid. Every foreign key holds the uuid, so
 // inside the platform nothing breaks; outside it, a script or a bookmark that
 // typed the old name stops resolving, which is why the rename is its own act
@@ -56,7 +56,7 @@ var renameableRegistries = map[string]renameableRegistry{
 // name is not restamped: like any edit to a fleet-wide classification, that is
 // the recompute verb's to apply (label_recompute.go).
 //
-// Refusals: a table outside renameableRegistries is ErrRegistryNotRenameable;
+// Refusals: a table outside renameableCatalogs is ErrCatalogNotRenameable;
 // an illegal or uuid-shaped name is the name rule's error; an unknown ref is
 // ErrTypeNotFound; an official row is ErrTypeOfficial, since the boot seed owns
 // it by name and would re-create the old one on the next start; a taken name is
@@ -64,10 +64,10 @@ var renameableRegistries = map[string]renameableRegistry{
 // and a location_type may not take the reserved "root". A driver's rename
 // re-derives its attached tasks (carryDriverName), and a location_type's
 // carries its by-value copies (carryLocationTypeName).
-func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName string) (string, error) {
-	reg, ok := renameableRegistries[table]
+func (p *PG) RenameCatalog(ctx context.Context, actorID, table, ref, newName string) (string, error) {
+	reg, ok := renameableCatalogs[table]
 	if !ok {
-		return "", fmt.Errorf("%w: %q", ErrRegistryNotRenameable, table)
+		return "", fmt.Errorf("%w: %q", ErrCatalogNotRenameable, table)
 	}
 	if err := ValidateName(table, newName); err != nil {
 		return "", err
@@ -83,7 +83,7 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 
 	var rowID, oldName string
 	var official bool
-	err = tx.QueryRow(ctx, `select id, name, official from `+table+` where id = (select r.id from `+refRows(table, ref)+` r where r.`+registryRefCol(ref)+` = $1) for update`, ref).
+	err = tx.QueryRow(ctx, `select id, name, official from `+table+` where id = (select r.id from `+refRows(table, ref)+` r where r.`+catalogRefCol(ref)+` = $1) for update`, ref).
 		Scan(&rowID, &oldName, &official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrTypeNotFound
@@ -97,7 +97,7 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 	if oldName == newName {
 		return rowID, nil
 	}
-	before, err := registryAuditImage(ctx, tx, table, rowID)
+	before, err := catalogAuditImage(ctx, tx, table, rowID)
 	if err != nil {
 		return "", fmt.Errorf("storage: audit image %s %q: %w", table, rowID, err)
 	}
@@ -116,7 +116,7 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 			return "", err
 		}
 	}
-	after, err := registryAuditImage(ctx, tx, table, rowID)
+	after, err := catalogAuditImage(ctx, tx, table, rowID)
 	if err != nil {
 		return "", fmt.Errorf("storage: audit image %s %q: %w", table, rowID, err)
 	}
@@ -132,7 +132,7 @@ func (p *PG) RenameRegistry(ctx context.Context, actorID, table, ref, newName st
 // carryDriverName re-derives the tasks of every endpoint attached through the
 // driver: each derived task bakes the driver's name into its spec, and its id
 // hashes the spec, so without this the outpost would keep running tasks under a
-// name the registry no longer has, and the next unrelated driver edit would
+// name the catalog no longer has, and the next unrelated driver edit would
 // take the churn instead. It is the re-derive a version change runs (#823):
 // superseded tasks retire, the new ones take their place, and each endpoint is
 // bumped so its outpost picks the set up.
@@ -141,9 +141,9 @@ func carryDriverName(ctx context.Context, tx pgx.Tx, rowID, _, _ string) error {
 }
 
 // carryLocationTypeName rewrites the one by-value reference a location_type has:
-// allowed_parent_types holds type NAMES (ADR-0062 left it a within-registry
+// allowed_parent_types holds type NAMES (ADR-0062 left it a within-catalog
 // reference by name), on every type row and inside an operator's fork of a
-// shipped type (registry_shadow.image). Without this a rename would silently
+// shipped type (catalog_shadow.image). Without this a rename would silently
 // strand every placement rule that named the type, refusing locations the
 // operator had allowed. Order is kept in both, so a read shows the rule as the
 // operator wrote it.
@@ -155,15 +155,15 @@ func carryLocationTypeName(ctx context.Context, tx pgx.Tx, _, oldName, newName s
 		return fmt.Errorf("storage: carry location_type rename into allowed_parent_types: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		update registry_shadow
+		update catalog_shadow
 		set image = jsonb_set(image, '{allowed_parent_types}', (
 				select coalesce(jsonb_agg(case when e.v = $2 then to_jsonb($3::text) else to_jsonb(e.v) end order by e.n), '[]'::jsonb)
 				from jsonb_array_elements_text(image->'allowed_parent_types') with ordinality as e(v, n))),
 		    updated_at = now()
-		where registry = $1
+		where catalog = $1
 		  and jsonb_typeof(image->'allowed_parent_types') = 'array'
 		  and image->'allowed_parent_types' @> to_jsonb(array[$2::text])`,
-		locationTypeRegistry, oldName, newName); err != nil {
+		locationTypeCatalog, oldName, newName); err != nil {
 		return fmt.Errorf("storage: carry location_type rename into forks: %w", err)
 	}
 	return nil

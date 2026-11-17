@@ -29,7 +29,7 @@ type endpointBody struct {
 	ID          string               `json:"id" doc:"The endpoint's uuid, the stable handle; <component>/<name> is the address an operator types"`
 	Name        string               `json:"name" doc:"The derived name (its transport), unique within the owning component"`
 	Label       string               `json:"label,omitempty" doc:"The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the transport. Absent when unset, and a surface with none renders the name verbatim"`
-	Transport   string               `json:"transport" doc:"The transport name (the wire this endpoint speaks over), from the code registry"`
+	Transport   string               `json:"transport" doc:"The transport name (the wire this endpoint speaks over), from the built-in transports"`
 	Component   *string              `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted endpoint"`
 	ComponentID *string              `json:"component_id,omitempty" doc:"The owning component's id; the stable form of component"`
 	Outpost     *string              `json:"outpost,omitempty" doc:"The outpost placement name, if assigned"`
@@ -135,7 +135,7 @@ type endpointPathInput struct {
 
 type createEndpointInput struct {
 	Body struct {
-		Transport string          `json:"transport,omitempty" doc:"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set"`
+		Transport string          `json:"transport,omitempty" doc:"A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set"`
 		Label     string          `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for"`
 		Component *string         `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)"`
 		Outpost   *string         `json:"outpost,omitempty" doc:"Outpost placement, by name or id"`
@@ -182,7 +182,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/transports",
 		Summary:     "List the transports the platform speaks",
-		Description: "Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.",
+		Description: "Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.",
 	}, "endpoint", "read"), func(ctx context.Context, _ *struct{}) (*listTransportsOutput, error) {
 		out := &listTransportsOutput{}
 		out.Body.Transports = transport.All()

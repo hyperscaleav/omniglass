@@ -112,7 +112,7 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 		t.Errorf("transports: %d carry probe facts, want the %d an outpost dials", probed, dialed)
 	}
 
-	// The two inheriting registries (#678). What the docs used to type out by
+	// The two inheriting catalogs (#678). What the docs used to type out by
 	// hand was the SHAPE, so that is what is checked: a child points at its
 	// parent, and the blank facts a child leaves for its ancestor to supply
 	// survive the render rather than being flattened into it. Flattening would
@@ -187,7 +187,7 @@ func TestSeedFactsMatchesCommitted(t *testing.T) {
 	}
 }
 
-// TestSeedFactsSeverityAndRules pins the severity registry and the official
+// TestSeedFactsSeverityAndRules pins the severity catalog and the official
 // event rules into the facts artifact (#921), so the alarms page and the rules
 // guide render the shipped levels and rules instead of restating them: each
 // level with its outage flag computed by the health rule's own floor.

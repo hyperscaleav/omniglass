@@ -18,16 +18,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestRegistryRenameThroughTheGateway is the capability ADR-0062 promised and
-// #555 found missing: a registry handle can be renamed through the platform,
-// not only by raw SQL (TestRegistryHandleRenameKeepsReferences proves the
+// TestCatalogRenameThroughTheGateway is the capability ADR-0062 promised and
+// #555 found missing: a catalog handle can be renamed through the platform,
+// not only by raw SQL (TestCatalogHandleRenameKeepsReferences proves the
 // foreign keys follow; this proves there is a door). Each of the five
-// registries renames by handle or uuid, keeps its uuid, answers to the new
+// catalogs renames by handle or uuid, keeps its uuid, answers to the new
 // name and not the old, and every referencing row reads the new handle. An
 // official row keeps its name (the boot seed owns it by name), a taken name is
 // a conflict, an illegal or uuid-shaped one is refused, and each rename writes
 // one audit row keyed on the uuid, in the same transaction.
-func TestRegistryRenameThroughTheGateway(t *testing.T) {
+func TestCatalogRenameThroughTheGateway(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -59,7 +59,7 @@ func TestRegistryRenameThroughTheGateway(t *testing.T) {
 		return n
 	}
 
-	// One custom row per registry, each referenced the way the fleet references it.
+	// One custom row per catalog, each referenced the way the fleet references it.
 	vendor, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "acme", Label: "Acme", Kind: "manufacturer"})
 	if err != nil {
 		t.Fatalf("vendor: %v", err)
@@ -86,7 +86,7 @@ func TestRegistryRenameThroughTheGateway(t *testing.T) {
 	}
 
 	// vendor: by handle, the product's vendor arc follows.
-	id, err := gw.RenameRegistry(ctx, "", "vendor", "acme", "acme-av")
+	id, err := gw.RenameCatalog(ctx, "", "vendor", "acme", "acme-av")
 	if err != nil || id != vendor.ID {
 		t.Fatalf("rename vendor = %q, %v; want its uuid %q", id, err, vendor.ID)
 	}
@@ -98,7 +98,7 @@ func TestRegistryRenameThroughTheGateway(t *testing.T) {
 	}
 
 	// driver: by uuid, the product's driver arc follows.
-	if _, err := gw.RenameRegistry(ctx, "", "driver", driver.ID, "acme-controller"); err != nil {
+	if _, err := gw.RenameCatalog(ctx, "", "driver", driver.ID, "acme-controller"); err != nil {
 		t.Fatalf("rename driver by uuid: %v", err)
 	}
 	if got, err := gw.GetProduct(ctx, "acme-bar"); err != nil || got.DriverName == nil || *got.DriverName != "acme-controller" {
@@ -106,7 +106,7 @@ func TestRegistryRenameThroughTheGateway(t *testing.T) {
 	}
 
 	// product: the sub-product's parent arc follows.
-	if _, err := gw.RenameRegistry(ctx, "", "product", "acme-bar", "acme-soundbar"); err != nil {
+	if _, err := gw.RenameCatalog(ctx, "", "product", "acme-bar", "acme-soundbar"); err != nil {
 		t.Fatalf("rename product: %v", err)
 	}
 	if got, err := gw.GetProduct(ctx, "acme-soundbar"); err != nil || got.ID != product.ID {
@@ -117,7 +117,7 @@ func TestRegistryRenameThroughTheGateway(t *testing.T) {
 	}
 
 	// standard: the system's standard arc follows.
-	if _, err := gw.RenameRegistry(ctx, "", "standard", "huddle", "huddle-space"); err != nil {
+	if _, err := gw.RenameCatalog(ctx, "", "standard", "huddle", "huddle-space"); err != nil {
 		t.Fatalf("rename standard: %v", err)
 	}
 	if got, err := gw.GetSystem(ctx, "huddle-1", all); err != nil || got.StandardName == nil || *got.StandardName != "huddle-space" {
@@ -136,32 +136,32 @@ func TestRegistryRenameThroughTheGateway(t *testing.T) {
 	// uuid-shaped name is refused, an unknown ref is not found on every table.
 	officials := map[string]string{"vendor": "kestrel", "driver": "snmp-generic", "product": "generic-device", "location_type": "room"}
 	for table, official := range officials {
-		if _, err := gw.RenameRegistry(ctx, "", table, official, "renamed-official"); !errors.Is(err, storage.ErrTypeOfficial) {
+		if _, err := gw.RenameCatalog(ctx, "", table, official, "renamed-official"); !errors.Is(err, storage.ErrTypeOfficial) {
 			t.Errorf("rename official %s %q: want ErrTypeOfficial, got %v", table, official, err)
 		}
 	}
 	for _, table := range []string{"vendor", "driver", "product", "standard", "location_type"} {
-		if _, err := gw.RenameRegistry(ctx, "", table, "no-such-row", "anything"); !errors.Is(err, storage.ErrTypeNotFound) {
+		if _, err := gw.RenameCatalog(ctx, "", table, "no-such-row", "anything"); !errors.Is(err, storage.ErrTypeNotFound) {
 			t.Errorf("rename unknown %s: want ErrTypeNotFound, got %v", table, err)
 		}
 	}
-	if _, err := gw.RenameRegistry(ctx, "", "vendor", "acme-av", "kestrel"); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.RenameCatalog(ctx, "", "vendor", "acme-av", "kestrel"); !errors.Is(err, storage.ErrTypeExists) {
 		t.Errorf("rename vendor onto a taken name: want ErrTypeExists, got %v", err)
 	}
-	if _, err := gw.RenameRegistry(ctx, "", "product", "acme-soundbar", "Acme_Bar"); !errors.Is(err, storage.ErrInvalidEntityName) {
+	if _, err := gw.RenameCatalog(ctx, "", "product", "acme-soundbar", "Acme_Bar"); !errors.Is(err, storage.ErrInvalidEntityName) {
 		t.Errorf("rename product to an illegal name: want ErrInvalidEntityName, got %v", err)
 	}
-	if _, err := gw.RenameRegistry(ctx, "", "product", "acme-soundbar", "0198f2c1-4a5b-7c3d-9e0f-1a2b3c4d5e6f"); !errors.Is(err, storage.ErrEntityNameIsUUID) {
+	if _, err := gw.RenameCatalog(ctx, "", "product", "acme-soundbar", "0198f2c1-4a5b-7c3d-9e0f-1a2b3c4d5e6f"); !errors.Is(err, storage.ErrEntityNameIsUUID) {
 		t.Errorf("rename product to a uuid-shaped name: want ErrEntityNameIsUUID, got %v", err)
 	}
-	if _, err := gw.RenameRegistry(ctx, "", "location", "anything", "anything-else"); err == nil {
-		t.Errorf("rename on a table that is not a renameable registry succeeded")
+	if _, err := gw.RenameCatalog(ctx, "", "location", "anything", "anything-else"); err == nil {
+		t.Errorf("rename on a table that is not a renameable catalog succeeded")
 	}
 }
 
-// TestLocationTypeRenameRewritesPlacementRules covers the one registry whose
+// TestLocationTypeRenameRewritesPlacementRules covers the one catalog whose
 // name is also stored by value: allowed_parent_types holds location_type NAMES
-// (a within-registry reference ADR-0062 left as-is), on the type rows and in an
+// (a within-catalog reference ADR-0062 left as-is), on the type rows and in an
 // operator's fork of a shipped type. A rename rewrites every occurrence in the
 // same transaction, so placement keeps working under the new name; a rename to
 // the reserved "root" sentinel is refused.
@@ -193,10 +193,10 @@ func TestLocationTypeRenameRewritesPlacementRules(t *testing.T) {
 		t.Fatalf("fork room: %v", err)
 	}
 
-	if _, err := gw.RenameRegistry(ctx, "", "location_type", "wing", "root"); !errors.Is(err, storage.ErrReservedTypeID) {
+	if _, err := gw.RenameCatalog(ctx, "", "location_type", "wing", "root"); !errors.Is(err, storage.ErrReservedTypeID) {
 		t.Fatalf("rename to the root sentinel: want ErrReservedTypeID, got %v", err)
 	}
-	id, err := gw.RenameRegistry(ctx, "", "location_type", "wing", "east-wing")
+	id, err := gw.RenameCatalog(ctx, "", "location_type", "wing", "east-wing")
 	if err != nil || id != wing.ID {
 		t.Fatalf("rename location_type = %q, %v; want its uuid", id, err)
 	}
@@ -269,7 +269,7 @@ func TestAStandardTheOldSeedPlantedIsTheOperators(t *testing.T) {
 		}
 	}
 
-	if _, err := gw.RenameRegistry(ctx, "", "standard", "meeting-room", "conference-room"); err != nil {
+	if _, err := gw.RenameCatalog(ctx, "", "standard", "meeting-room", "conference-room"); err != nil {
 		t.Fatalf("rename a standard the old seed planted: %v", err)
 	}
 	if err := gw.DeleteStandard(ctx, "", "classroom"); err != nil {
@@ -288,7 +288,7 @@ func TestAStandardTheOldSeedPlantedIsTheOperators(t *testing.T) {
 // TestADriverRenameRederivesItsTasks: every task a driver derives bakes the
 // driver's name into its spec (and its id hashes the spec), so a rename that
 // only moved the column would leave the outpost running tasks under a name the
-// registry no longer has, and hand the churn to the next unrelated edit. The
+// catalog no longer has, and hand the churn to the next unrelated edit. The
 // rename re-derives the attached endpoints' tasks in its own transaction, as a
 // version change does (#823): every driver task carries the new name, the
 // endpoint is bumped so the outpost picks the set up, and a later label edit moves
@@ -360,7 +360,7 @@ func TestADriverRenameRederivesItsTasks(t *testing.T) {
 		t.Fatal("the fixture derived no driver tasks")
 	}
 
-	if _, err := gw.RenameRegistry(ctx, "", "driver", "panel-proto", "panel-protocol"); err != nil {
+	if _, err := gw.RenameCatalog(ctx, "", "driver", "panel-proto", "panel-protocol"); err != nil {
 		t.Fatalf("rename driver: %v", err)
 	}
 	after := driverTasks()

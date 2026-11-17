@@ -3,7 +3,7 @@
 # driver (what talks to it), a kind (device/app/service), and the component_type
 # it is classified under (the taxonomy above product; component_types.yaml,
 # seeded first). vendor_id, driver_id, and component_type must resolve against
-# their catalogs. The registry lists alphabetically by label.
+# their catalogs. The catalog lists alphabetically by label.
 #
 # The SKUs are FICTIONAL (the omniglass-lab brand universe; the demo fleet is
 # not sponsored), but each is shaped like the real device class it stands for:

@@ -487,7 +487,7 @@ func (p *PG) RecordOrphanedBatches(ctx context.Context, name string, batches int
 // pinKeyOf names the property a transport's key pin rides (declared and
 // observed): the ssh host key (#1032), and the certificate's public key of
 // every transport over the tls handshake (tls #1035, https #902, wss #1034),
-// read off the registry's flag rather than a second list.
+// read off the catalog's flag rather than a second list.
 var pinKeyOf = func() map[string]string {
 	m := map[string]string{"ssh": probekeys.SSHHostKey}
 	for _, t := range transport.All() {

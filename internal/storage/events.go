@@ -69,7 +69,7 @@ const eventLineageCols = `case when event.origin = 'derived' then event.source_r
 // InsertEvents writes observed occurrence rows in one transaction, for w: a
 // outpost's lane (OutpostWriter) or the push lane (PushWriter). Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
-// observed. Callers apply reject-not-project (collection.Registry) before
+// observed. Callers apply reject-not-project (collection.Catalog) before
 // calling; this is the durable write, refusing the whole batch when an event
 // type's writer class does not admit w (ADR-0161: collection-failed is the
 // outpost's alone). Mirrors InsertMetricSamples.

@@ -814,7 +814,7 @@ components:
           description: The key's uuid, which the rule holds it by
           type: string
         lane:
-          description: Which registry the key is in
+          description: Which catalog the key is in
           enum:
             - property
             - metric
@@ -1100,7 +1100,7 @@ components:
           type: string
         calc_error:
           $ref: "#/components/schemas/CalcErrorBody"
-          description: Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled
+          description: Why the stored reduce does not compile against the catalogs as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled
         calc_warnings:
           description: "The warnings the stored reduce compiles with (a likely mistake, such as an input it never names), each with its code; notes only, never a fault: the rule computes all the same"
           items:
@@ -1141,7 +1141,7 @@ components:
           description: The property or metric the rule writes
           type: string
         output_lane:
-          description: Which lane the output key is on, derived from the registries
+          description: Which lane the output key is on, derived from the catalogs
           enum:
             - property
             - metric
@@ -1939,19 +1939,19 @@ components:
           description: The component_type's uuid, the stable handle that survives a rename
           type: string
         inherited_abbrev:
-          description: "The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          description: "The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"
           type: string
         inherited_abbrev_source:
           description: The name of the ancestor component_type inherited_abbrev comes from, which may be further up the chain than the parent
           type: string
         inherited_icon:
-          description: "The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          description: "The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"
           type: string
         inherited_icon_source:
           description: The name of the ancestor component_type inherited_icon comes from, which may be further up the chain than the parent
           type: string
         inherited_stem:
-          description: "The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          description: "The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"
           type: string
         inherited_stem_source:
           description: The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent
@@ -1974,7 +1974,7 @@ components:
           description: The parent component_type's id, the canonical handle; absent for a root type
           type: string
         resolved_icon:
-          description: "The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it"
+          description: "The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it"
           type: string
         stem:
           description: The auto-generated component name's prefix; empty inherits the nearest ancestor's
@@ -2405,7 +2405,7 @@ components:
         params:
           description: Address/target settings (jsonb); an attach derives them from the inputs instead
         transport:
-          description: A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set
+          description: A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set
           type: string
       type: object
     CreateEventRuleInputBody:
@@ -4144,7 +4144,7 @@ components:
         params:
           description: The address/target settings (jsonb)
         transport:
-          description: The transport name (the wire this endpoint speaks over), from the code registry
+          description: The transport name (the wire this endpoint speaks over), from the built-in transports
           type: string
         webhook:
           $ref: "#/components/schemas/EndpointWebhookBody"
@@ -4476,7 +4476,7 @@ components:
           description: The property or metric the rule reads
           type: string
         sample_lane:
-          description: Which lane the key reads, derived from the registries
+          description: Which lane the key reads, derived from the catalogs
           enum:
             - property
             - metric
@@ -9263,7 +9263,7 @@ components:
             - array
             - "null"
         logs:
-          description: "Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422"
+          description: "Raw untyped log lines. No catalog gate. Component owners only: a system batch carrying one is refused with a 422"
           items:
             $ref: "#/components/schemas/PushLog"
           type:
@@ -9761,6 +9761,25 @@ components:
       required:
         - name
       type: object
+    RenameCatalogInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenameCatalogInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        name:
+          description: The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)
+          maxLength: 100
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+      required:
+        - name
+      type: object
     RenameComponentInputBody:
       additionalProperties: false
       properties:
@@ -9830,25 +9849,6 @@ components:
           type: string
         name:
           description: The new name, unique within its placement (lowercase letters, digits, hyphens)
-          maxLength: 100
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9-]*$
-          type: string
-      required:
-        - name
-      type: object
-    RenameRegistryInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/RenameRegistryInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        name:
-          description: The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -9961,7 +9961,7 @@ components:
           description: The standard this system conforms to, by name or uuid; omit for a one-off system
           type: string
         system_type_id:
-          description: "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row."
+          description: "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that catalog row."
           type: string
       type: object
     RequestTallySnapshot:
@@ -12333,19 +12333,19 @@ components:
           description: The system_type's uuid, the stable handle that survives a rename
           type: string
         inherited_abbrev:
-          description: "The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          description: "The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"
           type: string
         inherited_abbrev_source:
           description: The name of the ancestor system_type inherited_abbrev comes from, which may be further up the chain than the parent
           type: string
         inherited_icon:
-          description: "The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          description: "The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"
           type: string
         inherited_icon_source:
           description: The name of the ancestor system_type inherited_icon comes from, which may be further up the chain than the parent
           type: string
         inherited_stem:
-          description: "The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          description: "The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"
           type: string
         inherited_stem_source:
           description: The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent
@@ -12367,7 +12367,7 @@ components:
           description: The parent system_type's id, the canonical handle; absent for a root type
           type: string
         resolved_icon:
-          description: "The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it"
+          description: "The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it"
           type: string
         stem:
           description: The prefix a generated system name is built from; empty inherits the nearest ancestor's
@@ -15177,7 +15177,7 @@ paths:
       summary: Whether the system has an owner yet, and whether it is a lab
   /calc-rules:
     get:
-      description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read."
+      description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read."
       operationId: list-calc-rule
       responses:
         "200":
@@ -15525,7 +15525,7 @@ paths:
       x-omniglass-permission: command_type:update
   /component-types:
     get:
-      description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read."
+      description: "Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read."
       operationId: list-component-types
       responses:
         "200":
@@ -17387,7 +17387,7 @@ paths:
       x-omniglass-permission: component:create
   /drivers:
     get:
-      description: Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
+      description: Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
       operationId: list-drivers
       responses:
         "200":
@@ -17535,7 +17535,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RenameRegistryInputBody"
+              $ref: "#/components/schemas/RenameCatalogInputBody"
         required: true
       responses:
         "200":
@@ -17866,7 +17866,7 @@ paths:
       x-omniglass-permission: endpoint:update
   /event-rules:
     get:
-      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
+      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
       operationId: list-event-rule
       responses:
         "200":
@@ -18373,7 +18373,7 @@ paths:
       summary: Liveness and database-reachability probe
   /location-types:
     get:
-      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
+      description: Lists the location_type catalog (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
       operationId: list-location-types
       responses:
         "200":
@@ -18693,7 +18693,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RenameRegistryInputBody"
+              $ref: "#/components/schemas/RenameCatalogInputBody"
         required: true
       responses:
         "200":
@@ -19716,7 +19716,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RenameRegistryInputBody"
+              $ref: "#/components/schemas/RenameCatalogInputBody"
         required: true
       responses:
         "200":
@@ -21347,7 +21347,7 @@ paths:
       x-omniglass-permission: principal:set-avatar
   /products:
     get:
-      description: Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+      description: Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
       operationId: list-products
       responses:
         "200":
@@ -21697,7 +21697,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RenameRegistryInputBody"
+              $ref: "#/components/schemas/RenameCatalogInputBody"
         required: true
       responses:
         "200":
@@ -22838,7 +22838,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RenameRegistryInputBody"
+              $ref: "#/components/schemas/RenameCatalogInputBody"
         required: true
       responses:
         "200":
@@ -22883,7 +22883,7 @@ paths:
       x-omniglass-permission: standard:create
   /system-types:
     get:
-      description: "Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read."
+      description: "Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read."
       operationId: list-system-types
       responses:
         "200":
@@ -24479,7 +24479,7 @@ paths:
       x-omniglass-permission: template:read
   /transports:
     get:
-      description: "Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it."
+      description: "Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it."
       operationId: list-transports
       responses:
         "200":
@@ -24624,7 +24624,7 @@ paths:
       x-omniglass-platform-permission: platform:update
   /vendors:
     get:
-      description: Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
+      description: Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
       operationId: list-vendors
       responses:
         "200":
@@ -24769,7 +24769,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RenameRegistryInputBody"
+              $ref: "#/components/schemas/RenameCatalogInputBody"
         required: true
       responses:
         "200":

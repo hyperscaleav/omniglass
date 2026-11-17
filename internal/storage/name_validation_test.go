@@ -23,7 +23,7 @@ import (
 // its accessor sigil precisely BECAUSE `$` cannot appear in a segment, so
 // `boi.17c.sys.$sys.av` parses without ambiguity and no word needs reserving.
 // That guarantee is worth exactly as much as the tables that enforce it: one
-// unvalidated registry accepting `$` is one place the grammar becomes ambiguous.
+// unvalidated catalog accepting `$` is one place the grammar becomes ambiguous.
 //
 // This test is the enforcement. Each case creates through the real gateway with a
 // segment the rule forbids and requires a refusal.

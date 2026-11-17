@@ -7,12 +7,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestRegistryLaneMembership: with the per-lane wire (#594) the lane IS the
-// routing, so the registry answers membership per catalog, not a kind string. A
+// TestCatalogLaneMembership: with the per-lane wire (#594) the lane IS the
+// routing, so the catalog answers membership per catalog, not a kind string. A
 // name resolves only on its own lane, and the resolved entry carries the catalog
 // row so ingest can validate against it (data_type, validation, payload_schema).
-func TestRegistryLaneMembership(t *testing.T) {
-	reg := collection.NewRegistry(
+func TestCatalogLaneMembership(t *testing.T) {
+	reg := collection.NewCatalog(
 		[]storage.MetricType{
 			{Name: "tcp-connect-time"},
 			{Name: "icmp-rtt-avg"},
@@ -57,12 +57,12 @@ func TestRegistryLaneMembership(t *testing.T) {
 	}
 }
 
-// TestRegistryReportsCollisions pins the shadowing bug. The catalogs are separate
+// TestCatalogReportsCollisions pins the shadowing bug. The catalogs are separate
 // tables with separate uniqueness, so nothing stops the same name existing in two
 // of them. Resolving a colliding name would pick a winner arbitrarily, so it must
 // resolve on NO lane, and Collisions() names it so the refusal is visible.
-func TestRegistryReportsCollisions(t *testing.T) {
-	reg := collection.NewRegistry(
+func TestCatalogReportsCollisions(t *testing.T) {
+	reg := collection.NewCatalog(
 		[]storage.MetricType{
 			{Name: "call-started"}, // collides with the event type below
 		},
@@ -91,11 +91,11 @@ func TestRegistryReportsCollisions(t *testing.T) {
 	}
 }
 
-// TestRegistryReportsCrossLaneCollisions is the same refusal for the catalog
+// TestCatalogReportsCrossLaneCollisions is the same refusal for the catalog
 // split's seam: a name in BOTH catalog lanes (metric and property) would land in
 // two sinks, so it must resolve to nothing until one side is renamed.
-func TestRegistryReportsCrossLaneCollisions(t *testing.T) {
-	reg := collection.NewRegistry(
+func TestCatalogReportsCrossLaneCollisions(t *testing.T) {
+	reg := collection.NewCatalog(
 		[]storage.MetricType{{Name: "fan-speed"}},
 		[]storage.PropertyType{{Name: "fan-speed"}, {Name: "video-input"}},
 		nil,
@@ -114,11 +114,11 @@ func TestRegistryReportsCrossLaneCollisions(t *testing.T) {
 	}
 }
 
-// TestRegistryNoCollisionsIsEmpty keeps the common path honest: the seeded
+// TestCatalogNoCollisionsIsEmpty keeps the common path honest: the seeded
 // vocabulary has no overlap, so Collisions() must stay empty rather than
 // reporting noise every boot.
-func TestRegistryNoCollisionsIsEmpty(t *testing.T) {
-	reg := collection.NewRegistry(
+func TestCatalogNoCollisionsIsEmpty(t *testing.T) {
+	reg := collection.NewCatalog(
 		[]storage.MetricType{{Name: "icmp-rtt-avg"}},
 		[]storage.PropertyType{{Name: "video-input"}},
 		[]storage.EventType{{Name: "call-started"}},
@@ -151,7 +151,7 @@ func TestAnOperatorsNameShadowsAnOfficialOneInAnotherCatalog(t *testing.T) {
 			[]storage.MetricType{{Name: "x", Official: true}}, nil, []storage.EventType{{Name: "x"}}, false, false, true},
 	}
 	for _, c := range cases {
-		reg := collection.NewRegistry(c.metrics, c.properties, c.events)
+		reg := collection.NewCatalog(c.metrics, c.properties, c.events)
 		if got := reg.Collisions(); len(got) != 0 {
 			t.Errorf("%s: Collisions() = %v, want none: the operator's row wins", c.what, got)
 		}
@@ -181,7 +181,7 @@ func TestOnlyAnUnambiguousOperatorRowShadows(t *testing.T) {
 		{"two operator rows", []storage.MetricType{{Name: "x"}}, []storage.PropertyType{{Name: "x"}}, nil},
 		{"two operator rows over an official one", []storage.MetricType{{Name: "x"}}, []storage.PropertyType{{Name: "x"}}, []storage.EventType{{Name: "x", Official: true}}},
 	} {
-		reg := collection.NewRegistry(c.metrics, c.properties, c.events)
+		reg := collection.NewCatalog(c.metrics, c.properties, c.events)
 		if got := reg.Collisions(); len(got) != 1 || got[0] != "x" {
 			t.Errorf("%s: Collisions() = %v, want [x]", c.what, got)
 		}
@@ -204,7 +204,7 @@ func TestOnlyAnUnambiguousOperatorRowShadows(t *testing.T) {
 // catalogs it resolves to nothing, so an operator row that appears beside a key a
 // later release reserves cannot take the official probe key's place.
 func TestAReservedKeyIsNeverShadowed(t *testing.T) {
-	reg := collection.NewRegistry(
+	reg := collection.NewCatalog(
 		[]storage.MetricType{{Name: "icmp-rtt-avg", Official: true}},
 		[]storage.PropertyType{{Name: "icmp-rtt-avg"}},
 		nil,

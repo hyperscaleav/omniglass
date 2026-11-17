@@ -23,7 +23,7 @@ type NameHolder struct {
 }
 
 // ResolveNameLane is the one rule for which row a bare name resolves to (#1307,
-// #1432): the search path, shared by the ingest registry and every reader of a
+// #1432): the search path, shared by the ingest catalog and every reader of a
 // name (an event rule's sample key, a calc rule's key, a driver's emit). The
 // three ingest catalogs share one name space, so the path runs across them:
 //   - the operator's local holders answer first: exactly one resolves, and
@@ -119,7 +119,7 @@ func catalogRows(table, namespace string) string {
 }
 
 // refRows is the row source a lookup by ref reads, where a ref is a name or a
-// uuid (registryRefCol picks the column): every row by uuid, which is unique
+// uuid (catalogRefCol picks the column): every row by uuid, which is unique
 // across namespaces, and the search path by name. table is always a literal at
 // the call site. A caller aliases it.
 func refRows(table, ref string) string {
@@ -139,7 +139,7 @@ var namespacedCatalogs = map[string]bool{
 	"vendor": true, "product": true, "driver": true, "standard": true, "role": true,
 }
 
-// resolveRefIn turns a registry ref (a name or a uuid) into the row's uuid:
+// resolveRefIn turns a catalog ref (a name or a uuid) into the row's uuid:
 // by uuid any row; by name the search path, or the one namespace given (og when
 // the boot seed writes a shipped row's references, #1432). No row is
 // pgx.ErrNoRows for the caller to map to its own sentinel.
@@ -149,7 +149,7 @@ func resolveRefIn(ctx context.Context, q querier, table, ref, namespace string) 
 		rows = catalogRows(table, namespace)
 	}
 	var id string
-	err := q.QueryRow(ctx, `select id::text from `+rows+` t where `+registryRefCol(ref)+` = $1`, ref).Scan(&id)
+	err := q.QueryRow(ctx, `select id::text from `+rows+` t where `+catalogRefCol(ref)+` = $1`, ref).Scan(&id)
 	return id, err
 }
 
@@ -178,7 +178,7 @@ func InEffect[T any](rows []T, key func(T) (namespace, name string)) []T {
 // ReconcileReservedKeys makes reserved_key exactly names (#1447), the list
 // writerclass.ReservedNames() generates: the boot seed's write on every start.
 // The table has no operator write path, so a name the code no longer reserves
-// is deleted rather than left to refuse a key the registry would resolve.
+// is deleted rather than left to refuse a key the catalog would resolve.
 // <table>_in_effect() for the three signal catalogs reads it, so a reserved key
 // both tiers hold reaches no reader, as ResolveNameLane resolves it.
 func (p *PG) ReconcileReservedKeys(ctx context.Context, names []string) error {

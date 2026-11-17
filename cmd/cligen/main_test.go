@@ -324,16 +324,16 @@ func TestRenderQueryFlags(t *testing.T) {
 	}
 }
 
-// TestTypeRegistryCommandNames pins the naming rule on the registries: a resource
+// TestTypeCatalogCommandNames pins the naming rule on the catalogs: a resource
 // is ONE kebab-case noun, and a space beneath it means the thing it owns. So the
-// registry and its property contract share `location-type`, and neither needs an
+// catalog and its property contract share `location-type`, and neither needs an
 // override.
 //
 // It previously asserted `type <kind> <verb>`, from when the CRUD sat under a
 // `/types` umbrella while the contract sat on a flat `/location-types`. That gave
 // one entity two command groups; ADR-0060 retired the umbrella. The standard
 // catalog has always been the shape the others now have.
-func TestTypeRegistryCommandNames(t *testing.T) {
+func TestTypeCatalogCommandNames(t *testing.T) {
 	cases := []struct {
 		opID, path, method string
 		want               []string

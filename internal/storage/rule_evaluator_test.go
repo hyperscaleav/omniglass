@@ -286,7 +286,7 @@ func TestEventRuleState(t *testing.T) {
 	if len(st.Open) != 0 || len(st.Pending) != 1 || st.Pending[0].Pending != "fire" || st.Pending[0].ComponentName != "bar-1" {
 		t.Fatalf("slow-hot state = %+v, want a pending fire on bar-1 and nothing open", st)
 	}
-	// The rule reads like a registry, but its state names components: a
+	// The rule reads like a catalog, but its state names components: a
 	// reader sees only the alarms and streaks on components its component
 	// read scope admits, and counts only those.
 	other, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-c"}, all, all, all, all)

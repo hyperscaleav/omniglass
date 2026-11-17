@@ -12,43 +12,43 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// renameRegistryInput is the :rename body every registry #555 opened shares. The
+// renameCatalogInput is the :rename body every catalog #555 opened shares. The
 // name rule lives here, in the contract, as it does on the fleet tiers' own
 // :rename bodies; a uuid-shaped name passes the pattern and is refused by the
 // gateway's name rule instead (422 either way).
-type renameRegistryInput struct {
+type renameCatalogInput struct {
 	ID   string `path:"id" doc:"The row, by its current name or its uuid"`
 	Body struct {
-		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)"`
+		Name string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)"`
 	}
 }
 
-// registryRename describes one registry's :rename route. resource is both the
+// catalogRename describes one catalog's :rename route. resource is both the
 // permission resource and the storage table (they are one word for every
-// registry the rename covers); noun is how the prose names it.
-type registryRename[O any] struct {
+// catalog the rename covers); noun is how the prose names it.
+type catalogRename[O any] struct {
 	resource   string
 	collection string
 	noun       string
-	// refusals adds the registry's own refusals to the generated description,
-	// after the ones every registry shares.
+	// refusals adds the catalog's own refusals to the generated description,
+	// after the ones every catalog shares.
 	refusals string
 	// read answers the renamed row, by the uuid the rename returned, in the
-	// registry's own response shape, so a rename answers exactly what a GET does.
+	// catalog's own response shape, so a rename answers exactly what a GET does.
 	read func(ctx context.Context, gw storage.Gateway, id string) (*O, error)
-	// mapErr is the registry's own error mapper, for the refusals the rename
+	// mapErr is the catalog's own error mapper, for the refusals the rename
 	// does not word itself.
 	mapErr func(error) error
 }
 
-// registerRegistryRename wires POST /<collection>/{id}:rename for one registry
+// registerCatalogRename wires POST /<collection>/{id}:rename for one catalog
 // (#555, ADR-0555): the custom method (ADR-0076) the fleet tiers already use for
-// a rename, here over storage.RenameRegistry, the one primitive every registry
+// a rename, here over storage.RenameCatalog, the one primitive every catalog
 // shares. Gated by <resource>:rename, its own permission rather than update,
 // because a rename breaks what lives outside the platform (a script, a bookmark,
 // an integration's config typed with the old name) even though nothing inside it
 // moves: every reference holds the uuid.
-func registerRegistryRename[O any](api huma.API, a *authenticator, gw storage.Gateway, r registryRename[O]) {
+func registerCatalogRename[O any](api huma.API, a *authenticator, gw storage.Gateway, r catalogRename[O]) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "rename-" + strings.ReplaceAll(r.resource, "_", "-"),
 		Method:      http.MethodPost,
@@ -60,8 +60,8 @@ func registerRegistryRename[O any](api huma.API, a *authenticator, gw storage.Ga
 			"A label rendered from the name is not restamped (the recompute verb applies that). "+
 			"An official %[1]s keeps its shipped name (422), since the boot seed owns it by name; a taken name is a 409; "+
 			"an illegal or uuid-shaped name is a 422.%[3]s Audited as rename. Gated by %[2]s:rename.", r.noun, r.resource, r.refusals),
-	}, r.resource, "rename"), func(ctx context.Context, in *renameRegistryInput) (*O, error) {
-		id, err := gw.RenameRegistry(ctx, actorID(ctx), r.resource, in.ID, in.Body.Name)
+	}, r.resource, "rename"), func(ctx context.Context, in *renameCatalogInput) (*O, error) {
+		id, err := gw.RenameCatalog(ctx, actorID(ctx), r.resource, in.ID, in.Body.Name)
 		switch {
 		case errors.Is(err, storage.ErrTypeExists):
 			return nil, huma.Error409Conflict(fmt.Sprintf("a %s named %q already exists", r.noun, in.Body.Name))
@@ -78,11 +78,11 @@ func registerRegistryRename[O any](api huma.API, a *authenticator, gw storage.Ga
 	})
 }
 
-// registerRegistryRenames wires the six registries the rename covers. The
-// catalogs keyed by telemetry name and the remaining type registries wait on
-// #1188 (storage.renameableRegistries says why).
-func registerRegistryRenames(api huma.API, a *authenticator, gw storage.Gateway) {
-	registerRegistryRename(api, a, gw, registryRename[vendorOutput]{
+// registerCatalogRenames wires the six catalogs the rename covers. The
+// catalogs keyed by telemetry name and the remaining type catalogs wait on
+// #1188 (storage.renameableCatalogs says why).
+func registerCatalogRenames(api huma.API, a *authenticator, gw storage.Gateway) {
+	registerCatalogRename(api, a, gw, catalogRename[vendorOutput]{
 		resource: "vendor", collection: "vendors", noun: "vendor",
 		read: func(ctx context.Context, gw storage.Gateway, id string) (*vendorOutput, error) {
 			m, err := gw.GetVendor(ctx, id)
@@ -93,7 +93,7 @@ func registerRegistryRenames(api huma.API, a *authenticator, gw storage.Gateway)
 		},
 		mapErr: func(err error) error { return mapTypeErr(err, "vendor") },
 	})
-	registerRegistryRename(api, a, gw, registryRename[driverOutput]{
+	registerCatalogRename(api, a, gw, catalogRename[driverOutput]{
 		resource: "driver", collection: "drivers", noun: "driver",
 		read: func(ctx context.Context, gw storage.Gateway, id string) (*driverOutput, error) {
 			d, err := gw.GetDriver(ctx, id)
@@ -104,7 +104,7 @@ func registerRegistryRenames(api huma.API, a *authenticator, gw storage.Gateway)
 		},
 		mapErr: mapDriverErr,
 	})
-	registerRegistryRename(api, a, gw, registryRename[productOutput]{
+	registerCatalogRename(api, a, gw, catalogRename[productOutput]{
 		resource: "product", collection: "products", noun: "product",
 		read: func(ctx context.Context, gw storage.Gateway, id string) (*productOutput, error) {
 			m, err := gw.GetProduct(ctx, id)
@@ -115,7 +115,7 @@ func registerRegistryRenames(api huma.API, a *authenticator, gw storage.Gateway)
 		},
 		mapErr: mapProductErr,
 	})
-	registerRegistryRename(api, a, gw, registryRename[standardOutput]{
+	registerCatalogRename(api, a, gw, catalogRename[standardOutput]{
 		resource: "standard", collection: "standards", noun: "standard",
 		read: func(ctx context.Context, gw storage.Gateway, id string) (*standardOutput, error) {
 			st, err := gw.GetStandard(ctx, id)
@@ -126,7 +126,7 @@ func registerRegistryRenames(api huma.API, a *authenticator, gw storage.Gateway)
 		},
 		mapErr: mapStandardErr,
 	})
-	registerRegistryRename(api, a, gw, registryRename[locationTypeOutput]{
+	registerCatalogRename(api, a, gw, catalogRename[locationTypeOutput]{
 		resource: "location_type", collection: "location-types", noun: "location type",
 		read: func(ctx context.Context, gw storage.Gateway, id string) (*locationTypeOutput, error) {
 			lt, err := gw.GetLocationType(ctx, id)
@@ -137,7 +137,7 @@ func registerRegistryRenames(api huma.API, a *authenticator, gw storage.Gateway)
 		},
 		mapErr: func(err error) error { return mapTypeErr(err, "location_type") },
 	})
-	registerRegistryRename(api, a, gw, registryRename[notificationTypeOutput]{
+	registerCatalogRename(api, a, gw, catalogRename[notificationTypeOutput]{
 		resource: "notification_type", collection: "notification-types", noun: "notification type",
 		read: func(ctx context.Context, gw storage.Gateway, id string) (*notificationTypeOutput, error) {
 			t, err := gw.GetNotificationType(ctx, id)

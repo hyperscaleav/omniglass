@@ -41,7 +41,7 @@ import (
 // syntax failure caught before any query ran (an empty segment, an
 // unrecognized accessor, a segment failing the entity name rule): a 422, the
 // caller's Msg verbatim. storage.ErrAddressNotAccepted is a dotted or
-// accessor-bearing ref sent to a registry whose names stay a single global
+// accessor-bearing ref sent to a catalog whose names stay a single global
 // token (outpost, tag, the four lane types): also a 422, naming the kind.
 //
 // storage.ErrUnresolvedRef is a name reference to one of the resources #1133
@@ -140,7 +140,7 @@ func mapDraftedNameErr(err error) (error, bool) {
 	return nil, false
 }
 
-// mapTypeErr translates the shared type-registry storage sentinels into HTTP
+// mapTypeErr translates the shared type-catalog storage sentinels into HTTP
 // status. kind is the wire label used in the message (e.g. "location_type").
 // Shared by the location/system/component type routes.
 func mapTypeErr(err error, kind string) error {
@@ -150,8 +150,8 @@ func mapTypeErr(err error, kind string) error {
 	// A mask this resource cannot honor is a request fault that NAMES the
 	// field, never a silent no-op: the caller stated an intent the resource has
 	// no field for, and swallowing it would leave them believing a write landed
-	// (ADR-0091). Here rather than in one registry's own mapper because the
-	// mask is a wire primitive every registry adopting it reaches the same way.
+	// (ADR-0091). Here rather than in one catalog's own mapper because the
+	// mask is a wire primitive every catalog adopting it reaches the same way.
 	var maskErr *updatemask.Error
 	if errors.As(err, &maskErr) {
 		return huma.Error422UnprocessableEntity(maskErr.Error())

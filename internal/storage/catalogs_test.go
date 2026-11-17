@@ -9,11 +9,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestRegistrySeed proves the boot seed lands the catalog canon on its two lanes
+// TestCatalogSeed proves the boot seed lands the catalog canon on its two lanes
 // (the reachability metric_types, the non-numeric property_types) and that a
 // second Run is idempotent. The transports are a code registry (ADR-0073,
 // internal/transport), no longer seeded rows, so they are not asserted here.
-func TestRegistrySeed(t *testing.T) {
+func TestCatalogSeed(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")

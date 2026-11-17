@@ -134,7 +134,7 @@ type fanPlan struct {
 // time. t counts each sample that lands no row under its outcome (#1641):
 // unidentified, unbound, or its lane's refusal.
 func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint string,
-	owners map[storage.IdentityKey]storage.IdentityOwner, reg collection.Registry, now time.Time, t *delivery.Tally) fanPlan {
+	owners map[storage.IdentityKey]storage.IdentityOwner, reg collection.Catalog, now time.Time, t *delivery.Tally) fanPlan {
 	w := storage.FanoutWriter(conduitID)
 	p := fanPlan{rows: storage.FannedRows{Writer: w}}
 	source := conduitName + "/" + endpoint

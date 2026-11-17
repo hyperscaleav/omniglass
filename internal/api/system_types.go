@@ -10,13 +10,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// systemTypeBody is the wire shape of a system_type registry row: the coarse
+// systemTypeBody is the wire shape of a system_type catalog row: the coarse
 // taxonomy of what kind of space a system is (a boardroom, a classroom, a video
 // wall). It is not the standard, which stays the blueprint a system conforms
 // to. Stem, Icon, and Abbrev are the system's console-facing name and glyph
 // facts, inherited from the nearest ancestor that sets them (null in storage;
 // rendered as "" here, the same as every other optional scalar). ParentID and
-// Parent are the tree link, absent for a root type. The registry lists
+// Parent are the tree link, absent for a root type. The catalog lists
 // alphabetically by label.
 type systemTypeBody struct {
 	ID    string `json:"id" doc:"The system_type's uuid, the stable handle that survives a rename"`
@@ -27,7 +27,7 @@ type systemTypeBody struct {
 	// ResolvedIcon is the glyph this type actually SHOWS, on the same terms as
 	// componentTypeBody's (#695): served on the listing, where the whole chain
 	// is already loaded, and absent from a single-row write response.
-	ResolvedIcon string  `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it"`
+	ResolvedIcon string  `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it"`
 	Abbrev       string  `json:"abbrev,omitempty" doc:"A compact form of label; empty inherits the nearest ancestor's"`
 	LabelRule    string  `json:"label_rule,omitempty" doc:"The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems"`
 	Official     bool    `json:"official"`
@@ -36,11 +36,11 @@ type systemTypeBody struct {
 	// The inherited facts, on the same terms as componentTypeBody's (#716):
 	// what this row would show if it stated nothing, which is what an edit
 	// blade's placeholder has to say, with the ancestor each one came from.
-	InheritedStem         string `json:"inherited_stem,omitempty" doc:"The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedStem         string `json:"inherited_stem,omitempty" doc:"The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"`
 	InheritedStemSource   string `json:"inherited_stem_source,omitempty" doc:"The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent"`
-	InheritedIcon         string `json:"inherited_icon,omitempty" doc:"The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedIcon         string `json:"inherited_icon,omitempty" doc:"The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"`
 	InheritedIconSource   string `json:"inherited_icon_source,omitempty" doc:"The name of the ancestor system_type inherited_icon comes from, which may be further up the chain than the parent"`
-	InheritedAbbrev       string `json:"inherited_abbrev,omitempty" doc:"The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedAbbrev       string `json:"inherited_abbrev,omitempty" doc:"The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon"`
 	InheritedAbbrevSource string `json:"inherited_abbrev_source,omitempty" doc:"The name of the ancestor system_type inherited_abbrev comes from, which may be further up the chain than the parent"`
 }
 
@@ -104,7 +104,7 @@ type systemTypeOutput struct {
 
 // mapSystemTypeErr translates the system_type storage sentinels into HTTP
 // status. The two write-time refusals are 422s naming the offense; everything
-// else falls through to the shared type-registry mapping (not-found 404,
+// else falls through to the shared type-catalog mapping (not-found 404,
 // duplicate 409, official read-only 422, in-use 409).
 func mapSystemTypeErr(err error) error {
 	if errors.Is(err, storage.ErrParentSystemTypeNotFound) {
@@ -132,7 +132,7 @@ func resolveSystemTypeParent(ctx context.Context, gw storage.Gateway, ref string
 	return parent, nil
 }
 
-// registerSystemTypeRoutes wires the system_type registry surface: list (the
+// registerSystemTypeRoutes wires the system_type catalog surface: list (the
 // tree, flattened with parent links), create/update/delete of custom
 // (non-official) outposts. Gated by system_type:read|create|update|delete; read
 // sits in the viewer floor (*:read), the mutations at the admin tier, the same
@@ -143,7 +143,7 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodGet,
 		Path:        "/system-types",
 		Summary:     "List system types",
-		Description: "Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.",
+		Description: "Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.",
 	}, "system_type", "read"), func(ctx context.Context, _ *struct{}) (*listSystemTypesOutput, error) {
 		types, err := gw.ListSystemTypes(ctx)
 		if err != nil {

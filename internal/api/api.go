@@ -411,7 +411,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerComponentTypeRoutes(api, a, gw)
 	registerSystemTypeRoutes(api, a, gw)
 	registerProductRoutes(api, a, gw)
-	registerRegistryRenames(api, a, gw)
+	registerCatalogRenames(api, a, gw)
 	registerEndpointRoutes(api, a, gw)
 	registerTaskRoutes(api, a, gw)
 	registerReachabilityRoutes(api, a, gw)
@@ -488,7 +488,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 // describeEntitySchemas stamps each vocabulary term's definition on the OpenAPI
 // entity schema it names (#2029), after every route has registered its types.
 // Huma derives schemas from Go structs and has no struct-level description tag,
-// so the registry is edited in place (ADR-2029); a term naming a schema no route
+// so the catalog is edited in place (ADR-2029); a term naming a schema no route
 // registered is caught by TestAPISpeaksTheVocabulary.
 func describeEntitySchemas(api huma.API) {
 	schemas := api.OpenAPI().Components.Schemas.Map()

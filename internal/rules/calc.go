@@ -35,7 +35,7 @@ const MaxCalcInputs = 16
 
 // CalcInput is one input as authored and stored (#1018): the alias the
 // expression knows it by, and the key it reads, held by id in its lane's
-// registry (KeyID, Lane) so a key rename changes nothing; Key is the key's
+// catalog (KeyID, Lane) so a key rename changes nothing; Key is the key's
 // name, resolved when the rule is read (on a write, Key may name the key or
 // give its id).
 //
@@ -51,7 +51,7 @@ type CalcInput struct {
 }
 
 // TypedInput is an input with its key's value type resolved from the
-// registries (ValueTypeFor).
+// catalogs (ValueTypeFor).
 type TypedInput struct {
 	Alias, Key, KeyID string
 	Lane              Lane

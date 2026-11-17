@@ -940,7 +940,7 @@ var exampleLogs = []struct {
 	{message: "cec handshake ok", severity: "info", facility: "daemon", minsAgo: 127},
 	{message: "input switched to HDMI2", severity: "notice", facility: "daemon", attrs: []byte(`{"input":"hdmi2"}`), minsAgo: 46},
 	// A classified line: a log line is untyped, but labels are how it gets sorted
-	// into a class (system, firmware, application) without a registry (ADR-0066).
+	// into a class (system, firmware, application) without a catalog (ADR-0066).
 	// This is the one seeded line carrying both structured columns.
 	{message: "backlight temperature high, throttling", severity: "warning", facility: "kern", attrs: []byte(`{"celsius":71,"limit":68}`), labels: []byte(`{"class":"firmware"}`), minsAgo: 12},
 }

@@ -292,7 +292,7 @@ func (s *Server) ack(msg jetstream.Msg) {
 // confine the owner, apply reject-not-project, write the surviving typed
 // samples, and ack. The ack discipline is deliberate: a permanent condition
 // (undecodable payload, or an orphan the confinement fence drops) is terminated /
-// acked so it is not redelivered; only a transient failure (DB, registry read) is
+// acked so it is not redelivered; only a transient failure (DB, catalog read) is
 // left for nakOrTerm, which redelivers (Nak) up to maxTelemetryDeliveries and then
 // terminates the message so it does not loop forever.
 func (s *Server) handleTelemetry(msg jetstream.Msg) {
@@ -454,7 +454,7 @@ func outpostSelfReport(ev *ogv1.TelemetryBatch, outpost string) (r *storage.Outp
 // warned and dropped, never the tick. Each resolved group carries the
 // endpoint that delivered its task, which the batch stamps seen in its own
 // transaction unless it refuses the group (#933, #1928). A returned error is
-// the resolve's, the registry's or the batch's (failed decides what it
+// the resolve's, the catalog's or the batch's (failed decides what it
 // means).
 //
 // The batch carries the outpost's ledger, and every item the consumer lands no
@@ -522,11 +522,11 @@ func (s *Server) landOutpost(ctx context.Context, id, outpost string, ev *ogv1.T
 		}
 		resolved = append(resolved, resolvedGroup{view: v, owner: owner, bind: bind})
 	}
-	var reg collection.Registry
+	var reg collection.Catalog
 	var identities map[string]*storage.IdentityResolution
 	if len(sampled) > 0 {
 		var err error
-		if reg, batch.CommandTargeted, err = s.registry.get(ctx, s.store, sampled...); err != nil {
+		if reg, batch.CommandTargeted, err = s.catalog.get(ctx, s.store, sampled...); err != nil {
 			return err
 		}
 		if identities, err = s.resolveIdentities(ctx, wants); err != nil {
@@ -724,8 +724,8 @@ type ingestBinding struct {
 	ConduitEndpoint string
 }
 
-// sampleCount is how many registry-resolved observations a batch carries across
-// its three typed lanes. Zero means no registry to read.
+// sampleCount is how many catalog-resolved observations a batch carries across
+// its three typed lanes. Zero means no catalog to read.
 func sampleCount(ev *ogv1.TelemetryBatch) int {
 	return len(ev.GetMetrics()) + len(ev.GetProperties()) + len(ev.GetEvents())
 }
@@ -747,7 +747,7 @@ func taskBound(ev *ogv1.TelemetryBatch) int {
 // It deliberately knows nothing about JetStream: no message, no ack, no nak. The
 // caller owns delivery semantics and decides what a returned error means, which is
 // what lets a synchronous API caller reuse it. A returned error is always transient
-// (a registry read or a sink write); anything permanent is dropped in place, since
+// (a catalog read or a sink write); anything permanent is dropped in place, since
 // re-delivering it would not help.
 //
 // The batch lands as ONE unit under id, its receipt (#311, ADR-0311): every sink
@@ -780,11 +780,11 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		batch.LogLines = append(batch.LogLines, taskLogWrites(ev, *bind.SampleOwner)...)
 	}
 	if bind.SampleOwner != nil && sampleCount(ev) > 0 {
-		// The registry is kept between batches and rebuilt only when the
+		// The catalog is kept between batches and rebuilt only when the
 		// catalogs change (#1279): one fingerprint read, not three catalogs.
 		// The command-targeted property names ride with it (#1299). A name
-		// the kept registry lacks reads the catalogs at once (#1928).
-		reg, targeted, err := s.registry.get(ctx, s.store, ev)
+		// the kept catalog lacks reads the catalogs at once (#1928).
+		reg, targeted, err := s.catalog.get(ctx, s.store, ev)
 		if err != nil {
 			return err
 		}
@@ -843,7 +843,7 @@ type sampleRows struct {
 // conduit, placed by identities, the batch's (or its tick's) one read.
 // Every sample that derives no row is counted in t under its outcome
 // (#1641); nil counts nothing.
-func (s *Server) deriveSamples(ev *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, identities map[string]*storage.IdentityResolution, t *delivery.Tally) sampleRows {
+func (s *Server) deriveSamples(ev *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Catalog, identities map[string]*storage.IdentityResolution, t *delivery.Tally) sampleRows {
 	own, fanned := splitIdentified(ev)
 	rows := sampleRows{
 		Metrics:    deriveMetrics(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer, t),
@@ -896,7 +896,7 @@ func (s *Server) resolveIdentities(ctx context.Context, wants map[string][]stora
 // no conduit to resolve against (a system push, which never carries an
 // identity) lands none of them, nor does one whose conduit resolved nothing:
 // those count unidentified in t, an unbound one unbound (#1641).
-func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, res *storage.IdentityResolution, t *delivery.Tally) (*storage.FannedRows, []storage.UnboundIdentityWrite) {
+func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Catalog, res *storage.IdentityResolution, t *delivery.Tally) (*storage.FannedRows, []storage.UnboundIdentityWrite) {
 	n := sampleCount(fanned)
 	if bind.Conduit == "" {
 		slog.Warn("identified samples on a batch with no conduit, dropped", "facility", "ingest", "samples", n)
@@ -1007,7 +1007,7 @@ func (s *Server) term(msg jetstream.Msg, b termed, cause delivery.Outcome, items
 
 // logLineWrites turns a push batch's raw log lines into component-owned
 // log_line writes (ADR-0066, narrowed by #589): the component is the owner the
-// API authorized. Pure: no I/O and no registry (a log line is untyped by
+// API authorized. Pure: no I/O and no catalog (a log line is untyped by
 // design). Each line's own ts and source win when set, else the batch's; empty
 // severity/facility/correlation stay "" and the storage layer maps them to NULL.
 func logLineWrites(ev *ogv1.TelemetryBatch, component string) []storage.LogLineWrite {
@@ -1134,7 +1134,7 @@ func lineSource(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) string {
 // deriveMetrics maps the metric lane to metric rows: the name must be a
 // registered metric_type. The value is a double by wire type, so there is no
 // shape to validate beyond the name.
-func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter, t *delivery.Tally) []storage.MetricSampleWrite {
+func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Catalog, w storage.KeyWriter, t *delivery.Tally) []storage.MetricSampleWrite {
 	var out []storage.MetricSampleWrite
 	for _, dp := range ev.GetMetrics() {
 		mt, ok := reg.Metric(dp.GetName())
@@ -1164,7 +1164,7 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwn
 // registered property_type, the value must be canonical JSON of the type's
 // data_type, and when the type declares a validation schema the value must
 // satisfy it (key.ValidateValue, the same validator every registered key obeys).
-func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter, t *delivery.Tally) []storage.PropertySampleWrite {
+func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Catalog, w storage.KeyWriter, t *delivery.Tally) []storage.PropertySampleWrite {
 	var out []storage.PropertySampleWrite
 	for _, dp := range ev.GetProperties() {
 		pt, ok := reg.Property(dp.GetName())
@@ -1204,7 +1204,7 @@ func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.Task
 // sample). A component published the occurrence natively (an xAPI event, an
 // SNMP trap): origin caught, the platform did not derive it. Raw log lines are
 // a separate ingest lane, not this path (ADR-0066).
-func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter, t *delivery.Tally) []storage.EventWrite {
+func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Catalog, w storage.KeyWriter, t *delivery.Tally) []storage.EventWrite {
 	var out []storage.EventWrite
 	for _, dp := range ev.GetEvents() {
 		et, ok := reg.Event(dp.GetName())

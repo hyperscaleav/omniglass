@@ -12,7 +12,7 @@ import (
 )
 
 // The template catalog over the API (ADR-0071, ADR-0827): the binary's
-// shipped templates, read-only. A catalog read is a registry read with no
+// shipped templates, read-only. A catalog read is a catalog read with no
 // owner, so there is no scope to inject; template:read sits on the viewer
 // read floor. Nothing here writes: a template is never a row, and the
 // createFromTemplate methods live on the collections they create in.

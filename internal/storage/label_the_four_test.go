@@ -16,7 +16,7 @@ import (
 //
 //   - the ORDER a list comes back in, which is a property of the VALUE. Postgres
 //     sorts NULL last under a default ASC and the empty string FIRST, and #756
-//     found seven registries already shipping their unlabelled rows at the top
+//     found seven catalogs already shipping their unlabelled rows at the top
 //     of the picker because of exactly that. A new list is guilty until a test
 //     says otherwise.
 //   - the INDEPENDENCE of the label from the address, which is the whole point

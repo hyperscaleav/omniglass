@@ -93,7 +93,7 @@ type updateCommandTypeInput struct {
 }
 
 // registerCommandTypeRoutes wires the command_type catalog: the fleet-wide "do"
-// registry (no scope injection, reference data) and its custom-type CRUD, gated by
+// catalog (no scope injection, reference data) and its custom-type CRUD, gated by
 // command_type:read / :create / :update / :delete. Official types are read-only.
 // Mirrors the property_type and event_type catalogs.
 func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {

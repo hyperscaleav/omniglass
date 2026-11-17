@@ -23,7 +23,7 @@ func criteria(op string, v any) rules.Criteria {
 // honest: it reads a registered sample key on its own lane, compares with
 // criteria that lane can evaluate, names a severity level that exists, and
 // selects component types and components that exist; an update bumps its
-// version; and rules read like a registry, written only with an
+// version; and rules read like a catalog, written only with an
 // all-scope grant.
 func TestEventRules(t *testing.T) {
 	t.Parallel()
@@ -83,7 +83,7 @@ func TestEventRules(t *testing.T) {
 		t.Fatalf("a duplicate name: err %v, want ErrEventRuleExists", err)
 	}
 
-	// Rules read like a registry: a reader whose component scope admits
+	// Rules read like a catalog: a reader whose component scope admits
 	// nothing still lists and gets every rule. Writing one takes an all-scope
 	// grant, since its selector reaches the whole fleet.
 	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "scoped", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high"}, none); !errors.Is(err, storage.ErrEventRuleForbidden) {

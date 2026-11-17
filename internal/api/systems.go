@@ -127,7 +127,7 @@ type createSystemInput struct {
 		// ordinal in this placement, suppressing the ordinal for the first of
 		// that stem in the bucket, and marks name_generated. Supplied, it is
 		// validated exactly as before. Omitting it without a system_type is a
-		// 422: the stem lives on that registry row.
+		// 422: the stem lives on that catalog row.
 		Name       string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem."`
 		Label      string `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
 		StandardID string `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
@@ -462,7 +462,7 @@ func mapSystemErr(err error) error {
 	case errors.Is(err, storage.ErrSystemTypeRequiredForName):
 		return errNoGeneratedName("a system with no system_type has no stem to generate a name from: supply a name, classify it, or :rename it before un-classifying it")
 	case errors.Is(err, storage.ErrSystemTypeNoStem):
-		return errNoGeneratedName("this system_type has no stem to generate a name from; supply a name explicitly, or fix the system_type registry")
+		return errNoGeneratedName("this system_type has no stem to generate a name from; supply a name explicitly, or fix the system_type catalog")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
 	default:
@@ -472,7 +472,7 @@ func mapSystemErr(err error) error {
 
 // mapStandardErr translates the standard storage sentinels into HTTP status. An
 // unknown parent is a 422; everything else falls through to the shared
-// type-registry mapping (not-found 404, duplicate 409, official read-only 422,
+// type-catalog mapping (not-found 404, duplicate 409, official read-only 422,
 // in-use 409).
 func mapStandardErr(err error) error {
 	if errors.Is(err, storage.ErrParentStandardNotFound) {
@@ -485,7 +485,7 @@ func mapStandardErr(err error) error {
 }
 
 // registerStandardRoutes wires the standard catalog CRUD surface, on the same
-// pattern as products. A standard is not a bare type registry: it carries a
+// pattern as products. A standard is not a bare type catalog: it carries a
 // declared property contract (and later a role set), so it is a Catalog entity
 // gated by its own standard:read|create|update|delete rather than the inherited
 // type:*. standard:read sits in the viewer read-floor (*:read), the mutations at

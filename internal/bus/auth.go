@@ -54,7 +54,7 @@ type Store interface {
 	// returning how many it served.
 	DrainCalcPending(ctx context.Context, limit int) (storage.CalcDrain, error)
 	// The telemetry ingest consumer surface: resolve+confine a tick's task
-	// owners, snapshot the sample registry (reject-not-project), and write the
+	// owners, snapshot the sample catalog (reject-not-project), and write the
 	// typed rows through one LandBatch. The catalog is two lanes (#587):
 	// metric_type names route to the metric sink, property_type names to property.
 	// ResolveTaskOwners resolves every task an outpost's tick names in one read
@@ -67,15 +67,15 @@ type Store interface {
 	ResolveIdentityBindings(ctx context.Context, ids map[string][]storage.IdentityKey) (map[string]*storage.IdentityResolution, error)
 	ListMetricTypes(ctx context.Context) ([]storage.MetricType, error)
 	ListPropertyTypes(ctx context.Context) ([]storage.PropertyType, error)
-	// The event-type registry snapshot: with the log kind gone from property_type,
+	// The event-type catalog snapshot: with the log kind gone from property_type,
 	// a registered event_type name routes a natively-published occurrence (an xAPI
 	// event, a trap) to the event sink (kind "event") as a caught event (ADR-0066).
 	ListEventTypes(ctx context.Context) ([]storage.EventType, error)
-	// CatalogFingerprint digests the rows the registry is built from, so the
-	// consumer reuses its registry until a catalog changes (#1279).
+	// CatalogFingerprint digests the rows the catalog is built from, so the
+	// consumer reuses its catalog until a catalog changes (#1279).
 	CatalogFingerprint(ctx context.Context) (string, error)
 	// CommandTargetedProperties is the property type names some command type
-	// targets, kept beside the registry and carried on each batch (#1299).
+	// targets, kept beside the catalog and carried on each batch (#1299).
 	CommandTargetedProperties(ctx context.Context) (map[string]bool, error)
 	// LandBatch writes one batch's every sink (the raw log lanes, ADR-0066 and
 	// #589, and the three typed sample lanes) in one transaction under the

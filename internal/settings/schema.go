@@ -51,7 +51,7 @@ type Keybindings struct {
 
 // LabelSettings is the label namespace: how the label rule engine renders, as
 // opposed to WHAT it renders (the rules themselves are per-tier columns on the
-// registries, not a setting).
+// catalogs, not a setting).
 //
 // It is the first PLATFORM-domain namespace, and the first that is platform and
 // client-visible at once. The two halves say different things and both are

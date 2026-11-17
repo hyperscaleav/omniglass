@@ -45,7 +45,7 @@ type eventRuleBody struct {
 }
 
 // TestEventRuleAPI drives rule authoring over HTTP: rules are listed by
-// any rule:read holder, like a registry, and authored with rule:* on an
+// any rule:read holder, like a catalog, and authored with rule:* on an
 // all-scope grant; a rule refers to a
 // registered sample key, criteria its lane can evaluate and a level that
 // exists; an update bumps its version.
@@ -155,7 +155,7 @@ func TestEventRuleAPI(t *testing.T) {
 		t.Fatalf("the state says last judged %v, want %v", state.LastJudged, one.LastJudged)
 	}
 
-	// Rules read like a registry: a viewer scoped to one place lists and gets
+	// Rules read like a catalog: a viewer scoped to one place lists and gets
 	// every rule. The live state names components, so it carries only the
 	// streaks on components the caller's component scope admits: a location
 	// scope reaches none today, a component scope reaches its own.

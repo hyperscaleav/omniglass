@@ -542,7 +542,7 @@ func (p *PG) lockGroups(ctx context.Context, tx *batchTx, live []landGroup) erro
 // out redeliveries that cannot succeed. Any other integrity violation is not
 // a refusal: a foreign key, a not-null type lookup or a unique key can fail
 // because a row the batch references was deleted under it (a metric type, a
-// calc rule), and the redelivery re-derives against the registry as it is
+// calc rule), and the redelivery re-derives against the catalog as it is
 // then and lands the rest.
 func IsRefusedWrite(err error) bool {
 	var ambiguous *ErrAmbiguousName

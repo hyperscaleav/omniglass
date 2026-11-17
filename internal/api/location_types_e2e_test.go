@@ -11,7 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestLocationTypesAPI drives the location_type registry read endpoint: an owner
+// TestLocationTypesAPI drives the location_type catalog read endpoint: an owner
 // lists the seeded official types in alphabetical order (by label), each
 // with its label, so a form can populate a type picker (value = id, label
 // = label). The 403 for a principal without location_type:read is covered

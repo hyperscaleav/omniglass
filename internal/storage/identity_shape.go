@@ -228,11 +228,11 @@ var IdentityShapes = map[string]TableIdentity{
 	"unbound_identity":     {Shape: ShapeIDOnly, Reason: "an identity a conduit reported that no binding places, one row per conduit, match key and value; read as the conduit's list, never addressed by name"},
 	"system_role_product":  {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
-	// registry_shadow holds an operator's version of a shipped registry row
+	// catalog_shadow holds an operator's version of a shipped catalog row
 	// (#655, ADR-0095). Nobody names it: it is addressed by the row it shadows,
-	// (registry, row_id), and row_id is that row's uuid. Operators never see it
+	// (catalog, row_id), and row_id is that row's uuid. Operators never see it
 	// at all, since every read resolves it over the official row.
-	"registry_shadow": {Shape: ShapeIDOnly, Reason: "addressed by the registry row it shadows, never named"},
+	"catalog_shadow": {Shape: ShapeIDOnly, Reason: "addressed by the catalog row it shadows, never named"},
 	// label_rule holds the global tier of the label rules (#682, ADR-0098), one
 	// row per labelled entity kind: a text primary key and no uuid at all.
 	"label_rule": {Shape: ShapeFixedKey, Reason: "keyed by the entity kind it applies to (component, system, location), a closed set the table's own CHECK enforces"},

@@ -13,7 +13,7 @@ import (
 )
 
 // A reserved key held in both tiers resolves to nothing in SQL too (#1447),
-// as ResolveNameLane resolves it for the ingest registry. An operator held
+// as ResolveNameLane resolves it for the ingest catalog. An operator held
 // local/ssh-host-key before a release reserved the name and shipped og's row
 // beside theirs: no reader serves the operator's frozen values as the outpost's.
 // An unreserved name an operator holds beside a shipped one still reaches
@@ -95,12 +95,12 @@ func TestAReservedKeyHeldInBothTiersReachesNoReader(t *testing.T) {
 		return got
 	}
 
-	// The reserved key: the registry refuses it, and so does every reader.
+	// The reserved key: the catalog refuses it, and so does every reader.
 	if w, ok := lane(reserved); ok {
 		t.Fatalf("ResolveNameLane(%s) = %+v, want nothing: the fixture lost its collision", reserved, w)
 	}
 	if got := inEffect(reserved); len(got) != 0 {
-		t.Errorf("property_type_in_effect() holds %s in %v, want neither tier, as the registry resolves it", reserved, got)
+		t.Errorf("property_type_in_effect() holds %s in %v, want neither tier, as the catalog resolves it", reserved, got)
 	}
 	if got, err := gw.LatestProperty(ctx, "disp-1", reserved, "ssh"); err != nil || got != nil {
 		t.Errorf("LatestProperty(%s) = %+v (%v), want nothing", reserved, got, err)
@@ -112,7 +112,7 @@ func TestAReservedKeyHeldInBothTiersReachesNoReader(t *testing.T) {
 		t.Errorf("the ssh key pin reads %q (%v), want none: the operator's frozen value is not the outpost's", pin, err)
 	}
 
-	// The unreserved key: the operator's row answers, in the registry and in
+	// The unreserved key: the operator's row answers, in the catalog and in
 	// every reader.
 	if w, ok := lane(unreserved); !ok || w.Namespace != storage.NamespaceLocal {
 		t.Fatalf("ResolveNameLane(%s) = %+v (%v), want the operator's local row", unreserved, w, ok)

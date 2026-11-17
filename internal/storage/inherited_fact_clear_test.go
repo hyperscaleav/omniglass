@@ -10,7 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The clearing half of the inherited registry facts (#716). `stem`, `abbrev`
+// The clearing half of the inherited catalog facts (#716). `stem`, `abbrev`
 // and `icon` on component_type and system_type are nullable and inherited: NULL
 // means "walk to the nearest ancestor that sets one". #677 and #656 stopped both
 // consoles writing "" over a NULL, which was destroying the walk; what neither
@@ -195,7 +195,7 @@ func TestClearingAnInheritedFactOnAShippedTypeForks(t *testing.T) {
 }
 
 // TestClearingAnInheritedSystemFactResumesTheWalk is the system_type twin of the
-// component acceptance. The registry differs (a shipped row here is read-only
+// component acceptance. The catalog differs (a shipped row here is read-only
 // rather than forkable), the sentinel does not.
 func TestClearingAnInheritedSystemFactResumesTheWalk(t *testing.T) {
 	t.Parallel()

@@ -68,7 +68,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-calc-rule",
 		Title:       "List calc rules",
-		Description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.",
+		Description: "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.",
 		Method:      "GET",
 		Path:        "/calc-rules",
 		Permission:  "rule:read",
@@ -116,7 +116,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-component-types",
 		Title:       "List component types",
-		Description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
+		Description: "Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
 		Method:      "GET",
 		Path:        "/component-types",
 		Permission:  "component_type:read",
@@ -512,7 +512,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-drivers",
 		Title:       "List drivers",
-		Description: "Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.",
+		Description: "Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.",
 		Method:      "GET",
 		Path:        "/drivers",
 		Permission:  "driver:read",
@@ -602,7 +602,7 @@ var catalog = []tooldef.Def{
 		BodyParams:  []string{"component", "driver", "inputs", "label", "out_of_band", "outpost", "params", "transport"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: true},
 		Class:       tooldef.ClassCredentialDestination,
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"component\":{\"description\":\"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)\",\"type\":\"string\"},\"driver\":{\"description\":\"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions\",\"type\":\"string\"},\"inputs\":{\"additionalProperties\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"number\"}]},\"description\":\"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest\",\"type\":\"object\"},\"label\":{\"description\":\"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for\",\"maxLength\":200,\"type\":\"string\"},\"out_of_band\":{\"description\":\"Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open\",\"type\":\"boolean\"},\"outpost\":{\"description\":\"Outpost placement, by name or id\",\"type\":\"string\"},\"params\":{\"description\":\"Address/target settings (jsonb); an attach derives them from the inputs instead\"},\"transport\":{\"description\":\"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set\",\"type\":\"string\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"component\":{\"description\":\"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)\",\"type\":\"string\"},\"driver\":{\"description\":\"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions\",\"type\":\"string\"},\"inputs\":{\"additionalProperties\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"number\"}]},\"description\":\"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest\",\"type\":\"object\"},\"label\":{\"description\":\"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for\",\"maxLength\":200,\"type\":\"string\"},\"out_of_band\":{\"description\":\"Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open\",\"type\":\"boolean\"},\"outpost\":{\"description\":\"Outpost placement, by name or id\",\"type\":\"string\"},\"params\":{\"description\":\"Address/target settings (jsonb); an attach derives them from the inputs instead\"},\"transport\":{\"description\":\"A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set\",\"type\":\"string\"}},\"type\":\"object\"}",
 	},
 	{
 		Name:        "get-endpoint",
@@ -682,7 +682,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-event-rule",
 		Title:       "List event rules",
-		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
+		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 		Method:      "GET",
 		Path:        "/event-rules",
 		Permission:  "rule:read",
@@ -908,7 +908,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-products",
 		Title:       "List products",
-		Description: "Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
+		Description: "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
 		Method:      "GET",
 		Path:        "/products",
 		Permission:  "product:read",
@@ -1171,7 +1171,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-transports",
 		Title:       "List the transports the platform speaks",
-		Description: "Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.",
+		Description: "Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.",
 		Method:      "GET",
 		Path:        "/transports",
 		Permission:  "endpoint:read",
@@ -1193,7 +1193,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-vendors",
 		Title:       "List vendors",
-		Description: "Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.",
+		Description: "Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.",
 		Method:      "GET",
 		Path:        "/vendors",
 		Permission:  "vendor:read",

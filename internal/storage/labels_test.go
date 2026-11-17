@@ -304,7 +304,7 @@ func TestAMoreSpecificTierWins(t *testing.T) {
 	}
 
 	// A product an operator owns, since a shipped product cannot be edited
-	// until the fork primitive reaches that registry.
+	// until the fork primitive reaches that catalog.
 	mine, err := gw.CreateProduct(ctx, "", storage.Product{
 		Name: "my-panel", Label: "My Panel", ComponentType: "display",
 		LabelRule: strptr("product says {{.ProductName}}"),
@@ -527,7 +527,7 @@ func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
 // keeping rather than quietly rewording. Slice 2 read it as the whole
 // enumeration the data map commits us to, on the reasoning that no fact in that
 // map changes by any other route. That reasoning was already thin (TypeName,
-// ProductName, VendorName and the rule itself are columns on registry rows, not
+// ProductName, VendorName and the rule itself are columns on catalog rows, not
 // on this one) and #685 ended it outright: a component's map now reads its
 // location's label and its primary system's type, so acts on OTHER rows stale
 // it too. Those acts, and the cascade that answers them, are
@@ -1017,7 +1017,7 @@ func TestALocationsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 		t.Fatalf("after rename = %q, want %q", renamed.Label, "Room/room-b")
 	}
 	// A location_type is seed-if-absent example content an operator owns, so
-	// reclassifying to a second seeded type needs no custom registry row.
+	// reclassifying to a second seeded type needs no custom catalog row.
 	reclassified, err := gw.UpdateLocation(ctx, "", renamed.ID, storage.LocationPatch{LocationType: strptr("floor")}, all, all)
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)

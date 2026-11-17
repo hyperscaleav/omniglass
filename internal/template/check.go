@@ -14,7 +14,7 @@ import (
 )
 
 // Check dry-runs every template in the catalog against the catalogs a
-// database holds (the seeded registries, in the build's test), reading only:
+// database holds (the seeded catalogs, in the build's test), reading only:
 // each product, type, driver input, property and metric a template names
 // must exist there, so a template naming a row a release withdrew fails the
 // build, naming the template and the row, rather than an operator. It

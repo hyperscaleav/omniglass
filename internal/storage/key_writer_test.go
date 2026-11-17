@@ -560,7 +560,7 @@ func TestEveryCatalogKeyHasOneWriterClass(t *testing.T) {
 			t.Errorf("an operator created event type %s", name)
 		}
 	}
-	// Even before the seed: a fresh registry refuses the names by rule, not by
+	// Even before the seed: a fresh catalog refuses the names by rule, not by
 	// collision with a seeded row.
 	if _, err := f.conn.Exec(f.ctx, `delete from metric_type where name = 'tcp-connect-time'`); err != nil {
 		t.Fatalf("drop a seeded reserved type: %v", err)

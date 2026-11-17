@@ -25,7 +25,7 @@ import (
 //	depot (building)                    > depot-r1 (room) -> depot-huddle, shared occupant
 //
 // Two roots, three hops deep against two, and no level in common below the
-// root: the seeded type registry allows a building at root, which is what lets
+// root: the seeded type catalog allows a building at root, which is what lets
 // the fixture prove the canvas needs no fixed campus/building/floor/room ladder.
 //
 // bar-1 fills a role in hq-huddle and is ALSO a member of depot-huddle, which

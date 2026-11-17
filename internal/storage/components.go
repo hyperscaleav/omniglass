@@ -489,7 +489,7 @@ func (p *PG) createComponentTx(ctx context.Context, tx pgx.Tx, actorID string, s
 	var productID *string
 	if spec.ProductName != nil {
 		var pid string
-		err := tx.QueryRow(ctx, `select id from `+refRows("product", *spec.ProductName)+` product where `+registryRefCol(*spec.ProductName)+` = $1`, *spec.ProductName).Scan(&pid)
+		err := tx.QueryRow(ctx, `select id from `+refRows("product", *spec.ProductName)+` product where `+catalogRefCol(*spec.ProductName)+` = $1`, *spec.ProductName).Scan(&pid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrProductNotFound
 		} else if err != nil {
@@ -632,7 +632,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	var patchProductID *string
 	if patch.ProductName != nil && *patch.ProductName != "" {
 		var pid string
-		err := tx.QueryRow(ctx, `select id from `+refRows("product", *patch.ProductName)+` product where `+registryRefCol(*patch.ProductName)+` = $1`, *patch.ProductName).Scan(&pid)
+		err := tx.QueryRow(ctx, `select id from `+refRows("product", *patch.ProductName)+` product where `+catalogRefCol(*patch.ProductName)+` = $1`, *patch.ProductName).Scan(&pid)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrProductNotFound
 		} else if err != nil {

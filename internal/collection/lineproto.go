@@ -64,7 +64,7 @@ func (e *lineExchanger) Exchange(ctx context.Context, target, line string, timeo
 }
 
 // IsLineTransport reports a transport the line protocol rides (the
-// registry's line flag): tcp, tls, telnet, ssh. Its polls and commands speak
+// catalog's line flag): tcp, tls, telnet, ssh. Its polls and commands speak
 // lines, over the endpoint's held session or, on tcp alone, a throwaway
 // connection.
 func IsLineTransport(name string) bool {

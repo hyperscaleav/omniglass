@@ -16,7 +16,7 @@ import (
 )
 
 // The probe metrics and verdict properties. Each is a seeded metric_type or
-// property_type (internal/seed); the ingest drops a name the registries lack.
+// property_type (internal/seed); the ingest drops a name the catalogs lack.
 const (
 	TCPOpen               = "tcp-open"
 	TCPConnectTime        = "tcp-connect-time"
@@ -166,7 +166,7 @@ var native = slices.Concat(outpostOnly, slices.Collect(maps.Keys(pushable)))
 
 // IsOutpostOnly reports a native key only an outpost's own collection may write,
 // which the push lane refuses. It matches case-insensitively and ignores
-// surrounding space, failing closed: a variant the registry would refuse as
+// surrounding space, failing closed: a variant the catalog would refuse as
 // unregistered today is refused as outpost-only should that lookup ever loosen.
 func IsOutpostOnly(key string) bool {
 	key = strings.TrimSpace(key)

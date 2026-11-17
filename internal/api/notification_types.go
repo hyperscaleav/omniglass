@@ -14,7 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The notification_type registry (#618, #1319): what a message about an alarm
+// The notification_type catalog (#618, #1319): what a message about an alarm
 // says. Fleet-wide reference data mirroring the command_type catalog (no scope
 // injected, read on the viewer floor); official types are read-only. A type's
 // two templates render through the shared template sandbox over the alarm
@@ -112,9 +112,9 @@ func orderedFacts(m map[string]string) []alarmFactBody {
 	return out
 }
 
-// registerNotificationTypeRoutes wires the registry's CRUD, gated by
+// registerNotificationTypeRoutes wires the catalog's CRUD, gated by
 // notification_type:read / :create / :update / :delete, and its :preview
-// (read). The :rename rides the shared registry rename (registry_rename.go).
+// (read). The :rename rides the shared catalog rename (catalog_rename.go).
 func registerNotificationTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-notification-type",

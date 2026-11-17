@@ -63,7 +63,7 @@ func (p *PG) UpsertPropertyType(ctx context.Context, prop PropertyType) error {
 }
 
 // ListPropertyTypes returns every registered property (official and custom). No
-// scope.Set: the registry is fleet-wide reference data, not a scoped resource.
+// scope.Set: the catalog is fleet-wide reference data, not a scoped resource.
 func (p *PG) ListPropertyTypes(ctx context.Context) ([]PropertyType, error) {
 	rows, err := p.pool.Query(ctx, propertyTypeListSQL)
 	if err != nil {

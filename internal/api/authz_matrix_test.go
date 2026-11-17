@@ -36,7 +36,7 @@ type scopedEntity struct {
 	// an alarm write on it. The entity's own PATCH is not listed here; the matrix
 	// asserts that one directly, because every entity has exactly one and it needs
 	// no description. These do need describing, because they are NOT uniform
-	// across the registry: properties exist on all three tiers, membership and
+	// across the catalog: properties exist on all three tiers, membership and
 	// roles only on system, alarms only on component (#736).
 	actions []actionRoute
 }

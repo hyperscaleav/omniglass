@@ -31,10 +31,10 @@ var (
 	ErrSecretInUse = errors.New("storage: a notification target binds this secret")
 )
 
-// SecretType is a registry row: the named, per-field-typed shape a secret takes
+// SecretType is a catalog row: the named, per-field-typed shape a secret takes
 // (snmp-community, basic-auth, ...). Fields carry the per-field secrecy and
 // origin that drive encryption, masking, and the create gate. official marks the
-// ship-with set, mirroring the other type registries.
+// ship-with set, mirroring the other type catalogs.
 type SecretType struct {
 	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062).
 	ID string
@@ -47,7 +47,7 @@ type SecretType struct {
 	Fields                []secret.Field
 }
 
-// Shape adapts the registry row to the pure secret.Shape the primitive validates
+// Shape adapts the catalog row to the pure secret.Shape the primitive validates
 // and masks against, so the crypto core never imports storage.
 func (st SecretType) Shape() secret.Shape {
 	return secret.Shape{Name: st.Name, Official: st.Official, Fields: st.Fields}
@@ -134,7 +134,7 @@ type ResolvedSecret struct {
 	Fields       []ResolvedField
 }
 
-// --- secret_type registry ----------------------------------------------------
+// --- secret_type catalog ----------------------------------------------------
 
 func (p *PG) UpsertSecretType(ctx context.Context, st SecretType) error {
 	schema, err := json.Marshal(st.Fields)
@@ -172,7 +172,7 @@ func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
 
 func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) {
 	st, err := scanSecretType(p.pool.QueryRow(ctx,
-		`select id, name, official, coalesce(label, ''), default_admin_sensitive, schema, namespace from `+refRows("secret_type", id)+` secret_type where `+registryRefCol(id)+` = $1`, id))
+		`select id, name, official, coalesce(label, ''), default_admin_sensitive, schema, namespace from `+refRows("secret_type", id)+` secret_type where `+catalogRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownSecretType
 	}
@@ -263,7 +263,7 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 	compID, sysID, locID := arcColumns(spec.OwnerKind, ownerID)
 	s, err := scanSecretRow(tx.QueryRow(ctx, `
 		insert into secret (name, label, secret_type, owner_kind, component_id, system_id, location_id, value, admin_sensitive)
-		values ($1, $2, (select id from `+refRows("secret_type", spec.SecretType)+` secret_type where `+registryRefCol(spec.SecretType)+` = $3), $4, $5, $6, $7, $8, $9)
+		values ($1, $2, (select id from `+refRows("secret_type", spec.SecretType)+` secret_type where `+catalogRefCol(spec.SecretType)+` = $3), $4, $5, $6, $7, $8, $9)
 		returning `+secretCols,
 		spec.Name, labelOrNull(spec.Label), spec.SecretType, spec.OwnerKind, compID, sysID, locID,
 		valueJSON, adminSensitive), shape)

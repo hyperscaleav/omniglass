@@ -133,7 +133,7 @@ func TestComponentTypeShadowImageIsWholeRow(t *testing.T) {
 		}
 	}
 	// A nil column is captured as an explicit null, not dropped: null is a
-	// value on this registry ("inherit from the parent"), so dropping it would
+	// value on this catalog ("inherit from the parent"), so dropping it would
 	// re-inherit the official row's on the next read.
 	if string(keys["icon"]) != "null" {
 		t.Errorf("image icon = %s, want an explicit null", keys["icon"])

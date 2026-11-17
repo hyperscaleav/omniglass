@@ -21,7 +21,7 @@ import (
 // and reject-not-project drops a name unknown to the metric catalog, INCLUDING a
 // name that is registered on another lane (the lane is the array, #594).
 func TestDeriveMetrics(t *testing.T) {
-	reg := collection.NewRegistry([]storage.MetricType{
+	reg := collection.NewCatalog([]storage.MetricType{
 		{Name: "icmp-rtt-avg"},
 		{Name: "tcp-connect-time"},
 	}, []storage.PropertyType{{Name: "video-input", DataType: "string"}}, nil)
@@ -57,7 +57,7 @@ func TestDeriveMetrics(t *testing.T) {
 // is dropped (reject-not-project has no reply channel on the outpost lane); a valid
 // one lands with the same owner stamping as a metric.
 func TestDeriveProperties(t *testing.T) {
-	reg := collection.NewRegistry(
+	reg := collection.NewCatalog(
 		[]storage.MetricType{{Name: "tcp-connect-time"}},
 		[]storage.PropertyType{
 			{Name: "endpoint-reachable", DataType: "string", Validation: []byte(`{"enum":["up","down"]}`)},
@@ -94,7 +94,7 @@ func TestDeriveProperties(t *testing.T) {
 func TestDeriveEvents(t *testing.T) {
 	// The schema declares its properties: Huma's validator enforces required and
 	// type only over declared property names.
-	reg := collection.NewRegistry(nil, nil,
+	reg := collection.NewCatalog(nil, nil,
 		[]storage.EventType{
 			{Name: "call-started", PayloadSchema: []byte(`{"type":"object","properties":{"participants":{"type":"integer"}},"required":["participants"]}`)},
 			{Name: "note"},
@@ -128,7 +128,7 @@ func TestDeriveEvents(t *testing.T) {
 // and when both are absent the zero time is passed so the insert path stamps
 // ingest time.
 func TestSampleTimeRule(t *testing.T) {
-	reg := collection.NewRegistry(
+	reg := collection.NewCatalog(
 		[]storage.MetricType{{Name: "tcp-connect-time"}},
 		[]storage.PropertyType{{Name: "serial-number", DataType: "string"}},
 		[]storage.EventType{{Name: "note"}})
@@ -259,7 +259,7 @@ func TestNakOrTerm(t *testing.T) {
 // value lands as its text form, a bool as true/false and a number as its
 // digits, which the gateway reads back typed by the property's data_type.
 func TestDerivePropertiesStoresTheTextForm(t *testing.T) {
-	reg := collection.NewRegistry(nil,
+	reg := collection.NewCatalog(nil,
 		[]storage.PropertyType{
 			{Name: "panel-lit", DataType: "bool"},
 			{Name: "seat-count", DataType: "json"},

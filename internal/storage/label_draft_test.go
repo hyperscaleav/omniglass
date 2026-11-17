@@ -355,7 +355,7 @@ func TestTheDraftLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)
 
-	// A system with no system_type at all: the stem lives on the registry row.
+	// A system with no system_type at all: the stem lives on the catalog row.
 	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{}, all, all); !errors.Is(err, storage.ErrSystemTypeRequiredForName) {
 		t.Errorf("unclassified system draft = %v, want ErrSystemTypeRequiredForName", err)
 	}

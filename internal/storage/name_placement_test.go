@@ -16,7 +16,7 @@ import (
 // openGateway is the shared open-and-seed boilerplate every test in this file
 // needs: a fresh testcontainer Postgres, a gateway on it, and the boot seed
 // (the generic-device product a component create falls back to, and the
-// location/system/component_type registries).
+// location/system/component_type catalogs).
 func openGateway(t *testing.T) storage.Gateway {
 	t.Helper()
 	ctx := context.Background()

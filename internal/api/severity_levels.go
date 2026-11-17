@@ -57,7 +57,7 @@ type updateSeverityLevelInput struct {
 	}
 }
 
-// registerSeverityLevelRoutes wires the severity registry (#917): fleet-wide
+// registerSeverityLevelRoutes wires the severity catalog (#917): fleet-wide
 // reference data every reader lists, and operator levels an admin adds,
 // renames, recolors, re-ranks and deletes. Official levels are read-only.
 // Reads take any grant; a write takes an all-scope one (#930), since a

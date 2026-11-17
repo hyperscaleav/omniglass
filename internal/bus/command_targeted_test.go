@@ -15,11 +15,11 @@ import (
 )
 
 // TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext is #1299's acceptance:
-// the consumer carries the command-targeted property names on the registry it
+// the consumer carries the command-targeted property names on the catalog it
 // keeps between batches, and a command type created between two batches is
 // honored by the second (one past the fingerprint's interval, #1928). A batch lands lamp-mode while nothing commands it;
 // then a command type targeting lamp-mode is created and a command issued, and
-// the next batch's lamp-mode observation settles it. A registry kept past the
+// the next batch's lamp-mode observation settles it. A catalog kept past the
 // command type's creation would not know lamp-mode is commanded, and the
 // command would wait out its window instead.
 func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
@@ -73,7 +73,7 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 	}
 	s := &Server{store: gw, orphans: newOrphanTally(orphanWindow)}
 	now := time.Now()
-	s.registry.now = func() time.Time { return now }
+	s.catalog.now = func() time.Time { return now }
 	land := func(id, mode string) {
 		t.Helper()
 		now = now.Add(fingerprintEvery)
@@ -85,7 +85,7 @@ func TestACommandTypeCreatedBetweenBatchesSettlesOnTheNext(t *testing.T) {
 		}
 	}
 
-	// Nothing commands lamp-mode yet; the registry is built and kept.
+	// Nothing commands lamp-mode yet; the catalog is built and kept.
 	land("b-1", "normal")
 
 	if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{Name: "set-lamp-mode", Label: "Set lamp mode",

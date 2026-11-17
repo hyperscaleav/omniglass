@@ -235,7 +235,7 @@ func TestOutpostNameSubjectSafety(t *testing.T) {
 }
 
 // TestGetOutpostRefusesADottedAddress is the storage-layer half of #627 Task
-// 12's 22-registry refusal: an outpost's name stays a single global kebab token
+// 12's 22-catalog refusal: an outpost's name stays a single global kebab token
 // (it rides NATS subjects), so a ref that looks like the tree-entity address
 // grammar (dot-joined, or opening on an accessor) must be the explicit
 // *storage.ErrAddressNotAccepted, naming the kind, never a fall-through

@@ -927,7 +927,7 @@ func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName st
 	return nil
 }
 
-// roleRef pairs a registry row's id (for the subtree/membership check) with
+// roleRef pairs a catalog row's id (for the subtree/membership check) with
 // its name (for a refusal message): shared shape for a role's accepted
 // component_types and its pinned products.
 type roleRef struct {

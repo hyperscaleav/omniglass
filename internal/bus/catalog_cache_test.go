@@ -14,15 +14,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestRegistryFollowsTheCatalogBetweenBatches is #1279's acceptance: the
-// ingest consumer keeps its sample registry between batches instead of
+// TestCatalogFollowsTheCatalogBetweenBatches is #1279's acceptance: the
+// ingest consumer keeps its sample catalog between batches instead of
 // re-reading the catalogs every time, and still honors a catalog change on the
 // next batch past the fingerprint's interval (#1928; each batch here lands one
 // interval after the last). A metric type created between two batches is accepted by
 // the second; a calc rule that starts writing that metric moves the key's
 // writer class (ADR-0161), so the next outpost sample of it is dropped by the
 // consumer's lane check rather than landed.
-func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
+func TestCatalogFollowsTheCatalogBetweenBatches(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -63,7 +63,7 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 	}
 	s := &Server{store: gw, orphans: newOrphanTally(orphanWindow)}
 	now := time.Now()
-	s.registry.now = func() time.Time { return now }
+	s.catalog.now = func() time.Time { return now }
 	land := func() error {
 		now = now.Add(fingerprintEvery)
 		return s.land(ctx, "", &ogv1.TelemetryBatch{TaskId: "t-ssh", OutpostId: "outpost-a",
@@ -80,7 +80,7 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 		return n
 	}
 
-	// An unregistered name is dropped; the registry is now cached.
+	// An unregistered name is dropped; the catalog is now cached.
 	if err := land(); err != nil {
 		t.Fatalf("first batch: %v", err)
 	}
@@ -113,14 +113,14 @@ func TestRegistryFollowsTheCatalogBetweenBatches(t *testing.T) {
 	}
 }
 
-// TestRegistryReadsTheFingerprintAtMostEveryInterval is #1928: a batch reuses
-// the kept registry without reading the catalogs' fingerprint while the last
+// TestCatalogReadsTheFingerprintAtMostEveryInterval is #1928: a batch reuses
+// the kept catalog without reading the catalogs' fingerprint while the last
 // read is younger than fingerprintEvery, so a fast batch rate pays one small
 // read every few seconds, not one a batch. A catalog change is honored by the
 // first batch after the interval.
-func TestRegistryReadsTheFingerprintAtMostEveryInterval(t *testing.T) {
+func TestCatalogReadsTheFingerprintAtMostEveryInterval(t *testing.T) {
 	now := time.Date(2026, 11, 14, 4, 0, 0, 0, time.UTC)
-	cache := &registryCache{now: func() time.Time { return now }}
+	cache := &catalogCache{now: func() time.Time { return now }}
 	store := &catalogStore{fp: "a", metrics: []storage.MetricType{{Name: "volume"}}}
 	batch := func(after time.Duration) {
 		t.Helper()
@@ -152,23 +152,23 @@ func TestRegistryReadsTheFingerprintAtMostEveryInterval(t *testing.T) {
 	}
 }
 
-func hasMetric(reg collection.Registry, name string) bool {
+func hasMetric(reg collection.Catalog, name string) bool {
 	_, ok := reg.Metric(name)
 	return ok
 }
 
-// TestRegistryReadsAtOnceForANameItLacks is the #1928 review's staleness
-// finding: a batch carrying a name the kept registry lacks reads the
+// TestCatalogReadsAtOnceForANameItLacks is the #1928 review's staleness
+// finding: a batch carrying a name the kept catalog lacks reads the
 // fingerprint at once, inside the interval, so a type created moments before
 // its first sample is honored rather than refused until the interval runs
 // out. A name the read confirms no catalog holds forces no further read
 // until the interval passes, so an outpost sending an unknown name pays one extra
 // read an interval, not one a batch.
-func TestRegistryReadsAtOnceForANameItLacks(t *testing.T) {
+func TestCatalogReadsAtOnceForANameItLacks(t *testing.T) {
 	now := time.Date(2026, 11, 14, 4, 0, 0, 0, time.UTC)
-	cache := &registryCache{now: func() time.Time { return now }}
+	cache := &catalogCache{now: func() time.Time { return now }}
 	store := &catalogStore{fp: "a", metrics: []storage.MetricType{{Name: "volume"}}}
-	batch := func(after time.Duration, names ...string) collection.Registry {
+	batch := func(after time.Duration, names ...string) collection.Catalog {
 		t.Helper()
 		now = now.Add(after)
 		ev := &ogv1.TelemetryBatch{}

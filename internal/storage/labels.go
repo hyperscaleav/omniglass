@@ -79,7 +79,7 @@ import (
 // every fact its map held was the labelled row's own. That argument is void
 // now, and it was weaker than it looked even then: TypeName, ProductName,
 // VendorName, Stem and TypeAbbrev were already columns on OTHER rows (a
-// registry's), and so was the rule itself. What placement changes is that the
+// catalog's), and so was the rule itself. What placement changes is that the
 // other row is now an FLEET row an operator edits daily rather than a catalog
 // row they edit rarely.
 //
@@ -193,7 +193,7 @@ func validateLabelRule(rule *string) error {
 // state to decide about and a reader a difference to misinterpret.
 //
 // It started life on the label rule and generalized with #716, which put the
-// same sentinel on the three other inherited registry facts (stem, icon,
+// same sentinel on the three other inherited catalog facts (stem, icon,
 // abbrev). The columns differ; the decoding does not, so it is one function.
 func nilIfEmpty(s *string) *string {
 	if s != nil && *s == "" {
@@ -418,7 +418,7 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 	var global string
 	err := q.QueryRow(ctx, `
 		-- p.label coalesces for the same reason v.label does (#805): a label is
-		-- nullable on every registry, an absent one is renderable as absent, and
+		-- nullable on every catalog, an absent one is renderable as absent, and
 		-- the direct-gateway lane seed, devseed and the tests use accepts a
 		-- product with no label even though the API's minLength refuses one.
 		select coalesce(p.label, ''), coalesce(v.label, ''), p.label_rule, p.component_type_id,
@@ -427,7 +427,7 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 		from product p
 		join component_type ct on ct.id = p.component_type_id
 		left join vendor v on v.id = p.vendor_id
-		left join registry_shadow s on s.registry = '`+componentTypeRegistry+`' and s.row_id = ct.id
+		left join catalog_shadow s on s.catalog = '`+componentTypeCatalog+`' and s.row_id = ct.id
 		left join label_rule lr on lr.entity_kind = 'component'
 		where p.id = $1`, productID).
 		Scan(&in.productName, &in.vendorName, &prodRule, &typeID, &in.typeName, &global)

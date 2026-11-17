@@ -103,13 +103,13 @@ func TestClearingAStemDoesNotWeakenTheStemRuleAPI(t *testing.T) {
 			map[string]any{"stem": bad}, http.StatusUnprocessableEntity)
 	}
 
-	// The one string the relaxation admits, on both registries.
+	// The one string the relaxation admits, on both catalogs.
 	c.do(ownerTok, http.MethodPatch, "/component-types/ifc-stem-rule", map[string]any{"stem": ""}, http.StatusOK)
 	c.do(ownerTok, http.MethodPatch, "/system-types/ifc-sys-stem-rule", map[string]any{"stem": ""}, http.StatusOK)
 }
 
 // TestClearingARootTypesStemIsA422API: a root has no ancestor to inherit from,
-// so the refusal that guards create guards the clear too, on both registries,
+// so the refusal that guards create guards the clear too, on both catalogs,
 // and it names the reason rather than returning a 500 from a later mint.
 func TestClearingARootTypesStemIsA422API(t *testing.T) {
 	t.Parallel()
@@ -320,7 +320,7 @@ func TestTheListingServesWhatAnInheritedFactWouldInheritAPI(t *testing.T) {
 	}
 }
 
-// TestTheSystemTypeListingServesItsInheritedFactsAPI: the system registry nests
+// TestTheSystemTypeListingServesItsInheritedFactsAPI: the system catalog nests
 // by the same rule and serves the same pair, so the console has one vocabulary
 // across both blades rather than a fact the component page can teach and the
 // system page cannot.

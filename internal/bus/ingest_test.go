@@ -288,7 +288,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
 	// RAW LOG LANE (ADR-0066): outpost-a ships its own self-log as a LogLine on the
-	// telemetry Event (no task, no registry name, no sample). It lands on
+	// telemetry Event (no task, no catalog name, no sample). It lands on
 	// outpost_log keyed to the publishing outpost (#589: the origin-true self-log
 	// home), the separate raw ingest lane, never the event table.
 	publishEvent(t, ncA, "outpost-a", &ogv1.TelemetryBatch{

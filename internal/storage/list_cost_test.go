@@ -502,14 +502,14 @@ func TestListCostDoesNotDependOnScopeShape(t *testing.T) {
 	}
 }
 
-// TestListComponentTypesCostIsFlatInRegistryDepth is the measurement #716's
+// TestListComponentTypesCostIsFlatInCatalogDepth is the measurement #716's
 // console half had to take before it was allowed to serve anything.
 //
 // #695 established that the icon resolution was free on this read because the
-// listing is the whole registry in one query, so every ancestor is already in
+// listing is the whole catalog in one query, so every ancestor is already in
 // hand. Widening the walk to the stem and the abbrev, and to the ancestor each
 // one came from, is a claim that the same holds for three facts rather than one.
-// This is the claim, measured: a registry twenty levels deeper costs exactly what
+// This is the claim, measured: a catalog twenty levels deeper costs exactly what
 // the seeded one costs, because the chain walk is a pass over rows in memory and
 // never a query.
 //
@@ -517,7 +517,7 @@ func TestListCostDoesNotDependOnScopeShape(t *testing.T) {
 // grow the number of rows the walk runs over; depth grows the number of LEVELS
 // each walk climbs, which is what a per-level query would charge for and what a
 // flat count therefore has to hold against.
-func TestListComponentTypesCostIsFlatInRegistryDepth(t *testing.T) {
+func TestListComponentTypesCostIsFlatInCatalogDepth(t *testing.T) {
 	t.Parallel()
 	gw, counter := countingFleet(t)
 	ctx := context.Background()
@@ -545,9 +545,9 @@ func TestListComponentTypesCostIsFlatInRegistryDepth(t *testing.T) {
 	assertFlatCost(t, small, large, 1)
 }
 
-// TestListSystemTypesCostIsFlatInRegistryDepth: the system registry's listing
+// TestListSystemTypesCostIsFlatInCatalogDepth: the system catalog's listing
 // resolves the same three facts over the same walk, so it owes the same number.
-func TestListSystemTypesCostIsFlatInRegistryDepth(t *testing.T) {
+func TestListSystemTypesCostIsFlatInCatalogDepth(t *testing.T) {
 	t.Parallel()
 	gw, counter := countingFleet(t)
 	ctx := context.Background()

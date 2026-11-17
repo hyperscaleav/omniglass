@@ -10,22 +10,22 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ErrTypeNotForked is a restore-to-defaults on a registry row that carries no
+// ErrTypeNotForked is a restore-to-defaults on a catalog row that carries no
 // operator fork. Distinct from ErrTypeNotFound (the row exists) and from
 // ErrTypeOfficial (nothing is being refused): there is simply nothing to undo,
 // and the console says so rather than reporting a silent success.
-var ErrTypeNotForked = errors.New("storage: registry row has no operator fork to restore")
+var ErrTypeNotForked = errors.New("storage: catalog row has no operator fork to restore")
 
-// The registry-fork primitive (#655, ADR-0095).
+// The catalog-fork primitive (#655, ADR-0095).
 //
-// A shipped registry row is official and the platform owns it. An operator's
+// A shipped catalog row is official and the platform owns it. An operator's
 // edit does not write that row; it writes a SHADOW keyed on the official row's
 // uuid, and every read resolves the shadow over the official row. Restoring
 // defaults is deleting the shadow. The official row is never updated and never
 // deleted by an operator action, so a release can improve a shipped row
 // without stomping anyone.
 //
-// Four facts hold the shape together, and an adopting registry must keep all
+// Four facts hold the shape together, and an adopting catalog must keep all
 // four:
 //
 //  1. The shadow shares the official row's uuid, so there is exactly one
@@ -41,26 +41,26 @@ var ErrTypeNotForked = errors.New("storage: registry row has no operator fork to
 //     column added after a fork resolve to its official value instead of to
 //     nothing.
 //  4. Every path that reads a row in order to write its shadow takes the
-//     registry row's lock FIRST, in a statement of its own, and reads the
-//     shadow only after (lockRegistryRow). Fact 3 is what makes this
+//     catalog row's lock FIRST, in a statement of its own, and reads the
+//     shadow only after (lockCatalogRow). Fact 3 is what makes this
 //     necessary: a whole-row image computed from a stale read overwrites
 //     whatever landed in between, and the lost edit leaves no trace, since both
 //     writes succeeded and both are in the audit log (#709).
 //
 // component_type is the first adopter and location_type the second (#703).
-// The other eleven registries carrying `official` adopt later; they need no
+// The other eleven catalogs carrying `official` adopt later; they need no
 // schema of their own, only a mutable-column projection like
 // componentTypeShadowImage and a resolve like applyComponentTypeImage.
 //
-// Fact 2 reads "structure" per registry rather than per column name.
+// Fact 2 reads "structure" per catalog rather than per column name.
 // location_type is FLAT, so it has no parent link to hold out of the image, and
 // its allowed_parent_types is not that link: it constrains which types a
 // location of this type may sit under, which is a fact the row states about
 // itself and one an operator legitimately reshapes. Holding it official would
-// leave a fork unable to say the thing the registry exists to say.
+// leave a fork unable to say the thing the catalog exists to say.
 
-// shadowRowID parses a registry row's own uuid, which is the shadow's key. It
-// exists because not every adopting registry holds that uuid as a uuid.UUID:
+// shadowRowID parses a catalog row's own uuid, which is the shadow's key. It
+// exists because not every adopting catalog holds that uuid as a uuid.UUID:
 // location_type carries it as the string its wire body and its audit rows use,
 // and a MustParse in a gateway path would turn a value the database minted into
 // a panic. The failure it names cannot happen through the gateway; a caller
@@ -68,12 +68,12 @@ var ErrTypeNotForked = errors.New("storage: registry row has no operator fork to
 func shadowRowID(id string) (uuid.UUID, error) {
 	rowID, err := uuid.Parse(id)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("storage: %q is not a registry row uuid: %w", id, err)
+		return uuid.Nil, fmt.Errorf("storage: %q is not a catalog row uuid: %w", id, err)
 	}
 	return rowID, nil
 }
 
-// lockRegistryRow takes the registry row's write lock for the life of the
+// lockCatalogRow takes the catalog row's write lock for the life of the
 // transaction, and must be issued as its OWN statement BEFORE the resolved read
 // the caller then patches. ErrTypeNotFound when the ref names nothing.
 //
@@ -81,7 +81,7 @@ func shadowRowID(id string) (uuid.UUID, error) {
 // is easy to get wrong (#709). A fork writes the whole mutable row back, so two
 // concurrent edits of different fields must not both compute their image from
 // the same starting point; the lock is what serialises them. But a lock taken
-// INSIDE the resolved read (`... left join registry_shadow ... for update of
+// INSIDE the resolved read (`... left join catalog_shadow ... for update of
 // ct`) does not serialise anything useful, because at READ COMMITTED the
 // statement's snapshot is taken when the statement begins, which is before it
 // blocks. The waiter then unblocks on a row that was locked rather than
@@ -93,17 +93,17 @@ func shadowRowID(id string) (uuid.UUID, error) {
 // Locking in a separate statement is what fixes it. The resolved read is then a
 // NEW statement, taking a new snapshot after the lock is held, so it sees the
 // shadow the previous holder committed. The cost is one round trip on the two
-// write paths of an adopting registry, which is the same trade ADR-0108 states
+// write paths of an adopting catalog, which is the same trade ADR-0108 states
 // for the settle paths.
 //
 // `select 1 ... for update` rather than locking through the resolved read
 // because the shadow cannot be locked at all: it is the nullable side of an
 // outer join (Postgres refuses FOR UPDATE there), and on a first fork the row
-// it would lock does not exist yet. The registry row is the one address both
+// it would lock does not exist yet. The catalog row is the one address both
 // forks share, which makes it the mutex.
-func lockRegistryRow(ctx context.Context, tx pgx.Tx, table, ref string) error {
+func lockCatalogRow(ctx context.Context, tx pgx.Tx, table, ref string) error {
 	var one int
-	err := tx.QueryRow(ctx, `select 1 from `+table+` where id = (select r.id from `+refRows(table, ref)+` r where r.`+registryRefCol(ref)+` = $1) for update`, ref).Scan(&one)
+	err := tx.QueryRow(ctx, `select 1 from `+table+` where id = (select r.id from `+refRows(table, ref)+` r where r.`+catalogRefCol(ref)+` = $1) for update`, ref).Scan(&one)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound
 	}
@@ -113,49 +113,49 @@ func lockRegistryRow(ctx context.Context, tx pgx.Tx, table, ref string) error {
 	return nil
 }
 
-// loadShadowImage reads a registry row's shadow image, returning nil when the
+// loadShadowImage reads a catalog row's shadow image, returning nil when the
 // row is not forked. nil is the unforked answer everywhere in this file, and
 // the overlay treats it as a no-op.
-func loadShadowImage(ctx context.Context, q querier, registry string, rowID uuid.UUID) ([]byte, error) {
+func loadShadowImage(ctx context.Context, q querier, catalog string, rowID uuid.UUID) ([]byte, error) {
 	var image []byte
-	err := q.QueryRow(ctx, `select image from registry_shadow where registry = $1 and row_id = $2`, registry, rowID).Scan(&image)
+	err := q.QueryRow(ctx, `select image from catalog_shadow where catalog = $1 and row_id = $2`, catalog, rowID).Scan(&image)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("storage: load %s shadow %q: %w", registry, rowID, err)
+		return nil, fmt.Errorf("storage: load %s shadow %q: %w", catalog, rowID, err)
 	}
 	return image, nil
 }
 
-// putShadowImage installs or replaces a registry row's shadow. A second edit
+// putShadowImage installs or replaces a catalog row's shadow. A second edit
 // of an already-forked row replaces the image rather than layering on it,
 // which is what keeps the image a whole-row copy.
-func putShadowImage(ctx context.Context, tx pgx.Tx, registry string, rowID uuid.UUID, image []byte) error {
+func putShadowImage(ctx context.Context, tx pgx.Tx, catalog string, rowID uuid.UUID, image []byte) error {
 	if _, err := tx.Exec(ctx, `
-		insert into registry_shadow (registry, row_id, image)
+		insert into catalog_shadow (catalog, row_id, image)
 		values ($1, $2, $3::jsonb)
-		on conflict (registry, row_id) do update
+		on conflict (catalog, row_id) do update
 			set image      = excluded.image,
-			    updated_at = now()`, registry, rowID, image); err != nil {
-		return fmt.Errorf("storage: write %s shadow %q: %w", registry, rowID, err)
+			    updated_at = now()`, catalog, rowID, image); err != nil {
+		return fmt.Errorf("storage: write %s shadow %q: %w", catalog, rowID, err)
 	}
 	return nil
 }
 
-// dropShadowImage removes a registry row's shadow, reporting whether there was
+// dropShadowImage removes a catalog row's shadow, reporting whether there was
 // one. That report is the restore path's ErrTypeNotForked.
-func dropShadowImage(ctx context.Context, tx pgx.Tx, registry string, rowID uuid.UUID) (bool, error) {
-	tag, err := tx.Exec(ctx, `delete from registry_shadow where registry = $1 and row_id = $2`, registry, rowID)
+func dropShadowImage(ctx context.Context, tx pgx.Tx, catalog string, rowID uuid.UUID) (bool, error) {
+	tag, err := tx.Exec(ctx, `delete from catalog_shadow where catalog = $1 and row_id = $2`, catalog, rowID)
 	if err != nil {
-		return false, fmt.Errorf("storage: drop %s shadow %q: %w", registry, rowID, err)
+		return false, fmt.Errorf("storage: drop %s shadow %q: %w", catalog, rowID, err)
 	}
 	return tag.RowsAffected() > 0, nil
 }
 
-// shadowFields decodes a shadow image into its present keys. A registry's
+// shadowFields decodes a shadow image into its present keys. A catalog's
 // overlay works key by key because "the image does not carry this column" and
-// "the image carries this column as null" are different answers: on a registry
+// "the image carries this column as null" are different answers: on a catalog
 // with inherit-from-parent columns (component_type's stem, icon and abbrev)
 // null is a value, so collapsing the two would make a forked row silently
 // re-adopt an official value the operator cleared.

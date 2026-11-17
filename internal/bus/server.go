@@ -83,7 +83,7 @@ type Server struct {
 	stopRetention     context.CancelFunc // ends the sample retention pass (#417)
 	orphans           *orphanTally       // the outpost lane's orphaned batches, warned and counted (#1200)
 	unboundWarn       unboundWarner      // a conduit's unbound identities, warned once per window (#1282)
-	registry          registryCache      // the ingest sample registry, kept until a catalog changes (#1279)
+	catalog          catalogCache      // the ingest sample catalog, kept until a catalog changes (#1279)
 	stopOrphanFlush   context.CancelFunc // ends the orphan count's flush
 	partitions        int                // how many ingest lanes the stream files outpost batches under (#1896)
 	lanesMu           sync.Mutex         // guards lanes

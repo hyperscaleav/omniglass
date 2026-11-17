@@ -21,7 +21,7 @@ import (
 // TestSimRoundTrip proves the simulator's wire over a real in-process NATS
 // server: a simulator holding an outpost's credential pulls the devices behind
 // that outpost (stating its capabilities), its hits reach the server's
-// registry, it cannot pull another outpost's list, and a hit on a component it
+// catalog, it cannot pull another outpost's list, and a hit on a component it
 // was not handed is not recorded.
 func TestSimRoundTrip(t *testing.T) {
 	if testing.Short() {

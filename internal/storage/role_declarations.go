@@ -47,7 +47,7 @@ func alternateRefExpr(table string) string {
 // interpolating one into a statement is safe.
 // roleOwnerExpr is the SQL for the value system_role's arc stores, given
 // whatever roleOwnerArg resolved $2 to. Both arcs accept either form (name or
-// uuid, ADR-0062): a standard's row is a registry entry addressed by handle or
+// uuid, ADR-0062): a standard's row is a catalog entry addressed by handle or
 // uuid directly; a system's is resolved once by roleOwnerArg before this
 // expression ever runs; the `or id::text = $2` arm here is what makes an
 // already-resolved id (or an ownerID that happened to be uuid-shaped) match.
@@ -91,7 +91,7 @@ func (p *PG) roleOwnerArg(ctx context.Context, q querier, ownerKind, ownerID str
 // ErrUnknownStandard. A bare name resolves along the search path (#1432), so it
 // names one standard.
 func standardRef(ctx context.Context, q querier, ref string) (id, name string, err error) {
-	err = q.QueryRow(ctx, `select id, name from `+refRows("standard", ref)+` standard where `+registryRefCol(ref)+` = $1`, ref).Scan(&id, &name)
+	err = q.QueryRow(ctx, `select id, name from `+refRows("standard", ref)+` standard where `+catalogRefCol(ref)+` = $1`, ref).Scan(&id, &name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", ErrUnknownStandard
 	}
@@ -572,7 +572,7 @@ func (p *PG) DeleteSystemRole(ctx context.Context, actorID, ownerKind, ownerID, 
 }
 
 // insertSeededSlot writes a template role's accepted types and pinned products,
-// inside the create's transaction. A name the registry lacks resolves to NULL on
+// inside the create's transaction. A name the catalog lacks resolves to NULL on
 // a NOT NULL column and is ErrRoleRefNotFound, rolling the whole role back.
 func insertSeededSlot(ctx context.Context, tx pgx.Tx, roleID string, types, products []string) error {
 	if len(types) > 0 {

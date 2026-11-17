@@ -61,11 +61,11 @@ type setLocationTypeMetricInput struct {
 }
 
 // registerLocationTypeMetricRoutes wires the location type's declared-metric
-// contract. The registry it hangs off is gated by location_type:*, so the
+// contract. The catalog it hangs off is gated by location_type:*, so the
 // contract keeps that permission story: the read rides the location_type:read
 // viewer floor, the writes sit at location_type:update / location_type:delete.
 // The writes do NOT consult the official flag (#703, ADR-0106): a contract line
-// is a row in its own table rather than a column of the registry row a fork
+// is a row in its own table rather than a column of the catalog row a fork
 // covers, and nothing seeds one, so every line in this table is an operator's
 // already. Refusing them on the four shipped types would have withdrawn the
 // contract editor for the types a fleet actually uses.
@@ -129,9 +129,9 @@ func registerLocationTypeMetricRoutes(api huma.API, a *authenticator, gw storage
 // mapLocationTypeMetricErr translates the contract storage sentinels into HTTP
 // status, mirroring the product metric contract: a metric the catalog does not
 // know is a 422 (the request names a metric that does not exist), everything
-// else falls through to the shared type-registry mapping, of which these paths
+// else falls through to the shared type-catalog mapping, of which these paths
 // reach the not-found 404. They cannot reach its official read-only 422: the
-// guard here is requireRegistryRow, which asks whether the type EXISTS and never
+// guard here is requireCatalogRow, which asks whether the type EXISTS and never
 // who owns it (#703, ADR-0106).
 func mapLocationTypeMetricErr(err error) error {
 	if errors.Is(err, storage.ErrMetricTypeNotFound) {

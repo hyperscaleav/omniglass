@@ -13,14 +13,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestRegistryRenameAPI drives #555 over HTTP: each of the five registries
-// renames through POST /<registry>/{id}:rename (the house custom method,
-// ADR-0076), gated by <registry>:rename, which admin holds and operator does
+// TestCatalogRenameAPI drives #555 over HTTP: each of the five catalogs
+// renames through POST /<catalog>/{id}:rename (the house custom method,
+// ADR-0076), gated by <catalog>:rename, which admin holds and operator does
 // not. The answer is the row under its new name with the same uuid; the old
 // name stops resolving. An official row is read-only (422), a taken name is a
 // 409, an illegal or uuid-shaped name a 422, an unknown row a 404, and a
 // location type may not take the reserved "root".
-func TestRegistryRenameAPI(t *testing.T) {
+func TestCatalogRenameAPI(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -45,8 +45,8 @@ func TestRegistryRenameAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	adminTok := principalWithGrants(t, ctx, dsn, "registry-admin", []grant{{role: "admin", scopeKind: "all"}})
-	operatorTok := principalWithGrants(t, ctx, dsn, "registry-operator", []grant{{role: "operator", scopeKind: "all"}})
+	adminTok := principalWithGrants(t, ctx, dsn, "catalog-admin", []grant{{role: "admin", scopeKind: "all"}})
+	operatorTok := principalWithGrants(t, ctx, dsn, "catalog-operator", []grant{{role: "operator", scopeKind: "all"}})
 
 	type row struct {
 		ID   string `json:"id"`
@@ -75,7 +75,7 @@ func TestRegistryRenameAPI(t *testing.T) {
 		{collection: "location-types", old: "wing", renamed: "east-wing", official: "room",
 			created: create("/location-types", map[string]any{"name": "wing", "label": "Wing", "allowed_parent_types": []string{"root"}})},
 	}
-	// resolves reports whether a name answers in its registry. Four registries
+	// resolves reports whether a name answers in its catalog. Four catalogs
 	// read one row by name; location types have no single-row GET, so their
 	// list is read instead.
 	resolves := func(t *testing.T, c *apiClient, collection, name string, want bool) {
@@ -103,7 +103,7 @@ func TestRegistryRenameAPI(t *testing.T) {
 		t.Run(tc.collection, func(t *testing.T) {
 			c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 			path := "/" + tc.collection + "/" + tc.old + ":rename"
-			// An operator holds no <registry>:rename (403, before anything resolves).
+			// An operator holds no <catalog>:rename (403, before anything resolves).
 			c.do(operatorTok, http.MethodPost, path, map[string]any{"name": tc.renamed}, http.StatusForbidden)
 			// Illegal and uuid-shaped names are refused, and leave the row as it was.
 			c.do(adminTok, http.MethodPost, path, map[string]any{"name": "Not_Kebab"}, http.StatusUnprocessableEntity)

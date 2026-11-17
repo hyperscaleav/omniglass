@@ -10,10 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// The type registries and catalogs (location_type, standard, vendor, driver,
+// The type catalogs and the other catalogs (location_type, standard, vendor, driver,
 // component_type, product) are flat, unscoped reference tables sharing one shape: a
 // stable id, an official flag (seed-owned rows), and a label. They
-// are not scoped-tree entities, so they use these registry helpers rather than
+// are not scoped-tree entities, so they use these catalog helpers rather than
 // scopedcrud. Operator rows are official=false; seeded rows are official=true and
 // read-only. A row cannot be deleted while inventory still references it (the
 // parent FK also enforces this; the pre-count turns the raw FK error into a clean
@@ -25,18 +25,18 @@ var (
 	ErrTypeInUse    = errors.New("storage: type is referenced by existing rows")
 )
 
-// registryAuditImage loads a registry row as a column-keyed map for an audit
+// catalogAuditImage loads a catalog row as a column-keyed map for an audit
 // image (#228): an update records (before, after) in the same shape and a
 // delete records the whole row it removed, so reference-data history is
 // complete and the console's field diff lines up key for key. row_to_json
 // keeps the helper table-agnostic; every table name is a compile-time
-// constant at its call site and registryRefCol is the sanctioned dynamic
+// constant at its call site and catalogRefCol is the sanctioned dynamic
 // fragment. A missing row surfaces pgx.ErrNoRows for the caller to map to
 // its own not-found sentinel (the guard has usually run, so this is the
 // deleted-between-guard-and-write race).
-func registryAuditImage(ctx context.Context, tx pgx.Tx, table, ref string) (map[string]any, error) {
+func catalogAuditImage(ctx context.Context, tx pgx.Tx, table, ref string) (map[string]any, error) {
 	var img map[string]any
-	if err := tx.QueryRow(ctx, `select row_to_json(t) from `+refRows(table, ref)+` t where `+registryRefCol(ref)+` = $1`, ref).Scan(&img); err != nil {
+	if err := tx.QueryRow(ctx, `select row_to_json(t) from `+refRows(table, ref)+` t where `+catalogRefCol(ref)+` = $1`, ref).Scan(&img); err != nil {
 		return nil, err
 	}
 	return img, nil
@@ -66,11 +66,11 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
-// registryRefCol picks the column that addresses a registry row. Every registry
+// catalogRefCol picks the column that addresses a catalog row. Every catalog
 // now has a uuid primary key and a renameable `name` (epic #262), so a caller
 // passes whichever form it holds and this decides the column. The two can never
 // collide: a handle is kebab and a uuid is not.
-func registryRefCol(ref string) string {
+func catalogRefCol(ref string) string {
 	if isUUID(ref) {
 		return "id"
 	}
@@ -81,7 +81,7 @@ func registryRefCol(ref string) string {
 // absent, ErrTypeOfficial if seed-owned. Update and delete call it first.
 func guardTypeMutable(ctx context.Context, q querier, table, id string) error {
 	var official bool
-	err := q.QueryRow(ctx, `select official from `+refRows(table, id)+` t where `+registryRefCol(id)+` = $1`, id).Scan(&official)
+	err := q.QueryRow(ctx, `select official from `+refRows(table, id)+` t where `+catalogRefCol(id)+` = $1`, id).Scan(&official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTypeNotFound
 	}
@@ -94,10 +94,10 @@ func guardTypeMutable(ctx context.Context, q querier, table, id string) error {
 	return nil
 }
 
-// clearsARootStem is the one rule both nesting registries enforce on the clear
+// clearsARootStem is the one rule both nesting catalogs enforce on the clear
 // path (#716): the three-state sentinel takes an outpost back to inheriting, and a
 // ROOT has nothing to inherit from, so clearing its stem is refused rather than
-// stored. Create already refuses a stemless root on both registries
+// stored. Create already refuses a stemless root on both catalogs
 // (ErrRootComponentTypeNeedsStem, ErrRootSystemTypeNeedsStem); the clear is the
 // second way to reach that state and gets the same answer at the same tier.
 //
@@ -129,7 +129,7 @@ func countTypeRefs(ctx context.Context, q querier, ref typeRef, id string) (int,
 // (ErrTypeInUse), deletes, and audits. resource is the audit label
 // (e.g. "location_type").
 //
-// refs is variadic because a registry can be pinned from more than one side.
+// refs is variadic because a catalog can be pinned from more than one side.
 // system_type is the first with two (its own children AND the systems it
 // classifies) and both must come back as the clean ErrTypeInUse a caller can
 // map to a 409, not as whichever raw foreign-key error happened to fire first.
@@ -138,7 +138,7 @@ func deleteTypeRow(ctx context.Context, p *PG, table, resource, actorID, id stri
 }
 
 // deleteTypeRowLocked is deleteTypeRow with a lock taken first in its
-// transaction, before the in-use count, for a registry whose count must not be
+// transaction, before the in-use count, for a catalog whose count must not be
 // overtaken by a concurrent write that adds a reference (a standard, whose
 // conforming systems' standard changes take the same lock).
 func deleteTypeRowLocked(ctx context.Context, p *PG, lock func(context.Context, txQuerier) error, table, resource, actorID, id string, refs ...typeRef) error {
@@ -156,10 +156,10 @@ func deleteTypeRowLocked(ctx context.Context, p *PG, lock func(context.Context, 
 	if err := guardTypeMutable(ctx, tx, table, id); err != nil {
 		return err
 	}
-	// A registry is addressed by either form; the refs count and the delete both
+	// A catalog is addressed by either form; the refs count and the delete both
 	// key on the row's uuid, so resolve it once.
 	var uid string
-	if err := tx.QueryRow(ctx, `select id from `+refRows(table, id)+` t where `+registryRefCol(id)+` = $1`, id).Scan(&uid); err != nil {
+	if err := tx.QueryRow(ctx, `select id from `+refRows(table, id)+` t where `+catalogRefCol(id)+` = $1`, id).Scan(&uid); err != nil {
 		return ErrTypeNotFound
 	}
 	for _, ref := range refs {
@@ -171,7 +171,7 @@ func deleteTypeRowLocked(ctx context.Context, p *PG, lock func(context.Context, 
 			return ErrTypeInUse
 		}
 	}
-	before, err := registryAuditImage(ctx, tx, table, uid)
+	before, err := catalogAuditImage(ctx, tx, table, uid)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrTypeNotFound
@@ -214,7 +214,7 @@ func isReferencedViolation(err error) bool {
 // write is the named catalog error rather than a NULL that trips the arc opaquely.
 func requireProperty(ctx context.Context, q querier, ref string) error {
 	var known bool
-	if err := q.QueryRow(ctx, `select true from `+refRows("property_type", ref)+` property_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+	if err := q.QueryRow(ctx, `select true from `+refRows("property_type", ref)+` property_type where `+catalogRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
 		return ErrPropertyTypeNotFound
 	}
 	return nil
@@ -224,19 +224,19 @@ func requireProperty(ctx context.Context, q querier, ref string) error {
 // a contract write is ErrMetricTypeNotFound, never a NULL tripping the arc.
 func requireMetricType(ctx context.Context, q querier, ref string) error {
 	var known bool
-	if err := q.QueryRow(ctx, `select true from `+refRows("metric_type", ref)+` metric_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+	if err := q.QueryRow(ctx, `select true from `+refRows("metric_type", ref)+` metric_type where `+catalogRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
 		return ErrMetricTypeNotFound
 	}
 	return nil
 }
 
-// requireRegistryRow resolves any registry reference (handle or uuid) against
+// requireCatalogRow resolves any catalog reference (handle or uuid) against
 // its table and returns ErrTypeNotFound when it names nothing: the classifier-
 // existence guard the contract seed paths share, so an unknown classifier is
 // the named error rather than a not-null violation from a NULL subselect.
-func requireRegistryRow(ctx context.Context, q querier, table, ref string) error {
+func requireCatalogRow(ctx context.Context, q querier, table, ref string) error {
 	var known bool
-	if err := q.QueryRow(ctx, `select true from `+refRows(table, ref)+` t where `+registryRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
+	if err := q.QueryRow(ctx, `select true from `+refRows(table, ref)+` t where `+catalogRefCol(ref)+` = $1`, ref).Scan(&known); err != nil {
 		return ErrTypeNotFound
 	}
 	return nil

@@ -19,7 +19,7 @@ import (
 // OutpostLogWrite rows on outpost_log, not this. Severity and facility are the
 // retention/routing axes (empty is stored as NULL so the partial indexes stay
 // tight); Attributes and Labels are freeform jsonb, nil when absent. A log
-// line is not an event: no registry gate.
+// line is not an event: no catalog gate.
 type LogLineWrite struct {
 	OwnerKind     string
 	OwnerID       string
@@ -117,7 +117,7 @@ func (f LogFilter) where(args []any) (string, []any, error) {
 // InsertLogLines writes raw component log rows in one transaction. A binding
 // carrying any other owner is refused loudly: log_line is component-only
 // (#589), and a named error here beats a NULL tripping the NOT NULL opaquely.
-// Mirrors InsertEvents, minus the event_type registry lookup: the log lane is
+// Mirrors InsertEvents, minus the event_type catalog lookup: the log lane is
 // untyped.
 func (p *PG) InsertLogLines(ctx context.Context, lines []LogLineWrite) error {
 	if len(lines) == 0 {

@@ -1124,7 +1124,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List calc rules",
-					Long:    "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.",
+					Long:    "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.",
 					Example: "  omniglass calc-rule list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3001,7 +3001,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List component types",
-					Long:    "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
+					Long:    "Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
 					Example: "  omniglass component-type list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3164,7 +3164,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List drivers",
-					Long:    "Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.",
+					Long:    "Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.",
 					Example: "  omniglass driver list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3243,7 +3243,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -3366,7 +3366,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().BoolVar(&fOutOfBand, "out-of-band", false, "Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open")
 				cmd.Flags().StringVar(&fOutpost, "outpost", "", "Outpost placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Address/target settings (jsonb); an attach derives them from the inputs instead")
-				cmd.Flags().StringVar(&fTransport, "transport", "", "A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set")
+				cmd.Flags().StringVar(&fTransport, "transport", "", "A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set")
 				return cmd
 			}()
 			return cmd
@@ -3686,7 +3686,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List event rules",
-					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
+					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 					Example: "  omniglass event-rule list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4802,7 +4802,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List location types",
-					Long:    "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.",
+					Long:    "Lists the location_type catalog (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.",
 					Example: "  omniglass location-type list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4970,7 +4970,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -5674,7 +5674,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -6893,7 +6893,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List products",
-					Long:    "Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
+					Long:    "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
 					Example: "  omniglass product list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7061,7 +7061,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -8227,7 +8227,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -9114,7 +9114,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "The parent system, by name or uuid. Part of the placement bucket a generated name's ordinal is read from. Resolved within the caller's system:create scope.")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard this system conforms to, by name or uuid; omit for a one-off system")
-				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row.")
+				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that catalog row.")
 				return cmd
 			}()
 			return cmd
@@ -9458,7 +9458,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List system types",
-					Long:    "Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.",
+					Long:    "Lists the system_type catalog (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.",
 					Example: "  omniglass system-type list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9785,7 +9785,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fEvents, "events", "", "Natively caught occurrences, validated against event_type")
-				cmd.Flags().StringVar(&fLogs, "logs", "", "Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422")
+				cmd.Flags().StringVar(&fLogs, "logs", "", "Raw untyped log lines. No catalog gate. Component owners only: a system batch carrying one is refused with a 422")
 				cmd.Flags().StringVar(&fMetrics, "metrics", "", "Numeric observations, validated against metric_type")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The entity every row in the batch lands under")
 				_ = cmd.MarkFlagRequired("owner")
@@ -9858,7 +9858,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List the transports the platform speaks",
-					Long:    "Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.",
+					Long:    "Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.",
 					Example: "  omniglass transport list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -10111,7 +10111,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List vendors",
-					Long:    "Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.",
+					Long:    "Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.",
 					Example: "  omniglass vendor list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -10141,7 +10141,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()

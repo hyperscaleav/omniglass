@@ -100,7 +100,7 @@ func loadDriverCatalogIn(ctx context.Context, q querier, namespace string) (cata
 	if err := rows.Err(); err != nil {
 		return cat, fmt.Errorf("storage: read emit catalogs: %w", err)
 	}
-	// A name resolves to the catalog the ingest registry resolves it to (an
+	// A name resolves to the catalog the ingest catalog resolves it to (an
 	// operator's row shadows an official one, #1307). A name that resolves to
 	// nothing (a collision) is left out, so a spec naming it is refused rather
 	// than validated against a lane ingest would not write.
@@ -400,14 +400,14 @@ func attachParams(effective map[string]string) map[string]string {
 }
 
 // loadDriverRef resolves a driver by name or uuid inside the caller's
-// transaction, ErrTypeNotFound when absent (the registry's own sentinel, which
+// transaction, ErrTypeNotFound when absent (the catalog's own sentinel, which
 // the API tier maps to a 422 reference fault). The row is read FOR SHARE: a
 // driver update or seed upsert in flight holds a lock that conflicts, so the
 // attach waits for it and derives from the spec it commits, and one that
 // starts after waits for the attach, whose endpoint its re-derive then sees
 // (#823). Without it an attach racing an update kept the old spec for good.
 func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) {
-	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where id = (select r.id from `+refRows("driver", ref)+` r where r.`+registryRefCol(ref)+` = $1) for share`, ref))
+	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where id = (select r.id from `+refRows("driver", ref)+` r where r.`+catalogRefCol(ref)+` = $1) for share`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}

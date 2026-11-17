@@ -50,7 +50,7 @@ func TestParseICMPTask(t *testing.T) {
 // and each produced sample rides its own lane (#594): a probe's timing on
 // metrics, its result (a state, #1592) and the text verdict on properties as
 // canonical JSON text, the result's reason riding as a label. The
-// probes know their lanes statically, so no registry is consulted outpost-side.
+// probes know their lanes statically, so no catalog is consulted outpost-side.
 func TestGroupForLanes(t *testing.T) {
 	t.Parallel()
 	dps := []collection.Sample{

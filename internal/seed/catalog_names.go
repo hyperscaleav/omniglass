@@ -7,11 +7,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// sharedRegistryNames parses the three ship-with registries (metric_type,
+// sharedCatalogNames parses the three ship-with catalogs (metric_type,
 // property_type, event_type) and returns, sorted, every name more than one of
 // them holds (#457). Ingest resolves a shared name to nothing on every lane,
 // so the seed refuses to ship one (Run).
-func sharedRegistryNames(metricYAML, propertyYAML, eventYAML []byte) ([]string, error) {
+func sharedCatalogNames(metricYAML, propertyYAML, eventYAML []byte) ([]string, error) {
 	type named struct {
 		Name string `yaml:"name"`
 	}

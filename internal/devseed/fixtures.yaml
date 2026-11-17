@@ -175,7 +175,7 @@ locations:
 
   # Service Depot: a fourth top of a deliberately DIFFERENT shape. It is a
   # building at the root with rooms hanging straight off it, no campus above and
-  # no floor between, which the seeded type registry allows and the model has
+  # no floor between, which the seeded type catalog allows and the model has
   # never required. Three tops shaped campus -> building -> floor -> room taught
   # a fixed ladder that does not exist, and a fleet canvas read against only
   # that shape would let a fixed-ladder assumption ship green (#630).
