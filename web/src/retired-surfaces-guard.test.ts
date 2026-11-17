@@ -28,9 +28,9 @@ const RETIRED = [
   ["defaultWidgets", "the summary board's config; retired with the board"],
   ["og-loc-widgets", "the summary board's stored preference; retired with the board"],
   // The inventory-era detail panels, unmounted when the classic faces retired
-  // (#806): the workspace's header, Activity tab and roles surface replaced them.
+  // (#806): the workspace's header, Activity tab and slots surface replaced them.
   ["HealthPanel", "the classic detail's health panel; the workspace header and Activity tab replaced it"],
-  ["MembersPanel", "the classic detail's members panel; staffing a role is how a member is bound"],
+  ["MembersPanel", "the classic detail's members panel; staffing a slot is how a member is bound"],
   // Explore's renderer library and the inventory tables (#861, #868): the
   // outline of locations replaced the cards, bands, mosaic and matrix faces, the
   // saved views over them, and the table face with its kind tabs.

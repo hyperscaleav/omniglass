@@ -15,7 +15,7 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { TAGS_KEY } from "../lib/tags";
-import { systemRolesKey } from "../lib/system_roles";
+import { systemSlotsKey } from "../lib/system_slots";
 import { ME_KEY, type Me } from "../lib/auth";
 import { componentCommandsKey, type Command } from "../lib/commands";
 import { EVENTS_KEY } from "../lib/events";
@@ -87,8 +87,8 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
   for (const n of seed?.outposts ?? outposts) qc.setQueryData([...outpostKey(n.name)], n);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("cft-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
-  qc.setQueryData([...systemRolesKey(uuidFor("cf-s-a"))], [{ name: "conf-bar", label: "Conferencing Bar", assigned_to: ["videobar-1"] }]);
-  qc.setQueryData([...systemRolesKey(uuidFor("cf-s-b"))], []);
+  qc.setQueryData([...systemSlotsKey(uuidFor("cf-s-a"))], [{ name: "conf-bar", label: "Conferencing Bar", assigned_to: ["videobar-1"] }]);
+  qc.setQueryData([...systemSlotsKey(uuidFor("cf-s-b"))], []);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...componentSystemsKey(uuidFor("cf-c-bar"))], memberships ?? [
@@ -183,7 +183,7 @@ describe("the component leaf", () => {
     expect(screen.queryByTestId("fleet-summary")).toBeNull();
   });
 
-  it("names the role it fills in each system it serves, the primary marked, in no inline prose", async () => {
+  it("names the slot it fills in each system it serves, the primary marked, in no inline prose", async () => {
     mount();
     const card = screen.getByTestId("leaf-memberships");
     expect(within(card).getByText("Boardroom System")).toBeTruthy();
@@ -202,7 +202,7 @@ describe("the component leaf", () => {
     expect(screen.getByTestId("leaf-collection").textContent).not.toMatch(/device/);
   });
 
-  it("a component filling no role renders without error", () => {
+  it("a component filling no slot renders without error", () => {
     mount(`/web/components/${uuidFor("cf-c-bar")}`, []);
     expect(screen.getByText(/Not in any system yet/)).toBeTruthy();
     expect(screen.getByTestId("leaf-collection")).toBeTruthy();

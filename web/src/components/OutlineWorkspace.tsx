@@ -125,7 +125,7 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
   // A report names an alarm's component by name and by uuid; the outline keys on the uuid.
   const alarms = createMemo(() => {
     const out = new Map<string, string>();
-    for (const q of health) for (const role of q.data?.roles ?? []) for (const a of role.alarms ?? []) {
+    for (const q of health) for (const slot of q.data?.slots ?? []) for (const a of slot.alarms ?? []) {
       if (a.component_id && !out.has(a.component_id)) out.set(a.component_id, a.message);
     }
     return out;

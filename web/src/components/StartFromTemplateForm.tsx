@@ -40,9 +40,9 @@ import {
   locationsBody,
   startNeeds,
   systemBody,
-  systemRoleSlots,
+  systemSlotFills,
 } from "../lib/templates";
-import { standardRoles, standardRolesKey } from "../lib/system_roles";
+import { standardSlots, standardSlotsKey } from "../lib/system_slots";
 
 // StartFromTemplateForm (#1329): the "Start from this template" form a Drawer
 // hosts, one per kind, each posting to its own route: a standard template
@@ -104,24 +104,24 @@ function useCarriedLocation(carried?: string) {
 }
 
 // The standards the fleet holds, by name: what decides whether a start creates
-// one from its template (and so needs standard:create) and whose roles a system is staffed to.
+// one from its template (and so needs standard:create) and whose slots a system is staffed to.
 export function useHeldStandards() {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const byName = (name: string) => (standards.data ?? []).find((s) => s.name === name);
   return { standards, byName, held: (name: string) => !!byName(name) };
 }
 
-// The roles of the fleet's own standard of that name, when it holds one: a
+// The slots of the fleet's own standard of that name, when it holds one: a
 // system is staffed to those, not to the template's copy. Undefined while it
 // is not held (the plan creates it from the template's) or not yet read.
-export function useHeldRoles(byName: (name: string) => { id: string } | undefined, name: () => string) {
+export function useHeldSlots(byName: (name: string) => { id: string } | undefined, name: () => string) {
   const held = () => byName(name());
-  const roles = useQuery(() => ({
-    queryKey: standardRolesKey(held()?.id ?? ""),
-    queryFn: () => standardRoles(held()!.id),
+  const slots = useQuery(() => ({
+    queryKey: standardSlotsKey(held()?.id ?? ""),
+    queryFn: () => standardSlots(held()!.id),
     enabled: !!held(),
   }));
-  return () => (held() ? roles.data : undefined);
+  return () => (held() ? slots.data : undefined);
 }
 
 // What the form still lacks to start, given its own choices; an alert names
@@ -313,18 +313,18 @@ function SystemForm(props: StartFormProps): JSX.Element {
   const { standards, held, byName } = useHeldStandards();
   const [d, setD] = createSignal<Omit<SystemDraft, "location">>({ name: "", label: "", standard: "", outpost: "", addresses: {} });
   // The standard the plan builds to: the form's choice, else the template's. When
-  // the fleet holds it the slots are its roles, else the template's it creates.
+  // the fleet holds it the slots are its slots, else the template's it creates.
   const planStandard = () => d().standard || props.template.system?.standard || "";
-  const heldRoles = useHeldRoles(byName, planStandard);
-  const slots = createMemo(() => systemRoleSlots(props.template, props.all, heldRoles()));
+  const heldSlots = useHeldSlots(byName, planStandard);
+  const slots = createMemo(() => systemSlotFills(props.template, props.all, heldSlots()));
   const mayAttach = () => can(me.data, "endpoint", "create");
   const anyAddress = () => Object.values(d().addresses).some((l) => l.some((a) => !!a.trim()));
   const missing = useMissing(props, held, () => ({ standard: d().standard, address: anyAddress() }));
   const set = <K extends keyof Omit<SystemDraft, "location">>(k: K, v: SystemDraft[K]) => setD({ ...d(), [k]: v });
-  const setAddress = (role: string, i: number, count: number, v: string) => {
-    const list = [...(d().addresses[role] ?? Array.from({ length: count }, () => ""))];
+  const setAddress = (slot: string, i: number, count: number, v: string) => {
+    const list = [...(d().addresses[slot] ?? Array.from({ length: count }, () => ""))];
     list[i] = v;
-    set("addresses", { ...d().addresses, [role]: list });
+    set("addresses", { ...d().addresses, [slot]: list });
   };
   const options = createMemo(() => standards.data ?? []);
   const noOutpost = () => needsOutpost(d());
@@ -363,7 +363,7 @@ function SystemForm(props: StartFormProps): JSX.Element {
       <Show when={mayAttach()} fallback={<NoAttach />}>
       <OutpostSelect value={d().outpost} onChange={(v) => set("outpost", v)} needed={noOutpost()} />
       <section class="flex flex-col gap-2">
-        <Eyebrow label="Addresses" hint="One per component, by role, as many as the standard it is built to asks for (yours of that name when you hold one). A component given an address lands attached through its driver with the template's preset; the rest land unattached and are yours to attach later." />
+        <Eyebrow label="Addresses" hint="One per component, by slot, as many as the standard it is built to asks for (yours of that name when you hold one). A component given an address lands attached through its driver with the template's preset; the rest land unattached and are yours to attach later." />
         <For each={slots()}>
           {(s) => (
             <Index each={Array.from({ length: s.count })}>
@@ -373,8 +373,8 @@ function SystemForm(props: StartFormProps): JSX.Element {
                     class="input input-bordered input-sm w-full font-data"
                     autocomplete="off"
                     placeholder="unattached"
-                    value={(d().addresses[s.role] ?? [])[i] ?? ""}
-                    onInput={(e) => setAddress(s.role, i, s.count, e.currentTarget.value)}
+                    value={(d().addresses[s.slot] ?? [])[i] ?? ""}
+                    onInput={(e) => setAddress(s.slot, i, s.count, e.currentTarget.value)}
                   />
                 </FieldRow>
               )}

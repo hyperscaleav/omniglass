@@ -11,7 +11,7 @@ import { STANDARDS_KEY } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
 import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { TAGS_KEY } from "../lib/tags";
-import { systemRolesKey } from "../lib/system_roles";
+import { systemSlotsKey } from "../lib/system_slots";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { pickTree, treeValue } from "./TreeSelect.testkit";
@@ -77,7 +77,7 @@ function mountHost(kind: "system" | "location", id: string, host: "page" | "blad
   qc.setQueryData([...STANDARDS_KEY], [{ id: uuidFor("std"), name: "huddle-room", label: "Huddle Room Standard" }]);
   qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st"), name: "huddle", label: "Huddle" }]);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...systemRolesKey(uuidFor("ef-sys"))], []);
+  qc.setQueryData([...systemSlotsKey(uuidFor("ef-sys"))], []);
   qc.setQueryData(["system-properties", uuidFor("ef-sys")], []);
   qc.setQueryData(["location-properties", uuidFor("ef-room")], []);
   window.history.pushState({}, "", "/web/x");
@@ -133,14 +133,14 @@ describe("the one form reads labels, not handles (#870)", () => {
 });
 
 describe("the one form in a blade is the glance (#872)", () => {
-  // Configuration (roles, properties and their cascade) lives on the
+  // Configuration (slots, properties and their cascade) lives on the
   // workspace's Configure tab; the blade keeps what an operator who landed
   // from a row needs. A system's or component's location is the blade's own
   // location card, so the form does not say it a second time.
   it("renders identity, classification and tags, and none of the configuration panels", async () => {
     mountHost("system", uuidFor("ef-sys"), "blade");
     const form = await screen.findByTestId("entity-form");
-    const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags|Roles|Properties)$/).map((e) => e.textContent);
+    const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags|Slots|Properties)$/).map((e) => e.textContent);
     expect(eyebrows).toEqual(["Identity", "Classification", "Tags"]);
   });
 
@@ -153,7 +153,7 @@ describe("the one form in a blade is the glance (#872)", () => {
   it("keeps the configuration panels on the page host", async () => {
     mountHost("system", uuidFor("ef-sys"), "page");
     const form = await screen.findByTestId("entity-form");
-    expect(within(form).getByText("Roles")).toBeTruthy();
+    expect(within(form).getByText("Slots")).toBeTruthy();
   });
 });
 
@@ -564,7 +564,7 @@ describe("the one form, system rename precheck", () => {
     qc.setQueryData([...STANDARDS_KEY], []);
     qc.setQueryData([...SYSTEM_TYPES_KEY], []);
     qc.setQueryData([...TAGS_KEY], []);
-    qc.setQueryData([...systemRolesKey(uuidFor("child-sys"))], []);
+    qc.setQueryData([...systemSlotsKey(uuidFor("child-sys"))], []);
     qc.setQueryData(["system-properties", uuidFor("child-sys")], []);
 
     window.history.pushState({}, "", "/web/x");

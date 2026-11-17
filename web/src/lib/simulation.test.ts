@@ -206,13 +206,13 @@ describe("validateAddSystem and addSystemBody", () => {
 });
 
 describe("planShortfall", () => {
-  it("lists the roles nothing simulated fits and how many they are short", () => {
-    const s = planShortfall({ standard: "s", alternates: {}, components: 1, roles: [
-      { role: "display", product: "p", count: 1 },
-      { role: "camera", count: 0, missing: 2, reason: "none" },
+  it("lists the slots nothing simulated fits and how many they are short", () => {
+    const s = planShortfall({ standard: "s", alternates: {}, components: 1, slots: [
+      { slot: "display", product: "p", count: 1 },
+      { slot: "camera", count: 0, missing: 2, reason: "none" },
     ] });
-    expect(s.roles.map((r) => r.role)).toEqual(["camera"]);
+    expect(s.slots.map((r) => r.slot)).toEqual(["camera"]);
     expect(s.missing).toBe(2);
-    expect(planShortfall(undefined)).toEqual({ roles: [], missing: 0 });
+    expect(planShortfall(undefined)).toEqual({ slots: [], missing: 0 });
   });
 });

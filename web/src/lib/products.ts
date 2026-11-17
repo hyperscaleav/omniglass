@@ -9,7 +9,7 @@ import { type ComponentType, resolveComponentTypeIcon } from "./component_types"
 // update/delete. A product carries a kind (device/app/service; vm retired,
 // folded into app, ADR-0086), a required component_type (the device-class
 // genus every product is classified under, ADR-0085; also what a system
-// role's typed-slot guard checks, #626), an optional vendor and driver, and
+// slot's typed-slot guard checks, #626), an optional vendor and driver, and
 // an optional parent product.
 
 export type ProductKind = "device" | "app" | "service";

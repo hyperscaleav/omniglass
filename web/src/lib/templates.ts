@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { CreateComponentFromTemplateInputBody, CreateComponentFromTemplateOutputBody, CreateLocationsFromTemplateInputBody, CreateLocationsFromTemplateOutputBody, CreateStandardFromTemplateInputBody, CreateSystemFromTemplateInputBody, CreateSystemFromTemplateOutputBody, TemplateBody, TemplateLocationBody, TemplateRoleBody } from "../api/api.gen";
+import type { CreateComponentFromTemplateInputBody, CreateComponentFromTemplateOutputBody, CreateLocationsFromTemplateInputBody, CreateLocationsFromTemplateOutputBody, CreateStandardFromTemplateInputBody, CreateSystemFromTemplateInputBody, CreateSystemFromTemplateOutputBody, TemplateBody, TemplateLocationBody, TemplateSlotBody } from "../api/api.gen";
 import type { Chip } from "./predicate";
 import { entityLabel } from "./entities";
 
@@ -15,7 +15,7 @@ import { entityLabel } from "./entities";
 export type Template = TemplateBody;
 export type TemplateKind = Template["kind"];
 export type TemplateLocation = TemplateLocationBody;
-export type TemplateRole = TemplateRoleBody;
+export type TemplateSlot = TemplateSlotBody;
 
 export type StandardFromTemplateBody = CreateStandardFromTemplateInputBody;
 export type ComponentFromTemplateBody = CreateComponentFromTemplateInputBody;
@@ -213,13 +213,13 @@ export const permText = (ps: Perm[]): string => ps.map(([r, a]) => `${r}:${a}`).
 // summary is the one line a list row says about what the template makes.
 export function templateSummary(t: Template): string {
   if (t.standard) {
-    const roles = t.standard.roles?.length ?? 0;
-    const head = `${roles} ${roles === 1 ? "role" : "roles"}`;
+    const slots = t.standard.slots?.length ?? 0;
+    const head = `${slots} ${slots === 1 ? "slot" : "slots"}`;
     return t.standard.parent ? `${head}, a variant of ${t.standard.parent}` : head;
   }
   if (t.system) {
-    const roles = Object.keys(t.system.roles ?? {}).length;
-    return `built to ${t.system.standard}, ${roles} ${roles === 1 ? "component" : "components"}`;
+    const slots = Object.keys(t.system.slots ?? {}).length;
+    return `built to ${t.system.standard}, ${slots} ${slots === 1 ? "component" : "components"}`;
   }
   if (t.location) {
     const rows = locationTreeRows(t.location);
@@ -245,41 +245,41 @@ export function locationTreeRows(p: TemplateLocation, depth = 0): LocationTreeRo
   return out;
 }
 
-// A role a system template staffs, with how many components fill it and what
+// A slot a system template staffs, with how many components fill it and what
 // fills it. The count is the quorum of the standard the plan builds to: the
-// fleet's own standard of that name when it holds one (its roles passed as
+// fleet's own standard of that name when it holds one (its slots passed as
 // `held`, which is what the route reads), else the standard template it creates the standard from
 // (one when the catalog does not hold that either).
-export type RoleSlot = { role: string; label: string; count: number; fill: string };
+export type SlotFill = { slot: string; label: string; count: number; fill: string };
 type DeclaredLike = { name: string; label?: string; quorum: number };
 
-export function systemRoleSlots(t: Template, all: Template[], held?: DeclaredLike[]): RoleSlot[] {
+export function systemSlotFills(t: Template, all: Template[], held?: DeclaredLike[]): SlotFill[] {
   if (!t.system) return [];
   const tpl = all.find((x) => x.kind === "standard_template" && x.name === t.system!.standard);
-  const roles: DeclaredLike[] = held ?? tpl?.standard?.roles ?? [];
-  const declared = new Map(roles.map((r) => [r.name, r]));
-  return Object.entries(t.system.roles ?? {})
-    .map(([role, f]) => {
-      const r = declared.get(role);
+  const slots: DeclaredLike[] = held ?? tpl?.standard?.slots ?? [];
+  const declared = new Map(slots.map((r) => [r.name, r]));
+  return Object.entries(t.system.slots ?? {})
+    .map(([slot, f]) => {
+      const r = declared.get(slot);
       const comp = f.component ? all.find((x) => x.kind === "component_template" && x.name === f.component) : undefined;
       return {
-        role,
-        label: r ? entityLabel(r) : role,
+        slot,
+        label: r ? entityLabel(r) : slot,
         count: Math.max(1, r?.quorum ?? 1),
         fill: comp ? entityLabel(comp) : (f.component ?? f.product ?? ""),
       };
     })
-    .sort((a, b) => declaredOrder(roles, a.role) - declaredOrder(roles, b.role) || a.role.localeCompare(b.role));
+    .sort((a, b) => declaredOrder(slots, a.slot) - declaredOrder(slots, b.slot) || a.slot.localeCompare(b.slot));
 }
 
-function declaredOrder(roles: DeclaredLike[], role: string): number {
-  const i = roles.findIndex((r) => r.name === role);
+function declaredOrder(slots: DeclaredLike[], slot: string): number {
+  const i = slots.findIndex((r) => r.name === slot);
   return i < 0 ? Number.MAX_SAFE_INTEGER : i;
 }
 
-// The quorum cell: "2" for an exact role, "1 to 3" for a capped range, "2 or
+// The quorum cell: "2" for an exact slot, "1 to 3" for a capped range, "2 or
 // more" for an uncapped one beyond its floor.
-export function quorumText(r: TemplateRole): string {
+export function quorumText(r: TemplateSlot): string {
   if (r.capacity == null) return r.quorum > 1 ? `${r.quorum} or more` : "1 or more";
   return r.capacity === r.quorum ? String(r.quorum) : `${r.quorum} to ${r.capacity}`;
 }
@@ -332,20 +332,20 @@ export type SystemDraft = {
   label: string;
   standard: string;
   outpost: string;
-  // Per role, one address per component slot in order; an empty one leaves
+  // Per slot, one address per component slot in order; an empty one leaves
   // that component unattached.
   addresses: Record<string, string[]>;
 };
 
 export function systemBody(template: string, d: SystemDraft): SystemFromTemplateBody {
   const attach: Record<string, Record<string, string>[]> = {};
-  for (const [role, list] of Object.entries(d.addresses)) {
+  for (const [slot, list] of Object.entries(d.addresses)) {
     // Keep the slots in order up to the last address given, so the second
-    // component of a role can attach while the first does not.
+    // component of a slot can attach while the first does not.
     let last = -1;
     list.forEach((a, i) => { if (opt(a)) last = i; });
     if (last < 0) continue;
-    attach[role] = list.slice(0, last + 1).map((a): Record<string, string> => (opt(a) ? { [ADDRESS_INPUT]: a.trim() } : {}));
+    attach[slot] = list.slice(0, last + 1).map((a): Record<string, string> => (opt(a) ? { [ADDRESS_INPUT]: a.trim() } : {}));
   }
   return {
     template,

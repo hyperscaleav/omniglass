@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { alarmRows, componentCards, sinceOf, systemZoomVM } from "./system_zoom";
 import type { FleetView } from "./fleet";
-import type { EffectiveRole, FleetHealth } from "./system_zoom";
+import type { EffectiveSlot, FleetHealth } from "./system_zoom";
 import { uuidFor } from "./testids";
 import { SEEDED_LEVELS } from "./testseverity";
 
 // The system zoom's view model (#636): the typed slots a system needs filled,
 // merged from the two reads that each carry half the story. The health read
 // has the figures and the choice grouping (satisfying, short, active, down);
-// the roles read has the declaration (accepted types, pinned products,
-// positions). Merged by role name, grouped by choice, and never recomputed:
+// the slots read has the declaration (accepted types, pinned products,
+// positions). Merged by slot name, grouped by choice, and never recomputed:
 // every figure on a card is the server's own.
 
 const view: FleetView = {
@@ -50,7 +50,7 @@ const view: FleetView = {
 
 const health: FleetHealth = {
   verdict: "degraded",
-  roles: [
+  slots: [
     // Unconditional, occupant down: the failure gap.
     {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 2, satisfying: 1, short: 1, spare: 0,
@@ -71,7 +71,7 @@ const health: FleetHealth = {
       impaired: false, active: true, assigned_to: ["videobar-1"], down: [], alarms: [],
       choice: "conferencing", alternate: "all-in-one",
     },
-    // The losing alternate's roles: legal build, not outstanding work.
+    // The losing alternate's slots: legal build, not outstanding work.
     {
       name: "conf-codec", label: "conf-codec", impact: "outage", quorum: 1, satisfying: 0, short: 1, spare: 0,
       impaired: true, active: false, assigned_to: [], down: [],
@@ -86,7 +86,7 @@ const health: FleetHealth = {
   ],
 } as unknown as FleetHealth;
 
-const declared: EffectiveRole[] = [
+const declared: EffectiveSlot[] = [
   {
     name: "room-mic", label: "Room Microphone", quorum: 2, assigned: 2, impact: "degraded", from_standard: true,
     accepted_types: ["microphone", "video-bar"], pinned_products: [], assigned_to: ["videobar-1", "mic-1"],
@@ -106,12 +106,12 @@ const declared: EffectiveRole[] = [
     accepted_types: ["codec"], pinned_products: [], assigned_to: [], alternate: "conferencing/component-system",
     positions: [], position_labels: [],
   },
-] as unknown as EffectiveRole[];
+] as unknown as EffectiveSlot[];
 
 const vm = () => systemZoomVM(health, declared, view, uuidFor("sz-sys"));
 
 describe("systemZoomVM", () => {
-  it("merges figures with declarations by role name, verbatim", () => {
+  it("merges figures with declarations by slot name, verbatim", () => {
     const mic = vm().unconditional.find((s) => s.name === "room-mic")!;
     expect(mic.satisfying).toBe(1);
     expect(mic.quorum).toBe(2);
@@ -141,7 +141,7 @@ describe("systemZoomVM", () => {
   });
 
   it("names the other system a shared occupant serves", () => {
-    const bar = vm().choices[0].alternates.find((a) => a.name === "all-in-one")!.roles[0];
+    const bar = vm().choices[0].alternates.find((a) => a.name === "all-in-one")!.slots[0];
     expect(bar.occupants[0].sharedWith).toEqual(["Overflow Room"]);
     const mic = vm().unconditional.find((s) => s.name === "room-mic")!;
     expect(mic.occupants[1].sharedWith).toEqual([]);
@@ -151,41 +151,41 @@ describe("systemZoomVM", () => {
     const conf = vm().choices.find((c) => c.name === "conferencing")!;
     expect(conf.activeAlternate).toBe("all-in-one");
     expect(conf.alternates.map((a) => a.name)).toEqual(["all-in-one"]);
-    expect(conf.alternates[0].roles.map((r) => r.name)).toEqual(["conf-bar"]);
-    // The losing build's role is nowhere on the zoom.
-    const all = [...vm().unconditional, ...vm().choices.flatMap((c) => c.alternates.flatMap((a) => a.roles))];
+    expect(conf.alternates[0].slots.map((r) => r.name)).toEqual(["conf-bar"]);
+    // The losing build's slot is nowhere on the zoom.
+    const all = [...vm().unconditional, ...vm().choices.flatMap((c) => c.alternates.flatMap((a) => a.slots))];
     expect(all.find((r) => r.name === "conf-codec")).toBeUndefined();
   });
 
-  it("puts a member filling no role in the no-role strip, no error", () => {
-    expect(vm().noRole.map((m) => m.name)).toEqual(["device-1"]);
-    expect(vm().noRole[0].sharedWith).toEqual([]);
+  it("puts a member filling no slot in the no-slot strip, no error", () => {
+    expect(vm().noSlot.map((m) => m.name)).toEqual(["device-1"]);
+    expect(vm().noSlot[0].sharedWith).toEqual([]);
   });
 });
 
 describe("alarmRows", () => {
   const now = Date.parse("2026-08-15T17:00:00Z");
-  it("flattens the active roles' alarms worst-first, joined to the role and the component's id", () => {
+  it("flattens the active slots' alarms worst-first, joined to the slot and the component's id", () => {
     const rows = alarmRows(health, SEEDED_LEVELS);
     expect(rows.map((r) => r.severity)).toEqual(["high", "warning"]);
     expect(rows[0]).toMatchObject({
       message: "No route to host",
       component: "mic-1",
       componentId: uuidFor("sz-c-mic"),
-      roleLabel: "Room Microphone",
+      slotLabel: "Room Microphone",
     });
   });
 
-  it("never carries an alarm from a build not in use: an inactive role's alarms did not move the verdict", () => {
+  it("never carries an alarm from a build not in use: an inactive slot's alarms did not move the verdict", () => {
     const rows = alarmRows(health, SEEDED_LEVELS);
     expect(rows.find((r) => r.message === "From the build not in use")).toBeUndefined();
   });
 
-  it("renders one row per alarm even when one down component staffs two active roles (the wire repeats per role)", () => {
+  it("renders one row per alarm even when one down component staffs two active slots (the wire repeats per slot)", () => {
     const doubled = {
       ...health,
-      roles: [
-        ...(health.roles ?? []),
+      slots: [
+        ...(health.slots ?? []),
         {
           name: "spare-mic", label: "Spare Microphone", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
           impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
@@ -200,7 +200,7 @@ describe("alarmRows", () => {
   it("names the component by the wire's name and links it by component_id, even off the projection", () => {
     const off = {
       ...health,
-      roles: [{
+      slots: [{
         name: "dsp", label: "DSP", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
         impaired: true, active: true, assigned_to: [], down: [],
         alarms: [{ id: "al-dsp", component: "dsp-1", component_id: uuidFor("sz-c-dsp"), severity: "high", message: "No signal", raised_at: "2026-08-15T14:20:00Z" }],
@@ -214,7 +214,7 @@ describe("alarmRows", () => {
   it("carries the acknowledgement the health read reports, unacknowledged by default", () => {
     const acked = {
       ...health,
-      roles: [{
+      slots: [{
         name: "dsp", label: "DSP", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
         impaired: true, active: true, assigned_to: [], down: [],
         alarms: [
@@ -229,7 +229,7 @@ describe("alarmRows", () => {
   });
 
   it("is empty for a healthy report", () => {
-    expect(alarmRows({ ...health, roles: [] } as never)).toEqual([]);
+    expect(alarmRows({ ...health, slots: [] } as never)).toEqual([]);
   });
   void now;
 });
@@ -248,25 +248,25 @@ describe("sinceOf", () => {
 });
 
 // The components-first body (#790): a system shows the things in it, one card
-// per component with a role BADGE; role-level grouping only where it earns it.
+// per component with a slot BADGE; slot-level grouping only where it earns it.
 describe("componentCards", () => {
   const body = () => componentCards(systemZoomVM(health, declared, view, uuidFor("sz-sys")));
 
-  it("gives every component one card with role badges; a grouped component's one home is its group", () => {
+  it("gives every component one card with slot badges; a grouped component's one home is its group", () => {
     const { cards, groups } = body();
-    // The bar staffs the grouped mic role AND answers the choice: it renders
+    // The bar staffs the grouped mic slot AND answers the choice: it renders
     // inside the group, wearing both badges, and never twice.
     expect(cards.find((c) => c.name === "videobar-1")).toBeUndefined();
     const bar = groups.find((g) => g.label === "Room Microphone")!.memberCards.find((c) => c.name === "videobar-1")!;
-    expect(bar.roles.map((r) => r.label).sort()).toEqual(["Conferencing Bar", "Room Microphone"]);
-    expect(bar.roles.find((r) => r.label === "Room Microphone")!.position).toBe("Left");
+    expect(bar.slots.map((r) => r.label).sort()).toEqual(["Conferencing Bar", "Room Microphone"]);
+    expect(bar.slots.find((r) => r.label === "Room Microphone")!.position).toBe("Left");
     expect(bar.componentId).toBe(uuidFor("sz-c-bar"));
     const power = cards.find((c) => c.name === "device-1")!;
-    expect(power.roles).toEqual([]);
-    expect(power.noRole).toBe(true);
+    expect(power.slots).toEqual([]);
+    expect(power.noSlot).toBe(true);
   });
 
-  it("groups only where grouping says something: a quorum>1 or short role, never the 1:1 case", () => {
+  it("groups only where grouping says something: a quorum>1 or short slot, never the 1:1 case", () => {
     const groups = body().groups;
     // room-mic: quorum 2, short 1 -> grouped with its arithmetic.
     const mic = groups.find((g) => g.label === "Room Microphone")!;
@@ -277,15 +277,15 @@ describe("componentCards", () => {
     expect(groups.find((g) => g.label === "Conferencing Bar")).toBeUndefined();
   });
 
-  it("an unstaffed role is an empty group wearing the role badge, never a card", () => {
+  it("an unstaffed slot is an empty group wearing the slot badge, never a card", () => {
     const display = body().groups.find((g) => g.label === "Main Display")!;
     expect(display.members).toEqual([]);
     expect(display.short).toBe(1);
-    expect(body().cards.some((c) => c.roles.some((r) => r.label === "Main Display"))).toBe(false);
+    expect(body().cards.some((c) => c.slots.some((r) => r.label === "Main Display"))).toBe(false);
   });
 
-  it("never surfaces a role from the build not in use", () => {
-    const all = [...body().cards.flatMap((c) => c.roles.map((r) => r.label)), ...body().groups.map((g) => g.label)];
+  it("never surfaces a slot from the build not in use", () => {
+    const all = [...body().cards.flatMap((c) => c.slots.map((r) => r.label)), ...body().groups.map((g) => g.label)];
     expect(all).not.toContain("conf-codec");
   });
 });
