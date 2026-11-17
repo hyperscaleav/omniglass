@@ -832,6 +832,9 @@ func (UnimplementedGateway) CollectionSettings(context.Context) (settings.Collec
 func (UnimplementedGateway) DatabaseSettings(context.Context) (settings.DatabaseSettings, error) {
 	return settings.DatabaseSettings{}, nil
 }
+func (UnimplementedGateway) AgentSettings(context.Context) (settings.AgentSettings, error) {
+	return settings.AgentSettings{}, nil
+}
 func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMetric) error {
 	return nil
 }

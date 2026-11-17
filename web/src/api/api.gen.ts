@@ -170,6 +170,109 @@ export type AddSimSystemOutputBody = {
 };
 
 /**
+ * The operation class
+ */
+export type AgentClassPolicyClass = typeof AgentClassPolicyClass[keyof typeof AgentClassPolicyClass];
+
+
+export const AgentClassPolicyClass = {
+  read: 'read',
+  write: 'write',
+  destructive: 'destructive',
+  credential_destination: 'credential_destination',
+} as const;
+
+/**
+ * always runs; ask runs, and the client confirms with its person first; never is refused by the server
+ */
+export type AgentClassPolicyPolicy = typeof AgentClassPolicyPolicy[keyof typeof AgentClassPolicyPolicy];
+
+
+export const AgentClassPolicyPolicy = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+export type AgentClassPolicy = {
+  /** The operation class */
+  class: AgentClassPolicyClass;
+  /** always runs; ask runs, and the client confirms with its person first; never is refused by the server */
+  policy: AgentClassPolicyPolicy;
+};
+
+export type AgentPolicyOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Whether this request is an agent's (an agent token, or any request over MCP), so the policy governs it */
+  applies: boolean;
+  /**
+     * The install's resolved policy for each operation class
+     * @nullable
+     */
+  classes: AgentClassPolicy[] | null;
+};
+
+/**
+ * Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind)
+ */
+export type AgentSettingsCredentialDestination = typeof AgentSettingsCredentialDestination[keyof typeof AgentSettingsCredentialDestination];
+
+
+export const AgentSettingsCredentialDestination = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE)
+ */
+export type AgentSettingsDestructive = typeof AgentSettingsDestructive[keyof typeof AgentSettingsDestructive];
+
+
+export const AgentSettingsDestructive = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for an agent's reads (a GET, or a POST gated on a read permission)
+ */
+export type AgentSettingsRead = typeof AgentSettingsRead[keyof typeof AgentSettingsRead];
+
+
+export const AgentSettingsRead = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for an agent's writes that create or act (a POST that is not a read)
+ */
+export type AgentSettingsWrite = typeof AgentSettingsWrite[keyof typeof AgentSettingsWrite];
+
+
+export const AgentSettingsWrite = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+export type AgentSettings = {
+  /** Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind) */
+  credential_destination: AgentSettingsCredentialDestination;
+  /** Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE) */
+  destructive: AgentSettingsDestructive;
+  /** Policy for an agent's reads (a GET, or a POST gated on a read permission) */
+  read: AgentSettingsRead;
+  /** Policy for an agent's writes that create or act (a POST that is not a read) */
+  write: AgentSettingsWrite;
+};
+
+/**
  * A raised problem on a component, with a severity, from the moment it raises until it clears.
  */
 export type AlarmBody = {
@@ -7373,6 +7476,7 @@ export type UISettings = {
 };
 
 export type Settings = {
+  agent: AgentSettings;
   collection: CollectionSettings;
   database: DatabaseSettings;
   keybindings: Keybindings;
@@ -9712,6 +9816,50 @@ return ogFetch<testAuthMeActionRulesDraftResponse>(getTestAuthMeActionRulesDraft
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(testDraftInputBody)
+  }
+);}
+
+
+
+export type getAuthMeAgentPolicyResponse200 = {
+  data: AgentPolicyOutputBody
+  status: 200
+}
+
+export type getAuthMeAgentPolicyResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getAuthMeAgentPolicyResponseSuccess = (getAuthMeAgentPolicyResponse200) & {
+  headers: Headers;
+};
+export type getAuthMeAgentPolicyResponseError = (getAuthMeAgentPolicyResponseDefault) & {
+  headers: Headers;
+};
+
+export type getAuthMeAgentPolicyResponse = (getAuthMeAgentPolicyResponseSuccess | getAuthMeAgentPolicyResponseError)
+
+export const getGetAuthMeAgentPolicyUrl = () => {
+
+
+
+
+  return `/auth/me/agent-policy`
+}
+
+/**
+ * Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
+ * @summary What the install lets an agent do
+ */
+export const getAuthMeAgentPolicy = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getAuthMeAgentPolicyResponse> => {
+
+  return ogFetch<getAuthMeAgentPolicyResponse>(getGetAuthMeAgentPolicyUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

@@ -206,6 +206,7 @@ generated self-scoped commands (each edits only the caller's own profile):
 
 ```sh
 omniglass auth me                                    # your principal, permissions, and grants
+omniglass auth agent-policy                          # what an agent may do, and whether it governs you
 omniglass auth update-profile --label "Ops Lead"
 omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
 omniglass auth set-avatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture

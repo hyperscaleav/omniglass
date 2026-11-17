@@ -41,6 +41,7 @@ type operation struct {
 	Summary     string          `json:"summary"`
 	Description string          `json:"description"`
 	Permission  string          `json:"x-omniglass-permission"`
+	Conditional string          `json:"x-omniglass-conditional-permission"`
 	Stamp       json.RawMessage `json:"x-omniglass-mcp"`
 	Plaintext   bool            `json:"x-omniglass-plaintext"`
 	Parameters  []struct {
@@ -115,6 +116,7 @@ func buildOne(doc document, path, method string, op operation) (tooldef.Def, err
 	d := tooldef.Def{
 		Name: op.OperationID, Title: op.Summary, Description: op.Description,
 		Method: method, Path: path, Permission: op.Permission, Annotations: ann,
+		Class: tooldef.Classify(ann, op.Permission, op.Conditional),
 	}
 	props := map[string]any{}
 	var required []string

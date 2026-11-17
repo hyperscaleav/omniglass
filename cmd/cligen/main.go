@@ -292,7 +292,9 @@ var nameOverride = map[string]([]string){
 	"set-auth-me-avatar":      {"auth", "set-avatar"},
 	"stop-impersonation":      {"auth", "stop-impersonation"},
 	"get-auth-me-avatar":      {"auth", "avatar"},
-	"create-auth-me-token":    {"auth", "create-token"},
+	// The caller's agent policy is one document, read not listed.
+	"get-auth-me-agent-policy": {"auth", "agent-policy"},
+	"create-auth-me-token":     {"auth", "create-token"},
 	// The self-service session surface: an operator manages their own sessions,
 	// so these are `session <verb>` rather than four levels under /auth/me.
 	"list-auth-me-sessions":       {"session", "list"},

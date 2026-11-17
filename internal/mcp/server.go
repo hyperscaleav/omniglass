@@ -68,6 +68,7 @@ func newServer(api http.Handler, version string) *sdk.Server {
 		Instructions: instructions + skillInstructions(),
 	})
 	addSkills(srv)
+	srv.AddReceivingMiddleware(withAgentPolicy(api))
 	for _, d := range catalog {
 		d := d
 		srv.AddTool(toolFor(d), func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {

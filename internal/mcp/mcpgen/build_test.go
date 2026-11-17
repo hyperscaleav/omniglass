@@ -79,6 +79,21 @@ func TestBuildTakesOnlyStampedOperations(t *testing.T) {
 	}
 }
 
+// Each tool carries its agent-policy class: a read gate is read, an update is
+// destructive, and a second gate that binds a stored credential makes the same
+// update a credential destination.
+func TestBuildClassifiesEachTool(t *testing.T) {
+	defs := build(t, specDoc)
+	if defs[0].Class != tooldef.ClassRead || defs[1].Class != tooldef.ClassDestructive {
+		t.Errorf("classes = %s, %s, want read, destructive", defs[0].Class, defs[1].Class)
+	}
+	bind := strings.Replace(specDoc, `"x-omniglass-permission": "widget:update", "x-omniglass-mcp": {}`,
+		`"x-omniglass-permission": "widget:update", "x-omniglass-conditional-permission": "secret:bind", "x-omniglass-mcp": {}`, 1)
+	if got := build(t, bind)[1].Class; got != tooldef.ClassCredentialDestination {
+		t.Errorf("an update with a bind second gate is %s, want credential_destination", got)
+	}
+}
+
 // A tool's arguments are its path parameters, query parameters and body
 // properties in one object, references inlined and the body's $schema dropped,
 // and each argument is sorted onto the request part it came from.

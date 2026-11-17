@@ -215,6 +215,22 @@ omniglass audit-log list
 
 Commands for the auth resource
 
+### `omniglass auth agent-policy`
+
+What the install lets an agent do
+
+```
+omniglass auth agent-policy
+```
+
+Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
+
+Example:
+
+```sh
+omniglass auth agent-policy
+```
+
 ### `omniglass auth avatar`
 
 Get your own profile picture

@@ -1,5 +1,43 @@
 // Generated from api/openapi.json by web/scripts/gen-settings-schema.mjs (make gen). Do not edit by hand.
 export const settingsSchema = {
+  "agent": {
+    "credential_destination": {
+      "description": "Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind)",
+      "type": "string",
+      "enum": [
+        "always",
+        "ask",
+        "never"
+      ]
+    },
+    "destructive": {
+      "description": "Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE)",
+      "type": "string",
+      "enum": [
+        "always",
+        "ask",
+        "never"
+      ]
+    },
+    "read": {
+      "description": "Policy for an agent's reads (a GET, or a POST gated on a read permission)",
+      "type": "string",
+      "enum": [
+        "always",
+        "ask",
+        "never"
+      ]
+    },
+    "write": {
+      "description": "Policy for an agent's writes that create or act (a POST that is not a read)",
+      "type": "string",
+      "enum": [
+        "always",
+        "ask",
+        "never"
+      ]
+    }
+  },
   "collection": {
     "report_seconds": {
       "description": "Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window",

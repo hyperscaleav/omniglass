@@ -21,13 +21,20 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-98 tools.
+Each tool also has an **agent class**, the one the install's [agent policy](/guides/agents/#what-an-agent-may-do)
+sets to always, ask or never: **read** (read-only), **destructive**, **credential_destination** (it may bind a
+stored credential to a destination, the most sensitive class, whatever else it does) or **write** (the rest). On
+`tools/list`, each tool's `_meta` carries `omniglass/agent_policy`, its class and the policy the install resolves
+for it.
+
+99 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
 | [`list-alarms`](#list-alarms) | List the fleet's active alarms | `component:read` | read-only, idempotent |
 | [`list-audit-log`](#list-audit-log) | List audit-trail events | `audit:read:admin` | read-only, idempotent |
 | [`get-auth-me`](#get-auth-me) | The authenticated principal, its permissions, and grants | authn only | read-only, idempotent |
+| [`get-auth-me-agent-policy`](#get-auth-me-agent-policy) | What the install lets an agent do | authn only | read-only, idempotent |
 | [`list-auth-me-notifications`](#list-auth-me-notifications) | List your inbox | `notification:read` | read-only, idempotent |
 | [`list-calc-rule`](#list-calc-rule) | List calc rules | `rule:read` | read-only, idempotent |
 | [`get-calc-rule`](#get-calc-rule) | Get a calc rule | `rule:read` | read-only, idempotent |
@@ -133,6 +140,7 @@ What is wrong now across every component the caller may read, in one read: the a
 - Route: `GET /api/v1/alarms`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -148,6 +156,7 @@ Recent audit-trail events, newest first, each with the actor and, for an imperso
 - Route: `GET /api/v1/audit-log`
 - Gate: `audit:read:admin`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -166,6 +175,19 @@ Returns the caller's principal, flattened permissions (a UI hint and the fast-re
 - Route: `GET /api/v1/auth/me`
 - Gate: authn only
 - Assume: read-only, idempotent
+- Agent class: read
+- Arguments: none
+
+## `get-auth-me-agent-policy`
+
+What the install lets an agent do
+
+Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
+
+- Route: `GET /api/v1/auth/me/agent-policy`
+- Gate: authn only
+- Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-auth-me-notifications`
@@ -177,6 +199,7 @@ The caller's own console inbox: the notifications addressed to them on the inbox
 - Route: `GET /api/v1/auth/me/notifications`
 - Gate: `notification:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -192,6 +215,7 @@ Lists the calc rules, by name: the authored config that derives an output key on
 - Route: `GET /api/v1/calc-rules`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `get-calc-rule`
@@ -203,6 +227,7 @@ Returns one calc rule by name (or uuid). Gated by rule:read.
 - Route: `GET /api/v1/calc-rules/{name}`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -217,6 +242,7 @@ What a calc rule last did on each owner the caller may read (components by the c
 - Route: `GET /api/v1/calc-rules/{name}/state`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -232,6 +258,7 @@ Computes a candidate calc rule now, on each owner it selects that the caller may
 - Route: `POST /api/v1/calc-rules:preview`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -251,6 +278,7 @@ Lists the component_type registry (the taxonomy a product is classified under: m
 - Route: `GET /api/v1/component-types`
 - Gate: `component_type:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-components`
@@ -262,6 +290,7 @@ Lists the components the caller may read, each filtered to its scope subtree. Ga
 - Route: `GET /api/v1/components`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `create-component`
@@ -273,6 +302,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 - Route: `POST /api/v1/components`
 - Gate: `component:create`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -293,6 +323,7 @@ Fetches a component by name within the caller's read scope. Out of scope is a no
 - Route: `GET /api/v1/components/{name}`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -307,6 +338,7 @@ Patches a component's label or product. The name is not patchable: renaming is t
 - Route: `PATCH /api/v1/components/{name}`
 - Gate: `component:update`
 - Assume: destructive
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -323,6 +355,7 @@ What is currently wrong with this component, newest first, with the component's 
 - Route: `GET /api/v1/components/{name}/alarms`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -339,6 +372,7 @@ Records that a human has seen this alarm, and changes nothing else. The alarm st
 - Route: `POST /api/v1/components/{name}/alarms/{id}:acknowledge`
 - Gate: `alarm:acknowledge`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -354,6 +388,7 @@ Snoozes the alarm's condition, its component and dedup_key, for a duration from 
 - Route: `POST /api/v1/components/{name}/alarms/{id}:snooze`
 - Gate: `alarm:snooze`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -370,6 +405,7 @@ The alarm's history in one list, oldest first: the events that carry it (an even
 - Route: `GET /api/v1/components/{name}/alarms/{id}:timeline`
 - Gate: `alarm:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -385,6 +421,7 @@ Ends the snooze on the alarm's condition early, exactly as its deadline passing 
 - Route: `POST /api/v1/components/{name}/alarms/{id}:unsnooze`
 - Gate: `alarm:snooze`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -400,6 +437,7 @@ The component's command history, newest first, each command whole (as the single
 - Route: `GET /api/v1/components/{name}/commands`
 - Gate: `command:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -418,6 +456,7 @@ One command, whole: what it was told and the value it set, its recorded status w
 - Route: `GET /api/v1/components/{name}/commands/{id}`
 - Gate: `command:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -433,6 +472,7 @@ Records a command invocation, writes a caused event, and (for a settleable comma
 - Route: `POST /api/v1/components/{name}/commands:issue`
 - Gate: `command:issue`
 - Assume: destructive, open-world
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -453,6 +493,7 @@ This component's dependency edges both ways: its upstreams (what it depends on) 
 - Route: `GET /api/v1/components/{name}/dependencies`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -467,6 +508,7 @@ Records that this component depends on the upstream: power (fed from the named o
 - Route: `POST /api/v1/components/{name}/dependencies`
 - Gate: `component:update`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -484,6 +526,7 @@ Removes this component's edge of the kind to the upstream. Gated by component:up
 - Route: `DELETE /api/v1/components/{name}/dependencies/{kind}/{upstream}`
 - Gate: `component:update`
 - Assume: destructive, idempotent
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -500,6 +543,7 @@ Resolves the tags that cascade onto a component (platform -> location -> system 
 - Route: `GET /api/v1/components/{name}/effective-tags`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -515,6 +559,7 @@ Returns the component's recent log occurrences (the log-kind sink), newest first
 - Route: `GET /api/v1/components/{name}/events`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -529,6 +574,7 @@ The identity bindings of this conduit component: each value it reports under a m
 - Route: `GET /api/v1/components/{name}/identity-bindings`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -543,6 +589,7 @@ Ties this value, reported by the conduit component under this match key, to one 
 - Route: `PUT /api/v1/components/{name}/identity-bindings/{key}/{value}`
 - Gate: `component:update`
 - Assume: destructive, idempotent
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -561,6 +608,7 @@ Removes the binding of this value, reported by the conduit component under this 
 - Route: `DELETE /api/v1/components/{name}/identity-bindings/{key}/{value}`
 - Gate: `component:update`
 - Assume: destructive, idempotent
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -577,6 +625,7 @@ Returns the component's recent raw log lines (the ingest lane of ADR-0066, disti
 - Route: `GET /api/v1/components/{name}/logs`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -593,6 +642,7 @@ Every metric the component's product declares, resolved to the newest observed o
 - Route: `GET /api/v1/components/{name}/metrics`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -607,6 +657,7 @@ The samples behind the effective read's latest value for one series, newest firs
 - Route: `GET /api/v1/components/{name}/metrics/{metric}/samples`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -626,6 +677,7 @@ Every property the component has: each its product declares, resolved to the com
 - Route: `GET /api/v1/components/{name}/properties`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -640,6 +692,7 @@ The change history behind the effective value for one property series, newest fi
 - Route: `GET /api/v1/components/{name}/properties/{property}/samples`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -659,6 +712,7 @@ Composes, per endpoint, the latest reachability verdict, the probe-layer signals
 - Route: `GET /api/v1/components/{name}/reachability`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -673,6 +727,7 @@ A component that speaks for many owners (a conduit) lands each value its driver 
 - Route: `GET /api/v1/components/{name}/unbound-identities`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -687,6 +742,7 @@ Lists the tags bound directly on a component (not the resolved cascade). Gated b
 - Route: `GET /api/v1/components/{name}:listTags`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -701,6 +757,7 @@ Removes a key's value from a component. Gated by component:update.
 - Route: `POST /api/v1/components/{name}:removeTag`
 - Gate: `component:update`
 - Assume: destructive
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -716,6 +773,7 @@ Binds a value for a key on a component. The key must exist and apply to this ent
 - Route: `POST /api/v1/components/{name}:setTag`
 - Gate: `component:update`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -732,6 +790,7 @@ Creates one component from a component template at a location: its product and t
 - Route: `POST /api/v1/components:createFromTemplate`
 - Gate: `component:create`
 - Assume: adds
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -751,6 +810,7 @@ Lists the driver registry, ordered alphabetically by label. Populates the driver
 - Route: `GET /api/v1/drivers`
 - Gate: `driver:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `create-driver`
@@ -762,6 +822,7 @@ Creates a custom (non-official) driver. Gated by driver:create.
 - Route: `POST /api/v1/drivers`
 - Gate: `driver:create`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -779,6 +840,7 @@ Fetches a driver by id. Gated by driver:read.
 - Route: `GET /api/v1/drivers/{id}`
 - Gate: `driver:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -793,6 +855,7 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 - Route: `PATCH /api/v1/drivers/{id}`
 - Gate: `driver:update`
 - Assume: destructive
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -810,6 +873,7 @@ Runs a driver spec's polls once through the node named, against the target its i
 - Route: `POST /api/v1/drivers:preview`
 - Gate: `driver:preview`
 - Assume: destructive, open-world
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -829,6 +893,7 @@ Checks a driver spec by the rules a save applies (the strict parse, then validat
 - Route: `POST /api/v1/drivers:validate`
 - Gate: `driver:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -843,6 +908,7 @@ Lists the endpoints whose owning component the caller may read (the component ca
 - Route: `GET /api/v1/endpoints`
 - Gate: `endpoint:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `create-endpoint`
@@ -854,6 +920,7 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 - Route: `POST /api/v1/endpoints`
 - Gate: `endpoint:create`
 - Assume: open-world
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -875,6 +942,7 @@ Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An end
 - Route: `GET /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -889,6 +957,7 @@ Patches an endpoint's node placement, params, label, out-of-band mark, or (drive
 - Route: `PATCH /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:update`
 - Assume: destructive, open-world
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -909,6 +978,7 @@ Deletes an endpoint, refused while a task still references it. Gated by endpoint
 - Route: `DELETE /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:delete`
 - Assume: destructive, idempotent
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -923,6 +993,7 @@ Runs one of an attached endpoint's polls now, on the node that holds the endpoin
 - Route: `POST /api/v1/endpoints/{endpoint}/polls/{poll}:run`
 - Gate: `endpoint:run`
 - Assume: open-world
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -939,6 +1010,7 @@ Moves the endpoint's retry counter, which is part of its connection fingerprint:
 - Route: `POST /api/v1/endpoints/{endpoint}:retry`
 - Gate: `endpoint:retry`
 - Assume: destructive, open-world
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -955,6 +1027,7 @@ Mints a webhook endpoint's token anew (#1024): a post bearing the old one answer
 - Route: `POST /api/v1/endpoints/{endpoint}:rotateToken`
 - Gate: `endpoint:update`
 - Assume: destructive
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -969,6 +1042,7 @@ Lists the event rules, the authored config that raises alarms, each with its liv
 - Route: `GET /api/v1/event-rules`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `get-event-rule`
@@ -980,6 +1054,7 @@ Returns one event rule by name, with its live state as counts over the component
 - Route: `GET /api/v1/event-rules/{name}`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -994,6 +1069,7 @@ What a rule holds right now: the conditions it holds in force (one per component
 - Route: `GET /api/v1/event-rules/{name}/state`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1008,6 +1084,7 @@ Judges a candidate rule (sample key, selector, criteria) without writing anythin
 - Route: `POST /api/v1/event-rules:preview`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1027,6 +1104,7 @@ Lists every registered event type (official and custom). The catalog is fleet-wi
 - Route: `GET /api/v1/event-types`
 - Gate: `event_type:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `validate-expression`
@@ -1038,6 +1116,7 @@ Compiles an expression against a registered site's environment and answers wheth
 - Route: `POST /api/v1/expressions:validate`
 - Gate: `rule:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1056,6 +1135,7 @@ Lists the locations the caller may read, each filtered to its scope subtree. Gat
 - Route: `GET /api/v1/locations`
 - Gate: `location:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `create-location`
@@ -1067,6 +1147,7 @@ Creates a location, optionally under a parent (a root needs an all-scoped grant)
 - Route: `POST /api/v1/locations`
 - Gate: `location:create`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1085,6 +1166,7 @@ Fetches a location by name within the caller's read scope. Out of scope is a non
 - Route: `GET /api/v1/locations/{name}`
 - Gate: `location:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1099,6 +1181,7 @@ Patches a location's label or location_type. The name is not patchable: renaming
 - Route: `PATCH /api/v1/locations/{name}`
 - Gate: `location:update`
 - Assume: destructive
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1115,6 +1198,7 @@ The location's current verdict, worst-wins over every system placed anywhere ben
 - Route: `GET /api/v1/locations/{name}/health`
 - Gate: `location:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1129,6 +1213,7 @@ Every metric the location's type declares, resolved to the newest observed or ca
 - Route: `GET /api/v1/locations/{name}/metrics`
 - Gate: `location:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1143,6 +1228,7 @@ Every property the location's type declares, resolved to the location's own valu
 - Route: `GET /api/v1/locations/{name}/properties`
 - Gate: `location:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1157,6 +1243,7 @@ Creates a subtree of locations from a location template under a parent location 
 - Route: `POST /api/v1/locations:createFromTemplate`
 - Gate: `location:create`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1174,6 +1261,7 @@ Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope rea
 - Route: `GET /api/v1/nodes`
 - Gate: `node:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `get-node`
@@ -1185,6 +1273,7 @@ Fetches a node by name. Requires an all-scope read. Gated by node:read.
 - Route: `GET /api/v1/nodes/{name}`
 - Gate: `node:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1199,6 +1288,7 @@ Returns the node's own recent operational log lines (the raw ingest lane of ADR-
 - Route: `GET /api/v1/nodes/{name}/logs`
 - Gate: `node:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1213,6 +1303,7 @@ Renders the type's subject and text (or a draft of either, sent in the body) aga
 - Route: `POST /api/v1/notification-types/{name}:preview`
 - Gate: `notification_type:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1232,6 +1323,7 @@ The messages sent, on their way, or failed about alarms, newest first, filtered 
 - Route: `GET /api/v1/notifications`
 - Gate: `notification:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1249,6 +1341,7 @@ Lists the product registry, ordered alphabetically by label. Each product carrie
 - Route: `GET /api/v1/products`
 - Gate: `product:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `get-product`
@@ -1260,6 +1353,7 @@ Fetches a product by its name or its uuid. Either form resolves, so `omniglass p
 - Route: `GET /api/v1/products/{id}`
 - Gate: `product:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1274,6 +1368,7 @@ Lists the secret_type shapes a secret can take, for the create form. Gated by se
 - Route: `GET /api/v1/secret-types`
 - Gate: `secret:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-secrets`
@@ -1285,6 +1380,7 @@ Lists the secrets the caller may see, with masked fields, filtered to the read s
 - Route: `GET /api/v1/secrets`
 - Gate: `secret:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `create-standard-from-template`
@@ -1296,6 +1392,7 @@ Writes one standard of your own (official false) from a standard template in the
 - Route: `POST /api/v1/standards:createFromTemplate`
 - Gate: `standard:create`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1313,6 +1410,7 @@ Lists the systems the caller may read, each filtered to its scope subtree. Gated
 - Route: `GET /api/v1/systems`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `get-system`
@@ -1324,6 +1422,7 @@ Fetches a system by name within the caller's read scope. Out of scope is a non-d
 - Route: `GET /api/v1/systems/{name}`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1338,6 +1437,7 @@ Patches a system's label, standard, or system_type. The name is not patchable: r
 - Route: `PATCH /api/v1/systems/{name}`
 - Gate: `system:update`
 - Assume: destructive
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1355,6 +1455,7 @@ Every member's alarms in one read, newest first, each naming its component: the 
 - Route: `GET /api/v1/systems/{name}/alarms`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1369,6 +1470,7 @@ Returns the system's own events and its members', newest first, bounded to the l
 - Route: `GET /api/v1/systems/{name}/events`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1383,6 +1485,7 @@ The system's current verdict and why: every role it needs filled, whether it is 
 - Route: `GET /api/v1/systems/{name}/health`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1397,6 +1500,7 @@ Returns the members' raw log lines merged newest first, bounded to the last 24 h
 - Route: `GET /api/v1/systems/{name}/logs`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1413,6 +1517,7 @@ The components bound into this system, ordered by name. Membership is what a rol
 - Route: `GET /api/v1/systems/{name}/members`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1427,6 +1532,7 @@ Binds this component into the system. Idempotent. A component's first membership
 - Route: `PUT /api/v1/systems/{name}/members/{component}`
 - Gate: `system:update`
 - Assume: destructive, idempotent
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1442,6 +1548,7 @@ Every metric the system's standard declares, resolved to the newest observed or 
 - Route: `GET /api/v1/systems/{name}/metrics`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1456,6 +1563,7 @@ The samples behind the effective read's latest value for one series, newest firs
 - Route: `GET /api/v1/systems/{name}/metrics/{metric}/samples`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1475,6 +1583,7 @@ Every property the system has: each its standard declares, resolved to the syste
 - Route: `GET /api/v1/systems/{name}/properties`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1489,6 +1598,7 @@ The change history behind the effective value for one property series, newest fi
 - Route: `GET /api/v1/systems/{name}/properties/{property}/samples`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1508,6 +1618,7 @@ Creates a system from a system template at a location, built to the standard you
 - Route: `POST /api/v1/systems:createFromTemplate`
 - Gate: `system:create`
 - Assume: adds
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1528,6 +1639,7 @@ Lists the tasks whose endpoint's owning component the caller may read (the compo
 - Route: `GET /api/v1/tasks`
 - Gate: `task:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-templates`
@@ -1539,6 +1651,7 @@ Lists the template catalog this binary ships, ordered by kind then name, optiona
 - Route: `GET /api/v1/templates`
 - Gate: `template:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1553,6 +1666,7 @@ Reads one template from the catalog by name, whole: its kind and the body that k
 - Route: `GET /api/v1/templates/{template}`
 - Gate: `template:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1567,6 +1681,7 @@ Lists the transport registry: the wires an endpoint can speak over, a build-time
 - Route: `GET /api/v1/transports`
 - Gate: `endpoint:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-unclaimed-sources`
@@ -1578,6 +1693,7 @@ The unclaimed-source inbox: each source a listener heard from that no endpoint c
 - Route: `GET /api/v1/unclaimed-sources`
 - Gate: `node:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-vendors`
@@ -1589,4 +1705,5 @@ Lists the vendor registry, ordered alphabetically by label. Populates the vendor
 - Route: `GET /api/v1/vendors`
 - Gate: `vendor:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none

@@ -22,7 +22,7 @@ const VERB_FAMILY: Record<string, string> = {
   create: "badge-success", enroll: "badge-success", issue: "badge-success", restore: "badge-success", enable: "badge-success",
   update: "badge-warning", set: "badge-warning", unset: "badge-warning", archive: "badge-warning", disable: "badge-warning",
   change_password: "badge-warning", reset_password: "badge-warning", clear_avatar: "badge-warning",
-  login_denied: "badge-warning", reveal: "badge-warning", copy: "badge-warning",
+  login_denied: "badge-warning", reveal: "badge-warning", copy: "badge-warning", agent_refused: "badge-warning",
   login: "badge-info", logout: "badge-info",
   impersonate: "badge-primary",
 };

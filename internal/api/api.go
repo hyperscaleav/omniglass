@@ -291,6 +291,16 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	}, a.meHandler)
 
 	huma.Register(api, huma.Operation{
+		OperationID: "get-auth-me-agent-policy",
+		Extensions:  mcpExposed(),
+		Method:      http.MethodGet,
+		Path:        "/auth/me/agent-policy",
+		Summary:     "What the install lets an agent do",
+		Description: "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
+		Middlewares: huma.Middlewares{a.authn},
+	}, a.agentPolicyHandler)
+
+	huma.Register(api, huma.Operation{
 		OperationID: "update-auth-me",
 		Method:      http.MethodPatch,
 		Path:        "/auth/me",

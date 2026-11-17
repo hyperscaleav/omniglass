@@ -985,6 +985,9 @@ type Gateway interface {
 	CollectionSettings(ctx context.Context) (settings.CollectionSettings, error)
 	// DatabaseSettings is the effective database namespace (#1627).
 	DatabaseSettings(ctx context.Context) (settings.DatabaseSettings, error)
+	// AgentSettings is the effective agent namespace (#2063): the install's
+	// always/ask/never policy for each class of operation an agent calls.
+	AgentSettings(ctx context.Context) (settings.AgentSettings, error)
 	// RecordPlatformMetrics lands the process's own observations on the
 	// platform components, written by the process (#1625).
 	RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) error
