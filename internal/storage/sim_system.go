@@ -7,18 +7,18 @@ import (
 )
 
 // SimSystemSpec is a simulated system to create: the system (to a standard,
-// typically), the node whose simulator serves its components, and one entry
+// typically), the outpost whose simulator serves its components, and one entry
 // per component, each with its role and product and the endpoints the
 // collector reaches it through.
 type SimSystemSpec struct {
 	System     SystemSpec
-	Node       string
+	Outpost    string
 	Components []SimSystemComponent
 }
 
 // SimSystemComponent is one planned component of a simulated system. Its
 // name is minted (the platform's naming, as an unnamed create mints it), it
-// sits where the system sits, and its endpoints are placed on the node.
+// sits where the system sits, and its endpoints are placed on the outpost.
 type SimSystemComponent struct {
 	Role      string
 	Product   string
@@ -48,18 +48,18 @@ type SimSystemError = PlanError
 
 // CreateSimSystem creates a simulated system whole, in one transaction: the
 // system, then for each planned component the component, its endpoints on
-// the node, and its role assignment. It is a consumer of the planned create
+// the outpost, and its role assignment. It is a consumer of the planned create
 // (CreatePlan): every piece is the ordinary create with the caller's own
 // scope and its own audit row, landing together or not at all.
 func (p *PG) CreateSimSystem(ctx context.Context, actorID string, spec SimSystemSpec, sc SimSystemScopes) (*SimSystem, error) {
-	node := spec.Node
+	outpost := spec.Outpost
 	ps := PlannedSystem{System: spec.System}
 	for _, slot := range spec.Components {
 		product := slot.Product
 		pc := PlannedComponent{Role: slot.Role, Component: ComponentSpec{ProductName: &product}}
 		for _, e := range slot.Endpoints {
-			n := node
-			e.Node = &n
+			n := outpost
+			e.Outpost = &n
 			pc.Endpoints = append(pc.Endpoints, e)
 		}
 		ps.Components = append(ps.Components, pc)

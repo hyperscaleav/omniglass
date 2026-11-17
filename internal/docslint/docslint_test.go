@@ -79,7 +79,7 @@ func TestAntiPatternCatalog(t *testing.T) {
 func TestBannedPatternsStaySane(t *testing.T) {
 	current := []string{
 		"property_type", "the property catalog", "a sample lands in metric",
-		"the current value cache", "source_event_id", "omniglass node run",
+		"the current value cache", "source_event_id", "omniglass outpost run",
 		"ListShell", "FlatList", "TreeList", "UpsertPropertyType",
 		"value_type on the variable", // a live column, distinct from the retired data-type usage
 		// ADR-0071 redefines "template" rather than retiring the word, so the prose
@@ -389,7 +389,7 @@ func TestADR2030PlaceAsANounFires(t *testing.T) {
 		"N inlined copies are N places to drift",
 		"a lab is never a place for real data",
 		"`corporate` places one booking service a site",
-		"a node delete re-places its tasks",
+		"an outpost delete re-places its tasks",
 		"`group_weight` places a group",
 		"where you place them, escaped",
 		"is not a number in the first place",

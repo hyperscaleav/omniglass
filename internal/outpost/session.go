@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"crypto/sha256"
@@ -18,7 +18,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
-// The node's held sessions (#816) and the listeners that live on them
+// The outpost's held sessions (#816) and the listeners that live on them
 // (#817). An endpoint whose worklist carries a standing listen task over a
 // transport with a session dialer gets one held session: the listen tasks
 // are what need the connection held, their instantiation commands arm it on
@@ -26,7 +26,7 @@ import (
 // pushes, and the endpoint's polls and commands borrow the connection rather
 // than dialing. The manager reconciles the held set against every worklist
 // pull: a new listen task starts a session, a removed one (or a change to
-// what the connection depends on) tears it down, node shutdown tears down
+// what the connection depends on) tears it down, outpost shutdown tears down
 // them all. It runs on the run loop's goroutine; what a session's goroutines
 // and the dispatcher's workers read back (where to publish, the listeners,
 // the held set) sits behind locks.
@@ -91,7 +91,7 @@ func sessionIdentity(transport, target string, timeout time.Duration, secrets ma
 	return hex.EncodeToString(sum[:])
 }
 
-// routedListener is one listener as the node runs it: its listen task and
+// routedListener is one listener as the outpost runs it: its listen task and
 // its baked function.
 type routedListener struct {
 	taskID string
@@ -610,11 +610,11 @@ func (h *heldSession) publishTo() (string, string) {
 	return h.taskID, h.endpoint
 }
 
-// sessionManager owns the node's held sessions, keyed by endpoint id.
+// sessionManager owns the outpost's held sessions, keyed by endpoint id.
 type sessionManager struct {
 	dialers map[string]collection.SessionDialer
 	hooks   sessionHooks
-	// dials bounds how many of the node's sessions dial and handshake at
+	// dials bounds how many of the outpost's sessions dial and handshake at
 	// once (#1636), shared by every session it starts; nil is unbounded.
 	dials collection.DialSlots
 	// mapsMu guards held, certPins, datagrams, datagramRefused and
@@ -674,7 +674,7 @@ type sessionManager struct {
 	streamResumes map[string]heldResume
 	// httpFetch sends a stream login's steps; nil is the real fetcher.
 	httpFetch collection.HTTPFetcher
-	// now is the node's clock for a disruption's quiet and hold (#1651):
+	// now is the outpost's clock for a disruption's quiet and hold (#1651):
 	// when a disruptive delivery adds disrupted, and what a held session's
 	// dial waits on. The wall clock unless a test sets it.
 	now func() time.Time
@@ -821,7 +821,7 @@ func (m *sessionManager) upstreamHeld(endpointID string) bool {
 
 // syncCertPins brings each tls endpoint's pin to what the worklist
 // delivers: a new endpoint takes the delivered pin (empty before first use),
-// a different delivered pin replaces it, a key the node learned on first use
+// a different delivered pin replaces it, a key the outpost learned on first use
 // that the worklist does not deliver (a lost publish) is published again, and
 // a delivered pin the worklist stops delivering (withdrawn) is forgotten. An
 // endpoint that left the worklist forgets its pin.
@@ -885,7 +885,7 @@ func (m *sessionManager) publishCertificate(endpointID, fp string) {
 }
 
 // certPinOf is the tls endpoint's pin the probe shares, or a pin of the
-// delivered key alone when the node holds none (no session manager).
+// delivered key alone when the outpost holds none (no session manager).
 func (m *sessionManager) certPinOf(task collection.TaskSpec) *collection.HostKeyPin {
 	if m != nil {
 		m.mapsMu.RLock()
@@ -1104,7 +1104,7 @@ func (m *sessionManager) observe(tasks []collection.TaskSpec) {
 	m.gates.route(tasks)
 	m.pubMu.Lock()
 	m.pubTask = pubTask
-	// What the server reflects back is what is published: a gate the node
+	// What the server reflects back is what is published: a gate the outpost
 	// holds that the worklist does not reflect (a lost publish) goes out
 	// again on every pull until it does, as the trusted host key does.
 	m.published = map[string]string{}
@@ -1174,7 +1174,7 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 	}
 	for id, h := range m.held {
 		w, ok := want[id]
-		// Only a key this node learned on first use is carried across a
+		// Only a key this outpost learned on first use is carried across a
 		// recycle; a delivered pin is the server's, delivered again or not.
 		if h.pin != nil && h.pin.Learned() {
 			if fp := h.pin.Get(); fp != "" {
@@ -1193,7 +1193,7 @@ func (m *sessionManager) reconcile(tasks []collection.TaskSpec) {
 		case h.pin != nil && w.hostKey == "" && h.pin.Get() != "" && !h.pin.Learned():
 			// The server delivered this pin and now delivers none: it was
 			// withdrawn (a declared pin the writer ruling retired, ADR-0161).
-			// The node forgets it, and the session redials trusting on first
+			// The outpost forgets it, and the session redials trusting on first
 			// use rather than holding a key nobody vouches for.
 			delete(m.pins, id)
 			m.teardown(id, h, "its host key pin was withdrawn")
@@ -1245,7 +1245,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 	if w.auth != nil && w.auth.SSH != nil {
 		h.pin = collection.NewHostKeyPin(w.hostKey)
 		if w.hostKey == "" {
-			// The key this node trusted on first use, carried across a recycle.
+			// The key this outpost trusted on first use, carried across a recycle.
 			h.pin = collection.NewLearnedHostKeyPin(m.pins[id])
 		}
 		// Every authenticated connection publishes its key: one lost publish
@@ -1303,7 +1303,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 	}
 	var rejected *collection.TerminalError
 	if gt, ok := m.gates.refusedAt(id, rungAuthenticated); ok {
-		// A gate this node holds for this fingerprint, or carried back from
+		// A gate this outpost holds for this fingerprint, or carried back from
 		// before a restart: the session starts rejected and dials nothing.
 		rejected = gt.refusal()
 	}
@@ -1341,7 +1341,7 @@ func (m *sessionManager) start(id string, w sessionWant) {
 			case tr.State == collection.SessionRejected && tr.Refusal != nil && tr.Refusal != rejected:
 				// Not the replay of the refusal the session was started
 				// with (that gate is already held, and an adopted one's
-				// refusal is the node's placeholder, #1110): a refusal met,
+				// refusal is the outpost's placeholder, #1110): a refusal met,
 				// a re-probe's under the same fingerprint included.
 				m.refuse(id, w.fingerprint, tr.Refusal)
 			case tr.State == collection.SessionUp && !driver.IsHTTP(w.conn.transport):
@@ -1500,7 +1500,7 @@ func (h *heldSession) rejected() bool {
 }
 
 // lookup is the session a poll or a command on endpointID borrows, or nil (a
-// nil interface, never a typed nil) when the node holds none for it.
+// nil interface, never a typed nil) when the outpost holds none for it.
 func (m *sessionManager) lookup(endpointID string) collection.HeldExchanger {
 	if m == nil || endpointID == "" {
 		return nil
@@ -1513,7 +1513,7 @@ func (m *sessionManager) lookup(endpointID string) collection.HeldExchanger {
 	return nil
 }
 
-// isUp reports whether the node holds a session for endpointID that reads up.
+// isUp reports whether the outpost holds a session for endpointID that reads up.
 func (m *sessionManager) isUp(endpointID string) bool {
 	if m == nil || endpointID == "" {
 		return false
@@ -1528,13 +1528,13 @@ func (m *sessionManager) isUp(endpointID string) bool {
 	return st == collection.SessionUp
 }
 
-// closeAll tears down every held session: node shutdown.
+// closeAll tears down every held session: outpost shutdown.
 func (m *sessionManager) closeAll() {
 	for id, h := range m.held {
-		m.teardown(id, h, "node shutdown")
+		m.teardown(id, h, "outpost shutdown")
 	}
 	for id, h := range m.datagrams {
-		m.closeDatagram(id, h, "node shutdown")
+		m.closeDatagram(id, h, "outpost shutdown")
 	}
 }
 

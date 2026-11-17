@@ -1,4 +1,4 @@
-package simnode
+package simoutpost
 
 import (
 	"encoding/json"
@@ -37,7 +37,7 @@ func safeAnswer(run func() collection.SimOperationResult) (res collection.SimOpe
 }
 
 // subscribeOperations answers the server's operation requests for this
-// node's devices.
+// outpost's devices.
 func subscribeOperations(nc *nats.Conn, name string, engine *sim.Engine) (*nats.Subscription, error) {
 	return nc.Subscribe(collection.SimopSubject(name), func(m *nats.Msg) {
 		var op collection.SimOperation

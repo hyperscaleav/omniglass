@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The node runs a session's auth step and honours rejected (#1049): the
+// The outpost runs a session's auth step and honours rejected (#1049): the
 // driver's session block arrives on the worklist, the login renders against
 // the delivered secrets, the auth rung and the reason publish, a rejected
 // session dials no more until its credential changes or its endpoint's
@@ -326,7 +326,7 @@ func (p *countingTelnetProbe) Probe(context.Context, string, time.Duration) (col
 	return collection.TelnetResult{Dialed: true, Reason: collection.Refused}, nil
 }
 
-// Review of #1033, finding 2: while the node holds an endpoint's telnet
+// Review of #1033, finding 2: while the outpost holds an endpoint's telnet
 // session and it reads up, the reachability probe does not dial a second
 // connection (gear that admits one telnet client would refuse it and read
 // not responsive beside an up session): the up session is the proof.

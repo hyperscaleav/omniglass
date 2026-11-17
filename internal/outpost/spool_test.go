@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"bytes"
@@ -20,17 +20,17 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// The node's telemetry spool (#454, folded into #453): a batch the stream has
+// The outpost's telemetry spool (#454, folded into #453): a batch the stream has
 // not acked stays held, in order, and ships on the next tick under the id it
 // was minted with, so a retry is a duplicate the stream and the server's
 // receipt recognize; at its cap the oldest batch drops and the drop is told.
-// A node's tick lands as one batch of task groups (#1582): the spool gathers
+// An outpost's tick lands as one batch of task groups (#1582): the spool gathers
 // the groups and flushes them on its timer, at its byte threshold, or ahead of
 // a whole batch, minting the batch's id and bytes once at the flush.
 
 // stubPublisher records every attempt and fails every one while the stream
 // is down, as a lost connection fails every batch with the stream at once
-// (one connection delivers in order, and the node buffers nothing across a
+// (one connection delivers in order, and the outpost buffers nothing across a
 // reconnect, so a later batch never lands ahead of an earlier one that
 // failed). It stores a batch once per id, as the stream's duplicate window
 // does, so a retry of a batch it already stored is answered and not stored
@@ -221,7 +221,7 @@ func timedSpool(pub *stubPublisher) (*telemetrySpool, *fakeTimers) {
 // then back. Nothing is lost, nothing is stored twice, the batches ship in
 // the order they were sent, and every attempt at one batch carries the one
 // id it was minted with. (Adapted for #1582: each batch is one group added
-// and flushed, the node's path, where it was a whole batch sent.)
+// and flushed, the outpost's path, where it was a whole batch sent.)
 func TestSpoolShipsEveryBatchOnceInOrder(t *testing.T) {
 	t.Parallel()
 	pub := &stubPublisher{down: true}
@@ -255,7 +255,7 @@ func TestSpoolShipsEveryBatchOnceInOrder(t *testing.T) {
 			ids[a.id] = true
 		}
 		if a.subject != "og.v1.telemetry.edge" {
-			t.Fatalf("published on %q, want the node's own subject", a.subject)
+			t.Fatalf("published on %q, want the outpost's own subject", a.subject)
 		}
 	}
 	if len(ids) != 1 {
@@ -615,7 +615,7 @@ func (p *stubPublisher) shippedBatches(t *testing.T) []*ogv1.TelemetryBatch {
 }
 
 // TestSpoolFlushesATickAsOneBatch: N groups added within one interval ship
-// as one batch of N groups, in the order added, under the node's id, when
+// as one batch of N groups, in the order added, under the outpost's id, when
 // the interval's timer fires; nothing ships before it.
 func TestSpoolFlushesATickAsOneBatch(t *testing.T) {
 	t.Parallel()
@@ -644,8 +644,8 @@ func TestSpoolFlushesATickAsOneBatch(t *testing.T) {
 		t.Fatalf("shipped %d batches, want 1 for the interval", len(batches))
 	}
 	b := batches[0]
-	if b.GetNodeId() != "edge" || b.GetTs() == nil {
-		t.Fatalf("batch node %q ts %v, want edge and a flush time", b.GetNodeId(), b.GetTs())
+	if b.GetOutpostId() != "edge" || b.GetTs() == nil {
+		t.Fatalf("batch outpost %q ts %v, want edge and a flush time", b.GetOutpostId(), b.GetTs())
 	}
 	if b.GetTaskId() != "" || len(b.GetMetrics()) != 0 {
 		t.Fatalf("a tick batch carried top-level task samples: task %q, %d metrics", b.GetTaskId(), len(b.GetMetrics()))
@@ -829,7 +829,7 @@ func TestSpoolRetryShipsTheSameIdAndBytes(t *testing.T) {
 	}
 }
 
-// TestSpoolSendFlushesPendingFirst: a whole batch (the node's own logs) sent
+// TestSpoolSendFlushesPendingFirst: a whole batch (the outpost's own logs) sent
 // while groups are pending ships after them, so the stream keeps the order
 // things happened in.
 func TestSpoolSendFlushesPendingFirst(t *testing.T) {
@@ -837,7 +837,7 @@ func TestSpoolSendFlushesPendingFirst(t *testing.T) {
 	pub := &stubPublisher{}
 	s, timers := timedSpool(pub)
 	_ = s.add(tagged("g"))
-	if err := s.send(&ogv1.TelemetryBatch{NodeId: "edge", Logs: []*ogv1.LogLine{{Message: "hello"}}}); err != nil {
+	if err := s.send(&ogv1.TelemetryBatch{OutpostId: "edge", Logs: []*ogv1.LogLine{{Message: "hello"}}}); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	waitIdle(t, s)
@@ -846,7 +846,7 @@ func TestSpoolSendFlushesPendingFirst(t *testing.T) {
 		t.Fatalf("shipped %d batches, want the pending groups then the logs", len(batches))
 	}
 	if len(batches[0].GetGroups()) != 1 || len(batches[1].GetLogs()) != 1 {
-		t.Fatalf("order %v, want groups first then node logs", batches)
+		t.Fatalf("order %v, want groups first then outpost logs", batches)
 	}
 	if len(timers.live()) != 0 {
 		t.Fatal("the flush timer stayed armed after send flushed the pending groups")
@@ -890,7 +890,7 @@ func TestSpoolTimerAfterAFlushIsANoOp(t *testing.T) {
 }
 
 // TestSpoolShipsPushedSamplesAtOnce: a session's pushed samples are a change
-// an endpoint just told the node about, so they flush at once, carrying the
+// an endpoint just told the outpost about, so they flush at once, carrying the
 // groups already pending with them, instead of waiting out the tick's timer.
 func TestSpoolShipsPushedSamplesAtOnce(t *testing.T) {
 	t.Parallel()
@@ -913,7 +913,7 @@ func TestSpoolShipsPushedSamplesAtOnce(t *testing.T) {
 }
 
 // TestSpoolTalliesEveryBatchAcknowledgedOrDropped (#1639): the lab reconciles
-// what the node published against what landed, so the spool counts each batch
+// what the outpost published against what landed, so the spool counts each batch
 // the stream acknowledged and each it gave up on, an overflow or a refusal.
 // A retry of a held batch is not counted twice.
 func TestSpoolTalliesEveryBatchAcknowledgedOrDropped(t *testing.T) {
@@ -972,12 +972,12 @@ func TestSpoolStampsOneBootAndADenseSeq(t *testing.T) {
 	pub := &stubPublisher{}
 	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
 	queueTagged(t, s, "a")
-	if err := s.send(&ogv1.TelemetryBatch{NodeId: "edge", Logs: []*ogv1.LogLine{{Message: "self"}}}); err != nil {
+	if err := s.send(&ogv1.TelemetryBatch{OutpostId: "edge", Logs: []*ogv1.LogLine{{Message: "self"}}}); err != nil {
 		t.Fatal(err)
 	}
 	queueTagged(t, s, "b")
 	_ = s.add(tagged("c"))
-	if err := s.send(&ogv1.TelemetryBatch{NodeId: "edge", Logs: []*ogv1.LogLine{{Message: "self"}}}); err != nil {
+	if err := s.send(&ogv1.TelemetryBatch{OutpostId: "edge", Logs: []*ogv1.LogLine{{Message: "self"}}}); err != nil {
 		t.Fatal(err)
 	}
 	waitIdle(t, s)
@@ -1004,7 +1004,7 @@ func TestSpoolStampsOneBootAndADenseSeq(t *testing.T) {
 
 // TestSpoolLedgerCountsEachKind (#1641): a batch's count per kind is the
 // items it carries, before is what the boot minted ahead of it, and a whole
-// batch's self-logs count as log, its node-self samples as metric.
+// batch's self-logs count as log, its outpost-self samples as metric.
 func TestSpoolLedgerCountsEachKind(t *testing.T) {
 	t.Parallel()
 	pub := &stubPublisher{}
@@ -1016,9 +1016,9 @@ func TestSpoolLedgerCountsEachKind(t *testing.T) {
 	})
 	_ = s.add(&ogv1.TaskGroup{TaskId: "b", Events: []*ogv1.EventSample{{Name: "e", Message: "up"}}})
 	s.flush()
-	if err := s.send(&ogv1.TelemetryBatch{NodeId: "edge",
-		Logs:     []*ogv1.LogLine{{Message: "1"}, {Message: "2"}},
-		NodeSelf: &ogv1.NodeSelf{Metrics: []*ogv1.MetricSample{{Name: "spool-batch-count", Value: 0}}},
+	if err := s.send(&ogv1.TelemetryBatch{OutpostId: "edge",
+		Logs:        []*ogv1.LogLine{{Message: "1"}, {Message: "2"}},
+		OutpostSelf: &ogv1.OutpostSelf{Metrics: []*ogv1.MetricSample{{Name: "spool-batch-count", Value: 0}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1151,9 +1151,9 @@ func TestAnOverflowedBatchIsCountedUnderItsCauseOnTheNextLedger(t *testing.T) {
 	}
 }
 
-// TestARefusedBatchIsTheNodesLossOnTheNextLedger (#1692): a batch the bus
+// TestARefusedBatchIsTheOutpostsLossOnTheNextLedger (#1692): a batch the bus
 // refuses for good is dropped as bus-refused, and the next batch says so.
-func TestARefusedBatchIsTheNodesLossOnTheNextLedger(t *testing.T) {
+func TestARefusedBatchIsTheOutpostsLossOnTheNextLedger(t *testing.T) {
 	t.Parallel()
 	pub := &stubPublisher{}
 	refuse := true
@@ -1183,10 +1183,10 @@ func TestARefusedBatchIsTheNodesLossOnTheNextLedger(t *testing.T) {
 	}
 }
 
-// TestSelfLogsTheBufferDroppedAreTheNodesLoss (#1692): self-log lines the
+// TestSelfLogsTheBufferDroppedAreTheOutpostsLoss (#1692): self-log lines the
 // capture buffer dropped never reached a batch; the self-report that drains
 // it carries their count as self-log-overflow, a running total.
-func TestSelfLogsTheBufferDroppedAreTheNodesLoss(t *testing.T) {
+func TestSelfLogsTheBufferDroppedAreTheOutpostsLoss(t *testing.T) {
 	t.Parallel()
 	pub := &stubPublisher{}
 	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", pub.publish)
@@ -1225,7 +1225,7 @@ func (h *slowWarnHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.recordingHandler.Handle(ctx, r)
 }
 
-// TestSpoolTellsItsDropsBeforeDrainReturns: a stopping node drains the spool
+// TestSpoolTellsItsDropsBeforeDrainReturns: a stopping outpost drains the spool
 // and exits, so the overflow notice has to be logged before drain returns, not
 // after the shipper wakes it.
 func TestSpoolTellsItsDropsBeforeDrainReturns(t *testing.T) {

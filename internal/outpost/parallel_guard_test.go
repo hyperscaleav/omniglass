@@ -1,4 +1,4 @@
-package node_test
+package outpost_test
 
 import (
 	"testing"
@@ -12,7 +12,7 @@ import (
 // ephemeral ports, never fixed ones, which is what makes that safe; a test that
 // needs a fixed port says so in a "// Serial:" comment. It scans the package's
 // internal and external test files alike.
-func TestEveryNodeTestRunsInParallelOrSaysWhyNot(t *testing.T) {
+func TestEveryOutpostTestRunsInParallelOrSaysWhyNot(t *testing.T) {
 	t.Parallel()
 	storagetest.RequireParallelOrSerial(t, ".")
 }

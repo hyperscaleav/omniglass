@@ -13,20 +13,20 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
-// The storage half of the on-demand node run (#1163, ADR-1163): checking a
+// The storage half of the on-demand outpost run (#1163, ADR-1163): checking a
 // spec the way a save does without saving it, planning a preview (what a
-// node is sent to run a spec's polls once against a target, its secrets
+// outpost is sent to run a spec's polls once against a target, its secrets
 // unsealed), and resolving an attached endpoint's poll for a run now. The
-// node runs the work; these decide what it may be sent, and audit the asking.
+// outpost runs the work; these decide what it may be sent, and audit the asking.
 
 var (
-	// ErrPreviewUnsupported marks a preview of a poll no node can run without
+	// ErrPreviewUnsupported marks a preview of a poll no outpost can run without
 	// an endpoint: one that rides a held session (a login session, a line
 	// protocol over telnet, ssh, tls or a websocket) or a bound udp socket.
 	ErrPreviewUnsupported = errors.New("storage: preview unsupported")
 	// ErrNoSuchPoll marks a run of a poll the endpoint does not derive.
 	ErrNoSuchPoll = errors.New("storage: no such poll")
-	// ErrEndpointUnplaced marks a run of an endpoint no node holds.
+	// ErrEndpointUnplaced marks a run of an endpoint no outpost holds.
 	ErrEndpointUnplaced = errors.New("storage: endpoint unplaced")
 )
 
@@ -56,54 +56,54 @@ func (p *PG) DriverSpecFindings(ctx context.Context, raw []byte) ([]driver.Findi
 	return driver.Findings(raw, cat), nil
 }
 
-// PreviewInput is a preview asked for: the node to run it, the spec (a stored
+// PreviewInput is a preview asked for: the outpost to run it, the spec (a stored
 // driver by reference, or a spec inline), the inputs an attach would take,
 // and the polls to run (none is every poll). The scopes are the caller's:
-// node read, and secret read and bind, since a secret a preview uses leaves
+// outpost read, and secret read and bind, since a secret a preview uses leaves
 // for a target the caller names, as an attach's does (#2047).
 type PreviewInput struct {
-	Node     string
-	Driver   string
-	Spec     []byte
-	Inputs   map[string]string
-	Polls    []string
-	NodeRead scope.Set
-	Secrets  SecretUse
+	Outpost     string
+	Driver      string
+	Spec        []byte
+	Inputs      map[string]string
+	Polls       []string
+	OutpostRead scope.Set
+	Secrets     SecretUse
 }
 
-// PreviewPlan is what a node is sent to run a preview: a task per poll, as a
+// PreviewPlan is what an outpost is sent to run a preview: a task per poll, as a
 // worklist would deliver it, with no endpoint. Sealed lists the plaintext of
 // every secret field the tasks carry, which the answer is masked of.
 type PreviewPlan struct {
-	NodeID   string
-	NodeName string
-	Driver   string
-	Target   string
-	Polls    []string
-	Tasks    []WorklistTask
-	Sealed   []string
+	OutpostID   string
+	OutpostName string
+	Driver      string
+	Target      string
+	Polls       []string
+	Tasks       []WorklistTask
+	Sealed      []string
 }
 
 // previewEndpointName names the endpoint a preview task stands in for: none.
 const previewEndpointName = "preview"
 
-// previewableTransports are the transports whose polls a node runs without an
+// previewableTransports are the transports whose polls an outpost runs without an
 // endpoint: a request of its own, answered by itself (http, https, an snmp
 // get, a tcp line on a throwaway connection). Every other transport's poll
 // borrows a held session or a bound socket that only an endpoint has.
 var previewableTransports = []string{"http", "https", "snmp", "tcp"}
 
-// PlanDriverPreview turns a preview asked for into the tasks a node runs: the
+// PlanDriverPreview turns a preview asked for into the tasks an outpost runs: the
 // spec checked as a save would (refused with its findings), the polls chosen,
 // the inputs resolved as an attach would (defaults baked, the dial target
 // derived), and each secret input unsealed, but only a secret the caller may
-// reveal. The asking is audited in one transaction: a preview row on the node,
+// reveal. The asking is audited in one transaction: a preview row on the outpost,
 // and a row on each secret it hands to the target.
 func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewInput) (*PreviewPlan, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
-	n, err := p.GetNode(ctx, in.Node, in.NodeRead)
+	n, err := p.GetOutpost(ctx, in.Outpost, in.OutpostRead)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewIn
 	if err != nil {
 		return nil, fmt.Errorf("storage: marshal preview params: %w", err)
 	}
-	plan := &PreviewPlan{NodeID: n.PrincipalID, NodeName: n.Name, Target: params["target"]}
+	plan := &PreviewPlan{OutpostID: n.PrincipalID, OutpostName: n.Name, Target: params["target"]}
 	if in.Driver != "" {
 		plan.Driver = d.Name
 	}
@@ -179,7 +179,7 @@ func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewIn
 		secretNames = append(secretNames, row.name)
 		secretID := row.id
 		if err := writeAuditRes(ctx, tx, actorID, "preview", "secret", secretID, nil,
-			map[string]any{"node": n.Name, "target": plan.Target, "input": input.Name}); err != nil {
+			map[string]any{"outpost": n.Name, "target": plan.Target, "input": input.Name}); err != nil {
 			return nil, err
 		}
 	}
@@ -207,8 +207,8 @@ func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewIn
 		plan.Tasks = append(plan.Tasks, task)
 		plan.Polls = append(plan.Polls, poll.Name)
 	}
-	nodeID := n.PrincipalID
-	if err := writeAuditRes(ctx, tx, actorID, "preview", "node", nodeID, nil, map[string]any{
+	outpostID := n.PrincipalID
+	if err := writeAuditRes(ctx, tx, actorID, "preview", "outpost", outpostID, nil, map[string]any{
 		"driver": plan.Driver, "transport": sp.Transport, "target": plan.Target, "polls": plan.Polls, "secrets": secretNames,
 	}); err != nil {
 		return nil, err
@@ -245,23 +245,23 @@ func choosePolls(sp *driver.Spec, names []string) ([]driver.Poll, error) {
 }
 
 // EndpointPoll is an attached endpoint's poll, resolved for a run now: the
-// endpoint, the node that holds it, and the poll's task. Sealed lists the
+// endpoint, the outpost that holds it, and the poll's task. Sealed lists the
 // plaintext of every secret field the endpoint's worklist carries, which the
 // answer is masked of (the device may echo a credential back).
 type EndpointPoll struct {
-	EndpointID string
-	Endpoint   string
-	Component  string
-	NodeName   string
-	TaskID     string
-	Poll       string
-	Sealed     []string
+	EndpointID  string
+	Endpoint    string
+	Component   string
+	OutpostName string
+	TaskID      string
+	Poll        string
+	Sealed      []string
 }
 
 // PlanEndpointRun resolves the poll an operator asked to run now: the
 // endpoint under the caller's read and run scopes (outside the read scope a
 // non-disclosing not-found, inside it but outside the run scope a refusal),
-// the node that holds it, and the enabled poll task its driver derives for the
+// the outpost that holds it, and the enabled poll task its driver derives for the
 // named poll. The asking is audited on the endpoint.
 func (p *PG) PlanEndpointRun(ctx context.Context, actorID, ref, poll string, read, action scope.Set) (*EndpointPoll, error) {
 	tx, err := p.pool.Begin(ctx)
@@ -276,8 +276,8 @@ func (p *PG) PlanEndpointRun(ctx context.Context, actorID, ref, poll string, rea
 	if ep.DriverID == nil {
 		return nil, fmt.Errorf("%w: endpoint %q has no driver attached, so it has no polls (its reachability probe runs on its own)", ErrNoSuchPoll, ep.Name)
 	}
-	if ep.Node == nil {
-		return nil, fmt.Errorf("%w: endpoint %q is placed on no node, so no node can run its poll", ErrEndpointUnplaced, ep.Name)
+	if ep.Outpost == nil {
+		return nil, fmt.Errorf("%w: endpoint %q is placed on no outpost, so no outpost can run its poll", ErrEndpointUnplaced, ep.Name)
 	}
 	rows, err := tx.Query(ctx, `select id, coalesce(spec->>'function', '') from task where endpoint_id = $1 and mode = 'poll' and enabled order by 2`, ep.ID)
 	if err != nil {
@@ -308,12 +308,12 @@ func (p *PG) PlanEndpointRun(ctx context.Context, actorID, ref, poll string, rea
 		}
 		return nil, fmt.Errorf("%w: endpoint %q has no poll named %q; its polls are %s", ErrNoSuchPoll, ep.Name, poll, polls)
 	}
-	run := &EndpointPoll{EndpointID: ep.ID, Endpoint: ep.Name, NodeName: *ep.Node, TaskID: taskID, Poll: poll}
+	run := &EndpointPoll{EndpointID: ep.ID, Endpoint: ep.Name, OutpostName: *ep.Outpost, TaskID: taskID, Poll: poll}
 	if ep.Component != nil {
 		run.Component = *ep.Component
 	}
 	endpointID := ep.ID
-	if err := writeAuditRes(ctx, tx, actorID, "run", "endpoint", endpointID, nil, map[string]any{"poll": poll, "node": run.NodeName}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "run", "endpoint", endpointID, nil, map[string]any{"poll": poll, "outpost": run.OutpostName}); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -326,7 +326,7 @@ func (p *PG) PlanEndpointRun(ctx context.Context, actorID, ref, poll string, rea
 }
 
 // endpointSealed is the plaintext of every secret field the endpoint's tasks
-// carry to its node: each secret input of its driver, resolved as the
+// carry to its outpost: each secret input of its driver, resolved as the
 // worklist resolves it (cascading onto the endpoint's own component), and of
 // each, the fields its type marks secret. A reference that resolves to
 // nothing is absent here as it is on the worklist; a real failure (no key
@@ -363,11 +363,11 @@ func (p *PG) endpointSealed(ctx context.Context, ep *Endpoint) ([]string, error)
 		names = append(names, ref)
 	}
 	sort.Strings(names)
-	asks := make([]nodeSecretRef, len(names))
+	asks := make([]outpostSecretRef, len(names))
 	for i, name := range names {
-		asks[i] = nodeSecretRef{name, cid}
+		asks[i] = outpostSecretRef{name, cid}
 	}
-	got, err := p.nodeSecrets(ctx, asks)
+	got, err := p.outpostSecrets(ctx, asks)
 	if err != nil {
 		return nil, fmt.Errorf("storage: endpoint %q unseal: %w", ep.Name, err)
 	}

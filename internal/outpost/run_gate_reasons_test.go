@@ -3,7 +3,7 @@
 // The simulator serves on 127.x addresses beyond 127.0.0.1, which Linux
 // treats as local without configuration.
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -42,7 +42,7 @@ func TestAGoneDeviceHoldsItsPollsUntilItReturns(t *testing.T) {
 		"host": s.ips[sensorProfile], "port": fmt.Sprint(s.httpPort(sensorProfile)), "key": "census-key"})
 	// The probe runs every 1.5s, so a poll or two comes due and fails while
 	// the gone device's two down verdicts are still landing (#1704's CI).
-	s.runNodeProbing("edge-held", time.Second, 1500*time.Millisecond)
+	s.runOutpostProbing("edge-held", time.Second, 1500*time.Millisecond)
 
 	s.waitMetric("sensor-1", ep.Name, probekeys.PollDuration, func(v float64) bool { return v > 0 }, "a positive mean poll time")
 

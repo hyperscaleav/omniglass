@@ -61,7 +61,7 @@ type GroupPatch struct {
 // facts a roster shows, kept apart.
 //
 // Name is the principal's IDENTIFIER, whichever kind it is (a human's username,
-// a service account's name, a node's name), resolved by principalIdent.
+// a service account's name, an outpost's name), resolved by principalIdent.
 // Label is the friendly string, which only a human has a column for and
 // which is empty when nobody set one. The field that used to carry both is why
 // #563 renamed `service.label`.
@@ -390,11 +390,11 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupRef string, read scope.S
 	out := []GroupMember{}
 	for rows.Next() {
 		var m GroupMember
-		var username, serviceName, nodeName *string
-		if err := rows.Scan(&m.PrincipalID, &m.Kind, &username, &serviceName, &nodeName, &m.Label); err != nil {
+		var username, serviceName, outpostName *string
+		if err := rows.Scan(&m.PrincipalID, &m.Kind, &username, &serviceName, &outpostName, &m.Label); err != nil {
 			return nil, fmt.Errorf("storage: scan member: %w", err)
 		}
-		m.Name = principalIdent(username, serviceName, nodeName)
+		m.Name = principalIdent(username, serviceName, outpostName)
 		out = append(out, m)
 	}
 	return out, rows.Err()

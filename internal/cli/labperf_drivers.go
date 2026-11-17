@@ -59,13 +59,13 @@ func saveDriverTable(w io.Writer, out string, table labfootprint.DriverCostTable
 func newLabPerfDriversCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "drivers",
-		Short: "Measure what each shipped driver's polls cost a node, and write the table the docs render",
-		Long: "Brings up a throwaway lab with no fleet and, for each shipped driver in turn, a node of its own with the " +
-			"simulator beside it in its network namespace, so the node's cgroup holds only the node's work. Each driver " +
+		Short: "Measure what each shipped driver's polls cost an outpost, and write the table the docs render",
+		Long: "Brings up a throwaway lab with no fleet and, for each shipped driver in turn, an outpost of its own with the " +
+			"simulator beside it in its network namespace, so the outpost's cgroup holds only the outpost's work. Each driver " +
 			"is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the " +
-			"node's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm " +
+			"outpost's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm " +
 			"cost), with the threads' own CPU per run from poll-cpu-time beside it. A driver whose memory does not fit " +
-			"a line is swept again on a fresh node at four times the step, up to --max-step-tasks, since a cheap " +
+			"a line is swept again on a fresh outpost at four times the step, up to --max-step-tasks, since a cheap " +
 			"driver's few KiB a task is inside the noise at a small step. A figure that still does not fit is listed " +
 			"as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.\n\n" +
 			"The table is a host's: run it on the host class it describes, then run `go run ./cmd/labgen` and commit " +
@@ -88,7 +88,7 @@ func newLabPerfDriversCmd() *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.String("image", "", "the omniglass image the lab and the sweep's nodes run (lab run's --image); empty is this binary's own build")
+	f.String("image", "", "the omniglass image the lab and the sweep's outposts run (lab run's --image); empty is this binary's own build")
 	f.StringSlice("only", nil, "sweep only these drivers; empty sweeps every shipped one")
 	f.Int("step-tasks", 400, "about how many poll tasks each step adds")
 	f.Int("max-step-tasks", 6400, "the biggest step a driver whose memory does not show is swept again at; 0 sweeps each driver once")

@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 )
 
 // pruneCommandMemory drops outcomes past the redelivery window so the map does
-// not grow for the life of a long-running node, while keeping entries young
+// not grow for the life of a long-running outpost, while keeping entries young
 // enough to still be redelivered (idempotence must survive a redelivery).
 func TestPruneCommandMemory(t *testing.T) {
 	t.Parallel()
@@ -35,9 +35,9 @@ func TestPruneCommandMemory(t *testing.T) {
 	}
 }
 
-// A node whose command pull fails says so once, at WARN with its name and
+// An outpost whose command pull fails says so once, at WARN with its name and
 // the error, not on every tick it keeps failing, and says once at INFO when
-// a pull succeeds again: a node that cannot reach its command queue is
+// a pull succeeds again: an outpost that cannot reach its command queue is
 // visible in its own log (#1630).
 func TestACommandPullFailureIsLoggedOnTheTransition(t *testing.T) {
 	// Serial: it swaps the slog default to count the pull's log lines.
@@ -83,8 +83,8 @@ func TestACommandPullFailureIsLoggedOnTheTransition(t *testing.T) {
 
 	// No command responder: the first failure is one WARN line.
 	first := at(pull(), slog.LevelWarn)
-	if len(first) != 1 || attr(first[0], "facility") != "command" || attr(first[0], "node") != "edge-7" || attr(first[0], "error") == "" {
-		t.Fatalf("first failed pull logged %d WARN lines (%v), want one with facility=command, the node and the error", len(first), first)
+	if len(first) != 1 || attr(first[0], "facility") != "command" || attr(first[0], "outpost") != "edge-7" || attr(first[0], "error") == "" {
+		t.Fatalf("first failed pull logged %d WARN lines (%v), want one with facility=command, the outpost and the error", len(first), first)
 	}
 	// Still failing: nothing new.
 	if again := pull(); len(at(again, slog.LevelWarn)) != 0 || len(at(again, slog.LevelInfo)) != 0 {
@@ -101,8 +101,8 @@ func TestACommandPullFailureIsLoggedOnTheTransition(t *testing.T) {
 		t.Fatal(err)
 	}
 	recovered := pull()
-	if info := at(recovered, slog.LevelInfo); len(info) != 1 || attr(info[0], "node") != "edge-7" || len(at(recovered, slog.LevelWarn)) != 0 {
-		t.Fatalf("recovered pull logged %v, want one INFO line naming the node", recovered)
+	if info := at(recovered, slog.LevelInfo); len(info) != 1 || attr(info[0], "outpost") != "edge-7" || len(at(recovered, slog.LevelWarn)) != 0 {
+		t.Fatalf("recovered pull logged %v, want one INFO line naming the outpost", recovered)
 	}
 	if steady := pull(); len(steady) != 0 {
 		t.Fatalf("steady pull logged %v, want nothing", steady)

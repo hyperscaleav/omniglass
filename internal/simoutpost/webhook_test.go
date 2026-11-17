@@ -1,6 +1,6 @@
 //go:build linux
 
-package simnode
+package simoutpost
 
 import (
 	"sort"

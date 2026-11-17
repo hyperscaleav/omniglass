@@ -25,7 +25,7 @@ import (
 // the owner, measured rows only (observed and calculated). Two instances are
 // two series, and a declared or intended row is a want, not a reading, so
 // neither may move a bucket's min, max, avg or last. Rows of one instance from
-// different sources or collector nodes stay one series: a node move or a task
+// different sources or collector outposts stay one series: an outpost move or a task
 // reassignment does not split what was measured.
 
 // MetricBucket is one regular bucket of a metric series. An empty bucket has

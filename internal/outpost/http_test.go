@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// The node side of http polls and commands (#902) over fakes: the gate a
+// The outpost side of http polls and commands (#902) over fakes: the gate a
 // refused credential holds, the rung a credentialed poll sends at, the
 // backoff a request's own fault and a Retry-After book, and a command's
 // credential read off the worklist rather than the delivery.
@@ -94,7 +94,7 @@ func TestAnHTTPCommandTakesItsCredentialFromTheWorklist(t *testing.T) {
 		t.Fatalf("a command beneath the gate = %q, sent %d more", out, len(f.sent)-sent)
 	}
 
-	// An endpoint with no task on this node has no credential to send.
+	// An endpoint with no task on this outpost has no credential to send.
 	d.EndpointID = "ep-elsewhere"
 	if _, out := executeDelivery(t.Context(), runner, d, m); !strings.Contains(out, "no task") {
 		t.Fatalf("a command for an unknown endpoint = %q", out)

@@ -7,7 +7,7 @@ import (
 )
 
 // A task carries its component on the wire only beside its path upstreams
-// (#1652): the node reads an upstream's component off the edge that names it,
+// (#1652): the outpost reads an upstream's component off the edge that names it,
 // so the thousands of tasks reached through nothing pay no bytes for it.
 func TestOnlyATaskReachedThroughAnUpstreamCarriesItsComponent(t *testing.T) {
 	t.Parallel()

@@ -1,4 +1,4 @@
-package simnode
+package simoutpost
 
 import (
 	"encoding/json"
@@ -33,7 +33,7 @@ func TestObservationWireSumsProtocolsAndNamesUnhitDevices(t *testing.T) {
 		Faces: []sim.FaceOverlap{{DeviceID: "a", Hostname: "dsp", Face: "api", Protocol: "http", Received: 3, Overlapped: 1}},
 	}
 	w := observationWire("edge", snap, 1)
-	if w.Node != "edge" || w.Devices != 3 || w.Impaired != 1 || !w.At.Equal(at) || w.FleetGeneration != 4 || !w.FleetChanging {
+	if w.Outpost != "edge" || w.Devices != 3 || w.Impaired != 1 || !w.At.Equal(at) || w.FleetGeneration != 4 || !w.FleetChanging {
 		t.Fatalf("header = %+v", w)
 	}
 	h := w.Protocol("http")
@@ -83,8 +83,8 @@ func TestObservationWireStaysBoundedAtFleetScale(t *testing.T) {
 	}
 }
 
-// The simulator answers an observation request on its node's subject.
-func TestSubscribeObservationAnswersOnTheNodesSubject(t *testing.T) {
+// The simulator answers an observation request on its outpost's subject.
+func TestSubscribeObservationAnswersOnTheOutpostsSubject(t *testing.T) {
 	nc := startBus(t)
 	engine := sim.NewEngine(nil, nil)
 	sub, err := subscribeObservation(nc, "edge", engine, func() int { return 0 })
@@ -100,7 +100,7 @@ func TestSubscribeObservationAnswersOnTheNodesSubject(t *testing.T) {
 	if err := json.Unmarshal(msg.Data, &w); err != nil {
 		t.Fatal(err)
 	}
-	if w.Node != "edge" || w.At.IsZero() || len(w.Protocols) != len(sim.ObservedProtocols()) {
+	if w.Outpost != "edge" || w.At.IsZero() || len(w.Protocols) != len(sim.ObservedProtocols()) {
 		t.Fatalf("reply = %+v", w)
 	}
 }

@@ -1,4 +1,4 @@
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -8,19 +8,19 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/delivery"
 	"github.com/hyperscaleav/omniglass/internal/labfootprint"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 )
 
-// TestASpoolOverflowReadsAsTheNodeHopsLoss (#1692): the bus is away while
-// the node mints five batches into a spool that holds three, so the spool
+// TestASpoolOverflowReadsAsTheOutpostHopsLoss (#1692): the bus is away while
+// the outpost mints five batches into a spool that holds three, so the spool
 // drops the two oldest. When the bus is back, the three it held land, and
 // the next batch carries the dropped run. The lab's read, over real
-// receipts, names the two batches' items the node hop's loss under
+// receipts, names the two batches' items the outpost hop's loss under
 // spool-overflow, the ingest hop lost nothing of what it was handed, and the
 // end to end is the two composed.
-func TestASpoolOverflowReadsAsTheNodeHopsLoss(t *testing.T) {
+func TestASpoolOverflowReadsAsTheOutpostHopsLoss(t *testing.T) {
 	t.Parallel()
-	r := node.NewHopRig(t, 3)
+	r := outpost.NewHopRig(t, 3)
 	from := time.Now().UTC().Add(-time.Second)
 	at := from
 
@@ -51,19 +51,19 @@ func TestASpoolOverflowReadsAsTheNodeHopsLoss(t *testing.T) {
 		t.Fatalf("unsettled %v ended %v, want the boot settled by its batch after the window", unsettled, ended)
 	}
 
-	nodeRow := rowOf(t, rows, delivery.Node, delivery.Metric)
-	if nodeRow.In != 6 || nodeRow.Out != 4 || nodeRow.Outcomes[delivery.SpoolOverflow] != 2 || nodeRow.Outcomes[delivery.Shipped] != 4 {
-		t.Fatalf("node row %+v, want 6 minted, 4 shipped, 2 lost to spool-overflow", nodeRow)
+	outpostRow := rowOf(t, rows, delivery.Outpost, delivery.Metric)
+	if outpostRow.In != 6 || outpostRow.Out != 4 || outpostRow.Outcomes[delivery.SpoolOverflow] != 2 || outpostRow.Outcomes[delivery.Shipped] != 4 {
+		t.Fatalf("outpost row %+v, want 6 minted, 4 shipped, 2 lost to spool-overflow", outpostRow)
 	}
-	if nodeRow.Cause() != delivery.SpoolOverflow || nodeRow.Loss == nil || *nodeRow.Loss != 2.0/6 {
-		t.Fatalf("node row loss %v cause %q, want 2/6 under spool-overflow", nodeRow.Loss, nodeRow.Cause())
+	if outpostRow.Cause() != delivery.SpoolOverflow || outpostRow.Loss == nil || *outpostRow.Loss != 2.0/6 {
+		t.Fatalf("outpost row loss %v cause %q, want 2/6 under spool-overflow", outpostRow.Loss, outpostRow.Cause())
 	}
 	ingestRow := rowOf(t, rows, delivery.Ingest, delivery.Metric)
 	if ingestRow.In != 4 || ingestRow.Out != 4 || ingestRow.Loss == nil || *ingestRow.Loss != 0 {
 		t.Fatalf("ingest row %+v, want the 4 shipped all stored, loss 0", ingestRow)
 	}
 	if ingestRow.Outcomes[delivery.Missing] != 0 {
-		t.Fatalf("ingest row reads %d missing: the node's drops leaked into the ingest hop", ingestRow.Outcomes[delivery.Missing])
+		t.Fatalf("ingest row reads %d missing: the outpost's drops leaked into the ingest hop", ingestRow.Outcomes[delivery.Missing])
 	}
 	if got := labfootprint.EndToEndOf(rows)[delivery.Metric]; got != delivery.EndToEnd(2.0/6, 0) {
 		t.Fatalf("metric end to end %v, want the two hops composed, %v", got, delivery.EndToEnd(2.0/6, 0))
@@ -83,12 +83,12 @@ func rowOf(t *testing.T, rows []labfootprint.DeliveryRow, h delivery.Hop, k deli
 }
 
 // waitReceipts waits until edge-1 has n receipts.
-func waitReceipts(t *testing.T, r *node.HopRig, n int) {
+func waitReceipts(t *testing.T, r *outpost.HopRig, n int) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		var got int
-		if err := r.Conn.QueryRow(context.Background(), `select count(*) from telemetry_receipt where node = 'edge-1'`).Scan(&got); err != nil {
+		if err := r.Conn.QueryRow(context.Background(), `select count(*) from telemetry_receipt where outpost = 'edge-1'`).Scan(&got); err != nil {
 			t.Fatalf("count receipts: %v", err)
 		}
 		if got >= n {
@@ -102,7 +102,7 @@ func waitReceipts(t *testing.T, r *node.HopRig, n int) {
 }
 
 // readReceipts is the lab's receipts read over w, as lab measure makes it.
-func readReceipts(t *testing.T, r *node.HopRig, w delivery.Window) []delivery.Receipt {
+func readReceipts(t *testing.T, r *outpost.HopRig, w delivery.Window) []delivery.Receipt {
 	t.Helper()
 	rows, err := r.Conn.Query(context.Background(), labfootprint.ReceiptsQuery(w.From, w.To))
 	if err != nil {

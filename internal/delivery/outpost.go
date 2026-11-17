@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-// The node hop (#1692): what a node minted against what its spool handed to
+// The outpost hop (#1692): what an outpost minted against what its spool handed to
 // the stream. A batch the spool gives up on leaves a gap in its boot's seqs,
-// which alone reads as missing at ingest; the node names the gap's cause on
-// the batches it mints after, so the read can tell the node's loss from the
+// which alone reads as missing at ingest; the outpost names the gap's cause on
+// the batches it mints after, so the read can tell the outpost's loss from the
 // ingest's. Items lost before any batch carried them have no seq at all, so
-// the node keeps a running count of them by cause, carried by every batch.
+// the outpost keeps a running count of them by cause, carried by every batch.
 
-// Drop is a run of consecutive seqs of one boot the node's spool dropped for
+// Drop is a run of consecutive seqs of one boot the outpost's spool dropped for
 // one cause, From and To both included, and the items of each kind they
 // carried.
 type Drop struct {
@@ -24,21 +24,21 @@ type Drop struct {
 	Items map[Kind]uint64 `json:"items"`
 }
 
-// NodeLoss is the node's own account a batch carries: the runs its spool
+// OutpostLoss is the outpost's own account a batch carries: the runs its spool
 // dropped that no acked batch has carried yet, and the items lost before any
 // batch carried them, running totals since the boot began by cause and kind.
-type NodeLoss struct {
+type OutpostLoss struct {
 	Dropped []Drop                      `json:"dropped,omitempty"`
 	Lost    map[Outcome]map[Kind]uint64 `json:"lost,omitempty"`
 }
 
-// Empty reports whether the node has lost nothing it accounts for.
-func (n NodeLoss) Empty() bool { return len(n.Dropped) == 0 && len(n.Lost) == 0 }
+// Empty reports whether the outpost has lost nothing it accounts for.
+func (n OutpostLoss) Empty() bool { return len(n.Dropped) == 0 && len(n.Lost) == 0 }
 
 // maxPendingDrops bounds the runs a ledger carries. Drops of the oldest
 // queued batch come in seq order and extend one run, so it takes a drop
 // pattern no spool makes to reach it; past it the oldest run is forgotten,
-// and its items read as missing at ingest rather than as the node's loss.
+// and its items read as missing at ingest rather than as the outpost's loss.
 const maxPendingDrops = 256
 
 // pendingDrop is a run not yet known to be in the stream: noted is the last
@@ -95,9 +95,9 @@ func (l *Ledger) Stored(seq uint64) {
 	l.drops = slices.DeleteFunc(l.drops, func(d pendingDrop) bool { return d.noted < seq })
 }
 
-// loss is the ledger's node account as of now, a copy the stamp can keep.
-func (l *Ledger) loss() NodeLoss {
-	var n NodeLoss
+// loss is the ledger's outpost account as of now, a copy the stamp can keep.
+func (l *Ledger) loss() OutpostLoss {
+	var n OutpostLoss
 	for _, d := range l.drops {
 		n.Dropped = append(n.Dropped, Drop{Cause: d.Cause, From: d.From, To: d.To, Items: maps.Clone(d.Items)})
 	}
@@ -153,10 +153,10 @@ func bootDrops(rs []Receipt) []Drop {
 	return out
 }
 
-// gapDrops is, per cause and kind, the node-dropped items of the gap rs[i]
+// gapDrops is, per cause and kind, the outpost-dropped items of the gap rs[i]
 // owns: the seqs between it and the next receipt, and for the boot's lowest
 // receipt the seqs below it too. Capped per kind at the gap's items, so the
-// node never accounts for more than the offsets say went missing.
+// outpost never accounts for more than the offsets say went missing.
 func gapDrops(rs []Receipt, runs []Drop, i int, k Kind) (map[Outcome]uint64, uint64) {
 	var gap uint64
 	got := map[Outcome]uint64{}
@@ -164,7 +164,7 @@ func gapDrops(rs []Receipt, runs []Drop, i int, k Kind) (map[Outcome]uint64, uin
 		gap += items
 		left := items
 		in := dropsIn(runs, lo, hi)
-		for _, c := range NodeOutcomes {
+		for _, c := range OutpostOutcomes {
 			n := min(in[c][k], left)
 			if n > 0 {
 				got[c] += n
@@ -181,7 +181,7 @@ func gapDrops(rs []Receipt, runs []Drop, i int, k Kind) (map[Outcome]uint64, uin
 	return got, gap
 }
 
-// gapMissing is the items of kind k of the gap rs[i] owns that the node
+// gapMissing is the items of kind k of the gap rs[i] owns that the outpost
 // does not account for: what it shipped and the ingest never landed.
 func gapMissing(rs []Receipt, runs []Drop, i int, k Kind) uint64 {
 	got, gap := gapDrops(rs, runs, i, k)
@@ -191,17 +191,17 @@ func gapMissing(rs []Receipt, runs []Drop, i int, k Kind) uint64 {
 	return gap
 }
 
-// ReconcileNode is the node hop over a window: per kind, in is what the
-// node minted into the window's batches and the gaps the window owns (as
+// ReconcileOutpost is the outpost hop over a window: per kind, in is what the
+// outpost minted into the window's batches and the gaps the window owns (as
 // Reconcile owns them), plus what it lost before minting in the window; out
-// is what it shipped. A gap's items the node accounts for are its loss under
+// is what it shipped. A gap's items the outpost accounts for are its loss under
 // their cause, the rest it shipped and the ingest hop reads as missing. So
-// the node's out is exactly the ingest's in, and the two compose end to end.
+// the outpost's out is exactly the ingest's in, and the two compose end to end.
 //
 // What a boot lost before minting reads from the running totals: the most
 // any in-window receipt carries, less the most any receipt below the window
 // carries.
-func ReconcileNode(w Window, receipts []Receipt) map[Kind]Total {
+func ReconcileOutpost(w Window, receipts []Receipt) map[Kind]Total {
 	out := map[Kind]Total{}
 	add := func(k Kind, o Outcome, n uint64) {
 		t, ok := out[k]
@@ -233,7 +233,7 @@ func ReconcileNode(w Window, receipts []Receipt) map[Kind]Total {
 				add(k, Shipped, max(r.Declared[k].Count, r.Outcome.Items(k)))
 				got, gap := gapDrops(rs, runs, i, k)
 				var dropped uint64
-				for _, c := range NodeOutcomes {
+				for _, c := range OutpostOutcomes {
 					add(k, c, got[c])
 					dropped += got[c]
 				}
@@ -243,7 +243,7 @@ func ReconcileNode(w Window, receipts []Receipt) map[Kind]Total {
 		if !inWindow {
 			continue
 		}
-		for _, c := range NodeOutcomes {
+		for _, c := range OutpostOutcomes {
 			for _, k := range Kinds {
 				if n, below := lostIn[c][k], lostBelow[c][k]; n > below {
 					add(k, c, n-below)
@@ -266,7 +266,7 @@ func maxInto(into, src map[Outcome]map[Kind]uint64) {
 	}
 }
 
-// Ended is a boot that will never settle because its node started again: its
+// Ended is a boot that will never settle because its outpost started again: its
 // spool, and every batch it still held, went with the process. Last is the
 // highest seq of it that landed and LastMinted when; Next is the boot that
 // followed and NextMinted its first landed batch. Whatever the old boot
@@ -280,15 +280,15 @@ type Ended struct {
 	NextMinted time.Time
 }
 
-// EndedOf is each of the boots named that its node followed with another
-// boot: a receipt of a different boot of the same node minted after the
+// EndedOf is each of the boots named that its outpost followed with another
+// boot: a receipt of a different boot of the same outpost minted after the
 // boot's last landed batch. The earliest such boot is Next. A boot not
 // followed is not ended, and stays unsettled. Pure.
 func EndedOf(named []Boot, receipts []Receipt) map[Boot]Ended {
 	all := boots(receipts)
 	byBoot := map[Boot][]Receipt{}
 	for _, rs := range all {
-		byBoot[Boot{Node: rs[0].Node, Boot: rs[0].Boot}] = rs
+		byBoot[Boot{Outpost: rs[0].Outpost, Boot: rs[0].Boot}] = rs
 	}
 	out := map[Boot]Ended{}
 	for _, b := range named {
@@ -299,7 +299,7 @@ func EndedOf(named []Boot, receipts []Receipt) map[Boot]Ended {
 		last := rs[len(rs)-1]
 		e := Ended{Boot: b, Last: last.Seq, LastMinted: last.Minted}
 		for _, other := range all {
-			if other[0].Node != b.Node || other[0].Boot == b.Boot {
+			if other[0].Outpost != b.Outpost || other[0].Boot == b.Boot {
 				continue
 			}
 			first := other[0]

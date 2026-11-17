@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
 
-// taskMask is what the node masks out of everything task collects: each
+// taskMask is what the outpost masks out of everything task collects: each
 // secret field the worklist names, and the forms its http credential rides
 // the wire in (a basic authorization's base64 of username and password),
 // which a component echoing its request back would show.

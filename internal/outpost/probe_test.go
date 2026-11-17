@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func TestParseICMPTask(t *testing.T) {
 // and each produced sample rides its own lane (#594): a probe's timing on
 // metrics, its result (a state, #1592) and the text verdict on properties as
 // canonical JSON text, the result's reason riding as a label. The
-// probes know their lanes statically, so no registry is consulted node-side.
+// probes know their lanes statically, so no registry is consulted outpost-side.
 func TestGroupForLanes(t *testing.T) {
 	t.Parallel()
 	dps := []collection.Sample{
@@ -102,7 +102,7 @@ func TestGroupForTS(t *testing.T) {
 	}
 }
 
-// TestAppendVerdict proves the node-side transition-only invariant: the first
+// TestAppendVerdict proves the outpost-side transition-only invariant: the first
 // observation emits a verdict, an unchanged verdict on the next tick emits
 // nothing, and a flip emits again. This is the primary defense; the ingest guard
 // is the restart net.
@@ -233,7 +233,7 @@ func (f fakeGetter) Get(context.Context, string, string, []string, time.Duration
 	return f.res, f.err
 }
 
-// TestCollectDriverTask proves the node-side driver dispatch (#814): a baked
+// TestCollectDriverTask proves the outpost-side driver dispatch (#814): a baked
 // poll task fetches with the worklist-delivered credential and lands its emits
 // typed by lane, and each fault is a story, never a silent drop.
 func TestCollectDriverTask(t *testing.T) {

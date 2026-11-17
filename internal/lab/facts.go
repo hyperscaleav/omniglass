@@ -41,7 +41,7 @@ type FactService struct {
 	Limits string `json:"limits"`
 }
 
-// FactCadence is one cadence profile the lab's node runs at.
+// FactCadence is one cadence profile the lab's outpost runs at.
 type FactCadence struct {
 	Name          string `json:"name"`
 	Heartbeat     string `json:"heartbeat"`
@@ -50,7 +50,7 @@ type FactCadence struct {
 	// ReportEvery is the collection report window the profile's seed sets
 	// (#1646), empty when it leaves the platform's own setting.
 	ReportEvery string `json:"report_every"`
-	// ClosedLoopBracket is how often the server brackets the node for
+	// ClosedLoopBracket is how often the server brackets the outpost for
 	// Platform health's closed loop.
 	ClosedLoopBracket string `json:"closed_loop_bracket"`
 	For               string `json:"for"`
@@ -130,7 +130,7 @@ func collection(seg string) bool {
 // FactsJSON renders the facts for the default lab, reading the walkthrough
 // manifests from walkthroughs (the web/e2e/walkthroughs directory).
 func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
-	spec, err := Plan(Options{Image: "omniglass", Port: DefaultPort, NodeToken: "(minted per run)"})
+	spec, err := Plan(Options{Image: "omniglass", Port: DefaultPort, OutpostToken: "(minted per run)"})
 	if err != nil {
 		return nil, err
 	}

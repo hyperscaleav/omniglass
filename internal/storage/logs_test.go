@@ -83,12 +83,12 @@ func TestInsertLogLines(t *testing.T) {
 	}
 }
 
-// TestInsertNodeLogs round-trips the self-log lane (ADR-0066) on its own table:
-// a node's log lines land in node_log keyed to the node's principal_id (#589
-// split them out of log_line), read back newest-first by ListNodeLogs, with
-// empty severity/facility coalesced to "". A node's line never surfaces on a
+// TestInsertOutpostLogs round-trips the self-log lane (ADR-0066) on its own table:
+// an outpost's log lines land in outpost_log keyed to the outpost's principal_id (#589
+// split them out of log_line), read back newest-first by ListOutpostLogs, with
+// empty severity/facility coalesced to "". An outpost's line never surfaces on a
 // component's log read: the tables are disjoint by construction.
-func TestInsertNodeLogs(t *testing.T) {
+func TestInsertOutpostLogs(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -103,35 +103,35 @@ func TestInsertNodeLogs(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 
 	now := time.Now().UTC()
-	if err := gw.InsertNodeLogs(ctx, []storage.NodeLogWrite{
-		{Node: "edge-1", Source: "node", Message: "connected to bus", TS: now.Add(-time.Minute)},
-		{Node: "edge-1", Source: "node", Severity: "info", Facility: "collection", Message: "worklist pulled", Attributes: []byte(`{"tasks":2}`), TS: now},
+	if err := gw.InsertOutpostLogs(ctx, []storage.OutpostLogWrite{
+		{Outpost: "edge-1", Source: "outpost", Message: "connected to bus", TS: now.Add(-time.Minute)},
+		{Outpost: "edge-1", Source: "outpost", Severity: "info", Facility: "collection", Message: "worklist pulled", Attributes: []byte(`{"tasks":2}`), TS: now},
 	}); err != nil {
-		t.Fatalf("insert node logs: %v", err)
+		t.Fatalf("insert outpost logs: %v", err)
 	}
 
-	got, err := gw.ListNodeLogs(ctx, "edge-1", time.Hour, 10)
+	got, err := gw.ListOutpostLogs(ctx, "edge-1", time.Hour, 10)
 	if err != nil {
-		t.Fatalf("list node logs: %v", err)
+		t.Fatalf("list outpost logs: %v", err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("list node logs: want 2, got %d", len(got))
+		t.Fatalf("list outpost logs: want 2, got %d", len(got))
 	}
 	if got[0].Message != "worklist pulled" || got[0].Facility != "collection" ||
 		string(got[0].Attributes) != `{"tasks": 2}` {
-		t.Fatalf("newest node log: unexpected row %+v", got[0])
+		t.Fatalf("newest outpost log: unexpected row %+v", got[0])
 	}
 	// The line with no severity/facility coalesces those columns to "".
 	if got[1].Message != "connected to bus" || got[1].Severity != "" || got[1].Facility != "" {
-		t.Fatalf("oldest node log: want empty severity/facility, got %+v", got[1])
+		t.Fatalf("oldest outpost log: want empty severity/facility, got %+v", got[1])
 	}
 
-	// A node's line does not surface on a component log read: a fresh component
+	// An outpost's line does not surface on a component log read: a fresh component
 	// sees nothing.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-x"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
@@ -141,14 +141,14 @@ func TestInsertNodeLogs(t *testing.T) {
 		t.Fatalf("list component logs: %v", err)
 	}
 	if len(compLogs) != 0 {
-		t.Fatalf("component log read leaked node lines: %+v", compLogs)
+		t.Fatalf("component log read leaked outpost lines: %+v", compLogs)
 	}
 
-	// A node that does not exist is a named error, not an FK violation.
-	if err := gw.InsertNodeLogs(ctx, []storage.NodeLogWrite{
-		{Node: "ghost-node", Message: "x", TS: now},
+	// An outpost that does not exist is a named error, not an FK violation.
+	if err := gw.InsertOutpostLogs(ctx, []storage.OutpostLogWrite{
+		{Outpost: "ghost-outpost", Message: "x", TS: now},
 	}); err == nil {
-		t.Fatal("insert with unknown node: want error, got nil")
+		t.Fatal("insert with unknown outpost: want error, got nil")
 	}
 }
 

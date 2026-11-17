@@ -1696,150 +1696,6 @@ export interface paths {
       error: og.setMetricTypeRetentionResponseError["data"];
     };
   };
-  "/nodes": {
-    get: {
-      path: never;
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.listNodesResponseSuccess["data"];
-      error: og.listNodesResponseError["data"];
-    };
-    post: {
-      path: never;
-      query: never;
-      body: NonNullable<Parameters<typeof og.createNode>[0]>;
-      bodyRequired: true;
-      data: og.createNodeResponseSuccess["data"];
-      error: og.createNodeResponseError["data"];
-    };
-  };
-  "/nodes/{name}": {
-    get: {
-      path: { "name": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.getNodeResponseSuccess["data"];
-      error: og.getNodeResponseError["data"];
-    };
-    delete: {
-      path: { "name": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.deleteNodeResponseSuccess["data"];
-      error: og.deleteNodeResponseError["data"];
-    };
-    patch: {
-      path: { "name": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.updateNode>[1]>;
-      bodyRequired: true;
-      data: og.updateNodeResponseSuccess["data"];
-      error: og.updateNodeResponseError["data"];
-    };
-  };
-  "/nodes/{name}/logs": {
-    get: {
-      path: { "name": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.listNodeLogsResponseSuccess["data"];
-      error: og.listNodeLogsResponseError["data"];
-    };
-  };
-  "/nodes/{name}/simulation": {
-    get: {
-      path: { "name": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.getNodeSimulationResponseSuccess["data"];
-      error: og.getNodeSimulationResponseError["data"];
-    };
-  };
-  "/nodes/{name}/simulation/components": {
-    post: {
-      path: { "name": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.addNodeSimulationComponent>[1]>;
-      bodyRequired: true;
-      data: og.addNodeSimulationComponentResponseSuccess["data"];
-      error: og.addNodeSimulationComponentResponseError["data"];
-    };
-  };
-  "/nodes/{name}/simulation/observation": {
-    get: {
-      path: { "name": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.getNodeSimulationObservationResponseSuccess["data"];
-      error: og.getNodeSimulationObservationResponseError["data"];
-    };
-  };
-  "/nodes/{name}/simulation/systems": {
-    post: {
-      path: { "name": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.addNodeSimulationSystem>[1]>;
-      bodyRequired: true;
-      data: og.addNodeSimulationSystemResponseSuccess["data"];
-      error: og.addNodeSimulationSystemResponseError["data"];
-    };
-  };
-  "/nodes/{name}:enroll": {
-    post: {
-      path: { "name": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.enrollNodeResponseSuccess["data"];
-      error: og.enrollNodeResponseError["data"];
-    };
-  };
-  "/nodes/{name}:listTags": {
-    get: {
-      path: { "name": string };
-      query: never;
-      body: never;
-      bodyRequired: false;
-      data: og.listNodeTagsResponseSuccess["data"];
-      error: og.listNodeTagsResponseError["data"];
-    };
-  };
-  "/nodes/{name}:removeTag": {
-    post: {
-      path: { "name": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.removeNodeTag>[1]>;
-      bodyRequired: true;
-      data: og.removeNodeTagResponseSuccess["data"];
-      error: og.removeNodeTagResponseError["data"];
-    };
-  };
-  "/nodes/{name}:setTag": {
-    post: {
-      path: { "name": string };
-      query: never;
-      body: NonNullable<Parameters<typeof og.setNodeTag>[1]>;
-      bodyRequired: true;
-      data: og.setNodeTagResponseSuccess["data"];
-      error: og.setNodeTagResponseError["data"];
-    };
-  };
-  "/nodes:claim": {
-    post: {
-      path: never;
-      query: never;
-      body: NonNullable<Parameters<typeof og.claimNode>[0]>;
-      bodyRequired: true;
-      data: og.claimNodeResponseSuccess["data"];
-      error: og.claimNodeResponseError["data"];
-    };
-  };
   "/notification-targets": {
     get: {
       path: never;
@@ -1996,6 +1852,150 @@ export interface paths {
       bodyRequired: false;
       data: og.retryNotificationResponseSuccess["data"];
       error: og.retryNotificationResponseError["data"];
+    };
+  };
+  "/outposts": {
+    get: {
+      path: never;
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listOutpostsResponseSuccess["data"];
+      error: og.listOutpostsResponseError["data"];
+    };
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.createOutpost>[0]>;
+      bodyRequired: true;
+      data: og.createOutpostResponseSuccess["data"];
+      error: og.createOutpostResponseError["data"];
+    };
+  };
+  "/outposts/{name}": {
+    get: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getOutpostResponseSuccess["data"];
+      error: og.getOutpostResponseError["data"];
+    };
+    delete: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.deleteOutpostResponseSuccess["data"];
+      error: og.deleteOutpostResponseError["data"];
+    };
+    patch: {
+      path: { "name": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.updateOutpost>[1]>;
+      bodyRequired: true;
+      data: og.updateOutpostResponseSuccess["data"];
+      error: og.updateOutpostResponseError["data"];
+    };
+  };
+  "/outposts/{name}/logs": {
+    get: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listOutpostLogsResponseSuccess["data"];
+      error: og.listOutpostLogsResponseError["data"];
+    };
+  };
+  "/outposts/{name}/simulation": {
+    get: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getOutpostSimulationResponseSuccess["data"];
+      error: og.getOutpostSimulationResponseError["data"];
+    };
+  };
+  "/outposts/{name}/simulation/components": {
+    post: {
+      path: { "name": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.addOutpostSimulationComponent>[1]>;
+      bodyRequired: true;
+      data: og.addOutpostSimulationComponentResponseSuccess["data"];
+      error: og.addOutpostSimulationComponentResponseError["data"];
+    };
+  };
+  "/outposts/{name}/simulation/observation": {
+    get: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.getOutpostSimulationObservationResponseSuccess["data"];
+      error: og.getOutpostSimulationObservationResponseError["data"];
+    };
+  };
+  "/outposts/{name}/simulation/systems": {
+    post: {
+      path: { "name": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.addOutpostSimulationSystem>[1]>;
+      bodyRequired: true;
+      data: og.addOutpostSimulationSystemResponseSuccess["data"];
+      error: og.addOutpostSimulationSystemResponseError["data"];
+    };
+  };
+  "/outposts/{name}:enroll": {
+    post: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.enrollOutpostResponseSuccess["data"];
+      error: og.enrollOutpostResponseError["data"];
+    };
+  };
+  "/outposts/{name}:listTags": {
+    get: {
+      path: { "name": string };
+      query: never;
+      body: never;
+      bodyRequired: false;
+      data: og.listOutpostTagsResponseSuccess["data"];
+      error: og.listOutpostTagsResponseError["data"];
+    };
+  };
+  "/outposts/{name}:removeTag": {
+    post: {
+      path: { "name": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.removeOutpostTag>[1]>;
+      bodyRequired: true;
+      data: og.removeOutpostTagResponseSuccess["data"];
+      error: og.removeOutpostTagResponseError["data"];
+    };
+  };
+  "/outposts/{name}:setTag": {
+    post: {
+      path: { "name": string };
+      query: never;
+      body: NonNullable<Parameters<typeof og.setOutpostTag>[1]>;
+      bodyRequired: true;
+      data: og.setOutpostTagResponseSuccess["data"];
+      error: og.setOutpostTagResponseError["data"];
+    };
+  };
+  "/outposts:claim": {
+    post: {
+      path: never;
+      query: never;
+      body: NonNullable<Parameters<typeof og.claimOutpost>[0]>;
+      bodyRequired: true;
+      data: og.claimOutpostResponseSuccess["data"];
+      error: og.claimOutpostResponseError["data"];
     };
   };
   "/principal-groups": {

@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"bytes"
@@ -11,12 +11,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodePolarisDSPReadsItsProgramOutput (#1493): the shipped
+// TestOutpostPolarisDSPReadsItsProgramOutput (#1493): the shipped
 // polaris-dsp-snmp driver on the simulated DSP's SNMP face lands the program
 // output's level and mute beside the DSP's identity and uptime, the class
 // signals the lab's DSPs read nothing but identity without. A mute set over
 // the DSP's HTTP API reads back as muted on the next poll.
-func TestNodePolarisDSPReadsItsProgramOutput(t *testing.T) {
+func TestOutpostPolarisDSPReadsItsProgramOutput(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -40,7 +40,7 @@ func TestNodePolarisDSPReadsItsProgramOutput(t *testing.T) {
 	}
 	ep := s.attachHTTP("dsp-1", "polaris-dsp-snmp", "edge-dsp", map[string]string{
 		"host": s.ips[prof], "port": fmt.Sprint(snmpPort), "community": "dsp-community"})
-	s.runNode("edge-dsp")
+	s.runOutpost("edge-dsp")
 
 	s.waitFor("dsp-1", ep.Name, "endpoint-responsive", is("up"), "up: the agent answered")
 	s.waitFor("dsp-1", ep.Name, "model-number", is(fmt.Sprint(dev.ReadPath("configuration.device.model"))), "the model, sysDescr")
@@ -63,6 +63,6 @@ func TestNodePolarisDSPReadsItsProgramOutput(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("mute: status %d", resp.StatusCode)
 	}
-	s.runNode("edge-dsp") // a restarted node polls at once, rather than in 30s
+	s.runOutpost("edge-dsp") // a restarted outpost polls at once, rather than in 30s
 	s.waitFor("dsp-1", ep.Name, "mute", is("true"), "muted, set over HTTP")
 }

@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -10,11 +10,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodeFerritePDUReadsOutletsCurrentAndVoltage (#1368): the shipped
+// TestOutpostFerritePDUReadsOutletsCurrentAndVoltage (#1368): the shipped
 // ferrite-pdu-snmp driver on the simulated power conditioner's SNMP face lands
 // the state of each outlet, the total current in amperes and the input voltage
 // in volts, beside its identity and uptime.
-func TestNodeFerritePDUReadsOutletsCurrentAndVoltage(t *testing.T) {
+func TestOutpostFerritePDUReadsOutletsCurrentAndVoltage(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -35,7 +35,7 @@ func TestNodeFerritePDUReadsOutletsCurrentAndVoltage(t *testing.T) {
 	}
 	ep := s.attachHTTP("power-1", "ferrite-pdu-snmp", "edge-pdu", map[string]string{
 		"host": s.ips[pdu], "port": fmt.Sprint(snmpPort), "community": "pdu-community"})
-	s.runNode("edge-pdu")
+	s.runOutpost("edge-pdu")
 
 	s.waitFor("power-1", ep.Name, "endpoint-responsive", is("up"), "up: the agent answered")
 	s.waitFor("power-1", ep.Name, "model-number", is(fmt.Sprint(dev.ReadPath("configuration.device.model"))), "the model, sysDescr")

@@ -48,9 +48,9 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **event type** | A kind of discrete occurrence in the catalog, what an event is typed by. | `/event-types` | `event_type` |  |
 | **location type** | What kind of location a location is, and which kinds it may sit under. | `/location-types` | `location_type` |  |
 | **metric type** | A numeric signal in the catalog, the series a sample measures, with its unit and precision. | `/metric-types` | `metric_type` |  |
-| **node** | A collection process placed near the fleet that runs tasks and commands over endpoints and reports back. | `/nodes` | `node` |  |
 | **notification target** | Where a notification goes, a webhook, a mailbox, a group or a person. | `/notification-targets` | `notification_target` |  |
 | **notification type** | What a notification about an alarm says, as a subject and a text. | `/notification-types` | `notification_type` |  |
+| **outpost** | A collection process placed near the fleet that runs tasks and commands over endpoints and reports back. | `/outposts` | `outpost` |  |
 | **principal** | A user, a person or a machine, that roles are granted to. | `/principals` | `principal` |  |
 | **principal group** | A set of users granted roles together, each member inheriting the group's grants. | `/principal-groups` | `principal_group` |  |
 | **product** | A concrete model a vendor sells, with the driver that collects from it and the component type it is classified under. | `/products` | `product` |  |
@@ -61,8 +61,8 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **severity level** | How bad an alarm is, ranked, with its color and whether it takes its component out. | `/severity-levels` | `severity_level` |  |
 | **standard** | A blueprint a system conforms to, declaring the roles it fills and the properties every conforming system exposes. | `/standards` | `standard` |  |
 | **system type** | What kind of space a system is, such as a boardroom, a classroom or a video wall. | `/system-types` | `system_type` |  |
-| **task** | A node's unit of collection, a poll it runs or a listener it holds on one endpoint. | `/tasks` | `task` |  |
+| **task** | An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint. | `/tasks` | `task` |  |
 | **transport** | The wire an endpoint speaks over, such as ssh, https or snmp, built into Omniglass. | `/transports` | `endpoint` |  |
-| **unclaimed source** | A device a node heard from that no endpoint claims yet, waiting to be adopted or ignored. | `/unclaimed-sources` | `node` |  |
+| **unclaimed source** | A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored. | `/unclaimed-sources` | `outpost` |  |
 | **vendor** | An organization behind products, a manufacturer, an integrator or a developer. | `/vendors` | `vendor` |  |
 

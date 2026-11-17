@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -11,11 +11,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodeLyraMicsReadMuteLevelAndBattery (#894): the shipped Lyra drivers
+// TestOutpostLyraMicsReadMuteLevelAndBattery (#894): the shipped Lyra drivers
 // on the simulated microphones' SNMP faces land mute and the input level for
 // both, and the wireless system's battery as a ratio, beside identity. A
 // mute set on a microphone reads back on the next poll.
-func TestNodeLyraMicsReadMuteLevelAndBattery(t *testing.T) {
+func TestOutpostLyraMicsReadMuteLevelAndBattery(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -38,7 +38,7 @@ func TestNodeLyraMicsReadMuteLevelAndBattery(t *testing.T) {
 			"host": s.ips[prof], "port": fmt.Sprint(port), "community": "lyra-community"}).Name
 	}
 	arcEP, hxEP := attach("mic-ceiling", arc, "lyra-arc-snmp"), attach("mic-wireless", hx, "lyra-hx-snmp")
-	s.runNode("edge-lyra")
+	s.runOutpost("edge-lyra")
 
 	metric := func(comp, ep, key string, ok func(float64) bool) {
 		t.Helper()
@@ -70,6 +70,6 @@ func TestNodeLyraMicsReadMuteLevelAndBattery(t *testing.T) {
 	if res := s.devices[hx].Operate(sim.Operation{Kind: "http", Method: "POST", Path: "/api/mute", Body: `{"mute": true}`}); res.Status != 200 {
 		t.Fatalf("mute: %+v", res)
 	}
-	s.runNode("edge-lyra") // a restarted node polls at once, rather than in 30s
+	s.runOutpost("edge-lyra") // a restarted outpost polls at once, rather than in 30s
 	s.waitFor("mic-wireless", hxEP, "mute", is("true"), "muted on the microphone")
 }

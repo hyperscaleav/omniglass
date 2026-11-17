@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -36,9 +36,9 @@ func tcpProbeTask(fingerprint string) collection.TaskSpec {
 		EndpointParams: json.RawMessage(`{"target":"127.0.0.1:80"}`)}
 }
 
-// A node probes each endpoint on its probe interval (#1273), from the
+// An outpost probes each endpoint on its probe interval (#1273), from the
 // dispatcher's own timer, never the heartbeat (#1634): unset, the interval is
-// DefaultProbeEvery however often the node checks in, and a set interval is
+// DefaultProbeEvery however often the outpost checks in, and a set interval is
 // honored as given. The run loop here passes every second.
 func TestAProbeRunsOnItsProbeIntervalNotTheHeartbeat(t *testing.T) {
 	t.Parallel()

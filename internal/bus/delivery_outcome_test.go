@@ -19,14 +19,14 @@ import (
 )
 
 // outcomeRegistry is the catalog the outcome cases derive against: a
-// collected metric, a calc metric no node may write, a node-probe metric, a
+// collected metric, a calc metric no outpost may write, an outpost-probe metric, a
 // property with an enum, and an event with a payload schema.
 func outcomeRegistry() collection.Registry {
 	return collection.NewRegistry(
 		[]storage.MetricType{
 			{Name: "participant-count", WriterClass: writerclass.Collected},
 			{Name: "rollup-avg", WriterClass: writerclass.Calc},
-			{Name: "tcp-connect-time", WriterClass: writerclass.NodeProbe},
+			{Name: "tcp-connect-time", WriterClass: writerclass.OutpostProbe},
 		},
 		[]storage.PropertyType{{Name: "call-state", DataType: "string", Validation: []byte(`{"enum":["active","idle"]}`)}},
 		[]storage.EventType{{Name: "call-started", PayloadSchema: []byte(`{"type":"object","properties":{"n":{"type":"integer"}},"required":["n"]}`)}})
@@ -55,7 +55,7 @@ func only(t delivery.Tally, k delivery.Kind, o delivery.Outcome, n uint64) bool 
 func TestDeriveTalliesEachRefusal(t *testing.T) {
 	reg := outcomeRegistry()
 	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
-	w := storage.NodeWriter(owner.ComponentID, owner.EndpointName)
+	w := storage.OutpostWriter(owner.ComponentID, owner.EndpointName)
 	arc := componentArc(owner)
 	cases := []struct {
 		name string
@@ -66,8 +66,8 @@ func TestDeriveTalliesEachRefusal(t *testing.T) {
 		{"unregistered metric", &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "no-such-key", Value: 1}}}, delivery.Metric, delivery.RefusedUnregistered},
 		{"unregistered property", &ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{{Name: "no-such-key", ValueJson: `"x"`}}}, delivery.Property, delivery.RefusedUnregistered},
 		{"unregistered event", &ogv1.TelemetryBatch{Events: []*ogv1.EventSample{{Name: "no-such-key", Message: "m"}}}, delivery.Event, delivery.RefusedUnregistered},
-		{"writer class refuses the node", &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "rollup-avg", Value: 1}}}, delivery.Metric, delivery.RefusedWriter},
-		{"node-probe at another instance", &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1, Instance: "other"}}}, delivery.Metric, delivery.RefusedInstance},
+		{"writer class refuses the outpost", &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "rollup-avg", Value: 1}}}, delivery.Metric, delivery.RefusedWriter},
+		{"outpost-probe at another instance", &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1, Instance: "other"}}}, delivery.Metric, delivery.RefusedInstance},
 		{"property fails its validation", &ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{{Name: "call-state", ValueJson: `"sideways"`}}}, delivery.Property, delivery.RefusedInvalid},
 		{"event payload fails its schema", &ogv1.TelemetryBatch{Events: []*ogv1.EventSample{{Name: "call-started", Payload: []byte(`{"m":1}`)}}}, delivery.Event, delivery.RefusedInvalid},
 		{"event says nothing", &ogv1.TelemetryBatch{Events: []*ogv1.EventSample{{Name: "call-started"}}}, delivery.Event, delivery.RefusedEmpty},
@@ -171,7 +171,7 @@ func TestFanOutTalliesUnboundAndUnidentified(t *testing.T) {
 	})
 }
 
-// outcomeStore is a node lane's store with no database: it resolves the
+// outcomeStore is an outpost lane's store with no database: it resolves the
 // tasks it holds, serves outcomeRegistry, places no identity, and captures
 // the batch it is asked to land.
 type outcomeStore struct {
@@ -221,12 +221,12 @@ func (s *outcomeStore) RecordTermedBatch(_ context.Context, b storage.TermedBatc
 	return nil
 }
 
-// TestLandNodeTalliesEachPath: a node tick's paths that land nothing count
+// TestLandOutpostTalliesEachPath: an outpost tick's paths that land nothing count
 // their items before the batch reaches the gateway (#1641): every item of an
-// orphaned group is orphaned, a node-self block that names an identity is
+// orphaned group is orphaned, an outpost-self block that names an identity is
 // refused-invalid, and a ledger that declares more than the batch decodes to
-// reads the shortfall as missing. The batch carries its node and ledger.
-func TestLandNodeTalliesEachPath(t *testing.T) {
+// reads the shortfall as missing. The batch carries its outpost and ledger.
+func TestLandOutpostTalliesEachPath(t *testing.T) {
 	ctx := context.Background()
 	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointID: "ep-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
 
@@ -241,7 +241,7 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 				Events:     []*ogv1.EventSample{{Name: "call-started", Message: "m"}},
 				TaskLogs:   []*ogv1.LogLine{{Message: "a"}, {Message: "b"}, {Message: "c"}}},
 		}}
-		if err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
+		if err := s.landOutpost(ctx, "b1", "outpost-a", ev); err != nil {
 			t.Fatal(err)
 		}
 		got := store.landed.Tally
@@ -250,21 +250,21 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 				t.Errorf("%s: tally = %s, want %d orphaned and nothing else", k, mustJSON(t, got), n)
 			}
 		}
-		if store.landed.Node != "node-a" {
-			t.Errorf("batch node = %q, want node-a", store.landed.Node)
+		if store.landed.Outpost != "outpost-a" {
+			t.Errorf("batch outpost = %q, want outpost-a", store.landed.Outpost)
 		}
 	})
 
-	t.Run("node-self names an identity", func(t *testing.T) {
+	t.Run("outpost-self names an identity", func(t *testing.T) {
 		store := &outcomeStore{}
 		s := &Server{store: store, orphans: newOrphanTally(time.Minute)}
-		ev := &ogv1.TelemetryBatch{NodeSelf: &ogv1.NodeSelf{Metrics: []*ogv1.MetricSample{
-			{Name: "node-cpu-ratio", Value: 0.1}, {Name: "node-mem-ratio", Value: 0.2, Identity: room("zr-a")}}}}
-		if err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
+		ev := &ogv1.TelemetryBatch{OutpostSelf: &ogv1.OutpostSelf{Metrics: []*ogv1.MetricSample{
+			{Name: "outpost-cpu-ratio", Value: 0.1}, {Name: "outpost-mem-ratio", Value: 0.2, Identity: room("zr-a")}}}}
+		if err := s.landOutpost(ctx, "b1", "outpost-a", ev); err != nil {
 			t.Fatal(err)
 		}
 		if !only(store.landed.Tally, delivery.Metric, delivery.RefusedInvalid, 2) {
-			t.Fatalf("tally = %s, want both node-self metrics refused-invalid", mustJSON(t, store.landed.Tally))
+			t.Fatalf("tally = %s, want both outpost-self metrics refused-invalid", mustJSON(t, store.landed.Tally))
 		}
 	})
 
@@ -277,7 +277,7 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 			{TaskId: "t-own", Metrics: []*ogv1.MetricSample{{Name: "participant-count", Value: 1}},
 				TaskLogs: []*ogv1.LogLine{{Message: "a"}, {Message: "b"}}},
 		}}
-		if err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
+		if err := s.landOutpost(ctx, "b1", "outpost-a", ev); err != nil {
 			t.Fatal(err)
 		}
 		if !only(store.landed.Tally, delivery.Metric, delivery.Missing, 2) {
@@ -294,7 +294,7 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 		store := &outcomeStore{owners: map[string]storage.TaskOwner{"t-own": owner}}
 		s := &Server{store: store, orphans: newOrphanTally(time.Minute)}
 		ev := &ogv1.TelemetryBatch{Groups: []*ogv1.TaskGroup{{TaskId: "t-own", Metrics: []*ogv1.MetricSample{{Name: "participant-count", Value: 1}}}}}
-		if err := s.landNode(ctx, "b1", "node-a", ev); err != nil {
+		if err := s.landOutpost(ctx, "b1", "outpost-a", ev); err != nil {
 			t.Fatal(err)
 		}
 		if store.landed.Ledger != nil || !store.landed.Tally.Empty() {
@@ -303,7 +303,7 @@ func TestLandNodeTalliesEachPath(t *testing.T) {
 	})
 }
 
-// TestTermRecordsItsCause: each path that Terms a node's batch whole
+// TestTermRecordsItsCause: each path that Terms an outpost's batch whole
 // records a receipt for it, its declared items under the path's own outcome,
 // so the loss table names the cause instead of reading them missing (#1691).
 // An undecodable batch has no readable ledger, so it records nothing and its
@@ -323,8 +323,8 @@ func TestTermRecordsItsCause(t *testing.T) {
 		}
 		return b
 	}
-	header := nats.Header{jetstream.MsgIDHeader: []string{"node-a-boot-1-7"}}
-	const id = "og.v1.telemetry.node-a node-a-boot-1-7"
+	header := nats.Header{jetstream.MsgIDHeader: []string{"outpost-a-boot-1-7"}}
+	const id = "og.v1.telemetry.outpost-an outpost-a-boot-1-7"
 	transient := errors.New("database away")
 	refused := fmt.Errorf("land: %w", &storage.KeyWriterError{Key: "k"})
 	delivered := func(n uint64) *jetstream.MsgMetadata { return &jetstream.MsgMetadata{NumDelivered: n} }
@@ -339,7 +339,7 @@ func TestTermRecordsItsCause(t *testing.T) {
 		nak     bool
 	}{
 		{name: "undecodable", data: []byte{0xff, 0xff, 0xff}, meta: delivered(1)},
-		{name: "owner asserted on the node lane", meta: delivered(1), cause: delivery.RefusedOwner,
+		{name: "owner asserted on the outpost lane", meta: delivered(1), cause: delivery.RefusedOwner,
 			data: batch(func(ev *ogv1.TelemetryBatch) { ev.Owner = &ogv1.Owner{Kind: "component", Ref: "disp-1"} })},
 		{name: "task rows outside the groups", meta: delivered(1), cause: delivery.RefusedTask,
 			data: batch(func(ev *ogv1.TelemetryBatch) { ev.TaskId = "t-1" })},
@@ -367,9 +367,9 @@ func TestTermRecordsItsCause(t *testing.T) {
 				t.Fatalf("recorded %d Term receipts, want 1", len(store.termed))
 			}
 			got := store.termed[0]
-			if got.BatchID != id || got.Node != "node-a" || got.Ledger.Boot != "boot-1" || got.Ledger.Seq != 7 ||
+			if got.BatchID != id || got.Outpost != "outpost-a" || got.Ledger.Boot != "boot-1" || got.Ledger.Seq != 7 ||
 				got.Ledger.Resolved != 6 || !got.Ledger.Minted.Equal(stamp.Minted) {
-				t.Fatalf("receipt = %+v, want batch %q of node-a carrying its ledger", got, id)
+				t.Fatalf("receipt = %+v, want batch %q of outpost-a carrying its ledger", got, id)
 			}
 			if !only(got.Outcome, delivery.Log, c.cause, 1) {
 				t.Fatalf("outcome = %s, want its one declared log %s and nothing else", mustJSON(t, got.Outcome), c.cause)

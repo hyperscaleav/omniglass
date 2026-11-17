@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -30,9 +30,9 @@ import (
 )
 
 // The connection fingerprint and the layered gate end to end (#1056 ruling,
-// ADR-0158): Postgres, the bus, real nodes, and the simulated panel.
+// ADR-0158): Postgres, the bus, real outposts, and the simulated panel.
 
-// gateStack is one test's server, panel and node.
+// gateStack is one test's server, panel and outpost.
 type gateStack struct {
 	t      *testing.T
 	ctx    context.Context
@@ -49,14 +49,14 @@ type gateStack struct {
 // newGateStack serves the panel (and any extra panels) on ephemeral ports,
 // so a rerun or a second test process never binds where another panel is
 // serving; the endpoints take the ports the panel reports (#1066).
-func newGateStack(t *testing.T, ip, nodeName string, extraIPs ...string) *gateStack {
+func newGateStack(t *testing.T, ip, outpostName string, extraIPs ...string) *gateStack {
 	t.Helper()
-	return newGateStackWith(t, ip, nodeName, nil, extraIPs...)
+	return newGateStackWith(t, ip, outpostName, nil, extraIPs...)
 }
 
 // newGateStackWith is newGateStack over a catalog the test shapes first (a
 // face's certificate window, say).
-func newGateStackWith(t *testing.T, ip, nodeName string, shape func(*profile.Store), extraIPs ...string) *gateStack {
+func newGateStackWith(t *testing.T, ip, outpostName string, shape func(*profile.Store), extraIPs ...string) *gateStack {
 	t.Helper()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t), storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
@@ -86,12 +86,12 @@ func newGateStackWith(t *testing.T, ip, nodeName string, shape func(*profile.Sto
 	if err := engine.Sync(snaps); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: nodeName}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: outpostName}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	token := "enroll-token-" + nodeName
+	token := "enroll-token-" + outpostName
 	sum := sha256.Sum256([]byte(token))
-	if _, err := gw.SetEnrollmentToken(ctx, "", nodeName, hex.EncodeToString(sum[:]), all); err != nil {
+	if _, err := gw.SetEnrollmentToken(ctx, "", outpostName, hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
@@ -99,7 +99,7 @@ func newGateStackWith(t *testing.T, ip, nodeName string, shape func(*profile.Sto
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Shutdown)
-	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL()), api.WithNodeRunner(srv)))
+	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL()), api.WithOutpostRunner(srv)))
 	t.Cleanup(apiSrv.Close)
 	s := &gateStack{t: t, ctx: ctx, gw: gw, all: all, ip: ip, apiURL: apiSrv.URL, token: token, panels: map[string]*sim.Device{}}
 	for _, d := range engine.Devices() {
@@ -114,15 +114,15 @@ func newGateStackWith(t *testing.T, ip, nodeName string, shape func(*profile.Sto
 	return s
 }
 
-// runNode starts the node, stopping one already running: a restart.
-func (s *gateStack) runNode(name string) {
+// runOutpost starts the outpost, stopping one already running: a restart.
+func (s *gateStack) runOutpost(name string) {
 	if s.stop != nil {
 		s.stop()
 	}
 	runCtx, cancel := context.WithCancel(s.ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: name, Token: s.token, HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond})
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: s.apiURL, Name: name, Token: s.token, HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond})
 		ran <- err
 	}()
 	s.stop = func() {
@@ -181,10 +181,10 @@ func (s *gateStack) port(protocol string) int {
 	return panelPort(s.t, s.panel, protocol)
 }
 
-func (s *gateStack) attach(comp, drv, nodeName string, port int) *storage.Endpoint {
+func (s *gateStack) attach(comp, drv, outpostName string, port int) *storage.Endpoint {
 	s.t.Helper()
 	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs:     map[string]string{"host": s.ip, "port": fmt.Sprint(port), "login": "panel-login"},
 		SecretRead: s.all, SecretBind: s.all, CanAdmin: true,
 	}, s.all)
@@ -221,7 +221,7 @@ func TestTheGateLiftsOnlyWhenTheFingerprintChanges(t *testing.T) {
 	}
 	ep := s.attach("panel-1", "panel-telnet", "edge-i", s.port("telnet"))
 	logins := s.panel.TelnetLogins
-	s.runNode("edge-i")
+	s.runOutpost("edge-i")
 
 	// The login budget: three silent hang-ups, then rejected as auth.
 	s.waitFor("panel-1", ep.Name, "session-state", is("rejected"), "rejected")
@@ -238,9 +238,9 @@ func TestTheGateLiftsOnlyWhenTheFingerprintChanges(t *testing.T) {
 	}
 	s.settles("logins after a label edit", logins, 3)
 
-	// A restarted node honours the gate it did not see happen: no login.
-	s.runNode("edge-i")
-	s.settles("logins after a node restart", logins, 3)
+	// A restarted outpost honours the gate it did not see happen: no login.
+	s.runOutpost("edge-i")
+	s.settles("logins after an outpost restart", logins, 3)
 
 	// An operator's retry moves the fingerprint: a fresh login budget.
 	if _, err := s.gw.RetryEndpoint(s.ctx, "", ep.ID, storage.RetryPin{}, s.all, s.all); err != nil {
@@ -290,7 +290,7 @@ func TestAWrongPortIsUnreachableNeverAuth(t *testing.T) {
 		t.Fatal(err)
 	}
 	ep := s.attach("panel-2", "newtron-nvp-telnet", "edge-p", 2399)
-	s.runNode("edge-p")
+	s.runOutpost("edge-p")
 	s.waitFor("panel-2", ep.Name, "session-state", is("down"), "down (the budget spent on refused connects)")
 	if got := s.latest("panel-2", ep.Name, "session-reason"); !strings.Contains(got, "refused") || strings.HasPrefix(got, "auth") {
 		t.Fatalf("session-reason = %q, want a refused connect, never auth", got)
@@ -310,7 +310,7 @@ func TestAWrongPortIsUnreachableNeverAuth(t *testing.T) {
 // TestTheSSHProbeCredentialIsGated (#1060): a bare ssh endpoint whose params
 // carry a wrong password is tried once; later probes still run the key
 // exchange (responds stays observed) but send no credential while the
-// fingerprint holds, across a node restart too. A params edit (a new
+// fingerprint holds, across an outpost restart too. A params edit (a new
 // fingerprint) tries again, and the right password authenticates.
 func TestTheSSHProbeCredentialIsGated(t *testing.T) {
 	t.Parallel()
@@ -319,20 +319,20 @@ func TestTheSSHProbeCredentialIsGated(t *testing.T) {
 	}
 	s := newGateStack(t, simtest.ClaimLoopback(t), "edge-h")
 	s.component("panel-3")
-	comp, nodeName := "panel-3", "edge-h"
+	comp, outpostName := "panel-3", "edge-h"
 	params := func(pw string) json.RawMessage {
 		return json.RawMessage(fmt.Sprintf(`{"target":"%s:%d","username":"admin","password":%q}`, s.ip, s.port("ssh"), pw))
 	}
-	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &comp, Node: &nodeName, Params: params("wrong")}, s.all)
+	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &comp, Outpost: &outpostName, Params: params("wrong")}, s.all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.runNode(nodeName)
+	s.runOutpost(outpostName)
 	s.waitFor(comp, ep.Name, "endpoint-authenticated", is("no"), "no")
 	s.waitFor(comp, ep.Name, "endpoint-rejection", func(v string) bool { return strings.HasPrefix(v, "authenticated auth ") }, "the published gate")
 	s.waitFor(comp, ep.Name, "endpoint-responsive", is("up"), "responsive (the key exchange still runs)")
 	s.settles("ssh passwords tried", s.panel.SSHPasswordTries, 1)
-	s.runNode(nodeName)
+	s.runOutpost(outpostName)
 	s.settles("ssh passwords tried after a restart", s.panel.SSHPasswordTries, 1)
 
 	if _, err := s.gw.UpdateEndpoint(s.ctx, "", ep.ID, storage.EndpointPatch{Params: params("newtron")}, s.all, s.all); err != nil {
@@ -365,16 +365,16 @@ func TestADriverEndpointEditsItsAddressInPlace(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	drv, comp, node := "newtron-nvp-telnet", "panel-e", "edge-e"
+	drv, comp, outpost := "newtron-nvp-telnet", "panel-e", "edge-e"
 	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node,
+		Driver: &drv, Component: &comp, Outpost: &outpost,
 		Inputs:     map[string]string{"host": s.ip, "port": "2399", "login": "stale-login"},
 		SecretRead: s.all, SecretBind: s.all, CanAdmin: true,
 	}, s.all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.runNode("edge-e")
+	s.runOutpost("edge-e")
 	edit := func(p storage.EndpointPatch) {
 		t.Helper()
 		p.SecretRead, p.SecretBind, p.CanAdmin = s.all, s.all, true

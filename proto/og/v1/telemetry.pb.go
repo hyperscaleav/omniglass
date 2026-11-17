@@ -1,5 +1,5 @@
-// Native Omniglass telemetry wire format. A node ships a collected batch as a
-// TelemetryBatch (protobuf) over JetStream to og.v1.telemetry.<node>; the server's
+// Native Omniglass telemetry wire format. An outpost ships a collected batch as a
+// TelemetryBatch (protobuf) over JetStream to og.v1.telemetry.<outpost>; the server's
 // ingest consumer decodes it, binds the owner from the task's interface, and writes
 // the typed samples. This is the platform's own wire (not OTLP): it fits the property
 // taxonomy directly. There is no gRPC service (a batch is a NATS message, not an RPC).
@@ -41,18 +41,18 @@ const (
 )
 
 // TelemetryBatch is one batch a task collected, already normalized to the platform's
-// canonical signal vocabulary. The node stamps NO component identity: the server binds
+// canonical signal vocabulary. The outpost stamps NO component identity: the server binds
 // the owner at ingest from the task's interface (task_id -> interface -> component).
-// The node's only identity assertion is the subject (its own name, carried as
-// node_id) plus the task_id.
+// The outpost's only identity assertion is the subject (its own name, carried as
+// outpost_id) plus the task_id.
 type TelemetryBatch struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// task_id is the identity of the task that produced this batch. The server
-	// resolves the owner (and confines the node to its own tasks) from it.
+	// resolves the owner (and confines the outpost to its own tasks) from it.
 	TaskId string `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	// node_id is the edge process that ran the task. Provenance for "where did this
-	// run"; the authoritative node identity is the publishing subject.
-	NodeId string `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	// outpost_id is the edge process that ran the task. Provenance for "where did this
+	// run"; the authoritative outpost identity is the publishing subject.
+	OutpostId string `protobuf:"bytes,2,opt,name=outpost_id,json=outpostId,proto3" json:"outpost_id,omitempty"`
 	// ts is the batch-side timestamp. A per-sample ts overrides this when set; when
 	// neither is set the server stamps ingest time.
 	Ts *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=ts,proto3" json:"ts,omitempty"`
@@ -65,19 +65,19 @@ type TelemetryBatch struct {
 	Raw []byte `protobuf:"bytes,6,opt,name=raw,proto3" json:"raw,omitempty"`
 	// logs is the raw log lines in this batch (ADR-0066): untyped arrival, not
 	// registry-resolved samples. On the API lane the consumer writes them to
-	// log_line on the batch's owner; on a node's lane they are the node's own
-	// self-logs, written to node_log. A component's lines a node collected ride
+	// log_line on the batch's owner; on an outpost's lane they are the outpost's own
+	// self-logs, written to outpost_log. A component's lines an outpost collected ride
 	// task_logs instead.
 	Logs []*LogLine `protobuf:"bytes,7,rep,name=logs,proto3" json:"logs,omitempty"`
 	// owner is the estate address this batch belongs to, set ONLY on the API push
 	// lane (og.v1.api.telemetry), where the route already authorized the caller
 	// against it. It is believed because of the subject the batch arrived on, never
-	// because the field is populated: a batch on og.v1.telemetry.<node> that sets
-	// owner is REJECTED, since a node's owner is the server's to resolve from the
-	// task's interface, not the node's to assert.
+	// because the field is populated: a batch on og.v1.telemetry.<outpost> that sets
+	// owner is REJECTED, since an outpost's owner is the server's to resolve from the
+	// task's interface, not the outpost's to assert.
 	Owner *Owner `protobuf:"bytes,8,opt,name=owner,proto3" json:"owner,omitempty"`
 	// source is who observed this batch ("webex-cloud", "manual"), the provenance
-	// recorded on every row it lands. The node lane leaves it empty and the server
+	// recorded on every row it lands. The outpost lane leaves it empty and the server
 	// fills it from the task's interface_type; a push has no interface, so without
 	// this its rows would be unattributable.
 	Source string `protobuf:"bytes,9,opt,name=source,proto3" json:"source,omitempty"`
@@ -96,33 +96,33 @@ type TelemetryBatch struct {
 	// task_logs is the log lines a task collected from its component (#1145): a
 	// driver's log line emits and the messages a listener policy lands unclaimed.
 	// The consumer writes them to log_line on the task's component, owner-bound
-	// server-side from the task as every sample is, never to node_log. A field of
-	// its own, beside the node's self-logs in logs, so one batch carries both and
-	// neither lands in the other's table. Set only on a node's lane.
+	// server-side from the task as every sample is, never to outpost_log. A field of
+	// its own, beside the outpost's self-logs in logs, so one batch carries both and
+	// neither lands in the other's table. Set only on an outpost's lane.
 	TaskLogs []*LogLine `protobuf:"bytes,13,rep,name=task_logs,json=taskLogs,proto3" json:"task_logs,omitempty"`
-	// groups is a node's whole tick (#1582): one TaskGroup per task that
-	// reported, so a node publishes one batch per tick instead of one per task.
+	// groups is an outpost's whole tick (#1582): one TaskGroup per task that
+	// reported, so an outpost publishes one batch per tick instead of one per task.
 	// The batch carries ONE id (the Nats-Msg-Id) and is byte-identical on every
 	// retry, so the receipt is written once however many groups ride it. Writer
 	// identity, the observed ts and the owner are per group, resolved by the
-	// server from each group's task_id (the node asserts a task, never an owner).
-	// Node-level logs (field 7) and node_id (field 2) stay on the batch itself.
-	// Set only on a node's lane: a node batch that carries task samples in the
+	// server from each group's task_id (the outpost asserts a task, never an owner).
+	// Outpost-level logs (field 7) and outpost_id (field 2) stay on the batch itself.
+	// Set only on an outpost's lane: an outpost batch that carries task samples in the
 	// top-level lanes (task_id, metrics, properties, events, task_logs) instead
 	// of in groups is refused. The API push lane keeps using the top-level fields.
 	Groups []*TaskGroup `protobuf:"bytes,14,rep,name=groups,proto3" json:"groups,omitempty"`
-	// node_self is the node's report of itself (#1625): its schedule, spool,
-	// sessions and process, platform metrics on the node's own platform
+	// outpost_self is the outpost's report of itself (#1625): its schedule, spool,
+	// sessions and process, platform metrics on the outpost's own platform
 	// component. Like logs (field 7) it names no task and no owner: the server
-	// resolves the owner from the publishing node, never from the batch, and
+	// resolves the owner from the publishing outpost, never from the batch, and
 	// lands each sample under the platform writer. A sample whose name is not a
-	// declared node-self platform key is refused. Set only on a node's lane.
-	NodeSelf *NodeSelf `protobuf:"bytes,15,opt,name=node_self,json=nodeSelf,proto3" json:"node_self,omitempty"`
+	// declared outpost-self platform key is refused. Set only on an outpost's lane.
+	OutpostSelf *OutpostSelf `protobuf:"bytes,15,opt,name=outpost_self,json=outpostSelf,proto3" json:"outpost_self,omitempty"`
 	// ledger is the publisher's delivery accounting for this batch (#1641):
 	// which boot minted it, its dense sequence in that boot, and how many items
 	// of each kind it carries and the boot minted before it. The server reads a
 	// gap in a boot's sequence as items that never landed, and the offsets say
-	// how many of each kind. On a node's lane the boot is the node's spool's,
+	// how many of each kind. On an outpost's lane the boot is the outpost's spool's,
 	// stamped under its lock and encoded once, so every retry carries it
 	// unchanged; on the API push lane it is the server's own, minted as the
 	// server publishes each batch (#1696).
@@ -168,9 +168,9 @@ func (x *TelemetryBatch) GetTaskId() string {
 	return ""
 }
 
-func (x *TelemetryBatch) GetNodeId() string {
+func (x *TelemetryBatch) GetOutpostId() string {
 	if x != nil {
-		return x.NodeId
+		return x.OutpostId
 	}
 	return ""
 }
@@ -252,9 +252,9 @@ func (x *TelemetryBatch) GetGroups() []*TaskGroup {
 	return nil
 }
 
-func (x *TelemetryBatch) GetNodeSelf() *NodeSelf {
+func (x *TelemetryBatch) GetOutpostSelf() *OutpostSelf {
 	if x != nil {
-		return x.NodeSelf
+		return x.OutpostSelf
 	}
 	return nil
 }
@@ -267,11 +267,11 @@ func (x *TelemetryBatch) GetLedger() *DeliveryLedger {
 }
 
 // DeliveryLedger is one batch's place in its boot's delivery count (#1641).
-// A boot is one start of a node's spool, or of the server's push lane
+// A boot is one start of an outpost's spool, or of the server's push lane
 // publisher (#1696).
 type DeliveryLedger struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// boot is a UUIDv7 minted once when the node's spool, or the server's push
+	// boot is a UUIDv7 minted once when the outpost's spool, or the server's push
 	// lane publisher, starts.
 	Boot string `protobuf:"bytes,1,opt,name=boot,proto3" json:"boot,omitempty"`
 	// seq is dense from 1 per boot, minted when the batch is flushed.
@@ -287,7 +287,7 @@ type DeliveryLedger struct {
 	Kinds []*KindCount `protobuf:"bytes,5,rep,name=kinds,proto3" json:"kinds,omitempty"`
 	// dropped is each run of this boot's batches the spool gave up on (#1692),
 	// carried by every batch minted after the drop until one of them is acked:
-	// the server reads a gap those runs cover as the node hop's loss, under
+	// the server reads a gap those runs cover as the outpost hop's loss, under
 	// their cause, and not as missing at ingest.
 	Dropped []*DroppedRun `protobuf:"bytes,6,rep,name=dropped,proto3" json:"dropped,omitempty"`
 	// lost is the items this boot lost before any batch carried them (#1692),
@@ -377,7 +377,7 @@ func (x *DeliveryLedger) GetLost() []*LostCount {
 	return nil
 }
 
-// DroppedRun is a run of consecutive seqs of one boot the node's spool
+// DroppedRun is a run of consecutive seqs of one boot the outpost's spool
 // dropped for one cause, and the items of each kind they carried.
 type DroppedRun struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -579,30 +579,30 @@ func (x *KindCount) GetBefore() uint64 {
 	return 0
 }
 
-// NodeSelf is a node's self-report (#1625): platform metrics about the node
+// OutpostSelf is an outpost's self-report (#1625): platform metrics about the outpost
 // itself. Each sample's instance is empty but where the key discriminates
 // (session-held-count carries the session state).
-type NodeSelf struct {
+type OutpostSelf struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Metrics       []*MetricSample        `protobuf:"bytes,1,rep,name=metrics,proto3" json:"metrics,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *NodeSelf) Reset() {
-	*x = NodeSelf{}
+func (x *OutpostSelf) Reset() {
+	*x = OutpostSelf{}
 	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *NodeSelf) String() string {
+func (x *OutpostSelf) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*NodeSelf) ProtoMessage() {}
+func (*OutpostSelf) ProtoMessage() {}
 
-func (x *NodeSelf) ProtoReflect() protoreflect.Message {
+func (x *OutpostSelf) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_og_v1_telemetry_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -614,27 +614,27 @@ func (x *NodeSelf) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use NodeSelf.ProtoReflect.Descriptor instead.
-func (*NodeSelf) Descriptor() ([]byte, []int) {
+// Deprecated: Use OutpostSelf.ProtoReflect.Descriptor instead.
+func (*OutpostSelf) Descriptor() ([]byte, []int) {
 	return file_proto_og_v1_telemetry_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *NodeSelf) GetMetrics() []*MetricSample {
+func (x *OutpostSelf) GetMetrics() []*MetricSample {
 	if x != nil {
 		return x.Metrics
 	}
 	return nil
 }
 
-// TaskGroup is one task's samples from one node tick (#1582). It is the unit of
+// TaskGroup is one task's samples from one outpost tick (#1582). It is the unit of
 // refusal: a group the gateway refuses (an unknown owner, a value the schema
 // rejects) is dropped alone, its sibling groups in the same batch land, and the
 // batch's receipt is still written once.
 type TaskGroup struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// task_id is the task that produced this group. The server resolves the owner
-	// from it and confines the node to its own tasks; a group naming a task the
-	// node does not own is recorded as an orphan and skipped, not the batch.
+	// from it and confines the outpost to its own tasks; a group naming a task the
+	// outpost does not own is recorded as an orphan and skipped, not the batch.
 	TaskId string `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	// ts is the time this group was observed. A per-sample ts overrides it when
 	// set; when neither is set the server stamps ingest time. It is per group, not
@@ -732,7 +732,7 @@ func (x *TaskGroup) GetTaskLogs() []*LogLine {
 // and which one. Only the API lane sets it (see TelemetryBatch.owner).
 type Owner struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// kind is the arc: component, system, location, or node.
+	// kind is the arc: component, system, location, or outpost.
 	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
 	// ref addresses the entity within that kind, by name or id.
 	Ref           string `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
@@ -798,7 +798,7 @@ type MetricSample struct {
 	// are unset the server stamps ingest time. A supplied ts survives verbatim.
 	Ts *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=ts,proto3" json:"ts,omitempty"`
 	// instance discriminates many values of ONE name on one owner (three fan
-	// speeds, per-port counters). The node lane leaves it empty and the server
+	// speeds, per-port counters). The outpost lane leaves it empty and the server
 	// fills it from the interface name; a push sets it directly.
 	Instance string `protobuf:"bytes,4,opt,name=instance,proto3" json:"instance,omitempty"`
 	// labels are sample-specific dimensional metadata (e.g. the reason). Not
@@ -808,7 +808,7 @@ type MetricSample struct {
 	// ADR-1282): a match key and its value, naming the owner the sample is
 	// about rather than the conduit component that collected it. It is a
 	// claim, never an owner: the server resolves it only against the identity
-	// bindings of the conduit the batch is already confined to (the node lane's
+	// bindings of the conduit the batch is already confined to (the outpost lane's
 	// task, the webhook's endpoint). The push route never sets it. Unset, the
 	// sample lands on the conduit as before.
 	Identity      *Identity `protobuf:"bytes,6,opt,name=identity,proto3" json:"identity,omitempty"`
@@ -1138,7 +1138,7 @@ func (x *Identity) GetValue() string {
 
 // LogLine is one raw log line off the ingest lane (ADR-0066): untyped text, not a
 // registry-resolved sample. The consumer writes it to log_line, owner-confined to
-// the publishing node (self-logs) or the task's component. severity and facility
+// the publishing outpost (self-logs) or the task's component. severity and facility
 // are the retention/routing axes; attributes and labels are freeform JSON.
 type LogLine struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1255,10 +1255,11 @@ var File_proto_og_v1_telemetry_proto protoreflect.FileDescriptor
 
 const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xab\x05\n" +
+	"\x1bproto/og/v1/telemetry.proto\x12\x05og.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xba\x05\n" +
 	"\x0eTelemetryBatch\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x17\n" +
-	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12*\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
+	"\n" +
+	"outpost_id\x18\x02 \x01(\tR\toutpostId\x12*\n" +
 	"\x02ts\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02ts\x129\n" +
 	"\x06labels\x18\x04 \x03(\v2!.og.v1.TelemetryBatch.LabelsEntryR\x06labels\x12\x10\n" +
 	"\x03raw\x18\x06 \x01(\fR\x03raw\x12\"\n" +
@@ -1272,8 +1273,8 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"properties\x12*\n" +
 	"\x06events\x18\f \x03(\v2\x12.og.v1.EventSampleR\x06events\x12+\n" +
 	"\ttask_logs\x18\r \x03(\v2\x0e.og.v1.LogLineR\btaskLogs\x12(\n" +
-	"\x06groups\x18\x0e \x03(\v2\x10.og.v1.TaskGroupR\x06groups\x12,\n" +
-	"\tnode_self\x18\x0f \x01(\v2\x0f.og.v1.NodeSelfR\bnodeSelf\x12-\n" +
+	"\x06groups\x18\x0e \x03(\v2\x10.og.v1.TaskGroupR\x06groups\x125\n" +
+	"\foutpost_self\x18\x0f \x01(\v2\x12.og.v1.OutpostSelfR\voutpostSelf\x12-\n" +
 	"\x06ledger\x18\x10 \x01(\v2\x15.og.v1.DeliveryLedgerR\x06ledger\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -1299,8 +1300,8 @@ const file_proto_og_v1_telemetry_proto_rawDesc = "" +
 	"\tKindCount\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x04R\x05count\x12\x16\n" +
-	"\x06before\x18\x03 \x01(\x04R\x06before\"9\n" +
-	"\bNodeSelf\x12-\n" +
+	"\x06before\x18\x03 \x01(\x04R\x06before\"<\n" +
+	"\vOutpostSelf\x12-\n" +
 	"\ametrics\x18\x01 \x03(\v2\x13.og.v1.MetricSampleR\ametrics\"\x8f\x02\n" +
 	"\tTaskGroup\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12*\n" +
@@ -1377,7 +1378,7 @@ var file_proto_og_v1_telemetry_proto_goTypes = []any{
 	(*DroppedRun)(nil),            // 2: og.v1.DroppedRun
 	(*LostCount)(nil),             // 3: og.v1.LostCount
 	(*KindCount)(nil),             // 4: og.v1.KindCount
-	(*NodeSelf)(nil),              // 5: og.v1.NodeSelf
+	(*OutpostSelf)(nil),           // 5: og.v1.OutpostSelf
 	(*TaskGroup)(nil),             // 6: og.v1.TaskGroup
 	(*Owner)(nil),                 // 7: og.v1.Owner
 	(*MetricSample)(nil),          // 8: og.v1.MetricSample
@@ -1400,14 +1401,14 @@ var file_proto_og_v1_telemetry_proto_depIdxs = []int32{
 	10, // 6: og.v1.TelemetryBatch.events:type_name -> og.v1.EventSample
 	12, // 7: og.v1.TelemetryBatch.task_logs:type_name -> og.v1.LogLine
 	6,  // 8: og.v1.TelemetryBatch.groups:type_name -> og.v1.TaskGroup
-	5,  // 9: og.v1.TelemetryBatch.node_self:type_name -> og.v1.NodeSelf
+	5,  // 9: og.v1.TelemetryBatch.outpost_self:type_name -> og.v1.OutpostSelf
 	1,  // 10: og.v1.TelemetryBatch.ledger:type_name -> og.v1.DeliveryLedger
 	16, // 11: og.v1.DeliveryLedger.minted:type_name -> google.protobuf.Timestamp
 	4,  // 12: og.v1.DeliveryLedger.kinds:type_name -> og.v1.KindCount
 	2,  // 13: og.v1.DeliveryLedger.dropped:type_name -> og.v1.DroppedRun
 	3,  // 14: og.v1.DeliveryLedger.lost:type_name -> og.v1.LostCount
 	4,  // 15: og.v1.DroppedRun.kinds:type_name -> og.v1.KindCount
-	8,  // 16: og.v1.NodeSelf.metrics:type_name -> og.v1.MetricSample
+	8,  // 16: og.v1.OutpostSelf.metrics:type_name -> og.v1.MetricSample
 	16, // 17: og.v1.TaskGroup.ts:type_name -> google.protobuf.Timestamp
 	8,  // 18: og.v1.TaskGroup.metrics:type_name -> og.v1.MetricSample
 	9,  // 19: og.v1.TaskGroup.properties:type_name -> og.v1.PropertySample

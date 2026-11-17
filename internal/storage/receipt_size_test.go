@@ -17,7 +17,7 @@ import (
 // by the time of the read depends on what else the cluster is running.
 const receiptRowBudgetBytes = 330
 
-// TestReceiptStaysInItsBudget lands 1,000 of a node's ticks, each
+// TestReceiptStaysInItsBudget lands 1,000 of an outpost's ticks, each
 // shaped as a production one is (a UUIDv7 boot and batch id, a ledger
 // declaring metrics, properties and logs with a boot's running totals, an
 // outcome storing them), and holds the receipt's row under its budget,
@@ -36,15 +36,15 @@ func TestReceiptStaysInItsBudget(t *testing.T) {
 		at := ts.Add(time.Duration(i) * time.Second)
 		b := storage.IngestBatch{
 			BatchID: "og.v1.telemetry.edge-1 " + collection.NewBatchID(),
-			Writer:  storage.NodeWriter("", ""),
-			Node:    "edge-1",
+			Writer:  storage.OutpostWriter("", ""),
+			Outpost: "edge-1",
 			Ledger: &delivery.Stamp{Boot: boot, Seq: seq, Minted: at, Resolved: seq - 1, Kinds: delivery.Declared{
 				delivery.Metric:   {Count: 1, Before: 58 * (seq - 1)},
 				delivery.Property: {Count: 1, Before: seq / 16},
 				delivery.Log:      {Count: 1, Before: seq / 4},
 			}},
-			NodeLogs: []storage.NodeLogWrite{{Node: "edge-1", Source: "node", Severity: "info", Message: "tick", TS: at}},
-			Groups:   []storage.IngestGroup{taskGroup("task-a", f.disp1, f.node, "on", at)},
+			OutpostLogs: []storage.OutpostLogWrite{{Outpost: "edge-1", Source: "outpost", Severity: "info", Message: "tick", TS: at}},
+			Groups:      []storage.IngestGroup{taskGroup("task-a", f.disp1, f.outpost, "on", at)},
 		}
 		b.Groups[0].Events = nil
 		if res, err := f.gw.LandBatch(ctx, b); err != nil || !res.Landed {

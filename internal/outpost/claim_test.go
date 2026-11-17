@@ -1,4 +1,4 @@
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/nettest"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 )
 
 // A server URL can carry a user:password, and a claim that fails names the URL
-// it was sent to. node run prints that error and sim run logs it on every retry
+// it was sent to. outpost run prints that error and sim run logs it on every retry
 // while its server is still coming up, so a password in OMNIGLASS_SERVER
 // reached the screen and the container logs (#979's review).
 
@@ -19,7 +19,7 @@ import (
 func TestAnUnreachableClaimNeverEchoesTheServersPassword(t *testing.T) {
 	t.Parallel()
 	server := "http://operator:hunter2@" + nettest.RefusedAddr(t)
-	_, err := node.Claim(context.Background(), server, "edge-hq", "ogp_enroll")
+	_, err := outpost.Claim(context.Background(), server, "edge-hq", "ogp_enroll")
 	if err == nil {
 		t.Fatal("a claim to a refused address succeeded")
 	}
@@ -32,7 +32,7 @@ func TestAnUnreachableClaimNeverEchoesTheServersPassword(t *testing.T) {
 // character does not parse, and the parser's error quotes the whole URL.
 func TestAMalformedClaimURLNeverEchoesItsPassword(t *testing.T) {
 	t.Parallel()
-	_, err := node.Claim(context.Background(), "https://operator:hunter2@omniglass.example:80a", "edge-hq", "ogp_enroll")
+	_, err := outpost.Claim(context.Background(), "https://operator:hunter2@omniglass.example:80a", "edge-hq", "ogp_enroll")
 	if err == nil {
 		t.Fatal("a claim to an unparseable server URL succeeded")
 	}
@@ -48,7 +48,7 @@ func TestAMisreadClaimPasswordIsNeverShown(t *testing.T) {
 	t.Parallel()
 	addr := nettest.RefusedAddr(t)
 	for _, server := range []string{"http://operator:/abcSECRET@" + addr, "operator:abcSECRET@" + addr} {
-		_, err := node.Claim(context.Background(), server, "edge-hq", "ogp_enroll")
+		_, err := outpost.Claim(context.Background(), server, "edge-hq", "ogp_enroll")
 		if err == nil {
 			t.Fatalf("a claim to a misread server URL succeeded")
 		}

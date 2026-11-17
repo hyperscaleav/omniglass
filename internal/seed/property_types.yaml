@@ -55,10 +55,10 @@ property_types:
     description: >-
       A held session's state per endpoint: establishing (the first connection
       is being made), up (the connection is held and polls borrow it),
-      recovering (a held connection dropped and the node is reconnecting with
-      a bounded, jittered backoff), down (the attempt budget is spent; the node
+      recovering (a held connection dropped and the outpost is reconnecting with
+      a bounded, jittered backoff), down (the attempt budget is spent; the outpost
       keeps retrying at the capped pace), rejected (a refusal retrying cannot
-      fix, such as a wrong credential or a changed host key; the node dials no
+      fix, such as a wrong credential or a changed host key; the outpost dials no
       more until the endpoint changes or an operator retries). Written on
       transitions only; session-reason carries why.
   - name: session-reason
@@ -74,7 +74,7 @@ property_types:
     label: SSH Host Key
     description: >-
       The SHA256 fingerprint of the host key an ssh session trusts, per
-      endpoint. The node records the first key it sees (trust on first use)
+      endpoint. The outpost records the first key it sees (trust on first use)
       and every connection that matches it; a changed key is refused, and the
       session reads rejected with class host-key naming both fingerprints
       until an operator retries the endpoint with the new key, which lands
@@ -85,7 +85,7 @@ property_types:
     description: >-
       The SHA256 fingerprint of the public key a tls endpoint pins, per
       endpoint, in the form ssh fingerprints a host key in. In pin mode the
-      node records the first key it is offered (trust on first use), and
+      outpost records the first key it is offered (trust on first use), and
       records it again while the server does not yet deliver it back as the
       pin; a renewal that keeps the key is no change,
       and a changed key is refused, the session reading rejected with class
@@ -122,10 +122,10 @@ property_types:
     description: >-
       Why an endpoint's gate holds: the refusal's class and the component's
       own text (auth: the agent answered authorizationError for the
-      community), scrubbed by the node of anything it sent. Written beside
-      endpoint-rejection whenever the node records a gate, held session or
+      community), scrubbed by the outpost of anything it sent. Written beside
+      endpoint-rejection whenever the outpost records a gate, held session or
       not, so an endpoint gated by its reachability probe alone still says
-      why it was refused. A gate a restarted node adopts writes none, and the
+      why it was refused. A gate a restarted outpost adopts writes none, and the
       read serves the reason only while a gate holds.
   - name: health
     data_type: string

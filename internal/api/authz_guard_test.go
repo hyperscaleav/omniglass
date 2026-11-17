@@ -18,7 +18,7 @@ import (
 // operation MUST reject a no-permission principal. Keep this list short and
 // justified; a new entry is a security decision.
 var ungated = map[string]bool{
-	"POST /nodes:claim":                       true, // public by necessity: the node is not yet a principal; the enrollment token is the authentication, exchanged for its NATS credential
+	"POST /outposts:claim":                    true, // public by necessity: the outpost is not yet a principal; the enrollment token is the authentication, exchanged for its NATS credential
 	"POST /webhooks/{token}":                  true, // public by necessity (ADR-1024): the sender is not a principal; the endpoint's declared scheme is the authentication, and the write is bound to the token's one endpoint
 	"GET /webhooks/{token}":                   true, // public by necessity (ADR-1024): a sender verifying its URL before it posts; an unknown token is the receiver's identical 404
 	"HEAD /webhooks/{token}":                  true, // public by necessity (ADR-1024): the same verification, headers only

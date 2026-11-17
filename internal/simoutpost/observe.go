@@ -1,4 +1,4 @@
-package simnode
+package simoutpost
 
 import (
 	"encoding/json"
@@ -14,8 +14,8 @@ import (
 // (#1639): each protocol summed over its devices, the served devices that saw
 // nothing on it counted with a capped sample of their ids, and a capped list
 // of the faces that saw an overlap. Pure.
-func observationWire(node string, snap sim.ObservationSnapshot, impaired int) collection.SimObservation {
-	w := collection.SimObservation{Node: node, At: snap.At, Started: snap.Started,
+func observationWire(outpost string, snap sim.ObservationSnapshot, impaired int) collection.SimObservation {
+	w := collection.SimObservation{Outpost: outpost, At: snap.At, Started: snap.Started,
 		FleetGeneration: snap.FleetGeneration, FleetChanging: snap.FleetChanging, Devices: len(snap.Devices), Impaired: impaired}
 	index := map[string]int{}
 	for _, p := range snap.Protocols {
@@ -62,7 +62,7 @@ func observationWire(node string, snap sim.ObservationSnapshot, impaired int) co
 }
 
 // subscribeObservation answers the server's observation requests for this
-// node's simulator with a fresh read of the engine. impaired reports how many
+// outpost's simulator with a fresh read of the engine. impaired reports how many
 // devices carry an applied impairment.
 func subscribeObservation(nc *nats.Conn, name string, engine *sim.Engine, impaired func() int) (*nats.Subscription, error) {
 	return nc.Subscribe(collection.SimobsSubject(name), func(m *nats.Msg) {

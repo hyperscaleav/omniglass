@@ -14,7 +14,7 @@ import (
 
 // TestCreateSimSystem proves a simulated system lands whole or not at all:
 // the system to a standard, a component per planned slot with its endpoint
-// on the node, each assigned its role, in one transaction; a slot that
+// on the outpost, each assigned its role, in one transaction; a slot that
 // cannot be assigned, or a scope that refuses the system, leaves nothing.
 func TestCreateSimSystem(t *testing.T) {
 	t.Parallel()
@@ -33,7 +33,7 @@ func TestCreateSimSystem(t *testing.T) {
 	}
 	storagetest.CreateShippedStandards(t, gw)
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-s", LocationType: "campus"}, all); err != nil {
@@ -64,8 +64,8 @@ func TestCreateSimSystem(t *testing.T) {
 		SystemRead: all, SystemUpdate: all, EndpointCreate: all, SecretRead: all, SecretBind: all, CanAdmin: true,
 		ComponentRead: all, ComponentUpdate: all}
 	spec := storage.SimSystemSpec{
-		System: storage.SystemSpec{SystemTypeID: &sysType, StandardID: &standard, LocationName: &loc},
-		Node:   "edge",
+		System:  storage.SystemSpec{SystemTypeID: &sysType, StandardID: &standard, LocationName: &loc},
+		Outpost: "edge",
 		Components: []storage.SimSystemComponent{
 			slot("video-bar", bar.Name, "127.60.0.1:80"),
 			slot("main-display", disp.Name, "127.60.0.2:80"),
@@ -107,9 +107,9 @@ func TestCreateSimSystem(t *testing.T) {
 	if n := count(`select count(*) from system_role_assignment where system_id = (select id from system where name = '` + got.System.Name + `')`); n != 3 {
 		t.Fatalf("%d role assignments, want 3", n)
 	}
-	devs, err := gw.NodeSimDevices(ctx, "edge", all)
+	devs, err := gw.OutpostSimDevices(ctx, "edge", all)
 	if err != nil || len(devs) != 3 {
-		t.Fatalf("node lists %d simulated components (%v), want 3", len(devs), err)
+		t.Fatalf("outpost lists %d simulated components (%v), want 3", len(devs), err)
 	}
 	if n := count(`select count(*) from audit_log where resource = 'system_role_assignment'`); n < 3 {
 		t.Fatalf("%d role assignment audit rows, want each assignment audited", n)

@@ -12,22 +12,22 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestANodeLogOverridePrunesNodeLogsAndOnlyThem (#1350), against real
-// Postgres: with no node override set, a node's debug lines two days old are
+// TestAOutpostLogOverridePrunesOutpostLogsAndOnlyThem (#1350), against real
+// Postgres: with no outpost override set, an outpost's debug lines two days old are
 // kept by the shared 3-day debug window, exactly as a component's are. Once an
-// admin sets node_log_debug_days to 1, the pass removes the node's debug lines
+// admin sets outpost_log_debug_days to 1, the pass removes the outpost's debug lines
 // past a day, across more than one chunk, and leaves the component's lines and
-// the node's newer and info lines alone. A re-run removes nothing, and
-// restoring the override puts node_log back on the shared window. It runs at
+// the outpost's newer and info lines alone. A re-run removes nothing, and
+// restoring the override puts outpost_log back on the shared window. It runs at
 // the real clock and either side of a UTC midnight (#1567).
-func TestANodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T) {
+func TestAOutpostLogOverridePrunesOutpostLogsAndOnlyThem(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
-	storagetest.AtEachMidnight(t, nodeLogOverridePrunesNodeLogsAndOnlyThem)
+	storagetest.AtEachMidnight(t, outpostLogOverridePrunesOutpostLogsAndOnlyThem)
 }
 
-func nodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T, at time.Time) {
+func outpostLogOverridePrunesOutpostLogsAndOnlyThem(t *testing.T, at time.Time) {
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
 	clock := time.Now
@@ -48,14 +48,14 @@ func nodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T, at time.Time) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1"}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 	now := clock().UTC()
-	// This test is about node_log, not the metric compactions: stand their
+	// This test is about outpost_log, not the metric compactions: stand their
 	// marks at their targets, so no pass has an hour or a day to fold and
 	// none reports Behind. Left to seed itself, a fresh database's trend marks
 	// start at its oldest partition (the 1st of the month), and the test's
@@ -79,9 +79,9 @@ func nodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T, at time.Time) {
 		t.Helper()
 		ts := now.Add(-age)
 		var q string
-		if table == "node_log" {
-			q = `insert into node_log (ts, node_id, source, severity, message)
-				values ($1, (select principal_id from node where name = 'node-a'), 'node', $2, $3)`
+		if table == "outpost_log" {
+			q = `insert into outpost_log (ts, outpost_id, source, severity, message)
+				values ($1, (select principal_id from outpost where name = 'outpost-a'), 'outpost', $2, $3)`
 		} else {
 			q = `insert into log_line (ts, component_id, instance, source, severity, message)
 				values ($1, (select id from component where name = 'display-1'), '', 'push', $2, $3)`
@@ -91,13 +91,13 @@ func nodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T, at time.Time) {
 		}
 	}
 	const day = 24 * time.Hour
-	// Five old node debug lines, so a chunk of 2 needs three statements: the
+	// Five old outpost debug lines, so a chunk of 2 needs three statements: the
 	// last one short.
 	for i := 0; i < 5; i++ {
-		line("node_log", "debug", 2*day, "node-old-debug")
+		line("outpost_log", "debug", 2*day, "outpost-old-debug")
 	}
-	line("node_log", "debug", 12*time.Hour, "node-new-debug")
-	line("node_log", "info", 2*day, "node-old-info")
+	line("outpost_log", "debug", 12*time.Hour, "outpost-new-debug")
+	line("outpost_log", "info", 2*day, "outpost-old-info")
 	line("log_line", "debug", 2*day, "comp-old-debug")
 	count := func(table, msg string) int {
 		t.Helper()
@@ -116,40 +116,40 @@ func nodeLogOverridePrunesNodeLogsAndOnlyThem(t *testing.T, at time.Time) {
 		return rep
 	}
 
-	if rep := pass(); rep.Deleted["node_log/debug"] != 0 || count("node_log", "node-old-debug") != 5 {
-		t.Fatalf("with no node override, node_log/debug removed %d and kept %d, want the shared 3-day window to keep all 5",
-			rep.Deleted["node_log/debug"], count("node_log", "node-old-debug"))
+	if rep := pass(); rep.Deleted["outpost_log/debug"] != 0 || count("outpost_log", "outpost-old-debug") != 5 {
+		t.Fatalf("with no outpost override, outpost_log/debug removed %d and kept %d, want the shared 3-day window to keep all 5",
+			rep.Deleted["outpost_log/debug"], count("outpost_log", "outpost-old-debug"))
 	}
 
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "retention", map[string]any{"node_log_debug_days": 1}); err != nil {
-		t.Fatalf("set the node override: %v", err)
+	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "retention", map[string]any{"outpost_log_debug_days": 1}); err != nil {
+		t.Fatalf("set the outpost override: %v", err)
 	}
 	rep := pass()
-	if rep.Deleted["node_log/debug"] != 5 || len(rep.Behind) != 0 {
-		t.Errorf("report %+v, want 5 node debug lines removed and nothing behind", rep)
+	if rep.Deleted["outpost_log/debug"] != 5 || len(rep.Behind) != 0 {
+		t.Errorf("report %+v, want 5 outpost debug lines removed and nothing behind", rep)
 	}
 	for table, want := range map[[2]string]int{
-		{"node_log", "node-old-debug"}: 0,
-		{"node_log", "node-new-debug"}: 1,
-		{"node_log", "node-old-info"}:  1,
-		{"log_line", "comp-old-debug"}: 1,
+		{"outpost_log", "outpost-old-debug"}: 0,
+		{"outpost_log", "outpost-new-debug"}: 1,
+		{"outpost_log", "outpost-old-info"}:  1,
+		{"log_line", "comp-old-debug"}:       1,
 	} {
 		if got := count(table[0], table[1]); got != want {
 			t.Errorf("%s %q: %d left, want %d", table[0], table[1], got, want)
 		}
 	}
-	if rep := pass(); rep.Deleted["node_log/debug"] != 0 {
-		t.Errorf("a re-run removed %d node debug lines, want none", rep.Deleted["node_log/debug"])
+	if rep := pass(); rep.Deleted["outpost_log/debug"] != 0 {
+		t.Errorf("a re-run removed %d outpost debug lines, want none", rep.Deleted["outpost_log/debug"])
 	}
 
-	// Restoring the override (a null in the merge patch) returns node_log to
-	// the shared window: a node line two days old survives again.
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "retention", map[string]any{"node_log_debug_days": nil}); err != nil {
-		t.Fatalf("restore the node override: %v", err)
+	// Restoring the override (a null in the merge patch) returns outpost_log to
+	// the shared window: an outpost line two days old survives again.
+	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "retention", map[string]any{"outpost_log_debug_days": nil}); err != nil {
+		t.Fatalf("restore the outpost override: %v", err)
 	}
-	line("node_log", "debug", 2*day, "node-old-debug-2")
+	line("outpost_log", "debug", 2*day, "outpost-old-debug-2")
 	pass()
-	if got := count("node_log", "node-old-debug-2"); got != 1 {
-		t.Errorf("after restoring the override a 2-day node debug line left %d, want it kept by the shared window", got)
+	if got := count("outpost_log", "outpost-old-debug-2"); got != 1 {
+		t.Errorf("after restoring the override a 2-day outpost debug line left %d, want it kept by the shared window", got)
 	}
 }

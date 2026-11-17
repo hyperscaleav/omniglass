@@ -28,8 +28,8 @@ func soakAPI(view, alarms string) lab.SoakGetter {
 
 const soakCleanView = `{"figures_read": true, "system": {"name": "platform"},
  "servers": [{"name": "lab-server", "version": "v1.4.0"}],
- "nodes": [{"name": "edge-hq", "loss": 0}],
- "pipeline": {"hops": [{"id": "node", "total": {"newest": {"loss": 0}, "last_hour": {"loss": 0}}}],
+ "outposts": [{"name": "edge-hq", "loss": 0}],
+ "pipeline": {"hops": [{"id": "outpost", "total": {"newest": {"loss": 0}, "last_hour": {"loss": 0}}}],
    "end_to_end_total": {"newest": 0, "last_hour": 0}}}`
 
 func TestRunSoakVerdictWritesTheRecord(t *testing.T) {

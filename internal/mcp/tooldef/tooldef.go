@@ -46,7 +46,7 @@ type Hints struct {
 	// Destructive marks a create-shaped write (a POST) whose effect cannot simply
 	// be undone, such as issuing a command to a component.
 	Destructive bool `json:"destructive,omitempty"`
-	// OpenWorld marks a tool that reaches outside omniglass: a node touching the
+	// OpenWorld marks a tool that reaches outside omniglass: an outpost touching the
 	// network, or the server fetching from the internet.
 	OpenWorld bool `json:"open_world,omitempty"`
 }

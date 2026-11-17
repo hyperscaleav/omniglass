@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 func TestLogSinkCapturesAndDrains(t *testing.T) {
 	t.Parallel()
 	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
-	logger := slog.New(sink).With("node", "site-a")
+	logger := slog.New(sink).With("outpost", "site-a")
 
 	logger.Info("worklist pulled", "facility", "collection", "tasks", 3)
 	logger.Warn("task skipped", "facility", "collection", "task", "t-icmp")
@@ -24,8 +24,8 @@ func TestLogSinkCapturesAndDrains(t *testing.T) {
 	if recs[0].message != "worklist pulled" || recs[0].severity != "info" {
 		t.Fatalf("record 0 = %+v, want info/worklist pulled", recs[0])
 	}
-	if recs[0].attrs["node"] != "site-a" || recs[0].attrs["facility"] != "collection" {
-		t.Fatalf("record 0 attrs = %v, want bound node + inline facility", recs[0].attrs)
+	if recs[0].attrs["outpost"] != "site-a" || recs[0].attrs["facility"] != "collection" {
+		t.Fatalf("record 0 attrs = %v, want bound outpost + inline facility", recs[0].attrs)
 	}
 	if recs[1].severity != "warning" {
 		t.Fatalf("record 1 severity = %q, want warning", recs[1].severity)
@@ -45,21 +45,21 @@ func TestSelfLogEventMapping(t *testing.T) {
 	recs := []capturedLog{{
 		severity: "warning",
 		message:  "task skipped",
-		attrs:    map[string]any{"source": "collection", "facility": "node", "task": "t-icmp", "node": "site-a"},
+		attrs:    map[string]any{"source": "collection", "facility": "outpost", "task": "t-icmp", "outpost": "site-a"},
 	}}
 	ev := selfLogBatch("site-a", recs)
 	if ev == nil || len(ev.GetLogs()) != 1 {
 		t.Fatalf("selfLogBatch = %+v, want one log line", ev)
 	}
 	l := ev.GetLogs()[0]
-	if ev.GetNodeId() != "site-a" {
-		t.Fatalf("node id = %q, want site-a", ev.GetNodeId())
+	if ev.GetOutpostId() != "site-a" {
+		t.Fatalf("outpost id = %q, want site-a", ev.GetOutpostId())
 	}
 	if l.GetMessage() != "task skipped" || l.GetSeverity() != "warning" {
 		t.Fatalf("line = %q/%q, want task skipped/warning", l.GetMessage(), l.GetSeverity())
 	}
-	if l.GetSource() != "collection" || l.GetFacility() != "node" {
-		t.Fatalf("source/facility = %q/%q, want collection/node (lifted from attrs)", l.GetSource(), l.GetFacility())
+	if l.GetSource() != "collection" || l.GetFacility() != "outpost" {
+		t.Fatalf("source/facility = %q/%q, want collection/outpost (lifted from attrs)", l.GetSource(), l.GetFacility())
 	}
 	var rest map[string]any
 	if err := json.Unmarshal(l.GetAttributes(), &rest); err != nil {
@@ -68,12 +68,12 @@ func TestSelfLogEventMapping(t *testing.T) {
 	if _, ok := rest["source"]; ok {
 		t.Fatalf("source leaked into attributes: %v", rest)
 	}
-	if rest["task"] != "t-icmp" || rest["node"] != "site-a" {
-		t.Fatalf("attributes = %v, want task + node retained", rest)
+	if rest["task"] != "t-icmp" || rest["outpost"] != "site-a" {
+		t.Fatalf("attributes = %v, want task + outpost retained", rest)
 	}
 }
 
-// TestSelfLogEventDefaultsAndEmpty proves source defaults to "node" when unset and
+// TestSelfLogEventDefaultsAndEmpty proves source defaults to "outpost" when unset and
 // that an empty record set ships nothing.
 func TestSelfLogEventDefaultsAndEmpty(t *testing.T) {
 	t.Parallel()
@@ -82,32 +82,32 @@ func TestSelfLogEventDefaultsAndEmpty(t *testing.T) {
 	}
 	ev := selfLogBatch("site-a", []capturedLog{{severity: "info", message: "connected to bus", attrs: map[string]any{"url": "nats://x"}}})
 	l := ev.GetLogs()[0]
-	if l.GetSource() != "node" {
-		t.Fatalf("source = %q, want default node", l.GetSource())
+	if l.GetSource() != "outpost" {
+		t.Fatalf("source = %q, want default outpost", l.GetSource())
 	}
 	if l.GetFacility() != "" {
 		t.Fatalf("facility = %q, want empty", l.GetFacility())
 	}
 }
 
-// deepNodeWork stands in for arbitrary node code far from the run loop: it holds
+// deepOutpostWork stands in for arbitrary outpost code far from the run loop: it holds
 // no logger and takes none, it just calls the package-level slog. The self-log
 // lane must still carry what it emits.
-func deepNodeWork() {
+func deepOutpostWork() {
 	slog.Warn("probe capability missing", "facility", "collection", "probe", "icmp")
 }
 
-// TestSelfLogsAreNodeWide is the emitter contract: once the run loop installs the
-// sink as the process default, node code anywhere emits self-logs through the
+// TestSelfLogsAreOutpostWide is the emitter contract: once the run loop installs the
+// sink as the process default, outpost code anywhere emits self-logs through the
 // package-level slog with no logger threaded to it.
-func TestSelfLogsAreNodeWide(t *testing.T) {
+func TestSelfLogsAreOutpostWide(t *testing.T) {
 	// Serial: it swaps the slog default to read the self-log the probe writes through the package-level logger.
 	sink := newLogSink(slog.NewTextHandler(io.Discard, nil))
 	restore := slog.Default()
-	slog.SetDefault(slog.New(sink).With("node", "site-a"))
+	slog.SetDefault(slog.New(sink).With("outpost", "site-a"))
 	defer slog.SetDefault(restore)
 
-	deepNodeWork()
+	deepOutpostWork()
 
 	recs := sink.drain()
 	if len(recs) != 1 {
@@ -117,13 +117,13 @@ func TestSelfLogsAreNodeWide(t *testing.T) {
 		t.Fatalf("record = %+v, want warning/probe capability missing", recs[0])
 	}
 	// The run loop's bound attrs still ride along, so the line is attributable.
-	if recs[0].attrs["node"] != "site-a" || recs[0].attrs["probe"] != "icmp" {
-		t.Fatalf("attrs = %v, want bound node + inline probe", recs[0].attrs)
+	if recs[0].attrs["outpost"] != "site-a" || recs[0].attrs["probe"] != "icmp" {
+		t.Fatalf("attrs = %v, want bound outpost + inline probe", recs[0].attrs)
 	}
 }
 
 // TestLogSinkBoundsBuffer proves the buffer cannot grow without bound: once every
-// node slog call buffers, a chatty node between ticks (or a publish that never
+// outpost slog call buffers, a chatty outpost between ticks (or a publish that never
 // drains) would otherwise leak. The newest records win and the drain leads with an
 // honest overflow line rather than silently losing the count.
 func TestLogSinkBoundsBuffer(t *testing.T) {

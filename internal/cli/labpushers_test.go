@@ -21,7 +21,7 @@ func fakeMint() func() (string, []byte, string, error) {
 }
 
 // The scale plan provisions one principal and token per declared pusher
-// (#1743): a corporate lab's every pusher, on its own site's node, with a
+// (#1743): a corporate lab's every pusher, on its own site's outpost, with a
 // token of its own whose hash is what the seed sets, and each one handed to
 // the seed by name.
 func TestScaleLabMintsATokenPerDeclaredPusher(t *testing.T) {
@@ -37,13 +37,13 @@ func TestScaleLabMintsATokenPerDeclaredPusher(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{} // pusher -> its site's node
+	want := map[string]string{} // pusher -> its site's outpost
 	for _, site := range plan.Sites {
 		for _, p := range site.Pushers {
 			if p.Webhook {
 				continue // a meeting platform signs with a seeded secret, holding no token (#1747)
 			}
-			want[p.Name] = labscenario.SiteNode(site.Name)
+			want[p.Name] = labscenario.SiteOutpost(site.Name)
 		}
 	}
 	if len(want) != len(plan.Sites) {
@@ -58,8 +58,8 @@ func TestScaleLabMintsATokenPerDeclaredPusher(t *testing.T) {
 	}
 	tokens := map[string]bool{}
 	for _, p := range ps {
-		if node, ok := want[p.Name]; !ok || p.Node != node {
-			t.Errorf("pusher %s on node %s, want it declared and on %s", p.Name, p.Node, node)
+		if outpost, ok := want[p.Name]; !ok || p.Outpost != outpost {
+			t.Errorf("pusher %s on outpost %s, want it declared and on %s", p.Name, p.Outpost, outpost)
 		}
 		if p.Profile != "booking-service" {
 			t.Errorf("pusher %s runs %q, want booking-service", p.Name, p.Profile)
@@ -82,7 +82,7 @@ func TestScaleLabMintsATokenPerDeclaredPusher(t *testing.T) {
 }
 
 // The dev lab's pushers are its fleet's declarations, minted the same way
-// onto its one node; a lab with no node runs none, so it mints none.
+// onto its one outpost; a lab with no outpost runs none, so it mints none.
 func TestDevLabMintsATokenPerDeclaredPusher(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
@@ -100,12 +100,12 @@ func TestDevLabMintsATokenPerDeclaredPusher(t *testing.T) {
 	}
 	for i, p := range ps {
 		d := doc.SimPushers[i]
-		if p.Name != d.Name || p.Profile != d.Profile || p.Node != lab.NodeName || p.Token == "" || p.TokenHash == "" {
-			t.Errorf("pusher %d = %+v, want %s (%s) on %s with a token", i, p, d.Name, d.Profile, lab.NodeName)
+		if p.Name != d.Name || p.Profile != d.Profile || p.Outpost != lab.OutpostName || p.Token == "" || p.TokenHash == "" {
+			t.Errorf("pusher %d = %+v, want %s (%s) on %s with a token", i, p, d.Name, d.Profile, lab.OutpostName)
 		}
 	}
 	none, err := devLabPushers(doc.SimPushers, true, fakeMint())
 	if err != nil || len(none) != 0 {
-		t.Errorf("with no node minted %v (%v), want none", none, err)
+		t.Errorf("with no outpost minted %v (%v), want none", none, err)
 	}
 }

@@ -1,6 +1,6 @@
 //go:build linux
 
-package simnode
+package simoutpost
 
 import (
 	"context"
@@ -87,11 +87,11 @@ func eventually(t *testing.T, what string, cond func() bool) {
 	t.Fatalf("timed out waiting for %s", what)
 }
 
-// TestRunServesTheNodesDevicesAndFollowsChanges is the run mode's loop: a
-// simulator holding a node's credential serves the devices placed on that
-// node, its hits reach the server, a device added on the server starts
+// TestRunServesTheOutpostsDevicesAndFollowsChanges is the run mode's loop: a
+// simulator holding an outpost's credential serves the devices placed on that
+// outpost, its hits reach the server, a device added on the server starts
 // serving without a restart, and a device removed goes dark.
-func TestRunServesTheNodesDevicesAndFollowsChanges(t *testing.T) {
+func TestRunServesTheOutpostsDevicesAndFollowsChanges(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}
@@ -106,7 +106,7 @@ func TestRunServesTheNodesDevicesAndFollowsChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-s"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-s"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256([]byte("sim-secret"))
@@ -128,7 +128,7 @@ func TestRunServesTheNodesDevicesAndFollowsChanges(t *testing.T) {
 			t.Fatal(err)
 		}
 		target := net.JoinHostPort(ip, fmt.Sprint(port+runPortShift))
-		if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values ($1, 'tcp', (select id from component where name = $2), (select principal_id from node where name = 'edge-s'), jsonb_build_object('target', $3::text))`, name+"-tcp", name, target); err != nil {
+		if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ($1, 'tcp', (select id from component where name = $2), (select principal_id from outpost where name = 'edge-s'), jsonb_build_object('target', $3::text))`, name+"-tcp", name, target); err != nil {
 			t.Fatal(err)
 		}
 		return target

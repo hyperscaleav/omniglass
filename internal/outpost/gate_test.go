@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"testing"
@@ -13,7 +13,7 @@ import (
 // and every rung above it, for the endpoint, while the connection fingerprint
 // is unchanged. Lower rungs keep running. A changed fingerprint (a :retry
 // moves it too) lifts the gate, and a gate published as endpoint-rejection
-// and carried back on the worklist holds across a node restart.
+// and carried back on the worklist holds across an outpost restart.
 
 func TestGateBlocksItsRungAndAboveForItsFingerprint(t *testing.T) {
 	t.Parallel()
@@ -56,7 +56,7 @@ func TestGateHoldsAcrossARestartFromItsPublishedRejection(t *testing.T) {
 	restarted := newGates()
 	restarted.observe("ep-1", "fp-a", published)
 	if gt, ok := restarted.refusedAt("ep-1", rungAuthenticated); !ok || gt.class != driver.ClassAuth {
-		t.Fatalf("a restarted node lost the gate: %+v, %v", gt, ok)
+		t.Fatalf("a restarted outpost lost the gate: %+v, %v", gt, ok)
 	}
 	// It never saw the refusal, so it has no reason to publish (#1110).
 	if got, reason := restarted.rejectionOf("ep-1"); got != published || reason != "" {
@@ -90,7 +90,7 @@ func TestGateClearsWhenTheRungPasses(t *testing.T) {
 
 // A refusal of a changed key carries both keys as data (#1078): the gate
 // publishes them with itself, so the console names the pinned and the offered
-// key without parsing the reason, and a restarted node that adopts the gate
+// key without parsing the reason, and a restarted outpost that adopts the gate
 // adopts its evidence too, republishing the same value rather than one that
 // drops the keys.
 func TestAKeyRefusalPublishesBothKeysAndARestartKeepsThem(t *testing.T) {
@@ -111,7 +111,7 @@ func TestAKeyRefusalPublishesBothKeysAndARestartKeepsThem(t *testing.T) {
 	restarted := newGates()
 	restarted.observe("ep-1", "fp-a", published)
 	if got, _ := restarted.rejectionOf("ep-1"); got != published {
-		t.Fatalf("a restarted node republishes %q, want the adopted %q", got, published)
+		t.Fatalf("a restarted outpost republishes %q, want the adopted %q", got, published)
 	}
 
 	// A refusal that is not about a key carries none.

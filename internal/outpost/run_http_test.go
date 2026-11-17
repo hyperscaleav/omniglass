@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"bytes"
@@ -32,7 +32,7 @@ import (
 )
 
 // http polls and commands end to end (#902): Postgres, the bus, a real
-// node, and the simulator's http faces on ephemeral ports. The shipped
+// outpost, and the simulator's http faces on ephemeral ports. The shipped
 // kestrel-api driver reads the simulated bar over https with basic auth and
 // actuates it; the shipped tessellate-census-http driver reads the simulated sensor with
 // its header key; and a DSP's namespaced XML and its HTML status page are
@@ -40,7 +40,7 @@ import (
 // refused credential is sent once per connection fingerprint, and a changed
 // https key is held beneath the gate until an operator trusts it.
 
-// httpStack is one test's server, simulated components and node.
+// httpStack is one test's server, simulated components and outpost.
 type httpStack struct {
 	*gateStack
 	dsn     string
@@ -54,7 +54,7 @@ type httpStack struct {
 // address; shape adds variants to the catalog first. The profiles are
 // derived from the catalogs (pick), never named, so a catalog rename touches
 // the YAML and nothing here (#804).
-func newHTTPStack(t *testing.T, nodeName string, shape func(*profile.Store), pick func(*profile.Store) []string) *httpStack {
+func newHTTPStack(t *testing.T, outpostName string, shape func(*profile.Store), pick func(*profile.Store) []string) *httpStack {
 	t.Helper()
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
@@ -88,12 +88,12 @@ func newHTTPStack(t *testing.T, nodeName string, shape func(*profile.Store), pic
 	if err := engine.Sync(snaps); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: nodeName}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: outpostName}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	token := "enroll-token-" + nodeName
+	token := "enroll-token-" + outpostName
 	sum := sha256.Sum256([]byte(token))
-	if _, err := gw.SetEnrollmentToken(ctx, "", nodeName, hex.EncodeToString(sum[:]), all); err != nil {
+	if _, err := gw.SetEnrollmentToken(ctx, "", outpostName, hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
@@ -101,7 +101,7 @@ func newHTTPStack(t *testing.T, nodeName string, shape func(*profile.Store), pic
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Shutdown)
-	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL()), api.WithNodeRunner(srv)))
+	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL()), api.WithOutpostRunner(srv)))
 	t.Cleanup(apiSrv.Close)
 	s := &httpStack{gateStack: &gateStack{t: t, ctx: ctx, gw: gw, all: all, apiURL: apiSrv.URL, token: token, panels: map[string]*sim.Device{}},
 		dsn: dsn, devices: map[string]*sim.Device{}, ips: ips, engine: engine, snaps: snaps}
@@ -137,9 +137,9 @@ func (s *httpStack) secret(name, typ string, fields map[string]string) *storage.
 	return sec
 }
 
-func (s *httpStack) attachHTTP(comp, drv, nodeName string, inputs map[string]string) *storage.Endpoint {
+func (s *httpStack) attachHTTP(comp, drv, outpostName string, inputs map[string]string) *storage.Endpoint {
 	s.t.Helper()
-	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName, Inputs: inputs,
+	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpostName, Inputs: inputs,
 		SecretRead: s.all, SecretBind: s.all, CanAdmin: true}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach %s: %v", drv, err)
@@ -217,20 +217,20 @@ func (s *httpStack) commandStatus(typ string) string {
 	return status
 }
 
-// spkiOf renders a certificate's public key as the node pins it.
+// spkiOf renders a certificate's public key as the outpost pins it.
 func spkiOf(raw []byte) string {
 	sum := sha256.Sum256(raw)
 	return "SHA256:" + base64.RawStdEncoding.EncodeToString(sum[:])
 }
 
-// TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey: the shipped kestrel-api
+// TestOutpostHTTPSKestrelPollsActuatesAndPinsItsKey: the shipped kestrel-api
 // driver against the simulated bar's https face behind basic auth. The probe
 // runs the handshake and pins the bar's key on first use; the polls land the
 // bar's audio, call and system facts; a volume, a mute and a standby command
 // actuate it (the standby settles from its reply); a replaced bar's key is
 // refused as certificate, holds every request beneath the gate, and is
 // trusted with :retry and certificate.
-func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
+func TestOutpostHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -248,7 +248,7 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	if ep.Name != "https" {
 		t.Fatalf("endpoint name %q, want https", ep.Name)
 	}
-	s.runNode("edge-https")
+	s.runOutpost("edge-https")
 
 	s.waitFor("bar-1", ep.Name, "endpoint-responsive", is("up"), "up: the handshake answered")
 	s.waitFor("bar-1", ep.Name, "tls-certificate", is(spkiOf(bar.HTTPSCertificate().RawSubjectPublicKeyInfo)), "the bar's key, trusted on first use")
@@ -326,9 +326,9 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	}, "the certificate gate's reason, for the notice")
 	requests := bar.HTTPRequests
 	s.settles("requests beneath the certificate gate", requests, requests())
-	// A restarted node honours the gate it adopts: still nothing.
-	s.runNode("edge-https")
-	s.settles("requests after a node restart", requests, requests())
+	// A restarted outpost honours the gate it adopts: still nothing.
+	s.runOutpost("edge-https")
+	s.settles("requests after an outpost restart", requests, requests())
 
 	// The operator trusts the offered key: the gate lifts and the polls run.
 	if _, err := s.gw.RetryEndpoint(s.ctx, "", ep.ID, storage.RetryPin{Certificate: offered}, s.all, s.all); err != nil {
@@ -356,14 +356,14 @@ func TestNodeHTTPSKestrelPollsActuatesAndPinsItsKey(t *testing.T) {
 	s.waitFor("bar-1", ep.Name, "endpoint-responsive", is("up"), "up under skip")
 }
 
-// TestNodeHTTPAuthVariantsAndTheRefusedCredential: an api key in a header
+// TestOutpostHTTPAuthVariantsAndTheRefusedCredential: an api key in a header
 // (the shipped tessellate-census-http driver on the simulated sensor), a bearer token over
 // namespaced XML, and an api key in a query parameter over an HTML status
 // page (drivers authored here, on a DSP's faces). A wrong key is sent once
-// per connection fingerprint, across ticks and a node restart, while the
+// per connection fingerprint, across ticks and an outpost restart, while the
 // credential-free probe keeps reporting; the key rotated in the store brings
 // the endpoint up within a tick.
-func TestNodeHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
+func TestOutpostHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -420,7 +420,7 @@ func TestNodeHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
 	s.component("dsp-2")
 	xep := s.attachHTTP("dsp-1", "dsp-xml", "edge-http", map[string]string{"host": s.ips["dsp-bearer"], "port": fmt.Sprint(s.httpPort("dsp-bearer")), "token": "dsp-token"})
 	hep := s.attachHTTP("dsp-2", "dsp-html", "edge-http", map[string]string{"host": s.ips["dsp-query"], "port": fmt.Sprint(s.httpPort("dsp-query")), "key": "dsp-key"})
-	s.runNode("edge-http")
+	s.runOutpost("edge-http")
 
 	firmware := fmt.Sprint(s.devices["dsp-bearer"].ReadPath("configuration.firmware.version"))
 	s.waitFor("dsp-1", xep.Name, "firmware-version", is(firmware), "the firmware read by namespaced XPath")
@@ -437,8 +437,8 @@ func TestNodeHTTPAuthVariantsAndTheRefusedCredential(t *testing.T) {
 	s.waitFor("sensor-1", sep.Name, "endpoint-responsive", is("up"), "up: the credential-free probe still reports")
 	refusals := sensor.HTTPRefusals
 	s.settles("refused requests", refusals, 1)
-	s.runNode("edge-http")
-	s.settles("refused requests after a node restart", refusals, 1)
+	s.runOutpost("edge-http")
+	s.settles("refused requests after an outpost restart", refusals, 1)
 
 	// The key rotated in the store: the fingerprint moves, the gate lifts,
 	// and the polls land within a tick.

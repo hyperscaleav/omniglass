@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"encoding/json"
@@ -15,11 +15,11 @@ import (
 )
 
 // http logins and digest end to end (#1114): Postgres, the bus, a real
-// node, and the simulator's login faces on ephemeral ports. A form login
+// outpost, and the simulator's login faces on ephemeral ports. A form login
 // keeps one session across many polls and logs in exactly once more when the
 // panel forgets it; a JSON token login does the same with its captured
 // token; digest answers its challenge and a stale nonce. A wrong password is
-// one attempt, across ticks and a node restart, its reason on the gate; the
+// one attempt, across ticks and an outpost restart, its reason on the gate; the
 // secret fixed in place brings the endpoint back.
 
 // loginProfile is the simulator profile whose http face enforces a login of
@@ -136,17 +136,17 @@ func (s *httpStack) setPassword(sec *storage.Secret, pass string) {
 // refusedOnceThenRecovers sets a wrong password, watches the endpoint read
 // rejected with reason, and holds that the attempt counted by attempts
 // stopped at the gate (the refusal is not retried) and stays stopped across
-// a node restart, then fixes the secret in place and watches it recover.
+// an outpost restart, then fixes the secret in place and watches it recover.
 //
 // The count is read once the gate is published, not before the password
 // changes: polls under the old fingerprint keep answering (and counting)
-// until the node reads the changed worklist, and under load that window
+// until the outpost reads the changed worklist, and under load that window
 // spans a poll or more (#1597), so the count at the gate is the baseline
 // plus those plus the perAttempt the refusal itself took, never a fixed
 // number. What is fixed is that the refused attempt was counted (the
 // component counts an answer before it replies, and the gate follows the
 // reply) and that nothing counts after the gate.
-func (s *httpStack) refusedOnceThenRecovers(nodeName, comp, instance string, sec *storage.Secret, right string, attempts func() int64, perAttempt int64, reason string) {
+func (s *httpStack) refusedOnceThenRecovers(outpostName, comp, instance string, sec *storage.Secret, right string, attempts func() int64, perAttempt int64, reason string) {
 	s.t.Helper()
 	before := attempts()
 	s.setPassword(sec, "wrong-password")
@@ -158,15 +158,15 @@ func (s *httpStack) refusedOnceThenRecovers(nodeName, comp, instance string, sec
 		s.t.Fatalf("attempts at the gate = %d, want at least %d: the refused attempt was not counted", gated, before+perAttempt)
 	}
 	s.settles("attempts after the gate", attempts, gated)
-	s.runNode(nodeName)
-	s.settles("attempts after a node restart", attempts, gated)
+	s.runOutpost(outpostName)
+	s.settles("attempts after an outpost restart", attempts, gated)
 	// Fixed in place: the fingerprint moves, the gate lifts.
 	s.setPassword(sec, right)
 	s.waitFor(comp, instance, "endpoint-rejection", is("none"), "none, the secret fixed")
 	s.waitFor(comp, instance, "endpoint-authenticated", is("yes"), "yes after the fix")
 }
 
-func TestNodeHTTPFormAndTokenLoginsKeepTheirSession(t *testing.T) {
+func TestOutpostHTTPFormAndTokenLoginsKeepTheirSession(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -214,7 +214,7 @@ func TestNodeHTTPFormAndTokenLoginsKeepTheirSession(t *testing.T) {
 	tokenSecret := s.secret("panel-token-login", "basic-auth", map[string]string{"username": "admin", "password": password})
 	tep := s.attachHTTP("panel-2", "panel-token-api", "edge-login", map[string]string{
 		"host": s.ips[tokenProfile], "port": fmt.Sprint(s.httpPort(tokenProfile)), "login": "panel-token-login"})
-	s.runNode("edge-login")
+	s.runOutpost("edge-login")
 
 	s.waitFor("panel-1", fep.Name, "endpoint-authenticated", is("yes"), "yes: the form login opened a session")
 	s.waitFor("panel-1", fep.Name, "model-number", is(fmt.Sprint(panel.ReadPath("configuration.device.model"))), "the model, read inside the session")
@@ -251,7 +251,7 @@ func TestNodeHTTPFormAndTokenLoginsKeepTheirSession(t *testing.T) {
 		`auth: the component refused the login (401): {"error":"invalid credentials"}`)
 }
 
-func TestNodeHTTPDigestAnswersItsChallenge(t *testing.T) {
+func TestOutpostHTTPDigestAnswersItsChallenge(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -275,7 +275,7 @@ func TestNodeHTTPDigestAnswersItsChallenge(t *testing.T) {
 		sec := s.secret(secret, "basic-auth", map[string]string{"username": "admin", "password": password})
 		ep := s.attachHTTP(comp, "display-web-quick", "edge-digest", map[string]string{
 			"host": s.ips[name], "port": fmt.Sprint(s.httpPort(name)), "login": secret})
-		s.runNode("edge-digest")
+		s.runOutpost("edge-digest")
 
 		s.waitFor(comp, ep.Name, "endpoint-authenticated", is("yes"), name+": yes, the digest answered")
 		s.waitFor(comp, ep.Name, "serial-number", is(fmt.Sprint(dev.ReadPath("configuration.device.serial"))), name+": the serial")

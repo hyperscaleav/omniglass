@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"encoding/json"
@@ -18,9 +18,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The on-demand node run over the real wire (#1163): the API, the bus, a real
-// node and the simulator's digest-guarded display. A broken spec validates to
-// its findings; the fixed spec previews through the node, answering the
+// The on-demand outpost run over the real wire (#1163): the API, the bus, a real
+// outpost and the simulator's digest-guarded display. A broken spec validates to
+// its findings; the fixed spec previews through the outpost, answering the
 // display's identity with the raw answer beside it and landing nothing; the
 // shipped driver attached, its poll runs now and lands; a wrong password gates
 // the endpoint and the next run now is refused with the gate's reason, sending
@@ -85,7 +85,7 @@ func TestOnDemandRunsOverTheWire(t *testing.T) {
 		t.Fatalf("validate fixed = %d %+v", code, checked)
 	}
 
-	s.runNode("edge-run")
+	s.runOutpost("edge-run")
 	samples := func() int64 {
 		conn, err := pgx.Connect(s.ctx, s.dsn)
 		if err != nil {
@@ -93,32 +93,32 @@ func TestOnDemandRunsOverTheWire(t *testing.T) {
 		}
 		defer conn.Close(s.ctx)
 		var n int64
-		// The node's own report (#1625) lands on its platform component every
+		// The outpost's own report (#1625) lands on its platform component every
 		// tick, preview or not: only the fleet's rows count here.
 		if err := conn.QueryRow(s.ctx, `select (select count(*) from property) + (select count(*) from `+storagetest.MetricRows+` metric
-			where metric.component_id is null or metric.component_id not in (select platform_component_id from node where platform_component_id is not null))`).Scan(&n); err != nil {
+			where metric.component_id is null or metric.component_id not in (select platform_component_id from outpost where platform_component_id is not null))`).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n
 	}
 	before := samples()
 
-	// Preview: the node answers the display's identity and lands nothing.
+	// Preview: the outpost answers the display's identity and lands nothing.
 	var preview struct {
-		Node, Target string
-		Stored       bool
-		Results      []pollRun `json:"results"`
+		Outpost, Target string
+		Stored          bool
+		Results         []pollRun `json:"results"`
 	}
-	body := map[string]any{"node": "edge-run", "spec": spec, "inputs": inputs}
+	body := map[string]any{"outpost": "edge-run", "spec": spec, "inputs": inputs}
 	deadline := time.Now().Add(20 * time.Second)
 	code := 0
 	for time.Now().Before(deadline) {
 		if code = s.api(owner, http.MethodPost, "/drivers:preview", body, &preview); code != http.StatusServiceUnavailable {
 			break
 		}
-		time.Sleep(100 * time.Millisecond) // the node has not subscribed yet
+		time.Sleep(100 * time.Millisecond) // the outpost has not subscribed yet
 	}
-	if code != http.StatusOK || preview.Stored || preview.Node != "edge-run" || len(preview.Results) != 1 {
+	if code != http.StatusOK || preview.Stored || preview.Outpost != "edge-run" || len(preview.Results) != 1 {
 		t.Fatalf("preview = %d %+v", code, preview)
 	}
 	got := map[string]runSample{}
@@ -142,13 +142,13 @@ func TestOnDemandRunsOverTheWire(t *testing.T) {
 		Name string `json:"name"`
 	}
 	if code := s.api(owner, http.MethodPost, "/endpoints", map[string]any{
-		"component": "display-run", "driver": "boreal-edge-web", "node": "edge-run", "inputs": inputs,
+		"component": "display-run", "driver": "boreal-edge-web", "outpost": "edge-run", "inputs": inputs,
 	}, &ep); code != http.StatusCreated {
 		t.Fatalf("attach = %d", code)
 	}
 	path := "/endpoints/display-run%2F" + ep.Name + "/polls/identity:run"
 	var run struct {
-		Node    string      `json:"node"`
+		Outpost string      `json:"outpost"`
 		Stored  bool        `json:"stored"`
 		Poll    string      `json:"poll"`
 		Samples []runSample `json:"samples"`

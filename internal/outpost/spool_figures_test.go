@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"io"
@@ -30,7 +30,7 @@ func wantFlow(t *testing.T, f spoolFigures, kind delivery.Kind, in, out, loss fl
 	}
 }
 
-// The spool's part of the node's self-report (#1625, #1659): its depth each
+// The spool's part of the outpost's self-report (#1625, #1659): its depth each
 // tick, and its delivery: the items each batch carried counted once it
 // settles, in and out when the stream acks it, in alone when it is dropped at
 // a cap. A batch held for a retry has not settled, so it counts in neither.
@@ -111,8 +111,8 @@ func TestSpoolCountsAGroupItCannotEncodeAsLost(t *testing.T) {
 }
 
 // TestSpoolCountsTheSelfLogLinesTheBufferDroppedAsLost: a self-log line the
-// bounded buffer dropped never reached a batch, so the node hop's figures
-// count it in and not out (#1692), the same loss the lab's node row reads.
+// bounded buffer dropped never reached a batch, so the outpost hop's figures
+// count it in and not out (#1692), the same loss the lab's outpost row reads.
 func TestSpoolCountsTheSelfLogLinesTheBufferDroppedAsLost(t *testing.T) {
 	t.Parallel()
 	s := newTelemetrySpool("og.v1.telemetry.edge", "edge", (&stubPublisher{}).publish)

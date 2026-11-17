@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"sync"
@@ -31,10 +31,10 @@ func readings(ms []*ogv1.MetricSample) map[string]float64 {
 // #1634: the dispatcher's window feeds the report: the dues it met in
 // flight and passed over tally toward the report window, its longest pass is
 // the tick duration.
-func TestNodeReportTalliesTheDispatchWindows(t *testing.T) {
+func TestOutpostReportTalliesTheDispatchWindows(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	r.dispatch(dispatchWindow{passes: 3, passMax: 2 * time.Second, overruns: 1, skips: 2}, t0)
 	r.dispatch(dispatchWindow{passes: 1, passMax: time.Millisecond, overruns: 1}, t0.Add(30*time.Second))
 	got := readings(r.take(t0.Add(time.Minute)))
@@ -43,10 +43,10 @@ func TestNodeReportTalliesTheDispatchWindows(t *testing.T) {
 	}
 }
 
-func TestNodeReportReadsAPunctualDispatcherAsNoOverrun(t *testing.T) {
+func TestOutpostReportReadsAPunctualDispatcherAsNoOverrun(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	for i := range 3 {
 		r.dispatch(dispatchWindow{passes: 4, passMax: 2 * time.Second}, t0.Add(time.Duration(i)*30*time.Second))
 	}
@@ -59,20 +59,20 @@ func TestNodeReportReadsAPunctualDispatcherAsNoOverrun(t *testing.T) {
 	}
 }
 
-func TestNodeReportReadsNoTickDurationForAWindowWithNoPass(t *testing.T) {
+func TestOutpostReportReadsNoTickDurationForAWindowWithNoPass(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	r.dispatch(dispatchWindow{}, t0)
 	if got := readings(r.take(t0)); len(got) != 0 {
 		t.Fatalf("an empty dispatch window read %v", got)
 	}
 }
 
-func TestNodeReportEmitsEachWindowedCountOncePerWindowZeroWhenQuiet(t *testing.T) {
+func TestOutpostReportEmitsEachWindowedCountOncePerWindowZeroWhenQuiet(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 
 	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount}
 
@@ -118,16 +118,16 @@ func TestNodeReportEmitsEachWindowedCountOncePerWindowZeroWhenQuiet(t *testing.T
 	}
 }
 
-// TestNodeReportCountsReturnToZeroAfterAQuietWindow: the node's first window
+// TestOutpostReportCountsReturnToZeroAfterAQuietWindow: the outpost's first window
 // runs from its start, so it is whole and writes every count, zero included;
 // a window with an overrun and a skip follows, then a
 // quiet one, and each key's latest value is 0 again at the quiet window's end
 // rather than the event's count left standing as current.
-func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
+func TestOutpostReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
 	t1, t2, t3 := t0.Add(time.Minute), t0.Add(2*time.Minute), t0.Add(3*time.Minute)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	windowed := []string{writerclass.TickOverrunCount, writerclass.ScheduleSkipCount}
 
 	first := readings(r.take(t1))
@@ -153,15 +153,15 @@ func TestNodeReportCountsReturnToZeroAfterAQuietWindow(t *testing.T) {
 	}
 }
 
-// TestNodeReportEmitsDeliveryPerKindOncePerWindow (#1659): the spool's
+// TestOutpostReportEmitsDeliveryPerKindOncePerWindow (#1659): the spool's
 // settled items tally over the report window and land once at its end, in,
 // out and the loss ratio for every telemetry kind, the kind as the instance:
 // a window with drops reads a loss above 0, a kind with no traffic reads 0,
 // and a quiet window writes every figure as 0.
-func TestNodeReportEmitsDeliveryPerKindOncePerWindow(t *testing.T) {
+func TestOutpostReportEmitsDeliveryPerKindOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	key := func(k string, kind delivery.Kind) string { return k + "/" + string(kind) }
 
 	var early delivery.Counts
@@ -210,10 +210,10 @@ func TestNodeReportEmitsDeliveryPerKindOncePerWindow(t *testing.T) {
 	}
 }
 
-func TestNodeReportSamplesTheEachTickFigures(t *testing.T) {
+func TestOutpostReportSamplesTheEachTickFigures(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	r.dispatch(dispatchWindow{passes: 2, passMax: 1500 * time.Millisecond, runs: 3, lateMax: 250 * time.Millisecond, gapMax: 15 * time.Second}, t0)
 	r.spool(spoolFigures{batches: 0}, t0)
 	r.sessions(map[collection.SessionState]int{collection.SessionUp: 3, collection.SessionDown: 1}, t0)
@@ -242,8 +242,8 @@ func TestNodeReportSamplesTheEachTickFigures(t *testing.T) {
 		}
 	}
 	for _, m := range ms {
-		if !writerclass.NodeSelf(m.GetName()) {
-			t.Errorf("%s is not a declared node-self key", m.GetName())
+		if !writerclass.OutpostSelf(m.GetName()) {
+			t.Errorf("%s is not a declared outpost-self key", m.GetName())
 		}
 		if !m.GetTs().AsTime().Equal(t0) {
 			t.Errorf("%s stamped %v, want its sampling time", m.GetName(), m.GetTs().AsTime())
@@ -257,10 +257,10 @@ func TestNodeReportSamplesTheEachTickFigures(t *testing.T) {
 	}
 }
 
-func TestNodeReportReadsNoScheduleFigureOnAWindowThatRanNothing(t *testing.T) {
+func TestOutpostReportReadsNoScheduleFigureOnAWindowThatRanNothing(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	r.dispatch(dispatchWindow{passes: 1, passMax: time.Millisecond}, t0)
 	got := readings(r.take(t0))
 	for _, k := range []string{writerclass.ScheduleLateness, writerclass.ScheduleGapExcess} {
@@ -270,9 +270,9 @@ func TestNodeReportReadsNoScheduleFigureOnAWindowThatRanNothing(t *testing.T) {
 	}
 }
 
-func TestNodeReportIsNilSafe(t *testing.T) {
+func TestOutpostReportIsNilSafe(t *testing.T) {
 	t.Parallel()
-	var r *nodeReport
+	var r *outpostReport
 	r.dispatch(dispatchWindow{passes: 1, runs: 1}, time.Now())
 	r.worklist(1, time.Now())
 	if got := r.take(time.Now()); got != nil {
@@ -280,13 +280,13 @@ func TestNodeReportIsNilSafe(t *testing.T) {
 	}
 }
 
-// TestNodeReportReadsCPUThroughTheSharedRuntime: the node reads its process
+// TestOutpostReportReadsCPUThroughTheSharedRuntime: the outpost reads its process
 // through platformmetric.Runtime, the sampler the server shares, so its CPU
 // time is the time spent between two ticks and the first tick reads none.
-func TestNodeReportReadsCPUThroughTheSharedRuntime(t *testing.T) {
+func TestOutpostReportReadsCPUThroughTheSharedRuntime(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	r.process(platformmetric.Process{CPU: 4 * time.Second, FDs: 12}, t0)
 	first := readings(r.take(t0))
 	if _, ok := first[writerclass.ProcessCPUSeconds]; ok {
@@ -301,14 +301,14 @@ func TestNodeReportReadsCPUThroughTheSharedRuntime(t *testing.T) {
 	}
 }
 
-// TestNodeReportCountsAFailedCommandPullOncePerWindow (#1626): every failed
+// TestOutpostReportCountsAFailedCommandPullOncePerWindow (#1626): every failed
 // pull of the command queue is tallied, and the window's tally is sent once
 // when it ends; a window with no failure sends zero, so the count returns to
 // zero after the window that had it.
-func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
+func TestOutpostReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	r.commandPullFailed()
 	if mid := readings(r.take(t0.Add(30 * time.Second))); mid[writerclass.CommandPullFailureCount] != 0 {
 		t.Fatalf("command-pull-failure-count emitted before its window ended: %v", mid)
@@ -326,18 +326,18 @@ func TestNodeReportCountsAFailedCommandPullOncePerWindow(t *testing.T) {
 	} else if _, ok := quiet[writerclass.CommandPullFailureCount]; !ok {
 		t.Errorf("a window with no failed pull wrote no command-pull-failure-count: %v", quiet)
 	}
-	var none *nodeReport
+	var none *outpostReport
 	none.commandPullFailed()
 }
 
-// TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely: the command
+// TestOutpostReportTalliesAPullFailureFromTheCommandCycleSafely: the command
 // cycle runs on its own goroutine beside the heartbeat (#1634), so a failed
 // pull tallies while the heartbeat takes the report; under -race neither
 // races and no failure is lost.
-func TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely(t *testing.T) {
+func TestOutpostReportTalliesAPullFailureFromTheCommandCycleSafely(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		for range 100 {
@@ -355,14 +355,14 @@ func TestNodeReportTalliesAPullFailureFromTheCommandCycleSafely(t *testing.T) {
 	}
 }
 
-// #1693: the dispatcher's schedule hop rides the node-self block beside the
+// #1693: the dispatcher's schedule hop rides the outpost-self block beside the
 // spool's delivery, under the hop's own instances, schedule/{kind}, once per
 // report window, every kind written, a quiet window's as zero; the spool's
 // bare-kind series are untouched by it.
-func TestNodeReportEmitsTheScheduleHopPerKindOncePerWindow(t *testing.T) {
+func TestOutpostReportEmitsTheScheduleHopPerKindOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	var first, second dispatchWindow
 	first.schedule.Scheduled([]delivery.Kind{delivery.Metric, delivery.Property}, 2, 1)
 	second.schedule.Scheduled([]delivery.Kind{delivery.Metric}, 1, 0)
@@ -399,15 +399,15 @@ func TestNodeReportEmitsTheScheduleHopPerKindOncePerWindow(t *testing.T) {
 	}
 }
 
-// TestNodeReportReadsTheWorklistPullLossOncePerWindow (#1868): a node whose
+// TestOutpostReportReadsTheWorklistPullLossOncePerWindow (#1868): an outpost whose
 // worklist pulls are refused runs its last worklist, so each window carries
 // the share of its pulls refused, 0 when every pull was served, 1 when none
-// was; a window with no pull in it carries the last pull's outcome, so a node
+// was; a window with no pull in it carries the last pull's outcome, so an outpost
 // backed off between attempts still reads stale.
-func TestNodeReportReadsTheWorklistPullLossOncePerWindow(t *testing.T) {
+func TestOutpostReportReadsTheWorklistPullLossOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	key := writerclass.WorklistPullLossRatio
 
 	r.worklistPulled(true)
@@ -442,17 +442,17 @@ func TestNodeReportReadsTheWorklistPullLossOncePerWindow(t *testing.T) {
 		t.Errorf("a window with no pull after a served one read %v (written %v), want 0", v, ok)
 	}
 
-	var none *nodeReport
+	var none *outpostReport
 	none.worklistPulled(true)
 }
 
-// TestNodeReportTalliesWorklistPullsFromThePullLoopSafely: the worklist is
+// TestOutpostReportTalliesWorklistPullsFromThePullLoopSafely: the worklist is
 // pulled on its own goroutine (#1577) while the heartbeat takes the report;
 // under -race neither races and no pull is lost from the windows' tallies.
-func TestNodeReportTalliesWorklistPullsFromThePullLoopSafely(t *testing.T) {
+func TestOutpostReportTalliesWorklistPullsFromThePullLoopSafely(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		for range 100 {
@@ -474,10 +474,10 @@ func TestNodeReportTalliesWorklistPullsFromThePullLoopSafely(t *testing.T) {
 // #1686: the pool's busy time over the report window's dispatch windows reads
 // as one worker-busy-fraction when the window ends: busy worker time over the
 // pool's whole worker time, under the instance lane.
-func TestNodeReportReadsThePoolsBusyFractionOncePerWindow(t *testing.T) {
+func TestOutpostReportReadsThePoolsBusyFractionOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	key := writerclass.WorkerBusyFraction + "/lane"
 
 	r.dispatch(dispatchWindow{pool: poolWindow{busy: 30 * time.Second, capacity: 60 * time.Second}}, t0.Add(30*time.Second))
@@ -502,10 +502,10 @@ func TestNodeReportReadsThePoolsBusyFractionOncePerWindow(t *testing.T) {
 // A report window whose dispatch windows ran on different worker counts (a
 // pool resized between them) reads busy worker time over the worker time the
 // pool actually had, so a pool busy throughout reads exactly 1, never past it.
-func TestNodeReportReadsBusyOverThePoolsActualWorkerTime(t *testing.T) {
+func TestOutpostReportReadsBusyOverThePoolsActualWorkerTime(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	key := writerclass.WorkerBusyFraction + "/lane"
 
 	var p poolTally
@@ -525,13 +525,13 @@ func TestNodeReportReadsBusyOverThePoolsActualWorkerTime(t *testing.T) {
 	}
 }
 
-// #1869: the node reports how many lanes it runs once a window, under the
+// #1869: the outpost reports how many lanes it runs once a window, under the
 // instance lane, beside how busy they were, so a pool sized at boot reads
-// in the console rather than only in the node's log.
-func TestNodeReportReadsTheLaneCountOncePerWindow(t *testing.T) {
+// in the console rather than only in the outpost's log.
+func TestOutpostReportReadsTheLaneCountOncePerWindow(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	r.lanes(46)
 	key := writerclass.LaneWorkerCount + "/lane"
 

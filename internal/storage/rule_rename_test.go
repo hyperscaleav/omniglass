@@ -252,7 +252,7 @@ func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
 	}
 
 	// With no condition row: in force for the live counts and the evaluator,
-	// and a recovery clears it. On an instance: a node writes this key only
+	// and a recovery clears it. On an instance: an outpost writes this key only
 	// under the endpoint its task ran (ADR-0161), so its series always has one.
 	b := legacy("panel", false)
 	got, err = r.f.gw.GetEventRule(r.ctx, "legacy", r.f.all)

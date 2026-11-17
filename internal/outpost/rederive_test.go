@@ -1,4 +1,4 @@
-package node_test
+package outpost_test
 
 import (
 	"bufio"
@@ -14,7 +14,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -79,7 +79,7 @@ func TestDriverFixReachesTheNextPoll(t *testing.T) {
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "panel-fix", Label: "Panel", Version: "1.0.0", Spec: spec(`^INPUT (\\d+)$`)}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-f"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-f"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	token := "enroll-token-fix"
@@ -90,9 +90,9 @@ func TestDriverFixReachesTheNextPoll(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-f"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	comp, drv, nodeName := "panel-f", "panel-fix", "edge-f"
+	comp, drv, outpostName := "panel-f", "panel-fix", "edge-f"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs: map[string]string{"host": host, "port": port}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
@@ -107,8 +107,8 @@ func TestDriverFixReachesTheNextPoll(t *testing.T) {
 	defer apiSrv.Close()
 	runOnce := func() {
 		t.Helper()
-		if _, err := node.Run(ctx, node.Config{ServerURL: apiSrv.URL, Name: "edge-f", Token: token, Once: true}); err != nil {
-			t.Fatalf("node run: %v", err)
+		if _, err := outpost.Run(ctx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-f", Token: token, Once: true}); err != nil {
+			t.Fatalf("outpost run: %v", err)
 		}
 	}
 	latest := func() string {
@@ -157,10 +157,10 @@ func (c *countingLine) count() int {
 	return c.asks
 }
 
-// #822 end to end: the real node, a 50ms heartbeat, a driver poll declaring
+// #822 end to end: the real outpost, a 50ms heartbeat, a driver poll declaring
 // every 400ms. Over the 1.3s after the first poll, ungated the device would be
 // asked on all ~26 ticks; gated it is asked at 0, 0.4, 0.8 and 1.2s.
-func TestNodeHonorsThePollSchedule(t *testing.T) {
+func TestOutpostHonorsThePollSchedule(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -181,7 +181,7 @@ func TestNodeHonorsThePollSchedule(t *testing.T) {
 			"emits": [{"name": "video-input", "extract": {"regex": "^INPUT (\\S+)$"}}]}]}`)}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-s2"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-s2"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	token := "enroll-token-sched"
@@ -209,9 +209,9 @@ func TestNodeHonorsThePollSchedule(t *testing.T) {
 		}
 	}()
 	host, port, _ := net.SplitHostPort(ln.Addr().String())
-	comp, drv, nodeName := "panel-s2", "panel-sched", "edge-s2"
+	comp, drv, outpostName := "panel-s2", "panel-sched", "edge-s2"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs: map[string]string{"host": host, "port": port}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
 		t.Fatal(err)
@@ -228,7 +228,7 @@ func TestNodeHonorsThePollSchedule(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-s2", Token: token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-s2", Token: token,
 			HeartbeatEvery: 50 * time.Millisecond, ProbeEvery: 50 * time.Millisecond, Line: line})
 		ran <- err
 	}()
@@ -236,14 +236,14 @@ func TestNodeHonorsThePollSchedule(t *testing.T) {
 	for line.count() == 0 {
 		if time.Now().After(deadline) {
 			stop()
-			t.Fatal("the node never polled")
+			t.Fatal("the outpost never polled")
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	time.Sleep(1300 * time.Millisecond) // about 26 heartbeats after the first poll
 	stop()
 	if err := <-ran; err != nil {
-		t.Fatalf("node run: %v", err)
+		t.Fatalf("outpost run: %v", err)
 	}
 	if n := line.count(); n < 3 || n > 5 {
 		t.Fatalf("a 400ms poll on a 50ms heartbeat over 1.3s after its first run asked the device %d times, want about 4", n)

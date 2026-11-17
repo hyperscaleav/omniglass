@@ -20,10 +20,10 @@ func hashHex(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// TestNodeGateway proves the node enrollment lifecycle and the worklist read:
-// create, mint (set token), authenticate, claim, heartbeat, and NodeWorklist.
+// TestOutpostGateway proves the outpost enrollment lifecycle and the worklist read:
+// create, mint (set token), authenticate, claim, heartbeat, and OutpostWorklist.
 // Skipped under -short.
-func TestNodeGateway(t *testing.T) {
+func TestOutpostGateway(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -40,22 +40,22 @@ func TestNodeGateway(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	// Create requires an all-scope grant (node is fleet-wide, not tree-scoped).
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a", Description: "lab a"}, scope.Set{}, all); !errors.Is(err, storage.ErrNodeForbidden) {
-		t.Fatalf("create without all-scope: want ErrNodeForbidden, got %v", err)
+	// Create requires an all-scope grant (outpost is fleet-wide, not tree-scoped).
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a", Description: "lab a"}, scope.Set{}, all); !errors.Is(err, storage.ErrOutpostForbidden) {
+		t.Fatalf("create without all-scope: want ErrOutpostForbidden, got %v", err)
 	}
-	n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a", Description: "lab a"}, all, all)
+	n, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a", Description: "lab a"}, all, all)
 	if err != nil {
-		t.Fatalf("create node: %v", err)
+		t.Fatalf("create outpost: %v", err)
 	}
-	if n.Name != "node-a" || n.Enrolled || n.PrincipalID == "" {
-		t.Fatalf("fresh node: want name node-a, not enrolled, with a principal id, got %+v", n)
+	if n.Name != "outpost-a" || n.Enrolled || n.PrincipalID == "" {
+		t.Fatalf("fresh outpost: want name outpost-a, not enrolled, with a principal id, got %+v", n)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); !errors.Is(err, storage.ErrNodeExists) {
-		t.Fatalf("duplicate node: want ErrNodeExists, got %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); !errors.Is(err, storage.ErrOutpostExists) {
+		t.Fatalf("duplicate outpost: want ErrOutpostExists, got %v", err)
 	}
 
-	// The node is a first-class principal of kind='node' (not a standalone island):
+	// The outpost is a first-class principal of kind='outpost' (not a standalone island):
 	// its detail row's principal_id points to a principal row of that kind.
 	probe, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -64,68 +64,68 @@ func TestNodeGateway(t *testing.T) {
 	defer probe.Close(ctx)
 	var kind string
 	if err := probe.QueryRow(ctx, `select kind from principal where id = $1`, n.PrincipalID).Scan(&kind); err != nil {
-		t.Fatalf("load node principal: %v", err)
+		t.Fatalf("load outpost principal: %v", err)
 	}
-	if kind != "node" {
-		t.Fatalf("node principal kind = %q, want node", kind)
+	if kind != "outpost" {
+		t.Fatalf("outpost principal kind = %q, want outpost", kind)
 	}
 
 	// Mint: store the token hash.
 	token := "enroll-secret-a"
-	if _, err := gw.SetEnrollmentToken(ctx, "", "node-a", hashHex(token), all); err != nil {
+	if _, err := gw.SetEnrollmentToken(ctx, "", "outpost-a", hashHex(token), all); err != nil {
 		t.Fatalf("set enrollment token: %v", err)
 	}
-	if _, err := gw.SetEnrollmentToken(ctx, "", "ghost", hashHex(token), all); !errors.Is(err, storage.ErrNodeNotFound) {
-		t.Fatalf("mint unknown node: want ErrNodeNotFound, got %v", err)
+	if _, err := gw.SetEnrollmentToken(ctx, "", "ghost", hashHex(token), all); !errors.Is(err, storage.ErrOutpostNotFound) {
+		t.Fatalf("mint unknown outpost: want ErrOutpostNotFound, got %v", err)
 	}
 
-	// The enrollment secret is a bearer credential ROW on the node principal (the
+	// The enrollment secret is a bearer credential ROW on the outpost principal (the
 	// same machinery a service token uses), not a bespoke column.
 	var credKind string
 	if err := probe.QueryRow(ctx,
 		`select kind from credential where principal_id = $1`, n.PrincipalID).Scan(&credKind); err != nil {
-		t.Fatalf("load node credential: %v", err)
+		t.Fatalf("load outpost credential: %v", err)
 	}
 	if credKind != "bearer" {
-		t.Fatalf("node credential kind = %q, want bearer", credKind)
+		t.Fatalf("outpost credential kind = %q, want bearer", credKind)
 	}
 
 	// Authenticate (the NATS callback path): right hash true, wrong hash false.
-	if ok, err := gw.AuthenticateNode(ctx, "node-a", hashHex(token)); err != nil || !ok {
+	if ok, err := gw.AuthenticateOutpost(ctx, "outpost-a", hashHex(token)); err != nil || !ok {
 		t.Fatalf("authenticate right: want true, got (%v,%v)", ok, err)
 	}
-	if ok, _ := gw.AuthenticateNode(ctx, "node-a", hashHex("wrong")); ok {
+	if ok, _ := gw.AuthenticateOutpost(ctx, "outpost-a", hashHex("wrong")); ok {
 		t.Fatalf("authenticate wrong: want false")
 	}
-	if ok, _ := gw.AuthenticateNode(ctx, "ghost", hashHex(token)); ok {
-		t.Fatalf("authenticate unknown node: want false")
+	if ok, _ := gw.AuthenticateOutpost(ctx, "ghost", hashHex(token)); ok {
+		t.Fatalf("authenticate unknown outpost: want false")
 	}
 
 	// Claim: right token sets enrolled_at; wrong token is rejected.
-	claimed, err := gw.ClaimNode(ctx, "node-a", hashHex(token))
+	claimed, err := gw.ClaimOutpost(ctx, "outpost-a", hashHex(token))
 	if err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	if !claimed.Enrolled || claimed.EnrolledAt == nil {
-		t.Fatalf("claimed node: want enrolled with enrolled_at, got %+v", claimed)
+		t.Fatalf("claimed outpost: want enrolled with enrolled_at, got %+v", claimed)
 	}
-	if _, err := gw.ClaimNode(ctx, "node-a", hashHex("wrong")); !errors.Is(err, storage.ErrEnrollmentInvalid) {
+	if _, err := gw.ClaimOutpost(ctx, "outpost-a", hashHex("wrong")); !errors.Is(err, storage.ErrEnrollmentInvalid) {
 		t.Fatalf("claim wrong token: want ErrEnrollmentInvalid, got %v", err)
 	}
 
 	// Heartbeat updates last_heartbeat_at.
-	if err := gw.RecordHeartbeat(ctx, "node-a"); err != nil {
+	if err := gw.RecordHeartbeat(ctx, "outpost-a"); err != nil {
 		t.Fatalf("heartbeat: %v", err)
 	}
-	got, err := gw.GetNode(ctx, "node-a", all)
+	got, err := gw.GetOutpost(ctx, "outpost-a", all)
 	if err != nil {
-		t.Fatalf("get node: %v", err)
+		t.Fatalf("get outpost: %v", err)
 	}
 	if got.LastHeartbeatAt == nil {
 		t.Fatalf("last_heartbeat_at not set after heartbeat")
 	}
 
-	// Worklist: seed a component + interface + enabled task bound to node-a.
+	// Worklist: seed a component + interface + enabled task bound to outpost-a.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestNodeGateway(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec, enabled) values ('t-icmp', 'poll', (select id from endpoint where name = 'disp-1-icmp'), '{"probe":"icmp"}'::jsonb, true)`); err != nil {
@@ -144,7 +144,7 @@ func TestNodeGateway(t *testing.T) {
 		t.Fatalf("insert disabled task: %v", err)
 	}
 
-	wl, err := gw.NodeWorklist(ctx, "node-a")
+	wl, err := gw.OutpostWorklist(ctx, "outpost-a")
 	if err != nil {
 		t.Fatalf("worklist: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestNodeGateway(t *testing.T) {
 		t.Fatalf("worklist task: got %+v", wl.Tasks[0])
 	}
 	// The endpoint id rides with each task: endpoint names are unique only
-	// per component, and a node keys a held session by the endpoint (#816).
+	// per component, and an outpost keys a held session by the endpoint (#816).
 	var epID string
 	if err := conn.QueryRow(ctx, `select id::text from endpoint where name = 'disp-1-icmp'`).Scan(&epID); err != nil {
 		t.Fatalf("endpoint id: %v", err)
@@ -167,25 +167,25 @@ func TestNodeGateway(t *testing.T) {
 		t.Fatalf("config_generation = 0, want the interface's updated_at epoch")
 	}
 
-	// An unknown node worklist is empty, not an error.
-	empty, err := gw.NodeWorklist(ctx, "no-such-node")
+	// An unknown outpost worklist is empty, not an error.
+	empty, err := gw.OutpostWorklist(ctx, "no-such-outpost")
 	if err != nil {
-		t.Fatalf("worklist unknown node: %v", err)
+		t.Fatalf("worklist unknown outpost: %v", err)
 	}
 	if len(empty.Tasks) != 0 || empty.ConfigGeneration != 0 {
-		t.Fatalf("unknown node worklist: want empty/0, got %+v", empty)
+		t.Fatalf("unknown outpost worklist: want empty/0, got %+v", empty)
 	}
 }
 
-// TestNodeNameSubjectSafety proves the node-name invariant is enforced at the
-// Storage Gateway: a node name becomes a NATS subject token
-// (og.v1.telemetry.<name>, ...) and its per-node subject grant, so a name
+// TestOutpostNameSubjectSafety proves the outpost-name invariant is enforced at the
+// Storage Gateway: an outpost name becomes a NATS subject token
+// (og.v1.telemetry.<name>, ...) and its per-outpost subject grant, so a name
 // containing a dot, a subject wildcard ('*', '>'), or whitespace must be refused
 // with ErrInvalidEntityName before any row is written. The entity name rule
-// (storage.ValidateName) is the only fence since #570 dropped the node table's
+// (storage.ValidateName) is the only fence since #570 dropped the outpost table's
 // own CHECK, which forbade exactly these characters and no others; this is the
 // test that keeps the guarantee the CHECK used to state. Skipped under -short.
-func TestNodeNameSubjectSafety(t *testing.T) {
+func TestOutpostNameSubjectSafety(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -206,41 +206,41 @@ func TestNodeNameSubjectSafety(t *testing.T) {
 	// a newline, a carriage return), plus two it admitted that the entity rule
 	// refuses (uppercase, an underscore): one rule, refusing all of them.
 	for _, bad := range []string{"bad.name", "edge*", "edge>", "has space", "tab\tname", "new\nline", "carriage\rreturn", "Edge-1", "edge_1"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: bad, Description: "subject-unsafe"}, all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
-			t.Fatalf("create node %q: want ErrInvalidEntityName, got %v", bad, err)
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: bad, Description: "subject-unsafe"}, all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
+			t.Fatalf("create outpost %q: want ErrInvalidEntityName, got %v", bad, err)
 		}
 		// "bad.name" is dot-joined, so #627 Task 12's RejectAddressForm now
 		// catches it before the lookup even runs and reports the more specific
-		// ErrAddressNotAccepted ("a node name is a single token") rather than
+		// ErrAddressNotAccepted ("an outpost name is a single token") rather than
 		// blending into the generic not-found every other subject-unsafe name
 		// still gets: the row was never written either way, but a caller gets
 		// told WHY only when the ref looked like #627's address grammar.
-		_, err := gw.GetNode(ctx, bad, all)
+		_, err := gw.GetOutpost(ctx, bad, all)
 		if bad == "bad.name" {
 			var notAccepted *storage.ErrAddressNotAccepted
 			if !errors.As(err, &notAccepted) {
-				t.Fatalf("get node %q after rejected create: want *storage.ErrAddressNotAccepted, got %v", bad, err)
+				t.Fatalf("get outpost %q after rejected create: want *storage.ErrAddressNotAccepted, got %v", bad, err)
 			}
 			continue
 		}
-		if !errors.Is(err, storage.ErrNodeNotFound) {
-			t.Fatalf("get node %q after rejected create: want ErrNodeNotFound (no row), got %v", bad, err)
+		if !errors.Is(err, storage.ErrOutpostNotFound) {
+			t.Fatalf("get outpost %q after rejected create: want ErrOutpostNotFound (no row), got %v", bad, err)
 		}
 	}
 
 	// A subject-safe name still succeeds.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-safe", Description: "ok"}, all, all); err != nil {
-		t.Fatalf("create valid node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-safe", Description: "ok"}, all, all); err != nil {
+		t.Fatalf("create valid outpost: %v", err)
 	}
 }
 
-// TestGetNodeRefusesADottedAddress is the storage-layer half of #627 Task
-// 12's 22-registry refusal: a node's name stays a single global kebab token
+// TestGetOutpostRefusesADottedAddress is the storage-layer half of #627 Task
+// 12's 22-registry refusal: an outpost's name stays a single global kebab token
 // (it rides NATS subjects), so a ref that looks like the tree-entity address
 // grammar (dot-joined, or opening on an accessor) must be the explicit
 // *storage.ErrAddressNotAccepted, naming the kind, never a fall-through
-// ErrNodeNotFound that looks identical to an ordinary unknown node.
-func TestGetNodeRefusesADottedAddress(t *testing.T) {
+// ErrOutpostNotFound that looks identical to an ordinary unknown outpost.
+func TestGetOutpostRefusesADottedAddress(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -255,22 +255,22 @@ func TestGetNodeRefusesADottedAddress(t *testing.T) {
 	all := scope.Set{All: true}
 
 	for _, ref := range []string{"boi.17c", "$comp.display-1"} {
-		_, err := gw.GetNode(ctx, ref, all)
+		_, err := gw.GetOutpost(ctx, ref, all)
 		var notAccepted *storage.ErrAddressNotAccepted
 		if !errors.As(err, &notAccepted) {
-			t.Fatalf("GetNode(%q) = %v, want *storage.ErrAddressNotAccepted", ref, err)
+			t.Fatalf("GetOutpost(%q) = %v, want *storage.ErrAddressNotAccepted", ref, err)
 		}
-		if notAccepted.Kind != "node" {
-			t.Errorf("GetNode(%q) Kind = %q, want %q", ref, notAccepted.Kind, "node")
+		if notAccepted.Kind != "outpost" {
+			t.Errorf("GetOutpost(%q) Kind = %q, want %q", ref, notAccepted.Kind, "outpost")
 		}
 	}
 }
 
-// TestNodeIdentityAndEdit covers the N1 identity fields (label, location)
-// and the UpdateNode patch path: nil-unchanged semantics, location set / change /
+// TestOutpostIdentityAndEdit covers the N1 identity fields (label, location)
+// and the UpdateOutpost patch path: nil-unchanged semantics, location set / change /
 // clear, an unknown location rejected, name immutability, and the location FK's
-// ON DELETE SET NULL. See .claude/superpowers/specs/2026-07-19-node-identity-and-edit-design.md.
-func TestNodeIdentityAndEdit(t *testing.T) {
+// ON DELETE SET NULL. See .claude/superpowers/specs/2026-07-19-outpost-identity-and-edit-design.md.
+func TestOutpostIdentityAndEdit(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -297,24 +297,24 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	}
 
 	// Create carries label and location.
-	n, err := gw.CreateNode(ctx, "", storage.NodeSpec{
-		Name: "edge-hq", Label: "HQ Closet Node", Description: "rack 3", LocationName: &closet.Name,
+	n, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{
+		Name: "edge-hq", Label: "HQ Closet Outpost", Description: "rack 3", LocationName: &closet.Name,
 	}, all, all)
 	if err != nil {
-		t.Fatalf("create node: %v", err)
+		t.Fatalf("create outpost: %v", err)
 	}
-	if n.Label != "HQ Closet Node" || n.LocationName == nil || *n.LocationName != "hq-closet" {
-		t.Fatalf("fresh node identity: got display=%q location=%v", n.Label, n.LocationName)
+	if n.Label != "HQ Closet Outpost" || n.LocationName == nil || *n.LocationName != "hq-closet" {
+		t.Fatalf("fresh outpost identity: got display=%q location=%v", n.Label, n.LocationName)
 	}
 
 	str := func(s string) *string { return &s }
 
 	// Patch label only: description and location are untouched (nil = unchanged).
-	up, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{Label: str("HQ Node")}, all, all, all)
+	up, err := gw.UpdateOutpost(ctx, "", "edge-hq", storage.OutpostPatch{Label: str("HQ Outpost")}, all, all, all)
 	if err != nil {
 		t.Fatalf("update label: %v", err)
 	}
-	if up.Label != "HQ Node" || up.Description != "rack 3" || up.LocationName == nil || *up.LocationName != "hq-closet" {
+	if up.Label != "HQ Outpost" || up.Description != "rack 3" || up.LocationName == nil || *up.LocationName != "hq-closet" {
 		t.Fatalf("patch display only: got %+v", up)
 	}
 	if up.Name != "edge-hq" {
@@ -322,7 +322,7 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	}
 
 	// Move the location to another valid one.
-	up, err = gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: &other.Name}, all, all, all)
+	up, err = gw.UpdateOutpost(ctx, "", "edge-hq", storage.OutpostPatch{LocationName: &other.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("relocate: %v", err)
 	}
@@ -331,7 +331,7 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	}
 
 	// Clear the location (a pointer to "").
-	up, err = gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: str("")}, all, all, all)
+	up, err = gw.UpdateOutpost(ctx, "", "edge-hq", storage.OutpostPatch{LocationName: str("")}, all, all, all)
 	if err != nil {
 		t.Fatalf("clear location: %v", err)
 	}
@@ -340,22 +340,22 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	}
 
 	// An unknown location is rejected (the location FK), not silently applied.
-	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: str("ghost-room")}, all, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
+	if _, err := gw.UpdateOutpost(ctx, "", "edge-hq", storage.OutpostPatch{LocationName: str("ghost-room")}, all, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Fatalf("unknown location: want ErrLocationNotFound, got %v", err)
 	}
 
-	// Fleet-wide: an update without all-scope is forbidden; an unknown node is not found.
-	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{Label: str("x")}, scope.Set{}, scope.Set{}, all); !errors.Is(err, storage.ErrNodeForbidden) {
-		t.Fatalf("update without all-scope: want ErrNodeForbidden, got %v", err)
+	// Fleet-wide: an update without all-scope is forbidden; an unknown outpost is not found.
+	if _, err := gw.UpdateOutpost(ctx, "", "edge-hq", storage.OutpostPatch{Label: str("x")}, scope.Set{}, scope.Set{}, all); !errors.Is(err, storage.ErrOutpostForbidden) {
+		t.Fatalf("update without all-scope: want ErrOutpostForbidden, got %v", err)
 	}
-	if _, err := gw.UpdateNode(ctx, "", "ghost", storage.NodePatch{Label: str("x")}, all, all, all); !errors.Is(err, storage.ErrNodeNotFound) {
-		t.Fatalf("update unknown node: want ErrNodeNotFound, got %v", err)
+	if _, err := gw.UpdateOutpost(ctx, "", "ghost", storage.OutpostPatch{Label: str("x")}, all, all, all); !errors.Is(err, storage.ErrOutpostNotFound) {
+		t.Fatalf("update unknown outpost: want ErrOutpostNotFound, got %v", err)
 	}
 
-	// The location FK is ON DELETE SET NULL: place the node, delete its location,
-	// the node survives with a cleared placement (deleted via a probe, since
+	// The location FK is ON DELETE SET NULL: place the outpost, delete its location,
+	// the outpost survives with a cleared placement (deleted via a probe, since
 	// location-delete guards are not the unit under test).
-	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: &closet.Name}, all, all, all); err != nil {
+	if _, err := gw.UpdateOutpost(ctx, "", "edge-hq", storage.OutpostPatch{LocationName: &closet.Name}, all, all, all); err != nil {
 		t.Fatalf("re-place before delete: %v", err)
 	}
 	probe, err := pgx.Connect(ctx, dsn)
@@ -366,20 +366,20 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	if _, err := probe.Exec(ctx, `delete from location where name = 'hq-closet'`); err != nil {
 		t.Fatalf("delete location: %v", err)
 	}
-	got, err := gw.GetNode(ctx, "edge-hq", all)
+	got, err := gw.GetOutpost(ctx, "edge-hq", all)
 	if err != nil {
-		t.Fatalf("get node after location delete: %v", err)
+		t.Fatalf("get outpost after location delete: %v", err)
 	}
 	if got.LocationName != nil {
 		t.Fatalf("ON DELETE SET NULL: want nil location, got %v", *got.LocationName)
 	}
 }
 
-// TestDeleteNode covers node decommission (N3): a hard delete of the node
-// principal cascades its interfaces, their derived tasks, and its node-owned tag
-// bindings, while a component's own telemetry (owner arc = component, node_id
-// null) survives. Plus the all-scope gate and the unknown-node not-found.
-func TestDeleteNode(t *testing.T) {
+// TestDeleteOutpost covers outpost decommission (N3): a hard delete of the outpost
+// principal cascades its interfaces, their derived tasks, and its outpost-owned tag
+// bindings, while a component's own telemetry (owner arc = component, outpost_id
+// null) survives. Plus the all-scope gate and the unknown-outpost not-found.
+func TestDeleteOutpost(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -399,25 +399,25 @@ func TestDeleteNode(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-del"}, all, all)
+	outpost, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-del"}, all, all)
 	if err != nil {
-		t.Fatalf("create node: %v", err)
+		t.Fatalf("create outpost: %v", err)
 	}
-	comp, nodeName := "dsp-1", "edge-del"
+	comp, outpostName := "dsp-1", "edge-del"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Transport: "tcp", Component: &comp, Node: &nodeName, Params: []byte(`{"target":"10.0.0.1:80"}`),
+		Transport: "tcp", Component: &comp, Outpost: &outpostName, Params: []byte(`{"target":"10.0.0.1:80"}`),
 	}, all); err != nil {
 		t.Fatalf("create interface: %v", err)
 	}
-	// A component-owned sample (owner arc = component, node_id null): it must
-	// survive the node's deletion.
+	// A component-owned sample (owner arc = component, outpost_id null): it must
+	// survive the outpost's deletion.
 	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "dsp-1", Key: "tcp-connect-time", Instance: "tcp", Value: 1, Source: "tcp", TS: time.Now().UTC()},
 	}); err != nil {
 		t.Fatalf("insert component sample: %v", err)
 	}
-	// A node-owned tag binding (cascades on delete).
-	mustNodeTag(t, gw, node.Name)
+	// An outpost-owned tag binding (cascades on delete).
+	mustOutpostTag(t, gw, outpost.Name)
 
 	probe, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -431,61 +431,61 @@ func TestDeleteNode(t *testing.T) {
 		}
 		return n
 	}
-	if count(`select count(*) from endpoint where node_name = (select principal_id from node where name = $1)`, nodeName) != 1 {
-		t.Fatalf("precondition: want 1 interface on the node")
+	if count(`select count(*) from endpoint where outpost_id = (select principal_id from outpost where name = $1)`, outpostName) != 1 {
+		t.Fatalf("precondition: want 1 interface on the outpost")
 	}
 	if count(`select count(*) from task`) != 1 {
 		t.Fatalf("precondition: want 1 derived task")
 	}
-	if count(`select count(*) from tag_binding where node_id = $1`, node.PrincipalID) != 1 {
-		t.Fatalf("precondition: want 1 node tag binding")
+	if count(`select count(*) from tag_binding where outpost_id = $1`, outpost.PrincipalID) != 1 {
+		t.Fatalf("precondition: want 1 outpost tag binding")
 	}
 
-	// The all-scope gate and unknown-node, then the delete.
-	if err := gw.DeleteNode(ctx, "", nodeName, scope.Set{}, scope.Set{}); !errors.Is(err, storage.ErrNodeForbidden) {
-		t.Fatalf("delete without all-scope: want ErrNodeForbidden, got %v", err)
+	// The all-scope gate and unknown-outpost, then the delete.
+	if err := gw.DeleteOutpost(ctx, "", outpostName, scope.Set{}, scope.Set{}); !errors.Is(err, storage.ErrOutpostForbidden) {
+		t.Fatalf("delete without all-scope: want ErrOutpostForbidden, got %v", err)
 	}
-	if err := gw.DeleteNode(ctx, "", "ghost", all, all); !errors.Is(err, storage.ErrNodeNotFound) {
-		t.Fatalf("delete unknown node: want ErrNodeNotFound, got %v", err)
+	if err := gw.DeleteOutpost(ctx, "", "ghost", all, all); !errors.Is(err, storage.ErrOutpostNotFound) {
+		t.Fatalf("delete unknown outpost: want ErrOutpostNotFound, got %v", err)
 	}
-	if err := gw.DeleteNode(ctx, "", nodeName, all, all); err != nil {
-		t.Fatalf("delete node: %v", err)
+	if err := gw.DeleteOutpost(ctx, "", outpostName, all, all); err != nil {
+		t.Fatalf("delete outpost: %v", err)
 	}
 
-	// The node and everything keyed to it are gone; the node principal too.
-	if _, err := gw.GetNode(ctx, nodeName, all); !errors.Is(err, storage.ErrNodeNotFound) {
-		t.Errorf("node still present after delete: %v", err)
+	// The outpost and everything keyed to it are gone; the outpost principal too.
+	if _, err := gw.GetOutpost(ctx, outpostName, all); !errors.Is(err, storage.ErrOutpostNotFound) {
+		t.Errorf("outpost still present after delete: %v", err)
 	}
-	if n := count(`select count(*) from node where name = $1`, nodeName); n != 0 {
-		t.Errorf("node rows = %d, want 0", n)
+	if n := count(`select count(*) from outpost where name = $1`, outpostName); n != 0 {
+		t.Errorf("outpost rows = %d, want 0", n)
 	}
-	if n := count(`select count(*) from principal where id = $1`, node.PrincipalID); n != 0 {
-		t.Errorf("node principal rows = %d, want 0", n)
+	if n := count(`select count(*) from principal where id = $1`, outpost.PrincipalID); n != 0 {
+		t.Errorf("outpost principal rows = %d, want 0", n)
 	}
-	if n := count(`select count(*) from endpoint where node_name = (select principal_id from node where name = $1)`, nodeName); n != 0 {
+	if n := count(`select count(*) from endpoint where outpost_id = (select principal_id from outpost where name = $1)`, outpostName); n != 0 {
 		t.Errorf("interfaces = %d, want 0 (cascade)", n)
 	}
 	if n := count(`select count(*) from task`); n != 0 {
 		t.Errorf("tasks = %d, want 0 (cascade through the interface)", n)
 	}
-	if n := count(`select count(*) from tag_binding where node_id = $1`, node.PrincipalID); n != 0 {
-		t.Errorf("node tag bindings = %d, want 0 (cascade)", n)
+	if n := count(`select count(*) from tag_binding where outpost_id = $1`, outpost.PrincipalID); n != 0 {
+		t.Errorf("outpost tag bindings = %d, want 0 (cascade)", n)
 	}
-	// The component's own telemetry survives (owner arc = component, not the node).
+	// The component's own telemetry survives (owner arc = component, not the outpost).
 	if n := count(`select count(*) from ` + storagetest.MetricRows + ` metric where owner_kind = 'component'`); n != 1 {
-		t.Errorf("component samples = %d, want 1 (must survive the node delete)", n)
+		t.Errorf("component samples = %d, want 1 (must survive the outpost delete)", n)
 	}
 }
 
-// mustNodeTag mints a node-applicable key and binds it to the node.
-func mustNodeTag(t *testing.T, gw storage.Gateway, nodeName string) {
+// mustOutpostTag mints an outpost-applicable key and binds it to the outpost.
+func mustOutpostTag(t *testing.T, gw storage.Gateway, outpostName string) {
 	t.Helper()
 	ctx := context.Background()
 	all := scope.Set{All: true}
-	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "rack", AppliesTo: []string{"node"}}, all); err != nil {
+	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "rack", AppliesTo: []string{"outpost"}}, all); err != nil {
 		t.Fatalf("create tag: %v", err)
 	}
-	if _, err := gw.SetTagBinding(ctx, "", "rack", "node", &nodeName, "r5", all, all); err != nil {
-		t.Fatalf("bind node tag: %v", err)
+	if _, err := gw.SetTagBinding(ctx, "", "rack", "outpost", &outpostName, "r5", all, all); err != nil {
+		t.Fatalf("bind outpost tag: %v", err)
 	}
 }

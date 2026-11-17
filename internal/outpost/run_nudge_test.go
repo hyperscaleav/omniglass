@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -68,11 +68,11 @@ func acceptor(t *testing.T) string {
 	return port
 }
 
-// #1945 end to end: a node pulling its worklist once an hour still runs an
+// #1945 end to end: an outpost pulling its worklist once an hour still runs an
 // endpoint the moment it is created or edited, because the commit nudges it
 // to pull now; and a burst of edits costs a bounded number of pulls, because
-// the node coalesces the nudges.
-func TestAWorklistChangeReachesTheNodeAtOnce(t *testing.T) {
+// the outpost coalesces the nudges.
+func TestAWorklistChangeReachesTheOutpostAtOnce(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -93,7 +93,7 @@ func TestAWorklistChangeReachesTheNodeAtOnce(t *testing.T) {
 			"emits": [{"name": "video-input", "extract": {"regex": "^INPUT (\\S+)$"}}]}]}`)}); err != nil {
 		t.Fatal(err)
 	}
-	token := enrolledNode(t, ctx, gw, "edge-n")
+	token := enrolledOutpost(t, ctx, gw, "edge-n")
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-n"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestAWorklistChangeReachesTheNodeAtOnce(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-n", Token: token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-n", Token: token,
 			HeartbeatEvery: 50 * time.Millisecond, ProbeEvery: 50 * time.Millisecond,
 			WorklistEvery: time.Hour, Line: line})
 		ran <- err
@@ -117,18 +117,18 @@ func TestAWorklistChangeReachesTheNodeAtOnce(t *testing.T) {
 	defer func() {
 		stop()
 		if err := <-ran; err != nil {
-			t.Errorf("node run: %v", err)
+			t.Errorf("outpost run: %v", err)
 		}
 	}()
-	pollUntil(t, 10*time.Second, "the node never took its first worklist", func() bool {
+	pollUntil(t, 10*time.Second, "the outpost never took its first worklist", func() bool {
 		return srv.WorklistCounts().Served >= 1
 	})
 
 	// A new endpoint runs within a second, not on the hourly pull.
 	first, second := acceptor(t), acceptor(t)
-	comp, drv, nodeName := "panel-n", "panel-nudge", "edge-n"
+	comp, drv, outpostName := "panel-n", "panel-nudge", "edge-n"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs: map[string]string{"host": "127.0.0.1", "port": first}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
@@ -142,7 +142,7 @@ func TestAWorklistChangeReachesTheNodeAtOnce(t *testing.T) {
 	}
 	pollUntil(t, time.Second, "an edited endpoint did not move within 1s", func() bool { return line.asked(second) })
 
-	// A burst of 100 changes: the node pulls at least once after it (the
+	// A burst of 100 changes: the outpost pulls at least once after it (the
 	// last change is not lost), and at most once per nudge gap while it runs.
 	before := srv.WorklistCounts().Served
 	start := time.Now()
@@ -155,12 +155,12 @@ func TestAWorklistChangeReachesTheNodeAtOnce(t *testing.T) {
 	pollUntil(t, 2*time.Second, "the burst nudged no pull", func() bool {
 		return srv.WorklistCounts().Served > before
 	})
-	time.Sleep(3 * node.NudgeGap) // let any last coalesced pull land
+	time.Sleep(3 * outpost.NudgeGap) // let any last coalesced pull land
 	elapsed := time.Since(start)
 	pulls := srv.WorklistCounts().Served - before
-	bound := int64(elapsed/node.NudgeGap) + 3
+	bound := int64(elapsed/outpost.NudgeGap) + 3
 	if pulls > bound {
-		t.Fatalf("100 changes over %v cost %d pulls, want at most %d (one per %v gap)", elapsed, pulls, bound, node.NudgeGap)
+		t.Fatalf("100 changes over %v cost %d pulls, want at most %d (one per %v gap)", elapsed, pulls, bound, outpost.NudgeGap)
 	}
 	t.Logf("100 changes over %v cost %d pulls (bound %d)", elapsed.Round(time.Millisecond), pulls, bound)
 }

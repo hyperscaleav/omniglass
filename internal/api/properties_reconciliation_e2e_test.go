@@ -80,13 +80,13 @@ func TestPropertiesCarryReconciliationAPI(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 	// A declared value (want) and an observed value (is) that differ, and a
-	// key observed with nothing declared. The observations are the node lane's,
+	// key observed with nothing declared. The observations are the outpost lane's,
 	// stamped with the endpoint whose task collected them.
 	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all, all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
 	now := time.Now().UTC()
-	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter("disp-1", "panel-ip"), []storage.PropertySampleWrite{
+	if err := gw.InsertPropertySamples(ctx, storage.OutpostWriter("disp-1", "panel-ip"), []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "firmware-version", Instance: "panel-ip", Value: "2.0.0", TS: now},
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "serial-number", Instance: "panel-ip", Value: "SN-42", TS: now},
 	}); err != nil {

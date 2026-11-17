@@ -1,17 +1,17 @@
-package node
+package outpost
 
 import (
 	"hash/fnv"
 	"time"
 )
 
-// reportWindow is a report's window on the node's grid (#1779): its ends
+// reportWindow is a report's window on the outpost's grid (#1779): its ends
 // fall on slots one window apart from the Unix epoch, offset by a phase from the
-// node's seed, the way the scheduler places a task's polls. A window closes
+// outpost's seed, the way the scheduler places a task's polls. A window closes
 // at its grid end however late the tick that takes it, so a report written
 // "every minute" lands once a minute and never drifts later by the tick's
-// lateness, and a fleet's nodes spread their reports over the window rather
-// than sending together. The first window runs from the node's start to its
+// lateness, and a fleet's outposts spread their reports over the window rather
+// than sending together. The first window runs from the outpost's start to its
 // first slot, so it is short.
 type reportWindow struct {
 	every time.Duration
@@ -21,7 +21,7 @@ type reportWindow struct {
 }
 
 // phaseSeed is the seed a name's phase on any interval comes from: a
-// function of the name alone, so a restarted node keeps its phase.
+// function of the name alone, so a restarted outpost keeps its phase.
 func phaseSeed(name string) uint64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(name))

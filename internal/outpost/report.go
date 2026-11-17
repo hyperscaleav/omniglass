@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"sort"
@@ -9,12 +9,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 )
 
-// defaultReportEvery is the collection report window a node keeps when its
+// defaultReportEvery is the collection report window an outpost keeps when its
 // worklist carries none (an older server): the platform's own default.
 const defaultReportEvery = time.Minute
 
 // collectionReport accumulates each endpoint's collection telemetry over a
-// report window (#1369): the node's account of its own collection, built-in
+// report window (#1369): the outpost's account of its own collection, built-in
 // data every endpoint carries whatever its driver, as against the collected
 // data a driver declares. Its polls report a mean duration and a failure
 // count, its held session's or socket's listeners the messages they claimed
@@ -62,8 +62,8 @@ type endpointReport struct {
 }
 
 // newCollectionReport starts a report whose windows sit on the grid seed
-// places (#1779): the node's phaseSeed, so its reports keep their place
-// across a restart and spread from other nodes'.
+// places (#1779): the outpost's phaseSeed, so its reports keep their place
+// across a restart and spread from other outposts'.
 func newCollectionReport(every time.Duration, seed uint64, now time.Time) *collectionReport {
 	if every <= 0 {
 		every = defaultReportEvery
@@ -72,7 +72,7 @@ func newCollectionReport(every time.Duration, seed uint64, now time.Time) *colle
 }
 
 // setEvery applies the window the worklist carries, from the window in
-// progress; none (zero) keeps the window the node has.
+// progress; none (zero) keeps the window the outpost has.
 func (r *collectionReport) setEvery(every time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -197,10 +197,10 @@ func (r *collectionReport) due(now time.Time) bool {
 
 // take returns the window's rows, each stamped at now, and starts the next
 // window at the grid end of this one. Each endpoint's rows publish under the task
-// tasks names for it, the task the node holds now: a driver revision
+// tasks names for it, the task the outpost holds now: a driver revision
 // mid-window replaces an endpoint's task ids, and a row under a deleted one
 // would be refused as an orphan. An endpoint tasks does not name (deleted, or
-// moved to another node) reports nothing. A mean duration lands only for an
+// moved to another outpost) reports nothing. A mean duration lands only for an
 // endpoint that polled, a mean CPU time only for one whose runs read the
 // thread clock, a failure, held, due, skipped, unclaimed or hold-expiry count only when nonzero, and a
 // claimed count for every held endpoint. Ordered by task, so a publish order

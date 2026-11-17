@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -11,12 +11,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodeRecordingServiceReportsItsWork (#1363): the shipped
+// TestOutpostRecordingServiceReportsItsWork (#1363): the shipped
 // recording-service-api driver on the simulated recording service's https
 // face, its key in a header, lands the service's status and version, its
 // three work counters as samples, and a failed recording as an event on the
 // component.
-func TestNodeRecordingServiceReportsItsWork(t *testing.T) {
+func TestOutpostRecordingServiceReportsItsWork(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -31,7 +31,7 @@ func TestNodeRecordingServiceReportsItsWork(t *testing.T) {
 	dev := s.devices[rec]
 	ep := s.attachHTTP("recorder-1", "recording-service-api", "edge-rec", map[string]string{
 		"host": s.ips[rec], "port": fmt.Sprint(s.httpPort(rec)), "key": "rec-key"})
-	s.runNode("edge-rec")
+	s.runOutpost("edge-rec")
 
 	s.waitFor("recorder-1", ep.Name, "endpoint-authenticated", is("yes"), "yes: the key accepted")
 	s.waitFor("recorder-1", ep.Name, "service-state", is("ok"), "ok at rest")

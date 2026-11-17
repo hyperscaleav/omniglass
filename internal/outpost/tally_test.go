@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"encoding/json"
@@ -11,9 +11,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// The node answers a tally request on its own subject with what it counted,
+// The outpost answers a tally request on its own subject with what it counted,
 // named for itself (#1639).
-func TestSubscribeTallyAnswersWithTheNodesCounts(t *testing.T) {
+func TestSubscribeTallyAnswersWithTheOutpostsCounts(t *testing.T) {
 	t.Parallel()
 	nc := startTallyBus(t)
 	tally := collection.NewRequestTally()
@@ -32,7 +32,7 @@ func TestSubscribeTallyAnswersWithTheNodesCounts(t *testing.T) {
 	if err := json.Unmarshal(msg.Data, &snap); err != nil {
 		t.Fatal(err)
 	}
-	if snap.Node != "edge" || snap.At.IsZero() || snap.BatchesAcknowledged != 1 {
+	if snap.Outpost != "edge" || snap.At.IsZero() || snap.BatchesAcknowledged != 1 {
 		t.Fatalf("reply = %+v", snap)
 	}
 	if len(snap.Transports) != 1 || snap.Transports[0].Transport != "http" || snap.Transports[0].Answered != 1 {

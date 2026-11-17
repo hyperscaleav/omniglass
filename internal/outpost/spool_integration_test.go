@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"bytes"
@@ -26,7 +26,7 @@ import (
 )
 
 // lossyAck is a real JetStream publish whose first n acks are lost: the
-// stream stores the batch, and the node is told it did not. Every attempt is
+// stream stores the batch, and the outpost is told it did not. Every attempt is
 // recorded with the id it carried and the bytes it shipped.
 type lossyAck struct {
 	real publishFunc
@@ -63,13 +63,13 @@ func (l *lossyAck) publish(subject string, data []byte, id string) (ackWait, err
 	}, nil
 }
 
-// TestNodePublishMissingItsAckIsRetriedOnce drives the node's spool over a
-// real JetStream and a real Postgres, as an enrolled node with its own
+// TestOutpostPublishMissingItsAckIsRetriedOnce drives the outpost's spool over a
+// real JetStream and a real Postgres, as an enrolled outpost with its own
 // credential: the stream stores a batch but the ack is lost twice, the spool
 // retries it on each tick under the id it was minted with, and the batch
-// lands exactly once, a node's self-log line (which no natural key could
+// lands exactly once, an outpost's self-log line (which no natural key could
 // dedupe) and a task's sample alike (#453, #454).
-// spoolFixture is a seeded database with an enrolled node (edge-1, token
+// spoolFixture is a seeded database with an enrolled outpost (edge-1, token
 // token-1), a component and a task on it, and the bus in front of them.
 type spoolFixture struct {
 	ctx  context.Context
@@ -94,8 +94,8 @@ func newSpoolFixture(t *testing.T) spoolFixture {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	sum := sha256.Sum256([]byte("token-1"))
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-1", hex.EncodeToString(sum[:]), all); err != nil {
@@ -109,8 +109,8 @@ func newSpoolFixture(t *testing.T) spoolFixture {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'edge-1'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'edge-1'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
@@ -125,43 +125,43 @@ func newSpoolFixture(t *testing.T) spoolFixture {
 	return spoolFixture{ctx: ctx, gw: gw, conn: conn, srv: srv}
 }
 
-// nodeLogs counts the node_log rows carrying message.
-func (f spoolFixture) nodeLogs(t *testing.T, message string) int {
+// outpostLogs counts the outpost_log rows carrying message.
+func (f spoolFixture) outpostLogs(t *testing.T, message string) int {
 	t.Helper()
 	var n int
-	if err := f.conn.QueryRow(f.ctx, `select count(*) from node_log where message = $1`, message).Scan(&n); err != nil {
-		t.Fatalf("count node_log %q: %v", message, err)
+	if err := f.conn.QueryRow(f.ctx, `select count(*) from outpost_log where message = $1`, message).Scan(&n); err != nil {
+		t.Fatalf("count outpost_log %q: %v", message, err)
 	}
 	return n
 }
 
-// waitNodeLog waits until a node_log row carrying message has landed.
-func (f spoolFixture) waitNodeLog(t *testing.T, message string, within time.Duration) {
+// waitOutpostLog waits until an outpost_log row carrying message has landed.
+func (f spoolFixture) waitOutpostLog(t *testing.T, message string, within time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(within)
-	for f.nodeLogs(t, message) == 0 {
+	for f.outpostLogs(t, message) == 0 {
 		if time.Now().After(deadline) {
-			t.Fatalf("the node_log line %q never landed", message)
+			t.Fatalf("the outpost_log line %q never landed", message)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 }
 
-// selfLog is a node self-log batch carrying one line.
+// selfLog is an outpost self-log batch carrying one line.
 func selfLog(message string) *ogv1.TelemetryBatch {
-	return &ogv1.TelemetryBatch{NodeId: "edge-1", Logs: []*ogv1.LogLine{{Message: message, Severity: "info", Source: "node"}}}
+	return &ogv1.TelemetryBatch{OutpostId: "edge-1", Logs: []*ogv1.LogLine{{Message: message, Severity: "info", Source: "outpost"}}}
 }
 
-func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
+func TestOutpostPublishMissingItsAckIsRetriedOnce(t *testing.T) {
 	t.Parallel()
 	f := newSpoolFixture(t)
 	ctx, conn, srv := f.ctx, f.conn, f.srv
 	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("edge-1", "token-1"), nats.CustomInboxPrefix(collection.InboxPrefix("edge-1")))
 	if err != nil {
-		t.Fatalf("connect as the node: %v", err)
+		t.Fatalf("connect as the outpost: %v", err)
 	}
 	defer nc.Close()
-	js, err := newNodeJetStream(nc)
+	js, err := newOutpostJetStream(nc)
 	if err != nil {
 		t.Fatalf("jetstream: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
 	lossy := &lossyAck{real: jetStreamPublish(js), n: 2, attempts: map[string][]string{}}
 	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), "edge-1", lossy.publish)
 
-	if err := spool.send(&ogv1.TelemetryBatch{NodeId: "edge-1", Logs: []*ogv1.LogLine{{Message: "ack lost twice", Severity: "info", Source: "node"}}}); err != nil {
+	if err := spool.send(&ogv1.TelemetryBatch{OutpostId: "edge-1", Logs: []*ogv1.LogLine{{Message: "ack lost twice", Severity: "info", Source: "outpost"}}}); err != nil {
 		t.Fatalf("send the self-log batch: %v", err)
 	}
 	// The task's sample rides a tick batch (#1582): its group added, then
@@ -193,7 +193,7 @@ func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
 	// Each row lands once: wait for both, then for the consumer to settle.
 	count := func() (logs, metrics int) {
 		if err := conn.QueryRow(ctx, `select
-			(select count(*) from node_log where message = 'ack lost twice'),
+			(select count(*) from outpost_log where message = 'ack lost twice'),
 			(select count(*) from `+storagetest.MetricRows+` metric where metric_type_id = (select id from metric_type where name = 'tcp-connect-time'))`).Scan(&logs, &metrics); err != nil {
 			t.Fatalf("count rows: %v", err)
 		}
@@ -212,12 +212,12 @@ func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
 	}
 	// A later batch is the watermark: the consumer takes the stream in
 	// order, so once it has landed, anything a retry stored is behind it.
-	if err := spool.send(&ogv1.TelemetryBatch{NodeId: "edge-1", Logs: []*ogv1.LogLine{{Message: "watermark", Severity: "info", Source: "node"}}}); err != nil {
+	if err := spool.send(&ogv1.TelemetryBatch{OutpostId: "edge-1", Logs: []*ogv1.LogLine{{Message: "watermark", Severity: "info", Source: "outpost"}}}); err != nil {
 		t.Fatalf("send the watermark: %v", err)
 	}
 	for {
 		var n int
-		if err := conn.QueryRow(ctx, `select count(*) from node_log where message = 'watermark'`).Scan(&n); err != nil {
+		if err := conn.QueryRow(ctx, `select count(*) from outpost_log where message = 'watermark'`).Scan(&n); err != nil {
 			t.Fatalf("count the watermark: %v", err)
 		}
 		if n == 1 {
@@ -252,7 +252,7 @@ func TestNodePublishMissingItsAckIsRetriedOnce(t *testing.T) {
 
 // busRelay is a TCP relay in front of the bus, on a port it holds for the
 // whole test, that the test can take down (every connection cut, every new
-// one refused) and bring back: a WAN outage between a node and the server.
+// one refused) and bring back: a WAN outage between an outpost and the server.
 type busRelay struct {
 	ln       net.Listener
 	upstream string
@@ -314,12 +314,12 @@ func (r *busRelay) setDown(down bool) {
 	}
 }
 
-// TestNodeConnectionOutlivesALongOutage: a bus outage longer than any
+// TestOutpostConnectionOutlivesALongOutage: a bus outage longer than any
 // reconnect budget (here many hundred attempts long, at a shortened wait)
-// does not end the node's connection, so a batch the spool held through it
+// does not end the outpost's connection, so a batch the spool held through it
 // ships when the bus is back (#454). A connection that gave up would leave
-// the node running and never shipping again until a restart lost the spool.
-func TestNodeConnectionOutlivesALongOutage(t *testing.T) {
+// the outpost running and never shipping again until a restart lost the spool.
+func TestOutpostConnectionOutlivesALongOutage(t *testing.T) {
 	t.Parallel()
 	f := newSpoolFixture(t)
 	prior := [3]time.Duration{reconnectWait, reconnectJitter, reconnectJitterTLS}
@@ -332,7 +332,7 @@ func TestNodeConnectionOutlivesALongOutage(t *testing.T) {
 		t.Fatalf("connect through the relay: %v", err)
 	}
 	defer nc.Close()
-	js, err := newNodeJetStream(nc)
+	js, err := newOutpostJetStream(nc)
 	if err != nil {
 		t.Fatalf("jetstream: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestNodeConnectionOutlivesALongOutage(t *testing.T) {
 		spool.retry()
 		time.Sleep(100 * time.Millisecond)
 	}
-	f.waitNodeLog(t, "held through the outage", 15*time.Second)
+	f.waitOutpostLog(t, "held through the outage", 15*time.Second)
 }
 
 // TestSpoolDropsABatchTheBusCanNeverTake: a batch over the bus's payload
@@ -368,7 +368,7 @@ func TestSpoolDropsABatchTheBusCanNeverTake(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer nc.Close()
-	js, err := newNodeJetStream(nc)
+	js, err := newOutpostJetStream(nc)
 	if err != nil {
 		t.Fatalf("jetstream: %v", err)
 	}
@@ -391,7 +391,7 @@ func TestSpoolDropsABatchTheBusCanNeverTake(t *testing.T) {
 	if err := spool.drain(ctx); err != nil {
 		t.Fatalf("drain: %v (the oversized batch blocked the queue)", err)
 	}
-	f.waitNodeLog(t, "behind the oversized batch", 15*time.Second)
+	f.waitOutpostLog(t, "behind the oversized batch", 15*time.Second)
 	if !spool.takeOverflow() {
 		t.Fatal("the spool dropped a batch and did not report it to the run loop")
 	}

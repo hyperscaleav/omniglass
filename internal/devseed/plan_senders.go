@@ -17,7 +17,7 @@ import (
 // A plan's webhook sender (#1747) is an outside actor that speaks for a site
 // as a component of its own: a meeting platform account whose rooms are the
 // site's systems. It seeds as that component, one webhook endpoint of the
-// driver its simulator profile names (server hosted, so on no node), a
+// driver its simulator profile names (server hosted, so on no outpost), a
 // signing secret minted for this seed alone, and one identity binding per
 // system, named for the system, on the driver's room identity. The simulator
 // learns the bound names from the bindings and adds each as a room, so its

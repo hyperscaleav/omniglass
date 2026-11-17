@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// A disruptive command closes its endpoints' gates (#1651): the node adds
+// A disruptive command closes its endpoints' gates (#1651): the outpost adds
 // disrupted to every endpoint of the component placed on it before the
 // command is sent, runs nothing against them for the quiet period, then
 // reopens each on its own first up verdict after it, with the hold the
@@ -308,7 +308,7 @@ func TestADisruptedEndpointHoldsItsPollsAndAnswersAtOnce(t *testing.T) {
 	line := &lineRecorder{}
 	_, out := executeDelivery(t.Context(), &collection.Runner{Line: line}, collection.CommandDelivery{
 		ID: 43, CommandType: "set-input", Transport: "tcp", Target: "10.20.4.40:23", EndpointID: "ep-1", Line: "SET INPUT hdmi2"}, l.sessions)
-	if want := "node: the endpoint is " + named + ", so the command was not sent"; out != want {
+	if want := "outpost: the endpoint is " + named + ", so the command was not sent"; out != want {
 		t.Fatalf("a command answered %q, want %q", out, want)
 	}
 	if len(line.sent) != 0 {
@@ -320,7 +320,7 @@ func TestADisruptedEndpointHoldsItsPollsAndAnswersAtOnce(t *testing.T) {
 		t.Fatalf("run now = %+v, want gated by disrupted, naming the command", reply)
 	}
 	var answered []collection.RunReply
-	takeRun(t.Context(), runRoute{node: "edge", sessions: l.sessions, pool: newLanePool(1, nil)},
+	takeRun(t.Context(), runRoute{outpost: "edge", sessions: l.sessions, pool: newLanePool(1, nil)},
 		collection.RunRequest{Kind: collection.RunNow, Tasks: []collection.TaskSpec{reasonPollTask()}},
 		func(r collection.RunReply) { answered = append(answered, r) })
 	if len(answered) != 1 || answered[0].GateReason != string(reasonDisrupted) {
@@ -356,10 +356,10 @@ func TestADisruptedEndpointsSessionDialsAfterItsQuietPeriod(t *testing.T) {
 	}
 }
 
-// A restarted node does not adopt disrupted from the published value: the
+// A restarted outpost does not adopt disrupted from the published value: the
 // command that caused it is the old process's, and its probes re-derive
 // whatever still holds.
-func TestARestartedNodeDoesNotAdoptADisruption(t *testing.T) {
+func TestARestartedOutpostDoesNotAdoptADisruption(t *testing.T) {
 	t.Parallel()
 	g := newGates()
 	g.observe("ep-1", "fp-a", "")
@@ -372,13 +372,13 @@ func TestARestartedNodeDoesNotAdoptADisruption(t *testing.T) {
 	restarted := newGates()
 	restarted.observe("ep-1", "fp-a", value)
 	if r, held := restarted.holding("ep-1"); held {
-		t.Fatalf("a restarted node adopted %+v", r)
+		t.Fatalf("a restarted outpost adopted %+v", r)
 	}
 	if _, quiet := restarted.quietUntil("ep-1", gateT0); quiet {
-		t.Fatal("a restarted node adopted a quiet period")
+		t.Fatal("a restarted outpost adopted a quiet period")
 	}
 	if _, ok := restarted.refusedAt("ep-1", rungAuthenticated); !ok {
-		t.Fatal("a restarted node lost the refusal beside the disruption")
+		t.Fatal("a restarted outpost lost the refusal beside the disruption")
 	}
 }
 

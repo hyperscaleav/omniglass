@@ -137,24 +137,24 @@ terms:
     audience: admin
     collection: transports
     permission: endpoint
-  - word: node
-    plural: nodes
+  - word: outpost
+    plural: outposts
     definition: A collection process placed near the fleet that runs tasks and commands over endpoints and reports back.
     audience: admin
-    collection: nodes
-    schema: NodeBody
-    permission: node
-    nav: /nodes
+    collection: outposts
+    schema: OutpostBody
+    permission: outpost
+    nav: /outposts
   - word: unclaimed source
     plural: unclaimed sources
-    definition: A device a node heard from that no endpoint claims yet, waiting to be adopted or ignored.
+    definition: A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored.
     audience: admin
     collection: unclaimed-sources
     schema: UnclaimedSourceBody
-    permission: node
+    permission: outpost
   - word: task
     plural: tasks
-    definition: A node's unit of collection, a poll it runs or a listener it holds on one endpoint.
+    definition: An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint.
     audience: admin
     collection: tasks
     schema: TaskBody
@@ -415,7 +415,7 @@ not_terms:
   - collection: expressions
     reason: the expression engine's evaluate and explain verbs
   - collection: telemetry
-    reason: the ingest path a node writes samples through
+    reason: the ingest path an outpost writes samples through
   - collection: webhooks
     reason: inbound webhook delivery, a mechanism
   - collection: simulation

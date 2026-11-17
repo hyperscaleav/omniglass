@@ -19,7 +19,7 @@ import (
 // derived on read).
 
 // MetricTrendHorizon is how long after an hour ends the compaction waits
-// before closing it: the late-data horizon (ADR-0311, the node spool replays
+// before closing it: the late-data horizon (ADR-0311, the outpost spool replays
 // up to 12 hours), so an on-time spool replay lands before its hour closes.
 const MetricTrendHorizon = 24 * time.Hour
 

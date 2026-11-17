@@ -404,7 +404,7 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 		return err
 	}
 	// A calc rule's output is a key it owns, never one of the reserved
-	// family's (ADR-0161): a native probe key is the node's observation, and
+	// family's (ADR-0161): a native probe key is the outpost's observation, and
 	// health is the rollup's (#525 decision 3).
 	if c, ok := writerclass.Reserved(r.OutputKey); ok {
 		return invalidCalc("output_key", "%s", writerclass.Refusal(c, strings.TrimSpace(r.OutputKey), writerclass.CalcRule, ""))
@@ -476,7 +476,7 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 	}
 	rows, err := q.Query(ctx, `select c.id::text, c.name,
 			c.output_lane || ':' || coalesce(c.output_property_type_id, c.output_metric_type_id)::text, coalesce(pt.name, mt.name, ''),
-			(select coalesce(jsonb_agg(jsonb_build_object('node', i.lane || ':' || coalesce(i.property_type_id, i.metric_type_id)::text,
+			(select coalesce(jsonb_agg(jsonb_build_object('outpost', i.lane || ':' || coalesce(i.property_type_id, i.metric_type_id)::text,
 				'name', coalesce(ipt.name, imt.name)) order by i.position), '[]'::jsonb)
 				from calc_rule_input i left join property_type ipt on ipt.id = i.property_type_id
 				left join metric_type imt on imt.id = i.metric_type_id where i.rule_id = c.id)
@@ -488,9 +488,9 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 		return fmt.Errorf("storage: read the calc graph: %w", err)
 	}
 	defer rows.Close()
-	// The graph's nodes are keys by lane and id, so a rename moves nothing
+	// The graph's outposts are keys by lane and id, so a rename moves nothing
 	// and a property and a metric of one name are two keys; names says each
-	// node's name now, for the chain a refusal reads.
+	// outpost's name now, for the chain a refusal reads.
 	names := map[string]string{}
 	var graph []rules.CalcEdge
 	for rows.Next() {
@@ -502,14 +502,14 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 		if id == r.ID {
 			continue
 		}
-		var inputs []struct{ Node, Name string }
+		var inputs []struct{ Outpost, Name string }
 		if err := json.Unmarshal(raw, &inputs); err != nil {
 			return fmt.Errorf("storage: calc rule %q inputs: %w", name, err)
 		}
 		e := rules.CalcEdge{Rule: name, Output: output}
 		for _, in := range inputs {
-			e.Inputs = append(e.Inputs, in.Node)
-			names[in.Node] = in.Name
+			e.Inputs = append(e.Inputs, in.Outpost)
+			names[in.Outpost] = in.Name
 		}
 		names[output] = outputName
 		graph = append(graph, e)
@@ -520,9 +520,9 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 	candidate := rules.CalcEdge{Rule: r.Name, Output: string(r.OutputLane) + ":" + r.outputID}
 	names[candidate.Output] = r.OutputKey
 	for _, in := range r.Inputs {
-		node := string(in.Lane) + ":" + in.KeyID
-		candidate.Inputs = append(candidate.Inputs, node)
-		names[node] = in.Key
+		outpost := string(in.Lane) + ":" + in.KeyID
+		candidate.Inputs = append(candidate.Inputs, outpost)
+		names[outpost] = in.Key
 	}
 	if c := rules.CalcCycle(graph, candidate); c != nil {
 		for i, k := range c.Keys {
@@ -608,7 +608,7 @@ func writeCalcInputs(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 // intended value and its reply. The reverse order is held too (ADR-0161): a
 // driver created or edited to emit a key a rule already outputs is refused at
 // its spec write, a command type targeting one at its target (the key is of
-// the calc class), and a node lane or a push carrying one at the gateway.
+// the calc class), and an outpost lane or a push carrying one at the gateway.
 func collectedBy(ctx context.Context, q querier, key string) error {
 	var driver string
 	err := q.QueryRow(ctx, `select d.name from driver d

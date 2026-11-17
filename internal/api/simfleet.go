@@ -22,19 +22,19 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// SimHub is the server's line to the simulators beside its nodes
-// (bus.Server): their status, which nodes have one, and a way to ask one to
+// SimHub is the server's line to the simulators beside its outposts
+// (bus.Server): their status, which outposts have one, and a way to ask one to
 // run an operation.
 type SimHub interface {
-	SimStatus(node string) (simhub.Status, bool)
-	Nodes() []string
-	// Forget drops a node's status when the node is deleted.
-	Forget(node string)
-	FireSimOperation(ctx context.Context, node string, op collection.SimOperation) (collection.SimOperationResult, error)
-	EndpointObservation(ctx context.Context, node string) (collection.EndpointObservation, error)
+	SimStatus(outpost string) (simhub.Status, bool)
+	Outposts() []string
+	// Forget drops an outpost's status when the outpost is deleted.
+	Forget(outpost string)
+	FireSimOperation(ctx context.Context, outpost string, op collection.SimOperation) (collection.SimOperationResult, error)
+	EndpointObservation(ctx context.Context, outpost string) (collection.EndpointObservation, error)
 }
 
-// WithSimHub supplies the server's simulators: the node simulation view, the
+// WithSimHub supplies the server's simulators: the outpost simulation view, the
 // fleet view, and firing operations all read through it.
 func WithSimHub(h SimHub) Option {
 	return func(o *options) {
@@ -47,8 +47,8 @@ func WithSimHub(h SimHub) Option {
 // embeds, loaded once.
 var simCatalog = sync.OnceValues(func() (*profile.Store, error) { return profile.LoadStoreFS(profiles.FS) })
 
-type simNodeBody struct {
-	Node         string                         `json:"node"`
+type simOutpostBody struct {
+	Outpost      string                         `json:"outpost"`
 	Connected    bool                           `json:"connected"`
 	LastSeen     time.Time                      `json:"last_seen"`
 	Capabilities collection.SimCapabilities     `json:"capabilities"`
@@ -58,8 +58,8 @@ type simNodeBody struct {
 
 type simFleetOutput struct {
 	Body struct {
-		Connected bool          `json:"connected" doc:"Any simulator pulled its device list recently; the console shows its Simulation page only then."`
-		Nodes     []simNodeBody `json:"nodes" doc:"Each node a simulator has pulled for since the server started, whose simulated components the caller's scope reaches."`
+		Connected bool             `json:"connected" doc:"Any simulator pulled its device list recently; the console shows its Simulation page only then."`
+		Outposts  []simOutpostBody `json:"outposts" doc:"Each outpost a simulator has pulled for since the server started, whose simulated components the caller's scope reaches."`
 	}
 }
 
@@ -116,9 +116,9 @@ type simSurfaceBody struct {
 
 type componentSimOutput struct {
 	Body struct {
-		Simulated   bool                           `json:"simulated" doc:"The component has an endpoint on a node and a product a profile simulates."`
-		Node        string                         `json:"node,omitempty"`
-		Connected   bool                           `json:"connected" doc:"The node's simulator pulled recently."`
+		Simulated   bool                           `json:"simulated" doc:"The component has an endpoint on an outpost and a product a profile simulates."`
+		Outpost     string                         `json:"outpost,omitempty"`
+		Connected   bool                           `json:"connected" doc:"The outpost's simulator pulled recently."`
 		Activity    *simDeviceBody                 `json:"activity,omitempty" doc:"What the simulator reports for the component: serving, hits, and its impairment."`
 		Product     string                         `json:"product,omitempty"`
 		Profile     string                         `json:"profile,omitempty"`
@@ -151,7 +151,7 @@ type simObservationOutput struct {
 }
 
 type addSimComponentInput struct {
-	Name string `path:"name" doc:"The node whose simulator serves the new component"`
+	Name string `path:"name" doc:"The outpost whose simulator serves the new component"`
 	Body struct {
 		Name     string  `json:"name" minLength:"1" doc:"The new component's name"`
 		Product  string  `json:"product" minLength:"1" doc:"A product a simulator profile simulates"`
@@ -162,7 +162,7 @@ type addSimComponentInput struct {
 type addSimComponentOutput struct {
 	Body struct {
 		Component string `json:"component"`
-		Node      string `json:"node"`
+		Outpost   string `json:"outpost"`
 		Address   string `json:"address" doc:"The loopback address the simulated component answers on."`
 		Endpoints int    `json:"endpoints" doc:"How many endpoints were created for the collector to reach it."`
 	}
@@ -245,11 +245,11 @@ func variantsOf(p *profile.DeviceProfile) []string {
 }
 
 func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, hub SimHub) {
-	status := func(node string) (simhub.Status, bool) {
+	status := func(outpost string) (simhub.Status, bool) {
 		if hub == nil {
 			return simhub.Status{}, false
 		}
-		return hub.SimStatus(node)
+		return hub.SimStatus(outpost)
 	}
 
 	huma.Register(api, a.gated(huma.Operation{
@@ -257,32 +257,32 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodGet,
 		Path:        "/simulation",
 		Summary:     "Get the simulated fleet",
-		Description: "Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
+		Description: "Every outpost a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees an outpost's simulator when its component read scope holds at least one component the outpost simulates (an all-scope reader sees all of them); no outpost read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
 	}, "simulation", "read"), func(ctx context.Context, _ *struct{}) (*simFleetOutput, error) {
 		out := &simFleetOutput{}
-		out.Body.Nodes = []simNodeBody{}
+		out.Body.Outposts = []simOutpostBody{}
 		if hub == nil {
 			return out, nil
 		}
 		now := time.Now()
 		read := a.scopeFor(ctx, "component", "read")
-		for _, node := range hub.Nodes() {
-			devices, err := gw.NodeSimDevices(ctx, node, read)
+		for _, outpost := range hub.Outposts() {
+			devices, err := gw.OutpostSimDevices(ctx, outpost, read)
 			if err != nil {
 				return nil, huma.Error500InternalServerError("get simulation")
 			}
-			// simulation:read is the whole gate: a caller sees a node's
+			// simulation:read is the whole gate: a caller sees an outpost's
 			// simulator when its component scope holds at least one of the
-			// components the node simulates (an all-scope reader sees every
-			// simulator, even one serving nothing yet). No node read is
-			// needed; the node's name and capabilities are what such a
+			// components the outpost simulates (an all-scope reader sees every
+			// simulator, even one serving nothing yet). No outpost read is
+			// needed; the outpost's name and capabilities are what such a
 			// caller learns.
 			if len(devices) == 0 && !read.All {
 				continue
 			}
-			st, seen := status(node)
+			st, seen := status(outpost)
 			b := simulationBody(devices, st, seen, now).Body
-			out.Body.Nodes = append(out.Body.Nodes, simNodeBody{Node: node, Connected: b.Connected, LastSeen: st.LastSeen,
+			out.Body.Outposts = append(out.Body.Outposts, simOutpostBody{Outpost: outpost, Connected: b.Connected, LastSeen: st.LastSeen,
 				Capabilities: b.Capabilities, Impairments: b.Impairments, Components: b.Devices})
 			out.Body.Connected = out.Body.Connected || b.Connected
 		}
@@ -314,30 +314,30 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		return out, nil
 	})
 
-	// simulated resolves a component's simulation: its node, its device row
+	// simulated resolves a component's simulation: its outpost, its device row
 	// (within the read scope), and the profile that simulates its product.
 	type simulated struct {
-		id, node string
-		device   storage.SimDevice
-		prof     *profile.DeviceProfile
+		id, outpost string
+		device      storage.SimDevice
+		prof        *profile.DeviceProfile
 	}
 	resolve := func(ctx context.Context, name string, action scope.Set) (*simulated, error) {
 		id, err := gw.ResolveActionTarget(ctx, "component", name, a.scopeFor(ctx, "component", "read"), action)
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		node, err := gw.ComponentSimNode(ctx, id)
+		outpost, err := gw.ComponentSimOutpost(ctx, id)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("get component simulation")
 		}
-		if node == "" {
+		if outpost == "" {
 			return &simulated{id: id}, nil
 		}
-		devices, err := gw.NodeSimDevices(ctx, node, a.scopeFor(ctx, "component", "read"))
+		devices, err := gw.OutpostSimDevices(ctx, outpost, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, huma.Error500InternalServerError("get component simulation")
 		}
-		s := &simulated{id: id, node: node}
+		s := &simulated{id: id, outpost: outpost}
 		for _, d := range devices {
 			if d.ComponentID == id {
 				s.device = d
@@ -358,20 +358,20 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/simulation",
 		Summary:     "Get a component's simulation",
-		Description: "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.",
+		Description: "Whether a component is simulated (it has an endpoint on an outpost and a product a simulator profile simulates) and, when it is, its outpost, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.",
 	}, "simulation", "read"), func(ctx context.Context, in *impairmentPathInput) (*componentSimOutput, error) {
 		s, err := resolve(ctx, in.Name, a.scopeFor(ctx, "simulation", "read"))
 		if err != nil {
 			return nil, err
 		}
 		out := &componentSimOutput{}
-		if s.node == "" || s.prof == nil {
+		if s.outpost == "" || s.prof == nil {
 			return out, nil
 		}
-		st, seen := status(s.node)
+		st, seen := status(s.outpost)
 		view := simulationBody([]storage.SimDevice{s.device}, st, seen, time.Now()).Body
 		b := &out.Body
-		b.Simulated, b.Node, b.Connected = true, s.node, view.Connected
+		b.Simulated, b.Outpost, b.Connected = true, s.outpost, view.Connected
 		b.Activity = &view.Devices[0]
 		b.Product, b.Profile, b.Address, b.Summary = s.device.Product, s.prof.Name, s.device.Address, s.prof.Doc.Summary
 		b.Variants, b.Impairments = variantsOf(s.prof), view.Impairments
@@ -384,14 +384,14 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/simulation:fire",
 		Summary:     "Fire an operation at a simulated component",
-		Description: "Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
+		Description: "Asks the simulator beside the component's outpost to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.",
 	}, "simulation", "update"), func(ctx context.Context, in *fireSimInput) (*fireSimOutput, error) {
 		s, err := resolve(ctx, in.Name, a.scopeFor(ctx, "simulation", "update"))
 		if err != nil {
 			return nil, err
 		}
-		if s.node == "" || s.prof == nil {
-			return nil, huma.Error409Conflict(fmt.Sprintf("%s is not simulated: it needs an endpoint on a node and a product a simulator profile simulates", in.Name))
+		if s.outpost == "" || s.prof == nil {
+			return nil, huma.Error409Conflict(fmt.Sprintf("%s is not simulated: it needs an endpoint on an outpost and a product a simulator profile simulates", in.Name))
 		}
 		var iface *profile.Interface
 		for i := range s.prof.Interfaces {
@@ -414,9 +414,9 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		if hub == nil {
 			return nil, huma.Error503ServiceUnavailable("no simulator answered")
 		}
-		res, err := hub.FireSimOperation(ctx, s.node, op)
+		res, err := hub.FireSimOperation(ctx, s.outpost, op)
 		if errors.Is(err, collection.ErrNoSimulator) {
-			return nil, huma.Error503ServiceUnavailable(fmt.Sprintf("no simulator beside %s answered", s.node))
+			return nil, huma.Error503ServiceUnavailable(fmt.Sprintf("no simulator beside %s answered", s.outpost))
 		}
 		if err != nil {
 			return nil, huma.Error500InternalServerError("fire sim operation")
@@ -425,17 +425,17 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "get-node-simulation-observation",
+		OperationID: "get-outpost-simulation-observation",
 		Method:      http.MethodGet,
-		Path:        "/nodes/{name}/simulation/observation",
-		Summary:     "Get a node's endpoint observation",
-		Description: "What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.",
-	}, "simulation", "read"), func(ctx context.Context, in *nodePathInput) (*simObservationOutput, error) {
+		Path:        "/outposts/{name}/simulation/observation",
+		Summary:     "Get an outpost's endpoint observation",
+		Description: "What the simulated endpoints beside an outpost saw arrive and how each request settled, and what the outpost tallied sending, read in that order: the simulator, then the outpost, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the outpost simulates. An outpost that does not exist is a 404; no simulator answering, or the outpost not answering, a 503.",
+	}, "simulation", "read"), func(ctx context.Context, in *outpostPathInput) (*simObservationOutput, error) {
 		if !a.scopeFor(ctx, "component", "read").All {
-			return nil, huma.Error403Forbidden("a node's endpoint observation spans every component it simulates, so it needs an all-scope component read")
+			return nil, huma.Error403Forbidden("an outpost's endpoint observation spans every component it simulates, so it needs an all-scope component read")
 		}
-		if _, err := gw.GetNode(ctx, in.Name, scope.Set{All: true}); err != nil {
-			return nil, mapNodeErr(err)
+		if _, err := gw.GetOutpost(ctx, in.Name, scope.Set{All: true}); err != nil {
+			return nil, mapOutpostErr(err)
 		}
 		if hub == nil {
 			return nil, huma.Error503ServiceUnavailable(fmt.Sprintf("no simulator beside %s answered", in.Name))
@@ -444,8 +444,8 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		switch {
 		case errors.Is(err, collection.ErrNoSimulator):
 			return nil, huma.Error503ServiceUnavailable(fmt.Sprintf("no simulator beside %s answered", in.Name))
-		case errors.Is(err, collection.ErrNodeAbsent):
-			return nil, huma.Error503ServiceUnavailable(fmt.Sprintf("node %s did not answer", in.Name))
+		case errors.Is(err, collection.ErrOutpostAbsent):
+			return nil, huma.Error503ServiceUnavailable(fmt.Sprintf("outpost %s did not answer", in.Name))
 		case err != nil:
 			return nil, huma.Error500InternalServerError("get endpoint observation")
 		}
@@ -453,18 +453,18 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 	})
 
 	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
-		OperationID:   "add-node-simulation-component",
+		OperationID:   "add-outpost-simulation-component",
 		Method:        http.MethodPost,
-		Path:          "/nodes/{name}/simulation/components",
+		Path:          "/outposts/{name}/simulation/components",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Add a simulated component",
-		Description:   "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
+		Description:   "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the outpost: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the outpost's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. An outpost with no simulator connected is a 409, and a product no profile simulates a 422.",
 	}, "simulation", "update"), "secret", "bind"), func(ctx context.Context, in *addSimComponentInput) (*addSimComponentOutput, error) {
 		if !a.allows(ctx, "component", "create") || !a.allows(ctx, "endpoint", "create") {
 			return nil, huma.Error403Forbidden("adding a simulated component also needs component:create and endpoint:create")
 		}
-		if _, err := gw.GetNode(ctx, in.Name, a.scopeFor(ctx, "node", "read")); err != nil {
-			return nil, mapNodeErr(err)
+		if _, err := gw.GetOutpost(ctx, in.Name, a.scopeFor(ctx, "outpost", "read")); err != nil {
+			return nil, mapOutpostErr(err)
 		}
 		st, seen := status(in.Name)
 		if !seen || time.Since(st.LastSeen) > simConnectedWindow {
@@ -530,9 +530,9 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 				undo()
 				return huma.Error409Conflict(fmt.Sprintf("the collector has no way to reach a simulated %s: its profile serves no HTTP or TCP surface to probe", product))
 			}
-			node, id := in.Name, c.ID
+			outpost, id := in.Name, c.ID
 			for _, spec := range simEndpointSpecs(plan[0].Endpoints) {
-				spec.Component, spec.Node, spec.SecretRead, spec.SecretBind, spec.CanAdmin = &id, &node, use.Read, use.Bind, use.CanAdmin
+				spec.Component, spec.Outpost, spec.SecretRead, spec.SecretBind, spec.CanAdmin = &id, &outpost, use.Read, use.Bind, use.CanAdmin
 				ep, err := gw.CreateEndpoint(ctx, actorID(ctx), spec, a.scopeFor(ctx, "endpoint", "create"))
 				if err != nil {
 					undo()
@@ -546,7 +546,7 @@ func registerSimFleetRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			return nil, err
 		}
 		out := &addSimComponentOutput{}
-		out.Body.Component, out.Body.Node, out.Body.Address, out.Body.Endpoints = c.Name, in.Name, plan[0].Address, len(plan[0].Endpoints)
+		out.Body.Component, out.Body.Outpost, out.Body.Address, out.Body.Endpoints = c.Name, in.Name, plan[0].Address, len(plan[0].Endpoints)
 		return out, nil
 	})
 }

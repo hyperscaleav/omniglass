@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -14,9 +14,9 @@ import (
 )
 
 // TestCommandPullAgainstAStoppedBusLandsTheFailureCount (#1626): edge-1 pulls
-// its command queue from a bus that has stopped. The pull fails, the node's
+// its command queue from a bus that has stopped. The pull fails, the outpost's
 // report counts it, and once a bus is back the window's count rides the
-// node-self block and lands on edge-1's platform component as
+// outpost-self block and lands on edge-1's platform component as
 // command-pull-failure-count.
 func TestCommandPullAgainstAStoppedBusLandsTheFailureCount(t *testing.T) {
 	t.Parallel()
@@ -26,18 +26,18 @@ func TestCommandPullAgainstAStoppedBusLandsTheFailureCount(t *testing.T) {
 		nats.CustomInboxPrefix(collection.InboxPrefix("edge-1")), nats.MaxReconnects(0),
 		nats.ClosedHandler(func(*nats.Conn) { close(closed) }))
 	if err != nil {
-		t.Fatalf("connect as the node: %v", err)
+		t.Fatalf("connect as the outpost: %v", err)
 	}
 	defer down.Close()
 	f.srv.Shutdown()
 	select {
 	case <-closed:
 	case <-time.After(5 * time.Second):
-		t.Fatal("the node's connection never saw the bus stop")
+		t.Fatal("the outpost's connection never saw the bus stop")
 	}
 
 	start := time.Now().Add(-time.Minute)
-	self := newNodeReport(time.Minute, 0, start)
+	self := newOutpostReport(time.Minute, 0, start)
 	runCommands(f.ctx, down, "edge-1", nil, nil, nil, newCommandState(), self)
 	report := self.take(time.Now())
 	if got := readings(report)[writerclass.CommandPullFailureCount]; got != 1 {
@@ -51,20 +51,20 @@ func TestCommandPullAgainstAStoppedBusLandsTheFailureCount(t *testing.T) {
 	t.Cleanup(back.Shutdown)
 	nc, err := nats.Connect(back.ClientURL(), nats.UserInfo("edge-1", "token-1"), nats.CustomInboxPrefix(collection.InboxPrefix("edge-1")))
 	if err != nil {
-		t.Fatalf("reconnect as the node: %v", err)
+		t.Fatalf("reconnect as the outpost: %v", err)
 	}
 	defer nc.Close()
-	js, err := newNodeJetStream(nc)
+	js, err := newOutpostJetStream(nc)
 	if err != nil {
 		t.Fatalf("jetstream: %v", err)
 	}
 	spool := newTelemetrySpool(collection.TelemetrySubject("edge-1"), "edge-1", jetStreamPublish(js))
-	if err := spool.send(&ogv1.TelemetryBatch{NodeId: "edge-1", NodeSelf: &ogv1.NodeSelf{Metrics: report}}); err != nil {
+	if err := spool.send(&ogv1.TelemetryBatch{OutpostId: "edge-1", OutpostSelf: &ogv1.OutpostSelf{Metrics: report}}); err != nil {
 		t.Fatalf("send the report: %v", err)
 	}
 	waitIdle(t, spool)
 
-	n, err := f.gw.GetNode(f.ctx, "edge-1", scope.Set{All: true})
+	n, err := f.gw.GetOutpost(f.ctx, "edge-1", scope.Set{All: true})
 	if err != nil || n.PlatformComponentID == nil {
 		t.Fatalf("edge-1's platform component: %+v (%v)", n, err)
 	}

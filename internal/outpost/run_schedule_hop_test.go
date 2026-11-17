@@ -3,7 +3,7 @@
 // The simulator serves on 127.x addresses beyond 127.0.0.1, which Linux
 // treats as local without configuration.
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -24,15 +24,15 @@ import (
 // second, against a device that accepts and never answers, so each poll
 // waits out its timeout and the dues behind it pass over. The lab's own
 // read of the window, the same queries the scale run makes, shows the loss
-// at the schedule hop, runs due against runs made, while every item the node
+// at the schedule hop, runs due against runs made, while every item the outpost
 // did mint landed: the ingest hop reads 0.
 func TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
 	}
-	const nodeName = "edge-schedule-hop"
-	s := newHTTPStack(t, nodeName, nil, func(store *profile.Store) []string {
+	const outpostName = "edge-schedule-hop"
+	s := newHTTPStack(t, outpostName, nil, func(store *profile.Store) []string {
 		return []string{driverProfile(t, store, "tessellate-census-http")}
 	})
 	s.everyDriver("tessellate-census-http", "sensor-1s", "1s")
@@ -43,10 +43,10 @@ func TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.attachHTTP("sensor-dead", "sensor-1s", nodeName, map[string]string{"host": host, "port": port, "key": "census-key"})
+	s.attachHTTP("sensor-dead", "sensor-1s", outpostName, map[string]string{"host": host, "port": port, "key": "census-key"})
 
 	from := time.Now()
-	s.runNodeReporting(nodeName, time.Second)
+	s.runOutpostReporting(outpostName, time.Second)
 	time.Sleep(7 * time.Second)
 	w := delivery.Window{From: from, To: time.Now()}
 
@@ -95,7 +95,7 @@ func TestADispatcherSkippingDuesReadsScheduleLossAndNoIngestLoss(t *testing.T) {
 		case delivery.Ingest:
 			ingest++
 			if r.Loss == nil || *r.Loss != 0 {
-				t.Errorf("the %s ingest hop lost %v (outcomes %v), want 0: every item the node minted landed", r.Kind, r.Loss, r.Outcomes)
+				t.Errorf("the %s ingest hop lost %v (outcomes %v), want 0: every item the outpost minted landed", r.Kind, r.Loss, r.Outcomes)
 			}
 		}
 	}

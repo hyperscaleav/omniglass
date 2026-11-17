@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// capturedLog is one of the node's own log records, held for shipment as a
+// capturedLog is one of the outpost's own log records, held for shipment as a
 // self-log (ADR-0066). It is the severity + message + attrs distilled from an
 // slog.Record, decoupled from slog so the mapping to a LogLine stays pure.
 type capturedLog struct {
@@ -22,17 +22,17 @@ type capturedLog struct {
 }
 
 // maxBufferedLogs bounds the self-log buffer between drains. The run loop installs
-// the sink as the process default logger, so EVERY node slog call buffers; a chatty
+// the sink as the process default logger, so EVERY outpost slog call buffers; a chatty
 // stretch between ticks (or a publish that stops draining) would otherwise grow
 // without bound on a long-lived edge process. At the cap the oldest records are
 // dropped (the newest are the ones worth shipping) and the count is reported.
 const maxBufferedLogs = 1000
 
 // logSink is an slog.Handler that both forwards records to an inner handler (the
-// node console) and buffers them for shipment as node self-logs. It is the node
+// outpost console) and buffers them for shipment as outpost self-logs. It is the outpost
 // half of the raw log lane: the run loop drains the buffer each tick and
-// publishes the lines on the node's telemetry subject, where the ingest consumer
-// lands them in node_log. The buffer, its drop counter, and the lock
+// publishes the lines on the outpost's telemetry subject, where the ingest consumer
+// lands them in outpost_log. The buffer, its drop counter, and the lock
 // are shared by pointer across WithAttrs/WithGroup clones so every derived logger
 // (and the process default) appends to one bounded queue.
 type logSink struct {
@@ -64,7 +64,7 @@ func (h *logSink) Handle(ctx context.Context, r slog.Record) error {
 	h.mu.Lock()
 	if len(*h.buf) >= maxBufferedLogs {
 		// At the cap, drop the oldest so the newest (the ones that explain what the
-		// node is doing right now) survive. The console still saw every record.
+		// outpost is doing right now) survive. The console still saw every record.
 		*h.buf = append((*h.buf)[:0], (*h.buf)[len(*h.buf)-maxBufferedLogs+1:]...)
 		*h.dropped++
 	}
@@ -75,7 +75,7 @@ func (h *logSink) Handle(ctx context.Context, r slog.Record) error {
 
 // WithAttrs binds attrs onto both the inner handler (console) and the captured
 // base (self-logs). WithGroup shares the buffer but does not prefix captured keys:
-// the node does not group its self-logs, so the simple path is the correct one.
+// the outpost does not group its self-logs, so the simple path is the correct one.
 func (h *logSink) WithAttrs(as []slog.Attr) slog.Handler {
 	return &logSink{inner: h.inner.WithAttrs(as), base: append(append([]slog.Attr{}, h.base...), as...), mu: h.mu, buf: h.buf, dropped: h.dropped}
 }
@@ -95,7 +95,7 @@ func (h *logSink) drain() []capturedLog {
 }
 
 // drainCounted is drain, and how many lines the cap dropped since the last
-// drain: the lines the node lost before any batch carried them (#1692).
+// drain: the lines the outpost lost before any batch carried them (#1692).
 func (h *logSink) drainCounted() ([]capturedLog, int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -110,7 +110,7 @@ func (h *logSink) drainCounted() ([]capturedLog, int) {
 			ts:       ts,
 			severity: "warning",
 			message:  "self-log buffer overflow, oldest lines dropped",
-			attrs:    map[string]any{"facility": "node", "dropped": *h.dropped},
+			attrs:    map[string]any{"facility": "outpost", "dropped": *h.dropped},
 		}
 		out = append([]capturedLog{notice}, out...)
 		*h.dropped = 0
@@ -133,18 +133,18 @@ func severityOf(l slog.Level) string {
 	}
 }
 
-// selfLogBatch maps captured node records to a telemetry Event carrying only log
-// lines (no samples, no task): the node's self-logs on the raw ingest lane. Pure:
+// selfLogBatch maps captured outpost records to a telemetry Event carrying only log
+// lines (no samples, no task): the outpost's self-logs on the raw ingest lane. Pure:
 // no I/O. The reserved "source" and "facility" attrs are lifted into the LogLine
-// columns (source defaults to "node"); the rest ride the attributes JSON. Returns
+// columns (source defaults to "outpost"); the rest ride the attributes JSON. Returns
 // nil when there is nothing to ship.
-func selfLogBatch(node string, recs []capturedLog) *ogv1.TelemetryBatch {
+func selfLogBatch(outpost string, recs []capturedLog) *ogv1.TelemetryBatch {
 	if len(recs) == 0 {
 		return nil
 	}
 	logs := make([]*ogv1.LogLine, 0, len(recs))
 	for _, r := range recs {
-		source := "node"
+		source := "outpost"
 		if s, ok := r.attrs["source"].(string); ok && s != "" {
 			source = s
 		}
@@ -171,5 +171,5 @@ func selfLogBatch(node string, recs []capturedLog) *ogv1.TelemetryBatch {
 			Ts:         timestamppb.New(r.ts),
 		})
 	}
-	return &ogv1.TelemetryBatch{NodeId: node, Logs: logs}
+	return &ogv1.TelemetryBatch{OutpostId: outpost, Logs: logs}
 }

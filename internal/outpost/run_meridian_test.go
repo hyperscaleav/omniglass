@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -10,13 +10,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodeMeridianReadsRouteLinkAndSignal (#895): the shipped Meridian
+// TestOutpostMeridianReadsRouteLinkAndSignal (#895): the shipped Meridian
 // drivers on the simulated switcher's and extender's SNMP faces land each
 // device's own signals beside its identity and uptime: the switcher's routed
 // input and the signal on it, the extender's link and the signal on its
 // input. A route set over the switcher's HTTP API reads back as the routed
 // input on the next poll.
-func TestNodeMeridianReadsRouteLinkAndSignal(t *testing.T) {
+func TestOutpostMeridianReadsRouteLinkAndSignal(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -39,7 +39,7 @@ func TestNodeMeridianReadsRouteLinkAndSignal(t *testing.T) {
 			"host": s.ips[prof], "port": fmt.Sprint(port), "community": "meridian-community"}).Name
 	}
 	swEP, extEP := attach("switcher-1", sw, "meridian-mx-snmp"), attach("extender-1", ext, "meridian-xl-snmp")
-	s.runNode("edge-meridian")
+	s.runOutpost("edge-meridian")
 
 	for _, m := range []struct{ comp, ep, prof, model string }{
 		{"switcher-1", swEP, sw, "MX 84"}, {"extender-1", extEP, ext, "XL-1"},
@@ -59,7 +59,7 @@ func TestNodeMeridianReadsRouteLinkAndSignal(t *testing.T) {
 	if res := s.devices[sw].Operate(sim.Operation{Kind: "http", Method: "POST", Path: "/api/route", Body: `{"input": "dp1"}`}); res.Status != 200 {
 		t.Fatalf("route: %+v", res)
 	}
-	s.runNode("edge-meridian") // a restarted node polls at once, rather than in 30s
+	s.runOutpost("edge-meridian") // a restarted outpost polls at once, rather than in 30s
 	s.waitFor("switcher-1", swEP, "video-input", is("dp1"), "dp1 routed over HTTP")
 	s.waitFor("switcher-1", swEP, "signal-state", is("absent"), "no signal on the routed dp1")
 }

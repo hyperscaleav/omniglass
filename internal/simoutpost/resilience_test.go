@@ -1,4 +1,4 @@
-package simnode
+package simoutpost
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/sim"
 )
 
@@ -59,7 +59,7 @@ func TestRunStopsOnARefusedClaim(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err := Run(ctx, Config{ServerURL: srv.URL, Name: "edge", Token: "wrong"})
-	if !errors.Is(err, node.ErrClaimRejected) {
+	if !errors.Is(err, outpost.ErrClaimRejected) {
 		t.Fatalf("Run with a refused claim returned %v", err)
 	}
 }

@@ -76,7 +76,7 @@ type retentionLane struct {
 // samples, each type with a window of its own (#417, named <lane>/<type>; the
 // lane's own prune skips it), then each log table's bands
 // (logline.RetentionBands), least severe first: log_line by the shared band
-// window, node_log by the node override where an admin set one (#1350).
+// window, outpost_log by the outpost override where an admin set one (#1350).
 func retentionLanes(store retentionStore, w settings.RetentionSettings, overrides []storage.TypeRetention) []retentionLane {
 	lanes := []retentionLane{}
 	for _, l := range []struct {
@@ -94,11 +94,11 @@ func retentionLanes(store retentionStore, w settings.RetentionSettings, override
 			return store.PruneSamplesOfType(ctx, o.Lane, o.TypeID, o.Days, before, limit)
 		}})
 	}
-	for _, table := range []string{"log_line", "node_log"} {
+	for _, table := range []string{"log_line", "outpost_log"} {
 		for _, band := range logline.RetentionBands() {
 			days := w.LogDays(band)
-			if table == "node_log" {
-				days = w.NodeLogDays(band) // a node override when set (#1350)
+			if table == "outpost_log" {
+				days = w.OutpostLogDays(band) // an outpost override when set (#1350)
 			}
 			lanes = append(lanes, retentionLane{table + "/" + band, days, func(ctx context.Context, before time.Time, limit int) (int64, error) {
 				return store.PruneLogs(ctx, table, band, before, limit)

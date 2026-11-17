@@ -11,32 +11,32 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// TestNodeSilentOpensAndClears proves the seeded node-silent rule (#1707) on
-// a claimed node's platform component, the component the server writes its
+// TestOutpostSilentOpensAndClears proves the seeded outpost-silent rule (#1707) on
+// a claimed outpost's platform component, the component the server writes its
 // checkin-age against: an age of 90 s (three 30 s heartbeats, the threshold
 // itself) opens nothing, 120 s opens the alarm with no sustain to wait out,
-// and the next reading after the node speaks again clears it.
-func TestNodeSilentOpensAndClears(t *testing.T) {
+// and the next reading after the outpost speaks again clears it.
+func TestOutpostSilentOpensAndClears(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	gw, ctx, dsn := platformGatewayDSN(t)
-	platformNode(t, ctx, gw, "edge-silent")
+	platformOutpost(t, ctx, gw, "edge-silent")
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
-	if _, err := conn.Exec(ctx, `update node set enrolled_at = now() where name = 'edge-silent'`); err != nil {
+	if _, err := conn.Exec(ctx, `update outpost set enrolled_at = now() where name = 'edge-silent'`); err != nil {
 		t.Fatalf("claim edge-silent: %v", err)
 	}
-	checkins, err := gw.NodeCheckins(ctx)
+	checkins, err := gw.OutpostCheckins(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(checkins) != 1 || checkins[0].Node != "edge-silent" {
-		t.Fatalf("node checkins = %+v, want the one claimed node", checkins)
+	if len(checkins) != 1 || checkins[0].Outpost != "edge-silent" {
+		t.Fatalf("outpost checkins = %+v, want the one claimed outpost", checkins)
 	}
 	comp := checkins[0].ComponentID
 
@@ -51,25 +51,25 @@ func TestNodeSilentOpensAndClears(t *testing.T) {
 	}
 
 	age(90)
-	if n := openAlarmsByRule(t, ctx, gw, "edge-silent", "node-silent"); n != 0 {
-		t.Fatalf("a check-in age of exactly 90 s opened %d node-silent alarms; the threshold is past three heartbeats", n)
+	if n := openAlarmsByRule(t, ctx, gw, "edge-silent", "outpost-silent"); n != 0 {
+		t.Fatalf("a check-in age of exactly 90 s opened %d outpost-silent alarms; the threshold is past three heartbeats", n)
 	}
 	age(120)
-	if n := openAlarmsByRule(t, ctx, gw, "edge-silent", "node-silent"); n != 1 {
-		t.Fatalf("a check-in age of 120 s left %d node-silent alarms open on edge-silent's platform component, want 1", n)
+	if n := openAlarmsByRule(t, ctx, gw, "edge-silent", "outpost-silent"); n != 1 {
+		t.Fatalf("a check-in age of 120 s left %d outpost-silent alarms open on edge-silent's platform component, want 1", n)
 	}
 	alarms, err := gw.ListAlarms(ctx, "edge-silent", storage.AlarmFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range alarms {
-		if a.RaisedByRule != nil && *a.RaisedByRule == "node-silent" && a.Severity != "high" {
-			t.Errorf("node-silent raised at %q, want high", a.Severity)
+		if a.RaisedByRule != nil && *a.RaisedByRule == "outpost-silent" && a.Severity != "high" {
+			t.Errorf("outpost-silent raised at %q, want high", a.Severity)
 		}
 	}
 	age(10)
-	if n := openAlarmsByRule(t, ctx, gw, "edge-silent", "node-silent"); n != 0 {
-		t.Fatalf("a node heard from again left %d node-silent alarms open, want it cleared", n)
+	if n := openAlarmsByRule(t, ctx, gw, "edge-silent", "outpost-silent"); n != 0 {
+		t.Fatalf("an outpost heard from again left %d outpost-silent alarms open, want it cleared", n)
 	}
 }
 

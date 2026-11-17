@@ -12,8 +12,8 @@ import (
 // cobra: both are added, and lookup returns whichever it finds first. The second
 // is unreachable, silently, and the only symptom is a command that runs the wrong
 // thing. That has now happened three times (the `members` collision under the
-// principal groups, `type list`, and the `node` run mode swallowing every
-// generated node command), each found by a person typing it rather than by the
+// principal groups, `type list`, and the `outpost` run mode swallowing every
+// generated outpost command), each found by a person typing it rather than by the
 // build.
 //
 // The hand-written run modes and the generated API groups compose on one root, so
@@ -94,22 +94,22 @@ func itoa(n int) string {
 	return "many"
 }
 
-// TestNodeRunIsReachable pins the outcome, not the wiring: the edge run mode is
-// attached to the generated `node` group after generation, so if the API ever
-// stopped exposing node routes the group would vanish and the mode would go with
+// TestOutpostRunIsReachable pins the outcome, not the wiring: the edge run mode is
+// attached to the generated `outpost` group after generation, so if the API ever
+// stopped exposing outpost routes the group would vanish and the mode would go with
 // it, silently. Asserting both halves resolve is what catches that, and it is the
-// regression for the collision itself: before this, `node list` resolved to the
+// regression for the collision itself: before this, `outpost list` resolved to the
 // daemon and failed asking for --token.
-func TestNodeRunIsReachable(t *testing.T) {
+func TestOutpostRunIsReachable(t *testing.T) {
 	root := Root("test")
 	for _, tc := range []struct {
 		args []string
 		want string
 	}{
-		{[]string{"node", "run"}, "run"},
-		{[]string{"node", "list"}, "list"},
-		{[]string{"node", "enroll"}, "enroll"},
-		{[]string{"node", "simulation"}, "simulation"},
+		{[]string{"outpost", "run"}, "run"},
+		{[]string{"outpost", "list"}, "list"},
+		{[]string{"outpost", "enroll"}, "enroll"},
+		{[]string{"outpost", "simulation"}, "simulation"},
 		{[]string{"sim", "run"}, "run"},
 	} {
 		cmd, _, err := root.Find(tc.args)
@@ -123,16 +123,16 @@ func TestNodeRunIsReachable(t *testing.T) {
 	}
 }
 
-// The simulator needs its node's identity; without it, it says what to set
+// The simulator needs its outpost's identity; without it, it says what to set
 // rather than failing somewhere downstream.
-func TestSimRunRequiresTheNodeIdentity(t *testing.T) {
+func TestSimRunRequiresTheOutpostIdentity(t *testing.T) {
 	t.Setenv("OMNIGLASS_SERVER", "")
-	t.Setenv("OMNIGLASS_NODE_NAME", "")
-	t.Setenv("OMNIGLASS_NODE_TOKEN", "")
+	t.Setenv("OMNIGLASS_OUTPOST_NAME", "")
+	t.Setenv("OMNIGLASS_OUTPOST_TOKEN", "")
 	root := Root("test")
 	root.SetArgs([]string{"sim", "run"})
 	err := root.Execute()
-	if err == nil || !strings.Contains(err.Error(), "OMNIGLASS_NODE_TOKEN") {
+	if err == nil || !strings.Contains(err.Error(), "OMNIGLASS_OUTPOST_TOKEN") {
 		t.Fatalf("sim run without identity: %v", err)
 	}
 }

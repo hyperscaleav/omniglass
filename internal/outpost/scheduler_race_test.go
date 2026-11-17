@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 
 // laneWatchGetter is an snmp getter that notes, per target, how many gets
 // are in flight, so a test can see two tasks on one endpoint overlap, and
-// how many run at once across the node.
+// how many run at once across the outpost.
 type laneWatchGetter struct {
 	mu       sync.Mutex
 	inflight map[string]int
@@ -62,7 +62,7 @@ func fleetPoll(component, endpoint, poll int) collection.TaskSpec {
 // workers through the real collector, the session manager reconciling the
 // worklist while they run. Under -race this is the dispatcher's
 // concurrency check; it also holds the lane rule: two tasks on one endpoint
-// never overlap, while the node runs many endpoints at once.
+// never overlap, while the outpost runs many endpoints at once.
 func TestSixtyPollsAcrossTenComponentsRunConcurrentlyOneAtATimePerEndpoint(t *testing.T) {
 	t.Parallel()
 	var tasks []collection.TaskSpec

@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -12,12 +12,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodeBorealBeamReadsItsProjectorState (#899): the shipped
+// TestOutpostBorealBeamReadsItsProjectorState (#899): the shipped
 // boreal-beam-snmp driver on the simulated projector's SNMP face lands the
 // projector's own state beside its identity: power, light-source hours, the
 // shutter and the input. A shutter closed and an input switched on the
 // projector read back on the next poll.
-func TestNodeBorealBeamReadsItsProjectorState(t *testing.T) {
+func TestOutpostBorealBeamReadsItsProjectorState(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -38,7 +38,7 @@ func TestNodeBorealBeamReadsItsProjectorState(t *testing.T) {
 	}
 	ep := s.attachHTTP("projector-1", "boreal-beam-snmp", "edge-beam", map[string]string{
 		"host": s.ips[beam], "port": fmt.Sprint(snmpPort), "community": "beam-community"})
-	s.runNode("edge-beam")
+	s.runOutpost("edge-beam")
 
 	s.waitFor("projector-1", ep.Name, "endpoint-responsive", is("up"), "up: the agent answered")
 	s.waitFor("projector-1", ep.Name, "model-number", is(fmt.Sprint(dev.ReadPath("configuration.device.model"))), "the model, sysDescr")
@@ -71,7 +71,7 @@ func TestNodeBorealBeamReadsItsProjectorState(t *testing.T) {
 			t.Fatalf("%s: %+v", op.Path, res)
 		}
 	}
-	s.runNode("edge-beam") // a restarted node polls at once, rather than in 30s
+	s.runOutpost("edge-beam") // a restarted outpost polls at once, rather than in 30s
 	s.waitFor("projector-1", ep.Name, "shutter-state", is("closed"), "closed, set over HTTP")
 	s.waitFor("projector-1", ep.Name, "video-input", is("hdmi2"), "hdmi2, set over HTTP")
 }

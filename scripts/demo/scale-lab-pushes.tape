@@ -2,7 +2,7 @@
 #
 # A corporate lab declares one booking service a site (#1743). Each run mints every pusher its
 # token, the seed grants its service principal telemetry:push on its site's systems and nothing
-# else, and the simulator on the site's node posts each system's bookings to POST /telemetry:push
+# else, and the simulator on the site's outpost posts each system's bookings to POST /telemetry:push
 # every 30 seconds. It also declares one meeting platform a site (#1747): a component with a signed
 # webhook endpoint, a signing key minted for the run and never shown, and the site's systems bound
 # as its rooms, which the simulator adds and reports on every 30 seconds. Nobody pushes by hand

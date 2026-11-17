@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"sort"
@@ -17,12 +17,12 @@ import (
 // its own unreachable while waiting drops the upstream reason, so its gate
 // names its own cause.
 //
-// deriveUpstream is the whole rule, pure: the node runs it whenever any
+// deriveUpstream is the whole rule, pure: the outpost runs it whenever any
 // endpoint's reason set moves, so a dependent closes in the same pass as its
 // upstream.
 
 // pathUpstream is one path upstream of an endpoint's component: the
-// upstream component, its name, and its in-band endpoints on this node.
+// upstream component, its name, and its in-band endpoints on this outpost.
 type pathUpstream struct {
 	component string
 	name      string
@@ -32,7 +32,7 @@ type pathUpstream struct {
 // upstreamHold is an endpoint's upstream reason. component and name are the
 // component it names; root is the component whose own closure the hold
 // descends from, which the cycle guard reads; wait marks the wait phase;
-// adopted marks a hold a restarted node took off its published rejection,
+// adopted marks a hold a restarted outpost took off its published rejection,
 // before any upstream closure was derived live.
 type upstreamHold struct {
 	root      string
@@ -46,7 +46,7 @@ type upstreamHold struct {
 // upstreamState is what the rule reads: each endpoint's component, its path
 // upstreams, which endpoints are closed by a reason of their own (any but
 // upstream), which hold their own unreachable, which have a probe task,
-// which have read up since the node started, the holds the last derive gave,
+// which have read up since the outpost started, the holds the last derive gave,
 // and the time a new hold is since.
 type upstreamState struct {
 	componentOf map[string]string
@@ -139,7 +139,7 @@ func deriveUpstream(s upstreamState) map[string]upstreamHold {
 
 // adoptedHeld is every adopted hold still in its held phase that stays so:
 // on an endpoint still placed here, with a probed endpoint of its upstreams
-// that has not read up since the node started.
+// that has not read up since the outpost started.
 func adoptedHeld(s upstreamState) map[string]upstreamHold {
 	out := map[string]upstreamHold{}
 	for ep, h := range s.prior {

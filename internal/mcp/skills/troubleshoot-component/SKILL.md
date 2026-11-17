@@ -30,9 +30,9 @@ Read `tool:get-component-reachability`. If it is unreachable:
 - the reachability answer is per endpoint: its verdict and the probe layers
   under it say whether the path failed (no answer to a ping or a port) or the
   endpoint answered and was refused. Read that endpoint with `tool:get-endpoint`
-  for the node it is placed on and the driver it is attached through;
-- read the node that polls it with `tool:get-node`, and that node's logs with
-  `tool:list-node-logs`: a node that is down or cannot route to the component
+  for the outpost it is placed on and the driver it is attached through;
+- read the outpost that polls it with `tool:get-outpost`, and that outpost's logs with
+  `tool:list-outpost-logs`: an outpost that is down or cannot route to the component
   makes every component behind it unreachable.
 
 ## 3. What does it say about itself?

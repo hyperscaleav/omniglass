@@ -1,6 +1,6 @@
 //go:build linux
 
-package node
+package outpost
 
 import (
 	"bytes"
@@ -20,7 +20,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The node's udp endpoints (#1037) against a real component socket on
+// The outpost's udp endpoints (#1037) against a real component socket on
 // loopback: each endpoint's own bound socket, the request rung over it, polls
 // and commands borrowing it, the arm conversation, the gate, and the foreign
 // datagram flush. The simulated panel end to end is run_udp_test.go.
@@ -503,7 +503,7 @@ func eventually(t *testing.T, what string, ok func() bool) {
 }
 
 // Beneath a gate nothing is sent under its fingerprint, the arm included: a
-// node restarted onto a carried-back gate opens the socket and arms nothing,
+// outpost restarted onto a carried-back gate opens the socket and arms nothing,
 // and once the gate lifts (an operator's :retry moves the fingerprint) the
 // first answered rung arms (review of #1037, finding 1).
 func TestAUDPEndpointArmsNothingBeneathAGate(t *testing.T) {
@@ -577,7 +577,7 @@ func TestTheUDPRequestRungTimesAnErrorShapedAnswer(t *testing.T) {
 }
 
 // A panic in an endpoint's arm goroutine (#1636) is recovered, never the
-// node's end, and the arm runs again on the next reconcile: the component
+// outpost's end, and the arm runs again on the next reconcile: the component
 // may never have heard the subscribe the panic cut short.
 func TestAUDPArmPanicIsRecoveredAndReArmsOnTheNextReconcile(t *testing.T) {
 	t.Parallel()

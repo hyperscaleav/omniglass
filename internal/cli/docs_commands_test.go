@@ -153,7 +153,7 @@ func TestCheckInvocationRejectsDoubledSegments(t *testing.T) {
 		{"principal", "avatar", "list"},
 		{"location", "get", "hq"},
 		{"component"}, // a bare group mention in prose is fine
-		{"node", "enroll", "field-1"},
+		{"outpost", "enroll", "field-1"},
 	}
 	for _, words := range good {
 		if err := checkInvocation(idx, words); err != nil {

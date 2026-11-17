@@ -10,30 +10,30 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The on-demand node run (#1163, ADR-1163): the server asks a node to run
+// The on-demand outpost run (#1163, ADR-1163): the server asks an outpost to run
 // work once, now, and answers its caller with what the run read. One
 // primitive, two outcomes: a preview runs polls of a spec no endpoint holds
 // yet and stores nothing, and a run now runs an attached endpoint's poll
 // outside its schedule and lands its samples as a scheduled run does. It is a
-// request the server makes and the node answers once (the simulator
+// request the server makes and the outpost answers once (the simulator
 // operation's shape), not the command wire's pull: a run is wanted now or not
-// at all, so a node that is not there is an answer, never a queued run.
+// at all, so an outpost that is not there is an answer, never a queued run.
 
-// RunSubject is where the server asks a node to run work now (request-reply,
-// the server requesting). The node subscribes with its own grant and answers
+// RunSubject is where the server asks an outpost to run work now (request-reply,
+// the server requesting). The outpost subscribes with its own grant and answers
 // each request once.
-func RunSubject(node string) string { return subjectPrefix + "run." + node }
+func RunSubject(outpost string) string { return subjectPrefix + "run." + outpost }
 
-// The answers a run gets when the node does not run it.
+// The answers a run gets when the outpost does not run it.
 var (
-	// ErrNodeAbsent: the node is not connected (no one listens on its run
+	// ErrOutpostAbsent: the outpost is not connected (no one listens on its run
 	// subject).
-	ErrNodeAbsent = errors.New("the node is not connected")
-	// ErrNodeTimeout: the node did not answer within the run's budget.
-	ErrNodeTimeout = errors.New("the node did not answer in time")
-	// ErrTaskNotOnWorklist: the task is not on the node's worklist (disabled,
+	ErrOutpostAbsent = errors.New("the outpost is not connected")
+	// ErrOutpostTimeout: the outpost did not answer within the run's budget.
+	ErrOutpostTimeout = errors.New("the outpost did not answer in time")
+	// ErrTaskNotOnWorklist: the task is not on the outpost's worklist (disabled,
 	// or its endpoint moved since it was resolved).
-	ErrTaskNotOnWorklist = errors.New("the task is not on the node's worklist")
+	ErrTaskNotOnWorklist = errors.New("the task is not on the outpost's worklist")
 )
 
 // The two outcomes of a run.
@@ -46,7 +46,7 @@ const (
 	RunNow = "run"
 )
 
-// RunRequest is one run asked of a node: its outcome, the tasks to run (each
+// RunRequest is one run asked of an outpost: its outcome, the tasks to run (each
 // as a worklist delivers it, its secret inputs unsealed), and how long the
 // whole run may take.
 type RunRequest struct {
@@ -54,7 +54,7 @@ type RunRequest struct {
 	Tasks     []TaskSpec `json:"tasks"`
 	TimeoutMs int64      `json:"timeout_ms,omitempty"`
 	// Mask is a preview's secret field values (the tasks carry every field,
-	// a username among them, and only these are secret), which the node
+	// a username among them, and only these are secret), which the outpost
 	// scrubs from the excerpt before it cuts it.
 	Mask []string `json:"mask,omitempty"`
 }
@@ -106,7 +106,7 @@ type RunResult struct {
 	TookMs           int64       `json:"took_ms"`
 }
 
-// RunReply is the node's answer to a run: a result per task, or, when the run
+// RunReply is the outpost's answer to a run: a result per task, or, when the run
 // could not start, why (Gated when the endpoint's gate holds and so refused
 // the run, the gate's refusal in Error; Pending when its stream is still on
 // its first attempt).
@@ -120,7 +120,7 @@ type RunReply struct {
 	// Pending is a run now held back because the endpoint's stream is still
 	// making its first attempt (#1038): nothing has refused it yet.
 	Pending bool `json:"pending,omitempty"`
-	// Full is a run the node refused unrun because its operator lanes are
+	// Full is a run the outpost refused unrun because its operator lanes are
 	// at their cap (#1249): overload, answered at once and never queued.
 	Full bool `json:"full,omitempty"`
 }

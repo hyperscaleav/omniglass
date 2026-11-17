@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"encoding/json"
@@ -14,11 +14,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// A websocket end to end (#1034): Postgres, the bus, a real node, and the
+// A websocket end to end (#1034): Postgres, the bus, a real outpost, and the
 // simulated Kestrel bar's control socket over wss. The shipped kestrel-ws
 // driver holds one socket: the subscription is armed on connect, a change
 // on the bar is pushed and lands within a second, the polls and a command
-// are answered by the id the node minted into each while pushes interleave
+// are answered by the id the outpost minted into each while pushes interleave
 // (the command settling from its answer), a dropped socket recovers and
 // arms again, a refused credential reads rejected after one upgrade, across
 // a restart, until the secret is fixed in place, and a replaced bar's key is
@@ -37,7 +37,7 @@ func (s *httpStack) facePort(name, protocol string) int {
 	return 0
 }
 
-func TestNodeWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
+func TestOutpostWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -55,7 +55,7 @@ func TestNodeWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 	if ep.Name != "wss" {
 		t.Fatalf("endpoint name %q, want wss", ep.Name)
 	}
-	s.runNode("edge-ws")
+	s.runOutpost("edge-ws")
 
 	s.waitFor("bar-ws", ep.Name, "session-state", is("up"), "up: the socket held")
 	s.waitFor("bar-ws", ep.Name, "endpoint-authenticated", is("yes"), "yes: the upgrade's credential accepted")
@@ -93,7 +93,7 @@ func TestNodeWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 	// The bar drops the socket: the session recovers, arms again, and
 	// pushes land once more.
 	if n := bar.DropWebSockets(); n != 1 {
-		t.Fatalf("dropped %d sockets, want the node's one", n)
+		t.Fatalf("dropped %d sockets, want the outpost's one", n)
 	}
 	s.settles("subscribes after the drop", bar.WebSocketSubscribes, 2)
 	setVolume(t, bar, 43)
@@ -104,7 +104,7 @@ func TestNodeWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 
 	// A wrong password: the fingerprint moves, the socket upgrades once, is
 	// refused, and reads rejected with the reason; it does not try again
-	// under the fingerprint, across a node restart.
+	// under the fingerprint, across an outpost restart.
 	refusals := bar.WebSocketRefusals
 	before := refusals()
 	if _, err := s.gw.UpdateSecret(s.ctx, "", login.ID, storage.SecretPatch{Fields: map[string]string{"password": "wrong-password"}}, s.all, s.all, true, true); err != nil {
@@ -114,8 +114,8 @@ func TestNodeWebSocketArmsPushesAnswersByIDAndRecovers(t *testing.T) {
 	s.waitFor("bar-ws", ep.Name, "session-reason", is("auth: the component refused the credential (401)"), "the refusal's reason")
 	s.waitFor("bar-ws", ep.Name, "endpoint-rejection", func(v string) bool { return strings.HasPrefix(v, "authenticated auth ") }, "the auth gate")
 	s.settles("upgrades refused with the wrong password", refusals, before+1)
-	s.runNode("edge-ws")
-	s.settles("upgrades refused after a node restart", refusals, before+1)
+	s.runOutpost("edge-ws")
+	s.settles("upgrades refused after an outpost restart", refusals, before+1)
 
 	// Fixed in place: the gate lifts and the socket comes back up.
 	if _, err := s.gw.UpdateSecret(s.ctx, "", login.ID, storage.SecretPatch{Fields: map[string]string{"password": "kestrel"}}, s.all, s.all, true, true); err != nil {

@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"container/heap"
@@ -11,13 +11,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// DefaultProbeEvery is how often each reachability probe runs when the node
+// DefaultProbeEvery is how often each reachability probe runs when the outpost
 // is given no interval of its own (#1634): its own timer, never the
 // heartbeat.
 const DefaultProbeEvery = 30 * time.Second
 
 // DefaultLaneWorkers is the lane count of a dispatcher built with none, as
-// its tests build it (#1634, #1249). It is not a node's default: Run always
+// its tests build it (#1634, #1249). It is not an outpost's default: Run always
 // hands the dispatcher the count it resolved, the operator's or auto's
 // (#1869, AutoLaneWorkers).
 const DefaultLaneWorkers = 16
@@ -34,10 +34,10 @@ const DefaultLaneWorkers = 16
 // sent: counted held once per due, released the moment the gate opens. A
 // probe of an endpoint a path upstream holds (#1652) is held the same way,
 // in the pass and again at admit, released when the upstream opens. The
-// heartbeat keeps the node's housekeeping and sets no task's cadence.
+// heartbeat keeps the outpost's housekeeping and sets no task's cadence.
 
 // phaseOf is where on its interval a task's slots fall: a function of its
-// id alone, so a restarted node keeps each task's slots and a fleet of tasks
+// id alone, so a restarted outpost keeps each task's slots and a fleet of tasks
 // spreads across the interval rather than firing together.
 func phaseOf(id string, every time.Duration) time.Duration {
 	if every <= 0 {
@@ -206,7 +206,7 @@ func newDispatcher(cfg dispatchConfig) *dispatcher {
 
 // interval is how often a task runs: a driver poll at its declared
 // schedule, at the heartbeat when it declares none; a reachability probe at
-// the node's probe interval.
+// the outpost's probe interval.
 func (d *dispatcher) interval(t collection.TaskSpec) time.Duration {
 	if driver.IsBaked(t.Spec) {
 		if every := pollInterval(t); every > 0 {
@@ -223,7 +223,7 @@ func (d *dispatcher) interval(t collection.TaskSpec) time.Duration {
 // taskKinds is the telemetry kinds a task's run produces (#1693), in the
 // order the loss table prints them: a reachability probe's metrics and its
 // verdict property, a driver poll's the lanes its emits declare. A spec the
-// node cannot read produces nothing, so its runs count toward no kind.
+// outpost cannot read produces nothing, so its runs count toward no kind.
 func taskKinds(t collection.TaskSpec) []delivery.Kind {
 	if !driver.IsBaked(t.Spec) {
 		return []delivery.Kind{delivery.Metric, delivery.Property}

@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"sync"
@@ -12,8 +12,8 @@ import (
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
 
-// A metric sample's ts is whole milliseconds from the node on (#1526): the
-// node truncates it where every batch leaves it, the spool, so no probe,
+// A metric sample's ts is whole milliseconds from the outpost on (#1526): the
+// outpost truncates it where every batch leaves it, the spool, so no probe,
 // driver or session has to remember to.
 
 // capturePublisher keeps the bytes the spool ships, decoded.
@@ -54,7 +54,7 @@ func TestSpoolShipsMetricTimestampsOnTheMillisecond(t *testing.T) {
 	g.TaskLogs = []*ogv1.LogLine{{Message: "line", Ts: timestamppb.New(at)}}
 
 	pub := &capturePublisher{}
-	s := newTelemetrySpool("og.v1.node.telemetry", "edge", pub.publish)
+	s := newTelemetrySpool("og.v1.outpost.telemetry", "edge", pub.publish)
 	if err := s.add(g); err != nil {
 		t.Fatal(err)
 	}

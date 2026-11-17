@@ -1,4 +1,4 @@
-package node_test
+package outpost_test
 
 import (
 	"os"

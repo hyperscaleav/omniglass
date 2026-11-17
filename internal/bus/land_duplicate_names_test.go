@@ -14,7 +14,7 @@ import (
 
 func landStrptr(s string) *string { return &s }
 
-// TestLandSurvivesDuplicateComponentNames is the node ingest lane's regression
+// TestLandSurvivesDuplicateComponentNames is the outpost ingest lane's regression
 // test for the #627 review's finding 1: ResolveTaskOwner used to discard the
 // component id it already had (i.component, an FK right there in the row) in
 // favor of a name derived from it, which every downstream sink then had to
@@ -58,8 +58,8 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all)
 	if err != nil {
@@ -81,9 +81,9 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 		t.Fatalf("the two components did not actually land on different rows")
 	}
 
-	// A task bound to compA's interface, on node-a.
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('display-1-tcp', 'tcp', $1::uuid, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1:22"}'::jsonb)`,
+	// A task bound to compA's interface, on outpost-a.
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('display-1-tcp', 'tcp', $1::uuid, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb)`,
 		compA.ID); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 
 	// ResolveTaskOwner must resolve compA's id directly, not "display-1" (now
 	// ambiguous between compA and compB).
-	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-a", "node-a")
+	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-a", "outpost-a")
 	if err != nil {
 		t.Fatalf("resolve task owner: %v", err)
 	}
@@ -110,11 +110,11 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 	// exercise of the storage writes finding 1 was about.
 	s := &Server{store: gw}
 	ev := &ogv1.TelemetryBatch{
-		TaskId:  "t-a",
-		NodeId:  "node-a",
-		Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}},
+		TaskId:    "t-a",
+		OutpostId: "outpost-a",
+		Metrics:   []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}},
 	}
-	bind := ingestBinding{SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}
+	bind := ingestBinding{SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.OutpostWriter(owner.ComponentID, owner.EndpointName)}
 	if err := s.land(ctx, "", ev, bind); err != nil {
 		t.Fatalf("land: %v", err)
 	}

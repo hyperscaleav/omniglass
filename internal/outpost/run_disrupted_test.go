@@ -3,7 +3,7 @@
 // The simulator serves on 127.x addresses beyond 127.0.0.1, which Linux
 // treats as local without configuration.
 
-package node_test
+package outpost_test
 
 import (
 	"encoding/json"
@@ -22,7 +22,7 @@ import (
 
 // TestARebootHoldsItsDevicesEndpointsUntilEachReadsUpAgain drives #1651 over
 // the real wire: a simulated occupancy sensor carried by two endpoints of
-// one component on one node, its http API (polled every second, and the
+// one component on one outpost, its http API (polled every second, and the
 // reboot's carrier) and its raw-tcp feed (probed only). The reboot's
 // delivery closes both gates with disrupted before it sends; the device
 // goes away as a rebooting one does; nothing runs against either endpoint
@@ -51,7 +51,7 @@ func TestARebootHoldsItsDevicesEndpointsUntilEachReadsUpAgain(t *testing.T) {
 	// both, keeping the hold far past the outage so only up verdicts release.
 	const quiet = 4 * time.Second
 	s.setDisruption("reboot", quiet, 120*time.Second)
-	s.runNodeReporting("edge-reboot", time.Second)
+	s.runOutpostReporting("edge-reboot", time.Second)
 
 	s.waitMetric("sensor-1", web.Name, probekeys.PollDuration, func(v float64) bool { return v > 0 }, "a positive mean poll time")
 	s.waitFor("sensor-1", feed.Name, probekeys.EndpointReachable, is("up"), "up: the feed's port answered")
@@ -63,7 +63,7 @@ func TestARebootHoldsItsDevicesEndpointsUntilEachReadsUpAgain(t *testing.T) {
 		t.Fatalf("issue reboot = %d", code)
 	}
 	// A reboot is fire-and-forget, settled at its issue; the device goes
-	// once the node has carried it.
+	// once the outpost has carried it.
 	for deadline := time.Now().Add(20 * time.Second); cmd.ExecutedAt == nil; {
 		if time.Now().After(deadline) {
 			t.Fatalf("reboot = %+v, want executed within 20s", cmd)
@@ -152,9 +152,9 @@ func (s *httpStack) rebootingDriver(shipped, name string) {
 
 // attachBareTCP attaches a driverless tcp endpoint: its probe is all that
 // runs against it.
-func (s *httpStack) attachBareTCP(comp, nodeName, target string) *storage.Endpoint {
+func (s *httpStack) attachBareTCP(comp, outpostName, target string) *storage.Endpoint {
 	s.t.Helper()
-	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &nodeName,
+	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Outpost: &outpostName,
 		Params: []byte(`{"target":"` + target + `"}`)}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach bare tcp: %v", err)

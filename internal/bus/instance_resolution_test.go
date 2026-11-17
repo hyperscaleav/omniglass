@@ -17,7 +17,7 @@ import (
 )
 
 // TestInstanceResolvesTheSameWayInIngestReconciliationAndSettlement is
-// ADR-0456 end to end: a node publishes a reading with no instance over the
+// ADR-0456 end to end: an outpost publishes a reading with no instance over the
 // real bus, ingest stamps it with the endpoint whose task collected it, and
 // the two readers that ask the owner-level question (reconciliation's is, and
 // the settlement of an un-instanced command no endpoint carried) resolve that
@@ -37,11 +37,11 @@ func TestInstanceResolvesTheSameWayInIngestReconciliationAndSettlement(t *testin
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "secret-a"
-	if _, err := gw.SetEnrollmentToken(ctx, "", "node-a", hashHex(token), all); err != nil {
+	if _, err := gw.SetEnrollmentToken(ctx, "", "outpost-a", hashHex(token), all); err != nil {
 		t.Fatalf("mint token: %v", err)
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1"}, all, all, all, all)
@@ -53,8 +53,8 @@ func TestInstanceResolvesTheSameWayInIngestReconciliationAndSettlement(t *testin
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('panel-ip', 'tcp', $1::uuid, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.9:23"}'::jsonb)`, comp.ID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('panel-ip', 'tcp', $1::uuid, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.9:23"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
@@ -84,16 +84,16 @@ func TestInstanceResolvesTheSameWayInIngestReconciliationAndSettlement(t *testin
 		t.Fatalf("start bus: %v", err)
 	}
 	defer srv.Shutdown()
-	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("node-a", token), nats.CustomInboxPrefix(collection.InboxPrefix("node-a")))
+	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("outpost-a", token), nats.CustomInboxPrefix(collection.InboxPrefix("outpost-a")))
 	if err != nil {
-		t.Fatalf("node connect: %v", err)
+		t.Fatalf("outpost connect: %v", err)
 	}
 	defer nc.Close()
 
-	// The node's reading names no instance: ingest stamps the endpoint.
-	publishEvent(t, nc, "node-a", bus.AsTick(&ogv1.TelemetryBatch{
+	// The outpost's reading names no instance: ingest stamps the endpoint.
+	publishEvent(t, nc, "outpost-a", bus.AsTick(&ogv1.TelemetryBatch{
 		TaskId:     "t-panel",
-		NodeId:     "node-a",
+		OutpostId:  "outpost-a",
 		Properties: []*ogv1.PropertySample{{Name: "video-input", ValueJson: `"hdmi2"`}},
 	}))
 	waitProperty(t, ctx, gw, "panel-1", "video-input", "panel-ip", func(d *storage.PropertySample) bool { return d != nil && d.Value == "hdmi2" })

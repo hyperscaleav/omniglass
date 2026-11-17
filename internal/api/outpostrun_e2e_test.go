@@ -22,13 +22,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The on-demand run routes' contract (#1163), the node behind them a stand-in
-// that records what it was asked (the real wire is internal/node's
+// The on-demand run routes' contract (#1163), the outpost behind them a stand-in
+// that records what it was asked (the real wire is internal/outpost's
 // run_ondemand_test): who may validate, preview and run now; what reaches the
-// node; what comes back masked; and the stricter class that bounds runs in
+// outpost; what comes back masked; and the stricter class that bounds runs in
 // flight. Skipped under -short.
 
-const nodeRunSecret = "node-run-pw-value"
+const outpostRunSecret = "outpost-run-pw-value"
 
 // recordingRunner is the dependency behind the routes: it records each ask
 // and answers with a fixed result, holding each answer until release closes
@@ -38,12 +38,12 @@ type recordingRunner struct {
 	previews [][]storage.WorklistTask
 	runs     []string
 	release  chan struct{}
-	// held, when set, is the node's answer to every ask: its gates held the
+	// held, when set, is the outpost's answer to every ask: its gates held the
 	// endpoint or the target's host, so it sent nothing.
 	held *collection.RunReply
 }
 
-func (r *recordingRunner) RunPreview(_ context.Context, node string, tasks []storage.WorklistTask, _ []string, _ time.Duration) (collection.RunReply, error) {
+func (r *recordingRunner) RunPreview(_ context.Context, outpost string, tasks []storage.WorklistTask, _ []string, _ time.Duration) (collection.RunReply, error) {
 	r.mu.Lock()
 	r.previews = append(r.previews, tasks)
 	rel, held := r.release, r.held
@@ -56,12 +56,12 @@ func (r *recordingRunner) RunPreview(_ context.Context, node string, tasks []sto
 	}
 	return collection.RunReply{Results: []collection.RunResult{{TaskID: tasks[0].ID, Function: "identity",
 		Samples: []collection.RunSample{{Name: "model-number", Text: "Edge 86"}},
-		Excerpt: `{"device":{"model":"Edge 86"},"echo":"` + nodeRunSecret + `"}`}}}, nil
+		Excerpt: `{"device":{"model":"Edge 86"},"echo":"` + outpostRunSecret + `"}`}}}, nil
 }
 
-func (r *recordingRunner) RunTaskNow(_ context.Context, node, taskID string, _ time.Duration) (collection.RunReply, error) {
+func (r *recordingRunner) RunTaskNow(_ context.Context, outpost, taskID string, _ time.Duration) (collection.RunReply, error) {
 	r.mu.Lock()
-	r.runs = append(r.runs, node+"/"+taskID)
+	r.runs = append(r.runs, outpost+"/"+taskID)
 	held := r.held
 	r.mu.Unlock()
 	if held != nil {
@@ -70,13 +70,13 @@ func (r *recordingRunner) RunTaskNow(_ context.Context, node, taskID string, _ t
 	// The device echoes its credential back (a misconfigured page, a banner):
 	// the answer must come back masked of it, as a preview's does.
 	return collection.RunReply{Results: []collection.RunResult{{TaskID: taskID, Function: "identity",
-		Samples: []collection.RunSample{{Name: "model-number", Text: "Edge 86"}, {Name: "serial-number", Text: "echo " + nodeRunSecret, Labels: map[string]string{"echo": nodeRunSecret},
-			Identity: &collection.RunIdentity{Key: "serial-number", Value: "echo " + nodeRunSecret}}},
-		Faults:  []string{"emit firmware-version did not locate in " + nodeRunSecret},
-		Excerpt: `{"echo":"` + nodeRunSecret + `"}`}}}, nil
+		Samples: []collection.RunSample{{Name: "model-number", Text: "Edge 86"}, {Name: "serial-number", Text: "echo " + outpostRunSecret, Labels: map[string]string{"echo": outpostRunSecret},
+			Identity: &collection.RunIdentity{Key: "serial-number", Value: "echo " + outpostRunSecret}}},
+		Faults:  []string{"emit firmware-version did not locate in " + outpostRunSecret},
+		Excerpt: `{"echo":"` + outpostRunSecret + `"}`}}}, nil
 }
 
-type nodeRunStack struct {
+type outpostRunStack struct {
 	c      *apiClient
 	runner *recordingRunner
 	owner  string
@@ -84,7 +84,7 @@ type nodeRunStack struct {
 	ctx    context.Context
 }
 
-func newNodeRunStack(t *testing.T, opts ...api.Option) *nodeRunStack {
+func newOutpostRunStack(t *testing.T, opts ...api.Option) *outpostRunStack {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -97,31 +97,31 @@ func newNodeRunStack(t *testing.T, opts ...api.Option) *nodeRunStack {
 	}
 	t.Cleanup(gw.Close)
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-api"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-api"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{Name: "display-login", SecretType: "basic-auth", OwnerKind: "platform",
-		Fields: map[string]string{"username": "admin", "password": nodeRunSecret}}, all, true); err != nil {
+		Fields: map[string]string{"username": "admin", "password": outpostRunSecret}}, all, true); err != nil {
 		t.Fatal(err)
 	}
 	runner := &recordingRunner{}
-	srv := httptest.NewServer(api.NewHandler(gw, append([]api.Option{api.WithNodeRunner(runner)}, opts...)...))
+	srv := httptest.NewServer(api.NewHandler(gw, append([]api.Option{api.WithOutpostRunner(runner)}, opts...)...))
 	t.Cleanup(srv.Close)
-	return &nodeRunStack{c: &apiClient{t: t, ctx: ctx, base: srv.URL}, runner: runner, owner: bootstrapOwnerTok(t, ctx, gw), dsn: dsn, ctx: ctx}
+	return &outpostRunStack{c: &apiClient{t: t, ctx: ctx, base: srv.URL}, runner: runner, owner: bootstrapOwnerTok(t, ctx, gw), dsn: dsn, ctx: ctx}
 }
 
-var previewBody = map[string]any{"node": "edge-api", "driver": "boreal-edge-web", "inputs": map[string]string{"host": "10.20.4.31", "login": "display-login"}}
+var previewBody = map[string]any{"outpost": "edge-api", "driver": "boreal-edge-web", "inputs": map[string]string{"host": "10.20.4.31", "login": "display-login"}}
 
-// A preview reaches the node named with the spec's polls and the secret
+// A preview reaches the outpost named with the spec's polls and the secret
 // unsealed, and its answer comes back masked of that secret.
-func TestPreviewReachesTheNodeAndComesBackMasked(t *testing.T) {
+func TestPreviewReachesTheOutpostAndComesBackMasked(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t)
+	s := newOutpostRunStack(t)
 	raw := s.c.do(s.owner, http.MethodPost, "/drivers:preview", previewBody, http.StatusOK)
 	var out struct {
-		Node, Target string
-		Stored       bool
-		Results      []struct {
+		Outpost, Target string
+		Stored          bool
+		Results         []struct {
 			Poll    string `json:"poll"`
 			Excerpt string `json:"excerpt"`
 		} `json:"results"`
@@ -129,14 +129,14 @@ func TestPreviewReachesTheNodeAndComesBackMasked(t *testing.T) {
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatal(err)
 	}
-	if out.Node != "edge-api" || out.Target != "10.20.4.31:80" || out.Stored || len(out.Results) != 1 || out.Results[0].Poll != "identity" {
+	if out.Outpost != "edge-api" || out.Target != "10.20.4.31:80" || out.Stored || len(out.Results) != 1 || out.Results[0].Poll != "identity" {
 		t.Fatalf("preview = %s", raw)
 	}
-	if strings.Contains(string(raw), nodeRunSecret) || !strings.Contains(out.Results[0].Excerpt, "[redacted]") {
+	if strings.Contains(string(raw), outpostRunSecret) || !strings.Contains(out.Results[0].Excerpt, "[redacted]") {
 		t.Errorf("the answer carries the secret: %s", raw)
 	}
-	if len(s.runner.previews) != 1 || s.runner.previews[0][0].Secrets["login"]["password"] != nodeRunSecret {
-		t.Errorf("the node was asked %+v", s.runner.previews)
+	if len(s.runner.previews) != 1 || s.runner.previews[0][0].Secrets["login"]["password"] != outpostRunSecret {
+		t.Errorf("the outpost was asked %+v", s.runner.previews)
 	}
 }
 
@@ -145,36 +145,36 @@ func TestPreviewReachesTheNodeAndComesBackMasked(t *testing.T) {
 // text, labels and identity, and the faults (#2025).
 func TestARunNowComesBackMasked(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t)
+	s := newOutpostRunStack(t)
 	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-echo", "product": "generic-device"}, http.StatusCreated)
 	var ep struct {
 		Name string `json:"name"`
 	}
-	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-echo", "driver": "boreal-edge-web", "node": "edge-api",
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-echo", "driver": "boreal-edge-web", "outpost": "edge-api",
 		"inputs": map[string]string{"host": "10.20.4.33", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
 		t.Fatal(err)
 	}
 	raw := s.c.do(s.owner, http.MethodPost, "/endpoints/display-echo%2F"+ep.Name+"/polls/identity:run", nil, http.StatusOK)
-	if strings.Contains(string(raw), nodeRunSecret) || !strings.Contains(string(raw), "[redacted]") {
+	if strings.Contains(string(raw), outpostRunSecret) || !strings.Contains(string(raw), "[redacted]") {
 		t.Errorf("the run now answer carries the endpoint's secret: %s", raw)
 	}
 }
 
-// A node's refusal of a run now can quote what the device said, so the
+// An outpost's refusal of a run now can quote what the device said, so the
 // refusal comes back masked of the endpoint's secrets too, whichever answer
 // carries it (#2025).
 func TestARunNowRefusalComesBackMasked(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t)
+	s := newOutpostRunStack(t)
 	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-refused", "product": "generic-device"}, http.StatusCreated)
 	var ep struct {
 		Name string `json:"name"`
 	}
-	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-refused", "driver": "boreal-edge-web", "node": "edge-api",
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-refused", "driver": "boreal-edge-web", "outpost": "edge-api",
 		"inputs": map[string]string{"host": "10.20.4.34", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
 		t.Fatal(err)
 	}
-	quote := "login refused: banner echoed " + nodeRunSecret
+	quote := "login refused: banner echoed " + outpostRunSecret
 	for name, reply := range map[string]collection.RunReply{
 		"gated":   {Gated: true, GateReason: "refused", Error: quote},
 		"held":    {Gated: true, GateReason: "unreachable", Error: quote},
@@ -186,30 +186,30 @@ func TestARunNowRefusalComesBackMasked(t *testing.T) {
 		s.runner.held = &reply
 		s.runner.mu.Unlock()
 		code, raw := s.c.send(s.owner, http.MethodPost, "/endpoints/display-refused%2F"+ep.Name+"/polls/identity:run", nil)
-		if code == http.StatusOK || strings.Contains(string(raw), nodeRunSecret) || !strings.Contains(string(raw), "[redacted]") {
+		if code == http.StatusOK || strings.Contains(string(raw), outpostRunSecret) || !strings.Contains(string(raw), "[redacted]") {
 			t.Errorf("a %s run now = %d %s, want the refusal masked of the endpoint's secret", name, code, raw)
 		}
 	}
 }
 
-// A node whose probe reads the endpoint, or the preview's target host,
+// An outpost whose probe reads the endpoint, or the preview's target host,
 // unreachable answers at once, gated with that reason (#1650): the route
-// answers 409 naming it, never a 502 as though the node had failed, and a
+// answers 409 naming it, never a 502 as though the outpost had failed, and a
 // run now's answer is not a refusal's (no retry-endpoint lifts it).
 func TestAHeldRunAnswersConflictNamingTheReason(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t)
+	s := newOutpostRunStack(t)
 	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-held", "product": "generic-device"}, http.StatusCreated)
 	var ep struct {
 		Name string `json:"name"`
 	}
-	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-held", "driver": "boreal-edge-web", "node": "edge-api",
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-held", "driver": "boreal-edge-web", "outpost": "edge-api",
 		"inputs": map[string]string{"host": "10.20.4.31", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
 		t.Fatal(err)
 	}
 	s.runner.mu.Lock()
 	s.runner.held = &collection.RunReply{Gated: true, GateReason: "unreachable",
-		Error: "node: the endpoint is unreachable since 2026-11-09T14:03:00Z (probe t1); it reopens on the probe's next up verdict"}
+		Error: "outpost: the endpoint is unreachable since 2026-11-09T14:03:00Z (probe t1); it reopens on the probe's next up verdict"}
 	s.runner.mu.Unlock()
 	code, raw := s.c.send(s.owner, http.MethodPost, "/endpoints/display-held%2F"+ep.Name+"/polls/identity:run", nil)
 	if code != http.StatusConflict || !strings.Contains(string(raw), "unreachable since 2026-11-09T14:03:00Z") || strings.Contains(string(raw), "retry-endpoint") {
@@ -217,7 +217,7 @@ func TestAHeldRunAnswersConflictNamingTheReason(t *testing.T) {
 	}
 	s.runner.mu.Lock()
 	s.runner.held = &collection.RunReply{Gated: true, GateReason: "unreachable",
-		Error: "node: the host is unreachable since 2026-11-09T14:03:00Z (probe t1), so the preview was not sent; it reopens on the probe's next up verdict"}
+		Error: "outpost: the host is unreachable since 2026-11-09T14:03:00Z (probe t1), so the preview was not sent; it reopens on the probe's next up verdict"}
 	s.runner.mu.Unlock()
 	if code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusConflict || !strings.Contains(string(raw), "unreachable since") {
 		t.Errorf("a held preview = %d %s, want 409 naming unreachable, not 502", code, raw)
@@ -225,8 +225,8 @@ func TestAHeldRunAnswersConflictNamingTheReason(t *testing.T) {
 	// A preview that resolved to an inventoried endpoint (#1249) is held by
 	// that endpoint's gate, a disruption or a refusal included.
 	for reason, text := range map[string]string{
-		"disrupted": "node: the endpoint at 10.20.4.31:443 is disrupted by reboot (command 42) since 2026-11-09T14:03:00Z, so the preview was not sent",
-		"refused":   "node: the endpoint at 10.20.4.31:443 is gated: auth: 401, so the preview was not sent",
+		"disrupted": "outpost: the endpoint at 10.20.4.31:443 is disrupted by reboot (command 42) since 2026-11-09T14:03:00Z, so the preview was not sent",
+		"refused":   "outpost: the endpoint at 10.20.4.31:443 is gated: auth: 401, so the preview was not sent",
 	} {
 		s.runner.mu.Lock()
 		s.runner.held = &collection.RunReply{Gated: true, GateReason: reason, Error: text}
@@ -237,20 +237,20 @@ func TestAHeldRunAnswersConflictNamingTheReason(t *testing.T) {
 	}
 }
 
-// Operator work past the node's operator lane cap (#1249) is refused there
+// Operator work past the outpost's operator lane cap (#1249) is refused there
 // unrun: a 429 for a run now and a preview alike, never a gateway fault.
 func TestFullOperatorLanesAnswerTooManyRequests(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t)
+	s := newOutpostRunStack(t)
 	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-full", "product": "generic-device"}, http.StatusCreated)
 	var ep struct {
 		Name string `json:"name"`
 	}
-	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-full", "driver": "boreal-edge-web", "node": "edge-api",
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-full", "driver": "boreal-edge-web", "outpost": "edge-api",
 		"inputs": map[string]string{"host": "10.20.4.32", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
 		t.Fatal(err)
 	}
-	full := "the node's operator lanes are full; retry in a moment"
+	full := "the outpost's operator lanes are full; retry in a moment"
 	s.runner.mu.Lock()
 	s.runner.held = &collection.RunReply{Full: true, Error: full}
 	s.runner.mu.Unlock()
@@ -262,25 +262,25 @@ func TestFullOperatorLanesAnswerTooManyRequests(t *testing.T) {
 	}
 }
 
-// A spec that does not validate is a 422 listing its findings, and the node is
+// A spec that does not validate is a 422 listing its findings, and the outpost is
 // never asked; exactly one of driver or spec is required.
 func TestPreviewRefusals(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t)
-	code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", map[string]any{"node": "edge-api",
+	s := newOutpostRunStack(t)
+	code, raw := s.c.send(s.owner, http.MethodPost, "/drivers:preview", map[string]any{"outpost": "edge-api",
 		"spec": map[string]any{"version": 1, "transport": "http", "polls": []map[string]any{{"name": "p", "schedule": map[string]any{"every": "soon"},
 			"request": map[string]any{"path": "/x"}, "emits": []map[string]any{{"name": "uptime", "extract": map[string]any{"jsonpath": "a"}}}}}}})
 	if code != http.StatusUnprocessableEntity || !strings.Contains(string(raw), "schedule") {
 		t.Errorf("an invalid spec = %d %s, want 422 with its findings", code, raw)
 	}
-	if code, _ := s.c.send(s.owner, http.MethodPost, "/drivers:preview", map[string]any{"node": "edge-api"}); code != http.StatusUnprocessableEntity {
+	if code, _ := s.c.send(s.owner, http.MethodPost, "/drivers:preview", map[string]any{"outpost": "edge-api"}); code != http.StatusUnprocessableEntity {
 		t.Errorf("neither driver nor spec = %d, want 422", code)
 	}
-	if code, _ := s.c.send(s.owner, http.MethodPost, "/drivers:preview", map[string]any{"node": "no-such-node", "driver": "boreal-edge-web", "inputs": map[string]string{"host": "10.0.0.1", "login": "display-login"}}); code != http.StatusNotFound {
-		t.Errorf("an unknown node = %d, want 404", code)
+	if code, _ := s.c.send(s.owner, http.MethodPost, "/drivers:preview", map[string]any{"outpost": "no-such-outpost", "driver": "boreal-edge-web", "inputs": map[string]string{"host": "10.0.0.1", "login": "display-login"}}); code != http.StatusNotFound {
+		t.Errorf("an unknown outpost = %d, want 404", code)
 	}
 	if len(s.runner.previews) != 0 {
-		t.Errorf("a refused preview asked the node: %+v", s.runner.previews)
+		t.Errorf("a refused preview asked the outpost: %+v", s.runner.previews)
 	}
 }
 
@@ -288,7 +288,7 @@ func TestPreviewRefusals(t *testing.T) {
 // nor run a poll now; an operator may do both.
 func TestOnDemandRunPermissions(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t)
+	s := newOutpostRunStack(t)
 	viewer := principalWithGrants(t, s.ctx, s.dsn, "run-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	operator := principalWithGrants(t, s.ctx, s.dsn, "run-operator", []grant{{role: "operator", scopeKind: "all"}})
 	spec := map[string]any{"spec": map[string]any{"version": 1, "transport": "tcp"}}
@@ -306,11 +306,11 @@ func TestOnDemandRunPermissions(t *testing.T) {
 	var ep struct {
 		Name string `json:"name"`
 	}
-	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-api", "driver": "boreal-edge-web", "node": "edge-api",
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/endpoints", map[string]any{"component": "display-api", "driver": "boreal-edge-web", "outpost": "edge-api",
 		"inputs": map[string]string{"host": "10.20.4.31", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
 		t.Fatal(err)
 	}
-	// Nodes take an all-scope node:read, so an operator scoped to one
+	// Outposts take an all-scope outpost:read, so an operator scoped to one
 	// component may not name one for a preview: a 403, not a 500.
 	compID := entityID(t, s.c, s.owner, "/components", "display-api")
 	scoped := principalWithGrants(t, s.ctx, s.dsn, "run-scoped", []grant{{role: "operator", scopeKind: "component", scopeID: compID}})
@@ -325,7 +325,7 @@ func TestOnDemandRunPermissions(t *testing.T) {
 		t.Errorf("operator run now = %d %s", code, raw)
 	}
 	if len(s.runner.runs) != 1 || !strings.HasPrefix(s.runner.runs[0], "edge-api/") {
-		t.Errorf("the node was asked %v", s.runner.runs)
+		t.Errorf("the outpost was asked %v", s.runner.runs)
 	}
 }
 
@@ -333,7 +333,7 @@ func TestOnDemandRunPermissions(t *testing.T) {
 // anything is planned or asked.
 func TestOnDemandRunsAreBounded(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t, api.WithNodeRunLimits(8, 1))
+	s := newOutpostRunStack(t, api.WithOutpostRunLimits(8, 1))
 	s.runner.release = make(chan struct{})
 	done := make(chan int, 1)
 	go func() {
@@ -359,7 +359,7 @@ func TestOnDemandRunsAreBounded(t *testing.T) {
 	}
 }
 
-// Without a bus nothing can reach a node: 503, not a hang.
+// Without a bus nothing can reach an outpost: 503, not a hang.
 func TestOnDemandRunsWithoutABus(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -382,13 +382,13 @@ func TestOnDemandRunsWithoutABus(t *testing.T) {
 	}
 }
 
-// Handing a secret to a node, by a preview or an attach, takes secret:bind
+// Handing a secret to an outpost, by a preview or an attach, takes secret:bind
 // over it (#2047): one that may read the secret but not bind it is refused
 // both, and an edit moving the endpoint's address, naming the right; one that
 // may bind it but never reveal it does all three.
-func TestHandingASecretToANodeTakesSecretBind(t *testing.T) {
+func TestHandingASecretToAOutpostTakesSecretBind(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t)
+	s := newOutpostRunStack(t)
 	conn, err := pgx.Connect(s.ctx, s.dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -400,7 +400,7 @@ func TestHandingASecretToANodeTakesSecretBind(t *testing.T) {
 	}
 	conn.Close(s.ctx)
 	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-bind", "product": "generic-device"}, http.StatusCreated)
-	attach := map[string]any{"component": "display-bind", "driver": "boreal-edge-web", "node": "edge-api",
+	attach := map[string]any{"component": "display-bind", "driver": "boreal-edge-web", "outpost": "edge-api",
 		"inputs": map[string]string{"host": "10.20.4.31", "login": "display-login"}}
 
 	reader := principalWithGrants(t, s.ctx, s.dsn, "bind-less", []grant{{role: "bind-less", scopeKind: "all"}})
@@ -444,22 +444,22 @@ func TestHandingASecretToANodeTakesSecretBind(t *testing.T) {
 // the plaintext stays out of its reach.
 func TestAnAgentRunsAPollWithACredentialItNeverReads(t *testing.T) {
 	t.Parallel()
-	s := newNodeRunStack(t)
+	s := newOutpostRunStack(t)
 	agent := mintAgent(t, s.c, s.owner, map[string]any{"description": "claude", "agent": "claude", "ttl_days": 7})
 
-	if raw := s.c.do(agent.Token, http.MethodPost, "/drivers:preview", previewBody, http.StatusOK); strings.Contains(string(raw), nodeRunSecret) {
+	if raw := s.c.do(agent.Token, http.MethodPost, "/drivers:preview", previewBody, http.StatusOK); strings.Contains(string(raw), outpostRunSecret) {
 		t.Errorf("the agent's preview carries the secret: %s", raw)
 	}
 	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "display-agent", "product": "generic-device"}, http.StatusCreated)
 	var ep struct {
 		Name string `json:"name"`
 	}
-	if err := json.Unmarshal(s.c.do(agent.Token, http.MethodPost, "/endpoints", map[string]any{"component": "display-agent", "driver": "boreal-edge-web", "node": "edge-api",
+	if err := json.Unmarshal(s.c.do(agent.Token, http.MethodPost, "/endpoints", map[string]any{"component": "display-agent", "driver": "boreal-edge-web", "outpost": "edge-api",
 		"inputs": map[string]string{"host": "10.20.4.34", "login": "display-login"}}, http.StatusCreated), &ep); err != nil {
 		t.Fatal(err)
 	}
 	raw := s.c.do(agent.Token, http.MethodPost, "/endpoints/display-agent%2F"+ep.Name+"/polls/identity:run", nil, http.StatusOK)
-	if strings.Contains(string(raw), nodeRunSecret) || !strings.Contains(string(raw), "[redacted]") {
+	if strings.Contains(string(raw), outpostRunSecret) || !strings.Contains(string(raw), "[redacted]") {
 		t.Errorf("the agent's run now carries the secret: %s", raw)
 	}
 

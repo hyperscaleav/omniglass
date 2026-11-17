@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The node's tls endpoints (#1035): the verification mode and the server
+// The outpost's tls endpoints (#1035): the verification mode and the server
 // name come off the endpoint's params, the public key pin rides the worklist
 // and is trusted on first use, one pin per endpoint is shared by the held
 // session and the probe (so neither trusts a key the other refused), a pin
@@ -253,7 +253,7 @@ func (d *countingTCPDialer) count() int {
 
 // A changed key the probe meets gates the endpoint at the transport rung,
 // naming both keys as data; beneath the gate only the TCP connect runs (no
-// handshake reaches the new key), and a restarted node honours the gate the
+// handshake reaches the new key), and a restarted outpost honours the gate the
 // worklist carries back.
 func TestTLSProbeCertificateRefusalGatesTheTransportRung(t *testing.T) {
 	t.Parallel()
@@ -301,7 +301,7 @@ func TestTLSProbeCertificateRefusalGatesTheTransportRung(t *testing.T) {
 		t.Fatalf("beneath the gate: %d handshakes, %d connects; want no handshake and a connect a tick", prober.calls(), tcp.count()-before)
 	}
 
-	// A restarted node, the rejection carried back: still no handshake.
+	// A restarted outpost, the rejection carried back: still no handshake.
 	restarted := newSessionManager(nil, sessionHooks{})
 	carried := withFingerprint(task, "fp-1", published)
 	restarted.reconcile([]collection.TaskSpec{carried})
@@ -309,7 +309,7 @@ func TestTLSProbeCertificateRefusalGatesTheTransportRung(t *testing.T) {
 		t.Fatal(err)
 	}
 	if prober.calls() != 1 {
-		t.Fatal("a restarted node ran a handshake against an unchanged fingerprint")
+		t.Fatal("a restarted outpost ran a handshake against an unchanged fingerprint")
 	}
 	gt, ok = restarted.refusedAt("ep-1", rungResponsive)
 	if !ok || gt.refusal().Pinned != keyFirst || gt.refusal().Offered != keySecond {
@@ -329,7 +329,7 @@ func TestTLSProbeCertificateRefusalGatesTheTransportRung(t *testing.T) {
 }
 
 // A held tls session under a certificate gate starts rejected: a restarted
-// node attempts no handshake under the unchanged fingerprint.
+// outpost attempts no handshake under the unchanged fingerprint.
 func TestATLSSessionUnderACertificateGateStartsRejected(t *testing.T) {
 	t.Parallel()
 	dialer := &tlsFakeDialer{offered: keySecond}
@@ -410,7 +410,7 @@ func TestTLSProbeLogsTheRefusalsReasonOnce(t *testing.T) {
 }
 
 // A tls pin the worklist delivered and then stops delivering was withdrawn by
-// the server: the node forgets it, never republishes it, and the session
+// the server: the outpost forgets it, never republishes it, and the session
 // redials trusting on first use.
 func TestTLSWithdrawnPinIsForgottenAndTrustsOnFirstUseAgain(t *testing.T) {
 	t.Parallel()
@@ -427,7 +427,7 @@ func TestTLSWithdrawnPinIsForgottenAndTrustsOnFirstUseAgain(t *testing.T) {
 	waitFor(t, func() bool { return slices.Contains(keys.all(), keySecond) }, "the key trusted on first use was published")
 	m.reconcile([]collection.TaskSpec{tlsPollTask("p1", "ep-1", pinParams, "")})
 	if got := keys.all(); slices.Contains(got, "SHA256:planted") {
-		t.Fatalf("the node republished the withdrawn pin as its own key: %v", got)
+		t.Fatalf("the outpost republished the withdrawn pin as its own key: %v", got)
 	}
 	dialer.mu.Lock()
 	last := dialer.trusts[len(dialer.trusts)-1]

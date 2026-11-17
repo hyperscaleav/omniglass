@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"slices"
@@ -12,7 +12,7 @@ import (
 // #1634: a failed poll retries on a backoff of its own: a fixed base,
 // doubling on each consecutive failure and capped at the poll's interval, so
 // a 24h poll that fails during a reboot retries in a second, not a day. The
-// schedule has no heartbeat to read: the node's tick no longer sets any
+// schedule has no heartbeat to read: the outpost's tick no longer sets any
 // task's cadence.
 func TestABackoffStartsAtItsBaseDoublesAndCapsAtTheInterval(t *testing.T) {
 	t.Parallel()

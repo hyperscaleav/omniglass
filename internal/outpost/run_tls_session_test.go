@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"crypto/sha256"
@@ -19,7 +19,7 @@ import (
 )
 
 // The line protocol over tls end to end (#1035): Postgres, the bus, a real
-// node, and the simulated panel's TLS face, on ephemeral ports.
+// outpost, and the simulated panel's TLS face, on ephemeral ports.
 
 // panelKey is the public key fingerprint of the certificate the panel's tls
 // face serves now, computed independently of the code under test.
@@ -44,14 +44,14 @@ func tenDayCertificates(store *profile.Store) {
 	}
 }
 
-func (s *gateStack) attachTLS(comp, nodeName string, port int, extra map[string]string) *storage.Endpoint {
+func (s *gateStack) attachTLS(comp, outpostName string, port int, extra map[string]string) *storage.Endpoint {
 	s.t.Helper()
 	drv := "newtron-nvp-tls"
 	inputs := map[string]string{"host": s.ip, "port": fmt.Sprint(port)}
 	for k, v := range extra {
 		inputs[k] = v
 	}
-	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName, Inputs: inputs, SecretRead: s.all, SecretBind: s.all}, s.all)
+	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpostName, Inputs: inputs, SecretRead: s.all, SecretBind: s.all}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach %s: %v", drv, err)
 	}
@@ -66,16 +66,16 @@ func (s *gateStack) metric(comp, instance, key string) (float64, bool) {
 	return m.Value, true
 }
 
-// TestNodeTLSSessionPinsTheKeyAndRefusesAChange: the shipped newtron-nvp-tls
+// TestOutpostTLSSessionPinsTheKeyAndRefusesAChange: the shipped newtron-nvp-tls
 // driver (pin on first use) attached to the panel's TLS face. The session
 // trusts the panel's key, polls, actuates a command, receives a push, and
 // recovers after the face drops it; the probe lands the handshake time and
 // the certificate's expiry and days left. The panel is replaced (a new key):
 // the endpoint reads rejected, class certificate, naming both keys, only the
 // TCP connect runs beneath the gate (no handshake reaches the new key), and
-// a restarted node runs none either. The operator accepts the offered key
+// a restarted outpost runs none either. The operator accepts the offered key
 // with :retry: the session comes up on it.
-func TestNodeTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
+func TestOutpostTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -84,7 +84,7 @@ func TestNodeTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
 	s.component("panel-1")
 	port := s.port("tls")
 	ep := s.attachTLS("panel-1", "edge-tls", port, nil)
-	s.runNode("edge-tls")
+	s.runOutpost("edge-tls")
 
 	first := panelKey(t, s.panel)
 	s.waitFor("panel-1", ep.Name, "session-state", is("up"), "up")
@@ -94,7 +94,7 @@ func TestNodeTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
 	// The worklist delivers the trusted key back as the pin.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		wl, err := s.gw.NodeWorklist(s.ctx, "edge-tls")
+		wl, err := s.gw.OutpostWorklist(s.ctx, "edge-tls")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,13 +174,13 @@ func TestNodeTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
 
 	// Beneath the gate only the TCP connect runs: no handshake (and so no
 	// poll, command or arm) reaches the new key, tick after tick, across a
-	// node restart too.
+	// outpost restart too.
 	handshakes := func() int64 { return s.panel.TLSHandshakes() }
 	time.Sleep(500 * time.Millisecond) // let the refused handshakes in flight finish
 	held := handshakes()
 	s.settles("handshakes beneath the gate", handshakes, held)
-	s.runNode("edge-tls")
-	s.settles("handshakes after a node restart", handshakes, held)
+	s.runOutpost("edge-tls")
+	s.settles("handshakes after an outpost restart", handshakes, held)
 
 	// The operator accepts the offered key: the session comes up on it.
 	if _, err := s.gw.RetryEndpoint(s.ctx, "", ep.ID, storage.RetryPin{Certificate: second}, s.all, s.all); err != nil {
@@ -188,20 +188,20 @@ func TestNodeTLSSessionPinsTheKeyAndRefusesAChange(t *testing.T) {
 	}
 	s.waitFor("panel-1", ep.Name, "session-state", is("up"), "up on the accepted key")
 	// The accepted key is the pin in force: the operator's declared one, which
-	// the node is handed back rather than publishing (ADR-0161 reads it as the
-	// pin, never as the node's observation).
+	// the outpost is handed back rather than publishing (ADR-0161 reads it as the
+	// pin, never as the outpost's observation).
 	if pin, err := s.gw.EndpointKeyPin(s.ctx, "panel-1", ep.Name, "tls"); err != nil || pin != second {
 		t.Fatalf("the pin in force = %q (%v), want the accepted key", pin, err)
 	}
 	s.waitFor("panel-1", ep.Name, "endpoint-rejection", is("none"), "the gate lifted")
 }
 
-// TestNodeTLSModesVerifyAndSkip: the mode is a driver input edited in place.
+// TestOutpostTLSModesVerifyAndSkip: the mode is a driver input edited in place.
 // Verify against the panel's self-signed certificate is a certificate
 // refusal with its reason, never a timeout; skip connects, and the endpoint
 // reads that verification is skipped; each edit moves the fingerprint, so a
 // gate lifts without a retry.
-func TestNodeTLSModesVerifyAndSkip(t *testing.T) {
+func TestOutpostTLSModesVerifyAndSkip(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -209,7 +209,7 @@ func TestNodeTLSModesVerifyAndSkip(t *testing.T) {
 	s := newGateStack(t, simtest.ClaimLoopback(t), "edge-tlsm")
 	s.component("panel-1")
 	ep := s.attachTLS("panel-1", "edge-tlsm", s.port("tls"), map[string]string{"tls-mode": "verify"})
-	s.runNode("edge-tlsm")
+	s.runOutpost("edge-tlsm")
 
 	s.waitFor("panel-1", ep.Name, "session-state", is("rejected"), "rejected under verify")
 	s.waitFor("panel-1", ep.Name, "session-reason", func(v string) bool {

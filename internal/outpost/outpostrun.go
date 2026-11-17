@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The node side of the on-demand node run (#1163, ADR-1163): the server asks
-// the node to run work now and the node answers once. Both kinds are
+// The outpost side of the on-demand outpost run (#1163, ADR-1163): the server asks
+// the outpost to run work now and the outpost answers once. Both kinds are
 // operator work on the endpoint lanes (#1249, ADR-1249). A run now runs one
-// of the node's own poll tasks on its endpoint's lane, ahead of the
+// of the outpost's own poll tasks on its endpoint's lane, ahead of the
 // scheduled runs waiting there, so it borrows the endpoint's session, honors
 // its gate exactly as a scheduled run does, and lands what it reads. A
 // preview runs polls of a spec no endpoint holds yet, touching no held
@@ -29,13 +29,13 @@ const defaultRunTimeout = 20 * time.Second
 
 // lanesFull is the answer to operator work the lanes refused at the operator
 // queue's cap.
-const lanesFull = "the node's operator lanes are full; retry in a moment"
+const lanesFull = "the outpost's operator lanes are full; retry in a moment"
 
-// runRoute is what a run request needs on the node: where a run now lands
+// runRoute is what a run request needs on the outpost: where a run now lands
 // what it reads, what it borrows and books, and the lanes both kinds take.
 type runRoute struct {
 	out      *telemetrySpool
-	node     string
+	outpost  string
 	runner   *collection.Runner
 	sessions *sessionManager
 	sched    *pollSchedule
@@ -43,19 +43,19 @@ type runRoute struct {
 	pool     *lanePool
 }
 
-// subscribeRuns takes the server's run requests for this node.
+// subscribeRuns takes the server's run requests for this outpost.
 func subscribeRuns(ctx context.Context, nc *nats.Conn, rt runRoute) (*nats.Subscription, error) {
-	return nc.Subscribe(collection.RunSubject(rt.node), func(m *nats.Msg) {
+	return nc.Subscribe(collection.RunSubject(rt.outpost), func(m *nats.Msg) {
 		respond := func(r collection.RunReply) {
 			b, err := json.Marshal(r)
 			if err != nil {
-				b, _ = json.Marshal(collection.RunReply{Error: "the node could not encode its answer"})
+				b, _ = json.Marshal(collection.RunReply{Error: "the outpost could not encode its answer"})
 			}
 			_ = m.Respond(b)
 		}
 		var req collection.RunRequest
 		if err := json.Unmarshal(m.Data, &req); err != nil {
-			respond(collection.RunReply{Error: "the node could not read the run request"})
+			respond(collection.RunReply{Error: "the outpost could not read the run request"})
 			return
 		}
 		takeRun(ctx, rt, req, respond)
@@ -70,7 +70,7 @@ func subscribeRuns(ctx context.Context, nc *nats.Conn, rt runRoute) (*nats.Subsc
 // refused at once, never queued.
 func takeRun(ctx context.Context, rt runRoute, req collection.RunRequest, respond func(collection.RunReply)) {
 	if ctx.Err() != nil {
-		respond(collection.RunReply{Error: "the node is stopping"})
+		respond(collection.RunReply{Error: "the outpost is stopping"})
 		return
 	}
 	timeout := time.Duration(req.TimeoutMs) * time.Millisecond
@@ -88,7 +88,7 @@ func takeRun(ctx context.Context, rt runRoute, req collection.RunRequest, respon
 		run := func() {
 			left := time.Until(deadline)
 			if left <= 0 {
-				respond(collection.RunReply{Error: "the run's budget passed before the node could take it"})
+				respond(collection.RunReply{Error: "the run's budget passed before the outpost could take it"})
 				return
 			}
 			respond(previewRun(ctx, rt.runner, g, req.Tasks, req.Mask, left))
@@ -112,13 +112,13 @@ func takeRun(ctx context.Context, rt runRoute, req collection.RunRequest, respon
 			return
 		}
 		ok := rt.pool.offer(laneKey(task), laneOperator, func() {
-			respond(runNowTask(ctx, rt.out, rt.node, rt.runner, rt.sessions, rt.sched, rt.report, task, deadline))
+			respond(runNowTask(ctx, rt.out, rt.outpost, rt.runner, rt.sessions, rt.sched, rt.report, task, deadline))
 		})
 		if !ok {
 			respond(collection.RunReply{Full: true, Error: lanesFull})
 		}
 	default:
-		respond(collection.RunReply{Error: fmt.Sprintf("the node does not know a run of kind %q", req.Kind)})
+		respond(collection.RunReply{Error: fmt.Sprintf("the outpost does not know a run of kind %q", req.Kind)})
 	}
 }
 
@@ -134,7 +134,7 @@ func previewGate(g *gates, tasks []collection.TaskSpec) (collection.RunReply, bo
 	for _, task := range tasks {
 		if r, closed := g.closedHost(taskTarget(task)); closed {
 			return collection.RunReply{Gated: true, GateReason: string(r.kind),
-				Error: "node: the host is " + r.text + ", so the preview was not sent; " + reasonRules[r.kind].release}, true
+				Error: "outpost: the host is " + r.text + ", so the preview was not sent; " + reasonRules[r.kind].release}, true
 		}
 	}
 	return collection.RunReply{}, false
@@ -176,24 +176,24 @@ func previewRun(ctx context.Context, runner *collection.Runner, g *gates, tasks 
 // held session, no learned http auth (a digest challenge is answered afresh,
 // a login logs in once), and a tls pin trusted on first use. A poll that
 // needs a held session or a bound udp socket faults naming why (the server
-// refuses such a preview before it asks, so this is the node's own guard).
+// refuses such a preview before it asks, so this is the outpost's own guard).
 // The excerpt is what the fetch answered, before any emit read it.
 func collectPreviewTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, mask []string) (dps []collection.Sample, faults []error, excerpt string, cut bool) {
 	fn, err := driver.ParseBaked(task.Spec)
 	if err != nil {
-		return nil, []error{fmt.Errorf("node: preview task %s: %w", task.ID, err)}, "", false
+		return nil, []error{fmt.Errorf("outpost: preview task %s: %w", task.ID, err)}, "", false
 	}
 	var p endpointParams
 	if len(task.EndpointParams) > 0 {
 		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
-			return nil, []error{fmt.Errorf("node: bad preview params for task %s: %w", task.ID, err)}, "", false
+			return nil, []error{fmt.Errorf("outpost: bad preview params for task %s: %w", task.ID, err)}, "", false
 		}
 	}
 	switch {
 	case task.Transport == "udp":
-		return nil, []error{fmt.Errorf("node: a preview has no bound udp socket; attach the endpoint and run its poll now instead")}, "", false
+		return nil, []error{fmt.Errorf("outpost: a preview has no bound udp socket; attach the endpoint and run its poll now instead")}, "", false
 	case !driver.IsHTTP(task.Transport) && task.Session != nil:
-		return nil, []error{fmt.Errorf("node: a %s poll whose driver declares a session rides a held session, which a preview does not open", task.Transport)}, "", false
+		return nil, []error{fmt.Errorf("outpost: a %s poll whose driver declares a session rides a held session, which a preview does not open", task.Transport)}, "", false
 	}
 	// The excerpt is scrubbed here, where the credential is known, in every
 	// form an answer echoes it (a basic header's value too), and only then cut,
@@ -217,7 +217,7 @@ func collectPreviewTask(ctx context.Context, runner *collection.Runner, task col
 	if task.Transport == "https" {
 		trust, err := tlsTrustOf(p)
 		if err != nil {
-			return nil, []error{fmt.Errorf("node: preview task %s: %w", task.ID, err)}, "", false
+			return nil, []error{fmt.Errorf("outpost: preview task %s: %w", task.ID, err)}, "", false
 		}
 		pt.TLS = &trust
 	}
@@ -247,22 +247,22 @@ func landableRun(sched *pollSchedule, taskID string, dps []collection.Sample) []
 // (unreachable, disrupted): gated, naming the reason and what releases it.
 func heldRun(r reason) collection.RunReply {
 	return collection.RunReply{Gated: true, GateReason: string(r.kind),
-		Error: "node: the endpoint is " + r.text + "; " + reasonRules[r.kind].release}
+		Error: "outpost: the endpoint is " + r.text + "; " + reasonRules[r.kind].release}
 }
 
-// runNowTask runs one of the node's poll tasks now, on its lane, exactly
+// runNowTask runs one of the outpost's poll tasks now, on its lane, exactly
 // as a scheduled run would, its schedule untouched: the endpoint's held
 // session borrowed where it has one, its gate honored (a gated stateless
 // poll is refused with the gate's refusal, an endpoint its probe reads
 // unreachable is answered with that, and nothing is sent), a terminal
 // refusal it meets gating the endpoint, and what it reads published (its
 // faults as collection-failed, its samples as a batch), so it lands.
-func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, report *collectionReport, task collection.TaskSpec, deadline time.Time) collection.RunReply {
+func runNowTask(ctx context.Context, out *telemetrySpool, outpost string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, report *collectionReport, task collection.TaskSpec, deadline time.Time) collection.RunReply {
 	if task.Mode != "poll" || !driver.IsBaked(task.Spec) {
 		return collection.RunReply{Error: "a run now runs a driver poll, and this task is not one"}
 	}
 	if !time.Now().Before(deadline) {
-		return collection.RunReply{Error: "the run's budget passed before the node could take it"}
+		return collection.RunReply{Error: "the run's budget passed before the outpost could take it"}
 	}
 	if driver.IsHTTP(task.Transport) && sessions.streamPending(task.EndpointID) {
 		// The endpoint's stream is making its first attempt under this
@@ -298,13 +298,13 @@ func runNowTask(ctx context.Context, out *telemetrySpool, node string, runner *c
 	}
 	for _, f := range faults {
 		res.Faults = append(res.Faults, f.Error())
-		if err := publishCollectionFailed(out, node, task.ID, f); err != nil {
-			return collection.RunReply{Error: "the node could not publish the run's faults: " + err.Error()}
+		if err := publishCollectionFailed(out, outpost, task.ID, f); err != nil {
+			return collection.RunReply{Error: "the outpost could not publish the run's faults: " + err.Error()}
 		}
 	}
 	if landed := landableRun(sched, task.ID, dps); len(landed) > 0 {
-		if err := publishBatch(out, node, task.ID, landed); err != nil {
-			return collection.RunReply{Error: "the node could not publish the run's samples: " + err.Error()}
+		if err := publishBatch(out, outpost, task.ID, landed); err != nil {
+			return collection.RunReply{Error: "the outpost could not publish the run's samples: " + err.Error()}
 		}
 	}
 	sched.commitChanged(task.ID, dps)

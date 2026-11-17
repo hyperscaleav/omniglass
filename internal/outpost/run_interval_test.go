@@ -3,7 +3,7 @@
 // The simulator serves on 127.x addresses beyond 127.0.0.1, which Linux
 // treats as local without configuration.
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -16,12 +16,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
 // TestAPollRunsOnItsOwnIntervalBesideADeadDevice drives #1634 over the real
-// wire: a node that checks in every 30s, the shipped tessellate-census-http driver
+// wire: an outpost that checks in every 30s, the shipped tessellate-census-http driver
 // re-authored so each poll runs every 10s, against the simulated sensor, and
 // a second component whose device accepts a connection and never answers.
 // The live sensor's samples land 10s apart, within a second, though the
@@ -56,7 +56,7 @@ func TestAPollRunsOnItsOwnIntervalBesideADeadDevice(t *testing.T) {
 	runCtx, cancel := context.WithCancel(s.ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: "edge-interval", Token: s.token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: s.apiURL, Name: "edge-interval", Token: s.token,
 			HeartbeatEvery: 30 * time.Second})
 		ran <- err
 	}()

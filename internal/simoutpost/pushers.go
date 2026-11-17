@@ -1,4 +1,4 @@
-package simnode
+package simoutpost
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
 
-// Pusher is one outside actor the emulator runs beside its node (#1743): a
+// Pusher is one outside actor the emulator runs beside its outpost (#1743): a
 // pusher the lab's scenario declared, as a device of a profile with a push
 // face, holding the bearer token the lab minted for its principal this run.
 // Name is the principal's; the emulator never logs Token.
@@ -18,8 +18,8 @@ type Pusher struct {
 	Name, Profile, Token string
 }
 
-// PushersEnv carries a node's pushers to its emulator, as FormatPushers
-// writes them. The lab sets it per node; it is never printed.
+// PushersEnv carries an outpost's pushers to its emulator, as FormatPushers
+// writes them. The lab sets it per outpost; it is never printed.
 const PushersEnv = "OMNIGLASS_SIM_PUSHERS"
 
 // FormatPushers writes each pusher as name=profile:token, comma separated. A
@@ -62,7 +62,7 @@ func ParsePushers(s string) ([]Pusher, error) {
 }
 
 // startPushers runs each pusher as an emulator device of its profile, apart
-// from the node's simulated fleet (a pusher is no component the server lists
+// from the outpost's simulated fleet (a pusher is no component the server lists
 // for it), and hands each its token: its push face then pushes for every
 // system its grant names, on its profile's cadence. A pusher whose profile
 // the catalog lacks or has no push face is refused, since it would never

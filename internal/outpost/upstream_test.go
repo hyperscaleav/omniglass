@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"strings"
@@ -200,7 +200,7 @@ func TestTheUpstreamReasonIsPublishedNamingTheComponentAndAdoptedOnRestart(t *te
 		t.Fatalf("c-1 text = %q; want it to name upstream A since", r.text)
 	}
 
-	// A restarted node adopts the reason off the worklist and keeps it held:
+	// A restarted outpost adopts the reason off the worklist and keeps it held:
 	// the upstream's own unreachable is re-earned from its probes, so until
 	// B reads up nothing says the path is open, and probing C now would read
 	// it down behind a dead upstream.
@@ -262,7 +262,7 @@ func TestADownReadBeforeTheHoldDoesNotCountTowardUnreachableAfterIt(t *testing.T
 }
 
 // chainGates places the A-B-C chain on g, every endpoint probed; observe
-// first marks each endpoint's fingerprint (a fresh node).
+// first marks each endpoint's fingerprint (a fresh outpost).
 func chainGates(g *gates, observe bool) {
 	if observe {
 		for _, ep := range []string{"a-1", "b-1", "c-1"} {

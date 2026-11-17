@@ -32,8 +32,8 @@ type endpointBody struct {
 	Transport   string               `json:"transport" doc:"The transport name (the wire this endpoint speaks over), from the code registry"`
 	Component   *string              `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted endpoint"`
 	ComponentID *string              `json:"component_id,omitempty" doc:"The owning component's id; the stable form of component"`
-	Node        *string              `json:"node,omitempty" doc:"The node placement name, if assigned"`
-	NodeID      *string              `json:"node_id,omitempty" doc:"The placed node's id; the stable form of node"`
+	Outpost     *string              `json:"outpost,omitempty" doc:"The outpost placement name, if assigned"`
+	OutpostID   *string              `json:"outpost_id,omitempty" doc:"The placed outpost's id; the stable form of outpost"`
 	Params      json.RawMessage      `json:"params,omitempty" doc:"The address/target settings (jsonb)"`
 	Driver      *string              `json:"driver,omitempty" doc:"The driver this endpoint was attached through (#813); absent for a bare probe endpoint"`
 	DriverID    *string              `json:"driver_id,omitempty" doc:"The attached driver's id; the stable form of driver"`
@@ -100,7 +100,7 @@ func toEndpointBody(it *storage.Endpoint) endpointBody {
 	b := endpointBody{
 		ID: it.ID, Name: it.Name, Label: it.Label, Transport: it.Transport,
 		Component: it.Component, ComponentID: it.ComponentID,
-		Node: it.Node, NodeID: it.NodeID, OutOfBand: it.OutOfBand,
+		Outpost: it.Outpost, OutpostID: it.OutpostID, OutOfBand: it.OutOfBand,
 	}
 	if len(it.Params) > 0 {
 		b.Params = json.RawMessage(it.Params)
@@ -138,7 +138,7 @@ type createEndpointInput struct {
 		Transport string          `json:"transport,omitempty" doc:"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set"`
 		Label     string          `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for"`
 		Component *string         `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)"`
-		Node      *string         `json:"node,omitempty" doc:"Node placement, by name or id"`
+		Outpost   *string         `json:"outpost,omitempty" doc:"Outpost placement, by name or id"`
 		Params    json.RawMessage `json:"params,omitempty" doc:"Address/target settings (jsonb); an attach derives them from the inputs instead"`
 		Driver    *string         `json:"driver,omitempty" doc:"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions"`
 		Inputs    inputScalars    `json:"inputs,omitempty" doc:"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest"`
@@ -149,7 +149,7 @@ type createEndpointInput struct {
 type updateEndpointInput struct {
 	Endpoint string `path:"endpoint" doc:"The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does" example:"boi.17c.415a.$comp.display-1/https"`
 	Body     struct {
-		Node      *string         `json:"node,omitempty" doc:"Reassign the node placement, by name or id"`
+		Outpost   *string         `json:"outpost,omitempty" doc:"Reassign the outpost placement, by name or id"`
 		Label     *string         `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone"`
 		Params    json.RawMessage `json:"params,omitempty" doc:"Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs"`
 		Inputs    inputScalars    `json:"inputs,omitempty" doc:"A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it"`
@@ -161,7 +161,7 @@ type updateEndpointInput struct {
 type retryEndpointInput struct {
 	Endpoint string `path:"endpoint" doc:"The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does" example:"boi.17c.415a.$comp.display-1/https"`
 	Body     *struct {
-		HostKey     string `json:"host_key,omitempty" doc:"The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged"`
+		HostKey     string `json:"host_key,omitempty" doc:"The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the outpost's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged"`
 		Certificate string `json:"certificate,omitempty" doc:"A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged"`
 	}
 }
@@ -241,7 +241,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Transport: in.Body.Transport,
 			Label:     in.Body.Label,
 			Component: in.Body.Component,
-			Node:      in.Body.Node,
+			Outpost:   in.Body.Outpost,
 			Params:    []byte(in.Body.Params),
 			Driver:    in.Body.Driver,
 			Inputs:    in.Body.Inputs.strings(),
@@ -267,11 +267,11 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/endpoints/{endpoint}",
 		Summary:     "Update an endpoint",
-		Description: "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+		Description: "Patches an endpoint's outpost placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 	}, "endpoint", "update"), "secret", "bind"), func(ctx context.Context, in *updateEndpointInput) (*endpointOutput, error) {
 		use := a.secretBind(ctx)
 		it, err := gw.UpdateEndpoint(ctx, actorID(ctx), in.Endpoint, storage.EndpointPatch{
-			Node:      in.Body.Node,
+			Outpost:   in.Body.Outpost,
 			Params:    []byte(in.Body.Params),
 			Label:     in.Body.Label,
 			Inputs:    in.Body.Inputs.strings(),
@@ -296,7 +296,7 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPost,
 		Path:        "/endpoints/{endpoint}:retry",
 		Summary:     "Retry an endpoint's gated connections",
-		Description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
+		Description: "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the outpost recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.",
 	}, "endpoint", "retry"), func(ctx context.Context, in *retryEndpointInput) (*endpointOutput, error) {
 		var pin storage.RetryPin
 		if in.Body != nil {
@@ -368,8 +368,8 @@ func mapEndpointErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown transport")
 	case errors.Is(err, storage.ErrEndpointComponentNotFound):
 		return huma.Error422UnprocessableEntity("component not found")
-	case errors.Is(err, storage.ErrEndpointNodeNotFound), errors.Is(err, storage.ErrNodeNotFound):
-		return huma.Error422UnprocessableEntity("node not found")
+	case errors.Is(err, storage.ErrEndpointOutpostNotFound), errors.Is(err, storage.ErrOutpostNotFound):
+		return huma.Error422UnprocessableEntity("outpost not found")
 	case errors.Is(err, storage.ErrRetryHostKey):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: retry host key: "))
 	case errors.Is(err, storage.ErrRetryHostKeyStale):

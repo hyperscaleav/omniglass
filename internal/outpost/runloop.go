@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// runLoop is the node's run-loop goroutine (#1636, ADR-1637): the one owner
+// runLoop is the outpost's run-loop goroutine (#1636, ADR-1637): the one owner
 // of the session maps, so a reconcile, a borrowed session and a housekeeping
 // pass never race. Each kind of work has its own clock, a channel, so a test
 // drives the loop with clocks it owns and a nil channel never fires:
@@ -20,7 +20,7 @@ import (
 //   - reconcile is the safety net, for a gate or a retry that changed
 //     between worklists;
 //   - heartbeat runs the heartbeat's own work (liveness, the spool, the
-//     commands, the node's account of itself);
+//     commands, the outpost's account of itself);
 //   - housekeep flushes what the sessions accumulated (unclaimed lines,
 //     pushes into the collection report) and publishes the report when due.
 //

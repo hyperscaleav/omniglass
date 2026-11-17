@@ -242,7 +242,7 @@
     {
       "table": "metric_series",
       "shape": "id only",
-      "reason": "what a metric sample is a sample of (#1275), keyed by its type, owner, instance, provenance, source and collecting node; nothing addresses it by name",
+      "reason": "what a metric sample is a sample of (#1275), keyed by its type, owner, instance, provenance, source and collecting outpost; nothing addresses it by name",
       "labelled": false
     },
     {
@@ -268,16 +268,6 @@
       "shape": "keyspace",
       "reason": "icmp-rtt-avg, a numeric-series name referenced from drivers and templates",
       "labelled": true
-    },
-    {
-      "table": "node",
-      "shape": "key-bearing",
-      "labelled": true
-    },
-    {
-      "table": "node_log",
-      "shape": "id only",
-      "labelled": false
     },
     {
       "table": "notification",
@@ -316,6 +306,16 @@
       "reason": "keyed by the hash of a minted refresh token (#2073), not a name: it is spent by its one refresh and pruned when its credential rotates",
       "labelled": false,
       "no_label": "no operator surface of its own: only the refresh grant reads a refresh token"
+    },
+    {
+      "table": "outpost",
+      "shape": "key-bearing",
+      "labelled": true
+    },
+    {
+      "table": "outpost_log",
+      "shape": "id only",
+      "labelled": false
     },
     {
       "table": "platform_server",

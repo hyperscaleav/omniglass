@@ -244,7 +244,7 @@ interfaces:
 
   # NVP as datagrams (#1037): the same line protocol over UDP, one line per
   # datagram, the proving face for the udp transport. Each source address is
-  # its own session, so a node's endpoint, which sends every request from its
+  # its own session, so an outpost's endpoint, which sends every request from its
   # own bound port, is the destination SUBSCRIBE INPUT pushes to. The face
   # drops a seeded share of datagrams each way (loss_pct), so the driver's
   # retries are exercised on a real wire with no NET_ADMIN. The NVP verbs are

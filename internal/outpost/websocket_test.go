@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// A websocket endpoint's session as the node derives it (#1034): its auth
+// A websocket endpoint's session as the outpost derives it (#1034): its auth
 // step is the upgrade (the driver's, or the root), riding the session's
 // scheme with the credential resolved from the delivered secrets; its polls
 // never fall back to a throwaway line connection; and its learned auth is

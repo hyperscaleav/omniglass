@@ -12,185 +12,185 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-type nodeBody struct {
+type outpostBody struct {
 	Name            string            `json:"name"`
 	Label           string            `json:"label,omitempty"`
 	Description     string            `json:"description,omitempty"`
-	Location        *string           `json:"location,omitempty" doc:"The location the node sits in (descriptive placement, not scope)"`
+	Location        *string           `json:"location,omitempty" doc:"The location the outpost sits in (descriptive placement, not scope)"`
 	LocationID      *string           `json:"location_id,omitempty" doc:"The location's id; the stable form of location"`
 	Enrolled        bool              `json:"enrolled"`
 	LastHeartbeatAt *time.Time        `json:"last_heartbeat_at,omitempty"`
 	EnrolledAt      *time.Time        `json:"enrolled_at,omitempty"`
-	OrphanedBatches int64             `json:"orphaned_batches" doc:"How many of this node's telemetry batches the server dropped because their task is not placed on this node (moved to another node, or unknown): the confinement fence, counted rather than silent. A rising count means the node is collecting for a task it no longer holds"`
+	OrphanedBatches int64             `json:"orphaned_batches" doc:"How many of this outpost's telemetry batches the server dropped because their task is not placed on this outpost (moved to another outpost, or unknown): the confinement fence, counted rather than silent. A rising count means the outpost is collecting for a task it no longer holds"`
 	LastOrphanedAt  *time.Time        `json:"last_orphaned_at,omitempty" doc:"When the newest orphaned batch arrived"`
-	EffectiveTags   map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills."`
+	EffectiveTags   map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) on this outpost: its direct bindings plus propagating platform tags. For the Tags column and the blade pills."`
 }
 
-func toNodeBody(n *storage.Node) nodeBody {
-	return nodeBody{
+func toOutpostBody(n *storage.Outpost) outpostBody {
+	return outpostBody{
 		Name: n.Name, Label: n.Label, Description: n.Description, Location: n.LocationName, LocationID: n.LocationID,
 		Enrolled: n.Enrolled, LastHeartbeatAt: n.LastHeartbeatAt, EnrolledAt: n.EnrolledAt,
 		OrphanedBatches: n.OrphanedBatches, LastOrphanedAt: n.LastOrphanedAt,
 	}
 }
 
-type listNodesOutput struct {
+type listOutpostsOutput struct {
 	Body struct {
-		Nodes []nodeBody `json:"nodes"`
+		Outposts []outpostBody `json:"outposts"`
 	}
 }
 
-type nodeOutput struct {
-	Body nodeBody
+type outpostOutput struct {
+	Body outpostBody
 }
 
-type nodePathInput struct {
-	Name string `path:"name" doc:"The node's unique name"`
+type outpostPathInput struct {
+	Name string `path:"name" doc:"The outpost's unique name"`
 }
 
-type createNodeInput struct {
+type createOutpostInput struct {
 	Body struct {
-		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot"`
+		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique outpost name (lowercase letters, digits, and hyphens); it is also the outpost's NATS subject token, which is why the rule forbids a dot"`
 		Label       string  `json:"label,omitempty" doc:"Operator label; falls back to the name when empty"`
-		Description string  `json:"description,omitempty" doc:"Free-form operator notes about the node"`
-		Location    *string `json:"location,omitempty" doc:"Optional location the node sits in, by name or id (descriptive placement, not scope)"`
+		Description string  `json:"description,omitempty" doc:"Free-form operator notes about the outpost"`
+		Location    *string `json:"location,omitempty" doc:"Optional location the outpost sits in, by name or id (descriptive placement, not scope)"`
 	}
 }
 
-// updateNodeInput is the PATCH body: a nil field is left unchanged. Name is not
+// updateOutpostInput is the PATCH body: a nil field is left unchanged. Name is not
 // patchable (the immutable fleet address). A Location of "" clears the placement.
-type updateNodeInput struct {
+type updateOutpostInput struct {
 	Name string `path:"name"`
 	Body struct {
 		Label       *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		Description *string `json:"description,omitempty" doc:"New free-form operator notes"`
-		Location    *string `json:"location,omitempty" doc:"Set the node's location by name or id, or \"\" to clear it"`
+		Location    *string `json:"location,omitempty" doc:"Set the outpost's location by name or id, or \"\" to clear it"`
 	}
 }
 
 type enrollOutput struct {
 	Body struct {
 		Name  string `json:"name"`
-		Token string `json:"token" doc:"The enrollment token, shown once. Hand it to the node deployment; the node presents it to claim its NATS credential."`
+		Token string `json:"token" doc:"The enrollment token, shown once. Hand it to the outpost deployment; the outpost presents it to claim its NATS credential."`
 	}
 }
 
-type claimNodeInput struct {
+type claimOutpostInput struct {
 	Body struct {
-		Name  string `json:"name" minLength:"1" doc:"The node name the enrollment was minted for"`
-		Token string `json:"token" minLength:"1" doc:"The one-time enrollment token from node create, exchanged here for the node's NATS credential"`
+		Name  string `json:"name" minLength:"1" doc:"The outpost name the enrollment was minted for"`
+		Token string `json:"token" minLength:"1" doc:"The one-time enrollment token from outpost create, exchanged here for the outpost's NATS credential"`
 	}
 }
 
 type claimOutput struct {
 	Body struct {
-		NatsURL  string `json:"nats_url" doc:"The NATS URL the node dials"`
-		Username string `json:"username" doc:"The node's NATS username (its node name)"`
-		Password string `json:"password" doc:"The node's NATS password (its enrollment token)"`
+		NatsURL  string `json:"nats_url" doc:"The NATS URL the outpost dials"`
+		Username string `json:"username" doc:"The outpost's NATS username (its outpost name)"`
+		Password string `json:"password" doc:"The outpost's NATS password (its enrollment token)"`
 	}
 }
 
-// registerNodeRoutes wires the node surface: AIP CRUD-ish create/list/get plus
-// the :enroll custom method (mint a token) and the public :claim exchange (a node
+// registerOutpostRoutes wires the outpost surface: AIP CRUD-ish create/list/get plus
+// the :enroll custom method (mint a token) and the public :claim exchange (an outpost
 // presents its token, gets its NATS credential). natsURL is the address the claim
-// reply hands back so the node needs only the server URL.
-func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, natsURL string, hub SimHub) {
+// reply hands back so the outpost needs only the server URL.
+func registerOutpostRoutes(api huma.API, a *authenticator, gw storage.Gateway, natsURL string, hub SimHub) {
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "list-nodes",
+		OperationID: "list-outposts",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
-		Path:        "/nodes",
-		Summary:     "List nodes",
-		Description: "Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.",
-	}, "node", "read"), func(ctx context.Context, _ *struct{}) (*listNodesOutput, error) {
-		nodes, err := gw.ListNodes(ctx, a.scopeFor(ctx, "node", "read"))
+		Path:        "/outposts",
+		Summary:     "List outposts",
+		Description: "Lists the edge outposts. An outpost is fleet-wide, so listing requires an all-scope read. Gated by outpost:read.",
+	}, "outpost", "read"), func(ctx context.Context, _ *struct{}) (*listOutpostsOutput, error) {
+		outposts, err := gw.ListOutposts(ctx, a.scopeFor(ctx, "outpost", "read"))
 		if err != nil {
-			return nil, mapNodeErr(err)
+			return nil, mapOutpostErr(err)
 		}
-		ids := make([]string, len(nodes))
-		for i := range nodes {
-			ids[i] = nodes[i].PrincipalID
+		ids := make([]string, len(outposts))
+		for i := range outposts {
+			ids[i] = outposts[i].PrincipalID
 		}
-		effTags, err := gw.EffectiveTags(ctx, "node", ids)
+		effTags, err := gw.EffectiveTags(ctx, "outpost", ids)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("list nodes")
+			return nil, huma.Error500InternalServerError("list outposts")
 		}
-		out := &listNodesOutput{}
-		out.Body.Nodes = make([]nodeBody, 0, len(nodes))
-		for i := range nodes {
-			b := toNodeBody(&nodes[i])
-			b.EffectiveTags = effTags[nodes[i].PrincipalID]
-			out.Body.Nodes = append(out.Body.Nodes, b)
+		out := &listOutpostsOutput{}
+		out.Body.Outposts = make([]outpostBody, 0, len(outposts))
+		for i := range outposts {
+			b := toOutpostBody(&outposts[i])
+			b.EffectiveTags = effTags[outposts[i].PrincipalID]
+			out.Body.Outposts = append(out.Body.Outposts, b)
 		}
 		return out, nil
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "get-node",
+		OperationID: "get-outpost",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
-		Path:        "/nodes/{name}",
-		Summary:     "Get a node",
-		Description: "Fetches a node by name. Requires an all-scope read. Gated by node:read.",
-	}, "node", "read"), func(ctx context.Context, in *nodePathInput) (*nodeOutput, error) {
-		n, err := gw.GetNode(ctx, in.Name, a.scopeFor(ctx, "node", "read"))
+		Path:        "/outposts/{name}",
+		Summary:     "Get an outpost",
+		Description: "Fetches an outpost by name. Requires an all-scope read. Gated by outpost:read.",
+	}, "outpost", "read"), func(ctx context.Context, in *outpostPathInput) (*outpostOutput, error) {
+		n, err := gw.GetOutpost(ctx, in.Name, a.scopeFor(ctx, "outpost", "read"))
 		if err != nil {
-			return nil, mapNodeErr(err)
+			return nil, mapOutpostErr(err)
 		}
-		b := toNodeBody(n)
-		effTags, err := gw.EffectiveTags(ctx, "node", []string{n.PrincipalID})
+		b := toOutpostBody(n)
+		effTags, err := gw.EffectiveTags(ctx, "outpost", []string{n.PrincipalID})
 		if err != nil {
-			return nil, huma.Error500InternalServerError("get node")
+			return nil, huma.Error500InternalServerError("get outpost")
 		}
 		b.EffectiveTags = effTags[n.PrincipalID]
-		return &nodeOutput{Body: b}, nil
+		return &outpostOutput{Body: b}, nil
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "create-node",
+		OperationID:   "create-outpost",
 		Method:        http.MethodPost,
-		Path:          "/nodes",
+		Path:          "/outposts",
 		DefaultStatus: http.StatusCreated,
-		Summary:       "Create a node",
-		Description:   "Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.",
-	}, "node", "create"), func(ctx context.Context, in *createNodeInput) (*nodeOutput, error) {
-		n, err := gw.CreateNode(ctx, actorID(ctx), storage.NodeSpec{
+		Summary:       "Create an outpost",
+		Description:   "Registers an edge outpost server-side (day-one enrollment: create, then :enroll to mint its token). Gated by outpost:create.",
+	}, "outpost", "create"), func(ctx context.Context, in *createOutpostInput) (*outpostOutput, error) {
+		n, err := gw.CreateOutpost(ctx, actorID(ctx), storage.OutpostSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Description: in.Body.Description, LocationName: in.Body.Location,
-		}, a.scopeFor(ctx, "node", "create"), a.scopeFor(ctx, "location", "read"))
+		}, a.scopeFor(ctx, "outpost", "create"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
-			return nil, mapNodeErr(err)
+			return nil, mapOutpostErr(err)
 		}
-		return &nodeOutput{Body: toNodeBody(n)}, nil
+		return &outpostOutput{Body: toOutpostBody(n)}, nil
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "update-node",
+		OperationID: "update-outpost",
 		Method:      http.MethodPatch,
-		Path:        "/nodes/{name}",
-		Summary:     "Update a node",
-		Description: "Patches a node's label, description, and location (a nil field is unchanged; a location of \"\" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.",
-	}, "node", "update"), func(ctx context.Context, in *updateNodeInput) (*nodeOutput, error) {
-		n, err := gw.UpdateNode(ctx, actorID(ctx), in.Name, storage.NodePatch{
+		Path:        "/outposts/{name}",
+		Summary:     "Update an outpost",
+		Description: "Patches an outpost's label, description, and location (a nil field is unchanged; a location of \"\" clears it). The name is immutable. Requires an all-scope action. Gated by outpost:update.",
+	}, "outpost", "update"), func(ctx context.Context, in *updateOutpostInput) (*outpostOutput, error) {
+		n, err := gw.UpdateOutpost(ctx, actorID(ctx), in.Name, storage.OutpostPatch{
 			Label: in.Body.Label, Description: in.Body.Description, LocationName: in.Body.Location,
-		}, a.scopeFor(ctx, "node", "read"), a.scopeFor(ctx, "node", "update"), a.scopeFor(ctx, "location", "read"))
+		}, a.scopeFor(ctx, "outpost", "read"), a.scopeFor(ctx, "outpost", "update"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
-			return nil, mapNodeErr(err)
+			return nil, mapOutpostErr(err)
 		}
-		return &nodeOutput{Body: toNodeBody(n)}, nil
+		return &outpostOutput{Body: toOutpostBody(n)}, nil
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "delete-node",
+		OperationID:   "delete-outpost",
 		Method:        http.MethodDelete,
-		Path:          "/nodes/{name}",
+		Path:          "/outposts/{name}",
 		DefaultStatus: http.StatusNoContent,
-		Summary:       "Delete a node",
-		Description:   "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
-	}, "node", "delete"), func(ctx context.Context, in *nodePathInput) (*struct{}, error) {
-		if err := gw.DeleteNode(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "node", "read"), a.scopeFor(ctx, "node", "delete")); err != nil {
-			return nil, mapNodeErr(err)
+		Summary:       "Delete an outpost",
+		Description:   "Decommissions an outpost: a hard delete that cascades its endpoints, their derived tasks, its outpost-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by outpost:delete.",
+	}, "outpost", "delete"), func(ctx context.Context, in *outpostPathInput) (*struct{}, error) {
+		if err := gw.DeleteOutpost(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "outpost", "read"), a.scopeFor(ctx, "outpost", "delete")); err != nil {
+			return nil, mapOutpostErr(err)
 		}
-		// The deleted node's simulator status goes with it; a nil hub (no bus) has none.
+		// The deleted outpost's simulator status goes with it; a nil hub (no bus) has none.
 		if hub != nil {
 			hub.Forget(in.Name)
 		}
@@ -198,19 +198,19 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 	})
 
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "enroll-node",
+		OperationID: "enroll-outpost",
 		Extensions:  plaintext(),
 		Method:      http.MethodPost,
-		Path:        "/nodes/{name}:enroll",
-		Summary:     "Mint a node's enrollment token",
-		Description: "Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.",
-	}, "node", "enroll"), func(ctx context.Context, in *nodePathInput) (*enrollOutput, error) {
+		Path:        "/outposts/{name}:enroll",
+		Summary:     "Mint an outpost's enrollment token",
+		Description: "Mints (or re-mints) the outpost's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by outpost:enroll.",
+	}, "outpost", "enroll"), func(ctx context.Context, in *outpostPathInput) (*enrollOutput, error) {
 		token, hash, _, err := auth.NewBearerToken()
 		if err != nil {
 			return nil, huma.Error500InternalServerError("mint enrollment token")
 		}
-		if _, err := gw.SetEnrollmentToken(ctx, actorID(ctx), in.Name, hex.EncodeToString(hash), a.scopeFor(ctx, "node", "enroll")); err != nil {
-			return nil, mapNodeErr(err)
+		if _, err := gw.SetEnrollmentToken(ctx, actorID(ctx), in.Name, hex.EncodeToString(hash), a.scopeFor(ctx, "outpost", "enroll")); err != nil {
+			return nil, mapOutpostErr(err)
 		}
 		out := &enrollOutput{}
 		out.Body.Name = in.Name
@@ -219,17 +219,17 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 	})
 
 	huma.Register(api, huma.Operation{
-		OperationID: "claim-node",
+		OperationID: "claim-outpost",
 		Extensions:  plaintext(),
 		Method:      http.MethodPost,
-		Path:        "/nodes:claim",
-		Summary:     "Claim a node identity in exchange for its NATS credential",
-		Description: "The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.",
+		Path:        "/outposts:claim",
+		Summary:     "Claim an outpost identity in exchange for its NATS credential",
+		Description: "The outpost-facing exchange: an outpost presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.",
 		Errors:      []int{http.StatusUnauthorized},
-	}, func(ctx context.Context, in *claimNodeInput) (*claimOutput, error) {
-		n, err := gw.ClaimNode(ctx, in.Body.Name, hex.EncodeToString(auth.HashToken(in.Body.Token)))
+	}, func(ctx context.Context, in *claimOutpostInput) (*claimOutput, error) {
+		n, err := gw.ClaimOutpost(ctx, in.Body.Name, hex.EncodeToString(auth.HashToken(in.Body.Token)))
 		if err != nil {
-			return nil, mapNodeErr(err)
+			return nil, mapOutpostErr(err)
 		}
 		out := &claimOutput{}
 		out.Body.NatsURL = natsURL
@@ -239,7 +239,7 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 	})
 }
 
-func mapNodeErr(err error) error {
+func mapOutpostErr(err error) error {
 	if platErr, ok := mapPlatformErr(err); ok {
 		return platErr
 	}
@@ -247,21 +247,21 @@ func mapNodeErr(err error) error {
 		return refErr
 	}
 	switch {
-	case errors.Is(err, storage.ErrNodeNotFound):
-		return huma.Error404NotFound("node not found")
-	case errors.Is(err, storage.ErrNodeExists):
-		return huma.Error409Conflict("node name already exists")
-	case errors.Is(err, storage.ErrNodeForbidden):
+	case errors.Is(err, storage.ErrOutpostNotFound):
+		return huma.Error404NotFound("outpost not found")
+	case errors.Is(err, storage.ErrOutpostExists):
+		return huma.Error409Conflict("outpost name already exists")
+	case errors.Is(err, storage.ErrOutpostForbidden):
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrEnrollmentInvalid):
 		return huma.Error401Unauthorized("invalid enrollment token")
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
-		return huma.Error422UnprocessableEntity("node name may not be a uuid")
+		return huma.Error422UnprocessableEntity("outpost name may not be a uuid")
 	case errors.Is(err, storage.ErrInvalidEntityName):
-		return huma.Error422UnprocessableEntity("node name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
+		return huma.Error422UnprocessableEntity("outpost name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
 	default:
-		return huma.Error500InternalServerError("node operation failed")
+		return huma.Error500InternalServerError("outpost operation failed")
 	}
 }

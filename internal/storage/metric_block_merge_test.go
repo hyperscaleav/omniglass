@@ -190,7 +190,7 @@ func TestLateSamplesRewriteTheirBlockOnce(t *testing.T) {
 	r.verify()
 }
 
-// TestAReplayedSpoolLandsWhole: a node's three-day spool replayed after its
+// TestAReplayedSpoolLandsWhole: an outpost's three-day spool replayed after its
 // first two days folded lands every sample: Sunday's into its ISO week's
 // block, Monday's into its day block, and Tuesday's, a day the fold has not
 // reached, as raw rows the next pass folds. A batch delivered again lands

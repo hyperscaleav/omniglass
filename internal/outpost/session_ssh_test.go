@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The node's ssh sessions (#1032): the transport's own credential comes from
+// The outpost's ssh sessions (#1032): the transport's own credential comes from
 // the secret input the driver names, the host key pin rides the worklist and
 // is trusted on first use, a pin the operator changes recycles the session,
 // and a key trusted on first use publishes as ssh-host-key without
@@ -167,7 +167,7 @@ func TestSSHPinSurvivesALostPublishAndARecycle(t *testing.T) {
 	log.waitFor(t, "p1", collection.SessionUp)
 
 	// The server never got it: the next tick still delivers no pin, and the
-	// node publishes it again.
+	// outpost publishes it again.
 	m.reconcile([]collection.TaskSpec{sshPollTask("p1", "ep-1", "", creds)})
 	mu.Lock()
 	n := published
@@ -230,8 +230,8 @@ func TestSSHHostKeyRefusalPublishesBothKeysWithItsGate(t *testing.T) {
 
 // A pin the worklist delivered and then stops delivering was withdrawn by the
 // server (a declared pin that never came through :retry, retired by the
-// writer ruling): the node forgets it, never republishes it as a key it
-// learned, and the next connection trusts on first use. A key the node
+// writer ruling): the outpost forgets it, never republishes it as a key it
+// learned, and the next connection trusts on first use. A key the outpost
 // learned itself on first use is still carried (the lost-publish case above).
 func TestSSHWithdrawnPinIsForgottenAndTrustsOnFirstUseAgain(t *testing.T) {
 	t.Parallel()
@@ -283,7 +283,7 @@ func TestSSHWithdrawnPinIsForgottenAndTrustsOnFirstUseAgain(t *testing.T) {
 	got := append([]string(nil), keys...)
 	mu.Unlock()
 	if slices.Contains(got, "SHA256:planted") {
-		t.Fatalf("the node republished the withdrawn pin as its own key: %v", got)
+		t.Fatalf("the outpost republished the withdrawn pin as its own key: %v", got)
 	}
 	if !slices.Contains(got, "SHA256:real") {
 		t.Fatalf("published %v, want the key trusted on first use after the withdrawal", got)

@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -161,7 +161,7 @@ type dialAnswer struct {
 var (
 	dialUp           = dialAnswer{reach: collection.Responded}
 	dialDown         = dialAnswer{reach: collection.Refused}
-	dialInconclusive = dialAnswer{err: errors.New("no route out of the node")}
+	dialInconclusive = dialAnswer{err: errors.New("no route out of the outpost")}
 )
 
 func (d *scriptDialer) Dial(context.Context, string, time.Duration) (float64, collection.Reachability, error) {
@@ -496,7 +496,7 @@ func TestACommandToAnUnreachableEndpointAnswersAtOnce(t *testing.T) {
 	line := &lineRecorder{}
 	_, out := executeDelivery(t.Context(), &collection.Runner{Line: line}, collection.CommandDelivery{
 		ID: 1, Transport: "tcp", Target: "10.0.0.5:23", EndpointID: "ep-1", Line: "SET INPUT hdmi2"}, m)
-	if want := "node: the endpoint is unreachable since 2026-11-09T14:03:00Z (probe r1), so the command was not sent"; out != want {
+	if want := "outpost: the endpoint is unreachable since 2026-11-09T14:03:00Z (probe r1), so the command was not sent"; out != want {
 		t.Fatalf("outcome %q, want %q", out, want)
 	}
 	if len(line.sent) != 0 {
@@ -559,7 +559,7 @@ func TestARunNowOnAnUnreachableEndpointIsAnsweredBeforeItsLane(t *testing.T) {
 }
 
 // A preview carries no endpoint: it answers Gated when its target's host is
-// unreachable on this node. A refusal holds it only when it resolves to the
+// unreachable on this outpost. A refusal holds it only when it resolves to the
 // refused endpoint by transport and target (#1249): it sends its own
 // request, with inputs no better than the refused ones until an operator
 // acts. A preview to another host is never held.
@@ -612,7 +612,7 @@ func TestHostOfReadsEveryTargetForm(t *testing.T) {
 }
 
 // endpoint-rejection carries every reason, the refused entry first; Parse
-// still reads the refused entry; a restarted node adopts refused alone, since
+// still reads the refused entry; a restarted outpost adopts refused alone, since
 // the probe re-derives unreachable.
 func TestTheGatePublishesEveryReasonAndARestartAdoptsTheRefusal(t *testing.T) {
 	t.Parallel()
@@ -635,13 +635,13 @@ func TestTheGatePublishesEveryReasonAndARestartAdoptsTheRefusal(t *testing.T) {
 	restarted := newGates()
 	restarted.observe("ep-1", "fp-a", value)
 	if _, ok := restarted.refusedAt("ep-1", rungAuthenticated); !ok {
-		t.Fatal("a restarted node lost the refusal")
+		t.Fatal("a restarted outpost lost the refusal")
 	}
 	if r, held := restarted.holding("ep-1"); held {
-		t.Fatalf("a restarted node adopted %+v; unreachable is the probe's to re-derive", r)
+		t.Fatalf("a restarted outpost adopted %+v; unreachable is the probe's to re-derive", r)
 	}
 	if got, _ := restarted.rejectionOf("ep-1"); got != "authenticated auth fp-a" {
-		t.Fatalf("a restarted node publishes %q, want the refusal alone", got)
+		t.Fatalf("a restarted outpost publishes %q, want the refusal alone", got)
 	}
 
 	// Unreachable alone publishes no reason beside it: the reason property is

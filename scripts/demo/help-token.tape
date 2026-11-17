@@ -23,7 +23,7 @@ Wait
 Type "# Five pages of help: the root, a generated command, a secret's, a public one, a hand-written one"
 Enter
 Wait
-Type `pages() { for c in "" "component list" "secret reveal" "node claim" "bootstrap"; do omniglass $c --help; done; }`
+Type `pages() { for c in "" "component list" "secret reveal" "outpost claim" "bootstrap"; do omniglass $c --help; done; }`
 Enter
 Wait
 Type `pages | grep -c -- '--token string'`

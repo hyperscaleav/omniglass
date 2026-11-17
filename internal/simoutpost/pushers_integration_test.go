@@ -1,4 +1,4 @@
-package simnode
+package simoutpost
 
 import (
 	"context"

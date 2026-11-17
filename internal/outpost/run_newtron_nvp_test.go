@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -12,12 +12,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodeNewtronProcessorAndSchedulerReadTheirClassState (#896): the
+// TestOutpostNewtronProcessorAndSchedulerReadTheirClassState (#896): the
 // shipped newtron-core-nvp and newtron-slate-nvp drivers over the simulated
 // control processor's and scheduling panel's NVP faces. The processor lands
 // its program state and the input beside it, the scheduling panel its
 // room's booking; a change on the device reaches the series.
-func TestNodeNewtronProcessorAndSchedulerReadTheirClassState(t *testing.T) {
+func TestOutpostNewtronProcessorAndSchedulerReadTheirClassState(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -42,7 +42,7 @@ func TestNodeNewtronProcessorAndSchedulerReadTheirClassState(t *testing.T) {
 			"host": s.ips[prof], "port": fmt.Sprint(nvpPort(prof))}).Name
 	}
 	coreEP, slateEP := attach("processor-1", core, "newtron-core-nvp"), attach("scheduler-1", slate, "newtron-slate-nvp")
-	s.runNode("edge-nvp")
+	s.runOutpost("edge-nvp")
 
 	s.waitFor("processor-1", coreEP, "program-state", is("running"), "a running program at rest")
 	s.waitFor("processor-1", coreEP, "video-input", is("hdmi1"), "the input, which a processor answers as the panel does")
@@ -60,7 +60,7 @@ func TestNodeNewtronProcessorAndSchedulerReadTheirClassState(t *testing.T) {
 			t.Fatalf("%s: %v", c.line, err)
 		}
 	}
-	s.runNode("edge-nvp") // a restarted node polls at once, rather than at the interval
+	s.runOutpost("edge-nvp") // a restarted outpost polls at once, rather than at the interval
 	s.waitFor("processor-1", coreEP, "program-state", is("stopped"), "the stopped program")
 	s.waitFor("processor-1", coreEP, "scene-state", is("presentation"), "the scene the room entered")
 	s.waitFor("scheduler-1", slateEP, "booking-state", is("booked"), "the booked room")

@@ -193,7 +193,7 @@ func (p *PG) CreateComponentDependency(ctx context.Context, actorID, component s
 		return nil, fmt.Errorf("storage: read component dependency: %w", err)
 	}
 	if spec.Kind == DependencyPath {
-		if err := announceNodesOf(ctx, tx, pathEdgeNodesSQL, dep.ID, up.ID); err != nil {
+		if err := announceOutpostsOf(ctx, tx, pathEdgeOutpostsSQL, dep.ID, up.ID); err != nil {
 			return nil, err
 		}
 	}
@@ -279,7 +279,7 @@ func (p *PG) DeleteComponentDependency(ctx context.Context, actorID, component, 
 		return fmt.Errorf("storage: read component dependency: %w", err)
 	}
 	if kind == DependencyPath {
-		if err := announceNodesOf(ctx, tx, pathEdgeNodesSQL, dep.ID, up.ID); err != nil {
+		if err := announceOutpostsOf(ctx, tx, pathEdgeOutpostsSQL, dep.ID, up.ID); err != nil {
 			return err
 		}
 	}

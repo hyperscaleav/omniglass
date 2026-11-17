@@ -160,7 +160,7 @@ func resolveComponentTypeParent(ctx context.Context, gw storage.Gateway, ref str
 
 // registerComponentTypeRoutes wires the component_type registry surface: list
 // (the tree, flattened with parent links), create/update/delete of custom
-// (non-official) nodes. Gated by component_type:read|create|update|delete;
+// (non-official) outposts. Gated by component_type:read|create|update|delete;
 // read sits in the viewer floor (*:read), the mutations at the admin tier,
 // the same split as location_type.
 func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {

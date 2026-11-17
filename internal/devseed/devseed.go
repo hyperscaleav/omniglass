@@ -358,7 +358,7 @@ func Fixtures() (Doc, error) {
 }
 
 // Options tunes a Run. SimFleet wires the simulated fleet (addresses and
-// endpoints on the dev node for every component the simulator serves).
+// endpoints on the dev outpost for every component the simulator serves).
 // SimPortOffset is the lift the simulator applies to ports below 1024, which
 // the endpoints target: 0 (the default) for one that binds the real ports, in
 // a container as the lab's does; a lift for one run unprivileged on a host.
@@ -790,9 +790,9 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err := seedLogs(ctx, gw, displayID); err != nil {
 		return err
 	}
-	// The edge node's own self-logs, so the node blade's Self-logs panel comes up
-	// populated: the node narrating itself (ADR-0066), owner-bound to the node.
-	if err := seedNodeLogs(ctx, gw); err != nil {
+	// The edge outpost's own self-logs, so the outpost blade's Self-logs panel comes up
+	// populated: the outpost narrating itself (ADR-0066), owner-bound to the outpost.
+	if err := seedOutpostLogs(ctx, gw); err != nil {
 		return err
 	}
 	// Samples on the huddle system for the metric contract its standard
@@ -807,15 +807,15 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	if err := seedTelemetryBreadth(ctx, gw, actorID, compIDs, sysIDs); err != nil {
 		return err
 	}
-	// Last: the simulated fleet, addresses and endpoints on the dev node for
-	// every component the simulator serves, so a lab's node collects for
+	// Last: the simulated fleet, addresses and endpoints on the dev outpost for
+	// every component the simulator serves, so a lab's outpost collects for
 	// real. Last, so a failure here cannot skip the seeding before it.
 	if !opts.SimFleet {
 		return nil
 	}
 	// Only the example fleet's own devices are simulated, never a scenario's
 	// copies of them (scenario.go) nor a device added by hand: one simulator
-	// and one node collecting from thousands of devices would turn a dev
+	// and one outpost collecting from thousands of devices would turn a dev
 	// start into a load test of the collector. Limited on every run, whatever
 	// the scenario, so a plain re-seed of a database a large scenario filled
 	// does not wire the copies after the fact.
@@ -862,7 +862,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 			}
 		}
 	}
-	// The breadth RTT series, after the endpoints they are the node's account
+	// The breadth RTT series, after the endpoints they are the outpost's account
 	// of.
 	return seedBreadthRTT(ctx, gw, compIDs)
 }
@@ -979,12 +979,12 @@ func seedLogs(ctx context.Context, gw storage.Gateway, componentID string) error
 	return nil
 }
 
-// exampleNodeLogs are the edge node's own operational self-logs (ADR-0066): the
-// node narrating itself (connected, worklist pulled, a task skipped), not a
-// component's device output. source and facility name the node subsystem; one
+// exampleOutpostLogs are the edge outpost's own operational self-logs (ADR-0066): the
+// outpost narrating itself (connected, worklist pulled, a task skipped), not a
+// component's device output. source and facility name the outpost subsystem; one
 // carries a structured attributes payload and a higher severity so the panel's
 // badge and disclosure both show. minsAgo is minutes before the seed's now.
-var exampleNodeLogs = []struct {
+var exampleOutpostLogs = []struct {
 	message  string
 	source   string
 	severity string
@@ -992,29 +992,29 @@ var exampleNodeLogs = []struct {
 	attrs    []byte
 	minsAgo  int
 }{
-	{message: "connected to bus", source: "node", severity: "info", facility: "enrollment", minsAgo: 63},
-	{message: "worklist pulled", source: "node", severity: "info", facility: "collection", attrs: []byte(`{"tasks":2}`), minsAgo: 63},
-	{message: "worklist pulled", source: "node", severity: "info", facility: "collection", attrs: []byte(`{"tasks":2}`), minsAgo: 33},
+	{message: "connected to bus", source: "outpost", severity: "info", facility: "enrollment", minsAgo: 63},
+	{message: "worklist pulled", source: "outpost", severity: "info", facility: "collection", attrs: []byte(`{"tasks":2}`), minsAgo: 63},
+	{message: "worklist pulled", source: "outpost", severity: "info", facility: "collection", attrs: []byte(`{"tasks":2}`), minsAgo: 33},
 	{message: "task skipped", source: "collection", severity: "warning", facility: "collection", attrs: []byte(`{"task":"boardroom-a-hdmi","error":"unresolved host"}`), minsAgo: 12},
-	{message: "worklist pulled", source: "node", severity: "info", facility: "collection", attrs: []byte(`{"tasks":2}`), minsAgo: 3},
+	{message: "worklist pulled", source: "outpost", severity: "info", facility: "collection", attrs: []byte(`{"tasks":2}`), minsAgo: 3},
 }
 
-// seedNodeLogs installs the edge node's example self-logs idempotently, guarded on
-// the node already carrying lines (ListNodeLogs from the epoch, limit 1) the same
-// way seedLogs guards, since node_log has an auto id and no natural unique key.
-func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
-	existing, err := gw.ListNodeLogs(ctx, reachNode, 0, 1)
+// seedOutpostLogs installs the edge outpost's example self-logs idempotently, guarded on
+// the outpost already carrying lines (ListOutpostLogs from the epoch, limit 1) the same
+// way seedLogs guards, since outpost_log has an auto id and no natural unique key.
+func seedOutpostLogs(ctx context.Context, gw storage.Gateway) error {
+	existing, err := gw.ListOutpostLogs(ctx, reachOutpost, 0, 1)
 	if err != nil {
-		return fmt.Errorf("devseed: check node logs: %w", err)
+		return fmt.Errorf("devseed: check outpost logs: %w", err)
 	}
 	if len(existing) > 0 {
 		return nil
 	}
 	now := time.Now().UTC()
-	lines := make([]storage.NodeLogWrite, 0, len(exampleNodeLogs))
-	for _, l := range exampleNodeLogs {
-		lines = append(lines, storage.NodeLogWrite{
-			Node:       reachNode,
+	lines := make([]storage.OutpostLogWrite, 0, len(exampleOutpostLogs))
+	for _, l := range exampleOutpostLogs {
+		lines = append(lines, storage.OutpostLogWrite{
+			Outpost:    reachOutpost,
 			Source:     l.source,
 			Severity:   l.severity,
 			Facility:   l.facility,
@@ -1023,13 +1023,13 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 			TS:         now.Add(-time.Duration(l.minsAgo) * time.Minute),
 		})
 	}
-	if err := gw.InsertNodeLogs(ctx, lines); err != nil {
-		return fmt.Errorf("devseed: insert node logs: %w", err)
+	if err := gw.InsertOutpostLogs(ctx, lines); err != nil {
+		return fmt.Errorf("devseed: insert outpost logs: %w", err)
 	}
 	return nil
 }
 
-// The worked reachability check the dev seed installs: an enrolled node and a lab
+// The worked reachability check the dev seed installs: an enrolled outpost and a lab
 // DSP (a polaris-class 16-channel audio DSP) under the HQ boardroom, exposing two
 // APIs. Each API is a transport-named endpoint: `web` (the HTTP
 // management API) and `qrc` (the Q-SYS-style control protocol over raw tcp). Two
@@ -1044,13 +1044,13 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 // therefore also the fleet's worked example of the name pen's other state,
 // sitting beside six generated siblings. It needs no ancestry in it, because a
 // component's name is unique within its room rather than across the fleet.
-// reachLocation and reachNodeLocation are fixture KEYS.
+// reachLocation and reachOutpostLocation are fixture KEYS.
 const (
-	reachComponent    = "dsp"
-	reachLocation     = "boardroom-a"
-	reachNodeLocation = "west"
-	reachNode         = "edge-hq"
-	reachHost         = "10.20.4.12"
+	reachComponent       = "dsp"
+	reachLocation        = "boardroom-a"
+	reachOutpostLocation = "west"
+	reachOutpost         = "edge-hq"
+	reachHost            = "10.20.4.12"
 	// reachProduct is what the demo DSP becomes with the simulated fleet: the
 	// simulated DSP it was modeled on (HTTP 80, the line protocol on 1710).
 	reachProduct = "polaris-dsp-16"
@@ -1077,7 +1077,7 @@ var reachChecks = []struct {
 // seedReachability installs the worked reachability checks idempotently through the
 // Storage Gateway. Its sentinel is the first endpoint: samples are append-only,
 // so once it exists the whole block has run and a re-run is a no-op (a second
-// a second seed-dev must not double the samples). It authors each check the way a node
+// a second seed-dev must not double the samples). It authors each check the way an outpost
 // runs one (endpoint + poll task) and writes a handful of samples keyed by the
 // component (owner) and endpoint (instance), using ONLY registered canonical
 // property_type names, so a wrong name would reject-not-project.
@@ -1087,9 +1087,9 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 	if !ok {
 		return fmt.Errorf("devseed: the reachability location key %q is not in the fleet", reachLocation)
 	}
-	closetID, ok := locIDs[reachNodeLocation]
+	closetID, ok := locIDs[reachOutpostLocation]
 	if !ok {
-		return fmt.Errorf("devseed: the reachability node location key %q is not in the fleet", reachNodeLocation)
+		return fmt.Errorf("devseed: the reachability outpost location key %q is not in the fleet", reachOutpostLocation)
 	}
 
 	// Sentinel: the first endpoint. Present means this block ran on an earlier start.
@@ -1117,45 +1117,45 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 		return fmt.Errorf("devseed: check reachability component: %w", err)
 	}
 
-	// The node, created then enrolled and claimed so it reads as enrolled in the
+	// The outpost, created then enrolled and claimed so it reads as enrolled in the
 	// console (enrolled_at is stamped by a claim). The token lives only long enough to
-	// claim; it is never returned or stored in cleartext. Tolerate an existing node.
-	if _, err := gw.GetNode(ctx, reachNode, all); errors.Is(err, storage.ErrNodeNotFound) {
-		if _, err := gw.CreateNode(ctx, actorID, storage.NodeSpec{
-			Name:         reachNode,
-			Label:        "HQ Edge Node",
+	// claim; it is never returned or stored in cleartext. Tolerate an existing outpost.
+	if _, err := gw.GetOutpost(ctx, reachOutpost, all); errors.Is(err, storage.ErrOutpostNotFound) {
+		if _, err := gw.CreateOutpost(ctx, actorID, storage.OutpostSpec{
+			Name:         reachOutpost,
+			Label:        "HQ Edge Outpost",
 			Description:  "HQ network closet",
 			LocationName: &closetID,
 		}, all, all); err != nil {
-			return fmt.Errorf("devseed: create reachability node: %w", err)
+			return fmt.Errorf("devseed: create reachability outpost: %w", err)
 		}
 		token, hash, _, err := auth.NewBearerToken()
 		if err != nil {
-			return fmt.Errorf("devseed: mint node token: %w", err)
+			return fmt.Errorf("devseed: mint outpost token: %w", err)
 		}
-		if _, err := gw.SetEnrollmentToken(ctx, actorID, reachNode, hex.EncodeToString(hash), all); err != nil {
-			return fmt.Errorf("devseed: enroll reachability node: %w", err)
+		if _, err := gw.SetEnrollmentToken(ctx, actorID, reachOutpost, hex.EncodeToString(hash), all); err != nil {
+			return fmt.Errorf("devseed: enroll reachability outpost: %w", err)
 		}
-		if _, err := gw.ClaimNode(ctx, reachNode, hex.EncodeToString(auth.HashToken(token))); err != nil {
-			return fmt.Errorf("devseed: claim reachability node: %w", err)
+		if _, err := gw.ClaimOutpost(ctx, reachOutpost, hex.EncodeToString(auth.HashToken(token))); err != nil {
+			return fmt.Errorf("devseed: claim reachability outpost: %w", err)
 		}
-		// Node tags (N2): a couple of governed tags so the console shows the node's
+		// Outpost tags (N2): a couple of governed tags so the console shows the outpost's
 		// Tags panel and the list's Tags column populated. Idempotent upserts.
-		nodeName := reachNode
-		if _, err := gw.SetTagBinding(ctx, actorID, "environment", "node", &nodeName, "prod", all, all); err != nil {
-			return fmt.Errorf("devseed: tag reachability node environment: %w", err)
+		outpostName := reachOutpost
+		if _, err := gw.SetTagBinding(ctx, actorID, "environment", "outpost", &outpostName, "prod", all, all); err != nil {
+			return fmt.Errorf("devseed: tag reachability outpost environment: %w", err)
 		}
-		if _, err := gw.SetTagBinding(ctx, actorID, "asset-id", "node", &nodeName, "NODE-EDGE-HQ", all, all); err != nil {
-			return fmt.Errorf("devseed: tag reachability node asset-id: %w", err)
+		if _, err := gw.SetTagBinding(ctx, actorID, "asset-id", "outpost", &outpostName, "OUTPOST-EDGE-HQ", all, all); err != nil {
+			return fmt.Errorf("devseed: tag reachability outpost asset-id: %w", err)
 		}
 	} else if err != nil {
-		return fmt.Errorf("devseed: check reachability node: %w", err)
+		return fmt.Errorf("devseed: check reachability outpost: %w", err)
 	}
 
 	// Each endpoint: named by its transport, target = the DSP
 	// host at the transport's port. A poll task rides each; samples tell its story.
 	comp := reachComponent
-	node := reachNode
+	outpost := reachOutpost
 	now := time.Now().UTC()
 	for _, c := range reachChecks {
 		// The endpoint is transport-named: its name is DERIVED from its transport
@@ -1164,7 +1164,7 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 		if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
 			Transport: c.itype,
 			Component: &comp,
-			Node:      &node,
+			Outpost:   &outpost,
 			Params:    []byte(fmt.Sprintf(`{"target":"%s:%d"}`, reachHost, c.port)),
 		}, all); err != nil {
 			return fmt.Errorf("devseed: create %s endpoint: %w", c.itype, err)
@@ -1197,13 +1197,13 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 		storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-reachable", Instance: iface, Value: "up", Source: "icmp", TS: recovered},
 		storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-open", Instance: iface, Value: "open", Source: "tcp", TS: recovered},
 	)
-	// Native probe keys: written as the node that holds the endpoint would,
+	// Native probe keys: written as the outpost that holds the endpoint would,
 	// under that endpoint alone (ADR-0161).
-	node := storage.NodeWriter(reachComponent, iface)
-	if err := gw.InsertPropertySamples(ctx, node, states); err != nil {
+	outpost := storage.OutpostWriter(reachComponent, iface)
+	if err := gw.InsertPropertySamples(ctx, outpost, states); err != nil {
 		return fmt.Errorf("devseed: insert %s property samples: %w", iface, err)
 	}
-	if err := gw.InsertMetricSamples(ctx, node, []storage.MetricSampleWrite{
+	if err := gw.InsertMetricSamples(ctx, outpost, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "icmp-rtt-avg", Instance: iface, Value: rttMs, Source: "icmp", TS: recovered},
 		{OwnerKind: "component", OwnerID: reachComponent, Key: "tcp-connect-time", Instance: iface, Value: connMs, Source: "tcp", TS: recovered},
 	}); err != nil {
@@ -1278,9 +1278,9 @@ func seedEvents(ctx context.Context, gw storage.Gateway, componentID string) err
 // reads populated wherever an operator lands. Fixture keys.
 
 // seedBreadthRTT writes RTT series on a few components, so leaves beyond the
-// DSP chart. A native probe key is the node's account of one of the
+// DSP chart. A native probe key is the outpost's account of one of the
 // component's endpoints (ADR-0161), so it runs after the simulated fleet gave
-// each its endpoint, lands under that endpoint as the node would, and skips a
+// each its endpoint, lands under that endpoint as the outpost would, and skips a
 // component with none. Sentinel: a component whose endpoint already carries
 // the series is left alone.
 func seedBreadthRTT(ctx context.Context, gw storage.Gateway, compIDs map[string]string) error {
@@ -1313,7 +1313,7 @@ func seedBreadthRTT(ctx context.Context, gw storage.Gateway, compIDs map[string]
 			ts := now.Add(-time.Duration(7-j) * 3 * time.Hour)
 			series = append(series, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: id, Key: "icmp-rtt-avg", Instance: ep, Value: 4.5 + float64(i) + 0.3*float64(j%3), Source: "devseed-breadth", TS: ts})
 		}
-		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(id, ep), series); err != nil {
+		if err := gw.InsertMetricSamples(ctx, storage.OutpostWriter(id, ep), series); err != nil {
 			return fmt.Errorf("devseed: breadth rtt samples: %w", err)
 		}
 	}

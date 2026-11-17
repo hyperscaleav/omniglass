@@ -23,7 +23,7 @@ import (
 // the simulation reads answer from the registry alone.
 type registryHub struct{ *simhub.Registry }
 
-func (h registryHub) SimStatus(node string) (simhub.Status, bool) { return h.Status(node) }
+func (h registryHub) SimStatus(outpost string) (simhub.Status, bool) { return h.Status(outpost) }
 
 func (registryHub) FireSimOperation(context.Context, string, collection.SimOperation) (collection.SimOperationResult, error) {
 	return collection.SimOperationResult{}, errors.New("no simulator")
@@ -33,12 +33,12 @@ func (registryHub) EndpointObservation(context.Context, string) (collection.Endp
 	return collection.EndpointObservation{}, errors.New("no simulator")
 }
 
-// TestNodeSimulationOfADeletedNodeIsNotFound is #907's CLI acceptance, end to
-// end: a node whose simulator pulled reads its simulation, and once `node
-// delete` removes it, `node simulation` on it is the node-not-found error, not
-// the stale status the registry held. A node created again under the same name
+// TestOutpostSimulationOfADeletedOutpostIsNotFound is #907's CLI acceptance, end to
+// end: an outpost whose simulator pulled reads its simulation, and once `outpost
+// delete` removes it, `outpost simulation` on it is the outpost-not-found error, not
+// the stale status the registry held. An outpost created again under the same name
 // starts with no simulator, not the deleted one's. Skipped under -short.
-func TestNodeSimulationOfADeletedNodeIsNotFound(t *testing.T) {
+func TestOutpostSimulationOfADeletedOutpostIsNotFound(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -58,8 +58,8 @@ func TestNodeSimulationOfADeletedNodeIsNotFound(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
-		t.Fatalf("node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("outpost: %v", err)
 	}
 	hub := registryHub{simhub.New()}
 	hub.Pulled("edge", collection.SimCapabilities{}, nil)
@@ -73,42 +73,42 @@ func TestNodeSimulationOfADeletedNodeIsNotFound(t *testing.T) {
 		t.Helper()
 		var body map[string]any
 		if err := json.Unmarshal([]byte(out), &body); err != nil {
-			t.Fatalf("node simulation edge printed %q, not a JSON object", out)
+			t.Fatalf("outpost simulation edge printed %q, not a JSON object", out)
 		}
 		return body
 	}
 
-	out, err := run("node", "simulation", "edge")
+	out, err := run("outpost", "simulation", "edge")
 	if err != nil {
-		t.Fatalf("node simulation edge before the delete: %v (%s)", err, out)
+		t.Fatalf("outpost simulation edge before the delete: %v (%s)", err, out)
 	}
 	if status := decode(out); status["connected"] != true || status["last_seen"] == nil {
-		t.Fatalf("node simulation edge before the delete = %v, want its simulator connected and seen", status)
+		t.Fatalf("outpost simulation edge before the delete = %v, want its simulator connected and seen", status)
 	}
 
-	if out, err := run("node", "delete", "edge"); err != nil {
-		t.Fatalf("node delete edge: %v (%s)", err, out)
+	if out, err := run("outpost", "delete", "edge"); err != nil {
+		t.Fatalf("outpost delete edge: %v (%s)", err, out)
 	}
 
-	out, err = run("node", "simulation", "edge")
+	out, err = run("outpost", "simulation", "edge")
 	if err == nil {
-		t.Fatalf("node simulation edge after the delete printed %q, want the node-not-found error", out)
+		t.Fatalf("outpost simulation edge after the delete printed %q, want the outpost-not-found error", out)
 	}
 	if !strings.Contains(err.Error(), "404") {
-		t.Errorf("node simulation edge after the delete: %v, want status 404", err)
+		t.Errorf("outpost simulation edge after the delete: %v, want status 404", err)
 	}
 	if !strings.Contains(strings.ToLower(out), "not found") {
-		t.Errorf("node simulation edge after the delete printed %q, want it to say the node is not found", out)
+		t.Errorf("outpost simulation edge after the delete printed %q, want it to say the outpost is not found", out)
 	}
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
-		t.Fatalf("node again: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("outpost again: %v", err)
 	}
-	out, err = run("node", "simulation", "edge")
+	out, err = run("outpost", "simulation", "edge")
 	if err != nil {
-		t.Fatalf("node simulation edge once created again: %v (%s)", err, out)
+		t.Fatalf("outpost simulation edge once created again: %v (%s)", err, out)
 	}
 	if status := decode(out); status["connected"] != false || status["last_seen"] != nil {
-		t.Errorf("node simulation edge once created again = %v, want no simulator, not the deleted node's", status)
+		t.Errorf("outpost simulation edge once created again = %v, want no simulator, not the deleted outpost's", status)
 	}
 }

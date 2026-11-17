@@ -1,4 +1,4 @@
-package simnode
+package simoutpost
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
 
-// A node's pushers (#1743) reach its emulator as one env value, name, profile
+// An outpost's pushers (#1743) reach its emulator as one env value, name, profile
 // and token each, and read back as they went; a malformed list is refused, so
 // a typo never leaves a pusher silently out.
 func TestPushersRoundTrip(t *testing.T) {
@@ -81,7 +81,7 @@ func (s *grantServer) handler() http.Handler {
 	return mux
 }
 
-// The emulator runs each of its node's pushers as a device of its profile
+// The emulator runs each of its outpost's pushers as a device of its profile
 // holding its own token (#1743), so each pushes for the systems its own grant
 // names as soon as it starts, and stops when the emulator does.
 func TestStartPushersRunsEachPusherWithItsToken(t *testing.T) {

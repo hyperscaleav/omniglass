@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -10,12 +10,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodeBorealEdgeReadsItsDisplayState (#1372): the shipped
+// TestOutpostBorealEdgeReadsItsDisplayState (#1372): the shipped
 // boreal-edge-snmp driver on the simulated display's SNMP face lands the
 // display's own state beside its identity: power and the selected input.
 // Power cycled and the input switched on the display's web admin read back on
 // the next poll.
-func TestNodeBorealEdgeReadsItsDisplayState(t *testing.T) {
+func TestOutpostBorealEdgeReadsItsDisplayState(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -36,7 +36,7 @@ func TestNodeBorealEdgeReadsItsDisplayState(t *testing.T) {
 	}
 	ep := s.attachHTTP("display-1", "boreal-edge-snmp", "edge-display", map[string]string{
 		"host": s.ips[edge], "port": fmt.Sprint(snmpPort), "community": "display-community"})
-	s.runNode("edge-display")
+	s.runOutpost("edge-display")
 
 	s.waitFor("display-1", ep.Name, "endpoint-responsive", is("up"), "up: the agent answered")
 	s.waitFor("display-1", ep.Name, "model-number", is(fmt.Sprint(dev.ReadPath("configuration.device.model"))), "the model, sysDescr")
@@ -53,7 +53,7 @@ func TestNodeBorealEdgeReadsItsDisplayState(t *testing.T) {
 			t.Fatalf("%s: %+v", op.Path, res)
 		}
 	}
-	s.runNode("edge-display") // a restarted node polls at once, rather than in 30s
+	s.runOutpost("edge-display") // a restarted outpost polls at once, rather than in 30s
 	s.waitFor("display-1", ep.Name, "power-state", is("standby"), "standby, set over HTTP")
 	s.waitFor("display-1", ep.Name, "video-input", is("dp1"), "dp1, set over HTTP")
 }

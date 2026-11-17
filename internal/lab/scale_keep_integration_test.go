@@ -21,7 +21,7 @@ import (
 // SIGTERM (as a service manager stops it), keeps its two volumes; run again
 // the same way, it re-attaches them, keeps the fleet without reseeding (a
 // component added on the first run is still there, and the seed says it
-// kept the fleet), and its site nodes come up enrolled with the new run's
+// kept the fleet), and its site outposts come up enrolled with the new run's
 // tokens. It runs under a project of its own, so it never meets a person's
 // scale lab on the same daemon. OMNIGLASS_LAB_TEST_BINARY and
 // OMNIGLASS_LAB_TEST_IMAGE run another build than make's; by default the
@@ -150,7 +150,7 @@ func TestIntegrationKeptScaleLabSurvivesAStop(t *testing.T) {
 		t.Errorf("the second run's seed did not keep the fleet:\n%s", second)
 	}
 	if !strings.Contains(second, "sites up") {
-		t.Errorf("the second run's site nodes did not come up:\n%s", second)
+		t.Errorf("the second run's site outposts did not come up:\n%s", second)
 	}
 }
 

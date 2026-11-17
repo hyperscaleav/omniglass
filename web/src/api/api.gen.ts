@@ -109,7 +109,7 @@ export type AddSimComponentOutputBody = {
   component: string;
   /** How many endpoints were created for the collector to reach it. */
   endpoints: number;
-  node: string;
+  outpost: string;
 };
 
 export type AddSimSystemComponentBody = {
@@ -158,7 +158,7 @@ export type AddSimSystemOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   components: AddSimSystemComponentBody[] | null;
-  node: string;
+  outpost: string;
   system: string;
   /** The new system's id, the stable address a link to it uses. */
   system_id: string;
@@ -1014,16 +1014,16 @@ export type CheckNameOutputBody = {
   valid: boolean;
 };
 
-export type ClaimNodeInputBody = {
+export type ClaimOutpostInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * The node name the enrollment was minted for
+     * The outpost name the enrollment was minted for
      * @minLength 1
      */
   name: string;
   /**
-     * The one-time enrollment token from node create, exchanged here for the node's NATS credential
+     * The one-time enrollment token from outpost create, exchanged here for the outpost's NATS credential
      * @minLength 1
      */
   token: string;
@@ -1032,11 +1032,11 @@ export type ClaimNodeInputBody = {
 export type ClaimOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The NATS URL the node dials */
+  /** The NATS URL the outpost dials */
   nats_url: string;
-  /** The node's NATS password (its enrollment token) */
+  /** The outpost's NATS password (its enrollment token) */
   password: string;
-  /** The node's NATS username (its node name) */
+  /** The outpost's NATS username (its outpost name) */
   username: string;
 };
 
@@ -1050,7 +1050,7 @@ export type CollectionSettings = {
 };
 
 /**
- * Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
+ * Where it sits now: queued for its outpost; delivered to it (a binding that settles on observation, or a fire-and-forget command its outpost's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
  */
 export type CommandBodyPhase = typeof CommandBodyPhase[keyof typeof CommandBodyPhase];
 
@@ -1066,7 +1066,7 @@ export const CommandBodyPhase = {
 } as const;
 
 /**
- * How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it)
+ * How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its outpost's execution report decides it)
  */
 export type CommandBodySettleMode = typeof CommandBodySettleMode[keyof typeof CommandBodySettleMode];
 
@@ -1078,7 +1078,7 @@ export const CommandBodySettleMode = {
 } as const;
 
 /**
- * What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report
+ * What decided it, once terminal: its reply (for a fire-and-forget command, its outpost's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report
  */
 export type CommandBodySettledBy = typeof CommandBodySettledBy[keyof typeof CommandBodySettledBy];
 
@@ -1150,21 +1150,21 @@ export type CommandBody = {
   component_id: string;
   /** When its window closes (its settle window, or a fire-and-forget command's delivery window); a command still issued past it is timed out by the next sweep */
   deadline: string;
-  /** When a node last took it from its queue */
+  /** When an outpost last took it from its queue */
   delivered_at?: string;
-  /** How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again */
+  /** How many times an outpost has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again */
   delivery_count: number;
   /** The driver whose binding renders and settles it, by name */
   driver?: string;
-  /** The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it */
+  /** The endpoint it rides, by name: the one an outpost took it over, else the one an outpost would (its driver binds the type); absent when no endpoint can carry it */
   endpoint?: string;
   /** The endpoint's uuid */
   endpoint_id?: string;
-  /** The execution's failure, as its node reported it, masked of credentials */
+  /** The execution's failure, as its outpost reported it, masked of credentials */
   exec_error?: string;
-  /** When its node's execution report landed */
+  /** When its outpost's execution report landed */
   executed_at?: string;
-  /** When a node first took it from its queue; a redelivery moves delivered_at, not this */
+  /** When an outpost first took it from its queue; a redelivery moves delivered_at, not this */
   first_delivered_at?: string;
   /** The command's id: with its component, its address (a command has no name) */
   id: number;
@@ -1178,25 +1178,25 @@ export type CommandBody = {
   issuer?: string;
   /** The issuer's uuid, the actor on the command's audit row */
   issuer_id?: string;
-  /** The node that endpoint is placed on, by name */
-  node?: string;
   /** The sample of its target that decided it, when an observation did */
   observed?: CommandObservation;
+  /** The outpost that endpoint is placed on, by name */
+  outpost?: string;
   /** The invocation params */
   params?: unknown;
-  /** Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status */
+  /** Where it sits now: queued for its outpost; delivered to it (a binding that settles on observation, or a fire-and-forget command its outpost's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status */
   phase: CommandBodyPhase;
   /** Why it reached its terminal status, in words: the reply that confirmed it, the value observed instead, where it stopped when it timed out */
   reason?: string;
   /** The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands */
   reply?: string;
-  /** How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it) */
+  /** How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its outpost's execution report decides it) */
   settle_mode: CommandBodySettleMode;
   /** How long it waits for its evidence */
   settle_window_seconds: number;
   /** When it reached its terminal status */
   settled_at?: string;
-  /** What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report */
+  /** What decided it, once terminal: its reply (for a fire-and-forget command, its outpost's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report */
   settled_by?: CommandBodySettledBy;
   /** The event its terminal status put there: command-settled, command-failed or command-timed-out */
   settled_event_id?: number;
@@ -1217,7 +1217,7 @@ export type CommandTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   description?: string;
-  /** The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering node until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
+  /** The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering outpost until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
   disruptive: boolean;
   /** A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive */
   hold_seconds: number;
@@ -1230,7 +1230,7 @@ export type CommandTypeBody = {
   params_schema?: unknown;
   /** Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type */
   power_outlet_param?: string;
-  /** A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive */
+  /** A disruptive type's quiet period: how long the outpost runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive */
   quiet_seconds: number;
   /** How long the device is given to actuate before a mismatch is a failed command */
   settle_window_seconds: number;
@@ -1580,13 +1580,13 @@ export type ComponentSimOutputBody = {
   /** What the simulator reports for the component: serving, hits, and its impairment. */
   activity?: SimDeviceBody;
   address?: string;
-  /** The node's simulator pulled recently. */
+  /** The outpost's simulator pulled recently. */
   connected: boolean;
   impairments: SimImpairmentStatus;
-  node?: string;
+  outpost?: string;
   product?: string;
   profile?: string;
-  /** The component has an endpoint on a node and a product a profile simulates. */
+  /** The component has an endpoint on an outpost and a product a profile simulates. */
   simulated: boolean;
   summary?: string;
   /**
@@ -1735,7 +1735,7 @@ export type CreateCommandTypeInputBody = {
   readonly $schema?: string;
   /** What the command does */
   description?: string;
-  /** The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again */
+  /** The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering outpost until each reads up again */
   disruptive?: boolean;
   /**
      * A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type
@@ -1817,8 +1817,8 @@ export type CreateComponentFromTemplateInputBody = {
   location?: string;
   /** The component's name; minted as an unnamed create mints it when empty */
   name?: string;
-  /** The node the endpoint is placed on; needed when inputs carry an address */
-  node?: string;
+  /** The outpost the endpoint is placed on; needed when inputs carry an address */
+  outpost?: string;
   /**
      * The component template, by name
      * @minLength 1
@@ -1947,10 +1947,10 @@ export type CreateEndpointInputBody = {
      * @maxLength 200
      */
   label?: string;
-  /** Node placement, by name or id */
-  node?: string;
   /** Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open */
   out_of_band?: boolean;
+  /** Outpost placement, by name or id */
+  outpost?: string;
   /** Address/target settings (jsonb); an attach derives them from the inputs instead */
   params?: unknown;
   /** A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
@@ -2406,24 +2406,6 @@ export type CreateMetricTypeInputBody = {
   unit?: string;
 };
 
-export type CreateNodeInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** Free-form operator notes about the node */
-  description?: string;
-  /** Operator label; falls back to the name when empty */
-  label?: string;
-  /** Optional location the node sits in, by name or id (descriptive placement, not scope) */
-  location?: string;
-  /**
-     * Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name: string;
-};
-
 /**
  * The target kind
  */
@@ -2487,6 +2469,24 @@ export type CreateNotificationTypeInputBody = {
   subject: string;
   /** The body text template */
   text: string;
+};
+
+export type CreateOutpostInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Free-form operator notes about the outpost */
+  description?: string;
+  /** Operator label; falls back to the name when empty */
+  label?: string;
+  /** Optional location the outpost sits in, by name or id (descriptive placement, not scope) */
+  location?: string;
+  /**
+     * Globally unique outpost name (lowercase letters, digits, and hyphens); it is also the outpost's NATS subject token, which is why the rule forbids a dot
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name: string;
 };
 
 export type CreatePersonalRuleInputBody = {
@@ -2746,8 +2746,8 @@ export type CreateSystemFromTemplateInputBody = {
   location?: string;
   /** The system's name; minted from its type when empty */
   name?: string;
-  /** The node the endpoints are placed on; needed when any component attaches */
-  node?: string;
+  /** The outpost the endpoints are placed on; needed when any component attaches */
+  outpost?: string;
   /** A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name */
   standard?: string;
   /**
@@ -3230,12 +3230,12 @@ export type EndpointBody = {
   label?: string;
   /** The derived name (its transport), unique within the owning component */
   name: string;
-  /** The node placement name, if assigned */
-  node?: string;
-  /** The placed node's id; the stable form of node */
-  node_id?: string;
   /** A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it */
   out_of_band: boolean;
+  /** The outpost placement name, if assigned */
+  outpost?: string;
+  /** The placed outpost's id; the stable form of outpost */
+  outpost_id?: string;
   /** The address/target settings (jsonb) */
   params?: unknown;
   /** The transport name (the wire this endpoint speaks over), from the code registry */
@@ -3271,7 +3271,7 @@ export type RequestTallySnapshot = {
   batches_acknowledged: number;
   batches_dropped: number;
   busy_workers?: GaugeReading;
-  node: string;
+  outpost: string;
   queue_depth?: GaugeReading;
   started: string;
   /** @nullable */
@@ -3323,7 +3323,7 @@ export type SimObservation = {
   fleet_changing?: boolean;
   fleet_generation: number;
   impaired: number;
-  node: string;
+  outpost: string;
   /** @nullable */
   protocols: SimProtocolObservation[] | null;
   started: string;
@@ -3332,7 +3332,7 @@ export type SimObservation = {
 export type EndpointObservation = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  node: RequestTallySnapshot;
+  outpost: RequestTallySnapshot;
   sim_after: SimObservation;
   sim_before: SimObservation;
 };
@@ -3341,7 +3341,7 @@ export type EnrollOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   name: string;
-  /** The enrollment token, shown once. Hand it to the node deployment; the node presents it to claim its NATS credential. */
+  /** The enrollment token, shown once. Hand it to the outpost deployment; the outpost presents it to claim its NATS credential. */
   token: string;
 };
 
@@ -3584,13 +3584,13 @@ export type EventRuleStateOutputBody = {
 };
 
 /**
- * Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+ * Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
  */
 export type EventTypeBodyWriterClass = typeof EventTypeBodyWriterClass[keyof typeof EventTypeBodyWriterClass];
 
 
 export const EventTypeBodyWriterClass = {
-  'node-probe': 'node-probe',
+  'outpost-probe': 'outpost-probe',
   platform: 'platform',
   'command-lifecycle': 'command-lifecycle',
   calc: 'calc',
@@ -3611,7 +3611,7 @@ export type EventTypeBody = {
   official: boolean;
   /** A JSON Schema fragment for the occurrence payload */
   payload_schema?: unknown;
-  /** Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
+  /** Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
   writer_class: EventTypeBodyWriterClass;
 };
 
@@ -4570,13 +4570,13 @@ export type ListMembersOutputBody = {
 };
 
 /**
- * Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+ * Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
  */
 export type MetricTypeBodyWriterClass = typeof MetricTypeBodyWriterClass[keyof typeof MetricTypeBodyWriterClass];
 
 
 export const MetricTypeBodyWriterClass = {
-  'node-probe': 'node-probe',
+  'outpost-probe': 'outpost-probe',
   platform: 'platform',
   calc: 'calc',
   collected: 'collected',
@@ -4601,7 +4601,7 @@ export type MetricTypeBody = {
   retention_days?: number;
   /** The display unit of the series (ms, dB, percent) */
   unit?: string;
-  /** Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
+  /** Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
   writer_class: MetricTypeBodyWriterClass;
   /** The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled) */
   written_by?: CalcWriterBody;
@@ -4612,42 +4612,6 @@ export type ListMetricTypesOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   metric_types: MetricTypeBody[] | null;
-};
-
-/**
- * The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills.
- */
-export type NodeBodyEffectiveTags = {[key: string]: string};
-
-/**
- * A collection process placed near the fleet that runs tasks and commands over endpoints and reports back.
- */
-export type NodeBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  description?: string;
-  /** The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills. */
-  effective_tags?: NodeBodyEffectiveTags;
-  enrolled: boolean;
-  enrolled_at?: string;
-  label?: string;
-  last_heartbeat_at?: string;
-  /** When the newest orphaned batch arrived */
-  last_orphaned_at?: string;
-  /** The location the node sits in (descriptive placement, not scope) */
-  location?: string;
-  /** The location's id; the stable form of location */
-  location_id?: string;
-  name: string;
-  /** How many of this node's telemetry batches the server dropped because their task is not placed on this node (moved to another node, or unknown): the confinement fence, counted rather than silent. A rising count means the node is collecting for a task it no longer holds */
-  orphaned_batches: number;
-};
-
-export type ListNodesOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** @nullable */
-  nodes: NodeBody[] | null;
 };
 
 /**
@@ -4759,6 +4723,42 @@ export type ListNotificationsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   notifications: NotificationBody[] | null;
+};
+
+/**
+ * The resolved effective tags (key -> winning value) on this outpost: its direct bindings plus propagating platform tags. For the Tags column and the blade pills.
+ */
+export type OutpostBodyEffectiveTags = {[key: string]: string};
+
+/**
+ * A collection process placed near the fleet that runs tasks and commands over endpoints and reports back.
+ */
+export type OutpostBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  description?: string;
+  /** The resolved effective tags (key -> winning value) on this outpost: its direct bindings plus propagating platform tags. For the Tags column and the blade pills. */
+  effective_tags?: OutpostBodyEffectiveTags;
+  enrolled: boolean;
+  enrolled_at?: string;
+  label?: string;
+  last_heartbeat_at?: string;
+  /** When the newest orphaned batch arrived */
+  last_orphaned_at?: string;
+  /** The location the outpost sits in (descriptive placement, not scope) */
+  location?: string;
+  /** The location's id; the stable form of location */
+  location_id?: string;
+  name: string;
+  /** How many of this outpost's telemetry batches the server dropped because their task is not placed on this outpost (moved to another outpost, or unknown): the confinement fence, counted rather than silent. A rising count means the outpost is collecting for a task it no longer holds */
+  orphaned_batches: number;
+};
+
+export type ListOutpostsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  outposts: OutpostBody[] | null;
 };
 
 export type PersonalRuleBody = {
@@ -4934,13 +4934,13 @@ export type ListProductsOutputBody = {
 };
 
 /**
- * Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+ * Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
  */
 export type PropertyBodyWriterClass = typeof PropertyBodyWriterClass[keyof typeof PropertyBodyWriterClass];
 
 
 export const PropertyBodyWriterClass = {
-  'node-probe': 'node-probe',
+  'outpost-probe': 'outpost-probe',
   platform: 'platform',
   calc: 'calc',
   collected: 'collected',
@@ -4963,7 +4963,7 @@ export type PropertyBody = {
   retention_days?: number;
   /** A JSON Schema fragment constraining the value */
   validation?: unknown;
-  /** Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
+  /** Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
   writer_class: PropertyBodyWriterClass;
   /** The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled) */
   written_by?: CalcWriterBody;
@@ -5344,7 +5344,7 @@ export type ListTagsOutputBody = {
 };
 
 /**
- * A node's unit of collection, a poll it runs or a listener it holds on one endpoint.
+ * An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint.
  */
 export type TaskBody = {
   /** A URL to the JSON Schema for this object. */
@@ -5355,10 +5355,10 @@ export type TaskBody = {
   id: string;
   label?: string;
   mode: string;
-  /** The node placement name, projected from the endpoint */
-  node?: string;
-  /** The placed node's id; the stable form of node */
-  node_id?: string;
+  /** The outpost placement name, projected from the endpoint */
+  outpost?: string;
+  /** The placed outpost's id; the stable form of outpost */
+  outpost_id?: string;
   /** The inline probe settings (jsonb) */
   spec?: unknown;
 };
@@ -5614,7 +5614,7 @@ export type ListTransportsOutputBody = {
 };
 
 /**
- * A device a node heard from that no endpoint claims yet, waiting to be adopted or ignored.
+ * A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored.
  */
 export type UnclaimedSourceBody = {
   /** How many messages it sent that nothing claimed */
@@ -5736,7 +5736,7 @@ export type LogBody = {
   correlation_id?: string;
   /** The line's facility, when classified */
   facility?: string;
-  /** The endpoint that collected the line, when a node collected it */
+  /** The endpoint that collected the line, when an outpost collected it */
   instance?: string;
   /** Freeform classification labels, when present */
   labels?: unknown;
@@ -5884,14 +5884,6 @@ export type MoveSystemInputBody = {
   parent?: string;
 };
 
-export type NodeLogsOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** @nullable */
-  logs: LogBody[] | null;
-  node: string;
-};
-
 /**
  * How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim)
  */
@@ -5948,6 +5940,14 @@ export type OptOutOutputBody = {
   opted_out: boolean;
 };
 
+export type OutpostLogsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  logs: LogBody[] | null;
+  outpost: string;
+};
+
 /**
  * The owner arc: a component, or a system (telemetry about the system as a whole, such as a cloud service's account of the room it serves). A system batch carries no log lines, since a log line is component-owned
  */
@@ -6000,7 +6000,7 @@ export type PlatformKeyBody = {
   description?: string;
   /** The metric type's label, the column header */
   label: string;
-  /** The metric type's name: the key a node's figures are indexed by */
+  /** The metric type's name: the key an outpost's figures are indexed by */
   name: string;
   /** The metric type's unit, when it has one */
   unit?: string;
@@ -6029,23 +6029,23 @@ export type PlatformInstanceFigureBody = {
 };
 
 /**
- * The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read
+ * The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read
  */
-export type PlatformNodeBodyFigures = {[key: string]: PlatformFigureBody};
+export type PlatformOutpostBodyFigures = {[key: string]: PlatformFigureBody};
 
-export type PlatformNodeBody = {
-  /** The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted */
+export type PlatformOutpostBody = {
+  /** The outpost's platform component uuid, where every figure has its history; absent for an outpost the boot has not yet adopted */
   component?: string;
   enrolled: boolean;
-  /** The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
-  figures?: PlatformNodeBodyFigures;
+  /** The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
+  figures?: PlatformOutpostBodyFigures;
   label: string;
-  /** The node's last heartbeat; absent when it has never sent one */
+  /** The outpost's last heartbeat; absent when it has never sent one */
   last_heartbeat_at?: string;
-  /** The share of what the node's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read */
+  /** The share of what the outpost's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read */
   loss?: number;
   name: string;
-  /** The node's platform component verdict, which tones the row; absent without a fleet-wide component read */
+  /** The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read */
   verdict?: string;
 };
 
@@ -6179,7 +6179,7 @@ export type PlatformPipelineHopBodyComponentClass = typeof PlatformPipelineHopBo
 
 
 export const PlatformPipelineHopBodyComponentClass = {
-  node: 'node',
+  outpost: 'outpost',
   server: 'server',
 } as const;
 
@@ -6192,7 +6192,7 @@ export type PlatformPipelineHopBodyId = typeof PlatformPipelineHopBodyId[keyof t
 export const PlatformPipelineHopBodyId = {
   schedule: 'schedule',
   sim: 'sim',
-  node: 'node',
+  outpost: 'outpost',
   ingest: 'ingest',
 } as const;
 
@@ -6273,7 +6273,7 @@ export type PlatformServerBody = {
 export type PlatformSimulationDeviceReceived = {[key: string]: number};
 
 export type PlatformSimulationDevice = {
-  /** The component's name; empty when it is no longer one of the node's simulated devices. */
+  /** The component's name; empty when it is no longer one of the outpost's simulated devices. */
   component: string;
   component_id: string;
   /** Whether the simulator impairs the device at the window's end. */
@@ -6285,7 +6285,7 @@ export type PlatformSimulationDevice = {
 };
 
 /**
- * How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (a node or sim that started again, or a sim whose served fleet changed) means no figure is meaningful.
+ * How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (an outpost or sim that started again, or a sim whose served fleet changed) means no figure is meaningful.
  */
 export type PlatformSimulationGapReading = typeof PlatformSimulationGapReading[keyof typeof PlatformSimulationGapReading];
 
@@ -6298,7 +6298,7 @@ export const PlatformSimulationGapReading = {
 } as const;
 
 export type PlatformSimulationGap = {
-  /** Answers the node gave up on before they arrived. */
+  /** Answers the outpost gave up on before they arrived. */
   answered_late: number;
   /** How many were lost at the hop over the window, past its masking term. */
   count: number;
@@ -6310,24 +6310,24 @@ export type PlatformSimulationGap = {
   masked: number;
   /** What the masking term is, empty when the gap has none. */
   masked_by: string;
-  /** The protocol the gap is on; empty for a batch gap, which is per node. */
+  /** The protocol the gap is on; empty for a batch gap, which is per outpost. */
   protocol: string;
   /**
-     * count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted node.
+     * count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted outpost.
      * @nullable
      */
   ratio: number | null;
-  /** How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (a node or sim that started again, or a sim whose served fleet changed) means no figure is meaningful. */
+  /** How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (an outpost or sim that started again, or a sim whose served fleet changed) means no figure is meaningful. */
   reading: PlatformSimulationGapReading;
 };
 
 /**
- * warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the node or its sim, or a change to the fleet the sim serves.
+ * warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the outpost or its sim, or a change to the fleet the sim serves.
  */
-export type PlatformSimulationNodeState = typeof PlatformSimulationNodeState[keyof typeof PlatformSimulationNodeState];
+export type PlatformSimulationOutpostState = typeof PlatformSimulationOutpostState[keyof typeof PlatformSimulationOutpostState];
 
 
-export const PlatformSimulationNodeState = {
+export const PlatformSimulationOutpostState = {
   warming_up: 'warming up',
   measured: 'measured',
   restarted: 'restarted',
@@ -6367,11 +6367,11 @@ export type PlatformSimulationReceipts = {
   margin: number;
 };
 
-export type PlatformSimulationNode = {
-  /** How many brackets the server holds for the node. */
+export type PlatformSimulationOutpost = {
+  /** How many brackets the server holds for the outpost. */
   brackets: number;
   /**
-     * The node's busy-worker high water; null until a node reports it.
+     * The outpost's busy-worker high water; null until an outpost reports it.
      * @nullable
      */
   busy_workers: number | null;
@@ -6391,11 +6391,11 @@ export type PlatformSimulationNode = {
   gaps: PlatformSimulationGap[] | null;
   /** The most requests the simulator held at once over every protocol. */
   in_flight_high: number;
-  node: string;
+  outpost: string;
   /** @nullable */
   protocols: PlatformSimulationProtocol[] | null;
   /**
-     * The node's dispatch queue depth; null until a node reports it.
+     * The outpost's dispatch queue depth; null until an outpost reports it.
      * @nullable
      */
   queue_depth: number | null;
@@ -6405,20 +6405,20 @@ export type PlatformSimulationNode = {
      * @nullable
      */
   start: string | null;
-  /** warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the node or its sim, or a change to the fleet the sim serves. */
-  state: PlatformSimulationNodeState;
+  /** warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the outpost or its sim, or a change to the fleet the sim serves. */
+  state: PlatformSimulationOutpostState;
 };
 
 export type PlatformSimulationViewOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** How often the server brackets each node. */
+  /** How often the server brackets each outpost. */
   bracket_seconds: number;
   /**
-     * Each node with a connected simulator; empty when none is.
+     * Each outpost with a connected simulator; empty when none is.
      * @nullable
      */
-  nodes: PlatformSimulationNode[] | null;
+  outposts: PlatformSimulationOutpost[] | null;
   /** The server's clock at the read. */
   read_at: string;
   /** A full window's length. */
@@ -6439,22 +6439,22 @@ export type PlatformViewOutputBody = {
   /** True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported */
   figures_read: boolean;
   /**
-     * The node table's column groups, in order: the page renders these and has no key list of its own
+     * The outpost table's column groups, in order: the page renders these and has no key list of its own
      * @nullable
      */
   groups: PlatformGroupBody[] | null;
   /** True when this server runs as an omniglass lab */
   lab: boolean;
   /**
-     * The hops a node's loss composes: the ones its own platform component records
+     * The hops an outpost's loss composes: the ones its own platform component records
      * @nullable
      */
   loss_hops: string[] | null;
   /**
-     * One row per node, in name order
+     * One row per outpost, in name order
      * @nullable
      */
-  nodes: PlatformNodeBody[] | null;
+  outposts: PlatformOutpostBody[] | null;
   /** Where work is lost: each hop's in, out and loss per kind, newest window and last hour, and the end to end. Absent without a fleet-wide component read */
   pipeline?: PlatformPipelineBody;
   /** The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock */
@@ -6514,7 +6514,7 @@ export type PollRunBody = {
      * @nullable
      */
   samples: RunSample[] | null;
-  /** How long the poll took on the node */
+  /** How long the poll took on the outpost */
   took_ms: number;
 };
 
@@ -6530,8 +6530,8 @@ export type PreviewDriverInputBody = {
   driver?: string;
   /** The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target */
   inputs?: PreviewDriverInputBodyInputs;
-  /** The node that runs the preview, by name: the one that reaches the target */
-  node: string;
+  /** The outpost that runs the preview, by name: the one that reaches the target */
+  outpost: string;
   /**
      * The polls to run, by name; absent runs every poll
      * @nullable
@@ -6540,7 +6540,7 @@ export type PreviewDriverInputBody = {
   /** A driver spec to preview inline, unsaved; or give driver */
   spec?: unknown;
   /**
-     * How long the node may take for the whole preview (default 15, at most 30)
+     * How long the outpost may take for the whole preview (default 15, at most 30)
      * @minimum 1
      * @maximum 30
      */
@@ -6552,8 +6552,8 @@ export type PreviewDriverOutputBody = {
   readonly $schema?: string;
   /** The stored driver previewed; absent for an inline spec */
   driver?: string;
-  /** The node that ran it */
-  node: string;
+  /** The outpost that ran it */
+  outpost: string;
   /**
      * One per poll
      * @nullable
@@ -6875,7 +6875,7 @@ export type PushOutputBody = {
 };
 
 /**
- * What kind of owner the identity names. A component or a system; a location or a node owns no observed sample, so neither is an owner here
+ * What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here
  */
 export type PutIdentityBindingInputBodyOwnerKind = typeof PutIdentityBindingInputBodyOwnerKind[keyof typeof PutIdentityBindingInputBodyOwnerKind];
 
@@ -6893,7 +6893,7 @@ export type PutIdentityBindingInputBody = {
      * @minLength 1
      */
   owner: string;
-  /** What kind of owner the identity names. A component or a system; a location or a node owns no observed sample, so neither is an owner here */
+  /** What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here */
   owner_kind: PutIdentityBindingInputBodyOwnerKind;
 };
 
@@ -6912,13 +6912,13 @@ export type RaiseAlarmInputBody = {
 };
 
 /**
- * Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
+ * Why verdict is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
  */
 export type ReachEndpointBodyPending = typeof ReachEndpointBodyPending[keyof typeof ReachEndpointBodyPending];
 
 
 export const ReachEndpointBodyPending = {
-  'no-node': 'no-node',
+  'no-outpost': 'no-outpost',
   'awaiting-probe': 'awaiting-probe',
 } as const;
 
@@ -6932,7 +6932,7 @@ export type ReachVerdictBody = {
 export type ReachGateReasonBody = {
   /** An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind */
   component?: string;
-  /** The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe) */
+  /** The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe) */
   kind: string;
   /** When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's */
   since: string;
@@ -6975,18 +6975,18 @@ export type ReachRejectionBody = {
   class: string;
   /** A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{endpoint}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409) */
   offered_key?: string;
-  /** A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all */
+  /** A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the outpost refused against it. Present with offered_key or not at all */
   pinned_key?: string;
-  /** Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the node of anything it sent. Published beside the gate by whatever the node was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the node recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole */
+  /** Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the outpost of anything it sent. Published beside the gate by whatever the outpost was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the outpost recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole */
   reason?: string;
   /** The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves */
   rung: ReachRejectionBodyRung;
-  /** When the node last published the gate: a retry that lifts it and a refusal that sets it again each move it */
+  /** When the outpost last published the gate: a retry that lifts it and a refusal that sets it again each move it */
   ts: string;
 };
 
 /**
- * The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves)
+ * The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the outpost dials no more until the endpoint's connection fingerprint moves)
  */
 export type ReachSessionBodyState = typeof ReachSessionBodyState[keyof typeof ReachSessionBodyState];
 
@@ -7000,9 +7000,9 @@ export const ReachSessionBodyState = {
 } as const;
 
 export type ReachSessionBody = {
-  /** Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent. Cut to 500 characters; the property's series keeps the whole */
+  /** Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the outpost of anything it sent. Cut to 500 characters; the property's series keeps the whole */
   reason?: string;
-  /** The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves) */
+  /** The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the outpost dials no more until the endpoint's connection fingerprint moves) */
   state: ReachSessionBodyState;
   /** When the session last changed state: a state is stored only on a transition, so a session is judged by the endpoint's last_seen, not by this */
   ts: string;
@@ -7017,7 +7017,7 @@ export type ReachTLSBody = {
   handshake_ms?: number;
   /** The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; served in pin mode alone, and absent before first use */
   key?: string;
-  /** How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice) */
+  /** How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the outpost's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice) */
   mode: string;
 };
 
@@ -7029,7 +7029,7 @@ export type ReachEndpointBody = {
   /** The endpoint's derived name (its transport) */
   endpoint: string;
   /**
-     * Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection
+     * Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the outpost published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection
      * @nullable
      */
   gate_reasons?: ReachGateReasonBody[] | null;
@@ -7049,9 +7049,9 @@ export type ReachEndpointBody = {
      * @nullable
      */
   layers: ReachLayerBody[] | null;
-  /** The node that probes this endpoint */
-  node?: string;
-  /** Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored */
+  /** The outpost that probes this endpoint */
+  outpost?: string;
+  /** Why verdict is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored */
   pending?: ReachEndpointBodyPending;
   /** The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds */
   rejection?: ReachRejectionBody;
@@ -7245,29 +7245,29 @@ export type RetentionSettings = {
      */
   metric_days: number;
   /**
-     * Days a node's own debug log line is kept; unset follows log_debug_days
+     * Days an outpost's own debug log line is kept; unset follows log_debug_days
      * @minimum 1
      * @maximum 36500
      */
-  node_log_debug_days?: number;
+  outpost_log_debug_days?: number;
   /**
-     * Days a node's own error, critical, alert or emergency log line is kept; unset follows log_error_days
+     * Days an outpost's own error, critical, alert or emergency log line is kept; unset follows log_error_days
      * @minimum 1
      * @maximum 36500
      */
-  node_log_error_days?: number;
+  outpost_log_error_days?: number;
   /**
-     * Days a node's own info or notice log line, or one with no severity, is kept; unset follows log_info_days
+     * Days an outpost's own info or notice log line, or one with no severity, is kept; unset follows log_info_days
      * @minimum 1
      * @maximum 36500
      */
-  node_log_info_days?: number;
+  outpost_log_info_days?: number;
   /**
-     * Days a node's own warning log line is kept; unset follows log_warning_days
+     * Days an outpost's own warning log line is kept; unset follows log_warning_days
      * @minimum 1
      * @maximum 36500
      */
-  node_log_warning_days?: number;
+  outpost_log_warning_days?: number;
   /**
      * Days a property transition is kept, unless its type keeps its own (a property type's retention_days)
      * @minimum 1
@@ -7287,7 +7287,7 @@ export type RetryEndpointInputBody = {
   readonly $schema?: string;
   /** A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged */
   certificate?: string;
-  /** The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
+  /** The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the outpost's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
   host_key?: string;
 };
 
@@ -7482,8 +7482,8 @@ export type RunEndpointPollOutputBody = {
      * @nullable
      */
   faults?: string[] | null;
-  /** The node that ran the poll */
-  node: string;
+  /** The outpost that ran the poll */
+  outpost: string;
   /** The poll that ran */
   poll: string;
   /**
@@ -7493,7 +7493,7 @@ export type RunEndpointPollOutputBody = {
   samples: RunSample[] | null;
   /** Always true: a run now lands its samples as a scheduled run does */
   stored: boolean;
-  /** How long the poll took on the node */
+  /** How long the poll took on the outpost */
   took_ms: number;
 };
 
@@ -7662,7 +7662,7 @@ export type SimCapabilities = {
   port_offset: number;
 };
 
-export type SimNodeBody = {
+export type SimOutpostBody = {
   capabilities: SimCapabilities;
   /**
      * The components the simulator serves, in the caller's component read scope, with their live hits.
@@ -7672,7 +7672,7 @@ export type SimNodeBody = {
   connected: boolean;
   impairments: SimImpairmentStatus;
   last_seen: string;
-  node: string;
+  outpost: string;
 };
 
 export type SimFleetOutputBody = {
@@ -7681,10 +7681,10 @@ export type SimFleetOutputBody = {
   /** Any simulator pulled its device list recently; the console shows its Simulation page only then. */
   connected: boolean;
   /**
-     * Each node a simulator has pulled for since the server started, whose simulated components the caller's scope reaches.
+     * Each outpost a simulator has pulled for since the server started, whose simulated components the caller's scope reaches.
      * @nullable
      */
-  nodes: SimNodeBody[] | null;
+  outposts: SimOutpostBody[] | null;
 };
 
 export type SimOperationResult = {
@@ -7743,7 +7743,7 @@ export type SimulationOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   capabilities: SimCapabilities;
-  /** A simulator beside this node pulled its device list recently. */
+  /** A simulator beside this outpost pulled its device list recently. */
   connected: boolean;
   /** @nullable */
   devices: SimDeviceBody[] | null;
@@ -7832,7 +7832,7 @@ export type SystemLogBody = {
   correlation_id?: string;
   /** The line's facility, when classified */
   facility?: string;
-  /** The endpoint that collected the line, when a node collected it */
+  /** The endpoint that collected the line, when an outpost collected it */
   instance?: string;
   /** Freeform classification labels, when present */
   labels?: unknown;
@@ -8137,10 +8137,10 @@ export type UpdateEndpointInputBody = {
      * @maxLength 200
      */
   label?: string;
-  /** Reassign the node placement, by name or id */
-  node?: string;
   /** Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone */
   out_of_band?: boolean;
+  /** Reassign the outpost placement, by name or id */
+  outpost?: string;
   /** Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
   params?: unknown;
   /** The transport: a driver-attached endpoint takes only one its driver speaks */
@@ -8268,17 +8268,6 @@ export type UpdateMetricTypeInputBody = {
   update_mask?: string[] | null;
 };
 
-export type UpdateNodeInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** New free-form operator notes */
-  description?: string;
-  /** A new operator-facing label */
-  label?: string;
-  /** Set the node's location by name or id, or "" to clear it */
-  location?: string;
-};
-
 export type UpdateNotificationTargetInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -8307,6 +8296,17 @@ export type UpdateNotificationTypeInputBody = {
   subject?: string;
   /** The body text template */
   text?: string;
+};
+
+export type UpdateOutpostInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** New free-form operator notes */
+  description?: string;
+  /** A new operator-facing label */
+  label?: string;
+  /** Set the outpost's location by name or id, or "" to clear it */
+  location?: string;
 };
 
 export type UpdatePersonalRuleInputBody = {
@@ -8796,7 +8796,7 @@ export type ListComponentPropertySeriesParams = {
 
 export type RunEndpointPollParams = {
   /**
-   * How long the node may take (default 15, at most 30)
+   * How long the outpost may take (default 15, at most 30)
    * @minimum 1
    * @maximum 30
    */
@@ -12402,7 +12402,7 @@ export const getGetComponentCommandUrl = (name: string,
 }
 
 /**
- * One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+ * One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, outpost and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
  * @summary Read a command
  */
 export const getComponentCommand = async (name: string,
@@ -12559,7 +12559,7 @@ export const getCreateComponentDependencyUrl = (name: string,) => {
 }
 
 /**
- * Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+ * Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's outpost its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
  * @summary Record that a component depends on another
  */
 export const createComponentDependency = async (name: string,
@@ -12945,7 +12945,7 @@ export const getPutIdentityBindingUrl = (name: string,
 }
 
 /**
- * Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+ * Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or an outpost owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
  * @summary Bind an identity a conduit reports to its owner
  */
 export const putIdentityBinding = async (name: string,
@@ -13006,7 +13006,7 @@ export const getGetComponentImpairmentUrl = (name: string,) => {
 }
 
 /**
- * The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+ * The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its outpost when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
  * @summary Get what is broken on a simulated device
  */
 export const getComponentImpairment = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentImpairmentResponse> => {
@@ -13050,7 +13050,7 @@ export const getSetComponentImpairmentUrl = (name: string,) => {
 }
 
 /**
- * Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+ * Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's outpost applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
  * @summary Break or repair a simulated device
  */
 export const setComponentImpairment = async (name: string,
@@ -13555,7 +13555,7 @@ export const getGetComponentSimulationUrl = (name: string,) => {
 }
 
 /**
- * Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
+ * Whether a component is simulated (it has an endpoint on an outpost and a product a simulator profile simulates) and, when it is, its outpost, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
  * @summary Get a component's simulation
  */
 export const getComponentSimulation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentSimulationResponse> => {
@@ -13599,7 +13599,7 @@ export const getFireComponentSimulationUrl = (name: string,) => {
 }
 
 /**
- * Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+ * Asks the simulator beside the component's outpost to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
  * @summary Fire an operation at a simulated component
  */
 export const fireComponentSimulation = async (name: string,
@@ -14084,7 +14084,7 @@ export const getCreateComponentFromTemplateUrl = () => {
 }
 
 /**
- * Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+ * Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no outpost a 422.
  * @summary Start a component from a template
  */
 export const createComponentFromTemplate = async (createComponentFromTemplateInputBody: NonReadonly<CreateComponentFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createComponentFromTemplateResponse> => {
@@ -14596,8 +14596,8 @@ export const getPreviewDriverUrl = () => {
 }
 
 /**
- * Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
- * @summary Preview a driver spec's polls through a node
+ * Runs a driver spec's polls once through the outpost named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the outpost holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the outpost and on each secret used. Gated by driver:preview.
+ * @summary Preview a driver spec's polls through an outpost
  */
 export const previewDriver = async (previewDriverInputBody: NonReadonly<PreviewDriverInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewDriverResponse> => {
 
@@ -14902,7 +14902,7 @@ export const getUpdateEndpointUrl = (endpoint: string,) => {
 }
 
 /**
- * Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+ * Patches an endpoint's outpost placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
  * @summary Update an endpoint
  */
 export const updateEndpoint = async (endpoint: string,
@@ -14970,7 +14970,7 @@ export const getRunEndpointPollUrl = (endpoint: string,
 }
 
 /**
- * Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+ * Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
  * @summary Run an endpoint's poll now
  */
 export const runEndpointPoll = async (endpoint: string,
@@ -15016,7 +15016,7 @@ export const getRetryEndpointUrl = (endpoint: string,) => {
 }
 
 /**
- * Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+ * Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the outpost recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
  * @summary Retry an endpoint's gated connections
  */
 export const retryEndpoint = async (endpoint: string,
@@ -18078,779 +18078,6 @@ return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(name
 
 
 
-export type listNodesResponse200 = {
-  data: ListNodesOutputBody
-  status: 200
-}
-
-export type listNodesResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listNodesResponseSuccess = (listNodesResponse200) & {
-  headers: Headers;
-};
-export type listNodesResponseError = (listNodesResponseDefault) & {
-  headers: Headers;
-};
-
-export type listNodesResponse = (listNodesResponseSuccess | listNodesResponseError)
-
-export const getListNodesUrl = () => {
-
-
-
-
-  return `/nodes`
-}
-
-/**
- * Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.
- * @summary List nodes
- */
-export const listNodes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listNodesResponse> => {
-
-  return ogFetch<listNodesResponse>(getListNodesUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type createNodeResponse201 = {
-  data: NodeBody
-  status: 201
-}
-
-export type createNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type createNodeResponseSuccess = (createNodeResponse201) & {
-  headers: Headers;
-};
-export type createNodeResponseError = (createNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type createNodeResponse = (createNodeResponseSuccess | createNodeResponseError)
-
-export const getCreateNodeUrl = () => {
-
-
-
-
-  return `/nodes`
-}
-
-/**
- * Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.
- * @summary Create a node
- */
-export const createNode = async (createNodeInputBody: NonReadonly<CreateNodeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNodeResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createNodeResponse>(getCreateNodeUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createNodeInputBody)
-  }
-);}
-
-
-
-export type deleteNodeResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type deleteNodeResponseSuccess = (deleteNodeResponse204) & {
-  headers: Headers;
-};
-export type deleteNodeResponseError = (deleteNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type deleteNodeResponse = (deleteNodeResponseSuccess | deleteNodeResponseError)
-
-export const getDeleteNodeUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}`
-}
-
-/**
- * Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
- * @summary Delete a node
- */
-export const deleteNode = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteNodeResponse> => {
-
-  return ogFetch<deleteNodeResponse>(getDeleteNodeUrl(name),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export type getNodeResponse200 = {
-  data: NodeBody
-  status: 200
-}
-
-export type getNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type getNodeResponseSuccess = (getNodeResponse200) & {
-  headers: Headers;
-};
-export type getNodeResponseError = (getNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type getNodeResponse = (getNodeResponseSuccess | getNodeResponseError)
-
-export const getGetNodeUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}`
-}
-
-/**
- * Fetches a node by name. Requires an all-scope read. Gated by node:read.
- * @summary Get a node
- */
-export const getNode = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getNodeResponse> => {
-
-  return ogFetch<getNodeResponse>(getGetNodeUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type updateNodeResponse200 = {
-  data: NodeBody
-  status: 200
-}
-
-export type updateNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type updateNodeResponseSuccess = (updateNodeResponse200) & {
-  headers: Headers;
-};
-export type updateNodeResponseError = (updateNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type updateNodeResponse = (updateNodeResponseSuccess | updateNodeResponseError)
-
-export const getUpdateNodeUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}`
-}
-
-/**
- * Patches a node's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
- * @summary Update a node
- */
-export const updateNode = async (name: string,
-    updateNodeInputBody: NonReadonly<UpdateNodeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateNodeResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateNodeResponse>(getUpdateNodeUrl(name),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(updateNodeInputBody)
-  }
-);}
-
-
-
-export type listNodeLogsResponse200 = {
-  data: NodeLogsOutputBody
-  status: 200
-}
-
-export type listNodeLogsResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listNodeLogsResponseSuccess = (listNodeLogsResponse200) & {
-  headers: Headers;
-};
-export type listNodeLogsResponseError = (listNodeLogsResponseDefault) & {
-  headers: Headers;
-};
-
-export type listNodeLogsResponse = (listNodeLogsResponseSuccess | listNodeLogsResponseError)
-
-export const getListNodeLogsUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/logs`
-}
-
-/**
- * Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.
- * @summary List a node's recent self-logs
- */
-export const listNodeLogs = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listNodeLogsResponse> => {
-
-  return ogFetch<listNodeLogsResponse>(getListNodeLogsUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type getNodeSimulationResponse200 = {
-  data: SimulationOutputBody
-  status: 200
-}
-
-export type getNodeSimulationResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type getNodeSimulationResponseSuccess = (getNodeSimulationResponse200) & {
-  headers: Headers;
-};
-export type getNodeSimulationResponseError = (getNodeSimulationResponseDefault) & {
-  headers: Headers;
-};
-
-export type getNodeSimulationResponse = (getNodeSimulationResponseSuccess | getNodeSimulationResponseError)
-
-export const getGetNodeSimulationUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/simulation`
-}
-
-/**
- * The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
- * @summary Get a node's simulator
- */
-export const getNodeSimulation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getNodeSimulationResponse> => {
-
-  return ogFetch<getNodeSimulationResponse>(getGetNodeSimulationUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type addNodeSimulationComponentResponse201 = {
-  data: AddSimComponentOutputBody
-  status: 201
-}
-
-export type addNodeSimulationComponentResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type addNodeSimulationComponentResponseSuccess = (addNodeSimulationComponentResponse201) & {
-  headers: Headers;
-};
-export type addNodeSimulationComponentResponseError = (addNodeSimulationComponentResponseDefault) & {
-  headers: Headers;
-};
-
-export type addNodeSimulationComponentResponse = (addNodeSimulationComponentResponseSuccess | addNodeSimulationComponentResponseError)
-
-export const getAddNodeSimulationComponentUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/simulation/components`
-}
-
-/**
- * Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
- * @summary Add a simulated component
- */
-export const addNodeSimulationComponent = async (name: string,
-    addSimComponentInputBody: NonReadonly<AddSimComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addNodeSimulationComponentResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<addNodeSimulationComponentResponse>(getAddNodeSimulationComponentUrl(name),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(addSimComponentInputBody)
-  }
-);}
-
-
-
-export type getNodeSimulationObservationResponse200 = {
-  data: EndpointObservation
-  status: 200
-}
-
-export type getNodeSimulationObservationResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type getNodeSimulationObservationResponseSuccess = (getNodeSimulationObservationResponse200) & {
-  headers: Headers;
-};
-export type getNodeSimulationObservationResponseError = (getNodeSimulationObservationResponseDefault) & {
-  headers: Headers;
-};
-
-export type getNodeSimulationObservationResponse = (getNodeSimulationObservationResponseSuccess | getNodeSimulationObservationResponseError)
-
-export const getGetNodeSimulationObservationUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/simulation/observation`
-}
-
-/**
- * What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.
- * @summary Get a node's endpoint observation
- */
-export const getNodeSimulationObservation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getNodeSimulationObservationResponse> => {
-
-  return ogFetch<getNodeSimulationObservationResponse>(getGetNodeSimulationObservationUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type addNodeSimulationSystemResponse201 = {
-  data: AddSimSystemOutputBody
-  status: 201
-}
-
-export type addNodeSimulationSystemResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type addNodeSimulationSystemResponseSuccess = (addNodeSimulationSystemResponse201) & {
-  headers: Headers;
-};
-export type addNodeSimulationSystemResponseError = (addNodeSimulationSystemResponseDefault) & {
-  headers: Headers;
-};
-
-export type addNodeSimulationSystemResponse = (addNodeSimulationSystemResponseSuccess | addNodeSimulationSystemResponseError)
-
-export const getAddNodeSimulationSystemUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/simulation/systems`
-}
-
-/**
- * Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
- * @summary Add a simulated system
- */
-export const addNodeSimulationSystem = async (name: string,
-    addSimSystemInputBody: NonReadonly<AddSimSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addNodeSimulationSystemResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<addNodeSimulationSystemResponse>(getAddNodeSimulationSystemUrl(name),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(addSimSystemInputBody)
-  }
-);}
-
-
-
-export type enrollNodeResponse200 = {
-  data: EnrollOutputBody
-  status: 200
-}
-
-export type enrollNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type enrollNodeResponseSuccess = (enrollNodeResponse200) & {
-  headers: Headers;
-};
-export type enrollNodeResponseError = (enrollNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type enrollNodeResponse = (enrollNodeResponseSuccess | enrollNodeResponseError)
-
-export const getEnrollNodeUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}:enroll`
-}
-
-/**
- * Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
- * @summary Mint a node's enrollment token
- */
-export const enrollNode = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<enrollNodeResponse> => {
-
-  return ogFetch<enrollNodeResponse>(getEnrollNodeUrl(name),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type listNodeTagsResponse200 = {
-  data: EntityTagsOutputBody
-  status: 200
-}
-
-export type listNodeTagsResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listNodeTagsResponseSuccess = (listNodeTagsResponse200) & {
-  headers: Headers;
-};
-export type listNodeTagsResponseError = (listNodeTagsResponseDefault) & {
-  headers: Headers;
-};
-
-export type listNodeTagsResponse = (listNodeTagsResponseSuccess | listNodeTagsResponseError)
-
-export const getListNodeTagsUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}:listTags`
-}
-
-/**
- * Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
- * @summary List tags on a node
- */
-export const listNodeTags = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listNodeTagsResponse> => {
-
-  return ogFetch<listNodeTagsResponse>(getListNodeTagsUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type removeNodeTagResponse204 = {
-  data: void
-  status: 204
-}
-
-export type removeNodeTagResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type removeNodeTagResponseSuccess = (removeNodeTagResponse204) & {
-  headers: Headers;
-};
-export type removeNodeTagResponseError = (removeNodeTagResponseDefault) & {
-  headers: Headers;
-};
-
-export type removeNodeTagResponse = (removeNodeTagResponseSuccess | removeNodeTagResponseError)
-
-export const getRemoveNodeTagUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}:removeTag`
-}
-
-/**
- * Removes a key's value from a node. Gated by node:update.
- * @summary Remove a tag value from a node
- */
-export const removeNodeTag = async (name: string,
-    entityRemoveTagInputBody: NonReadonly<EntityRemoveTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<removeNodeTagResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<removeNodeTagResponse>(getRemoveNodeTagUrl(name),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(entityRemoveTagInputBody)
-  }
-);}
-
-
-
-export type setNodeTagResponse200 = {
-  data: TagBindingBody
-  status: 200
-}
-
-export type setNodeTagResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type setNodeTagResponseSuccess = (setNodeTagResponse200) & {
-  headers: Headers;
-};
-export type setNodeTagResponseError = (setNodeTagResponseDefault) & {
-  headers: Headers;
-};
-
-export type setNodeTagResponse = (setNodeTagResponseSuccess | setNodeTagResponseError)
-
-export const getSetNodeTagUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}:setTag`
-}
-
-/**
- * Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.
- * @summary Set a tag value on a node
- */
-export const setNodeTag = async (name: string,
-    entitySetTagInputBody: NonReadonly<EntitySetTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setNodeTagResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setNodeTagResponse>(getSetNodeTagUrl(name),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(entitySetTagInputBody)
-  }
-);}
-
-
-
-export type claimNodeResponse200 = {
-  data: ClaimOutputBody
-  status: 200
-}
-
-export type claimNodeResponse401 = {
-  data: ErrorModel
-  status: 401
-}
-
-export type claimNodeResponse422 = {
-  data: ErrorModel
-  status: 422
-}
-
-export type claimNodeResponse500 = {
-  data: ErrorModel
-  status: 500
-}
-
-export type claimNodeResponseSuccess = (claimNodeResponse200) & {
-  headers: Headers;
-};
-export type claimNodeResponseError = (claimNodeResponse401 | claimNodeResponse422 | claimNodeResponse500) & {
-  headers: Headers;
-};
-
-export type claimNodeResponse = (claimNodeResponseSuccess | claimNodeResponseError)
-
-export const getClaimNodeUrl = () => {
-
-
-
-
-  return `/nodes:claim`
-}
-
-/**
- * The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
- * @summary Claim a node identity in exchange for its NATS credential
- */
-export const claimNode = async (claimNodeInputBody: NonReadonly<ClaimNodeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<claimNodeResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<claimNodeResponse>(getClaimNodeUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(claimNodeInputBody)
-  }
-);}
-
-
-
 export type listNotificationTargetResponse200 = {
   data: ListNotificationTargetsOutputBody
   status: 200
@@ -19689,6 +18916,779 @@ export const retryNotification = async (id: string, options?: Parameters<typeof 
     method: 'POST'
 
 
+  }
+);}
+
+
+
+export type listOutpostsResponse200 = {
+  data: ListOutpostsOutputBody
+  status: 200
+}
+
+export type listOutpostsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listOutpostsResponseSuccess = (listOutpostsResponse200) & {
+  headers: Headers;
+};
+export type listOutpostsResponseError = (listOutpostsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listOutpostsResponse = (listOutpostsResponseSuccess | listOutpostsResponseError)
+
+export const getListOutpostsUrl = () => {
+
+
+
+
+  return `/outposts`
+}
+
+/**
+ * Lists the edge outposts. An outpost is fleet-wide, so listing requires an all-scope read. Gated by outpost:read.
+ * @summary List outposts
+ */
+export const listOutposts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listOutpostsResponse> => {
+
+  return ogFetch<listOutpostsResponse>(getListOutpostsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createOutpostResponse201 = {
+  data: OutpostBody
+  status: 201
+}
+
+export type createOutpostResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createOutpostResponseSuccess = (createOutpostResponse201) & {
+  headers: Headers;
+};
+export type createOutpostResponseError = (createOutpostResponseDefault) & {
+  headers: Headers;
+};
+
+export type createOutpostResponse = (createOutpostResponseSuccess | createOutpostResponseError)
+
+export const getCreateOutpostUrl = () => {
+
+
+
+
+  return `/outposts`
+}
+
+/**
+ * Registers an edge outpost server-side (day-one enrollment: create, then :enroll to mint its token). Gated by outpost:create.
+ * @summary Create an outpost
+ */
+export const createOutpost = async (createOutpostInputBody: NonReadonly<CreateOutpostInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createOutpostResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createOutpostResponse>(getCreateOutpostUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createOutpostInputBody)
+  }
+);}
+
+
+
+export type deleteOutpostResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteOutpostResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type deleteOutpostResponseSuccess = (deleteOutpostResponse204) & {
+  headers: Headers;
+};
+export type deleteOutpostResponseError = (deleteOutpostResponseDefault) & {
+  headers: Headers;
+};
+
+export type deleteOutpostResponse = (deleteOutpostResponseSuccess | deleteOutpostResponseError)
+
+export const getDeleteOutpostUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}`
+}
+
+/**
+ * Decommissions an outpost: a hard delete that cascades its endpoints, their derived tasks, its outpost-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by outpost:delete.
+ * @summary Delete an outpost
+ */
+export const deleteOutpost = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteOutpostResponse> => {
+
+  return ogFetch<deleteOutpostResponse>(getDeleteOutpostUrl(name),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type getOutpostResponse200 = {
+  data: OutpostBody
+  status: 200
+}
+
+export type getOutpostResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getOutpostResponseSuccess = (getOutpostResponse200) & {
+  headers: Headers;
+};
+export type getOutpostResponseError = (getOutpostResponseDefault) & {
+  headers: Headers;
+};
+
+export type getOutpostResponse = (getOutpostResponseSuccess | getOutpostResponseError)
+
+export const getGetOutpostUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}`
+}
+
+/**
+ * Fetches an outpost by name. Requires an all-scope read. Gated by outpost:read.
+ * @summary Get an outpost
+ */
+export const getOutpost = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getOutpostResponse> => {
+
+  return ogFetch<getOutpostResponse>(getGetOutpostUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type updateOutpostResponse200 = {
+  data: OutpostBody
+  status: 200
+}
+
+export type updateOutpostResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type updateOutpostResponseSuccess = (updateOutpostResponse200) & {
+  headers: Headers;
+};
+export type updateOutpostResponseError = (updateOutpostResponseDefault) & {
+  headers: Headers;
+};
+
+export type updateOutpostResponse = (updateOutpostResponseSuccess | updateOutpostResponseError)
+
+export const getUpdateOutpostUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}`
+}
+
+/**
+ * Patches an outpost's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by outpost:update.
+ * @summary Update an outpost
+ */
+export const updateOutpost = async (name: string,
+    updateOutpostInputBody: NonReadonly<UpdateOutpostInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateOutpostResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<updateOutpostResponse>(getUpdateOutpostUrl(name),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateOutpostInputBody)
+  }
+);}
+
+
+
+export type listOutpostLogsResponse200 = {
+  data: OutpostLogsOutputBody
+  status: 200
+}
+
+export type listOutpostLogsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listOutpostLogsResponseSuccess = (listOutpostLogsResponse200) & {
+  headers: Headers;
+};
+export type listOutpostLogsResponseError = (listOutpostLogsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listOutpostLogsResponse = (listOutpostLogsResponseSuccess | listOutpostLogsResponseError)
+
+export const getListOutpostLogsUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}/logs`
+}
+
+/**
+ * Returns the outpost's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the outpost), newest first, bounded to the last 24 hours. Gated by outpost:read; an out-of-scope outpost is a non-disclosing 404.
+ * @summary List an outpost's recent self-logs
+ */
+export const listOutpostLogs = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listOutpostLogsResponse> => {
+
+  return ogFetch<listOutpostLogsResponse>(getListOutpostLogsUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type getOutpostSimulationResponse200 = {
+  data: SimulationOutputBody
+  status: 200
+}
+
+export type getOutpostSimulationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getOutpostSimulationResponseSuccess = (getOutpostSimulationResponse200) & {
+  headers: Headers;
+};
+export type getOutpostSimulationResponseError = (getOutpostSimulationResponseDefault) & {
+  headers: Headers;
+};
+
+export type getOutpostSimulationResponse = (getOutpostSimulationResponseSuccess | getOutpostSimulationResponseError)
+
+export const getGetOutpostSimulationUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}/simulation`
+}
+
+/**
+ * The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.
+ * @summary Get an outpost's simulator
+ */
+export const getOutpostSimulation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getOutpostSimulationResponse> => {
+
+  return ogFetch<getOutpostSimulationResponse>(getGetOutpostSimulationUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type addOutpostSimulationComponentResponse201 = {
+  data: AddSimComponentOutputBody
+  status: 201
+}
+
+export type addOutpostSimulationComponentResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type addOutpostSimulationComponentResponseSuccess = (addOutpostSimulationComponentResponse201) & {
+  headers: Headers;
+};
+export type addOutpostSimulationComponentResponseError = (addOutpostSimulationComponentResponseDefault) & {
+  headers: Headers;
+};
+
+export type addOutpostSimulationComponentResponse = (addOutpostSimulationComponentResponseSuccess | addOutpostSimulationComponentResponseError)
+
+export const getAddOutpostSimulationComponentUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}/simulation/components`
+}
+
+/**
+ * Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the outpost: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the outpost's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. An outpost with no simulator connected is a 409, and a product no profile simulates a 422.
+ * @summary Add a simulated component
+ */
+export const addOutpostSimulationComponent = async (name: string,
+    addSimComponentInputBody: NonReadonly<AddSimComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addOutpostSimulationComponentResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<addOutpostSimulationComponentResponse>(getAddOutpostSimulationComponentUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(addSimComponentInputBody)
+  }
+);}
+
+
+
+export type getOutpostSimulationObservationResponse200 = {
+  data: EndpointObservation
+  status: 200
+}
+
+export type getOutpostSimulationObservationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getOutpostSimulationObservationResponseSuccess = (getOutpostSimulationObservationResponse200) & {
+  headers: Headers;
+};
+export type getOutpostSimulationObservationResponseError = (getOutpostSimulationObservationResponseDefault) & {
+  headers: Headers;
+};
+
+export type getOutpostSimulationObservationResponse = (getOutpostSimulationObservationResponseSuccess | getOutpostSimulationObservationResponseError)
+
+export const getGetOutpostSimulationObservationUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}/simulation/observation`
+}
+
+/**
+ * What the simulated endpoints beside an outpost saw arrive and how each request settled, and what the outpost tallied sending, read in that order: the simulator, then the outpost, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the outpost simulates. An outpost that does not exist is a 404; no simulator answering, or the outpost not answering, a 503.
+ * @summary Get an outpost's endpoint observation
+ */
+export const getOutpostSimulationObservation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getOutpostSimulationObservationResponse> => {
+
+  return ogFetch<getOutpostSimulationObservationResponse>(getGetOutpostSimulationObservationUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type addOutpostSimulationSystemResponse201 = {
+  data: AddSimSystemOutputBody
+  status: 201
+}
+
+export type addOutpostSimulationSystemResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type addOutpostSimulationSystemResponseSuccess = (addOutpostSimulationSystemResponse201) & {
+  headers: Headers;
+};
+export type addOutpostSimulationSystemResponseError = (addOutpostSimulationSystemResponseDefault) & {
+  headers: Headers;
+};
+
+export type addOutpostSimulationSystemResponse = (addOutpostSimulationSystemResponseSuccess | addOutpostSimulationSystemResponseError)
+
+export const getAddOutpostSimulationSystemUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}/simulation/systems`
+}
+
+/**
+ * Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
+ * @summary Add a simulated system
+ */
+export const addOutpostSimulationSystem = async (name: string,
+    addSimSystemInputBody: NonReadonly<AddSimSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addOutpostSimulationSystemResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<addOutpostSimulationSystemResponse>(getAddOutpostSimulationSystemUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(addSimSystemInputBody)
+  }
+);}
+
+
+
+export type enrollOutpostResponse200 = {
+  data: EnrollOutputBody
+  status: 200
+}
+
+export type enrollOutpostResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type enrollOutpostResponseSuccess = (enrollOutpostResponse200) & {
+  headers: Headers;
+};
+export type enrollOutpostResponseError = (enrollOutpostResponseDefault) & {
+  headers: Headers;
+};
+
+export type enrollOutpostResponse = (enrollOutpostResponseSuccess | enrollOutpostResponseError)
+
+export const getEnrollOutpostUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}:enroll`
+}
+
+/**
+ * Mints (or re-mints) the outpost's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by outpost:enroll.
+ * @summary Mint an outpost's enrollment token
+ */
+export const enrollOutpost = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<enrollOutpostResponse> => {
+
+  return ogFetch<enrollOutpostResponse>(getEnrollOutpostUrl(name),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type listOutpostTagsResponse200 = {
+  data: EntityTagsOutputBody
+  status: 200
+}
+
+export type listOutpostTagsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listOutpostTagsResponseSuccess = (listOutpostTagsResponse200) & {
+  headers: Headers;
+};
+export type listOutpostTagsResponseError = (listOutpostTagsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listOutpostTagsResponse = (listOutpostTagsResponseSuccess | listOutpostTagsResponseError)
+
+export const getListOutpostTagsUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}:listTags`
+}
+
+/**
+ * Lists the tags bound directly on a outpost (not the resolved cascade). Gated by outpost:read.
+ * @summary List tags on a outpost
+ */
+export const listOutpostTags = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listOutpostTagsResponse> => {
+
+  return ogFetch<listOutpostTagsResponse>(getListOutpostTagsUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type removeOutpostTagResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeOutpostTagResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type removeOutpostTagResponseSuccess = (removeOutpostTagResponse204) & {
+  headers: Headers;
+};
+export type removeOutpostTagResponseError = (removeOutpostTagResponseDefault) & {
+  headers: Headers;
+};
+
+export type removeOutpostTagResponse = (removeOutpostTagResponseSuccess | removeOutpostTagResponseError)
+
+export const getRemoveOutpostTagUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}:removeTag`
+}
+
+/**
+ * Removes a key's value from a outpost. Gated by outpost:update.
+ * @summary Remove a tag value from a outpost
+ */
+export const removeOutpostTag = async (name: string,
+    entityRemoveTagInputBody: NonReadonly<EntityRemoveTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<removeOutpostTagResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<removeOutpostTagResponse>(getRemoveOutpostTagUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(entityRemoveTagInputBody)
+  }
+);}
+
+
+
+export type setOutpostTagResponse200 = {
+  data: TagBindingBody
+  status: 200
+}
+
+export type setOutpostTagResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type setOutpostTagResponseSuccess = (setOutpostTagResponse200) & {
+  headers: Headers;
+};
+export type setOutpostTagResponseError = (setOutpostTagResponseDefault) & {
+  headers: Headers;
+};
+
+export type setOutpostTagResponse = (setOutpostTagResponseSuccess | setOutpostTagResponseError)
+
+export const getSetOutpostTagUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}:setTag`
+}
+
+/**
+ * Binds a value for a key on a outpost. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by outpost:update.
+ * @summary Set a tag value on a outpost
+ */
+export const setOutpostTag = async (name: string,
+    entitySetTagInputBody: NonReadonly<EntitySetTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setOutpostTagResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<setOutpostTagResponse>(getSetOutpostTagUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(entitySetTagInputBody)
+  }
+);}
+
+
+
+export type claimOutpostResponse200 = {
+  data: ClaimOutputBody
+  status: 200
+}
+
+export type claimOutpostResponse401 = {
+  data: ErrorModel
+  status: 401
+}
+
+export type claimOutpostResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type claimOutpostResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type claimOutpostResponseSuccess = (claimOutpostResponse200) & {
+  headers: Headers;
+};
+export type claimOutpostResponseError = (claimOutpostResponse401 | claimOutpostResponse422 | claimOutpostResponse500) & {
+  headers: Headers;
+};
+
+export type claimOutpostResponse = (claimOutpostResponseSuccess | claimOutpostResponseError)
+
+export const getClaimOutpostUrl = () => {
+
+
+
+
+  return `/outposts:claim`
+}
+
+/**
+ * The outpost-facing exchange: an outpost presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
+ * @summary Claim an outpost identity in exchange for its NATS credential
+ */
+export const claimOutpost = async (claimOutpostInputBody: NonReadonly<ClaimOutpostInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<claimOutpostResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<claimOutpostResponse>(getClaimOutpostUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(claimOutpostInputBody)
   }
 );}
 
@@ -23122,7 +23122,7 @@ export const getGetSimulationUrl = () => {
 }
 
 /**
- * Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+ * Every outpost a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees an outpost's simulator when its component read scope holds at least one component the outpost simulates (an all-scope reader sees all of them); no outpost read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
  * @summary Get the simulated fleet
  */
 export const getSimulation = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getSimulationResponse> => {
@@ -26577,7 +26577,7 @@ export const getPushTelemetryUrl = () => {
 }
 
 /**
- * Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key a node writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is a node's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
+ * Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
  * @summary Push telemetry for an owner
  */
 export const pushTelemetry = async (pushInputBody: NonReadonly<PushInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<pushTelemetryResponse> => {
@@ -26774,7 +26774,7 @@ export const getListUnclaimedSourcesUrl = () => {
 }
 
 /**
- * The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as nodes are.
+ * The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by outpost:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as outposts are.
  * @summary List the sources no endpoint claims
  */
 export const listUnclaimedSources = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listUnclaimedSourcesResponse> => {
@@ -27375,7 +27375,7 @@ export const getGetPlatformViewUrl = () => {
 }
 
 /**
- * Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.
+ * Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.
  * @summary Read Omniglass's own health in one call
  */
 export const getPlatformView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformViewResponse> => {
@@ -27419,7 +27419,7 @@ export const getGetPlatformSimulationViewUrl = () => {
 }
 
 /**
- * Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+ * Returns the read behind the Platform health page's simulation section: one row per outpost with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. An outpost reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
  * @summary Read what each simulator saw against what the platform collected
  */
 export const getPlatformSimulationView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformSimulationViewResponse> => {

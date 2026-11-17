@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"strconv"
@@ -9,7 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The identity on the wire (#1386): the node's batch builder copies a
+// The identity on the wire (#1386): the outpost's batch builder copies a
 // sample's identity onto its metric, property or event sample, never onto a
 // log line; and a plain poll's change memory tells two records' occurrences
 // apart, so each room's event lands when that room's changes.

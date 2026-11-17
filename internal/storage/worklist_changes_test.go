@@ -14,11 +14,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// A write that changes a node's worklist announces it on commit (#1945): the
-// node it names arrives on WorklistChanges, so the bus can nudge that node to
+// A write that changes an outpost's worklist announces it on commit (#1945): the
+// outpost it names arrives on WorklistChanges, so the bus can nudge that outpost to
 // pull now instead of on its next scheduled pull. Skipped under -short.
 
-// nextChange waits for one announced node name, failing on a quiet channel.
+// nextChange waits for one announced outpost name, failing on a quiet channel.
 func nextChange(t *testing.T, ch <-chan string, what string) string {
 	t.Helper()
 	select {
@@ -34,7 +34,7 @@ func nextChange(t *testing.T, ch <-chan string, what string) string {
 }
 
 // expectChanges collects the names announced for one write and checks they are
-// exactly want, in any order: a write announces each node it touched once.
+// exactly want, in any order: a write announces each outpost it touched once.
 func expectChanges(t *testing.T, ch <-chan string, what string, want ...string) {
 	t.Helper()
 	got := map[string]bool{}
@@ -53,7 +53,7 @@ func expectChanges(t *testing.T, ch <-chan string, what string, want ...string) 
 	}
 }
 
-func TestWorklistChangesAnnounceTheNodesAWriteTouches(t *testing.T) {
+func TestWorklistChangesAnnounceTheOutpostsAWriteTouches(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -78,7 +78,7 @@ func TestWorklistChangesAnnounceTheNodesAWriteTouches(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, n := range []string{"edge-a", "edge-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -90,7 +90,7 @@ func TestWorklistChangesAnnounceTheNodesAWriteTouches(t *testing.T) {
 
 	comp, drv, a, b := "panel-n", "panel-proto", "edge-a", "edge-b"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &a,
+		Driver: &drv, Component: &comp, Outpost: &a,
 		Inputs: map[string]string{"host": "10.20.4.70"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
@@ -103,10 +103,10 @@ func TestWorklistChangesAnnounceTheNodesAWriteTouches(t *testing.T) {
 	}
 	expectChanges(t, changes, "an address edit", a)
 
-	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Node: &b}, all, all); err != nil {
+	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Outpost: &b}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	expectChanges(t, changes, "a move between nodes", a, b)
+	expectChanges(t, changes, "a move between outposts", a, b)
 
 	if _, err := gw.RetryEndpoint(ctx, "", ep.ID, storage.RetryPin{}, all, all); err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestWorklistChangesAnnounceTheNodesAWriteTouches(t *testing.T) {
 	}
 	expectChanges(t, changes, "a driver spec edit", b)
 
-	// A bare NOTIFY names no node: the listener skips it and stays up.
+	// A bare NOTIFY names no outpost: the listener skips it and stays up.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +174,7 @@ func TestWorklistChangesAnnounceTheNodesAWriteTouches(t *testing.T) {
 	if err := gw.DeleteEndpoint(ctx, "", ep.ID, all, all); err != nil {
 		t.Fatal(err)
 	}
-	// A late announcement from the edit loop above names the same node, so
+	// A late announcement from the edit loop above names the same outpost, so
 	// either way the next one names it.
 	got := nextChange(t, changes, "delete")
 	if got != b {

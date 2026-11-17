@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"sync"
@@ -13,11 +13,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// nodeReport is the node's account of itself (#1625): how long the
+// outpostReport is the outpost's account of itself (#1625): how long the
 // dispatcher's passes take and the dues it could not meet (#1634), how late
 // its tasks run against their intervals, how deep its spool is and what it
 // delivers, the sessions it holds, and what its process costs. They are platform metrics
-// on the node's own platform component, sent in the node-self block of the
+// on the outpost's own platform component, sent in the outpost-self block of the
 // batch the tick publishes; the server lands them under the platform writer.
 //
 // Two shapes, per the key table. The each-tick figures are one observation
@@ -25,14 +25,14 @@ import (
 // flight, skipped intervals, failed command pulls, and the spool's delivery
 // per telemetry kind, #1659, and the dispatcher's schedule hop, runs due
 // against runs made per kind under the instance schedule/{kind}, #1693) are
-// tallied over the node's report window, the collection report's
+// tallied over the outpost's report window, the collection report's
 // (report.go), and emitted once when it ends, every window, a quiet window's
 // as zero: a count written only when nonzero would leave the last event's
 // count standing as the series' latest value long after it. The window sits
-// on the node's grid (#1779), the collection report's, and its first runs
-// from the node's start to its first slot and writes too. Pure: the run loop
+// on the outpost's grid (#1779), the collection report's, and its first runs
+// from the outpost's start to its first slot and writes too. Pure: the run loop
 // feeds it and sends what it takes.
-type nodeReport struct {
+type outpostReport struct {
 	win reportWindow
 
 	overruns int
@@ -52,7 +52,7 @@ type nodeReport struct {
 	// runs due in, runs made out, per kind, written under schedule/{kind}.
 	schedule delivery.Counts
 	// pullFailures is the command queue pulls that failed in the window
-	// (#1626): no answer from the bus, or one the node could not read.
+	// (#1626): no answer from the bus, or one the outpost could not read.
 	// Atomic because the command cycle runs off the heartbeat goroutine
 	// (#1634) while the heartbeat takes the window.
 	pullFailures atomic.Int64
@@ -60,7 +60,7 @@ type nodeReport struct {
 	// pull loop's own goroutine (#1577).
 	pulls worklistPulls
 
-	// rt is the runtime sampler the server shares, so the node's CPU time
+	// rt is the runtime sampler the server shares, so the outpost's CPU time
 	// reads as the time between two of its ticks.
 	rt platformmetric.Runtime
 
@@ -74,24 +74,24 @@ type spoolFigures struct {
 	flow    delivery.Counts
 }
 
-// newNodeReport starts a report whose windows sit on the grid seed places,
+// newOutpostReport starts a report whose windows sit on the grid seed places,
 // the collection report's (#1779).
-func newNodeReport(every time.Duration, seed uint64, now time.Time) *nodeReport {
+func newOutpostReport(every time.Duration, seed uint64, now time.Time) *outpostReport {
 	if every <= 0 {
 		every = defaultReportEvery
 	}
-	return &nodeReport{win: newReportWindow(every, seed, now)}
+	return &outpostReport{win: newReportWindow(every, seed, now)}
 }
 
 // setEvery applies the report window the worklist carries; none keeps the
-// window the node has.
-func (r *nodeReport) setEvery(every time.Duration) {
+// window the outpost has.
+func (r *outpostReport) setEvery(every time.Duration) {
 	if r != nil {
 		r.win.setEvery(every)
 	}
 }
 
-func (r *nodeReport) sample(key string, v float64, at time.Time, instance string) {
+func (r *outpostReport) sample(key string, v float64, at time.Time, instance string) {
 	r.samples = append(r.samples, &ogv1.MetricSample{Name: key, Value: v, Ts: timestamppb.New(at.UTC()), Instance: instance})
 }
 
@@ -99,7 +99,7 @@ func (r *nodeReport) sample(key string, v float64, at time.Time, instance string
 // pass when it ran one, the latest dispatch and the worst gap excess when a
 // task ran on the schedule, and the dues it met in flight or passed over
 // toward the report window.
-func (r *nodeReport) dispatch(w dispatchWindow, at time.Time) {
+func (r *outpostReport) dispatch(w dispatchWindow, at time.Time) {
 	if r == nil {
 		return
 	}
@@ -117,7 +117,7 @@ func (r *nodeReport) dispatch(w dispatchWindow, at time.Time) {
 }
 
 // spool records the spool's depth now and tallies its delivery.
-func (r *nodeReport) spool(f spoolFigures, at time.Time) {
+func (r *outpostReport) spool(f spoolFigures, at time.Time) {
 	if r == nil {
 		return
 	}
@@ -125,10 +125,10 @@ func (r *nodeReport) spool(f spoolFigures, at time.Time) {
 	r.flow.Merge(f.flow)
 }
 
-// sessions records the sessions the node holds, one sample per state, a
+// sessions records the sessions the outpost holds, one sample per state, a
 // state with none included, so a state that empties reads zero rather than
 // its last count.
-func (r *nodeReport) sessions(held map[collection.SessionState]int, at time.Time) {
+func (r *outpostReport) sessions(held map[collection.SessionState]int, at time.Time) {
 	if r == nil {
 		return
 	}
@@ -137,8 +137,8 @@ func (r *nodeReport) sessions(held map[collection.SessionState]int, at time.Time
 	}
 }
 
-// process records what the node's process costs now.
-func (r *nodeReport) process(p platformmetric.Process, at time.Time) {
+// process records what the outpost's process costs now.
+func (r *outpostReport) process(p platformmetric.Process, at time.Time) {
 	if r == nil {
 		return
 	}
@@ -149,15 +149,15 @@ func (r *nodeReport) process(p platformmetric.Process, at time.Time) {
 
 // commandPullFailed tallies one failed pull of the command queue toward the
 // window.
-func (r *nodeReport) commandPullFailed() {
+func (r *outpostReport) commandPullFailed() {
 	if r != nil {
 		r.pullFailures.Add(1)
 	}
 }
 
 // worklistPulled tallies one worklist pull toward the window, refused when
-// the bus gave no worklist the node could read, so it kept its last one.
-func (r *nodeReport) worklistPulled(refused bool) {
+// the bus gave no worklist the outpost could read, so it kept its last one.
+func (r *outpostReport) worklistPulled(refused bool) {
 	if r != nil {
 		r.pulls.add(refused)
 	}
@@ -183,7 +183,7 @@ func (p *worklistPulls) add(refused bool) {
 }
 
 // lossRatio returns the window's share of refused pulls and starts the next
-// window. A window with no pull carries the last pull's outcome, so a node
+// window. A window with no pull carries the last pull's outcome, so an outpost
 // backed off between refused pulls still reads 1.
 func (p *worklistPulls) lossRatio() float64 {
 	p.mu.Lock()
@@ -200,14 +200,14 @@ func (p *worklistPulls) lossRatio() float64 {
 }
 
 // lanes records how many lanes the pool runs, reported every window.
-func (r *nodeReport) lanes(n int) {
+func (r *outpostReport) lanes(n int) {
 	if r != nil {
 		r.laneCount = n
 	}
 }
 
-// worklist records the size of a worklist the node just installed.
-func (r *nodeReport) worklist(tasks int, at time.Time) {
+// worklist records the size of a worklist the outpost just installed.
+func (r *outpostReport) worklist(tasks int, at time.Time) {
 	if r == nil {
 		return
 	}
@@ -217,7 +217,7 @@ func (r *nodeReport) worklist(tasks int, at time.Time) {
 // take returns what the report holds: the each-tick samples since the last
 // take, and, once the window has reached its grid end, the window's counts,
 // zero included, stamped at now, the next window starting at that end.
-func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
+func (r *outpostReport) take(now time.Time) []*ogv1.MetricSample {
 	if r == nil {
 		return nil
 	}
@@ -252,7 +252,7 @@ func (r *nodeReport) take(now time.Time) []*ogv1.MetricSample {
 	return out
 }
 
-// sessionCounts is how many sessions the node holds in each state.
+// sessionCounts is how many sessions the outpost holds in each state.
 func (m *sessionManager) sessionCounts() map[collection.SessionState]int {
 	out := map[collection.SessionState]int{}
 	if m == nil {
@@ -270,7 +270,7 @@ func (m *sessionManager) sessionCounts() map[collection.SessionState]int {
 // account closes a heartbeat tick: it records the dispatcher's window, the
 // spool's figures, the sessions held and the process, and takes what the
 // report has to send.
-func (r *nodeReport) account(w dispatchWindow, spool *telemetrySpool, sessions *sessionManager) []*ogv1.MetricSample {
+func (r *outpostReport) account(w dispatchWindow, spool *telemetrySpool, sessions *sessionManager) []*ogv1.MetricSample {
 	if r == nil {
 		return nil
 	}

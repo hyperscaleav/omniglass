@@ -14,7 +14,7 @@ Wait
 Type `ucc='hq.$comp.meetings-cloud'; huddle='hq.west.level-2.huddle.$sys.huddle'`
 Enter
 Wait
-Type `omniglass simulation add-component edge-hq --name meetings-cloud --location hq --product ucc-platform | jq -c '{node, endpoints}'`
+Type `omniglass simulation add-component edge-hq --name meetings-cloud --location hq --product ucc-platform | jq -c '{outpost, endpoints}'`
 Enter
 Wait
 Hide

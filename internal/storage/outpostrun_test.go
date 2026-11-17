@@ -15,8 +15,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The storage half of the on-demand node run (#1163): a spec checked as a
-// save would, a preview planned into the tasks a node runs (and audited), and
+// The storage half of the on-demand outpost run (#1163): a spec checked as a
+// save would, a preview planned into the tasks an outpost runs (and audited), and
 // an endpoint's poll resolved for a run now. Skipped under -short.
 
 const previewPassword = "preview-s3cret-value"
@@ -36,7 +36,7 @@ func runStack(t *testing.T) (*storage.PG, context.Context) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-p"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-p"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
@@ -50,7 +50,7 @@ func runStack(t *testing.T) (*storage.PG, context.Context) {
 
 func previewOf(driverRef string, inputs map[string]string) storage.PreviewInput {
 	all := scope.Set{All: true}
-	return storage.PreviewInput{Node: "edge-p", Driver: driverRef, Inputs: inputs, NodeRead: all, Secrets: storage.SecretUse{Read: all, Bind: all, CanAdmin: true}}
+	return storage.PreviewInput{Outpost: "edge-p", Driver: driverRef, Inputs: inputs, OutpostRead: all, Secrets: storage.SecretUse{Read: all, Bind: all, CanAdmin: true}}
 }
 
 func TestDriverSpecFindings(t *testing.T) {
@@ -72,7 +72,7 @@ func TestDriverSpecFindings(t *testing.T) {
 
 // A preview of a stored driver becomes a task per poll, as a worklist would
 // deliver it: the dial target from the inputs, the secret unsealed, and the
-// asking audited on the node and on the secret.
+// asking audited on the outpost and on the secret.
 func TestPlanDriverPreview(t *testing.T) {
 	t.Parallel()
 	gw, ctx := runStack(t)
@@ -80,7 +80,7 @@ func TestPlanDriverPreview(t *testing.T) {
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}
-	if plan.NodeName != "edge-p" || plan.Driver != "boreal-edge-web" || plan.Target != "10.20.4.31:80" || len(plan.Tasks) != 1 || plan.Polls[0] != "identity" {
+	if plan.OutpostName != "edge-p" || plan.Driver != "boreal-edge-web" || plan.Target != "10.20.4.31:80" || len(plan.Tasks) != 1 || plan.Polls[0] != "identity" {
 		t.Fatalf("plan = %+v", plan)
 	}
 	task := plan.Tasks[0]
@@ -94,12 +94,12 @@ func TestPlanDriverPreview(t *testing.T) {
 	if err := json.Unmarshal(task.EndpointParams, &params); err != nil || params["target"] != "10.20.4.31:80" {
 		t.Errorf("params = %s (%v)", task.EndpointParams, err)
 	}
-	nodeRows, _ := gw.ListAuditLog(ctx, storage.AuditFilter{Resource: "node", Verb: "preview"})
+	outpostRows, _ := gw.ListAuditLog(ctx, storage.AuditFilter{Resource: "outpost", Verb: "preview"})
 	secretRows, _ := gw.ListAuditLog(ctx, storage.AuditFilter{Resource: "secret", Verb: "preview"})
-	if len(nodeRows) != 1 || !strings.Contains(string(nodeRows[0].New), "10.20.4.31:80") || len(secretRows) != 1 {
-		t.Errorf("audit: node %+v, secret %+v; want one preview row each", nodeRows, secretRows)
+	if len(outpostRows) != 1 || !strings.Contains(string(outpostRows[0].New), "10.20.4.31:80") || len(secretRows) != 1 {
+		t.Errorf("audit: outpost %+v, secret %+v; want one preview row each", outpostRows, secretRows)
 	}
-	for _, r := range append(nodeRows, secretRows...) {
+	for _, r := range append(outpostRows, secretRows...) {
 		if strings.Contains(string(r.New), previewPassword) {
 			t.Errorf("an audit row carries the password: %s", r.New)
 		}
@@ -107,7 +107,7 @@ func TestPlanDriverPreview(t *testing.T) {
 }
 
 // What a preview cannot honestly run, or may not be given, is refused before a
-// node is asked: a spec that does not validate (with its findings), a poll
+// outpost is asked: a spec that does not validate (with its findings), a poll
 // riding a held session, a poll the spec does not have, and a secret the
 // caller may read but not reveal (a preview hands it to the target named).
 func TestPlanDriverPreviewRefuses(t *testing.T) {
@@ -145,27 +145,27 @@ func TestPlanDriverPreviewRefuses(t *testing.T) {
 	}
 
 	in = previewOf("boreal-edge-web", inputs)
-	in.Node = "no-such-node"
-	if _, err := gw.PlanDriverPreview(ctx, "", in); !errors.Is(err, storage.ErrNodeNotFound) {
-		t.Errorf("an unknown node = %v, want ErrNodeNotFound", err)
+	in.Outpost = "no-such-outpost"
+	if _, err := gw.PlanDriverPreview(ctx, "", in); !errors.Is(err, storage.ErrOutpostNotFound) {
+		t.Errorf("an unknown outpost = %v, want ErrOutpostNotFound", err)
 	}
 	if rows, _ := gw.ListAuditLog(ctx, storage.AuditFilter{Verb: "preview"}); len(rows) != 0 {
 		t.Errorf("refused previews wrote audit rows: %+v", rows)
 	}
 }
 
-// A run now resolves the endpoint's own poll task, on the node that holds it,
+// A run now resolves the endpoint's own poll task, on the outpost that holds it,
 // and audits the asking; a poll the endpoint does not have, or an endpoint no
-// node holds, is refused naming why.
+// outpost holds, is refused naming why.
 func TestPlanEndpointRun(t *testing.T) {
 	t.Parallel()
 	gw, ctx := runStack(t)
 	all := scope.Set{All: true}
-	comp, node, drv := "display-p", "edge-p", "boreal-edge-web"
+	comp, outpost, drv := "display-p", "edge-p", "boreal-edge-web"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: comp}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpost,
 		Inputs: map[string]string{"host": "10.20.4.31", "login": "display-login"}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +187,7 @@ func TestPlanEndpointRun(t *testing.T) {
 	if len(run.Sealed) != 1 || run.Sealed[0] != previewPassword {
 		t.Errorf("run sealed = %v, want the endpoint's password alone to mask the answer of", run.Sealed)
 	}
-	if !found || run.NodeName != node || run.Poll != "identity" || run.Component != comp {
+	if !found || run.OutpostName != outpost || run.Poll != "identity" || run.Component != comp {
 		t.Errorf("run = %+v (task found %v)", run, found)
 	}
 	if rows, _ := gw.ListAuditLog(ctx, storage.AuditFilter{Resource: "endpoint", Verb: "run"}); len(rows) != 1 || rows[0].ResourceID != ep.ID {

@@ -131,8 +131,8 @@ func addMemberTx(ctx context.Context, q txQuerier, systemID, componentID string)
 	// The primary is the row's own absence of competition: it is the default only
 	// when this component has no membership yet. The platform guard (#1625)
 	// rides the same statement, so a create into a system pays no extra round
-	// trip for it: the platform system admits no member this way (node
-	// registration and a server's boot write their own), and a node's or a
+	// trip for it: the platform system admits no member this way (outpost
+	// registration and a server's boot write their own), and an outpost's or a
 	// server's platform component joins no other system. The insert lands only when neither holds.
 	var platformSystem, platformComponent bool
 	if err := q.QueryRow(ctx, `

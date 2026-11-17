@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"bytes"
@@ -12,12 +12,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodePolarisAmpReadsItsOperatingState (#898): the shipped
+// TestOutpostPolarisAmpReadsItsOperatingState (#898): the shipped
 // polaris-amp-snmp driver on the simulated amplifier's SNMP face lands the
 // amplifier's own state beside its identity and uptime: power, protect,
 // temperature and fan. Standby entered over the amplifier's HTTP API reads
 // standby on the next poll.
-func TestNodePolarisAmpReadsItsOperatingState(t *testing.T) {
+func TestOutpostPolarisAmpReadsItsOperatingState(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -41,7 +41,7 @@ func TestNodePolarisAmpReadsItsOperatingState(t *testing.T) {
 	}
 	ep := s.attachHTTP("amp-1", "polaris-amp-snmp", "edge-amp", map[string]string{
 		"host": s.ips[amp], "port": fmt.Sprint(snmpPort), "community": "amp-community"})
-	s.runNode("edge-amp")
+	s.runOutpost("edge-amp")
 
 	s.waitFor("amp-1", ep.Name, "endpoint-responsive", is("up"), "up: the agent answered")
 	s.waitFor("amp-1", ep.Name, "model-number", is(fmt.Sprint(dev.ReadPath("configuration.device.model"))), "the model, sysDescr")
@@ -80,6 +80,6 @@ func TestNodePolarisAmpReadsItsOperatingState(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("standby: status %d", resp.StatusCode)
 	}
-	s.runNode("edge-amp") // a restarted node polls at once, rather than in 30s
+	s.runOutpost("edge-amp") // a restarted outpost polls at once, rather than in 30s
 	s.waitFor("amp-1", ep.Name, "power-state", is("standby"), "standby, entered over HTTP")
 }

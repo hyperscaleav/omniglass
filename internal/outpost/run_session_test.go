@@ -3,7 +3,7 @@
 // The simulator serves on 127.x addresses beyond 127.0.0.1, which Linux
 // treats as local without configuration.
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/driver"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim"
@@ -34,16 +34,16 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestNodeHoldsASessionThroughADeviceOutage drives #816 end to end over the
+// TestOutpostHoldsASessionThroughADeviceOutage drives #816 end to end over the
 // real wire: the shipped newtron-panel-nvp driver attached to a component, the
-// simulator's panel serving its line protocol, and the real node holding the
+// simulator's panel serving its line protocol, and the real outpost holding the
 // session its standing listen task asks for. The session-state transitions
 // land on the server as the component's property series (instance: the
 // endpoint), the poll rides the held session, killing the panel's listener
 // mid-session reads recovering and then up again once it returns, the
-// reasons land in the node's own logs, and node shutdown tears the session
+// reasons land in the outpost's own logs, and outpost shutdown tears the session
 // down on the device's side.
-func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
+func TestOutpostHoldsASessionThroughADeviceOutage(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -77,9 +77,9 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	panel := engine.Devices()[0]
 	nvpPort := panelPort(t, panel, "tcp")
 
-	// The operator's configuration: a node, a component, the driver attach.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-s"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	// The operator's configuration: an outpost, a component, the driver attach.
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-s"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "enroll-token-session"
 	sum := sha256.Sum256([]byte(token))
@@ -89,9 +89,9 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	comp, drv, nodeName := "panel-1", "newtron-panel-nvp", "edge-s"
+	comp, drv, outpostName := "panel-1", "newtron-panel-nvp", "edge-s"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
 		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
@@ -110,7 +110,7 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-s", Token: token, HeartbeatEvery: 200 * time.Millisecond, ProbeEvery: 200 * time.Millisecond})
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-s", Token: token, HeartbeatEvery: 200 * time.Millisecond, ProbeEvery: 200 * time.Millisecond})
 		ran <- err
 	}()
 	stopped := false
@@ -170,12 +170,12 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 		t.Fatalf("session-state series = %s, want establishing,up,recovering,up", got)
 	}
 
-	// The reasons ride the node's own logs.
+	// The reasons ride the outpost's own logs.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		logs, err := gw.ListNodeLogs(ctx, "edge-s", time.Hour, 200)
+		logs, err := gw.ListOutpostLogs(ctx, "edge-s", time.Hour, 200)
 		if err != nil {
-			t.Fatalf("node logs: %v", err)
+			t.Fatalf("outpost logs: %v", err)
 		}
 		found := false
 		for _, l := range logs {
@@ -187,34 +187,34 @@ func TestNodeHoldsASessionThroughADeviceOutage(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("no 'session recovering' self-log landed in node_log")
+			t.Fatal("no 'session recovering' self-log landed in outpost_log")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	// Node shutdown tears the session down: the panel holds no session after.
+	// Outpost shutdown tears the session down: the panel holds no session after.
 	stop()
 	if err := <-ran; err != nil {
-		t.Fatalf("node run: %v", err)
+		t.Fatalf("outpost run: %v", err)
 	}
 	stopped = true
 	deadline = time.Now().Add(3 * time.Second)
 	for panel.TCPSession().SessionCount() != 0 {
 		if time.Now().After(deadline) {
-			t.Fatalf("the panel still holds %d sessions after node shutdown", panel.TCPSession().SessionCount())
+			t.Fatalf("the panel still holds %d sessions after outpost shutdown", panel.TCPSession().SessionCount())
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 }
 
-// TestNodeLandsPushedSamplesThroughARecover drives #817 end to end: the
+// TestOutpostLandsPushedSamplesThroughARecover drives #817 end to end: the
 // shipped newtron-panel-nvp driver's EVT listener comes alive over the held
-// session. The node's tick is an hour, so after its first poll nothing polls
+// session. The outpost's tick is an hour, so after its first poll nothing polls
 // again: a value that lands later can only have been pushed. A change made on
 // the panel lands as the component's video-input within a second; the
 // panel's listener dies and returns, the session re-arms its subscription,
 // and the next change lands within a second too.
-func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
+func TestOutpostLandsPushedSamplesThroughARecover(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -254,8 +254,8 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 		return time.Now()
 	}
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-l"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-l"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "enroll-token-listener"
 	sum := sha256.Sum256([]byte(token))
@@ -265,9 +265,9 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-2"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	comp, drv, nodeName := "panel-2", "newtron-panel-nvp", "edge-l"
+	comp, drv, outpostName := "panel-2", "newtron-panel-nvp", "edge-l"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
 		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
@@ -286,7 +286,7 @@ func TestNodeLandsPushedSamplesThroughARecover(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-l", Token: token, HeartbeatEvery: time.Hour})
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-l", Token: token, HeartbeatEvery: time.Hour})
 		ran <- err
 	}()
 	defer func() { stop(); <-ran }()
@@ -475,14 +475,14 @@ func (w trippedInbound) Claim(msg driver.Message) bool {
 	return w.Inbound.Claim(msg)
 }
 
-// TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic drives #1636 over the
+// TestOutpostRestartHoldsFiftySessionsAndIsolatesAPanic drives #1636 over the
 // real wire: fifty simulated panels, each a component with the shipped
-// newtron-panel-nvp driver attached, held by one node. A restarted node brings all
+// newtron-panel-nvp driver attached, held by one outpost. A restarted outpost brings all
 // fifty back through its session-dials slots (never more connects in flight
 // than the bound), and a panic in one session's reader, injected on its first
 // pushed line, recovers that one session through its ordinary failure path
 // while the other forty-nine stay up on the connections they held.
-func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
+func TestOutpostRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -524,8 +524,8 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 		panels[d.DeviceID] = d
 	}
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-f"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-f"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "enroll-token-fleet"
 	sum := sha256.Sum256([]byte(token))
@@ -533,7 +533,7 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 		t.Fatalf("mint token: %v", err)
 	}
 	var fleetHeld []fleetSession
-	drv, nodeName := "newtron-panel-nvp", "edge-f"
+	drv, outpostName := "newtron-panel-nvp", "edge-f"
 	for i := range fleet {
 		host := fmt.Sprintf("panel-%02d", i)
 		panel := panels[host]
@@ -546,7 +546,7 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 			t.Fatalf("create component: %v", err)
 		}
 		ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-			Driver: &drv, Component: &comp, Node: &nodeName,
+			Driver: &drv, Component: &comp, Outpost: &outpostName,
 			Inputs:     map[string]string{"host": ip, "port": fmt.Sprint(port)},
 			SecretRead: all, SecretBind: all, CanAdmin: true,
 		}, all)
@@ -564,20 +564,20 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
 	defer apiSrv.Close()
 
-	// start runs the node until the returned stop; the heartbeat is an hour,
+	// start runs the outpost until the returned stop; the heartbeat is an hour,
 	// so every session it holds came up on the worklist's arrival.
-	start := func(cfg node.Config) (stop func()) {
+	start := func(cfg outpost.Config) (stop func()) {
 		cfg.ServerURL, cfg.Name, cfg.Token, cfg.HeartbeatEvery = apiSrv.URL, "edge-f", token, time.Hour
 		runCtx, cancel := context.WithCancel(ctx)
 		ran := make(chan error, 1)
 		go func() {
-			_, err := node.Run(runCtx, cfg)
+			_, err := outpost.Run(runCtx, cfg)
 			ran <- err
 		}()
 		return func() {
 			cancel()
 			if err := <-ran; err != nil {
-				t.Errorf("node run: %v", err)
+				t.Errorf("outpost run: %v", err)
 			}
 		}
 	}
@@ -617,7 +617,7 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 		}
 	}
 
-	stop := start(node.Config{})
+	stop := start(outpost.Config{})
 	allHeld(nil, 30*time.Second)
 	stop()
 	for _, h := range fleetHeld {
@@ -629,8 +629,8 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 	faults := &faultLineDialer{inner: collection.NewLineSessionDialer(), victim: victim.target}
 	upsAtRestart := ups()
 	// The heartbeat is an hour; a short report window is the housekeeping
-	// clock that publishes the node's self-logs.
-	stop = start(node.Config{SessionDials: dials, LineSession: faults, ReportEvery: 200 * time.Millisecond})
+	// clock that publishes the outpost's self-logs.
+	stop = start(outpost.Config{SessionDials: dials, LineSession: faults, ReportEvery: 200 * time.Millisecond})
 	defer stop()
 	allHeld(upsAtRestart, 30*time.Second)
 	if p := faults.peakInFlight(); p < 1 || p > dials {
@@ -651,7 +651,7 @@ func TestNodeRestartHoldsFiftySessionsAndIsolatesAPanic(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	waitNodeLog(t, gw, "edge-f", "session recovering", "panic: injected frame parse fault")
+	waitOutpostLog(t, gw, "edge-f", "session recovering", "panic: injected frame parse fault")
 
 	// The other forty-nine never left up: no recovering, no new up, the
 	// same one session held at their panels.
@@ -700,15 +700,15 @@ func waitPanel(t *testing.T, h fleetSession, n int) {
 	}
 }
 
-// waitNodeLog waits for a self-log with this message whose reason attribute
+// waitOutpostLog waits for a self-log with this message whose reason attribute
 // carries reason.
-func waitNodeLog(t *testing.T, gw *storage.PG, nodeName, message, reason string) {
+func waitOutpostLog(t *testing.T, gw *storage.PG, outpostName, message, reason string) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		logs, err := gw.ListNodeLogs(context.Background(), nodeName, time.Hour, 500)
+		logs, err := gw.ListOutpostLogs(context.Background(), outpostName, time.Hour, 500)
 		if err != nil {
-			t.Fatalf("node logs: %v", err)
+			t.Fatalf("outpost logs: %v", err)
 		}
 		for _, l := range logs {
 			var attrs struct {
@@ -719,7 +719,7 @@ func waitNodeLog(t *testing.T, gw *storage.PG, nodeName, message, reason string)
 			}
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("no %q self-log with a reason carrying %q landed in node_log", message, reason)
+			t.Fatalf("no %q self-log with a reason carrying %q landed in outpost_log", message, reason)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

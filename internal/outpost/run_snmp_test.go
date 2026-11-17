@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// snmp's reachability rung end to end (#821): Postgres, the bus, a real node,
+// snmp's reachability rung end to end (#821): Postgres, the bus, a real outpost,
 // and the simulated panels' v2c faces, on ephemeral ports, so two runs from
 // one worktree never collide.
 
@@ -25,10 +25,10 @@ func (s *gateStack) community(name, value string) *storage.Secret {
 	return sec
 }
 
-func (s *gateStack) attachSNMP(comp, nodeName, ip string, port int, community string) *storage.Endpoint {
+func (s *gateStack) attachSNMP(comp, outpostName, ip string, port int, community string) *storage.Endpoint {
 	s.t.Helper()
 	drv := "snmp-generic"
-	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName,
+	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs: map[string]string{"host": ip, "port": fmt.Sprint(port), "community": community}, SecretRead: s.all, SecretBind: s.all, CanAdmin: true}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach snmp-generic to %s: %v", comp, err)
@@ -36,16 +36,16 @@ func (s *gateStack) attachSNMP(comp, nodeName, ip string, port int, community st
 	return ep
 }
 
-// TestNodeSNMPRungIsAStandardGetAnswered: snmp-generic attached to three
+// TestOutpostSNMPRungIsAStandardGetAnswered: snmp-generic attached to three
 // simulated panels. With the face's community the get answers every tick:
 // responsive, the verdict, authenticated, and a timing, no tcp-open, and the
 // poll still lands. A wrong community meets the face's silence: not
 // responsive and never rejected. The face's refused community is answered
 // with authorizationError: rejected, class auth, no further get under that
-// fingerprint (across a node restart too), the verdict down beneath the
+// fingerprint (across an outpost restart too), the verdict down beneath the
 // gate, and the secret rotated brings it up. A stopped agent reads not
 // responsive.
-func TestNodeSNMPRungIsAStandardGetAnswered(t *testing.T) {
+func TestOutpostSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -62,7 +62,7 @@ func TestNodeSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	good := s.attachSNMP("panel-good", "edge-snmp", ipGood, port(ipGood), "panel-community")
 	wrong := s.attachSNMP("panel-wrong", "edge-snmp", ipWrong, port(ipWrong), "panel-wrong")
 	refused := s.attachSNMP("panel-refused", "edge-snmp", ipRefused, port(ipRefused), "panel-revoked")
-	s.runNode("edge-snmp")
+	s.runOutpost("edge-snmp")
 
 	s.waitFor("panel-good", good.Name, "endpoint-responsive", is("up"), "up: the get answered")
 	s.waitFor("panel-good", good.Name, "endpoint-reachable", is("up"), "up: the rung is the verdict")
@@ -111,20 +111,20 @@ func TestNodeSNMPRungIsAStandardGetAnswered(t *testing.T) {
 	// collectable: the verdict reads down, never frozen at the last answer.
 	s.waitFor("panel-refused", refused.Name, "endpoint-responsive", is("down"), "down: held beneath the gate")
 	s.waitFor("panel-refused", refused.Name, "endpoint-reachable", is("down"), "down")
-	// A restarted node adopts the gate from the worklist, and its poll, new
+	// A restarted outpost adopts the gate from the worklist, and its poll, new
 	// to the schedule and due at once, is held too: still no get.
 	// (The silent endpoint has served its part; it leaves, so a silent get's
-	// timeout does not hold the restarted node's first pass.)
+	// timeout does not hold the restarted outpost's first pass.)
 	if err := s.gw.DeleteEndpoint(s.ctx, "", wrong.ID, s.all, s.all); err != nil {
 		t.Fatal(err)
 	}
 	before := agent.SNMPRequests()
-	s.runNode("edge-snmp")
-	time.Sleep(2 * time.Second) // the restarted node's first ticks, its poll among them
-	s.settles("gets to the refusing agent after a node restart", agent.SNMPRequests, before)
+	s.runOutpost("edge-snmp")
+	time.Sleep(2 * time.Second) // the restarted outpost's first ticks, its poll among them
+	s.settles("gets to the refusing agent after an outpost restart", agent.SNMPRequests, before)
 	// The adopted gate never saw the refusal: the reason on record stands.
 	if got := s.latest("panel-refused", refused.Name, "endpoint-rejection-reason"); got != why {
-		t.Fatalf("after a node restart the gate's reason reads %q, want the refusal's own %q", got, why)
+		t.Fatalf("after an outpost restart the gate's reason reads %q, want the refusal's own %q", got, why)
 	}
 
 	// The community rotated in the secret store: up within a tick.

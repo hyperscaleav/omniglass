@@ -12,12 +12,12 @@ import (
 	"time"
 )
 
-// #1869: a node sizes its lane pool from the container's real cgroup limits.
-// The unit tests read fixture files; this runs the node in a container Docker
-// limits, so the kernel writes the cpu.max and memory.max the node reads, and
-// asserts the count and source its boot log states. The node needs no server:
+// #1869: an outpost sizes its lane pool from the container's real cgroup limits.
+// The unit tests read fixture files; this runs the outpost in a container Docker
+// limits, so the kernel writes the cpu.max and memory.max the outpost reads, and
+// asserts the count and source its boot log states. The outpost needs no server:
 // it sizes its lanes before it claims.
-func TestIntegrationNodeSizesItsLanesFromItsContainer(t *testing.T) {
+func TestIntegrationOutpostSizesItsLanesFromItsContainer(t *testing.T) {
 	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
 		t.Skip("the lab's integration tests run through make test-lab (they need the image make builds)")
 	}
@@ -34,13 +34,13 @@ func TestIntegrationNodeSizesItsLanesFromItsContainer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			container := fmt.Sprintf("omniglass-lanes-it-%d-%s", os.Getpid(), tc.cpus)
 			t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", container).Run() })
-			// The node logs its lanes, then exits on the refused claim; the
-			// timeout bounds a node that retried instead.
+			// The outpost logs its lanes, then exits on the refused claim; the
+			// timeout bounds an outpost that retried instead.
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 			out, _ := exec.CommandContext(ctx, "docker", "run", "--rm", "--name", container,
 				"--cpus", tc.cpus, "--memory", tc.memory, image,
-				"node", "run", "--server", "http://127.0.0.1:9", "--name", "lanes-it", "--token", "unused").CombinedOutput()
+				"outpost", "run", "--server", "http://127.0.0.1:9", "--name", "lanes-it", "--token", "unused").CombinedOutput()
 			var line string
 			for l := range strings.Lines(string(out)) {
 				if strings.Contains(l, `msg="lane workers"`) {
@@ -48,7 +48,7 @@ func TestIntegrationNodeSizesItsLanesFromItsContainer(t *testing.T) {
 				}
 			}
 			if line == "" {
-				t.Fatalf("no lane workers line in the node's boot log:\n%s", out)
+				t.Fatalf("no lane workers line in the outpost's boot log:\n%s", out)
 			}
 			for _, want := range tc.want {
 				if !strings.Contains(line, want) {

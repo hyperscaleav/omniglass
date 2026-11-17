@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// A driver emit lands on any lane (#1145), node side: an event rides the
+// A driver emit lands on any lane (#1145), outpost side: an event rides the
 // batch's event lane and a component's log line its task_logs lane (never
 // the self-log lane), an unclaimed message lands as a log line under the
 // endpoint's listen task when the spec says unmatched: log, and a plain

@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The node's session manager (#816) over a faked held connection: which
+// The outpost's session manager (#816) over a faked held connection: which
 // endpoints get a session, that a transition publishes under the listen
 // task, that polls borrow the session, and that removal and shutdown tear it
 // down. The real wire is the integration test's (run_session_test.go).
@@ -590,7 +590,7 @@ func (d *gatedDialer) counts() (now, peak int) {
 	return d.now, d.peak
 }
 
-// A node restarting with many held endpoints dials them through its
+// An outpost restarting with many held endpoints dials them through its
 // session-dials slots (#1636): ten wanted sessions behind a dialer that
 // holds every dial never have more than two in flight, wait as
 // establishing, and all come up once the dialer lets go.

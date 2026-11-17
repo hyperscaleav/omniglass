@@ -1,8 +1,8 @@
 //go:build linux && netadmin
 
-// node run --simulate --impairments in a network namespace of the test's own
+// outpost run --simulate --impairments in a network namespace of the test's own
 // (make test-netadmin): the impairments the in-process simulator applies
-// reach only its simulated components, never the node's own traffic to its
+// reach only its simulated components, never the outpost's own traffic to its
 // server, which shares the process but not the components' addresses.
 package e2e
 
@@ -29,13 +29,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestNodeSimulateImpairmentsSpareTheNode degrades one of two simulated
-// components with a 1000 ms latency and proves the node in the same process
+// TestOutpostSimulateImpairmentsSpareTheOutpost degrades one of two simulated
+// components with a 1000 ms latency and proves the outpost in the same process
 // keeps checking in and shipping on time: its heartbeat advances at its
 // cadence, and the other component's samples keep landing with a fast
 // connect. Then it unplugs the degraded one: it goes dark while the other
 // stays up.
-func TestNodeSimulateImpairmentsSpareTheNode(t *testing.T) {
+func TestOutpostSimulateImpairmentsSpareTheOutpost(t *testing.T) {
 	if os.Getenv("OMNIGLASS_NETADMIN") != "1" {
 		t.Fatal("this test rewrites the network it runs in; run it through make test-netadmin")
 	}
@@ -63,11 +63,11 @@ func TestNodeSimulateImpairmentsSpareTheNode(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-n"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-n"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	nodeTok := "node-simulate-netadmin-token"
-	sum := sha256.Sum256([]byte(nodeTok))
+	outpostTok := "outpost-simulate-netadmin-token"
+	sum := sha256.Sum256([]byte(outpostTok))
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-n", hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
@@ -95,13 +95,13 @@ func TestNodeSimulateImpairmentsSpareTheNode(t *testing.T) {
 		if _, err := conn.Exec(ctx, `update component set product_id = (select id from product where name = $1) where name = $2`, product, name); err != nil {
 			t.Fatal(err)
 		}
-		as("endpoint", "create", "--component", name, "--node", "edge-n", "--transport", "tcp",
+		as("endpoint", "create", "--component", name, "--outpost", "edge-n", "--transport", "tcp",
 			"--params", fmt.Sprintf(`{"target":"%s:%d"}`, ip, port))
 	}
 
 	pctx, stop := context.WithCancel(ctx)
-	p := exec.CommandContext(pctx, binPath, "node", "run", "--simulate", "--impairments", "--poll", "300ms", "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s")
-	p.Env = append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-n", "OMNIGLASS_NODE_TOKEN="+nodeTok)
+	p := exec.CommandContext(pctx, binPath, "outpost", "run", "--simulate", "--impairments", "--poll", "300ms", "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s")
+	p.Env = append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_OUTPOST_NAME=edge-n", "OMNIGLASS_OUTPOST_TOKEN="+outpostTok)
 	p.Stdout, p.Stderr = os.Stderr, os.Stderr
 	p.Cancel = func() error { return p.Process.Signal(os.Interrupt) }
 	if err := p.Start(); err != nil {
@@ -137,7 +137,7 @@ func TestNodeSimulateImpairmentsSpareTheNode(t *testing.T) {
 		var n struct {
 			LastHeartbeatAt *time.Time `json:"last_heartbeat_at"`
 		}
-		if !get("/nodes/edge-n", &n) || n.LastHeartbeatAt == nil {
+		if !get("/outposts/edge-n", &n) || n.LastHeartbeatAt == nil {
 			return time.Time{}
 		}
 		return *n.LastHeartbeatAt
@@ -179,7 +179,7 @@ func TestNodeSimulateImpairmentsSpareTheNode(t *testing.T) {
 	as("component", "impairment", "set", "sim-slow", "--latency-ms", "1000")
 	waitForWithin(t, 30*time.Second, "the 1000 ms latency to show on sim-slow", fresh("sim-slow", "tcp-connect-time", slowed, func(ms float64) bool { return ms >= 990 }))
 
-	// With the latency in force, watch the node for six seconds: its
+	// With the latency in force, watch the outpost for six seconds: its
 	// check-ins keep their 1s cadence, and the untouched component keeps
 	// landing fast samples.
 	last := heartbeat()
@@ -190,7 +190,7 @@ func TestNodeSimulateImpairmentsSpareTheNode(t *testing.T) {
 			last = hb
 		}
 		if gap := time.Since(last); gap > 3*time.Second {
-			t.Fatalf("the node's last check-in is %s old while sim-slow is degraded; its traffic to the server was delayed", gap.Round(time.Millisecond))
+			t.Fatalf("the outpost's last check-in is %s old while sim-slow is degraded; its traffic to the server was delayed", gap.Round(time.Millisecond))
 		}
 	}
 	checked := time.Now()

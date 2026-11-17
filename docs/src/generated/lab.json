@@ -16,13 +16,13 @@
     {
       "name": "seed",
       "image": "omniglass",
-      "command": "lab seed --scenario dev --node edge-hq --user dev --password dev",
+      "command": "lab seed --scenario dev --outpost edge-hq --user dev --password dev",
       "user": "the image's (nonroot)",
       "caps": [],
       "sysctls": [],
       "publish": "",
       "runs_once": true,
-      "role": "Runs once per lab start: migrates, marks the database as a lab's, seeds the fleet and the login on the first run, and enrolls the node afresh.",
+      "role": "Runs once per lab start: migrates, marks the database as a lab's, seeds the fleet and the login on the first run, and enrolls the outpost afresh.",
       "limits": ""
     },
     {
@@ -34,13 +34,13 @@
       "sysctls": [],
       "publish": "127.0.0.1:8080 -\u003e 8080",
       "runs_once": false,
-      "role": "The control plane and the console, in lab mode. Its console is the one published port; its bus listens on the lab network for the node.",
+      "role": "The control plane and the console, in lab mode. Its console is the one published port; its bus listens on the lab network for the outpost.",
       "limits": ""
     },
     {
-      "name": "node",
+      "name": "outpost",
       "image": "omniglass",
-      "command": "node run --simulate --impairments --heartbeat 2s --probe-every 10s --worklist-every 5s --poll 2s",
+      "command": "outpost run --simulate --impairments --heartbeat 2s --probe-every 10s --worklist-every 5s --poll 2s",
       "user": "0:0",
       "caps": [
         "NET_ADMIN"
@@ -50,7 +50,7 @@
       ],
       "publish": "",
       "runs_once": false,
-      "role": "The edge node edge-hq with the simulator in its own process: the simulated components sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, reaches only this container's network.",
+      "role": "The edge outpost edge-hq with the simulator in its own process: the simulated components sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, reaches only this container's network.",
       "limits": "1 CPU, 512 MiB"
     }
   ],
@@ -255,7 +255,7 @@
       "worklist_every": "30s",
       "report_every": "",
       "closed_loop_bracket": "1m",
-      "for": "the product's own defaults: what a deployment's node runs at"
+      "for": "the product's own defaults: what a deployment's outpost runs at"
     }
   ]
 }

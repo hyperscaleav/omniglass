@@ -25,12 +25,12 @@ type PlanOptions struct {
 	// Endpoints plans the simulated fleet: a loopback address and the
 	// endpoints for every component whose product the simulator serves.
 	Endpoints bool
-	// Node, when set, places the endpoints on that node (which must exist).
-	Node string
-	// NodeFor, when set, places each site's endpoints on the node it names
-	// for that site (a plan site's name), and takes precedence over Node. A
-	// site it names "" for falls back to Node. Each node must exist.
-	NodeFor func(site string) string
+	// Outpost, when set, places the endpoints on that outpost (which must exist).
+	Outpost string
+	// OutpostFor, when set, places each site's endpoints on the outpost it names
+	// for that site (a plan site's name), and takes precedence over Outpost. A
+	// site it names "" for falls back to Outpost. Each outpost must exist.
+	OutpostFor func(site string) string
 	// PortOffset is the simulator's lift for ports below 1024 (see Options).
 	PortOffset int
 	// InduceUnregistered makes one simulated device answer a property key no

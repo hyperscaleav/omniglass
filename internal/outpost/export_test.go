@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"errors"
@@ -10,9 +10,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// HopRig is a node's telemetry spool over a real bus and a real Postgres, as
-// the enrolled node edge-1 holding the poll task t-1, for the tests in
-// package node_test: they read what it landed through packages that import
+// HopRig is an outpost's telemetry spool over a real bus and a real Postgres, as
+// the enrolled outpost edge-1 holding the poll task t-1, for the tests in
+// package outpost_test: they read what it landed through packages that import
 // this one (#1692). While it is down every publish fails as an outage
 // fails it, so the spool holds its batches and, at its cap, overflows.
 type HopRig struct {
@@ -29,10 +29,10 @@ func NewHopRig(t *testing.T, maxBatches int) *HopRig {
 	f := newSpoolFixture(t)
 	nc, err := connectBus(f.srv.ClientURL(), "edge-1", "token-1", "edge-1")
 	if err != nil {
-		t.Fatalf("connect as the node: %v", err)
+		t.Fatalf("connect as the outpost: %v", err)
 	}
 	t.Cleanup(nc.Close)
-	js, err := newNodeJetStream(nc)
+	js, err := newOutpostJetStream(nc)
 	if err != nil {
 		t.Fatalf("jetstream: %v", err)
 	}

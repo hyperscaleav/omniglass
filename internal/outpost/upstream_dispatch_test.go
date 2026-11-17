@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ import (
 // polls.
 
 // gateway is the upstream: its own probe. Reached through nothing, it
-// carries no component on the wire; the node reads comp-gw off the edge that
+// carries no component on the wire; the outpost reads comp-gw off the edge that
 // names it.
 func gatewayProbe() collection.TaskSpec {
 	return collection.TaskSpec{ID: "t-gw", Mode: "poll", Transport: "tcp", EndpointID: "gw-1", EndpointName: "tcp",
@@ -79,7 +79,7 @@ func TestADependentsPollsAndProbesAreHeldWhileItsUpstreamIsClosed(t *testing.T) 
 	line := &lineRecorder{}
 	_, out := executeDelivery(t.Context(), &collection.Runner{Line: line}, collection.CommandDelivery{
 		ID: 7, CommandType: "set-input", Transport: "tcp", Target: "10.20.4.40:23", EndpointID: "ep-1", Line: "SET INPUT hdmi2"}, l.sessions)
-	if !strings.HasPrefix(out, "node: the endpoint is held by upstream gateway since ") || !strings.HasSuffix(out, ", so the command was not sent") {
+	if !strings.HasPrefix(out, "outpost: the endpoint is held by upstream gateway since ") || !strings.HasSuffix(out, ", so the command was not sent") {
 		t.Fatalf("a command answered %q; want it held by upstream gateway since, unsent", out)
 	}
 	if len(line.sent) != 0 {

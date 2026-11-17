@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// A node sizes its lane pool from what it may use (#1869). A lane is one
+// An outpost sizes its lane pool from what it may use (#1869). A lane is one
 // request in flight to one endpoint, and a request mostly waits on its
 // device: a run that costs a few milliseconds of CPU waits a couple of
 // hundred on the answer. So a CPU carries many lanes, and how many is the
@@ -19,7 +19,7 @@ import (
 // bounds it too, each lane holding its request and answer, and the pool is
 // clamped either side.
 
-// MinLaneWorkers and MaxLaneWorkers clamp an automatic lane count: a node on
+// MinLaneWorkers and MaxLaneWorkers clamp an automatic lane count: an outpost on
 // a sliver of a CPU still runs a few endpoints at once, and one on a large
 // host does not open more connections than a fleet's devices welcome.
 const (
@@ -27,11 +27,11 @@ const (
 	MaxLaneWorkers = 256
 )
 
-// laneCPUShare is the share of the node's CPU its lanes are sized to fill,
+// laneCPUShare is the share of the outpost's CPU its lanes are sized to fill,
 // leaving the rest to its reports, its worklist and its sends.
 const laneCPUShare = 0.5
 
-// laneMemoryShare is the share of the node's memory its lanes may hold.
+// laneMemoryShare is the share of the outpost's memory its lanes may hold.
 const laneMemoryShare = 0.25
 
 // LaneCost is what one lane's run costs: the CPU it burns, the time it waits
@@ -43,12 +43,12 @@ type LaneCost struct {
 }
 
 // DefaultLaneCost is a typical run: 4.4 ms of CPU, from the 3,000-endpoint
-// lab's busiest node (81 polls a second on 0.36 of a CPU, its simulator
+// lab's busiest outpost (81 polls a second on 0.36 of a CPU, its simulator
 // included, so an overestimate), waiting 200 ms on a device's answer, and a
 // lane holding at most 1 MiB. That is about 23 lanes a CPU.
 var DefaultLaneCost = LaneCost{CPUPerRun: 4400 * time.Microsecond, WaitPerRun: 200 * time.Millisecond, MemoryPerLane: 1 << 20}
 
-// Limits are the CPUs and memory a node may use, and where each was read.
+// Limits are the CPUs and memory an outpost may use, and where each was read.
 // Zero is unknown.
 type Limits struct {
 	CPUs        float64
@@ -57,7 +57,7 @@ type Limits struct {
 	MemoryFrom  string
 }
 
-// String names each limit and its source, for the node's boot log.
+// String names each limit and its source, for the outpost's boot log.
 func (l Limits) String() string {
 	cpu := "cpus unknown"
 	if l.CPUs > 0 {
@@ -213,7 +213,7 @@ func hostLimits() Limits {
 	return l
 }
 
-// resolveLaneWorkers is the node's lane count: the operator's when set, else
+// resolveLaneWorkers is the outpost's lane count: the operator's when set, else
 // auto's, and where it came from.
 func resolveLaneWorkers(set int, auto func() (int, string)) (int, string) {
 	if set > 0 {
@@ -222,7 +222,7 @@ func resolveLaneWorkers(set int, auto func() (int, string)) (int, string) {
 	return auto()
 }
 
-// AutoLaneWorkers sizes the lane pool for the machine the node runs on: its
+// AutoLaneWorkers sizes the lane pool for the machine the outpost runs on: its
 // cgroup's limits where it has them, else the host's, at DefaultLaneCost. The
 // second value says what it read, for the boot log.
 func AutoLaneWorkers() (int, string) {

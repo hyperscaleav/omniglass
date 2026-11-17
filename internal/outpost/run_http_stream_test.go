@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ import (
 )
 
 // A server-sent events stream end to end (#1038): Postgres, the bus, a real
-// node, and the simulated Kestrel bar's event stream over https. A change
+// outpost, and the simulated Kestrel bar's event stream over https. A change
 // on the bar lands within a second with no poll; a dropped stream reads
 // recovering and resumes from its last event id, landing every change once;
 // a refused credential reads rejected with its reason and is not retried
@@ -106,7 +106,7 @@ func (s *httpStack) waitVolume(comp, instance string, percent float64) time.Dura
 	return 0
 }
 
-func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
+func TestOutpostHTTPStreamLandsChangesAndResumes(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -122,7 +122,7 @@ func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
 	login := s.secret("bar-login", "basic-auth", map[string]string{"username": "admin", "password": "kestrel"})
 	ep := s.attachHTTP("bar-1", "bar-stream", "edge-stream", map[string]string{
 		"host": s.ips[barProfile], "port": fmt.Sprint(s.httpPort(barProfile)), "login": "bar-login"})
-	s.runNode("edge-stream")
+	s.runOutpost("edge-stream")
 
 	s.waitFor("bar-1", ep.Name, "session-state", is("up"), "up: the stream held")
 	s.waitFor("bar-1", ep.Name, "endpoint-authenticated", is("yes"), "yes: the stream's credential accepted")
@@ -133,12 +133,12 @@ func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
 		t.Fatalf("the change landed %v after it happened, want within a second", took)
 	}
 
-	// The bar drops the stream and changes twice while the node waits the
+	// The bar drops the stream and changes twice while the outpost waits the
 	// retry it asked for: the stream reads recovering, resumes from its last
 	// event id, and lands each change once (the bar's replay sends the last
-	// event again, which the node drops).
+	// event again, which the outpost drops).
 	if n := bar.DropEventStreams(); n != 1 {
-		t.Fatalf("dropped %d streams, want the node's one", n)
+		t.Fatalf("dropped %d streams, want the outpost's one", n)
 	}
 	setVolume(t, bar, 38)
 	setVolume(t, bar, 39)
@@ -158,7 +158,7 @@ func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
 
 	// A wrong password: the fingerprint moves, the stream reconnects once,
 	// is refused, and reads rejected with the reason; it does not try again
-	// under the fingerprint, across a node restart.
+	// under the fingerprint, across an outpost restart.
 	attempts := bar.EventStreamAttempts
 	before := attempts()
 	refusedBefore := bar.HTTPCredentialRefusals()
@@ -174,8 +174,8 @@ func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
 	if got := bar.HTTPCredentialRefusals() - refusedBefore; got != 1 {
 		t.Fatalf("credentialed requests refused = %d, want the stream's one", got)
 	}
-	s.runNode("edge-stream")
-	s.settles("stream attempts after a node restart", attempts, before+1)
+	s.runOutpost("edge-stream")
+	s.settles("stream attempts after an outpost restart", attempts, before+1)
 
 	// Fixed in place: the gate lifts and the stream comes back up.
 	if _, err := s.gw.UpdateSecret(s.ctx, "", login.ID, storage.SecretPatch{Fields: map[string]string{"password": "kestrel"}}, s.all, s.all, true, true); err != nil {
@@ -186,7 +186,7 @@ func TestNodeHTTPStreamLandsChangesAndResumes(t *testing.T) {
 	s.waitVolume("bar-1", ep.Name, 41)
 }
 
-func TestNodeHTTPStreamBehindAFormLogin(t *testing.T) {
+func TestOutpostHTTPStreamBehindAFormLogin(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -220,7 +220,7 @@ func TestNodeHTTPStreamBehindAFormLogin(t *testing.T) {
 	s.secret("bar-form-login", "basic-auth", map[string]string{"username": "admin", "password": "kestrel"})
 	ep := s.attachHTTP("bar-2", "bar-form-stream", "edge-stream-login", map[string]string{
 		"host": s.ips[formBar], "port": fmt.Sprint(s.httpPort(formBar)), "login": "bar-form-login"})
-	s.runNode("edge-stream-login")
+	s.runOutpost("edge-stream-login")
 
 	s.waitFor("bar-2", ep.Name, "session-state", is("up"), "up: logged in, then the stream held")
 	s.waitFor("bar-2", ep.Name, "endpoint-authenticated", is("yes"), "yes: the login accepted")

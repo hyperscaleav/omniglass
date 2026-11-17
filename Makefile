@@ -34,7 +34,7 @@ lab: all
 	./bin/omniglass lab run $(LAB_ARGS)
 
 # The lab against a real daemon (internal/lab's integration test): it comes
-# up, publishes one loopback port, keeps privilege on the node, collects, takes
+# up, publishes one loopback port, keeps privilege on the outpost, collects, takes
 # an impairment, tears down leaving no container and no network, keeps its
 # estate across a re-run, reaps a killed run, and starts over with --fresh.
 # The measuring tests run the ladder's smoke size, corporate at 20 systems
@@ -51,8 +51,8 @@ LAB_RUN ?= Integration
 test-lab-image:
 	OMNIGLASS_LAB_TEST=1 OMNIGLASS_LAB_TEST_BUILD=$(LAB_BUILD) OMNIGLASS_LAB_IMAGE=$(LAB_IMAGE) go test -tags labintegration -count=1 -p 1 -timeout 60m -v -run '$(LAB_RUN)' ./internal/lab/ ./internal/labfootprint/
 
-# The scale lab (#1554): a scale lab scenario at a size, one node per site,
-# checked by scripts/scale-lab.sh (a node container per site, every simulated
+# The scale lab (#1554): a scale lab scenario at a size, one outpost per site,
+# checked by scripts/scale-lab.sh (an outpost container per site, every simulated
 # component at its own loopback address, the containers' memory and CPU, and
 # a teardown that leaves nothing). Outside make test and CI: it builds the
 # image and stands up thousands of simulated devices. SYSTEMS sets the size,
@@ -306,7 +306,7 @@ bench:
 	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/... ./internal/bus/...
 
 # The ingest footprint (#1272): the standard workload delivered through the real
-# telemetry handler over the dev scenario's fleet, printing what one node batch
+# telemetry handler over the dev scenario's fleet, printing what one outpost batch
 # costs the database (statements, rows per observation, heap and index bytes
 # per row, receipt bytes, WAL bytes per observation, and the statements of one
 # batch). Then the block footprint (#1528): what the compacted tier's blocks

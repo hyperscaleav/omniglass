@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -20,8 +20,8 @@ import (
 )
 
 // The spool's caps (#454): how many batches, how many encoded bytes, and how
-// long, a node holds while the stream will not take them. Past any of them
-// the oldest batch is dropped, so a node behind a long outage keeps the newest
+// long, an outpost holds while the stream will not take them. Past any of them
+// the oldest batch is dropped, so an outpost behind a long outage keeps the newest
 // stretch of what it collected, and says how much it dropped. The age cap sits
 // well inside the server's receipt horizon (24 hours, ADR-0311): a batch the
 // stream stored but whose ack was lost cannot come back after its receipt is
@@ -41,9 +41,9 @@ const (
 	spoolPublishTimeout = 5 * time.Second
 )
 
-// A node's tick lands as one batch (#1582): the spool gathers the task groups
+// An outpost's tick lands as one batch (#1582): the spool gathers the task groups
 // added within defaultFlushEvery and flushes them as one TelemetryBatch, or
-// sooner once the groups pending reach defaultFlushBytes, so a node with many
+// sooner once the groups pending reach defaultFlushBytes, so an outpost with many
 // tasks pays one publish, one ack and one consumer turn per tick, not one per
 // task. The threshold stays well under the bus's default max payload (1 MiB).
 const (
@@ -75,7 +75,7 @@ type ackWait func(ctx context.Context) error
 // publish's own (a batch too large for the bus, a connection that is gone).
 type publishFunc func(subject string, data []byte, id string) (ackWait, error)
 
-// jetStreamPublish is the node's publishFunc: a JetStream publish under the
+// jetStreamPublish is the outpost's publishFunc: a JetStream publish under the
 // batch's id whose ack the spool waits on (collection.StartBatch).
 func jetStreamPublish(js jetstream.JetStream) publishFunc {
 	return func(subject string, data []byte, id string) (ackWait, error) {
@@ -114,7 +114,7 @@ type spooledBatch struct {
 	queued time.Time
 }
 
-// telemetrySpool is the node's every telemetry publish (#453, #454): a batch
+// telemetrySpool is the outpost's every telemetry publish (#453, #454): a batch
 // is minted an id and queued, and a shipper ships the queue in order, keeping
 // up to spoolWindow batches with the stream and removing each once acked. A
 // batch the stream has not acked stays queued and ships on the next tick
@@ -127,7 +127,7 @@ type spooledBatch struct {
 // A send only queues and returns: no caller (a session's goroutine, the
 // tick) ever waits on the stream. The shipper is a goroutine that runs while
 // there is something to ship. After a failed publish the spool holds: sends
-// only queue, so a node that cannot reach the bus pays one failed attempt per
+// only queue, so an outpost that cannot reach the bus pays one failed attempt per
 // tick rather than one per batch, and the tick's retry ships the queue again
 // from its head. The batches that were with the stream behind the failure are
 // sent again under their ids, so any copy the stream already stored is a
@@ -146,7 +146,7 @@ type spooledBatch struct {
 // encoded into the batch's bytes once, so every retry carries it unchanged.
 type telemetrySpool struct {
 	subject    string
-	node       string
+	outpost    string
 	publish    publishFunc
 	maxBatches int
 	maxBytes   int
@@ -179,10 +179,10 @@ type telemetrySpool struct {
 	flow       delivery.Counts       // the items settled since the last takeFigures: acked, or lost here
 }
 
-// newTelemetrySpool is node's spool shipping to subject through publish, at
+// newTelemetrySpool is outpost's spool shipping to subject through publish, at
 // the default caps and flush.
-func newTelemetrySpool(subject, node string, publish publishFunc) *telemetrySpool {
-	return &telemetrySpool{subject: subject, node: node, publish: publish, maxBatches: maxSpoolBatches, maxBytes: maxSpoolBytes,
+func newTelemetrySpool(subject, outpost string, publish publishFunc) *telemetrySpool {
+	return &telemetrySpool{subject: subject, outpost: outpost, publish: publish, maxBatches: maxSpoolBatches, maxBytes: maxSpoolBytes,
 		maxAge: maxSpoolAge, window: spoolWindow, now: time.Now,
 		flushEvery: defaultFlushEvery, flushBytes: defaultFlushBytes, afterFunc: timeAfterFunc,
 		ledger: delivery.NewLedger(collection.NewBatchID())}
@@ -208,7 +208,7 @@ func (s *telemetrySpool) add(g *ogv1.TaskGroup) error {
 		items := map[delivery.Kind]int{}
 		delivery.GroupItems(items, g)
 		s.lost(delivery.EncodeFailed, items)
-		return fmt.Errorf("node: marshal task group: %w", err)
+		return fmt.Errorf("outpost: marshal task group: %w", err)
 	}
 	field := protowire.AppendBytes(protowire.AppendTag(nil, groupsField, protowire.BytesType), b)
 	s.mu.Lock()
@@ -304,7 +304,7 @@ func (s *telemetrySpool) flush() {
 	}
 }
 
-// flushLocked turns the pending groups into one batch: the node's id, the
+// flushLocked turns the pending groups into one batch: the outpost's id, the
 // flush time, and the groups in the order added, encoded once and minted
 // one id, then queued and shipped as any batch. It reports whether queueing
 // began an overflow.
@@ -319,9 +319,9 @@ func (s *telemetrySpool) flushLocked() bool {
 	}
 	groups, size, kinds := s.groups, s.groupBytes, s.kinds
 	s.groups, s.groupBytes, s.kinds = nil, 0, nil
-	head, err := proto.Marshal(&ogv1.TelemetryBatch{NodeId: s.node, Ts: timestamppb.New(s.now().UTC())})
+	head, err := proto.Marshal(&ogv1.TelemetryBatch{OutpostId: s.outpost, Ts: timestamppb.New(s.now().UTC())})
 	if err != nil {
-		// Only a node id that is not UTF-8 fails here; config refuses one.
+		// Only an outpost id that is not UTF-8 fails here; config refuses one.
 		slog.Warn("telemetry batch header did not encode, groups dropped", "facility", "delivery", "groups", len(groups), "error", err.Error())
 		s.ledgerLocked().Lose(delivery.EncodeFailed, kinds)
 		s.flow.Lost(kinds)
@@ -339,7 +339,7 @@ func (s *telemetrySpool) flushLocked() bool {
 	return started
 }
 
-// send queues a whole batch (the node's own logs) behind the groups pending,
+// send queues a whole batch (the outpost's own logs) behind the groups pending,
 // which flush first so the stream keeps the order things happened in: it
 // mints the batch's id, queues it, and starts the shipper unless the spool is
 // holding. It never waits on the stream; it fails only on a batch it cannot
@@ -349,7 +349,7 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 	b, err := proto.Marshal(ev)
 	if err != nil {
 		s.lost(delivery.EncodeFailed, delivery.BatchItems(ev))
-		return fmt.Errorf("node: marshal telemetry batch: %w", err)
+		return fmt.Errorf("outpost: marshal telemetry batch: %w", err)
 	}
 	kinds := delivery.BatchItems(ev)
 	s.mu.Lock()
@@ -367,14 +367,14 @@ func (s *telemetrySpool) send(ev *ogv1.TelemetryBatch) error {
 	return nil
 }
 
-// stampMetricMillis puts every metric sample of ev, its node-self samples
+// stampMetricMillis puts every metric sample of ev, its outpost-self samples
 // included, on its own ts, whole milliseconds (#1526): a sample with no ts
 // takes the batch's, and a batch with neither is left for the ingest to
-// stamp. Done where every batch leaves the node, so no probe, driver or
+// stamp. Done where every batch leaves the outpost, so no probe, driver or
 // session has to remember to. The other lanes, and the batch's own ts, are
 // sent as they were.
 func stampMetricMillis(ev *ogv1.TelemetryBatch) {
-	for _, lane := range [][]*ogv1.MetricSample{ev.GetMetrics(), ev.GetNodeSelf().GetMetrics()} {
+	for _, lane := range [][]*ogv1.MetricSample{ev.GetMetrics(), ev.GetOutpostSelf().GetMetrics()} {
 		for _, m := range lane {
 			ts := m.GetTs()
 			if ts == nil {
@@ -494,7 +494,7 @@ func (s *telemetrySpool) ship() {
 		}
 		if len(inflight) == 0 {
 			// Tell the drops before the shipper stops: stopping wakes drain, and
-			// a node that drains then exits must not lose the notice. The lock
+			// an outpost that drains then exits must not lose the notice. The lock
 			// is released to log, so a batch queued meanwhile is shipped by the
 			// next pass, which tells nothing and stops.
 			if dropped := s.takeNoticeLocked(); dropped > 0 {
@@ -591,7 +591,7 @@ func (s *telemetrySpool) retry() {
 }
 
 // drain flushes the pending groups, ships the queue and waits until it is
-// empty, the one-shot run's last word and a stopping node's: a batch still
+// empty, the one-shot run's last word and a stopping outpost's: a batch still
 // held when the stream will not take it, or when ctx ends, is an error.
 func (s *telemetrySpool) drain(ctx context.Context) error {
 	s.flush()
@@ -609,7 +609,7 @@ func (s *telemetrySpool) drain(ctx context.Context) error {
 		s.mu.Unlock()
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("node: %d telemetry batches not acked by the stream: %w", s.pending(), ctx.Err())
+			return fmt.Errorf("outpost: %d telemetry batches not acked by the stream: %w", s.pending(), ctx.Err())
 		case <-idle:
 		}
 		s.mu.Lock()
@@ -619,7 +619,7 @@ func (s *telemetrySpool) drain(ctx context.Context) error {
 			return nil
 		}
 		if held {
-			return fmt.Errorf("node: %d telemetry batches not acked by the stream: %w", n, err)
+			return fmt.Errorf("outpost: %d telemetry batches not acked by the stream: %w", n, err)
 		}
 	}
 }
@@ -650,7 +650,7 @@ func (s *telemetrySpool) ledgerLocked() *delivery.Ledger {
 	return s.ledger
 }
 
-// takeFigures is the spool's part of the node's self-report (#1625, #1659):
+// takeFigures is the spool's part of the outpost's self-report (#1625, #1659):
 // the batches it holds now, and the items settled since the last call, each
 // counted once as it settles. An acked batch's items went in and out; a batch
 // dropped (at a cap, aged out, refused by the bus) or never encoded went in

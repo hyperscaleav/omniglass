@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"bytes"
@@ -17,7 +17,7 @@ import (
 )
 
 // A command's status from issue to settlement, end to end (#1155): the API
-// issue with wait, a real node, and the simulated Kestrel bar over two
+// issue with wait, a real outpost, and the simulated Kestrel bar over two
 // transports. set-volume over the held websocket answers settled with the
 // bar's answer frame as its evidence, set-volume over https answers settled
 // with the bar's confirmation, and each reads back the same by its id, with
@@ -82,7 +82,7 @@ type waitedCommand struct {
 	Reason      string  `json:"reason"`
 	Reply       *string `json:"reply"`
 	Endpoint    string  `json:"endpoint"`
-	Node        string  `json:"node"`
+	Outpost     string  `json:"outpost"`
 	Driver      string  `json:"driver"`
 	DeliveredAt *string `json:"delivered_at"`
 	ExecutedAt  *string `json:"executed_at"`
@@ -91,7 +91,7 @@ type waitedCommand struct {
 	Settlement  string  `json:"settlement"`
 }
 
-func TestNodeCommandWaitSettlesWithItsReply(t *testing.T) {
+func TestOutpostCommandWaitSettlesWithItsReply(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -109,7 +109,7 @@ func TestNodeCommandWaitSettlesWithItsReply(t *testing.T) {
 		"host": s.ips[barProfile], "port": fmt.Sprint(s.facePort(barProfile, "websocket")), "login": "bar-cmd-login"})
 	web := s.attachHTTP("bar-web", "kestrel-api", "edge-cmd", map[string]string{
 		"host": s.ips[barProfile], "port": fmt.Sprint(s.httpPort(barProfile)), "login": "bar-cmd-login"})
-	s.runNode("edge-cmd")
+	s.runOutpost("edge-cmd")
 	s.waitFor("bar-socket", ws.Name, "session-state", is("up"), "up: the socket held")
 	s.waitFor("bar-web", web.Name, "endpoint-authenticated", is("yes"), "yes: the bar accepted the login")
 	tok := s.ownerToken()
@@ -137,8 +137,8 @@ func TestNodeCommandWaitSettlesWithItsReply(t *testing.T) {
 			t.Fatalf("%s: the evidence carries the login: reply %q reason %q", tc.comp, *got.Reply, got.Reason)
 		}
 		t.Logf("%s: %s; reply %s", tc.comp, got.Reason, *got.Reply)
-		if got.Endpoint != tc.endpoint || got.Node != "edge-cmd" || got.Driver != tc.driver || got.Issuer != "root" {
-			t.Fatalf("%s: carried by %q on %q via %q, issued by %q", tc.comp, got.Endpoint, got.Node, got.Driver, got.Issuer)
+		if got.Endpoint != tc.endpoint || got.Outpost != "edge-cmd" || got.Driver != tc.driver || got.Issuer != "root" {
+			t.Fatalf("%s: carried by %q on %q via %q, issued by %q", tc.comp, got.Endpoint, got.Outpost, got.Driver, got.Issuer)
 		}
 		if got.DeliveredAt == nil || got.ExecutedAt == nil || got.SettledAt == nil {
 			t.Fatalf("%s: transitions = delivered %v executed %v settled %v, want each stamped", tc.comp, got.DeliveredAt, got.ExecutedAt, got.SettledAt)

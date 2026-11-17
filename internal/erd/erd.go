@@ -79,7 +79,7 @@ type Cluster struct {
 const unclustered = "unclustered"
 
 // Render turns a Schema into a D2 ERD. Each cluster becomes a container (in the
-// given order), each table a sql_table node listing its primary-key and
+// given order), each table a sql_table outpost listing its primary-key and
 // foreign-key columns, and each foreign key an edge between the two rows. A
 // table absent from every cluster lands in a trailing "unclustered" container.
 // Pure and deterministic: tables, columns, and edges are sorted so the output is
@@ -145,7 +145,7 @@ func Render(s Schema, clusters []Cluster) (string, error) {
 	return b.String(), nil
 }
 
-// writeTable emits one sql_table node with its primary-key then foreign-key
+// writeTable emits one sql_table outpost with its primary-key then foreign-key
 // columns.
 func writeTable(b *strings.Builder, t Table) {
 	b.WriteString("  " + t.Name + ": {\n")

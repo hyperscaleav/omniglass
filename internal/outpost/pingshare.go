@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -39,7 +39,7 @@ type pingShare struct {
 
 // pingHost is the host a probe's informational ping goes to, and whether it
 // pings at all: a ladder that asks for it, on a transport other than icmp
-// (whose probe is the ping), on a node that can ping.
+// (whose probe is the ping), on an outpost that can ping.
 func pingHost(runner *collection.Runner, task collection.TaskSpec) (string, bool) {
 	if task.Ladder == nil || !task.Ladder.Ping || task.Transport == "icmp" || runner.Ping == nil {
 		return "", false

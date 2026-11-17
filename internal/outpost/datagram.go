@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The node's udp endpoints (#1037). Every endpoint over udp gets its own
+// The outpost's udp endpoints (#1037). Every endpoint over udp gets its own
 // bound socket (decision 5 of #1076): the driver's listen-port input, else a
 // port the kernel picks. Its request rung, polls, commands and arm
 // conversation all leave from it, so a reply and a push arrive on the one
@@ -294,7 +294,7 @@ func (m *sessionManager) armDatagram(id string, h *heldDatagram) {
 	fingerprint := m.currentFingerprint(id)
 	go func() {
 		// A panic here (the arm hook, an answer's classification) is the
-		// endpoint's, never the node's: recovered, logged, and the arm runs
+		// endpoint's, never the outpost's: recovered, logged, and the arm runs
 		// again on the next reconcile (#1636).
 		pe := collection.Supervise("udp arm "+h.conn.target, func() { m.sendArm(id, h, arm, timeout, fingerprint) })
 		h.mu.Lock()
@@ -427,7 +427,7 @@ func (m *sessionManager) flushDatagrams() {
 func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *driver.Request, sessions *sessionManager) ([]collection.Sample, error) {
 	sock := sessions.datagramOf(task.EndpointID)
 	if sock == nil {
-		return nil, fmt.Errorf("node: task %s: no udp socket is bound for the endpoint: %s", task.ID, sessions.datagramRefusal(task.EndpointID))
+		return nil, fmt.Errorf("outpost: task %s: no udp socket is bound for the endpoint: %s", task.ID, sessions.datagramRefusal(task.EndpointID))
 	}
 	now := time.Now().UTC()
 	responsive := func(verdict, reason string) collection.Sample {
@@ -460,11 +460,11 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 		return []collection.Sample{responsive(collection.VerdictDown, rejectedReason+terr.Class)}, nil
 	}
 	if ctx.Err() != nil {
-		return nil, fmt.Errorf("node: task %s: %w", task.ID, ctx.Err())
+		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, ctx.Err())
 	}
 	reason, ok := collection.Classify(err)
 	if !ok {
-		return nil, fmt.Errorf("node: task %s: %w", task.ID, err)
+		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, err)
 	}
 	sessions.datagramVerdict(task.EndpointID, false)
 	return []collection.Sample{responsive(collection.VerdictDown, string(reason))}, nil

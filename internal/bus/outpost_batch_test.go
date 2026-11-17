@@ -23,7 +23,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// One tick of a node lands as one batch of task groups (#1582): the handler
+// One tick of an outpost lands as one batch of task groups (#1582): the handler
 // resolves every group's task in one read, lands every group in one
 // LandBatch, whose transaction stamps every landed group's endpoint seen
 // (#1928). A group the gateway refuses, or one the confinement fence
@@ -39,11 +39,11 @@ type tickStore struct {
 	refuseTask string
 }
 
-func (s *tickStore) ResolveTaskOwners(ctx context.Context, node string, ids []string) (map[string]storage.TaskOwner, error) {
+func (s *tickStore) ResolveTaskOwners(ctx context.Context, outpost string, ids []string) (map[string]storage.TaskOwner, error) {
 	s.mu.Lock()
 	s.resolves++
 	s.mu.Unlock()
-	return s.PG.ResolveTaskOwners(ctx, node, ids)
+	return s.PG.ResolveTaskOwners(ctx, outpost, ids)
 }
 
 // LandBatch records the batch and, when a task is to be refused, lands the
@@ -72,8 +72,8 @@ func (s *tickStore) LandBatch(ctx context.Context, b storage.IngestBatch) (stora
 	return res, err
 }
 
-// tickFixture is node-a holding three tasks, each on its own component's
-// endpoint, and node-b holding one node-a must not reach.
+// tickFixture is outpost-a holding three tasks, each on its own component's
+// endpoint, and outpost-b holding one outpost-a must not reach.
 type tickFixture struct {
 	ctx       context.Context
 	dsn       string
@@ -100,8 +100,8 @@ func newTickFixture(t *testing.T) *tickFixture {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	for _, n := range []string{"node-a", "node-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+	for _, n := range []string{"outpost-a", "outpost-b"} {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -116,9 +116,9 @@ func newTickFixture(t *testing.T) *tickFixture {
 	}
 	defer conn.Close(ctx)
 	if _, err := conn.Exec(ctx, `
-		insert into endpoint (name, transport, component, node_name, params)
+		insert into endpoint (name, transport, component, outpost_id, params)
 		select c.name || '-tcp', 'tcp', c.id, n.principal_id, '{"target":"127.0.0.1:1"}'::jsonb
-		from component c join node n on n.name = case when c.name = 'disp-b' then 'node-b' else 'node-a' end
+		from component c join outpost n on n.name = case when c.name = 'disp-b' then 'outpost-b' else 'outpost-a' end
 		where c.name like 'disp-%';
 		insert into task (id, mode, endpoint_id, enabled)
 		select 't-' || substr(e.name, 6, 1), 'poll', e.id, true from endpoint e`); err != nil {
@@ -153,12 +153,12 @@ func group(task string, v float64) *ogv1.TaskGroup {
 	}
 }
 
-// asTick is the node tick a one-task batch is (#1582): the node and its
+// asTick is the outpost tick a one-task batch is (#1582): the outpost and its
 // self-logs stay on the tick, and the task with its ts and every row it owns
 // becomes the tick's one group. It lets a test written about one task's rows
-// publish them the way a node does.
+// publish them the way an outpost does.
 func asTick(ev *ogv1.TelemetryBatch) *ogv1.TelemetryBatch {
-	return &ogv1.TelemetryBatch{NodeId: ev.GetNodeId(), Logs: ev.GetLogs(), Groups: []*ogv1.TaskGroup{{
+	return &ogv1.TelemetryBatch{OutpostId: ev.GetOutpostId(), Logs: ev.GetLogs(), Groups: []*ogv1.TaskGroup{{
 		TaskId:     ev.GetTaskId(),
 		Ts:         ev.GetTs(),
 		Metrics:    ev.GetMetrics(),
@@ -168,7 +168,7 @@ func asTick(ev *ogv1.TelemetryBatch) *ogv1.TelemetryBatch {
 	}}}
 }
 
-// deliver hands node-a's batch to the real handler as JetStream would.
+// deliver hands outpost-a's batch to the real handler as JetStream would.
 func (f *tickFixture) deliver(t *testing.T, ev *ogv1.TelemetryBatch) *deliveredMsg {
 	t.Helper()
 	data, err := proto.Marshal(ev)
@@ -176,7 +176,7 @@ func (f *tickFixture) deliver(t *testing.T, ev *ogv1.TelemetryBatch) *deliveredM
 		t.Fatal(err)
 	}
 	f.seq++
-	m := &deliveredMsg{subject: collection.TelemetrySubject("node-a"), data: data,
+	m := &deliveredMsg{subject: collection.TelemetrySubject("outpost-a"), data: data,
 		header: nats.Header{jetstream.MsgIDHeader: []string{fmt.Sprintf("tick-%d", f.seq)}}}
 	f.srv.handleTelemetry(m)
 	return m
@@ -226,9 +226,9 @@ func acked(t *testing.T, m *deliveredMsg) {
 	}
 }
 
-func TestNodeTickLandsAsOneBatch(t *testing.T) {
+func TestOutpostTickLandsAsOneBatch(t *testing.T) {
 	f := newTickFixture(t)
-	acked(t, f.deliver(t, &ogv1.TelemetryBatch{NodeId: "node-a",
+	acked(t, f.deliver(t, &ogv1.TelemetryBatch{OutpostId: "outpost-a",
 		Groups: []*ogv1.TaskGroup{group("t-1", 1), group("t-2", 0), group("t-3", 1)}}))
 
 	if f.store.resolves != 1 {
@@ -241,8 +241,8 @@ func TestNodeTickLandsAsOneBatch(t *testing.T) {
 		if want := fmt.Sprintf("t-%d", i+1); g.TaskID != want || len(g.Metrics) != 1 || len(g.Properties) != 1 {
 			t.Errorf("group %d = task %q, %d metrics, %d properties; want %s with one of each", i, g.TaskID, len(g.Metrics), len(g.Properties), want)
 		}
-		if g.Writer.Node == "" {
-			t.Errorf("group %d writer names no node: %+v", i, g.Writer)
+		if g.Writer.Outpost == "" {
+			t.Errorf("group %d writer names no outpost: %+v", i, g.Writer)
 		}
 	}
 	for comp, want := range map[string]float64{"disp-1": 1, "disp-2": 0, "disp-3": 1} {
@@ -285,11 +285,11 @@ type writerFunc func([]byte) (int, error)
 
 func (w writerFunc) Write(p []byte) (int, error) { return w(p) }
 
-func TestNodeBatchRefusedGroupAcks(t *testing.T) {
+func TestOutpostBatchRefusedGroupAcks(t *testing.T) {
 	f := newTickFixture(t)
 	f.store.refuseTask = "t-2"
 	logs := captureWarnings(t)
-	acked(t, f.deliver(t, &ogv1.TelemetryBatch{NodeId: "node-a",
+	acked(t, f.deliver(t, &ogv1.TelemetryBatch{OutpostId: "outpost-a",
 		Groups: []*ogv1.TaskGroup{group("t-1", 1), group("t-2", 1), group("t-3", 1)}}))
 
 	if got := f.tcpConnectTime(t, "disp-1"); got == nil || got.Value != 1 {
@@ -310,14 +310,14 @@ func TestNodeBatchRefusedGroupAcks(t *testing.T) {
 	}
 }
 
-func TestNodeBatchTopLevelTaskSamplesAreTermed(t *testing.T) {
+func TestOutpostBatchTopLevelTaskSamplesAreTermed(t *testing.T) {
 	f := newTickFixture(t)
 	for name, ev := range map[string]*ogv1.TelemetryBatch{
-		"task id":    {NodeId: "node-a", TaskId: "t-1", Groups: []*ogv1.TaskGroup{group("t-1", 1)}},
-		"metrics":    {NodeId: "node-a", Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}}},
-		"properties": {NodeId: "node-a", Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}}},
-		"events":     {NodeId: "node-a", Events: []*ogv1.EventSample{{Name: "call-started", Message: "x"}}},
-		"task logs":  {NodeId: "node-a", TaskLogs: []*ogv1.LogLine{{Message: "x"}}},
+		"task id":    {OutpostId: "outpost-a", TaskId: "t-1", Groups: []*ogv1.TaskGroup{group("t-1", 1)}},
+		"metrics":    {OutpostId: "outpost-a", Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}}},
+		"properties": {OutpostId: "outpost-a", Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}}},
+		"events":     {OutpostId: "outpost-a", Events: []*ogv1.EventSample{{Name: "call-started", Message: "x"}}},
+		"task logs":  {OutpostId: "outpost-a", TaskLogs: []*ogv1.LogLine{{Message: "x"}}},
 	} {
 		m := f.deliver(t, ev)
 		if !m.termed || m.acked || m.naked {
@@ -330,13 +330,13 @@ func TestNodeBatchTopLevelTaskSamplesAreTermed(t *testing.T) {
 	if got := f.tcpConnectTime(t, "disp-1"); got != nil {
 		t.Fatalf("disp-1 tcp-connect-time = %+v, want nothing from a termed batch", got)
 	}
-	// A node's self-logs ride the top level and still land.
-	acked(t, f.deliver(t, &ogv1.TelemetryBatch{NodeId: "node-a", Logs: []*ogv1.LogLine{{Message: "self"}}}))
+	// An outpost's self-logs ride the top level and still land.
+	acked(t, f.deliver(t, &ogv1.TelemetryBatch{OutpostId: "outpost-a", Logs: []*ogv1.LogLine{{Message: "self"}}}))
 }
 
-func TestNodeBatchOrphanGroupDoesNotBlockSiblings(t *testing.T) {
+func TestOutpostBatchOrphanGroupDoesNotBlockSiblings(t *testing.T) {
 	f := newTickFixture(t)
-	acked(t, f.deliver(t, &ogv1.TelemetryBatch{NodeId: "node-a",
+	acked(t, f.deliver(t, &ogv1.TelemetryBatch{OutpostId: "outpost-a",
 		Groups: []*ogv1.TaskGroup{group("t-1", 1), group("t-b", 1), group("t-3", 1)}}))
 
 	for _, comp := range []string{"disp-1", "disp-3"} {
@@ -345,10 +345,10 @@ func TestNodeBatchOrphanGroupDoesNotBlockSiblings(t *testing.T) {
 		}
 	}
 	if got, err := f.gw.LatestMetric(f.ctx, "disp-b", "tcp-connect-time"); err != nil || got != nil {
-		t.Errorf("disp-b tcp-connect-time = %+v (%v), want none: node-b's task is not node-a's to write", got, err)
+		t.Errorf("disp-b tcp-connect-time = %+v (%v), want none: outpost-b's task is not outpost-a's to write", got, err)
 	}
-	if n := f.srv.orphans.drain()["node-a"].Batches; n != 1 {
-		t.Errorf("orphans counted on node-a = %d, want the one orphaned group", n)
+	if n := f.srv.orphans.drain()["outpost-a"].Batches; n != 1 {
+		t.Errorf("orphans counted on outpost-a = %d, want the one orphaned group", n)
 	}
 	if len(f.store.lands) != 1 || len(f.store.lands[0].Groups) != 2 {
 		t.Errorf("LandBatch = %+v, want one call with the two resolved groups", f.store.lands)
@@ -362,12 +362,12 @@ func TestNodeBatchOrphanGroupDoesNotBlockSiblings(t *testing.T) {
 // JSON passes the bus untouched and fails its jsonb cast) drops alone on the
 // real gateway: the tick acks, its sibling's rows land under the tick's one
 // receipt, and only the sibling's endpoint is stamped seen.
-func TestNodeBatchPostgresRefusedGroupAcks(t *testing.T) {
+func TestOutpostBatchPostgresRefusedGroupAcks(t *testing.T) {
 	f := newTickFixture(t)
 	logs := captureWarnings(t)
 	bad := group("t-2", 1)
 	bad.TaskLogs = []*ogv1.LogLine{{Message: "codec reset", Attributes: []byte("{not json")}}
-	m := f.deliver(t, &ogv1.TelemetryBatch{NodeId: "node-a", Groups: []*ogv1.TaskGroup{group("t-1", 1), bad}})
+	m := f.deliver(t, &ogv1.TelemetryBatch{OutpostId: "outpost-a", Groups: []*ogv1.TaskGroup{group("t-1", 1), bad}})
 	acked(t, m)
 
 	if got := f.tcpConnectTime(t, "disp-1"); got == nil || got.Value != 1 {

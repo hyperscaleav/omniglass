@@ -137,7 +137,7 @@ func TestMCPServesTheGeneratedCatalog(t *testing.T) {
 			t.Errorf("%s annotations = %+v, want read-only %v destructive %v", name, a, want.readOnly, want.destructive)
 		}
 		if a != nil && (a.OpenWorldHint == nil || *a.OpenWorldHint != want.openWorld) {
-			t.Errorf("%s open-world = %v, want %v (a node reaching the network is open-world)", name, a.OpenWorldHint, want.openWorld)
+			t.Errorf("%s open-world = %v, want %v (an outpost reaching the network is open-world)", name, a.OpenWorldHint, want.openWorld)
 		}
 	}
 	if _, ok := tools["delete-component"]; ok {

@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
@@ -69,7 +69,7 @@ func (d *countingDevice) hostPort(t *testing.T) (string, string) {
 }
 
 // TestFiftyComponentsBesideASlowDeviceRunInTheirOwnLanes drives #1249 over
-// the real wire: Postgres, the bus, a real node, and fifty components, each
+// the real wire: Postgres, the bus, a real outpost, and fifty components, each
 // an http device answering two polls a second, one of them holding every
 // request for three seconds. Every fast component is asked its rounds in a
 // bounded time, the slow one is asked request after request, and no device ever holds two requests
@@ -120,7 +120,7 @@ func TestFiftyComponentsBesideASlowDeviceRunInTheirOwnLanes(t *testing.T) {
 	ran := make(chan error, 1)
 	start := time.Now()
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: "edge-lanes", Token: s.token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: s.apiURL, Name: "edge-lanes", Token: s.token,
 			HeartbeatEvery: 500 * time.Millisecond})
 		ran <- err
 	}()

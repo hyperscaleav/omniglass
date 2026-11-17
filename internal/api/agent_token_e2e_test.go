@@ -328,9 +328,9 @@ func loginBearer(t *testing.T, c *apiClient, user, password string) string {
 
 // An agent binds a credential it never reads (#2047): secret:bind is not
 // under the ceiling, so its owner's agent attaches a secret to an endpoint,
-// repoints the endpoint and moves it to another node, each audited as the
+// repoints the endpoint and moves it to another outpost, each audited as the
 // agent's, while the plaintext stays out of its reach: reveal, copy and a
-// node's enrollment token are still refused.
+// outpost's enrollment token are still refused.
 func TestAgentTokenBindsACredentialItNeverReads(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -353,8 +353,8 @@ func TestAgentTokenBindsACredentialItNeverReads(t *testing.T) {
 		t.Errorf("the attach answered the secret's plaintext: %s", out)
 	}
 	c.do(agent.Token, http.MethodPatch, "/endpoints/"+ep.ID, map[string]any{"inputs": map[string]string{"host": "10.20.4.70"}}, http.StatusOK)
-	c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "relay-2"}, http.StatusCreated)
-	c.do(agent.Token, http.MethodPatch, "/endpoints/"+ep.ID, map[string]any{"node": "relay-2"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPost, "/outposts", map[string]any{"name": "relay-2"}, http.StatusCreated)
+	c.do(agent.Token, http.MethodPatch, "/endpoints/"+ep.ID, map[string]any{"outpost": "relay-2"}, http.StatusOK)
 
 	var audit struct {
 		Events []struct {
@@ -378,7 +378,7 @@ func TestAgentTokenBindsACredentialItNeverReads(t *testing.T) {
 
 	c.do(agent.Token, http.MethodPost, "/secrets/lab-community:reveal", nil, http.StatusForbidden)
 	c.do(agent.Token, http.MethodPost, "/secrets/lab-community:copy", nil, http.StatusForbidden)
-	c.do(agent.Token, http.MethodPost, "/nodes/relay-2:enroll", nil, http.StatusForbidden)
+	c.do(agent.Token, http.MethodPost, "/outposts/relay-2:enroll", nil, http.StatusForbidden)
 }
 
 // An agent binds a signing key it never reads to a webhook target (#2047):

@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func newLaneRig(t *testing.T, runner *collection.Runner, tasks ...collection.Tas
 }
 
 func (r *laneRig) route() runRoute {
-	return runRoute{out: r.l.spool, node: "edge", runner: r.l.runner, sessions: r.l.sessions,
+	return runRoute{out: r.l.spool, outpost: "edge", runner: r.l.runner, sessions: r.l.sessions,
 		sched: r.l.sched, report: r.l.report, pool: r.d.pool}
 }
 
@@ -165,7 +165,7 @@ func TestACommandAndARunNowQueuedBehindAGateClosingCommandAnswerWithTheGate(t *t
 	if first.out != "" {
 		t.Fatalf("the reboot failed: %s", first.out)
 	}
-	if want := "node: the endpoint is " + named + ", so the command was not sent"; second.out != want {
+	if want := "outpost: the endpoint is " + named + ", so the command was not sent"; second.out != want {
 		t.Fatalf("the queued command answered %q, want %q", second.out, want)
 	}
 	if len(line.sent) != 1 || line.sent[0] != "REBOOT" {

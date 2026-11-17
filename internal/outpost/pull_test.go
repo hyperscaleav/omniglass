@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -63,7 +63,7 @@ func TestThePullIntervalIsJitteredTenPercent(t *testing.T) {
 }
 
 // The first worklist's pulls count toward the pull loss like every later one
-// (#1882): a node refused once and then served reads the window's refused
+// (#1882): an outpost refused once and then served reads the window's refused
 // share, and a run stopped while refused tallies no pull it never finished.
 func TestTheFirstWorklistsPullsCountTowardThePullLoss(t *testing.T) {
 	t.Parallel()
@@ -71,7 +71,7 @@ func TestTheFirstWorklistsPullsCountTowardThePullLoss(t *testing.T) {
 	t0 := time.Unix(1_800_000_000, 0)
 	key := writerclass.WorklistPullLossRatio
 
-	self := newNodeReport(time.Hour, 0, t0)
+	self := newOutpostReport(time.Hour, 0, t0)
 	var calls atomic.Int64
 	pull := func(context.Context) (collection.WorklistReply, error) {
 		if calls.Add(1) == 1 {
@@ -86,7 +86,7 @@ func TestTheFirstWorklistsPullsCountTowardThePullLoss(t *testing.T) {
 		t.Errorf("one of two first pulls refused: %s = %v, want 0.5", key, got)
 	}
 
-	stopped := newNodeReport(time.Hour, 0, t0)
+	stopped := newOutpostReport(time.Hour, 0, t0)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	refused := func(context.Context) (collection.WorklistReply, error) {
@@ -105,9 +105,9 @@ func TestTheFirstWorklistsPullsCountTowardThePullLoss(t *testing.T) {
 	}
 }
 
-// While the first worklist is outstanding the node ticks on its heartbeat
+// While the first worklist is outstanding the outpost ticks on its heartbeat
 // (#1882), and once it arrives the wait returns it and ticks no more.
-func TestTheNodeTicksWhileItAwaitsItsFirstWorklist(t *testing.T) {
+func TestTheOutpostTicksWhileItAwaitsItsFirstWorklist(t *testing.T) {
 	t.Parallel()
 	release := make(chan struct{})
 	ticked := make(chan struct{}, 16)

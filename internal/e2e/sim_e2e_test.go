@@ -31,9 +31,9 @@ import (
 const simE2EPortShift = 24000
 
 // TestSimulatorEndToEnd drives the simulator as an operator would: the real
-// server, `omniglass sim run` beside a node with that node's credential, and
-// `omniglass node run` collecting from the simulated device. The node's
-// reachability probe reaches the device, and `omniglass node simulation`
+// server, `omniglass sim run` beside an outpost with that outpost's credential, and
+// `omniglass outpost run` collecting from the simulated device. The outpost's
+// reachability probe reaches the device, and `omniglass outpost simulation`
 // shows the simulator connected, the device served, and the probe's hit.
 func TestSimulatorEndToEnd(t *testing.T) {
 	if testing.Short() {
@@ -64,11 +64,11 @@ func TestSimulatorEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-e"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-e"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	nodeTok := "sim-e2e-token"
-	sum := sha256.Sum256([]byte(nodeTok))
+	outpostTok := "sim-e2e-token"
+	sum := sha256.Sum256([]byte(outpostTok))
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-e", hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestSimulatorEndToEnd(t *testing.T) {
 		args []any
 	}{
 		{`update component set product_id = (select id from product where name = $1) where name = 'sim-dev'`, []any{product}},
-		{`insert into endpoint (name, transport, component, node_name, params) values ('sim-dev-tcp', 'tcp', (select id from component where name = 'sim-dev'), (select principal_id from node where name = 'edge-e'), jsonb_build_object('target', $1::text))`, []any{target}},
+		{`insert into endpoint (name, transport, component, outpost_id, params) values ('sim-dev-tcp', 'tcp', (select id from component where name = 'sim-dev'), (select principal_id from outpost where name = 'edge-e'), jsonb_build_object('target', $1::text))`, []any{target}},
 		{`insert into task (id, mode, endpoint_id, enabled) values ('t-sim', 'poll', (select id from endpoint where name = 'sim-dev-tcp'), true)`, nil},
 	} {
 		if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
@@ -98,19 +98,19 @@ func TestSimulatorEndToEnd(t *testing.T) {
 		}
 	}
 
-	// The simulator, beside the node, with the node's identity in its env.
+	// The simulator, beside the outpost, with the outpost's identity in its env.
 	simCtx, stopSim := context.WithCancel(ctx)
 	defer stopSim()
 	simCmd := exec.CommandContext(simCtx, binPath, "sim", "run",
 		"--port-offset", fmt.Sprint(simE2EPortShift), "--poll", "300ms")
 	simCmd.Env = append(os.Environ(),
-		"OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-e", "OMNIGLASS_NODE_TOKEN="+nodeTok)
+		"OMNIGLASS_SERVER="+server, "OMNIGLASS_OUTPOST_NAME=edge-e", "OMNIGLASS_OUTPOST_TOKEN="+outpostTok)
 	simCmd.Stdout, simCmd.Stderr = os.Stderr, os.Stderr
 	if err := simCmd.Start(); err != nil {
 		t.Fatalf("start sim: %v", err)
 	}
 	t.Cleanup(func() { stopSim(); _ = simCmd.Wait() })
-	// The operator's view: the generated CLI over GET /nodes/{name}/simulation.
+	// The operator's view: the generated CLI over GET /outposts/{name}/simulation.
 	cli := runCLI(t, root, binPath, os.Environ())
 	type simView struct {
 		Connected bool `json:"connected"`
@@ -122,7 +122,7 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	}
 	read := func() (simView, bool) {
 		var v simView
-		out, code := cli("node", "simulation", "edge-e", "--server", server, "--token", ownerTok)
+		out, code := cli("outpost", "simulation", "edge-e", "--server", server, "--token", ownerTok)
 		return v, code == 0 && json.Unmarshal([]byte(out), &v) == nil
 	}
 	// Wait on the simulator's own report, not a dial: a dial is a hit.
@@ -134,12 +134,12 @@ func TestSimulatorEndToEnd(t *testing.T) {
 		t.Fatalf("before any collection: %+v (read ok %v), want one device and no tcp hits", v, ok)
 	}
 
-	// The node collects from the simulated device once, and its probe is
+	// The outpost collects from the simulated device once, and its probe is
 	// the hit.
-	if out, code := cli("node", "run", "--server", server, "--name", "edge-e", "--token", nodeTok, "--once"); code != 0 {
-		t.Fatalf("node run exit %d:\n%s", code, out)
+	if out, code := cli("outpost", "run", "--server", server, "--name", "edge-e", "--token", outpostTok, "--once"); code != 0 {
+		t.Fatalf("outpost run exit %d:\n%s", code, out)
 	}
-	waitFor(t, "the probe's hit to show in `node simulation`", func() bool {
+	waitFor(t, "the probe's hit to show in `outpost simulation`", func() bool {
 		v, ok := read()
 		return ok && len(v.Devices) == 1 && v.Devices[0].HitsByProtocol["tcp"] > 0
 	})

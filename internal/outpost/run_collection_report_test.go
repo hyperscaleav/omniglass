@@ -3,7 +3,7 @@
 // The simulator serves on 127.x addresses beyond 127.0.0.1, which Linux
 // treats as local without configuration.
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -15,26 +15,26 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/nettest"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// runNodeReporting starts the node with its own collection report window, as
-// runNode does with the platform's: a test cannot wait the minute.
-func (s *gateStack) runNodeReporting(name string, every time.Duration) {
-	s.runNodeProbing(name, every, 100*time.Millisecond)
+// runOutpostReporting starts the outpost with its own collection report window, as
+// runOutpost does with the platform's: a test cannot wait the minute.
+func (s *gateStack) runOutpostReporting(name string, every time.Duration) {
+	s.runOutpostProbing(name, every, 100*time.Millisecond)
 }
 
-// runNodeProbing is runNodeReporting with the reachability probes on the
+// runOutpostProbing is runOutpostReporting with the reachability probes on the
 // given interval, not the tenth of a second it runs them on.
-func (s *gateStack) runNodeProbing(name string, every, probeEvery time.Duration) {
+func (s *gateStack) runOutpostProbing(name string, every, probeEvery time.Duration) {
 	if s.stop != nil {
 		s.stop()
 	}
 	runCtx, cancel := context.WithCancel(s.ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: name, Token: s.token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: s.apiURL, Name: name, Token: s.token,
 			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: probeEvery, ReportEvery: every})
 		ran <- err
 	}()
@@ -108,7 +108,7 @@ func TestEveryEndpointReportsItsOwnCollection(t *testing.T) {
 	}
 	gone := s.attachHTTP("bar-gone", "kestrel-api", "edge-report", map[string]string{
 		"host": goneHost, "port": gonePort, "login": "bar-login"})
-	s.runNodeReporting("edge-report", time.Second)
+	s.runOutpostReporting("edge-report", time.Second)
 
 	s.waitFor("bar-live", live.Name, "session-state", is("up"), "up: the stream held")
 
@@ -201,7 +201,7 @@ func TestAGatedPollAndARunNowCountInTheReport(t *testing.T) {
 	}
 	locked := s.attachHTTP("bar-locked", "bar-fast", "edge-gate-report", with("bar-wrong"))
 	run := s.attachHTTP("bar-run", "bar-slow", "edge-gate-report", with("bar-login"))
-	s.runNodeReporting("edge-gate-report", time.Second)
+	s.runOutpostReporting("edge-gate-report", time.Second)
 
 	// The wrong password gates the endpoint. Two windows on, every due poll
 	// is still refused: the window counts failures and times none.

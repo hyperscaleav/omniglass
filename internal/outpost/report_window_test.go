@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"testing"
@@ -42,11 +42,11 @@ func TestACollectionReportTakenAfterAStallResumesAtTheNextSlot(t *testing.T) {
 	}
 }
 
-// The node's account of itself closes its windowed counts on the same grid.
-func TestNodeReportWindowEndsOnItsGridHoweverLateItIsTaken(t *testing.T) {
+// The outpost's account of itself closes its windowed counts on the same grid.
+func TestOutpostReportWindowEndsOnItsGridHoweverLateItIsTaken(t *testing.T) {
 	t.Parallel()
 	t0 := time.Unix(1_800_000_000, 0)
-	r := newNodeReport(time.Minute, 0, t0)
+	r := newOutpostReport(time.Minute, 0, t0)
 	for k, late := range lateTakes {
 		end := t0.Add(time.Duration(k+1) * time.Minute)
 		if _, ok := readings(r.take(end.Add(-time.Nanosecond)))[writerclass.TickOverrunCount]; ok {
@@ -58,20 +58,20 @@ func TestNodeReportWindowEndsOnItsGridHoweverLateItIsTaken(t *testing.T) {
 	}
 }
 
-// A node's name places its grid: two nodes close their windows at different
+// An outpost's name places its grid: two outposts close their windows at different
 // offsets into the minute, so a fleet's reports spread instead of landing
-// together, and a node that restarts keeps the offset it had.
-func TestAReportWindowsPhaseFollowsTheNodesName(t *testing.T) {
+// together, and an outpost that restarts keeps the offset it had.
+func TestAReportWindowsPhaseFollowsTheOutpostsName(t *testing.T) {
 	t.Parallel()
 	start := time.Unix(1_800_000_000, 0).Add(17 * time.Second)
-	a := newReportWindow(time.Minute, phaseSeed("node-a"), start)
-	b := newReportWindow(time.Minute, phaseSeed("node-b"), start)
+	a := newReportWindow(time.Minute, phaseSeed("outpost-a"), start)
+	b := newReportWindow(time.Minute, phaseSeed("outpost-b"), start)
 	if a.end.Sub(a.end.Truncate(time.Minute)) == b.end.Sub(b.end.Truncate(time.Minute)) {
-		t.Fatalf("node-a and node-b close at the same offset %v", a.end.Sub(a.end.Truncate(time.Minute)))
+		t.Fatalf("outpost-a and outpost-b close at the same offset %v", a.end.Sub(a.end.Truncate(time.Minute)))
 	}
-	restarted := newReportWindow(time.Minute, phaseSeed("node-a"), start.Add(7*time.Minute+23*time.Second))
+	restarted := newReportWindow(time.Minute, phaseSeed("outpost-a"), start.Add(7*time.Minute+23*time.Second))
 	if d := restarted.end.Sub(a.end); d%time.Minute != 0 {
-		t.Fatalf("a restart moved node-a's grid by %v", d%time.Minute)
+		t.Fatalf("a restart moved outpost-a's grid by %v", d%time.Minute)
 	}
 	if a.end.Sub(start) > time.Minute || !a.end.After(start) {
 		t.Fatalf("the first window runs %v, want within one length", a.end.Sub(start))

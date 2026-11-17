@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"strings"
@@ -14,10 +14,10 @@ const mib = 1 << 20
 // CPU before memory or the clamp bind.
 var testLaneCost = LaneCost{CPUPerRun: 5 * time.Millisecond, WaitPerRun: 195 * time.Millisecond, MemoryPerLane: mib}
 
-// #1869: a node sizes its lane pool from what it may use, weighing how long a
+// #1869: an outpost sizes its lane pool from what it may use, weighing how long a
 // run waits on its device against the CPU it costs, and the memory it holds,
 // inside the clamp.
-func TestLaneWorkersForSizesThePoolFromTheNodesLimits(t *testing.T) {
+func TestLaneWorkersForSizesThePoolFromTheOutpostsLimits(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name   string
@@ -38,7 +38,7 @@ func TestLaneWorkersForSizesThePoolFromTheNodesLimits(t *testing.T) {
 	}
 }
 
-// The product's own cost gives a small node more lanes than one a request's
+// The product's own cost gives a small outpost more lanes than one a request's
 // wait would leave idle, and never leaves the clamp.
 func TestLaneWorkersForTheDefaultCostStaysInTheClamp(t *testing.T) {
 	t.Parallel()
@@ -120,7 +120,7 @@ func TestMemTotalReadsMeminfo(t *testing.T) {
 
 // Each limit is the tighter of the cgroup's and the host's, so a quota set
 // above the host's CPUs or memory does not size the pool for capacity the
-// node cannot have; one the cgroup leaves open is the host's. The source says
+// outpost cannot have; one the cgroup leaves open is the host's. The source says
 // which each came from.
 func TestLimitsTakeTheTighterOfTheCgroupsAndTheHosts(t *testing.T) {
 	t.Parallel()
@@ -167,8 +167,8 @@ func TestHostCPUsAreTheRuntimesSchedulableCount(t *testing.T) {
 	}
 }
 
-// An operator's count stands; zero is auto, sized from the node's limits, and
-// the source says which the node took.
+// An operator's count stands; zero is auto, sized from the outpost's limits, and
+// the source says which the outpost took.
 func TestResolveLaneWorkersTakesTheOperatorsCountOverAuto(t *testing.T) {
 	t.Parallel()
 	auto := func() (int, string) { return 46, "auto: cpu.max=2, memory.max=512MiB" }

@@ -9,9 +9,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// A node's receipts are counted by landed_at only inside the read's span,
+// An outpost's receipts are counted by landed_at only inside the read's span,
 // and split into the margin before the window's start and the run after its
-// end; another node's receipts never count, however its name begins, and
+// end; another outpost's receipts never count, however its name begins, and
 // neither does a Term receipt.
 func TestCountTelemetryReceipts(t *testing.T) {
 	t.Parallel()
@@ -41,7 +41,7 @@ func TestCountTelemetryReceipts(t *testing.T) {
 	// A batch the server Termed leaves a receipt that names its loss
 	// (#1691); it landed nothing, so it never counts.
 	termed := "og.v1.telemetry.edge-1 termed"
-	if err := f.gw.RecordTermedBatch(ctx, storage.TermedBatch{BatchID: termed, Node: "edge-1",
+	if err := f.gw.RecordTermedBatch(ctx, storage.TermedBatch{BatchID: termed, Outpost: "edge-1",
 		Ledger: delivery.Stamp{Boot: "boot-1", Seq: 1, Minted: start, Kinds: delivery.Declared{delivery.Log: {Count: 1}}}}); err != nil {
 		t.Fatalf("record %s: %v", termed, err)
 	}
@@ -59,15 +59,15 @@ func TestCountTelemetryReceipts(t *testing.T) {
 }
 
 // The poll targets are every enabled poll task's endpoint with a component,
-// by the node that holds it, with the schedule a driver declares, and empty
+// by the outpost that holds it, with the schedule a driver declares, and empty
 // for a reachability probe.
 func TestListClosedLoopPollTargets(t *testing.T) {
 	t.Parallel()
 	f := newLandFixture(t)
 	ctx := context.Background()
 	for _, q := range []string{
-		`insert into endpoint (name, transport, component, node_name, params) values ('disp-1-http', 'http', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'edge-1'), '{}'::jsonb)`,
-		`insert into endpoint (name, transport, component, node_name, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'edge-1'), '{}'::jsonb)`,
+		`insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-http', 'http', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'edge-1'), '{}'::jsonb)`,
+		`insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'edge-1'), '{}'::jsonb)`,
 		`insert into task (id, mode, endpoint_id, spec, enabled) values ('t-drv', 'poll', (select id from endpoint where name = 'disp-1-http'), '{"driver":"d","schedule":{"every":"15s"}}'::jsonb, true)`,
 		`insert into task (id, mode, endpoint_id, spec, enabled) values ('t-probe', 'poll', (select id from endpoint where name = 'disp-1-icmp'), '{}'::jsonb, true)`,
 		`insert into task (id, mode, endpoint_id, spec, enabled) values ('t-off', 'poll', (select id from endpoint where name = 'disp-1-icmp'), '{}'::jsonb, false)`,
@@ -82,7 +82,7 @@ func TestListClosedLoopPollTargets(t *testing.T) {
 	}
 	var mine []storage.ClosedLoopPollTarget
 	for _, p := range got {
-		if p.Node == "edge-1" {
+		if p.Outpost == "edge-1" {
 			mine = append(mine, p)
 		}
 	}

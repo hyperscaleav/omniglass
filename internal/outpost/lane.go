@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"encoding/json"
@@ -85,9 +85,9 @@ func runReply(c closure) collection.RunReply {
 // holds: nothing was sent.
 func commandRefusal(c closure) string {
 	if c.refusal != nil {
-		return "node: the endpoint is gated: " + c.refusal.Error()
+		return "outpost: the endpoint is gated: " + c.refusal.Error()
 	}
-	return "node: the endpoint is " + c.reason.text + ", so the command was not sent"
+	return "outpost: the endpoint is " + c.reason.text + ", so the command was not sent"
 }
 
 // previewReply is the answer to a preview that resolved to an endpoint whose
@@ -98,7 +98,7 @@ func previewReply(c closure, target string) collection.RunReply {
 		text = "gated: " + c.refusal.Error()
 	}
 	return collection.RunReply{Gated: true, GateReason: string(c.reason.kind),
-		Error: "node: the endpoint at " + target + " is " + text + ", so the preview was not sent; " + reasonRules[c.reason.kind].release}
+		Error: "outpost: the endpoint at " + target + " is " + text + ", so the preview was not sent; " + reasonRules[c.reason.kind].release}
 }
 
 // routeKey is what resolves a preview to an endpoint: the transport it
@@ -165,7 +165,7 @@ func (g *gates) previewClosed(tasks []collection.TaskSpec) (closure, string, boo
 	return c, taskTarget(tasks[0]), closed
 }
 
-// gatesOf is the manager's gates (nil-safe: a node run with no manager has
+// gatesOf is the manager's gates (nil-safe: an outpost run with no manager has
 // none, and a nil gates holds nothing).
 func (m *sessionManager) gatesOf() *gates {
 	if m == nil {

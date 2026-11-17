@@ -18,14 +18,14 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// TestNodeLaneLandsEveryNativeKey is the other half of #1080: the push lane
-// refuses every key only a node may write, and the node itself still writes
-// each one. A node publishes every native key (read from probekeys, so a key
+// TestOutpostLaneLandsEveryNativeKey is the other half of #1080: the push lane
+// refuses every key only an outpost may write, and the outpost itself still writes
+// each one. An outpost publishes every native key (read from probekeys, so a key
 // added there is covered here, collection-failed on the event lane among them)
 // on its own telemetry subject, for its own task, and every one lands under
-// the task's component, instanced by the endpoint: the node's writer is the
-// one the node-probe class admits (ADR-0161).
-func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
+// the task's component, instanced by the endpoint: the outpost's writer is the
+// one the outpost-probe class admits (ADR-0161).
+func TestOutpostLaneLandsEveryNativeKey(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
 	}
@@ -40,11 +40,11 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	const token = "secret-a"
-	if _, err := gw.SetEnrollmentToken(ctx, "", "node-a", hashHex(token), all); err != nil {
+	if _, err := gw.SetEnrollmentToken(ctx, "", "outpost-a", hashHex(token), all); err != nil {
 		t.Fatalf("mint token: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
@@ -54,8 +54,8 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:22"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
@@ -70,11 +70,11 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 	}
 	defer srv.Shutdown()
 	nc, err := nats.Connect(srv.ClientURL(),
-		nats.UserInfo("node-a", token),
-		nats.CustomInboxPrefix(collection.InboxPrefix("node-a")),
+		nats.UserInfo("outpost-a", token),
+		nats.CustomInboxPrefix(collection.InboxPrefix("outpost-a")),
 	)
 	if err != nil {
-		t.Fatalf("node connect: %v", err)
+		t.Fatalf("outpost connect: %v", err)
 	}
 	defer nc.Close()
 
@@ -94,7 +94,7 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 	}
 	propertyValue := map[string]string{}
 	for _, pt := range propertyTypes {
-		v := `"from-the-node"`
+		v := `"from-the-outpost"`
 		var schema struct {
 			Enum []any `json:"enum"`
 		}
@@ -125,7 +125,7 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 			continue
 		}
 		if isEvent[key] {
-			group.Events = append(group.Events, &ogv1.EventSample{Name: key, Message: "from the node"})
+			group.Events = append(group.Events, &ogv1.EventSample{Name: key, Message: "from the outpost"})
 			continue
 		}
 		v, ok := propertyValue[key]
@@ -134,7 +134,7 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 		}
 		group.Properties = append(group.Properties, &ogv1.PropertySample{Name: key, ValueJson: v})
 	}
-	publishEvent(t, nc, "node-a", &ogv1.TelemetryBatch{NodeId: "node-a", Groups: []*ogv1.TaskGroup{group}})
+	publishEvent(t, nc, "outpost-a", &ogv1.TelemetryBatch{OutpostId: "outpost-a", Groups: []*ogv1.TaskGroup{group}})
 
 	for _, key := range native {
 		deadline := time.Now().Add(5 * time.Second)
@@ -147,7 +147,7 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 					t.Fatalf("events: %v", err)
 				}
 				for _, e := range evs {
-					landed = landed || (e.Key == key && e.Instance == "ssh" && e.Message == "from the node")
+					landed = landed || (e.Key == key && e.Instance == "ssh" && e.Message == "from the outpost")
 				}
 			case isMetric[key]:
 				m, err := gw.LatestMetricInstance(ctx, "disp-1", key, "ssh")
@@ -168,7 +168,7 @@ func TestNodeLaneLandsEveryNativeKey(t *testing.T) {
 				break
 			}
 			if time.Now().After(deadline) {
-				t.Fatalf("the node's own %s never landed", key)
+				t.Fatalf("the outpost's own %s never landed", key)
 			}
 			time.Sleep(50 * time.Millisecond)
 		}

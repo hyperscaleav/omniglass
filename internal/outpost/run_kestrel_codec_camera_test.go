@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -11,13 +11,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
-// TestNodeKestrelRelayAndGazeReadTheirClass (#897): the shipped
+// TestOutpostKestrelRelayAndGazeReadTheirClass (#897): the shipped
 // kestrel-relay-api and kestrel-gaze-api drivers on the simulated codec's
 // and camera's https faces, behind the Kestrel login, land the codec's call
 // state, shared content and peripherals and the camera's pan, tilt, zoom,
 // preset and tracking, beside their identity. A call placed on the codec and
 // a preset recalled on the camera read back on the next poll.
-func TestNodeKestrelRelayAndGazeReadTheirClass(t *testing.T) {
+func TestOutpostKestrelRelayAndGazeReadTheirClass(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -34,7 +34,7 @@ func TestNodeKestrelRelayAndGazeReadTheirClass(t *testing.T) {
 			"host": s.ips[prof], "port": fmt.Sprint(s.httpPort(prof)), "login": "kestrel-login"}).Name
 	}
 	relayEP, gazeEP := attach("codec-1", relay, "kestrel-relay-api"), attach("camera-1", gaze, "kestrel-gaze-api")
-	s.runNode("edge-kestrel")
+	s.runOutpost("edge-kestrel")
 
 	metric := func(comp, ep, key string, ok func(float64) bool) {
 		t.Helper()
@@ -91,7 +91,7 @@ func TestNodeKestrelRelayAndGazeReadTheirClass(t *testing.T) {
 			t.Fatalf("%s: %+v", op.Path, res)
 		}
 	}
-	s.runNode("edge-kestrel") // a restarted node polls at once, rather than in 30s
+	s.runOutpost("edge-kestrel") // a restarted outpost polls at once, rather than in 30s
 	s.waitFor("codec-1", relayEP, "call-state", is("active"), "in a call on the codec")
 	s.waitFor("codec-1", relayEP, "content-sharing-state", is("sharing"), "sharing on the codec")
 	metric("codec-1", relayEP, "participant-count", func(v float64) bool { return v == 5 })

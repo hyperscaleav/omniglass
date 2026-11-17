@@ -18,12 +18,12 @@ import (
 )
 
 // depFixture is a seeded gateway with an owner to issue commands as and one
-// node to place endpoints on.
+// outpost to place endpoints on.
 type depFixture struct {
-	gw    *storage.PG
-	dsn   string
-	actor string
-	node  string
+	gw      *storage.PG
+	dsn     string
+	actor   string
+	outpost string
 }
 
 func newDepFixture(t *testing.T) *depFixture {
@@ -42,8 +42,8 @@ func newDepFixture(t *testing.T) *depFixture {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-dep"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-dep"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	_, hash, prefix, err := auth.NewBearerToken()
 	if err != nil {
@@ -61,7 +61,7 @@ func newDepFixture(t *testing.T) *depFixture {
 	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
-	return &depFixture{gw: gw, dsn: dsn, actor: actor, node: "edge-dep"}
+	return &depFixture{gw: gw, dsn: dsn, actor: actor, outpost: "edge-dep"}
 }
 
 func (f *depFixture) component(t *testing.T, name string) {
@@ -72,12 +72,12 @@ func (f *depFixture) component(t *testing.T, name string) {
 	}
 }
 
-// endpoint places a bare endpoint of the given transport on the fixture's node.
+// endpoint places a bare endpoint of the given transport on the fixture's outpost.
 func (f *depFixture) endpoint(t *testing.T, comp, transport string, oob bool) string {
 	t.Helper()
-	node := f.node
+	outpost := f.outpost
 	it, err := f.gw.CreateEndpoint(context.Background(), "", storage.EndpointSpec{
-		Transport: transport, Component: &comp, Node: &node, OutOfBand: oob,
+		Transport: transport, Component: &comp, Outpost: &outpost, OutOfBand: oob,
 	}, scope.Set{All: true})
 	if err != nil {
 		t.Fatalf("create %s endpoint on %s: %v", transport, comp, err)
@@ -85,13 +85,13 @@ func (f *depFixture) endpoint(t *testing.T, comp, transport string, oob bool) st
 	return it.ID
 }
 
-// attach attaches a driver to comp on the fixture's node, the endpoint a
+// attach attaches a driver to comp on the fixture's outpost, the endpoint a
 // command is delivered through.
 func (f *depFixture) attach(t *testing.T, comp, drv string) string {
 	t.Helper()
-	node := f.node
+	outpost := f.outpost
 	it, err := f.gw.CreateEndpoint(context.Background(), "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node, Inputs: map[string]string{"host": "10.20.9.10"},
+		Driver: &drv, Component: &comp, Outpost: &outpost, Inputs: map[string]string{"host": "10.20.9.10"},
 	}, scope.Set{All: true})
 	if err != nil {
 		t.Fatalf("attach %s to %s: %v", drv, comp, err)
@@ -111,7 +111,7 @@ func (f *depFixture) depend(t *testing.T, comp, upstream, kind, outlet string) {
 
 func (f *depFixture) delivery(t *testing.T, commandType string) storage.CommandDelivery {
 	t.Helper()
-	got, err := f.gw.PendingNodeCommands(context.Background(), f.node)
+	got, err := f.gw.PendingOutpostCommands(context.Background(), f.outpost)
 	if err != nil {
 		t.Fatalf("pending: %v", err)
 	}

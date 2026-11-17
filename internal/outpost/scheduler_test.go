@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -339,7 +339,7 @@ func TestAnOperatorRunWaitsForItsLaneAndGoesFirst(t *testing.T) {
 }
 
 // A first run happens at once; later dues fall on the task's phase, which is
-// a function of its id alone, so a restarted node keeps each task's slots and
+// a function of its id alone, so a restarted outpost keeps each task's slots and
 // a fleet of tasks spreads across the interval rather than firing together.
 func TestAFirstRunIsAtOnceAndLaterDuesKeepAStablePhase(t *testing.T) {
 	t.Parallel()
@@ -349,7 +349,7 @@ func TestAFirstRunIsAtOnceAndLaterDuesKeepAStablePhase(t *testing.T) {
 		return time.Duration(at.UnixNano())%every == phaseOf(task.ID, every)
 	}
 	for _, start := range []time.Time{schedT0.Add(3300 * time.Millisecond), schedT0.Add(47 * time.Second)} {
-		h := newSchedHarness(t, start, 4, 30*time.Second) // a fresh node: a restart
+		h := newSchedHarness(t, start, 4, 30*time.Second) // a fresh outpost: a restart
 		h.d.sync(wl(task), start)
 		h.d.pass(t.Context(), start)
 		h.d.settle()
@@ -412,7 +412,7 @@ func TestATaskRunProducesTheKindsItsSpecDeclares(t *testing.T) {
 	broken := everyPoll("p-3", "ep-1", "10s")
 	broken.Spec = json.RawMessage(`{"driver": "edge", "nonsense": true}`)
 	if got := taskKinds(broken); len(got) != 0 {
-		t.Errorf("a spec the node cannot read produces %v, want none (its run produces nothing)", got)
+		t.Errorf("a spec the outpost cannot read produces %v, want none (its run produces nothing)", got)
 	}
 }
 
@@ -474,7 +474,7 @@ func TestAPoolBusyThroughTheWindowReadsFullyBusy(t *testing.T) {
 	h.d.sync(wl(tasks...), schedT0)
 	h.d.pass(t.Context(), schedT0)
 	h.awaitStarts(4)
-	r := newNodeReport(time.Minute, 0, schedT0)
+	r := newOutpostReport(time.Minute, 0, schedT0)
 	for _, at := range []time.Time{schedT0.Add(30 * time.Second), schedT0.Add(time.Minute)} {
 		h.set(at)
 		r.dispatch(h.d.takeWindow(), at)

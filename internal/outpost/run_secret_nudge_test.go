@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -44,12 +44,12 @@ func (d *keyDevice) sent(key string) bool {
 	return d.keys[key]
 }
 
-// TestARotatedSecretReachesTheNodeAtOnce drives #1997 over the real wire:
-// Postgres, the bus, and a real node that pulls its worklist once an hour.
+// TestARotatedSecretReachesTheOutpostAtOnce drives #1997 over the real wire:
+// Postgres, the bus, and a real outpost that pulls its worklist once an hour.
 // Rotating the secret an endpoint's input names announces that endpoint's
-// node on commit, the bus nudges it, and the device's next request carries
+// outpost on commit, the bus nudges it, and the device's next request carries
 // the new key within a second, not an hour.
-func TestARotatedSecretReachesTheNodeAtOnce(t *testing.T) {
+func TestARotatedSecretReachesTheOutpostAtOnce(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -79,7 +79,7 @@ func TestARotatedSecretReachesTheNodeAtOnce(t *testing.T) {
 	runCtx, cancel := context.WithCancel(s.ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: s.apiURL, Name: "edge-rotate", Token: s.token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: s.apiURL, Name: "edge-rotate", Token: s.token,
 			HeartbeatEvery: 500 * time.Millisecond, WorklistEvery: time.Hour})
 		ran <- err
 	}()
@@ -92,5 +92,5 @@ func TestARotatedSecretReachesTheNodeAtOnce(t *testing.T) {
 	if _, err := s.gw.UpdateSecret(s.ctx, "", sec.ID, storage.SecretPatch{Fields: map[string]string{"key": "after"}}, s.all, s.all, true, true); err != nil {
 		t.Fatal(err)
 	}
-	pollUntil(t, time.Second, "a rotated secret did not reach a node pulling hourly within a second", func() bool { return device.sent("after") })
+	pollUntil(t, time.Second, "a rotated secret did not reach an outpost pulling hourly within a second", func() bool { return device.sent("after") })
 }

@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim"
@@ -28,11 +28,11 @@ import (
 )
 
 // A driver emit lands on any lane (#1145), end to end over the real wire:
-// Postgres, the bus, a real node and the simulator. The shipped newtron-panel-nvp
+// Postgres, the bus, a real outpost and the simulator. The shipped newtron-panel-nvp
 // driver lands one push on two lanes (the video-input property and an
 // input-changed event carrying the input), a diagnostics line as a log line
 // with its severity, and a push no listener claims whole as a log line, all
-// on the component and none in the node's self-logs; the shipped kestrel-api
+// on the component and none in the outpost's self-logs; the shipped kestrel-api
 // driver lands a call starting and ending as call-started and call-ended
 // carrying the call's id.
 
@@ -74,7 +74,7 @@ func payloadOf(t *testing.T, e storage.Event) map[string]any {
 	return m
 }
 
-func TestNodeLandsAnNVPPushOnEveryLane(t *testing.T) {
+func TestOutpostLandsAnNVPPushOnEveryLane(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -113,8 +113,8 @@ func TestNodeLandsAnNVPPushOnEveryLane(t *testing.T) {
 		}
 	}
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-lanes"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-lanes"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "enroll-token-lanes"
 	sum := sha256.Sum256([]byte(token))
@@ -124,9 +124,9 @@ func TestNodeLandsAnNVPPushOnEveryLane(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-lanes"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	comp, drv, nodeName := "panel-lanes", "newtron-panel-nvp", "edge-lanes"
+	comp, drv, outpostName := "panel-lanes", "newtron-panel-nvp", "edge-lanes"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(nvpPort)},
 		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
@@ -144,7 +144,7 @@ func TestNodeLandsAnNVPPushOnEveryLane(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: nodeName, Token: token, HeartbeatEvery: time.Hour})
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: outpostName, Token: token, HeartbeatEvery: time.Hour})
 		ran <- err
 	}()
 	defer func() { stop(); <-ran }()
@@ -197,17 +197,17 @@ func TestNodeLandsAnNVPPushOnEveryLane(t *testing.T) {
 	operate("/api/room/scene", `{"scene":"presentation"}`)
 	waitFor(t, "the unclaimed scene line", 5*time.Second, func() bool { _, ok := lineWith("EVT SCENE presentation"); return ok })
 
-	// None of the component's lines is the node's own.
-	self, err := gw.ListNodeLogs(ctx, nodeName, time.Hour, 500)
+	// None of the component's lines is the outpost's own.
+	self, err := gw.ListOutpostLogs(ctx, outpostName, time.Hour, 500)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(self) == 0 {
-		t.Fatal("the node shipped no self-logs")
+		t.Fatal("the outpost shipped no self-logs")
 	}
 	for _, s := range self {
 		if strings.Contains(s.Message, "backlight driver reset") || s.Message == "EVT SCENE presentation" {
-			t.Fatalf("a component's line landed as the node's own: %+v", s)
+			t.Fatalf("a component's line landed as the outpost's own: %+v", s)
 		}
 	}
 
@@ -218,7 +218,7 @@ func TestNodeLandsAnNVPPushOnEveryLane(t *testing.T) {
 	waitFor(t, "a second input-changed", 5*time.Second, func() bool { return len(eventsOf(t, gw, comp, "input-changed")) == 2 })
 }
 
-func TestNodeLandsKestrelCallEvents(t *testing.T) {
+func TestOutpostLandsKestrelCallEvents(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -233,7 +233,7 @@ func TestNodeLandsKestrelCallEvents(t *testing.T) {
 	s.secret("bar-login", "basic-auth", map[string]string{"username": "admin", "password": "kestrel"})
 	s.attachHTTP("bar-calls", "kestrel-api", "edge-calls", map[string]string{
 		"host": s.ips[barProfile], "port": fmt.Sprint(s.httpPort(barProfile)), "login": "bar-login"})
-	s.runNode("edge-calls")
+	s.runOutpost("edge-calls")
 	gw := s.gw
 
 	waitFor(t, "the stream up", 20*time.Second, func() bool {

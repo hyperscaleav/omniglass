@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/collection/rejection"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -31,15 +31,15 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange drives #1032 end to end:
+// TestOutpostSSHSessionPinsTheHostKeyAndRefusesAChange drives #1032 end to end:
 // the shipped newtron-nvp-ssh driver attached to the simulator's panel. The
-// node's ssh session authenticates, trusts the panel's host key on first use
+// outpost's ssh session authenticates, trusts the panel's host key on first use
 // (ssh-host-key lands on the server, which delivers it back as the pin), and
 // polls over the shell. The panel is replaced (a new key at the same
 // address): the session reads rejected, class host-key, naming both keys,
 // and dials no more. The operator retries with the new key: the session
 // redials onto it and reads up.
-func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
+func TestOutpostSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -70,7 +70,7 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	panel := engine.Devices()[0]
 	sshPort := panelPort(t, panel, "ssh")
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-h"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-h"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	token := "enroll-token-ssh"
@@ -87,9 +87,9 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	}, all, true); err != nil {
 		t.Fatal(err)
 	}
-	comp, drv, nodeName := "panel-1", "newtron-nvp-ssh", "edge-h"
+	comp, drv, outpostName := "panel-1", "newtron-nvp-ssh", "edge-h"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(sshPort), "login": "panel-login"},
 		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
@@ -107,7 +107,7 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-h", Token: token, HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond})
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-h", Token: token, HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond})
 		ran <- err
 	}()
 	defer func() {
@@ -142,7 +142,7 @@ func TestNodeSSHSessionPinsTheHostKeyAndRefusesAChange(t *testing.T) {
 	// The server delivers the trusted key back as the pin.
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		wl, err := gw.NodeWorklist(ctx, "edge-h")
+		wl, err := gw.OutpostWorklist(ctx, "edge-h")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,4 +1,4 @@
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -20,10 +20,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TestNodeRunOnce drives the whole node path as the user would: a real embedded
-// bus, a real HTTP claim, and node.Run pulling the worklist and heartbeating.
+// TestOutpostRunOnce drives the whole outpost path as the user would: a real embedded
+// bus, a real HTTP claim, and outpost.Run pulling the worklist and heartbeating.
 // Skipped under -short.
-func TestNodeRunOnce(t *testing.T) {
+func TestOutpostRunOnce(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -40,9 +40,9 @@ func TestNodeRunOnce(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	// Enroll the node (create + mint token). The stored form is hex sha256.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	// Enroll the outpost (create + mint token). The stored form is hex sha256.
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "site-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "enroll-token-a"
 	sum := sha256.Sum256([]byte(token))
@@ -50,7 +50,7 @@ func TestNodeRunOnce(t *testing.T) {
 		t.Fatalf("mint token: %v", err)
 	}
 
-	// Seed a component + interface + enabled task on the node.
+	// Seed a component + interface + enabled task on the outpost.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestNodeRunOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'site-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'site-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec, enabled) values ('t-icmp', 'poll', (select id from endpoint where name = 'disp-1-icmp'), '{}'::jsonb, true)`); err != nil {
@@ -75,10 +75,10 @@ func TestNodeRunOnce(t *testing.T) {
 	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
 	defer apiSrv.Close()
 
-	// Run the node once: claim, pull, heartbeat.
-	wl, err := node.Run(ctx, node.Config{ServerURL: apiSrv.URL, Name: "site-a", Token: token, Once: true})
+	// Run the outpost once: claim, pull, heartbeat.
+	wl, err := outpost.Run(ctx, outpost.Config{ServerURL: apiSrv.URL, Name: "site-a", Token: token, Once: true})
 	if err != nil {
-		t.Fatalf("node run: %v", err)
+		t.Fatalf("outpost run: %v", err)
 	}
 	if len(wl.Tasks) != 1 || wl.Tasks[0].ID != "t-icmp" {
 		t.Fatalf("worklist = %+v, want one t-icmp task", wl.Tasks)
@@ -87,29 +87,29 @@ func TestNodeRunOnce(t *testing.T) {
 	// The heartbeat landed: last_heartbeat_at is set.
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		n, err := gw.GetNode(ctx, "site-a", all)
+		n, err := gw.GetOutpost(ctx, "site-a", all)
 		if err != nil {
-			t.Fatalf("get node: %v", err)
+			t.Fatalf("get outpost: %v", err)
 		}
 		if n.LastHeartbeatAt != nil {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("last_heartbeat_at not set after node run")
+			t.Fatalf("last_heartbeat_at not set after outpost run")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	// The node's self-logs landed (ADR-0066): its own operational records
+	// The outpost's self-logs landed (ADR-0066): its own operational records
 	// ("connected to bus", "worklist pulled") rode the telemetry lane as LogLines
-	// and the ingest consumer wrote them to node_log (#589: the origin-true
+	// and the ingest consumer wrote them to outpost_log (#589: the origin-true
 	// self-log home, not any component's log_line). This closes the raw-log-lane
 	// producer loop end to end.
 	deadline = time.Now().Add(3 * time.Second)
 	for {
-		logs, err := gw.ListNodeLogs(ctx, "site-a", time.Hour, 50)
+		logs, err := gw.ListOutpostLogs(ctx, "site-a", time.Hour, 50)
 		if err != nil {
-			t.Fatalf("list node logs: %v", err)
+			t.Fatalf("list outpost logs: %v", err)
 		}
 		var pulled bool
 		for _, l := range logs {
@@ -121,21 +121,21 @@ func TestNodeRunOnce(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("node self-log 'worklist pulled' never landed in node_log")
+			t.Fatalf("outpost self-log 'worklist pulled' never landed in outpost_log")
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 }
 
-// TestNodeVerdictPerInterface pins the per-component-name regression: two
-// components each carry an interface named "api" on the SAME node, over different
+// TestOutpostVerdictPerInterface pins the per-component-name regression: two
+// components each carry an interface named "api" on the SAME outpost, over different
 // transports (http and tcp). Before interface names went per-component this
-// collision could not occur; now it is the common case. The node's verdict-dedup
-// map must be keyed by the node-unique task id, not the interface name, or the
+// collision could not occur; now it is the common case. The outpost's verdict-dedup
+// map must be keyed by the outpost-unique task id, not the interface name, or the
 // second component's reachability verdict is silently suppressed as a repeat of the
 // first. Both verdicts must land, which also proves http and tcp both route to the
 // tcp-connect reach probe. Skipped under -short.
-func TestNodeVerdictPerInterface(t *testing.T) {
+func TestOutpostVerdictPerInterface(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -161,9 +161,9 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 	defer ln.Close()
 	target := ln.Addr().String()
 
-	// Enroll the node.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	// Enroll the outpost.
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "site-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "enroll-token-verdict"
 	sum := sha256.Sum256([]byte(token))
@@ -171,7 +171,7 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 		t.Fatalf("mint token: %v", err)
 	}
 
-	// Two components, each with an interface named "tcp" on the same node, each
+	// Two components, each with an interface named "tcp" on the same outpost, each
 	// with its own poll task. Same friendly name, different components: the
 	// per-component-uniqueness case a global name key could not represent.
 	conn, err := pgx.Connect(ctx, dsn)
@@ -186,7 +186,7 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 			t.Fatalf("create component %s: %v", c.comp, err)
 		}
 		if _, err := conn.Exec(ctx,
-			`insert into endpoint (name, transport, component, node_name, params) values ('api', $1, (select id from component where name = $2), (select principal_id from node where name = 'site-a'), $3::jsonb)`,
+			`insert into endpoint (name, transport, component, outpost_id, params) values ('api', $1, (select id from component where name = $2), (select principal_id from outpost where name = 'site-a'), $3::jsonb)`,
 			c.itype, c.comp, fmt.Sprintf(`{"target":%q}`, target)); err != nil {
 			t.Fatalf("insert interface for %s: %v", c.comp, err)
 		}
@@ -207,10 +207,10 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 	apiSrv := httptest.NewServer(api.NewHandler(gw, api.WithNatsURL(srv.ClientURL())))
 	defer apiSrv.Close()
 
-	// Run the node once: it probes both interfaces and publishes a verdict per task.
-	wl, err := node.Run(ctx, node.Config{ServerURL: apiSrv.URL, Name: "site-a", Token: token, Once: true})
+	// Run the outpost once: it probes both interfaces and publishes a verdict per task.
+	wl, err := outpost.Run(ctx, outpost.Config{ServerURL: apiSrv.URL, Name: "site-a", Token: token, Once: true})
 	if err != nil {
-		t.Fatalf("node run: %v", err)
+		t.Fatalf("outpost run: %v", err)
 	}
 	if len(wl.Tasks) != 2 {
 		t.Fatalf("worklist = %d tasks, want 2", len(wl.Tasks))

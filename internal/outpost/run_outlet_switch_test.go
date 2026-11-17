@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"fmt"
@@ -65,7 +65,7 @@ func TestSwitchingAnOutletOffHoldsWhatItFeeds(t *testing.T) {
 	// quiet and releases the hold; the quiet is set long enough to observe the
 	// hold inside it.
 	s.setDisruption("outlet-off", 60*time.Second, 120*time.Second)
-	s.runNodeReporting("edge-outlet", time.Second)
+	s.runOutpostReporting("edge-outlet", time.Second)
 
 	s.waitFor("power-1", outlets.Name, "outlet-2-state", is("on"), "outlet 2 on, as the PDU starts")
 	s.waitMetric("sensor-1", web.Name, probekeys.PollDuration, func(v float64) bool { return v > 0 }, "a positive mean poll time")

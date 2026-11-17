@@ -14,10 +14,10 @@ import (
 )
 
 // The #589 split. A log line comes off a component, so log_line loses the
-// exclusive arc (owner_kind and the system/location/node arms) and component_id
-// becomes NOT NULL. A node's self-logs (ADR-0066) are not orphaned by the
-// narrowing: they move to node_log, an origin-true table where every row is
-// node-owned and no arc is needed. These tests pin the migrated shape; the
+// exclusive arc (owner_kind and the system/location/outpost arms) and component_id
+// becomes NOT NULL. An outpost's self-logs (ADR-0066) are not orphaned by the
+// narrowing: they move to outpost_log, an origin-true table where every row is
+// outpost-owned and no arc is needed. These tests pin the migrated shape; the
 // behavior over it lives in logs_test.go.
 
 // TestLogLineIsComponentOnly asserts the narrowed log_line: the three foreign
@@ -36,7 +36,7 @@ func TestLogLineIsComponentOnly(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	for _, col := range []string{"owner_kind", "system_id", "location_id", "node_id"} {
+	for _, col := range []string{"owner_kind", "system_id", "location_id", "outpost_id"} {
 		if logColumnExists(t, ctx, conn, "log_line", col) {
 			t.Errorf("log_line.%s still present; #589 narrowed log_line to component-only", col)
 		}
@@ -57,10 +57,10 @@ func TestLogLineIsComponentOnly(t *testing.T) {
 	}
 }
 
-// TestNodeLogShape asserts the self-log home the split creates: node_log keyed
-// to node(principal_id) with the same cascade the old node arm had, and the
-// (node_id, ts desc) index the newest-first list read leans on.
-func TestNodeLogShape(t *testing.T) {
+// TestOutpostLogShape asserts the self-log home the split creates: outpost_log keyed
+// to outpost(principal_id) with the same cascade the old outpost arm had, and the
+// (outpost_id, ts desc) index the newest-first list read leans on.
+func TestOutpostLogShape(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -74,49 +74,49 @@ func TestNodeLogShape(t *testing.T) {
 
 	var exists bool
 	if err := conn.QueryRow(ctx,
-		`select to_regclass('node_log') is not null`).Scan(&exists); err != nil {
-		t.Fatalf("probe node_log: %v", err)
+		`select to_regclass('outpost_log') is not null`).Scan(&exists); err != nil {
+		t.Fatalf("probe outpost_log: %v", err)
 	}
 	if !exists {
-		t.Fatal("node_log missing; #589 moves node self-logs into their own table")
+		t.Fatal("outpost_log missing; #589 moves outpost self-logs into their own table")
 	}
 
 	for col, wantNullable := range map[string]string{
-		"node_id": "NO", "message": "NO", "ts": "NO",
+		"outpost_id": "NO", "message": "NO", "ts": "NO",
 		"severity": "YES", "facility": "YES", "correlation_id": "YES",
 	} {
 		var nullable string
 		err := conn.QueryRow(ctx, `select is_nullable from information_schema.columns
-			where table_name = 'node_log' and column_name = $1`, col).Scan(&nullable)
+			where table_name = 'outpost_log' and column_name = $1`, col).Scan(&nullable)
 		if err != nil {
-			t.Fatalf("probe node_log.%s: %v", col, err)
+			t.Fatalf("probe outpost_log.%s: %v", col, err)
 		}
 		if nullable != wantNullable {
-			t.Errorf("node_log.%s nullable = %s, want %s", col, nullable, wantNullable)
+			t.Errorf("outpost_log.%s nullable = %s, want %s", col, nullable, wantNullable)
 		}
 	}
 
-	// The FK carries the node arm's target and cascade over unchanged: a
-	// deleted node takes its self-logs with it, exactly as the arc did.
+	// The FK carries the outpost arm's target and cascade over unchanged: a
+	// deleted outpost takes its self-logs with it, exactly as the arc did.
 	var confdel string
 	err = conn.QueryRow(ctx, `select confdeltype::text from pg_constraint
-		where conname = 'node_log_node_id_fkey' and confrelid = 'node'::regclass`).Scan(&confdel)
+		where conname = 'outpost_log_outpost_id_fkey' and confrelid = 'outpost'::regclass`).Scan(&confdel)
 	if err != nil {
-		t.Fatalf("probe node_log_node_id_fkey (want an FK to node): %v", err)
+		t.Fatalf("probe outpost_log_outpost_id_fkey (want an FK to outpost): %v", err)
 	}
 	if confdel != "c" {
-		t.Errorf("node_log_node_id_fkey delete rule = %q, want cascade", confdel)
+		t.Errorf("outpost_log_outpost_id_fkey delete rule = %q, want cascade", confdel)
 	}
 
-	if !indexExists(t, conn, "node_log_node_ts_idx") {
-		t.Error("node_log_node_ts_idx missing; the list read is newest-first per node")
+	if !indexExists(t, conn, "outpost_log_outpost_ts_idx") {
+		t.Error("outpost_log_outpost_ts_idx missing; the list read is newest-first per outpost")
 	}
 }
 
 // TestInsertLogLinesRefusesANonComponentBinding pins the write-side fence of the
 // narrowing: the storage layer refuses a non-component binding loudly
 // (reject-not-project, the house ingest posture) instead of projecting it onto
-// the component arm or letting a NULL trip a constraint opaquely. The node here
+// the component arm or letting a NULL trip a constraint opaquely. The outpost here
 // exists, so before the split this insert succeeded; only the narrowing turns
 // it into a named refusal.
 func TestInsertLogLinesRefusesANonComponentBinding(t *testing.T) {
@@ -134,15 +134,15 @@ func TestInsertLogLinesRefusesANonComponentBinding(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-9"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-9"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 
 	err = gw.InsertLogLines(ctx, []storage.LogLineWrite{
-		{OwnerKind: "node", OwnerID: "edge-9", Message: "self-log on the wrong lane", TS: time.Now().UTC()},
+		{OwnerKind: "outpost", OwnerID: "edge-9", Message: "self-log on the wrong lane", TS: time.Now().UTC()},
 	})
 	if err == nil {
-		t.Fatal("insert with a node binding: want a refusal, got nil (node self-logs belong in node_log)")
+		t.Fatal("insert with an outpost binding: want a refusal, got nil (outpost self-logs belong in outpost_log)")
 	}
 	if !strings.Contains(err.Error(), "component") {
 		t.Fatalf("refusal should name the component-only contract, got: %v", err)

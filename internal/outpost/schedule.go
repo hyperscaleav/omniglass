@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"sort"
@@ -11,7 +11,7 @@ import (
 )
 
 // The poll schedule (#822): a driver poll declares how often it runs
-// (schedule.every, baked into its task), and the node honors it. Since #1634
+// (schedule.every, baked into its task), and the outpost honors it. Since #1634
 // the dispatcher (scheduler.go) owns when each task is due, on a timer of its
 // own rather than the heartbeat tick; pollSchedule remembers, per task id,
 // what a run's outcome books on top of that: a failing poll's retry backoff,
@@ -29,7 +29,7 @@ type pollSchedule struct {
 	fingerprint map[string]string
 	// occurred is what each poll's events and log lines last landed (#1145),
 	// keyed by task, then by emit: a plain poll fires an occurrence when its
-	// content changes, not on every run. Node memory alone, so a restart may
+	// content changes, not on every run. Outpost memory alone, so a restart may
 	// fire one again.
 	occurred map[string]map[string]string
 }

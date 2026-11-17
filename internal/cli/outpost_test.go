@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/config"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 )
 
-// --session-dials (#1636) bounds how many held sessions the node dials at
+// --session-dials (#1636) bounds how many held sessions the outpost dials at
 // once: the flag wins, the env var stands in when the flag is omitted, and
-// neither leaves the node's default.
-func TestNodeRunSessionDials(t *testing.T) {
+// neither leaves the outpost's default.
+func TestOutpostRunSessionDials(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		flag    int
@@ -21,12 +21,12 @@ func TestNodeRunSessionDials(t *testing.T) {
 		want    int
 		wantErr string
 	}{
-		{name: "default", flag: node.DefaultSessionDials, want: node.DefaultSessionDials},
+		{name: "default", flag: outpost.DefaultSessionDials, want: outpost.DefaultSessionDials},
 		{name: "flag", flag: 2, changed: true, want: 2},
-		{name: "env stands in for the flag", flag: node.DefaultSessionDials, env: "4", want: 4},
+		{name: "env stands in for the flag", flag: outpost.DefaultSessionDials, env: "4", want: 4},
 		{name: "flag wins over env", flag: 2, changed: true, env: "4", want: 2},
-		{name: "env not a count", flag: node.DefaultSessionDials, env: "lots", wantErr: "OMNIGLASS_NODE_SESSION_DIALS"},
-		{name: "env zero", flag: node.DefaultSessionDials, env: "0", wantErr: "at least 1"},
+		{name: "env not a count", flag: outpost.DefaultSessionDials, env: "lots", wantErr: "OMNIGLASS_OUTPOST_SESSION_DIALS"},
+		{name: "env zero", flag: outpost.DefaultSessionDials, env: "0", wantErr: "at least 1"},
 		{name: "flag zero", flag: 0, changed: true, wantErr: "at least 1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -44,20 +44,20 @@ func TestNodeRunSessionDials(t *testing.T) {
 	}
 }
 
-// The flag is registered with the node's default, and the env reference
+// The flag is registered with the outpost's default, and the env reference
 // states that same default.
-func TestNodeRunSessionDialsFlagDefault(t *testing.T) {
-	f := newNodeRunCmd().Flags().Lookup("session-dials")
-	if f == nil || f.DefValue != strconv.Itoa(node.DefaultSessionDials) {
-		t.Fatalf("session-dials flag = %+v, want one defaulting to %d", f, node.DefaultSessionDials)
+func TestOutpostRunSessionDialsFlagDefault(t *testing.T) {
+	f := newOutpostRunCmd().Flags().Lookup("session-dials")
+	if f == nil || f.DefValue != strconv.Itoa(outpost.DefaultSessionDials) {
+		t.Fatalf("session-dials flag = %+v, want one defaulting to %d", f, outpost.DefaultSessionDials)
 	}
 	for _, v := range config.Registry {
-		if v.Key == "OMNIGLASS_NODE_SESSION_DIALS" {
-			if v.Default != strconv.Itoa(node.DefaultSessionDials) {
-				t.Fatalf("env reference states default %q, want %d", v.Default, node.DefaultSessionDials)
+		if v.Key == "OMNIGLASS_OUTPOST_SESSION_DIALS" {
+			if v.Default != strconv.Itoa(outpost.DefaultSessionDials) {
+				t.Fatalf("env reference states default %q, want %d", v.Default, outpost.DefaultSessionDials)
 			}
 			return
 		}
 	}
-	t.Fatal("OMNIGLASS_NODE_SESSION_DIALS is not in the env reference")
+	t.Fatal("OMNIGLASS_OUTPOST_SESSION_DIALS is not in the env reference")
 }

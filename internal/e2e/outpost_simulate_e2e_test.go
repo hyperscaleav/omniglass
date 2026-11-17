@@ -26,17 +26,17 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-const nodeSimulatePortShift = 25000
+const outpostSimulatePortShift = 25000
 
-// TestNodeRunSimulateCollectsItsOwnFleet drives `omniglass node run
-// --simulate` as an operator would: ONE process, holding one node's one
-// enrollment token, serves the simulated component placed on that node and
+// TestOutpostRunSimulateCollectsItsOwnFleet drives `omniglass outpost run
+// --simulate` as an operator would: ONE process, holding one outpost's one
+// enrollment token, serves the simulated component placed on that outpost and
 // collects from it. The simulator reports the component running, and the
-// node's TCP sample lands, so the two halves share the process and its
+// outpost's TCP sample lands, so the two halves share the process and its
 // loopback with no second enrollment and no second process.
-func TestNodeRunSimulateCollectsItsOwnFleet(t *testing.T) {
+func TestOutpostRunSimulateCollectsItsOwnFleet(t *testing.T) {
 	if testing.Short() {
-		t.Skip("node run --simulate e2e: skipped under -short (Postgres testcontainer + go build)")
+		t.Skip("outpost run --simulate e2e: skipped under -short (Postgres testcontainer + go build)")
 	}
 	ctx := context.Background()
 	root := repoRoot(t)
@@ -62,11 +62,11 @@ func TestNodeRunSimulateCollectsItsOwnFleet(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-s"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-s"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	nodeTok := "node-simulate-e2e-token"
-	sum := sha256.Sum256([]byte(nodeTok))
+	outpostTok := "outpost-simulate-e2e-token"
+	sum := sha256.Sum256([]byte(outpostTok))
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-s", hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
@@ -92,15 +92,15 @@ func TestNodeRunSimulateCollectsItsOwnFleet(t *testing.T) {
 		}
 		return out
 	}
-	target := net.JoinHostPort(simtest.ClaimLoopback(t), fmt.Sprint(port+nodeSimulatePortShift))
-	as("endpoint", "create", "--component", "sim-own", "--node", "edge-s", "--transport", "tcp",
+	target := net.JoinHostPort(simtest.ClaimLoopback(t), fmt.Sprint(port+outpostSimulatePortShift))
+	as("endpoint", "create", "--component", "sim-own", "--outpost", "edge-s", "--transport", "tcp",
 		"--params", fmt.Sprintf(`{"target":%q}`, target))
 
-	// The one process: the node, its simulator inside it.
+	// The one process: the outpost, its simulator inside it.
 	pctx, stop := context.WithCancel(ctx)
-	p := exec.CommandContext(pctx, binPath, "node", "run", "--simulate",
-		"--port-offset", fmt.Sprint(nodeSimulatePortShift), "--poll", "300ms", "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s")
-	p.Env = append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-s", "OMNIGLASS_NODE_TOKEN="+nodeTok)
+	p := exec.CommandContext(pctx, binPath, "outpost", "run", "--simulate",
+		"--port-offset", fmt.Sprint(outpostSimulatePortShift), "--poll", "300ms", "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s")
+	p.Env = append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_OUTPOST_NAME=edge-s", "OMNIGLASS_OUTPOST_TOKEN="+outpostTok)
 	p.Stdout, p.Stderr = os.Stderr, os.Stderr
 	// Stopped the way an operator stops it, so the graceful path is the one
 	// under test.
@@ -122,18 +122,18 @@ func TestNodeRunSimulateCollectsItsOwnFleet(t *testing.T) {
 	}
 	read := func() (simView, bool) {
 		var v simView
-		out, code := cli("node", "simulation", "edge-s", "--server", server, "--token", ownerTok)
+		out, code := cli("outpost", "simulation", "edge-s", "--server", server, "--token", ownerTok)
 		return v, code == 0 && json.Unmarshal([]byte(out), &v) == nil
 	}
 	waitForWithin(t, 30*time.Second, "the in-process simulator to report the component running", func() bool {
 		v, ok := read()
 		return ok && v.Connected && len(v.Devices) == 1 && v.Devices[0].Status == "running"
 	})
-	waitForWithin(t, 30*time.Second, "the node's probe to land on its own simulated component", func() bool {
+	waitForWithin(t, 30*time.Second, "the outpost's probe to land on its own simulated component", func() bool {
 		v, ok := read()
 		return ok && len(v.Devices) == 1 && v.Devices[0].HitsByProtocol["tcp"] > 0
 	})
-	waitForWithin(t, 30*time.Second, "the node's tcp-open result to read open", func() bool {
+	waitForWithin(t, 30*time.Second, "the outpost's tcp-open result to read open", func() bool {
 		req, _ := http.NewRequest(http.MethodGet, server+"/api/v1/components/sim-own/properties/tcp-open/samples?limit=1", nil)
 		req.Header.Set("Authorization", "Bearer "+ownerTok)
 		resp, err := http.DefaultClient.Do(req)
@@ -158,7 +158,7 @@ func TestNodeRunSimulateCollectsItsOwnFleet(t *testing.T) {
 	case <-exited:
 		exited <- nil
 	case <-time.After(15 * time.Second):
-		t.Fatal("node run --simulate did not exit within 15s of its signal")
+		t.Fatal("outpost run --simulate did not exit within 15s of its signal")
 	}
 	if c, err := net.DialTimeout("tcp", target, time.Second); err == nil {
 		c.Close()

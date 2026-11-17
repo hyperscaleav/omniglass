@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -26,15 +26,15 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestNodeTelnetSessionRejectsThenRecoversOnTheFix drives #1049 and #1033 end
+// TestOutpostTelnetSessionRejectsThenRecoversOnTheFix drives #1049 and #1033 end
 // to end over the real wire: the shipped newtron-nvp-telnet driver attached
-// to the simulator's panel with a wrong password. The node's session runs the
+// to the simulator's panel with a wrong password. The outpost's session runs the
 // login as its auth step and is refused: it reads rejected with the panel's
 // own text and endpoint-authenticated no, logs the rejection once, and dials
 // no more across many ticks. An operator's :retry dials exactly once more.
 // Fixing the credential reconnects within a tick: up, authenticated, and the
 // poll lands its value over the telnet session.
-func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
+func TestOutpostTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -64,8 +64,8 @@ func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	}
 	telnetPort := panelPort(t, engine.Devices()[0], "telnet")
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-t"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-t"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "enroll-token-telnet"
 	sum := sha256.Sum256([]byte(token))
@@ -82,9 +82,9 @@ func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create secret: %v", err)
 	}
-	comp, drv, nodeName := "panel-1", "newtron-nvp-telnet", "edge-t"
+	comp, drv, outpostName := "panel-1", "newtron-nvp-telnet", "edge-t"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(telnetPort), "login": "panel-login"},
 		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
@@ -103,7 +103,7 @@ func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-t", Token: token, HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond})
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-t", Token: token, HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 100 * time.Millisecond})
 		ran <- err
 	}()
 	defer func() {
@@ -130,9 +130,9 @@ func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 		t.Fatalf("%s on %s[%s] = %q, want %q", key, comp, ep.Name, latest(key), want)
 	}
 	countLogs := func(message string) int {
-		logs, err := gw.ListNodeLogs(ctx, "edge-t", time.Hour, 500)
+		logs, err := gw.ListOutpostLogs(ctx, "edge-t", time.Hour, 500)
 		if err != nil {
-			t.Fatalf("node logs: %v", err)
+			t.Fatalf("outpost logs: %v", err)
 		}
 		n := 0
 		for _, l := range logs {
@@ -158,7 +158,7 @@ func TestNodeTelnetSessionRejectsThenRecoversOnTheFix(t *testing.T) {
 	waitValue("session-reason", "auth: auth rejected")
 	waitValue("endpoint-authenticated", "no")
 	waitLogs("session rejected", 1)
-	// Twenty ticks later the node has not dialed again: still one rejection.
+	// Twenty ticks later the outpost has not dialed again: still one rejection.
 	time.Sleep(2 * time.Second)
 	waitLogs("session rejected", 1)
 

@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"net"
@@ -23,7 +23,7 @@ import (
 // keep running, so reachability stays observed while auth is rejected. A
 // changed fingerprint lifts the gate (an operator's :retry moves it too), and
 // so does the rung passing. The gate is published as endpoint-rejection and
-// carried back on the worklist, so a restarted node honors it.
+// carried back on the worklist, so a restarted outpost honors it.
 //
 // The gate is a set of reasons (#1650): that refusal is one reason, refused,
 // and the endpoint's own probe adds another, unreachable, on its second down
@@ -35,7 +35,7 @@ import (
 // its held sessions and re-arms its listeners, and only the probe reopens it.
 //
 // A component reached through another (a path dependency, #1652) adds a
-// third: upstream, which the node derives from the upstream's gate and not
+// third: upstream, which the outpost derives from the upstream's gate and not
 // from anything the endpoint did (upstream.go).
 
 // rung is a ladder rung a gate holds at.
@@ -102,7 +102,7 @@ type reasonKind string
 
 const (
 	// reasonUpstream is a path upstream's gate closed (#1652): derived on
-	// the node from the upstream endpoints' reasons, held while it is closed,
+	// the outpost from the upstream endpoints' reasons, held while it is closed,
 	// then waiting for the endpoint's own probe to read up.
 	reasonUpstream reasonKind = "upstream"
 	// reasonDisrupted is a disruptive command (a reboot) delivered to the
@@ -227,8 +227,8 @@ func hostOf(target string) string {
 // gate is one endpoint's held refusal. pinned and offered are a key
 // refusal's evidence (#1078), published with the gate and adopted with it.
 // adopted marks a gate taken from the worklist after a restart: its reason is
-// the node's placeholder, not the refusal's, so it is never published (#1110).
-// since is when this node recorded or adopted it.
+// the outpost's placeholder, not the refusal's, so it is never published (#1110).
+// since is when this outpost recorded or adopted it.
 type gate struct {
 	since       time.Time
 	fingerprint string
@@ -245,7 +245,7 @@ func (gt gate) value() string {
 	return rejection.Gate{Rung: string(gt.rung), Class: gt.class, Fingerprint: gt.fingerprint, PinnedKey: gt.pinned, OfferedKey: gt.offered}.String()
 }
 
-// gates is the node's gate per endpoint id, with the fingerprint each
+// gates is the outpost's gate per endpoint id, with the fingerprint each
 // endpoint is connected with now. held is each endpoint's refused reason;
 // others its every other reason, by kind; streak its probe's down verdicts in
 // a row; hosts the host its target names.
@@ -266,7 +266,7 @@ type gates struct {
 	topo     upstreamTopology
 	moved    map[string]bool
 	clock    func() time.Time
-	// upSeen is every endpoint whose probe has read up since the node
+	// upSeen is every endpoint whose probe has read up since the outpost
 	// started, which an adopted hold waits on (#1652).
 	upSeen map[string]bool
 	// routes resolves a preview to an endpoint's lane (#1249): transport
@@ -291,7 +291,7 @@ func newGates() *gates {
 }
 
 // topology takes the path dependencies off the worklist and derives the
-// upstream reasons anew. An adopted reason whose name the node did not know
+// upstream reasons anew. An adopted reason whose name the outpost did not know
 // takes it from the edges now.
 func (g *gates) topology(t upstreamTopology, now time.Time) {
 	g.mu.Lock()
@@ -376,7 +376,7 @@ func (g *gates) upstreamHeld(endpointID string) bool {
 
 // observe records the endpoint's fingerprint from the worklist and the
 // rejection published for it. A gate under another fingerprint lifts; a
-// published rejection under this one (a node restart) is adopted.
+// published rejection under this one (an outpost restart) is adopted.
 func (g *gates) observe(endpointID, fingerprint, published string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -393,7 +393,7 @@ func (g *gates) observe(endpointID, fingerprint, published string) {
 	}
 	if gt, ok := rejection.Parse(published); ok && gt.Fingerprint == fingerprint && fingerprint != "" {
 		g.held[endpointID] = gate{fingerprint: fingerprint, rung: rung(gt.Rung), class: gt.Class,
-			reason:  gt.Class + ": refused under this connection fingerprint before the node restarted",
+			reason:  gt.Class + ": refused under this connection fingerprint before the outpost restarted",
 			pinned:  gt.PinnedKey,
 			offered: gt.OfferedKey,
 			adopted: true,
@@ -401,8 +401,8 @@ func (g *gates) observe(endpointID, fingerprint, published string) {
 	}
 }
 
-// adoptUpstreamLocked takes the upstream reason a restarted node published
-// before it (#1652) as the endpoint's prior hold, the first time the node
+// adoptUpstreamLocked takes the upstream reason a restarted outpost published
+// before it (#1652) as the endpoint's prior hold, the first time the outpost
 // sees the endpoint: it stays held until its upstream's probes read up (the
 // upstream's own unreachable is re-earned, not adopted), then waits on its
 // own probe, so a restart never drops a hold unseen nor probes through a
@@ -801,7 +801,7 @@ func (g *gates) nextExpiry() (time.Time, bool) {
 
 // rejectionOf is the endpoint-rejection value the endpoint publishes now,
 // every reason its gate holds, and the reason beside it (#1110): the
-// refusal's own words, for a gate this node recorded; empty for a gate it
+// refusal's own words, for a gate this outpost recorded; empty for a gate it
 // adopted from the worklist, whose refusal it never saw, and when no refusal
 // holds (the value names every other reason itself).
 func (g *gates) rejectionOf(endpointID string) (value, why string) {

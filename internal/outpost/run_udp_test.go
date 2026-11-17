@@ -1,6 +1,6 @@
 //go:build linux
 
-package node_test
+package outpost_test
 
 import (
 	"encoding/json"
@@ -15,24 +15,24 @@ import (
 )
 
 // The line protocol as datagrams end to end (#1037): Postgres, the bus, a
-// real node, and the simulated panel's NVP datagram face, on ephemeral
+// real outpost, and the simulated panel's NVP datagram face, on ephemeral
 // ports, so two runs from one worktree never collide.
 
 // closedUDPPort is a port nothing in a test binds: privileged, so no
-// unprivileged process (a concurrent run's node or fixture) can hold it.
+// unprivileged process (a concurrent run's outpost or fixture) can hold it.
 const closedUDPPort = 1
 
-func (s *gateStack) attachUDP(comp, nodeName string, inputs map[string]string) *storage.Endpoint {
+func (s *gateStack) attachUDP(comp, outpostName string, inputs map[string]string) *storage.Endpoint {
 	s.t.Helper()
 	drv := "newtron-nvp-udp"
-	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &nodeName, Inputs: inputs, SecretRead: s.all, SecretBind: s.all}, s.all)
+	ep, err := s.gw.CreateEndpoint(s.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpostName, Inputs: inputs, SecretRead: s.all, SecretBind: s.all}, s.all)
 	if err != nil {
 		s.t.Fatalf("attach %s: %v", drv, err)
 	}
 	return ep
 }
 
-// commandExecuted waits for the node's execution report of cmd to land. The
+// commandExecuted waits for the outpost's execution report of cmd to land. The
 // command's status is not the wait: a push can settle it by observation while
 // the exchange is still retrying, and the late reply then lands as an
 // observation of its own. The report is written with that observation, after
@@ -74,7 +74,7 @@ func (s *gateStack) owner() string {
 	return owner.ID
 }
 
-// TestNodeUDPEndpointExchangesAndListensInDatagrams: the shipped
+// TestOutpostUDPEndpointExchangesAndListensInDatagrams: the shipped
 // newtron-nvp-udp driver attached to the panel's datagram face, which drops
 // 30% of datagrams each way. The request rung reads up through the loss
 // and lands its timing, the status poll lands through its retries, and a
@@ -82,7 +82,7 @@ func (s *gateStack) owner() string {
 // panel lands with no poll, a datagram from another source to the
 // endpoint's port is dropped, and a silent face and a closed port read not
 // responsive.
-func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
+func TestOutpostUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -91,12 +91,12 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	s.panel.SetDatagramLoss(30)
 	s.component("panel-1")
 	port := s.port("udp")
-	// No listen port: the node binds one of its own (a port picked and
-	// released here could be taken by a concurrent run before the node binds
+	// No listen port: the outpost binds one of its own (a port picked and
+	// released here could be taken by a concurrent run before the outpost binds
 	// it), and the test reads it back from the panel, which learned it from
 	// the subscribe.
 	ep := s.attachUDP("panel-1", "edge-udp", map[string]string{"host": s.ip, "port": fmt.Sprint(port)})
-	s.runNode("edge-udp")
+	s.runOutpost("edge-udp")
 
 	s.waitFor("panel-1", ep.Name, "endpoint-responsive", is("up"), "up, through the loss")
 	s.waitFor("panel-1", ep.Name, "endpoint-reachable", is("up"), "up: the request rung is the verdict")
@@ -159,14 +159,14 @@ func TestNodeUDPEndpointExchangesAndListensInDatagrams(t *testing.T) {
 	if len(sources) != 1 {
 		t.Fatalf("the panel holds sources %v, want the endpoint's one socket", sources)
 	}
-	node, err := net.ResolveUDPAddr("udp4", sources[0])
+	outpost, err := net.ResolveUDPAddr("udp4", sources[0])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := other.WriteToUDP([]byte("EVT INPUT usbc\r\n"), node); err != nil {
+	if _, err := other.WriteToUDP([]byte("EVT INPUT usbc\r\n"), outpost); err != nil {
 		t.Fatal(err)
 	}
-	// The node reads the datagram at once and a claim would ship on the next
+	// The outpost reads the datagram at once and a claim would ship on the next
 	// tick; the window is read through, not sampled once at its end.
 	for end := time.Now().Add(1500 * time.Millisecond); time.Now().Before(end); time.Sleep(25 * time.Millisecond) {
 		switch v := s.latest("panel-1", ep.Name, "video-input"); v {

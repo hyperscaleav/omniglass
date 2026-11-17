@@ -1,7 +1,7 @@
-// Package simnode is the simulator run mode (omniglass sim run): it runs
-// beside a node with that node's credential, pulls the devices placed on the
-// node, serves the ones it can through internal/sim, and reports their hits.
-package simnode
+// Package simoutpost is the simulator run mode (omniglass sim run): it runs
+// beside an outpost with that outpost's credential, pulls the devices placed on the
+// outpost, serves the ones it can through internal/sim, and reports their hits.
+package simoutpost
 
 import (
 	"bufio"
@@ -23,7 +23,7 @@ type Skip struct {
 // plan turns the server's device list into the snapshots to serve. A device
 // is served when a simulator profile serves its product (the profile of that
 // name, or a family profile that lists it) and its address is a loopback IP,
-// the addresses a simulator sharing the node's network can own. Snapshots
+// the addresses a simulator sharing the outpost's network can own. Snapshots
 // carry no state: each device starts from its profile's defaults, with its
 // product's overlay and an identity derived from its component id.
 func plan(devices []collection.SimDevice, profileFor func(string) (string, bool)) ([]sim.DeviceSnapshot, []Skip) {

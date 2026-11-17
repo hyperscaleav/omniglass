@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// The gate across the node's connection paths (#1056 ruling): held sessions,
+// The gate across the outpost's connection paths (#1056 ruling): held sessions,
 // the ssh probe's credential try (#1060), stateless polls and commands.
 
 type rejectionLog struct {
@@ -70,9 +70,9 @@ func TestSessionManagerPublishesItsRejection(t *testing.T) {
 	waitFor(t, func() bool { got := rej.all(); return len(got) > 0 && got[len(got)-1] == rejectionNone }, "none published once the new fingerprint passed")
 }
 
-// A restarted node honours the rejection the worklist carries back: zero
+// A restarted outpost honours the rejection the worklist carries back: zero
 // attempts while the fingerprint is unchanged, one as soon as it moves.
-func TestARestartedNodeMakesNoAttemptAgainstAnUnchangedFingerprint(t *testing.T) {
+func TestARestartedOutpostMakesNoAttemptAgainstAnUnchangedFingerprint(t *testing.T) {
 	t.Parallel()
 	dialer := &authFakeDialer{}
 	log := &transitionLog{}
@@ -86,7 +86,7 @@ func TestARestartedNodeMakesNoAttemptAgainstAnUnchangedFingerprint(t *testing.T)
 	}
 	time.Sleep(30 * time.Millisecond)
 	if n := dialer.connectCount(); n != 0 {
-		t.Fatalf("a restarted node made %d attempts against an unchanged fingerprint", n)
+		t.Fatalf("a restarted outpost made %d attempts against an unchanged fingerprint", n)
 	}
 	moved := withFingerprint(pollTaskWithLogin("p1", "ep-1", "wrong", 1), "fp-retried", "authenticated auth fp-1")
 	m.reconcile([]collection.TaskSpec{moved})
@@ -211,7 +211,7 @@ func TestRequestRungIsTheTransportProven(t *testing.T) {
 }
 
 // Review of the fingerprint slice, finding 1: the gate is republished until
-// the worklist reflects it (a lost publish must not leave a restarted node
+// the worklist reflects it (a lost publish must not leave a restarted outpost
 // without it), under a task from the current worklist (a re-derived driver
 // deletes the old task ids, and a sample under one is an orphan).
 func TestTheRejectionIsRepublishedUntilReflectedUnderACurrentTask(t *testing.T) {
@@ -254,7 +254,7 @@ func TestTheRejectionIsRepublishedUntilReflectedUnderACurrentTask(t *testing.T) 
 // #1110: a gate publishes its reason beside it, in the same publish, since
 // an endpoint with no held session has no session-reason to say why it was
 // refused, and the console's refusal notice reads it. A lost publish goes out
-// again with its reason. A gate a restarted node adopts from the worklist
+// again with its reason. A gate a restarted outpost adopts from the worklist
 // knows no reason of its own, so it publishes none rather than overwrite the
 // one on record, and a gate that lifts publishes none.
 func TestAGatePublishesItsReasonBesideIt(t *testing.T) {
@@ -282,7 +282,7 @@ func TestAGatePublishesItsReasonBesideIt(t *testing.T) {
 		t.Fatalf("a lifted gate published %+v, want none with no reason", got[len(got)-1])
 	}
 
-	// A restarted node adopts the gate; when the worklist stops reflecting
+	// A restarted outpost adopts the gate; when the worklist stops reflecting
 	// it, the adopted gate goes out again with no reason of its own.
 	restarted := &rejectionLog{}
 	m2 := newSessionManager(nil, sessionHooks{rejection: restarted.record})
@@ -302,7 +302,7 @@ func TestAGatePublishesItsReasonBesideIt(t *testing.T) {
 	}
 }
 
-// Review of #1110, finding 1: a restarted node's held session starts
+// Review of #1110, finding 1: a restarted outpost's held session starts
 // rejected under the gate it adopted, and the session's replayed transition
 // carries the adopted gate's placeholder refusal. Re-recorded as a fresh
 // refusal, the placeholder would go out as the gate's reason and overwrite
@@ -356,7 +356,7 @@ func TestAReprobedRefusalPublishesItsReasonUnderAnUnchangedGate(t *testing.T) {
 		return false
 	}, "the re-probed refusal's own words published beside the unchanged gate")
 	for _, p := range rej.each() {
-		if strings.Contains(p.reason, "before the node restarted") {
+		if strings.Contains(p.reason, "before the outpost restarted") {
 			t.Fatalf("the adopted gate's placeholder went out as its reason: %+v", p)
 		}
 	}

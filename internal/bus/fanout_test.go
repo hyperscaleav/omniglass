@@ -54,7 +54,7 @@ func TestPlanFanOut(t *testing.T) {
 	fanned := &ogv1.TelemetryBatch{
 		Metrics: []*ogv1.MetricSample{
 			{Name: "participant-count", Value: 3, Instance: "forged", Identity: room("zr-a")},
-			{Name: "tcp-connect-time", Value: 1, Identity: room("zr-a")}, // a node-probe key: refused
+			{Name: "tcp-connect-time", Value: 1, Identity: room("zr-a")}, // an outpost-probe key: refused
 			{Name: "participant-count", Value: 2, Identity: room("zr-x"), Ts: timestamppb.New(t0)},
 			{Name: "bad\x00name", Value: 2, Identity: room("zr-x")}, // no catalog key: counted, never named
 		},

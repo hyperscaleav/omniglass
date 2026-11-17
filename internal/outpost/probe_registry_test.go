@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -14,14 +14,14 @@ import (
 
 // The transport registry declares the keys each built transport's probe lands
 // (ProbeKeys, #1087), and the collection page renders that declaration. These
-// tests bind it to the probes: each is driven through the node's own dispatch
+// tests bind it to the probes: each is driven through the outpost's own dispatch
 // (collectProbe, then the verdict the collector rolls its samples into) against
 // a fake wire, once passing and once refused, and the keys that landed must be
 // the declared ones, no more (a probe that lands a key its entry omits) and no
 // fewer (an entry that declares a key no probe run lands).
 
 // probeRun is one drive of a probe: the runner holding the fake wire, the task,
-// and the node's session manager where the transport needs one (udp's socket).
+// and the outpost's session manager where the transport needs one (udp's socket).
 type probeRun struct {
 	runner   *collection.Runner
 	task     collection.TaskSpec
@@ -184,7 +184,7 @@ func landedKeys(t *testing.T, run probeRun) []string {
 	return keys
 }
 
-// probedTransports are the registry's built transports a node dials.
+// probedTransports are the registry's built transports an outpost dials.
 func probedTransports() []transport.Transport {
 	var out []transport.Transport
 	for _, tr := range transport.All() {

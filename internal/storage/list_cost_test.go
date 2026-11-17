@@ -406,8 +406,8 @@ func TestListRolesCostIsFlatInPageSize(t *testing.T) {
 // one union over the three kind-profile tables, one over the effective grants,
 // one over the group memberships. Four, and four is the ceiling here for the
 // same reason it is exact: the profile read is a UNION rather than a branch per
-// kind, so a directory of humans, service accounts and nodes costs what a
-// directory of humans costs, and this fixture holds a node beside its humans to
+// kind, so a directory of humans, service accounts and outposts costs what a
+// directory of humans costs, and this fixture holds an outpost beside its humans to
 // keep that honest rather than assumed.
 //
 // The fixture grows the grants and the group memberships with the page as well
@@ -428,11 +428,11 @@ func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
 	if _, err := gw.CreateGroupGrant(ctx, "", grp.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all); err != nil {
 		t.Fatalf("create group grant: %v", err)
 	}
-	// A node principal, so the page is not single-kind. A per-kind branch would
+	// An outpost principal, so the page is not single-kind. A per-kind branch would
 	// cost one more statement here than in a humans-only directory; the union
 	// costs the same, which is what makes the ceiling below a real number.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "probe-node"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "probe-outpost"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 
 	list := func() (int, error) {

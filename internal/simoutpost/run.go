@@ -1,4 +1,4 @@
-package simnode
+package simoutpost
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/sim"
 	"github.com/hyperscaleav/omniglass/internal/sim/impair"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
@@ -25,14 +25,14 @@ import (
 )
 
 // Config is the simulator run mode's configuration. It authenticates as the
-// node it runs beside, with that node's name and enrollment token.
+// outpost it runs beside, with that outpost's name and enrollment token.
 type Config struct {
 	ServerURL string
 	Name      string
 	Token     string
 	// PortOffset lifts the profile ports below 1024 by this much, so a
 	// simulator without the privilege to bind them can still serve (the
-	// node's endpoints must target the lifted ports); the rest stay put.
+	// outpost's endpoints must target the lifted ports); the rest stay put.
 	PortOffset int
 	// Poll is how often the simulator re-pulls its device list; FlushEvery
 	// how often it publishes the hits it saw. Zero takes the defaults.
@@ -46,7 +46,7 @@ type Config struct {
 	// Applier realizes impairments; nil is the kernel's (impair.Netlink).
 	Applier applier
 	// Pushers are the outside actors the lab's scenario declared on this
-	// node (#1743): each runs as an emulator device of its profile with a
+	// outpost (#1743): each runs as an emulator device of its profile with a
 	// push face, holding the token minted for its principal, and pushes the
 	// systems its grant names through POST /telemetry:push. None pushes
 	// nothing.
@@ -60,7 +60,7 @@ const (
 	defaultFlushEvery = time.Second
 )
 
-// Run serves the node's simulated devices until ctx is cancelled: it pulls
+// Run serves the outpost's simulated devices until ctx is cancelled: it pulls
 // the list, serves what it can, follows changes on every pull without a
 // restart, and publishes hits. A device it cannot serve is logged, not
 // fatal.
@@ -77,15 +77,15 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("sim: load catalog: %w", err)
 	}
-	// The simulator may start before its server (a sidecar beside a node
+	// The simulator may start before its server (a sidecar beside an outpost
 	// whose server is still coming up), so it keeps claiming until it can.
 	// A refused claim (a wrong name or token) is final; an unreachable
 	// server is retried.
-	var creds node.Credentials
+	var creds outpost.Credentials
 	var refused error
 	if err := retryUntil(ctx, time.Second, 30*time.Second, func() error {
-		c, err := node.Claim(ctx, cfg.ServerURL, cfg.Name, cfg.Token)
-		if errors.Is(err, node.ErrClaimRejected) {
+		c, err := outpost.Claim(ctx, cfg.ServerURL, cfg.Name, cfg.Token)
+		if errors.Is(err, outpost.ErrClaimRejected) {
 			refused = err
 			return nil
 		}

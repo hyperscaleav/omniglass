@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -33,7 +33,7 @@ type endpointParams struct {
 
 // collector runs one task when the dispatcher hands it a lane (#1634): a
 // driver poll or a reachability probe, publishing what it landed to the
-// node's own telemetry subject. The node stamps NO component identity: the
+// outpost's own telemetry subject. The outpost stamps NO component identity: the
 // Event carries only the task_id and the measurements; the server binds the
 // owner at ingest. A task that cannot be attempted (bad params, unresolved
 // host, no capability) lands a collection-failed story, never a false down,
@@ -42,7 +42,7 @@ type endpointParams struct {
 // schedule, the report and the spool hold their own locks.
 type collector struct {
 	out      *telemetrySpool
-	node     string
+	outpost  string
 	runner   *collection.Runner
 	sessions *sessionManager
 	sched    *pollSchedule
@@ -63,8 +63,8 @@ type collector struct {
 	faultseen map[string]string
 }
 
-func newCollector(out *telemetrySpool, node string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, report *collectionReport) *collector {
-	return &collector{out: out, node: node, runner: runner, sessions: sessions, sched: sched, report: report,
+func newCollector(out *telemetrySpool, outpost string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, report *collectionReport) *collector {
+	return &collector{out: out, outpost: outpost, runner: runner, sessions: sessions, sched: sched, report: report,
 		clock: time.Now, wake: func() {}, every: pollInterval, verdicts: map[string]string{}, faultseen: map[string]string{}}
 }
 
@@ -111,7 +111,7 @@ func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error
 	if refused {
 		// A stateless poll on a gated endpoint is not retried under the
 		// fingerprint it was refused under (#1056 ruling).
-		faults = []error{fmt.Errorf("node: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
+		faults = []error{fmt.Errorf("outpost: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
 		c.report.refused(task.EndpointID)
 	} else {
 		cost := measureRun(func() { dps, faults = collectDriverTask(ctx, c.runner, task, c.sessions) })
@@ -140,7 +140,7 @@ func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error
 	if current != c.faultseen[task.ID] {
 		for _, f := range faults {
 			slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
-			if pubErr := publishCollectionFailed(c.out, c.node, task.ID, f); pubErr != nil {
+			if pubErr := publishCollectionFailed(c.out, c.outpost, task.ID, f); pubErr != nil {
 				c.memMu.Unlock()
 				return pubErr
 			}
@@ -157,7 +157,7 @@ func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error
 		slog.Info("payload time ahead of arrival, landed at arrival", "facility", "collection", "task", task.ID, "count", n, "window", driver.ClampWindow.String())
 	}
 	if landed := c.sched.changed(task.ID, dps); len(landed) > 0 {
-		if err := publishBatch(c.out, c.node, task.ID, landed); err != nil {
+		if err := publishBatch(c.out, c.outpost, task.ID, landed); err != nil {
 			return err
 		}
 	}
@@ -180,13 +180,13 @@ func (c *collector) runProbe(ctx context.Context, task collection.TaskSpec) erro
 	dps, err := collectProbe(ctx, c.runner, task, c.sessions)
 	pings := <-pinged // joined here, before any path leaves
 	if err != nil {
-		// A skipped task is the node's own operational story AND a
+		// A skipped task is the outpost's own operational story AND a
 		// collection fact (#812): log it as a self-log, and land a
 		// collection-failed event naming the task, so the failure is visible
-		// on the component's timeline rather than only in the node's own
+		// on the component's timeline rather than only in the outpost's own
 		// logs. Never a false-down state sample.
 		slog.Warn("task skipped", "facility", "collection", "task", task.ID, "error", err.Error())
-		return publishCollectionFailed(c.out, c.node, task.ID, err)
+		return publishCollectionFailed(c.out, c.outpost, task.ID, err)
 	}
 	if dps == nil {
 		return nil // an unwired transport: nothing to publish
@@ -201,20 +201,20 @@ func (c *collector) runProbe(ctx context.Context, task collection.TaskSpec) erro
 		c.wake()
 	}
 	// Compute and, on a transition only, append the endpoint reachability
-	// verdict as a state sample. The node remembers the last verdict per task
+	// verdict as a state sample. The outpost remembers the last verdict per task
 	// and emits endpoint-reachable only on a flip or first observation, so
 	// the state series is transition-only, not one row per run. The key is
 	// the task id, not the endpoint name: endpoint names are unique only per
-	// component, so a node routinely probes two components' endpoints that
+	// component, so an outpost routinely probes two components' endpoints that
 	// share a friendly name (the default is the protocol), and a name-keyed
-	// map would suppress the second one's verdict. The task id is node-unique
+	// map would suppress the second one's verdict. The task id is outpost-unique
 	// (a content hash over the endpoint). The property lane's transition
-	// guard, held in the ingest's insert, is the net for a node restart.
+	// guard, held in the ingest's insert, is the net for an outpost restart.
 	c.memMu.Lock()
 	dps = appendVerdict(dps, task.ID, c.verdicts)
 	c.memMu.Unlock()
 	dps = append(dps, pings...)
-	return publishBatch(c.out, c.node, task.ID, dps)
+	return publishBatch(c.out, c.outpost, task.ID, dps)
 }
 
 // bookPollRun books a poll's next run from what its run landed. A run that
@@ -281,9 +281,9 @@ func clampedCount(dps []collection.Sample) int {
 }
 
 // publishBatch maps samples to a per-lane task group and adds it to the
-// spool's next batch (#1582), which ships on the node's own telemetry subject
+// spool's next batch (#1582), which ships on the outpost's own telemetry subject
 // once the stream acks it, holding it until then (#453). The batch carries the
-// node's id, so the node argument is the call sites' and goes unused.
+// outpost's id, so the outpost argument is the call sites' and goes unused.
 func publishBatch(out *telemetrySpool, _, taskID string, dps []collection.Sample) error {
 	return out.add(groupFor(taskID, dps))
 }
@@ -303,25 +303,25 @@ func publishPushed(out *telemetrySpool, taskID string, dps []collection.Sample) 
 // collectDriverTask parses one derived driver poll and runs it: the baked
 // function from the task spec, the target from the endpoint params, the
 // unsealed secret inputs from the worklist, and the endpoint's held session
-// when the node holds one (#816), which the poll borrows instead of dialing.
+// when the outpost holds one (#816), which the poll borrows instead of dialing.
 // Faults are the collection-failed stories; a parse fault covers the whole
 // task.
 func collectDriverTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, []error) {
 	fn, err := driver.ParseBaked(task.Spec)
 	if err != nil {
-		return nil, []error{fmt.Errorf("node: task %s: %w", task.ID, err)}
+		return nil, []error{fmt.Errorf("outpost: task %s: %w", task.ID, err)}
 	}
 	var p endpointParams
 	if len(task.EndpointParams) > 0 {
 		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
-			return nil, []error{fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)}
+			return nil, []error{fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)}
 		}
 	}
 	var timeout time.Duration
 	if p.Timeout != "" {
 		d, err := time.ParseDuration(p.Timeout)
 		if err != nil {
-			return nil, []error{fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)}
+			return nil, []error{fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)}
 		}
 		timeout = d
 	}
@@ -344,7 +344,7 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		if task.Transport == "https" {
 			trust, err := tlsTrustOf(p)
 			if err != nil {
-				return nil, []error{fmt.Errorf("node: task %s: %w", task.ID, err)}
+				return nil, []error{fmt.Errorf("outpost: task %s: %w", task.ID, err)}
 			}
 			if trust.Mode == driver.TLSModePin {
 				trust.Pin = sessions.certPinOf(task)
@@ -356,7 +356,7 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 		pt.Datagram = sessions.datagramOf(task.EndpointID)
 		pt.Retries = fn.Request.RetriesOr(driver.DefaultPollRetries)
 		if pt.Datagram == nil {
-			return nil, []error{fmt.Errorf("node: task %s: no udp socket is bound for the endpoint: %s", task.ID, sessions.datagramRefusal(task.EndpointID))}
+			return nil, []error{fmt.Errorf("outpost: task %s: no udp socket is bound for the endpoint: %s", task.ID, sessions.datagramRefusal(task.EndpointID))}
 		}
 	}
 	return runner.CollectDriverPoll(ctx, pt)
@@ -366,7 +366,7 @@ func collectDriverTask(ctx context.Context, runner *collection.Runner, task coll
 // samples and appends it (a state sample carrying up/down) only when it
 // differs from the last verdict remembered for that task, or is the first
 // observation. It records the emitted verdict in verdicts (keyed by the
-// node-unique task id, since endpoint names collide across components) so the
+// outpost-unique task id, since endpoint names collide across components) so the
 // next tick can tell a flip from a repeat. When the probe produced no
 // reachability metric (nothing to judge) or the verdict is unchanged, dps is
 // returned untouched.
@@ -464,7 +464,7 @@ func collectHTTPSProbe(ctx context.Context, runner *collection.Runner, task coll
 	_ = json.Unmarshal(task.EndpointParams, &p) // parseTCPTask has read it already
 	trust, err := tlsTrustOf(p)
 	if err != nil {
-		return nil, fmt.Errorf("node: task %s: %w", task.ID, err)
+		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, err)
 	}
 	if trust.Mode == driver.TLSModePin {
 		trust.Pin = sessions.certPinOf(task)
@@ -532,7 +532,7 @@ func collectTLSProbe(ctx context.Context, runner *collection.Runner, task collec
 	_ = json.Unmarshal(task.EndpointParams, &p) // parseTCPTask has read it already
 	trust, err := tlsTrustOf(p)
 	if err != nil {
-		return nil, fmt.Errorf("node: task %s: %w", task.ID, err)
+		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, err)
 	}
 	if trust.Mode == driver.TLSModePin {
 		trust.Pin = sessions.certPinOf(task)
@@ -561,7 +561,7 @@ func collectRequestRung(ctx context.Context, runner *collection.Runner, task col
 		return nil, err
 	}
 	if runner.Line == nil {
-		return nil, fmt.Errorf("node: task %s: no line client for the request rung", task.ID)
+		return nil, fmt.Errorf("outpost: task %s: no line client for the request rung", task.ID)
 	}
 	now := time.Now().UTC()
 	answer, xerr := runner.Line.Exchange(ctx, t.Target, req.Line, t.Timeout)
@@ -595,7 +595,7 @@ const informationalPingTimeout = 500 * time.Millisecond
 // pingInformational lands the ladder's ping (ADR-0158) beside an endpoint's
 // probe: icmp-reachable and its rtt, informational only. It is appended after
 // the verdict is judged, so a component that blocks ping never reads down
-// for it; a node that cannot ping lands nothing.
+// for it; an outpost that cannot ping lands nothing.
 func pingInformational(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, dps []collection.Sample) []collection.Sample {
 	host, ok := pingHost(runner, task)
 	if !ok {
@@ -621,7 +621,7 @@ func pingInformational(ctx context.Context, runner *collection.Runner, task coll
 }
 
 // collectTask dispatches a task to its probe by transport and returns the
-// produced samples. A nil, nil return is a transport this node does not
+// produced samples. A nil, nil return is a transport this outpost does not
 // run (skip, nothing to publish); an error is an unusable config or an
 // inconclusive probe (skip, no false down). Since #812 the ladder climbs to
 // layer 7: http issues a real request and ssh runs a real key exchange, each
@@ -674,17 +674,17 @@ func parseTCPTask(task collection.TaskSpec) (collection.TCPTask, error) {
 	var p endpointParams
 	if len(task.EndpointParams) > 0 {
 		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
-			return collection.TCPTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
+			return collection.TCPTask{}, fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)
 		}
 	}
 	if p.Target == "" {
-		return collection.TCPTask{}, fmt.Errorf("node: task %s: empty tcp target", task.ID)
+		return collection.TCPTask{}, fmt.Errorf("outpost: task %s: empty tcp target", task.ID)
 	}
 	var timeout time.Duration
 	if p.Timeout != "" {
 		d, err := time.ParseDuration(p.Timeout)
 		if err != nil {
-			return collection.TCPTask{}, fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+			return collection.TCPTask{}, fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
 		}
 		timeout = d
 	}
@@ -697,17 +697,17 @@ func parseICMPTask(task collection.TaskSpec) (collection.ICMPTask, error) {
 	var p endpointParams
 	if len(task.EndpointParams) > 0 {
 		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
-			return collection.ICMPTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
+			return collection.ICMPTask{}, fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)
 		}
 	}
 	if p.Target == "" {
-		return collection.ICMPTask{}, fmt.Errorf("node: task %s: empty icmp target", task.ID)
+		return collection.ICMPTask{}, fmt.Errorf("outpost: task %s: empty icmp target", task.ID)
 	}
 	var timeout time.Duration
 	if p.Timeout != "" {
 		d, err := time.ParseDuration(p.Timeout)
 		if err != nil {
-			return collection.ICMPTask{}, fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+			return collection.ICMPTask{}, fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
 		}
 		timeout = d
 	}
@@ -746,7 +746,7 @@ func groupFor(taskID string, dps []collection.Sample) *ogv1.TaskGroup {
 		case driver.LaneLog:
 			// A component's log line the task collected (#1145): its own
 			// lane, so ingest lands it on the task's component, never as the
-			// node's self-log.
+			// outpost's self-log.
 			ev.TaskLogs = append(ev.TaskLogs, &ogv1.LogLine{
 				Message:    strings.ToValidUTF8(d.Text, "\uFFFD"),
 				Severity:   d.Severity,
@@ -797,9 +797,9 @@ func validLabels(labels map[string]string) map[string]string {
 // publishCollectionFailed lands the collection-failed occurrence for a task
 // whose config or payload could not be used: the event carries the reason as
 // its message and the task identity in its payload, so a failing check is a
-// fact on the component's timeline, never only a line in the node's own logs.
-// It rides the tick's batch as the task's group (#1582); the node argument is
-// the call sites' and goes unused, the batch carrying the node's id.
+// fact on the component's timeline, never only a line in the outpost's own logs.
+// It rides the tick's batch as the task's group (#1582); the outpost argument is
+// the call sites' and goes unused, the batch carrying the outpost's id.
 func publishCollectionFailed(out *telemetrySpool, _, taskID string, cause error) error {
 	return out.add(collectionFailedGroup(taskID, cause))
 }
@@ -827,17 +827,17 @@ func parseHTTPTask(task collection.TaskSpec) (collection.HTTPTask, error) {
 	var p endpointParams
 	if len(task.EndpointParams) > 0 {
 		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
-			return collection.HTTPTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
+			return collection.HTTPTask{}, fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)
 		}
 	}
 	if p.Target == "" {
-		return collection.HTTPTask{}, fmt.Errorf("node: task %s: empty http target", task.ID)
+		return collection.HTTPTask{}, fmt.Errorf("outpost: task %s: empty http target", task.ID)
 	}
 	var timeout time.Duration
 	if p.Timeout != "" {
 		d, err := time.ParseDuration(p.Timeout)
 		if err != nil {
-			return collection.HTTPTask{}, fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+			return collection.HTTPTask{}, fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
 		}
 		timeout = d
 	}
@@ -851,17 +851,17 @@ func parseSSHTask(task collection.TaskSpec) (collection.SSHTask, error) {
 	var p endpointParams
 	if len(task.EndpointParams) > 0 {
 		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
-			return collection.SSHTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
+			return collection.SSHTask{}, fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)
 		}
 	}
 	if p.Target == "" {
-		return collection.SSHTask{}, fmt.Errorf("node: task %s: empty ssh target", task.ID)
+		return collection.SSHTask{}, fmt.Errorf("outpost: task %s: empty ssh target", task.ID)
 	}
 	var timeout time.Duration
 	if p.Timeout != "" {
 		d, err := time.ParseDuration(p.Timeout)
 		if err != nil {
-			return collection.SSHTask{}, fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+			return collection.SSHTask{}, fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
 		}
 		timeout = d
 	}

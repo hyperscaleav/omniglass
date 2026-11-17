@@ -151,7 +151,7 @@ var retiredIdentifiers = []BannedTerm{
 	},
 	{
 		Pattern:     regexp.MustCompile(`--mode[ =]node`),
-		Replacement: "omniglass node run",
+		Replacement: "omniglass outpost run",
 		Origin:      "ADR-0058",
 	},
 	{

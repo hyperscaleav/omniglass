@@ -15,7 +15,7 @@ import (
 // it runs, and the values tasks of many endpoints share (a driver's task
 // specs, its session block, a credential) ride once for the reply, in
 // dictionaries a task names by index. A flat reply repeated all of them on
-// every task, and a headquarters node's reply outgrew the bus's payload limit.
+// every task, and a headquarters outpost's reply outgrew the bus's payload limit.
 type worklistWire struct {
 	Endpoints        []endpointWire                 `json:"endpoints"`
 	Specs            []json.RawMessage              `json:"specs,omitempty"`
@@ -172,7 +172,7 @@ func entry[T any](values []T, ref int, what, task string) (T, error) {
 // ungroupWorklist is the reply a wire form carries, its tasks in id order
 // (the order the server builds them in). Tasks of one endpoint share its
 // params, ladder and upstreams, and tasks naming one dictionary entry share
-// it: the node reads a task, never writes one.
+// it: the outpost reads a task, never writes one.
 func ungroupWorklist(in worklistWire) (WorklistReply, error) {
 	if in.Endpoints == nil {
 		// A reply with no endpoints list is not this wire (a flat reply from a

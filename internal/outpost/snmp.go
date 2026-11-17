@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"context"
@@ -32,11 +32,11 @@ func collectSNMPRung(ctx context.Context, runner *collection.Runner, task collec
 	var p endpointParams
 	if len(task.EndpointParams) > 0 {
 		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
-			return nil, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
+			return nil, fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)
 		}
 	}
 	if p.Target == "" {
-		return nil, fmt.Errorf("node: task %s: empty snmp target", task.ID)
+		return nil, fmt.Errorf("outpost: task %s: empty snmp target", task.ID)
 	}
 	now := time.Now().UTC()
 	authenticated := func(verdict, reason string) collection.Sample {
@@ -58,16 +58,16 @@ func collectSNMPRung(ctx context.Context, runner *collection.Runner, task collec
 	}
 	community, ok := task.Secrets["community"]["community"]
 	if !ok || community == "" {
-		return nil, fmt.Errorf("node: task %s: %w", task.ID, errNoCommunity)
+		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, errNoCommunity)
 	}
 	if runner.SNMP == nil {
-		return nil, fmt.Errorf("node: task %s: no snmp getter wired", task.ID)
+		return nil, fmt.Errorf("outpost: task %s: no snmp getter wired", task.ID)
 	}
 	var timeout time.Duration
 	if p.Timeout != "" {
 		d, err := time.ParseDuration(p.Timeout)
 		if err != nil {
-			return nil, fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+			return nil, fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
 		}
 		timeout = d
 	}
@@ -85,11 +85,11 @@ func collectSNMPRung(ctx context.Context, runner *collection.Runner, task collec
 			authenticated("no", terr.Error())}, nil
 	}
 	if ctx.Err() != nil {
-		return nil, fmt.Errorf("node: task %s: %w", task.ID, ctx.Err())
+		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, ctx.Err())
 	}
 	reason, ok := collection.Classify(err)
 	if !ok {
-		return nil, fmt.Errorf("node: task %s: %w", task.ID, err)
+		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, err)
 	}
 	return []collection.Sample{responsive("down", string(reason))}, nil
 }

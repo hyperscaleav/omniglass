@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"encoding/json"
@@ -13,10 +13,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/redact"
 )
 
-// What a node collects never carries the credentials it collected with: a
+// What an outpost collects never carries the credentials it collected with: a
 // component that echoes its password back (in a property, a label, an
 // identity, an event, a log line, or a failure's reason) has the echo
-// masked on the node, before the group is queued, so it is never on the
+// masked on the outpost, before the group is queued, so it is never on the
 // stream, never stored and never served. Every lane rides the spool, so the
 // spool is the one place that masks.
 
@@ -70,7 +70,7 @@ func shippedText(t *testing.T, pub *capturePublisher) string {
 func TestSpoolMasksATasksSecretsOnEveryLane(t *testing.T) {
 	t.Parallel()
 	pub := &capturePublisher{}
-	s := newTelemetrySpool("og.v1.node.telemetry", "edge", pub.publish)
+	s := newTelemetrySpool("og.v1.outpost.telemetry", "edge", pub.publish)
 	s.setMasks([]collection.TaskSpec{echoingTask("task-1")})
 
 	if err := s.add(groupFor("task-1", echoingSamples())); err != nil {
@@ -110,7 +110,7 @@ func TestSpoolMasksATasksSecretsOnEveryLane(t *testing.T) {
 func TestSpoolMasksOnlyTheTasksOwnSecrets(t *testing.T) {
 	t.Parallel()
 	pub := &capturePublisher{}
-	s := newTelemetrySpool("og.v1.node.telemetry", "edge", pub.publish)
+	s := newTelemetrySpool("og.v1.outpost.telemetry", "edge", pub.publish)
 	s.setMasks([]collection.TaskSpec{echoingTask("task-2")})
 
 	if err := s.add(groupFor("task-1", echoingSamples())); err != nil {

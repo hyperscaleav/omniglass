@@ -3,7 +3,7 @@
 // The simulator serves on 127.x addresses beyond 127.0.0.1, which Linux
 // treats as local without configuration.
 
-package node_test
+package outpost_test
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/hyperscaleav/omniglass/internal/bus"
-	"github.com/hyperscaleav/omniglass/internal/node"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim"
@@ -41,20 +41,20 @@ type failingWorklist struct {
 	failFirst *atomic.Int64
 }
 
-func (s failingWorklist) NodeWorklist(ctx context.Context, name string) (storage.Worklist, error) {
+func (s failingWorklist) OutpostWorklist(ctx context.Context, name string) (storage.Worklist, error) {
 	if s.down.Load() || s.failFirst.Add(-1) >= 0 {
-		return storage.Worklist{}, errors.New("storage: node worklist: connection reset by peer")
+		return storage.Worklist{}, errors.New("storage: outpost worklist: connection reset by peer")
 	}
-	return s.PG.NodeWorklist(ctx, name)
+	return s.PG.OutpostWorklist(ctx, name)
 }
 
-// enrolledNode creates node name on gw with an enrollment token, and returns
+// enrolledOutpost creates outpost name on gw with an enrollment token, and returns
 // the token.
-func enrolledNode(t *testing.T, ctx context.Context, gw *storage.PG, name string) string {
+func enrolledOutpost(t *testing.T, ctx context.Context, gw *storage.PG, name string) string {
 	t.Helper()
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: name}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	token := "enroll-token-" + name
 	sum := sha256.Sum256([]byte(token))
@@ -76,13 +76,13 @@ func pollUntil(t *testing.T, d time.Duration, what string, cond func() bool) {
 	}
 }
 
-// nodeLogged reports whether one of node's own log lines on gw has message
+// outpostLogged reports whether one of outpost's own log lines on gw has message
 // and, when not empty, an attribute containing detail.
-func nodeLogged(t *testing.T, ctx context.Context, gw *storage.PG, nodeName, message, detail string) bool {
+func outpostLogged(t *testing.T, ctx context.Context, gw *storage.PG, outpostName, message, detail string) bool {
 	t.Helper()
-	logs, err := gw.ListNodeLogs(ctx, nodeName, time.Hour, 500)
+	logs, err := gw.ListOutpostLogs(ctx, outpostName, time.Hour, 500)
 	if err != nil {
-		t.Fatalf("node logs: %v", err)
+		t.Fatalf("outpost logs: %v", err)
 	}
 	for _, l := range logs {
 		if l.Message == message && strings.Contains(string(l.Attributes), detail) {
@@ -92,10 +92,10 @@ func nodeLogged(t *testing.T, ctx context.Context, gw *storage.PG, nodeName, mes
 	return false
 }
 
-// A node whose first worklist pulls fail does not exit (#1577): it retries on
+// An outpost whose first worklist pulls fail does not exit (#1577): it retries on
 // backoff, takes the worklist once the server can read it, and says what it
 // went through in its own logs.
-func TestANodeWhoseFirstPullsFailRetriesAndRuns(t *testing.T) {
+func TestAOutpostWhoseFirstPullsFailRetriesAndRuns(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -109,7 +109,7 @@ func TestANodeWhoseFirstPullsFailRetriesAndRuns(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	token := enrolledNode(t, ctx, gw, "edge-r")
+	token := enrolledOutpost(t, ctx, gw, "edge-r")
 
 	var down atomic.Bool
 	var failFirst atomic.Int64
@@ -125,20 +125,20 @@ func TestANodeWhoseFirstPullsFailRetriesAndRuns(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-r", Token: token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-r", Token: token,
 			HeartbeatEvery: 200 * time.Millisecond, ProbeEvery: 200 * time.Millisecond, WorklistEvery: time.Hour})
 		ran <- err
 	}()
 	defer func() {
 		stop()
 		if err := <-ran; err != nil {
-			t.Errorf("node run: %v", err)
+			t.Errorf("outpost run: %v", err)
 		}
 	}()
 
 	// Two refused pulls, then one served: the backoff waits are under 1 s
 	// and under 2 s.
-	pollUntil(t, 10*time.Second, fmt.Sprintf("the node never got a worklist: %+v", srv.WorklistCounts()), func() bool {
+	pollUntil(t, 10*time.Second, fmt.Sprintf("the outpost never got a worklist: %+v", srv.WorklistCounts()), func() bool {
 		return srv.WorklistCounts().Served >= 1
 	})
 	if got := srv.WorklistCounts().ReadFailed; got != 2 {
@@ -147,20 +147,20 @@ func TestANodeWhoseFirstPullsFailRetriesAndRuns(t *testing.T) {
 	select {
 	case err := <-ran:
 		ran <- err // the deferred wait reads it
-		t.Fatalf("the node exited: %v", err)
+		t.Fatalf("the outpost exited: %v", err)
 	default:
 	}
-	// The node's own logs carry each retry and the server's reason.
-	pollUntil(t, 5*time.Second, "no first-pull retry in the node's logs", func() bool {
-		return nodeLogged(t, ctx, gw, "edge-r", "first worklist pull failed, retrying", "worklist read failed")
+	// The outpost's own logs carry each retry and the server's reason.
+	pollUntil(t, 5*time.Second, "no first-pull retry in the outpost's logs", func() bool {
+		return outpostLogged(t, ctx, gw, "edge-r", "first worklist pull failed, retrying", "worklist read failed")
 	})
 }
 
-// A transient storage error during a pull reaches the node as an error, not
-// as an empty worklist (#1577): the node keeps its last one, its held session
+// A transient storage error during a pull reaches the outpost as an error, not
+// as an empty worklist (#1577): the outpost keeps its last one, its held session
 // stays up on the device and in the session-state series, and the pull
 // recovers once storage does.
-func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
+func TestATransientStorageErrorLeavesTheOutpostsSessionsUntouched(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server + the simulator")
@@ -190,13 +190,13 @@ func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
 	}
 	panel := engine.Devices()[0]
 
-	token := enrolledNode(t, ctx, gw, "edge-t")
+	token := enrolledOutpost(t, ctx, gw, "edge-t")
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-t"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	comp, drv, nodeName := "panel-t", "newtron-panel-nvp", "edge-t"
+	comp, drv, outpostName := "panel-t", "newtron-panel-nvp", "edge-t"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &nodeName,
+		Driver: &drv, Component: &comp, Outpost: &outpostName,
 		Inputs:     map[string]string{"host": panelIP, "port": fmt.Sprint(panelPort(t, panel, "tcp"))},
 		SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
@@ -217,14 +217,14 @@ func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: nodeName, Token: token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: outpostName, Token: token,
 			HeartbeatEvery: 200 * time.Millisecond, ProbeEvery: 200 * time.Millisecond, WorklistEvery: 200 * time.Millisecond})
 		ran <- err
 	}()
 	defer func() {
 		stop()
 		if err := <-ran; err != nil {
-			t.Errorf("node run: %v", err)
+			t.Errorf("outpost run: %v", err)
 		}
 	}()
 
@@ -287,19 +287,19 @@ func TestATransientStorageErrorLeavesTheNodesSessionsUntouched(t *testing.T) {
 	if got := strings.Join(story, ","); got != "establishing,up" {
 		t.Errorf("session-state series %s, want establishing,up", got)
 	}
-	// The node read the refusal as an error naming the server's reason, not
+	// The outpost read the refusal as an error naming the server's reason, not
 	// a timeout.
-	pollUntil(t, 5*time.Second, "no failed pull naming the read failure in the node's logs", func() bool {
-		return nodeLogged(t, ctx, gw, nodeName, "worklist pull failed, the node keeps its last worklist", "worklist read failed")
+	pollUntil(t, 5*time.Second, "no failed pull naming the read failure in the outpost's logs", func() bool {
+		return outpostLogged(t, ctx, gw, outpostName, "worklist pull failed, the outpost keeps its last worklist", "worklist read failed")
 	})
 }
 
-// A node whose worklist pulls are refused runs its last worklist, and says so
+// An outpost whose worklist pulls are refused runs its last worklist, and says so
 // (#1868): each report window lands worklist-pull-loss-ratio on its platform
 // component, 1 while every pull is refused and 0 again once one is served.
 // edge-hq's worklist outgrew the bus's payload ceiling and every pull after
 // its first was refused while each other loss ratio read 0.
-func TestANodeRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
+func TestAOutpostRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -313,7 +313,7 @@ func TestANodeRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	token := enrolledNode(t, ctx, gw, "edge-w")
+	token := enrolledOutpost(t, ctx, gw, "edge-w")
 
 	var down atomic.Bool
 	var failFirst atomic.Int64
@@ -328,7 +328,7 @@ func TestANodeRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-w", Token: token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-w", Token: token,
 			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 200 * time.Millisecond,
 			WorklistEvery: 200 * time.Millisecond, ReportEvery: 500 * time.Millisecond})
 		ran <- err
@@ -336,13 +336,13 @@ func TestANodeRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
 	defer func() {
 		stop()
 		if err := <-ran; err != nil {
-			t.Errorf("node run: %v", err)
+			t.Errorf("outpost run: %v", err)
 		}
 	}()
 
 	var component string
 	pollUntil(t, 10*time.Second, "edge-w never got a platform component", func() bool {
-		n, err := gw.GetNode(ctx, "edge-w", scope.Set{All: true})
+		n, err := gw.GetOutpost(ctx, "edge-w", scope.Set{All: true})
 		if err != nil || n.PlatformComponentID == nil {
 			return false
 		}
@@ -359,20 +359,20 @@ func TestANodeRunningAStaleWorklistReportsItsPullLoss(t *testing.T) {
 		}
 		return m.Value
 	}
-	pollUntil(t, 10*time.Second, "a node served its worklist never read 0", func() bool { return loss() == 0 })
+	pollUntil(t, 10*time.Second, "an outpost served its worklist never read 0", func() bool { return loss() == 0 })
 
 	down.Store(true)
-	pollUntil(t, 15*time.Second, "a node refused every pull never read 1", func() bool { return loss() == 1 })
+	pollUntil(t, 15*time.Second, "an outpost refused every pull never read 1", func() bool { return loss() == 1 })
 
 	down.Store(false)
-	pollUntil(t, 15*time.Second, "a node served again never read 0", func() bool { return loss() == 0 })
+	pollUntil(t, 15*time.Second, "an outpost served again never read 0", func() bool { return loss() == 0 })
 }
 
-// A node the server refuses its first worklist is not silent while it
+// An outpost the server refuses its first worklist is not silent while it
 // retries (#1882): it heartbeats, so it reads as alive, and its account of
 // itself reports every refused pull as worklist pull loss, 1 while nothing is
 // served. Once a pull is served it takes the worklist and the loss reads 0.
-func TestANodeRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
+func TestAOutpostRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -386,7 +386,7 @@ func TestANodeRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	token := enrolledNode(t, ctx, gw, "edge-f")
+	token := enrolledOutpost(t, ctx, gw, "edge-f")
 
 	var down atomic.Bool
 	var failFirst atomic.Int64
@@ -402,7 +402,7 @@ func TestANodeRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 	runCtx, stop := context.WithCancel(ctx)
 	ran := make(chan error, 1)
 	go func() {
-		_, err := node.Run(runCtx, node.Config{ServerURL: apiSrv.URL, Name: "edge-f", Token: token,
+		_, err := outpost.Run(runCtx, outpost.Config{ServerURL: apiSrv.URL, Name: "edge-f", Token: token,
 			HeartbeatEvery: 100 * time.Millisecond, ProbeEvery: 200 * time.Millisecond,
 			WorklistEvery: 200 * time.Millisecond, ReportEvery: 500 * time.Millisecond})
 		ran <- err
@@ -410,21 +410,21 @@ func TestANodeRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 	defer func() {
 		stop()
 		if err := <-ran; err != nil {
-			t.Errorf("node run: %v", err)
+			t.Errorf("outpost run: %v", err)
 		}
 	}()
 
 	var component string
 	pollUntil(t, 10*time.Second, "edge-f never got a platform component", func() bool {
-		n, err := gw.GetNode(ctx, "edge-f", scope.Set{All: true})
+		n, err := gw.GetOutpost(ctx, "edge-f", scope.Set{All: true})
 		if err != nil || n.PlatformComponentID == nil {
 			return false
 		}
 		component = *n.PlatformComponentID
 		return true
 	})
-	pollUntil(t, 10*time.Second, "a node refused its first worklist never heartbeat", func() bool {
-		n, err := gw.GetNode(ctx, "edge-f", scope.Set{All: true})
+	pollUntil(t, 10*time.Second, "an outpost refused its first worklist never heartbeat", func() bool {
+		n, err := gw.GetOutpost(ctx, "edge-f", scope.Set{All: true})
 		return err == nil && n.LastHeartbeatAt != nil
 	})
 	loss := func() float64 {
@@ -437,7 +437,7 @@ func TestANodeRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 		}
 		return m.Value
 	}
-	pollUntil(t, 10*time.Second, "a node refused every first pull never read 1", func() bool { return loss() == 1 })
+	pollUntil(t, 10*time.Second, "an outpost refused every first pull never read 1", func() bool { return loss() == 1 })
 	if got := srv.WorklistCounts().Served; got != 0 {
 		t.Fatalf("%d worklists served while the read was down", got)
 	}
@@ -450,5 +450,5 @@ func TestANodeRefusedItsFirstWorklistReportsItsPullLoss(t *testing.T) {
 	// The first pull's backoff may have reached its 30 s cap by now, so the
 	// served pull can land up to a full step after the flip.
 	down.Store(false)
-	pollUntil(t, 45*time.Second, "a node served at last never read 0", func() bool { return loss() == 0 })
+	pollUntil(t, 45*time.Second, "an outpost served at last never read 0", func() bool { return loss() == 0 })
 }

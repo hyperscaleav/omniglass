@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"sync"
@@ -86,7 +86,7 @@ func (p *lanePool) submit(key string, class laneClass, fn func()) {
 
 // offer queues fn on lane key as submit does, unless it is operator work
 // and the operator queue is at its cap: then it is refused, counted, and
-// false. A nil pool (a node run with no dispatcher) runs fn at once on its
+// false. A nil pool (an outpost run with no dispatcher) runs fn at once on its
 // own goroutine.
 func (p *lanePool) offer(key string, class laneClass, fn func()) bool {
 	if p == nil {
@@ -188,7 +188,7 @@ func (p *lanePool) takeWindow() laneWindow {
 	return w
 }
 
-// wait returns once no job runs or waits: a node's shutdown, and a test
+// wait returns once no job runs or waits: an outpost's shutdown, and a test
 // settling the work a pass dispatched.
 func (p *lanePool) wait() {
 	p.mu.Lock()

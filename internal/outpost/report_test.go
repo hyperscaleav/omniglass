@@ -1,4 +1,4 @@
-package node
+package outpost
 
 import (
 	"testing"
@@ -149,7 +149,7 @@ func TestAReportWindowStampsItsTakeAndStartsTheNextOnTheGrid(t *testing.T) {
 
 // The worklist carries the platform's window. A new window applies from the
 // window in progress (it is due by the new length), and a window the worklist
-// does not carry (an older server) keeps the node's own default.
+// does not carry (an older server) keeps the outpost's own default.
 func TestAReportWindowFollowsTheWorklist(t *testing.T) {
 	t.Parallel()
 	r := newCollectionReport(time.Minute, 0, t0)
@@ -163,12 +163,12 @@ func TestAReportWindowFollowsTheWorklist(t *testing.T) {
 	}
 }
 
-// The rows publish under a task the node holds now, chosen when the window
+// The rows publish under a task the outpost holds now, chosen when the window
 // is taken: a driver revision mid-window replaces an endpoint's task ids,
 // and a row under a deleted id would be refused as an orphan, raising the
-// node's stuck-task signal for nothing. An endpoint with no task left (it
-// was deleted, or moved to another node) reports nothing.
-func TestAReportWindowPublishesUnderATaskTheNodeHoldsNow(t *testing.T) {
+// outpost's stuck-task signal for nothing. An endpoint with no task left (it
+// was deleted, or moved to another outpost) reports nothing.
+func TestAReportWindowPublishesUnderATaskTheOutpostHoldsNow(t *testing.T) {
 	t.Parallel()
 	r := newCollectionReport(time.Minute, 0, t0)
 	r.poll("ep-bar", runCost{took: 30 * time.Millisecond}, false)
