@@ -6,7 +6,7 @@ architecture of record is the docs site under [docs/](docs/) (published at
 docs.omniglass.hyperscaleav.com), laid out by audience (#2153): Start here, Operator, Admin,
 Developer, Deployment, Architecture (badged, the architecture of record) and Reference
 (generated). The old pages sit under **Being rebuilt** and stay the reference until their
-section lands. Read the [architecture spine](docs/src/content/docs/architecture/index.md)
+section lands. Read [the model in one pass](docs/src/content/docs/start/the-model.md)
 before non-trivial changes.
 
 This repo is **public from the first commit** and built **one vertical slice per PR**.
