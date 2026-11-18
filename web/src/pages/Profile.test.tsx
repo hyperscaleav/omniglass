@@ -137,7 +137,7 @@ describe("Profile form controls are labelled", () => {
     // Unset email shows "not set".
     expect(screen.getByText("not set")).toBeTruthy();
     // Name is still a labelled input.
-    const nameInput = screen.getByLabelText("Name");
+    const nameInput = screen.getByLabelText("Label");
     expect(nameInput).toBeTruthy();
     expect((nameInput as HTMLInputElement).type).toBe("text");
   });

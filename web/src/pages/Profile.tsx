@@ -351,7 +351,7 @@ export default function Profile() {
             </div>
             <Note note={avatarMsg()} />
             <KVStacked label="Username" hint="Your sign-in name. An administrator can change it." value={human()?.username ?? ""} />
-            <FieldRow label="Name" eyebrow>
+            <FieldRow bind="label" eyebrow>
               <input
                 type="text"
                 class="input input-bordered w-full"
