@@ -4,6 +4,8 @@ description: "The slice-by-slice build history: one entry per merged vertical sl
 # The entries are not in this file. Each is one file under docs/src/content/build-log/,
 # spliced in where ::build-log sits by docs/src/plugins/remark-fragments.mjs. Add an
 # entry by adding a file; internal/docslint fails an entry written here.
+sidebar:
+  order: 4
 ---
 
 Each entry below is one merged vertical slice, oldest first, logged as it landed. The live

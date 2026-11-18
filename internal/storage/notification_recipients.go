@@ -8,8 +8,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
-// The queue-time recipient filter (#1341, ADR-1341): a group or person
-// target is expanded to the people it names at the transition, and each
+// The queue-time recipient filter (#1341, ADR-1341): a group, person or role
+// target is expanded to the people it names at the transition (a role's
+// holders read off the grant table, a grant made to a group reaching its
+// members, #1987), and each
 // person is kept only when their own component read scope admits the alarm's
 // component, so nothing about an alarm reaches a person who could not read it.
 // It runs inside the alarm transition's transaction, under #618's savepoint,
@@ -41,6 +43,17 @@ func recipientsFor(ctx context.Context, q querier, componentID string, targetIDs
 		  join users pr on pr.id = t.user_id
 		  join person h on h.user_id = pr.id
 		 where t.id = any($1::uuid[]) and t.kind = 'user' and pr.active and pr.archived_at is null
+		union all
+		select t.id::text, pr.id::text, h.username, t.channels
+		  from notification_target t
+		  join lateral (
+		        select g.user_id from user_grant g where g.role_id = t.role_id and g.user_id is not null
+		        union
+		        select m.user_id from user_grant g join user_group_member m on m.group_id = g.group_id
+		         where g.role_id = t.role_id) holder on true
+		  join users pr on pr.id = holder.user_id
+		  join person h on h.user_id = pr.id
+		 where t.id = any($1::uuid[]) and t.kind = 'role' and pr.active and pr.archived_at is null
 		order by 1, 3`, targetIDs)
 	if err != nil {
 		return nil, fmt.Errorf("storage: expand notification recipients: %w", err)
