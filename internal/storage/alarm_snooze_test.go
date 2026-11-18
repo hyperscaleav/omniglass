@@ -12,10 +12,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// A snooze is a fact about an alarm's CONDITION (#1318, ADR-1318): the
-// (component, dedup_key) identity of ADR-0075, set from any alarm of that
-// condition and lasting until a deadline. These tests pin the record itself:
-// who and until when, on every alarm of the condition and on no other, audited
+// A snooze is a fact about an alarm's IDENTITY (#1318, ADR-1318): the
+// (component, dedup_key) of ADR-0075, set from any alarm of that
+// identity and lasting until a deadline. These tests pin the record itself:
+// who and until when, on every alarm of the identity and on no other, audited
 // on the alarm it was called on, and orthogonal to acknowledgement, health and
 // clearing.
 
@@ -65,7 +65,7 @@ func TestSnoozeRecordsWhoAndUntilWhenOnTheCondition(t *testing.T) {
 	}
 	near(t, "snoozed_until", got.SnoozedUntil, time.Now().Add(time.Hour))
 	if got.SnoozedBy != "jordan-ops" {
-		t.Errorf("snoozed by %q, want the acting principal's name", got.SnoozedBy)
+		t.Errorf("snoozed by %q, want the acting user's name", got.SnoozedBy)
 	}
 	if got.Acknowledged() || !got.Active() {
 		t.Errorf("snoozing moved the alarm: %+v; a snooze neither acknowledges nor clears", got)
@@ -84,7 +84,7 @@ func TestSnoozeRecordsWhoAndUntilWhenOnTheCondition(t *testing.T) {
 	// The before image names the deadline as null: none was in force (#1339:
 	// an alarm's audit rows outlive it, so each carries both images).
 	if v, ok := before["snoozed_until"]; who != "jordan-ops" || !ok || v != nil || after["snoozed_until"] == nil || after["dedup_key"] != "no-signal" {
-		t.Errorf("snooze audit = %s %v -> %v, want jordan-ops, a null deadline before, the deadline and the condition after", who, before, after)
+		t.Errorf("snooze audit = %s %v -> %v, want jordan-ops, a null deadline before, the deadline and the identity after", who, before, after)
 	}
 
 	// The timeline reads the audit row with no change to its read.
@@ -98,8 +98,8 @@ func TestSnoozeRecordsWhoAndUntilWhenOnTheCondition(t *testing.T) {
 }
 
 // TestASnoozeCoversEveryAlarmOfItsConditionAndNoOther pins what the snooze
-// attaches to (decision 1): a re-raise of the same condition is a new row,
-// and it reads snoozed; another condition on the same component does not.
+// attaches to (decision 1): a re-raise of the same identity is a new row,
+// and it reads snoozed; another identity on the same component does not.
 func TestASnoozeCoversEveryAlarmOfItsConditionAndNoOther(t *testing.T) {
 	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
@@ -128,16 +128,16 @@ func TestASnoozeCoversEveryAlarmOfItsConditionAndNoOther(t *testing.T) {
 	for _, a := range list {
 		snoozed := a.SnoozedUntil != nil
 		if want := a.DedupKey == "no-signal"; snoozed != want {
-			t.Errorf("alarm %s (%s) snoozed = %v, want %v: clearing does not end a snooze, and it covers its condition only", a.ID, a.DedupKey, snoozed, want)
+			t.Errorf("alarm %s (%s) snoozed = %v, want %v: clearing does not end a snooze, and it covers its identity only", a.ID, a.DedupKey, snoozed, want)
 		}
 	}
 	if other.SnoozedUntil != nil {
-		t.Error("a raise of another condition came back snoozed")
+		t.Error("a raise of another identity came back snoozed")
 	}
 }
 
 // TestReSnoozingReplacesTheDeadlineWithOneAuditRow pins the thin cut: one
-// snooze per condition, and a second one replaces its deadline (shorter or
+// snooze per identity, and a second one replaces its deadline (shorter or
 // longer) with an audit row carrying the before and the after.
 func TestReSnoozingReplacesTheDeadlineWithOneAuditRow(t *testing.T) {
 	t.Parallel()
@@ -171,10 +171,10 @@ func TestUnsnoozeEndsItAndAnUnsnoozedConditionIsANoOp(t *testing.T) {
 
 	got, err := gw.UnsnoozeAlarm(ctx, actor, comp, raised.ID)
 	if err != nil {
-		t.Fatalf("unsnooze of an unsnoozed condition: %v", err)
+		t.Fatalf("unsnooze of an unsnoozed identity: %v", err)
 	}
 	if got.SnoozedUntil != nil || auditRows(t, dsn, "unsnooze", raised.ID) != 0 {
-		t.Fatal("unsnoozing a condition that is not snoozed wrote something")
+		t.Fatal("unsnoozing an identity that is not snoozed wrote something")
 	}
 
 	if _, err := gw.SnoozeAlarm(ctx, actor, comp, raised.ID, time.Hour); err != nil {
@@ -302,7 +302,7 @@ func TestUnsnoozingAnExpiredSnoozeEndsItAsTheSweepWould(t *testing.T) {
 }
 
 // TestConcurrentFirstSnoozesAuditTheReplacement: two first snoozes of one
-// condition at once serialize on the condition, so exactly one of them audits
+// identity at once serialize on the identity, so exactly one of them audits
 // a null deadline before and the other audits the deadline it replaced.
 func TestConcurrentFirstSnoozesAuditTheReplacement(t *testing.T) {
 	t.Parallel()

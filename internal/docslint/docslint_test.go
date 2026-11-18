@@ -79,7 +79,7 @@ func TestAntiPatternCatalog(t *testing.T) {
 func TestBannedPatternsStaySane(t *testing.T) {
 	current := []string{
 		"property_type", "the property catalog", "a sample lands in metric",
-		"the current value cache", "source_event_id", "omniglass node run",
+		"the current value cache", "source_event_id", "omniglass outpost run",
 		"ListShell", "FlatList", "TreeList", "UpsertPropertyType",
 		"value_type on the variable", // a live column, distinct from the retired data-type usage
 		// ADR-0071 redefines "template" rather than retiring the word, so the prose
@@ -88,7 +88,7 @@ func TestBannedPatternsStaySane(t *testing.T) {
 		"a component template to clone",
 		"start from a template",
 		// ADR-0827 reclaims the bare kind names for the template catalog.
-		"component_template", "system_template", "standard_template", "place_template",
+		"component_template", "system_template", "standard_template", "location_template",
 		"POST /standards:createFromTemplate", "an operator forks a shipped row",
 	}
 	for _, s := range current {
@@ -195,7 +195,7 @@ func TestScanLineAllowsRetirementProse(t *testing.T) {
 	}
 	// The escape must be narrow: a nearby retirement word does not license an
 	// unrelated current-tense claim later on the same line.
-	live := "the `field_definition` registry stores the contract"
+	live := "the `field_definition` catalog stores the contract"
 	if got := scanLine(live); len(got) == 0 {
 		t.Errorf("current-tense claim did not fire: %q", live)
 	}
@@ -219,11 +219,11 @@ func TestScanLineFirstMatchWins(t *testing.T) {
 // some unrelated thing that "was replaced" while still making a current-tense
 // claim about a retired term, and a whole-line escape waved exactly that through.
 func TestScanLineEscapeIsProximityScoped(t *testing.T) {
-	drift := "The `field_definition` registry stores the contract, unlike the old alarm model which was replaced."
+	drift := "The `field_definition` catalog stores the contract, unlike the old alarm model which was replaced."
 	if got := scanLine(drift); len(got) == 0 {
 		t.Errorf("a distant retirement word exempted current-tense drift: %q", drift)
 	}
-	near := "the `field_definition` registry retired with the fields fold"
+	near := "the `field_definition` catalog retired with the fields fold"
 	if got := scanLine(near); len(got) != 0 {
 		t.Errorf("an adjacent retirement marker failed to exempt: %q -> %v", near, got)
 	}
@@ -265,7 +265,7 @@ func TestOperatorStringPathsResolve(t *testing.T) {
 func TestNearRetirementMarkerIsRuneSafe(t *testing.T) {
 	// Curly quotes and arrows are three bytes each, so a byte window would cut
 	// through one of them here.
-	line := "the “shape” arrow → ✓ marker sits here, and the `field_definition` registry stores it"
+	line := "the “shape” arrow → ✓ marker sits here, and the `field_definition` catalog stores it"
 	if got := scanLine(line); len(got) == 0 {
 		t.Errorf("multi-byte line did not fire: %q", line)
 	}
@@ -345,5 +345,406 @@ func TestADR0115RestoreShippedFires(t *testing.T) {
 	}
 	if fires("that slot becomes **Restore default**, which discards your version") {
 		t.Error("the REPLACEMENT wording fired, so the entry would refuse the fix it asks for")
+	}
+}
+
+// TestADR2030PlaceAsANounFires proves the place-as-a-noun entry catches the
+// noun in the phrasings the sweep retired, and passes the English that keeps
+// the word: the verb, the idioms, and the other words built on it (placed,
+// placement, decimal places). It runs through scanLine, so the entry's
+// allowed phrasings are part of what it proves.
+func TestADR2030PlaceAsANounFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2030") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"the place card names the system's type",
+		"A place holding exactly one system lands on it.",
+		"Start a subtree of places from a template",
+		"**Configure place**",
+		"Every place in the fleet, and what is in it.",
+		"a component's own place must be at or below its system's",
+		"a `place_template` lands a subtree",
+		"the alarm's facts (`component`, `place`, `severity`)",
+		"`?edit=place` opens that one",
+	} {
+		if !fires(line) {
+			t.Errorf("place as a noun passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"the components placed at a location",
+		"a `placement: central` endpoint",
+		"the decimal places a rendered value keeps",
+		"the port edited in place connects",
+		"InfoTip takes children in place of its (i)",
+		"a new assertion earns its place by mutation",
+		"the only place a metric's latest value is said",
+		"theme tokens in one place",
+		"N inlined copies are N places to drift",
+		"a lab is never a place for real data",
+		"`corporate` places one booking service a site",
+		"an outpost delete re-places its tasks",
+		"`group_weight` places a group",
+		"where you place them, escaped",
+		"is not a number in the first place",
+		"both end up in the same place",
+		"an identity no binding places lands in the inbox",
+		"something in the middle answering in its place",
+		"the fix-an-endpoint-in-place walkthrough",
+	} {
+		if fires(line) {
+			t.Errorf("legitimate English fired: %q", line)
+		}
+	}
+}
+
+// TestADR2031NodeAsTheCollectorFires proves the node-as-the-collector entry
+// catches the retired noun in every spelling the rename carried (the prose
+// noun, the column, the env prefix, the route, the permission, the command)
+// and passes the senses the word keeps: a node of a tree, a DOM node, a
+// query plan's scan node, the Node.js runtime and its node: imports, the
+// explore ?node= parameter, and the D2 shape class the diagrams share.
+func TestADR2031NodeAsTheCollectorFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2031") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"the node polls each endpoint on its interval",
+		"A node holding a worklist heartbeats.",
+		"Every node in the fleet reports its loss.",
+		"the `node_id` column on endpoint_assignment",
+		"set `OMNIGLASS_NODE_TOKEN` before the first start",
+		"`GET /nodes` lists them",
+		"a role granting `node:read`",
+		"run `omniglass node run` on the edge host",
+		"the omniglass-node component",
+	} {
+		if !fires(line) {
+			t.Errorf("node as the collector passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"a tree node carries its children",
+		"the leaf node wins over its ancestor nodes",
+		"the deepest node wins",
+		"A scan node can name an index",
+		"a focusable node hidden from assistive tech",
+		"the root node of the forest",
+		"a DOM node the test queries",
+		"built with Node.js 22",
+		"import { readFile } from 'node:fs'",
+		"import path from \"node:path\"",
+		"web/node_modules is not committed",
+		"the explore view's `?node=` parameter",
+		"node e2e/shot.mjs out.png",
+		"classes: { node: { style.border-radius: 8 } }",
+		"  node: { style.border-radius: 8 }",
+		`  db: "Postgres" { class: node; shape: cylinder }`,
+		"a grant on this node only",
+	} {
+		if fires(line) {
+			t.Errorf("node in a kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2032SystemRoleFires proves the system-role entry catches what a
+// system needs filled in every spelling the rename carried (the prose noun,
+// the tables, the Go types, the routes, the accessor, the CLI subgroup) and
+// passes the senses role keeps: the IAM role an operator is granted, its
+// routes and permissions, and the ARIA role attribute.
+func TestADR2032SystemRoleFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2032") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"the system role is impaired",
+		"Each system role carries a quorum and an impact.",
+		"the `system_role` table",
+		"a row in `system_role_assignment`",
+		"`ListSystemRoles` resolves the effective set",
+		"`PUT /systems/{name}/roles/{role}` declares one",
+		"`GET /standards/{id}/roles` lists them",
+		"a lookup through `$role.display`",
+		"the `role_choice` table holds the alternates",
+		"a role assignment names the component",
+		"`omniglass system role assign`",
+		"the effective roles of a system",
+	} {
+		if !fires(line) {
+			t.Errorf("system role passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"the operator role grants",
+		"`GET /roles` lists them",
+		"a grant needs `role:read`",
+		"the viewer and operator roles ship seeded",
+		"an agent token is bounded by the roles its person chose",
+		`<div role="button" tabindex="0">`,
+		"the Admin Roles page",
+		"`omniglass role list`",
+		"`principal_grant.role_id` names the role",
+	} {
+		if fires(line) {
+			t.Errorf("role in a kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2035RegistryAsTheCatalogFires proves the registry-as-the-catalog entry
+// catches the word where it names the database rows the fleet is typed by, and
+// passes the lookups compiled into the binary that keep it: the transport
+// registry and its entries, the expression diagnostics, the declarative env
+// registry, the settings namespace registry, the simulator registry, the
+// console's blade and page registries, the agent skills, and a container or
+// package registry an image is pushed to or pulled from.
+func TestADR2035RegistryAsTheCatalogFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2035") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"the component_type registry is a hierarchy above product",
+		"Every registry lists alphabetically by label.",
+		"the three ingest registries share one name space",
+		"an operator forks a shipped registry row",
+		"the unit registry carries the symbol",
+		"Registries are seeded official and operator-extensible.",
+	} {
+		if !fires(line) {
+			t.Errorf("registry as the catalog passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"the transport registry declares each rung",
+		"each registry transport runs on a dev-fleet component",
+		"The transports are a code registry the binary ships",
+		"is its own registry entry over the tls handshake",
+		"the engine keeps a registry of diagnostics",
+		"generated from the registry (`make gen`)",
+		"the declarative env registry in `internal/config`",
+		"the environment registry (`make gen`)",
+		"the namespace registry, Huma reflects it",
+		"The simulator registry is per server process",
+		"the fleet's cross-entity blade registry",
+		"resolved through the PAGES registry",
+		"the skill registry lacks it",
+		"pushes to the GitHub Container Registry",
+		"build with `--push` to a registry",
+		"a fork run has no registry credential",
+		"the binary never asks the registry",
+		"the npm registry serves the package",
+		"[forks](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row)",
+		"the capability registry was retired by #626",
+		"<BladeStack registry={fleetRegistry} />",
+	} {
+		if fires(line) {
+			t.Errorf("registry in a kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2033LabelTemplateAndBlueprintFire proves the two ADR-2033 entries:
+// the string a label renders from is a rule, never a label template (the
+// prose noun and the column that spelled it), and a standard is the contract
+// a system is built to, never a blueprint. The senses template keeps pass:
+// a label rule, the Go text/template engine it is written in, the catalog
+// template an operator clones once, and a template's own label.
+func TestADR2033LabelTemplateAndBlueprintFire(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2033") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"a new label template",
+		"The label template systems of this type get",
+		"Label templates resolve through four tiers.",
+		"each label-template compiles at write time",
+		"the `default_template` column the boot seed owns",
+		"a standard is the blueprint a system conforms to",
+		"the blueprints your systems are built against",
+	} {
+		if !fires(line) {
+			t.Errorf("retired by ADR-2033 but passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"a new label rule",
+		"a Go text/template",
+		"The rule language is Go `text/template` over a closed map.",
+		"create a standard from the `meeting-room` standard template",
+		"a template's label is the name the catalog shows",
+		"the `label_rule` column's `default_rule` and `rule`",
+		"a standard is the contract a system is built to",
+	} {
+		if fires(line) {
+			t.Errorf("kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2036TheUserFires proves the ADR-2036 entries catch the retired IAM
+// words (principal, principal group, service account, and human as a kind) in
+// prose and in the identifier spellings the schema, API and permission rename
+// (#2075) retired, and pass a backticked identifier (history, an applied
+// migration's name) and the English senses of principal and human.
+func TestADR2036TheUserFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2036") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"a principal holds grants",
+		"Principals sign in with a password or a token.",
+		"every principal in the install",
+		"add a principal group for the night shift",
+		"a principal-group's members inherit its grants",
+		"a service account calls the API with a token",
+		"Service accounts never sign in to the console.",
+		"a service-account token",
+		"a human principal signs in with a password",
+		"human users and machine users alike",
+		"the human kind carries a username",
+		"humans and service principals",
+		"a human or machine user",
+		"GET /principals lists them",
+		"/principal-groups/{group}/members adds one",
+		"principal:read:admin gates the page",
+		`perm: "principal_group:read:admin"`,
+		"each grant row carries principal_id",
+		"me.principal.id is the caller",
+		"omniglass principal-group member create night-shift --principal-id alice",
+		"  --principal-group on-call --channels inbox",
+		"  principal: {",
+		`<SchemaTable table="principal" />`,
+	} {
+		if !fires(line) {
+			t.Errorf("retired IAM word passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"a user holds grants",
+		"a machine user calls the API with a token",
+		"add a user group for the night shift",
+		"a person signs in with a password",
+		"the `principal` table became `users`",
+		"migration `20261117224704_principal_becomes_user` renamed it",
+		"the `principal_id` column became `user_id`",
+		"the principal reason is cost",
+		"the principal axes of the design",
+		"the three principal surfaces",
+		"a human-in-the-loop gate",
+		"a human reads the label",
+		"the name is a human identifier",
+		"a human approves the PR",
+	} {
+		if fires(line) {
+			t.Errorf("IAM word in a kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2034GenusFires proves the genus entry catches the retired word for a
+// type catalog row, singular and plural, and passes an ADR link whose anchor
+// still carries it (ADR titles and anchors keep the word).
+func TestADR2034GenusFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2034") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"The device-class genus catalog: what kind of device a product is.",
+		"Root creates a new top-level genus.",
+		"two genera share a parent",
+		"The Genus column",
+	} {
+		if !fires(line) {
+			t.Errorf("genus passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"see [the registry](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)",
+		"a generic type parameter",
+		"the content type of the response",
+		"an input of type checkbox",
+	} {
+		if fires(line) {
+			t.Errorf("kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2037DeclaredValueFires proves the ADR-2037 entries catch the retired
+// declared-state words and the cascade sense of override, and pass the
+// catalog's sparse edit, which keeps the word override.
+func TestADR2037DeclaredValueFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2037") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"re-render it from declared config",
+		"the reconcile desired-state loop",
+		"projects desired state onto the device",
+		"each desired value resolves down the cascade",
+		"set the config on the room",
+		"the world drifted from intent (config drift)",
+		"tags resolve union-on-key, override-on-value",
+		"union on key, override on value",
+		"the HQ credential overrides the product's binding",
+	} {
+		if !fires(line) {
+			t.Errorf("retired by ADR-2037 but passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"re-render it from declared values",
+		"tags resolve union-on-key, shadow-on-value",
+		"the HQ credential shadows the product's binding",
+		"drift from the declared value",
+		"an override is your sparse edit to a shipped catalog row",
+		"the row's origin is overridden",
+		"a column sort overrides the default order",
+	} {
+		if fires(line) {
+			t.Errorf("kept sense fired: %q", line)
+		}
 	}
 }

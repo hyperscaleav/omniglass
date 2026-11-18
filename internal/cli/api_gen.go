@@ -80,7 +80,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().BoolVar(&fOptOutAllowed, "opt-out-allowed", false, "Let a member of a group it targets opt out of it for themselves (default false)")
 				cmd.Flags().StringVar(&fTargets, "targets", "", "The notification targets to send to, by name or uuid")
 				_ = cmd.MarkFlagRequired("targets")
-				cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column")
+				cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column")
 				return cmd
 			}()
 			return cmd
@@ -232,6 +232,220 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
+			Use:   "alarm",
+			Short: "Commands for the alarm resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qUnacknowledged bool
+				var qLimit int
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List the fleet's active alarms",
+					Long:    "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+					Example: "  omniglass alarm list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/alarms")
+						q := url.Values{}
+						if cmd.Flags().Changed("unacknowledged") {
+							q.Set("unacknowledged", fmt.Sprintf("%v", qUnacknowledged))
+						}
+						if cmd.Flags().Changed("limit") {
+							q.Set("limit", fmt.Sprintf("%v", qLimit))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at: the queue an operator, or an agent, works")
+				cmd.Flags().IntVar(&qLimit, "limit", 0, "At most this many, the worst first; 0 or absent means 200")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "assistant",
+			Short: "Commands for the assistant resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "conversation",
+				Short: "Commands for the conversation resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fAfter int
+					var fMessages string
+					var fPending string
+					var fUsage string
+					cmd := &cobra.Command{
+						Use:     "append <name>",
+						Short:   "Append a turn to one of your omnibot conversations",
+						Long:    "Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. While a server run holds the conversation, an append is a 409. Anyone else's is a 404. Audited without content. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation append <name> --after <int> --messages <json>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations/%s:append", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("after") {
+								body["after"] = fAfter
+							}
+							if cmd.Flags().Changed("messages") {
+								body["messages"] = jsonOrString(fMessages)
+							}
+							if cmd.Flags().Changed("pending") {
+								body["pending"] = jsonOrString(fPending)
+							}
+							if cmd.Flags().Changed("usage") {
+								body["usage"] = jsonOrString(fUsage)
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().IntVar(&fAfter, "after", 0, "The seq of the last message you saw (0 for an empty conversation); anything else is a 409")
+					_ = cmd.MarkFlagRequired("after")
+					cmd.Flags().StringVar(&fMessages, "messages", "", "The new messages, in order")
+					_ = cmd.MarkFlagRequired("messages")
+					cmd.Flags().StringVar(&fPending, "pending", "", "The write the run paused on, waiting on you; absent clears it")
+					cmd.Flags().StringVar(&fUsage, "usage", "", "The tokens this turn spent, added to the total")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fName string
+					cmd := &cobra.Command{
+						Use:     "create",
+						Short:   "Start an omnibot conversation",
+						Long:    "Creates an empty conversation of your own, named or named for you. A name you already use is a 409. Audited. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation create",
+						Args:    pathArgs(0),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations")
+							body := map[string]any{}
+							if cmd.Flags().Changed("name") {
+								body["name"] = fName
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fName, "name", "", "A name (lowercase kebab), unique among your own conversations; absent names it for you")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <name>",
+						Short:   "Delete one of your omnibot conversations",
+						Long:    "Deletes one of your own conversations and its transcript. Anyone else's is a 404. Audited. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation delete <name>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations/%s", pathSegment(args[0]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "get <name>",
+						Short:   "Get one of your omnibot conversations",
+						Long:    "One of your own conversations with its transcript, its pending write if a run paused on one, and the tokens it has spent. Anyone else's is a 404. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation get <name>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations/%s", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list",
+						Short:   "List your omnibot conversations",
+						Long:    "Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation list",
+						Args:    pathArgs(0),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations")
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fContext string
+					var fForwardedProps string
+					var fMessages string
+					var fResume string
+					var fRunId string
+					var fThreadId string
+					cmd := &cobra.Command{
+						Use:     "run <name>",
+						Short:   "Run omnibot on one of your conversations",
+						Long:    "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use.",
+						Example: "  omniglass assistant conversation run <name>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/assistant/conversations/%s:run", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("context") {
+								body["context"] = jsonOrString(fContext)
+							}
+							if cmd.Flags().Changed("forwardedProps") {
+								body["forwardedProps"] = jsonOrString(fForwardedProps)
+							}
+							if cmd.Flags().Changed("messages") {
+								body["messages"] = jsonOrString(fMessages)
+							}
+							if cmd.Flags().Changed("resume") {
+								body["resume"] = jsonOrString(fResume)
+							}
+							if cmd.Flags().Changed("runId") {
+								body["runId"] = fRunId
+							}
+							if cmd.Flags().Changed("threadId") {
+								body["threadId"] = fThreadId
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fContext, "context", "", "What the person handed over with the prompt, read as data ahead of it; ignored on a resume")
+					cmd.Flags().StringVar(&fForwardedProps, "forwardedProps", "", "An embedded skill to run; ignored on a resume")
+					cmd.Flags().StringVar(&fMessages, "messages", "", "The client's view of the conversation; only its last user message is read, as the prompt")
+					cmd.Flags().StringVar(&fResume, "resume", "", "The answer to the interrupt the last run ended on")
+					cmd.Flags().StringVar(&fRunId, "runId", "", "The run's id, echoed in its events")
+					cmd.Flags().StringVar(&fThreadId, "threadId", "", "Ignored: the conversation is the thread")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
 			Use:   "audit-log",
 			Short: "Commands for the audit-log resource",
 		}
@@ -241,6 +455,9 @@ func generatedCommands() []*cobra.Command {
 				var qResource string
 				var qVerb string
 				var qBefore string
+				var qAgent string
+				var qChannel string
+				var qClient string
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List audit-trail events",
@@ -262,6 +479,15 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("before") {
 							q.Set("before", fmt.Sprintf("%v", qBefore))
 						}
+						if cmd.Flags().Changed("agent") {
+							q.Set("agent", fmt.Sprintf("%v", qAgent))
+						}
+						if cmd.Flags().Changed("channel") {
+							q.Set("channel", fmt.Sprintf("%v", qChannel))
+						}
+						if cmd.Flags().Changed("client") {
+							q.Set("client", fmt.Sprintf("%v", qClient))
+						}
 						if enc := q.Encode(); enc != "" {
 							path += "?" + enc
 						}
@@ -269,9 +495,12 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().IntVar(&qLimit, "limit", 0, "Max rows to return, newest first (default 100, capped at 500)")
-				cmd.Flags().StringVar(&qResource, "resource", "", "Filter to one resource kind (e.g. auth, principal_grant)")
+				cmd.Flags().StringVar(&qResource, "resource", "", "Filter to one resource kind (e.g. auth, user_grant)")
 				cmd.Flags().StringVar(&qVerb, "verb", "", "Filter to one verb (e.g. login, create)")
 				cmd.Flags().StringVar(&qBefore, "before", "", "Only events strictly older than this RFC3339 timestamp (paging backward)")
+				cmd.Flags().StringVar(&qAgent, "agent", "", "Filter to the events one agent took on its person's behalf (the name its agent token was minted with)")
+				cmd.Flags().StringVar(&qChannel, "channel", "", "Filter to the events that arrived through one channel; direct is a plain API call, with no channel")
+				cmd.Flags().StringVar(&qClient, "client", "", "Filter to the events whose declared MCP client contains this term, case-insensitively")
 				return cmd
 			}()
 			return cmd
@@ -283,6 +512,23 @@ func generatedCommands() []*cobra.Command {
 			Use:   "auth",
 			Short: "Commands for the auth resource",
 		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "agent-policy",
+					Short:   "What the install lets an agent do",
+					Long:    "Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. Each class names the layer that set it (platform, role, or tool), and an overridden tool is listed with its own policy; the strictest layer wins. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.",
+					Example: "  omniglass auth agent-policy",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/auth/me/agent-policy")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
@@ -307,7 +553,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "change-password",
 					Short:   "Change your own password",
-					Long:    "Verifies the current password and sets a new one. Requires authentication; self-scoped.",
+					Long:    "Verifies the current password and sets a new one. Requires authentication; self-scoped. Refused (403) to an agent token.",
 					Example: "  omniglass auth change-password --current-password current_password --new-password new_password",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -332,19 +578,31 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fAgent string
+				var fChannels string
 				var fDescription string
+				var fRoles string
 				var fTtlDays int
 				cmd := &cobra.Command{
 					Use:     "create-token",
 					Short:   "Create one of your own API tokens",
-					Long:    "Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.",
+					Long:    "Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it. Naming an agent mints an agent token instead: it acts on your behalf, holds only what its optional roles AND you hold (each role must be one you cover, else 403), is accepted only on its optional channels, needs an explicit ttl_days, never holds a reveal or use action, cannot mint a token, change your password or impersonate, and every row it writes names the agent. An agent token cannot call this route.",
 					Example: "  omniglass auth create-token --description description",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/auth/me/tokens")
 						body := map[string]any{}
+						if cmd.Flags().Changed("agent") {
+							body["agent"] = fAgent
+						}
+						if cmd.Flags().Changed("channels") {
+							body["channels"] = jsonOrString(fChannels)
+						}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("roles") {
+							body["roles"] = jsonOrString(fRoles)
 						}
 						if cmd.Flags().Changed("ttl-days") {
 							body["ttl_days"] = fTtlDays
@@ -352,9 +610,12 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fAgent, "agent", "", "Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate.")
+				cmd.Flags().StringVar(&fChannels, "channels", "", "The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp.")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the token is for (required)")
 				_ = cmd.MarkFlagRequired("description")
-				cmd.Flags().IntVar(&fTtlDays, "ttl-days", 0, "Days until the token expires (default 90, maximum 365)")
+				cmd.Flags().StringVar(&fRoles, "roles", "", "An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling.")
+				cmd.Flags().IntVar(&fTtlDays, "ttl-days", 0, "Days until the token expires (default 90, maximum 365; required for an agent token)")
 				return cmd
 			}()
 			return cmd
@@ -410,8 +671,8 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "me",
-					Short:   "The authenticated principal, its permissions, and grants",
-					Long:    "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
+					Short:   "The authenticated user, its permissions, and grants",
+					Long:    "Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
 					Example: "  omniglass auth me",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -487,7 +748,7 @@ func generatedCommands() []*cobra.Command {
 						cmd.Flags().StringVar(&fOn, "on", "", "The alarm transitions it fires on: raised, cleared, or both")
 						_ = cmd.MarkFlagRequired("on")
 						cmd.Flags().StringVar(&fTargets, "targets", "", "Refused when set (a 422): a personal rule tells you alone and names no target")
-						cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read")
+						cmd.Flags().StringVar(&fWhen, "when", "", "A predicate over the alarm facts (component, location, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read")
 						return cmd
 					}()
 					return cmd
@@ -676,7 +937,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "list",
 							Short:   "List your inbox",
-							Long:    "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
+							Long:    "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
 							Example: "  omniglass auth me notification list",
 							Args:    pathArgs(0),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -737,6 +998,88 @@ func generatedCommands() []*cobra.Command {
 				return parent
 			}())
 			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "oauth-client",
+				Short: "Commands for the oauth-client resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fApproved bool
+					var fCodeChallenge string
+					var fCodeChallengeMethod string
+					var fRedirectUri string
+					var fResource string
+					var fRoles string
+					var fState string
+					cmd := &cobra.Command{
+						Use:     "authorize <id>",
+						Short:   "Approve or deny an OAuth client",
+						Long:    "Answers an OAuth client's authorization request as you. Approved, it issues a one-time code (good for five minutes) the client exchanges for an agent token accepted on the MCP channel only and holding only the roles you chose, each one whose capabilities you hold (else 403); denied, it sends the client back with access_denied. Returns where to send the browser back to. Requires authentication; an agent token or an impersonated session cannot answer.",
+						Example: "  omniglass auth oauth-client authorize <id> --approved <bool> --code-challenge code_challenge --code-challenge-method code_challenge_method --redirect-uri redirect_uri --resource resource",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/auth/oauth-clients/%s:authorize", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("approved") {
+								body["approved"] = fApproved
+							}
+							if cmd.Flags().Changed("code-challenge") {
+								body["code_challenge"] = fCodeChallenge
+							}
+							if cmd.Flags().Changed("code-challenge-method") {
+								body["code_challenge_method"] = fCodeChallengeMethod
+							}
+							if cmd.Flags().Changed("redirect-uri") {
+								body["redirect_uri"] = fRedirectUri
+							}
+							if cmd.Flags().Changed("resource") {
+								body["resource"] = fResource
+							}
+							if cmd.Flags().Changed("roles") {
+								body["roles"] = jsonOrString(fRoles)
+							}
+							if cmd.Flags().Changed("state") {
+								body["state"] = fState
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().BoolVar(&fApproved, "approved", false, "Whether you approve the client; false sends it back with access_denied")
+					_ = cmd.MarkFlagRequired("approved")
+					cmd.Flags().StringVar(&fCodeChallenge, "code-challenge", "", "The PKCE challenge from the authorization request")
+					_ = cmd.MarkFlagRequired("code-challenge")
+					cmd.Flags().StringVar(&fCodeChallengeMethod, "code-challenge-method", "", "The PKCE method; S256 only")
+					_ = cmd.MarkFlagRequired("code-challenge-method")
+					cmd.Flags().StringVar(&fRedirectUri, "redirect-uri", "", "The redirect URI from the authorization request; one the client registered")
+					_ = cmd.MarkFlagRequired("redirect-uri")
+					cmd.Flags().StringVar(&fResource, "resource", "", "The resource the token is for: this server's MCP endpoint")
+					_ = cmd.MarkFlagRequired("resource")
+					cmd.Flags().StringVar(&fRoles, "roles", "", "The roles to approve; each must be one whose capabilities you hold. Required when approved")
+					cmd.Flags().StringVar(&fState, "state", "", "The client's state, echoed back")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "get <id>",
+						Short:   "Read an OAuth client asking for your consent",
+						Long:    "Returns a registered OAuth client (the name it gave, its redirect URIs) and the roles you may approve for it, for the console's consent page. Requires authentication; the client is the one named in the authorization request.",
+						Example: "  omniglass auth oauth-client get <id>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/auth/oauth-clients/%s", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
@@ -826,7 +1169,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update-profile",
 					Short:   "Update your own profile",
-					Long:    "Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).",
+					Long:    "Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own user).",
 					Example: "  omniglass auth update-profile",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -909,7 +1252,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOutputKey, "output-key", "", "The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes")
 				_ = cmd.MarkFlagRequired("output-key")
-				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create")
 				_ = cmd.MarkFlagRequired("owner-kind")
 				cmd.Flags().StringVar(&fReduce, "reduce", "", "An expression over the inputs by alias")
 				_ = cmd.MarkFlagRequired("reduce")
@@ -957,7 +1300,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List calc rules",
-					Long:    "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.",
+					Long:    "Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.",
 					Example: "  omniglass calc-rule list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1197,7 +1540,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
-				cmd.Flags().BoolVar(&fDisruptive, "disruptive", false, "The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again")
+				cmd.Flags().BoolVar(&fDisruptive, "disruptive", false, "The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering outpost until each reads up again")
 				cmd.Flags().IntVar(&fHoldSeconds, "hold-seconds", 0, "A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase kebab)")
@@ -1373,7 +1716,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Raise an alarm on a component",
-						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1391,7 +1734,7 @@ func generatedCommands() []*cobra.Command {
 							return runAPICommand(cmd, "POST", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition")
+					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
 					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage")
 					_ = cmd.MarkFlagRequired("severity")
@@ -1442,7 +1785,7 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().BoolVar(&qIncludeCleared, "include-cleared", false, "Include cleared alarms, so the list is the history rather than what is wrong now")
-					cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended")
+					cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended")
 					return cmd
 				}()
 				return cmd
@@ -1452,8 +1795,8 @@ func generatedCommands() []*cobra.Command {
 					var fDuration string
 					cmd := &cobra.Command{
 						Use:     "snooze <name> <id>",
-						Short:   "Snooze an alarm's condition",
-						Long:    "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Short:   "Snooze an alarm",
+						Long:    "Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm snooze <name> <id> --duration duration",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1465,7 +1808,7 @@ func generatedCommands() []*cobra.Command {
 							return runAPICommand(cmd, "POST", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fDuration, "duration", "", "How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer")
+					cmd.Flags().StringVar(&fDuration, "duration", "", "How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer")
 					_ = cmd.MarkFlagRequired("duration")
 					return cmd
 				}()
@@ -1492,8 +1835,8 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "unsnooze <name> <id>",
-						Short:   "End an alarm's condition's snooze",
-						Long:    "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Short:   "End an alarm's snooze",
+						Long:    "Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm unsnooze <name> <id>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1551,7 +1894,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "get <name> <id>",
 						Short:   "Read a command",
-						Long:    "One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, outpost and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component command get 'hq.west.level-2.boardroom-a.$comp.videobar-1' 42",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1671,7 +2014,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a component",
-					Long:    "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.",
+					Long:    "Creates a component, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped component:create grant; a root with no location needs the all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.",
 					Example: "  omniglass component create",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1718,12 +2061,12 @@ func generatedCommands() []*cobra.Command {
 				var fLabel string
 				var fLocation string
 				var fName string
-				var fNode string
+				var fOutpost string
 				var fTemplate string
 				cmd := &cobra.Command{
 					Use:     "createFromTemplate",
 					Short:   "Start a component from a template",
-					Long:    "Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.",
+					Long:    "Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no outpost a 422.",
 					Example: "  omniglass component createFromTemplate --template template",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1741,8 +2084,8 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
-						if cmd.Flags().Changed("node") {
-							body["node"] = fNode
+						if cmd.Flags().Changed("outpost") {
+							body["outpost"] = fOutpost
 						}
 						if cmd.Flags().Changed("template") {
 							body["template"] = fTemplate
@@ -1750,11 +2093,11 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fInputs, "inputs", "", "Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read")
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind)")
 				cmd.Flags().StringVar(&fLabel, "label", "", "The component's label")
-				cmd.Flags().StringVar(&fLocation, "location", "", "The place the component sits in, by name or dotted path")
+				cmd.Flags().StringVar(&fLocation, "location", "", "The location the component sits in, by name or dotted path")
 				cmd.Flags().StringVar(&fName, "name", "", "The component's name; minted as an unnamed create mints it when empty")
-				cmd.Flags().StringVar(&fNode, "node", "", "The node the endpoint is placed on; needed when inputs carry an address")
+				cmd.Flags().StringVar(&fOutpost, "outpost", "", "The outpost the endpoint is placed on; needed when inputs carry an address")
 				cmd.Flags().StringVar(&fTemplate, "template", "", "The component template, by name")
 				_ = cmd.MarkFlagRequired("template")
 				return cmd
@@ -1766,7 +2109,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a component",
-					Long:    "Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1791,7 +2134,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Record that a component depends on another",
-						Long:    "Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).\n\nArguments:\n  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's outpost its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).\n\nArguments:\n  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component dependency create codec-1 --kind kind --upstream upstream",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1889,7 +2232,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Effective tags for a component",
-						Long:    "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component effective-tag list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1921,7 +2264,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Effective variables for a component",
-						Long:    "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union and the most specific binding shadows the rest, with the winner and the shadowed candidates. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component effective-variable list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1987,7 +2330,7 @@ func generatedCommands() []*cobra.Command {
 						Use:     "delete <name> <key> <value>",
 						Short:   "Unbind an identity a conduit reports",
 						Long:    "Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass component identity-binding delete ucc-service-1 ucc-room-id room-17c-415a",
+						Example: "  omniglass component identity-binding delete ucc-platform ucc-room-id room-17c-415a",
 						Args:    pathArgs(3),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/identity-bindings/%s/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
@@ -2004,7 +2347,7 @@ func generatedCommands() []*cobra.Command {
 						Use:     "list <name>",
 						Short:   "List the identities a conduit component fans out",
 						Long:    "The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass component identity-binding list ucc-service-1",
+						Example: "  omniglass component identity-binding list ucc-platform",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/identity-bindings", pathSegment(args[0]))
@@ -2022,8 +2365,8 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <name> <key> <value>",
 						Short:   "Bind an identity a conduit reports to its owner",
-						Long:    "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass component identity-binding update ucc-service-1 ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind",
+						Long:    "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or an outpost owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.\n\nArguments:\n  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass component identity-binding update ucc-platform ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind",
 						Args:    pathArgs(3),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/identity-bindings/%s/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
@@ -2039,7 +2382,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fOwner, "owner", "", "Name or uuid of the owner the identity's values land on, or a dotted address")
 					_ = cmd.MarkFlagRequired("owner")
-					cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here")
+					cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here")
 					_ = cmd.MarkFlagRequired("owner-kind")
 					return cmd
 				}()
@@ -2057,7 +2400,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "get <name>",
 						Short:   "Get what is broken on a simulated device",
-						Long:    "The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its outpost when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component impairment get <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2079,7 +2422,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "set <name>",
 						Short:   "Break or repair a simulated device",
-						Long:    "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's outpost applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component impairment set <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2136,7 +2479,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "listTags <name>",
 					Short:   "List tags on a component",
-					Long:    "Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component listTags <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2289,7 +2632,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "move <name>",
 					Short:   "Move a component",
-					Long:    "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component move <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2354,7 +2697,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's properties and where each stands",
-						Long:    "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2380,7 +2723,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "list <name> <property>",
 							Short:   "Read one property series' change history",
-							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
+							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
 							Example: "  omniglass component property sample list <name> <property>",
 							Args:    pathArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -2407,7 +2750,7 @@ func generatedCommands() []*cobra.Command {
 						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
 						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset. Ignored when a resolution is set")
 						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
-						cmd.Flags().StringVar(&qInstance, "instance", "", "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution")
+						cmd.Flags().StringVar(&qInstance, "instance", "", "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it")
 						return cmd
 					}()
 					return cmd
@@ -2487,7 +2830,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "removeTag <name>",
 					Short:   "Remove a tag value from a component",
-					Long:    "Removes a key's value from a component. Gated by component:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Removes a key's value from a component. Gated by component:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component removeTag <name> --key key",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2597,7 +2940,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "setTag <name>",
 					Short:   "Set a tag value on a component",
-					Long:    "Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass component setTag <name> --key key --value value",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2636,7 +2979,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "fire <name>",
 						Short:   "Fire an operation at a simulated component",
-						Long:    "Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Asks the simulator beside the component's outpost to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component simulation fire <name> --surface surface",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2679,7 +3022,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "get <name>",
 						Short:   "Get a component's simulation",
-						Long:    "Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Whether a component is simulated (it has an endpoint on an outpost and a product a simulator profile simulates) and, when it is, its outpost, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.\n\nArguments:\n  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component simulation get <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2703,8 +3046,8 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List the identities a conduit reported that no binding places",
-						Long:    "A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.\n\nArguments:\n  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.meetings-cloud); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass component unbound-identity list 'hq.$comp.meetings-cloud'",
+						Long:    "A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.\n\nArguments:\n  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass component unbound-identity list 'hq.$comp.ucc-platform'",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/unbound-identities", pathSegment(args[0]))
@@ -2803,7 +3146,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent component_type, by name or uuid; omit for a root type")
@@ -2834,7 +3177,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List component types",
-					Long:    "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
+					Long:    "Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
 					Example: "  omniglass component-type list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2905,7 +3248,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDefaultTags, "default-tags", "", "Replaces the default-tag set; omit to leave unchanged")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label rule; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.")
 				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).")
 				return cmd
 			}()
@@ -2997,7 +3340,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List drivers",
-					Long:    "Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.",
+					Long:    "Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.",
 					Example: "  omniglass driver list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3013,15 +3356,15 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDriver string
 				var fInputs string
-				var fNode string
+				var fOutpost string
 				var fPolls string
 				var fSpec string
 				var fTimeoutSeconds int
 				cmd := &cobra.Command{
 					Use:     "preview",
-					Short:   "Preview a driver spec's polls through a node",
-					Long:    "Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.",
-					Example: "  omniglass driver preview --node node",
+					Short:   "Preview a driver spec's polls through an outpost",
+					Long:    "Runs a driver spec's polls once through the outpost named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the outpost holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the outpost and on each secret used. Gated by driver:preview.",
+					Example: "  omniglass driver preview --outpost outpost",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/drivers:preview")
@@ -3032,8 +3375,8 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("inputs") {
 							body["inputs"] = jsonOrString(fInputs)
 						}
-						if cmd.Flags().Changed("node") {
-							body["node"] = fNode
+						if cmd.Flags().Changed("outpost") {
+							body["outpost"] = fOutpost
 						}
 						if cmd.Flags().Changed("polls") {
 							body["polls"] = jsonOrString(fPolls)
@@ -3048,12 +3391,12 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDriver, "driver", "", "A stored driver to preview, by name; or give spec")
-				cmd.Flags().StringVar(&fInputs, "inputs", "", "The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target")
-				cmd.Flags().StringVar(&fNode, "node", "", "The node that runs the preview, by name: the one that reaches the target")
-				_ = cmd.MarkFlagRequired("node")
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target")
+				cmd.Flags().StringVar(&fOutpost, "outpost", "", "The outpost that runs the preview, by name: the one that reaches the target")
+				_ = cmd.MarkFlagRequired("outpost")
 				cmd.Flags().StringVar(&fPolls, "polls", "", "The polls to run, by name; absent runs every poll")
 				cmd.Flags().StringVar(&fSpec, "spec", "", "A driver spec to preview inline, unsaved; or give driver")
-				cmd.Flags().IntVar(&fTimeoutSeconds, "timeout-seconds", 0, "How long the node may take for the whole preview (default 15, at most 30)")
+				cmd.Flags().IntVar(&fTimeoutSeconds, "timeout-seconds", 0, "How long the outpost may take for the whole preview (default 15, at most 30)")
 				return cmd
 			}()
 			return cmd
@@ -3076,7 +3419,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -3152,14 +3495,14 @@ func generatedCommands() []*cobra.Command {
 				var fDriver string
 				var fInputs string
 				var fLabel string
-				var fNode string
 				var fOutOfBand bool
+				var fOutpost string
 				var fParams string
 				var fTransport string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an endpoint",
-					Long:    "Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.",
+					Long:    "Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. A secret input hands that credential to the endpoint's host, so it takes secret:bind on the secret: one the caller cannot read is a 422, one it can read but not bind a 403. The create scope cascades through the owning component. Gated by endpoint:create.",
 					Example: "  omniglass endpoint create",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3177,11 +3520,11 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
-						if cmd.Flags().Changed("node") {
-							body["node"] = fNode
-						}
 						if cmd.Flags().Changed("out-of-band") {
 							body["out_of_band"] = fOutOfBand
+						}
+						if cmd.Flags().Changed("outpost") {
+							body["outpost"] = fOutpost
 						}
 						if cmd.Flags().Changed("params") {
 							body["params"] = jsonOrString(fParams)
@@ -3196,10 +3539,10 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDriver, "driver", "", "Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions")
 				cmd.Flags().StringVar(&fInputs, "inputs", "", "The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for")
-				cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
 				cmd.Flags().BoolVar(&fOutOfBand, "out-of-band", false, "Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open")
+				cmd.Flags().StringVar(&fOutpost, "outpost", "", "Outpost placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Address/target settings (jsonb); an attach derives them from the inputs instead")
-				cmd.Flags().StringVar(&fTransport, "transport", "", "A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set")
+				cmd.Flags().StringVar(&fTransport, "transport", "", "A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set")
 				return cmd
 			}()
 			return cmd
@@ -3266,7 +3609,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "run <endpoint> <poll>",
 						Short:   "Run an endpoint's poll now",
-						Long:    "Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
+						Long:    "Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.",
 						Example: "  omniglass endpoint poll run 'hq.west.level-2.huddle.$comp.panel-1/telnet' status",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -3281,7 +3624,7 @@ func generatedCommands() []*cobra.Command {
 							return runAPICommand(cmd, "POST", path, nil)
 						},
 					}
-					cmd.Flags().IntVar(&qTimeoutSeconds, "timeout-seconds", 0, "How long the node may take (default 15, at most 30)")
+					cmd.Flags().IntVar(&qTimeoutSeconds, "timeout-seconds", 0, "How long the outpost may take (default 15, at most 30)")
 					return cmd
 				}()
 				return cmd
@@ -3295,7 +3638,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "retry <endpoint>",
 					Short:   "Retry an endpoint's gated connections",
-					Long:    "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the outpost recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass endpoint retry 'boi.17c.415a.$comp.display-1/https'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3311,7 +3654,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fCertificate, "certificate", "", "A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged")
-				cmd.Flags().StringVar(&fHostKey, "host-key", "", "The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged")
+				cmd.Flags().StringVar(&fHostKey, "host-key", "", "The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the outpost's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged")
 				return cmd
 			}()
 			return cmd
@@ -3337,14 +3680,14 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fInputs string
 				var fLabel string
-				var fNode string
 				var fOutOfBand bool
+				var fOutpost string
 				var fParams string
 				var fTransport string
 				cmd := &cobra.Command{
 					Use:     "update <endpoint>",
 					Short:   "Update an endpoint",
-					Long:    "Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Patches an endpoint's outpost placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.\n\nArguments:\n  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass endpoint update 'boi.17c.415a.$comp.display-1/https'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3356,11 +3699,11 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
-						if cmd.Flags().Changed("node") {
-							body["node"] = fNode
-						}
 						if cmd.Flags().Changed("out-of-band") {
 							body["out_of_band"] = fOutOfBand
+						}
+						if cmd.Flags().Changed("outpost") {
+							body["outpost"] = fOutpost
 						}
 						if cmd.Flags().Changed("params") {
 							body["params"] = jsonOrString(fParams)
@@ -3371,10 +3714,10 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fInputs, "inputs", "", "A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential")
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone")
-				cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement, by name or id")
 				cmd.Flags().BoolVar(&fOutOfBand, "out-of-band", false, "Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone")
+				cmd.Flags().StringVar(&fOutpost, "outpost", "", "Reassign the outpost placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs")
 				cmd.Flags().StringVar(&fTransport, "transport", "", "The transport: a driver-attached endpoint takes only one its driver speaks")
 				return cmd
@@ -3407,7 +3750,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an event rule",
-					Long:    "Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
+					Long:    "Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
 					Example: "  omniglass event-rule create --fire-criteria <json> --fire-event-type fire_event_type --name name --sample-key sample_key",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3459,13 +3802,13 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)")
-				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none")
+				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when it clears, by name (rule-cleared is the generic one); absent, it writes none")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "A Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Defaults to true")
-				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that starts the condition: {expr}, or the short form {op, value}")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria the rule fires on: {expr}, or the short form {op, value}")
 				_ = cmd.MarkFlagRequired("fire-criteria")
-				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when its condition starts, by name (condition-started is the generic one)")
+				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when it fires, by name (rule-fired is the generic one)")
 				_ = cmd.MarkFlagRequired("fire-event-type")
 				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "A Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
@@ -3519,7 +3862,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List event rules",
-					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
+					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 					Example: "  omniglass event-rule list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3569,9 +3912,9 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria it ends on; absent, the negation of fire_criteria")
+				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria it clears on; absent, the negation of fire_criteria")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "Accepted and ignored, like fire_sustain")
-				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria its condition starts on: {expr}, or the short form {op, value}")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria it fires on: {expr}, or the short form {op, value}")
 				_ = cmd.MarkFlagRequired("fire-criteria")
 				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone")
 				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the candidate rule reads")
@@ -3587,7 +3930,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "rename <name>",
 					Short:   "Rename an event rule",
-					Long:    "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
+					Long:    "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
 					Example: "  omniglass event-rule rename <name> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3615,7 +3958,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Get an event rule's live state",
-						Long:    "What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.",
+						Long:    "What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.",
 						Example: "  omniglass event-rule state list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -3700,13 +4043,13 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)")
-				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when its condition ends, by name; empty writes none")
+				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when it clears, by name; empty writes none")
 				cmd.Flags().BoolVar(&fClearNegates, "clear-negates", false, "Drop the clear criteria, so the rule clears on the negation of its fire criteria")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "How long the clear criteria must hold, a Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether the rule evaluates; defaults to true on create")
-				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that starts the condition: {expr}, or the short form {op, value}")
-				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when its condition starts, by name; it cannot be emptied")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria the rule fires on: {expr}, or the short form {op, value}")
+				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when it fires, by name; it cannot be emptied")
 				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
 				cmd.Flags().StringVar(&fMessage, "message", "", "The alarm message; empty uses the label or the name")
@@ -3895,7 +4238,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fInputs, "inputs", "", "For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid)")
 				cmd.Flags().StringVar(&fKey, "key", "", "The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield")
-				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component")
+				cmd.Flags().StringVar(&fOwnerKind, "owner-kind", "", "For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per slot-bound member with value.<alias> and has.<alias> per input; defaults to component")
 				cmd.Flags().StringVar(&fSite, "site", "", "Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria")
 				_ = cmd.MarkFlagRequired("site")
 				cmd.Flags().StringVar(&fSource, "source", "", "The expression")
@@ -4130,8 +4473,8 @@ func generatedCommands() []*cobra.Command {
 				var fTemplate string
 				cmd := &cobra.Command{
 					Use:     "createFromTemplate",
-					Short:   "Start a subtree of places from a template",
-					Long:    "Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.",
+					Short:   "Start a subtree of locations from a template",
+					Long:    "Creates a subtree of locations from a location template under a parent location (or as a new top), each location's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template puts in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.",
 					Example: "  omniglass location createFromTemplate --template template",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4154,8 +4497,8 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fLabel, "label", "", "The subtree root's label")
 				cmd.Flags().StringVar(&fName, "name", "", "The subtree root's name; omitted takes the template's, else its type's name rule mints one")
-				cmd.Flags().StringVar(&fParent, "parent", "", "The place the subtree sits under, by name or dotted path; omitted makes it a new top")
-				cmd.Flags().StringVar(&fTemplate, "template", "", "The place template, by name")
+				cmd.Flags().StringVar(&fParent, "parent", "", "The location the subtree sits under, by name or dotted path; omitted makes it a new top")
+				cmd.Flags().StringVar(&fTemplate, "template", "", "The location template, by name")
 				_ = cmd.MarkFlagRequired("template")
 				return cmd
 			}()
@@ -4205,7 +4548,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a location's health",
-						Long:    "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4241,7 +4584,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "listTags <name>",
 					Short:   "List tags on a location",
-					Long:    "Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location listTags <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4344,7 +4687,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a location's effective properties",
-						Long:    "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass location property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4405,7 +4748,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "removeTag <name>",
 					Short:   "Remove a tag value from a location",
-					Long:    "Removes a key's value from a location. Gated by location:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Removes a key's value from a location. Gated by location:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location removeTag <name> --key key",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4486,7 +4829,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "resetName <name>",
 					Short:   "Regenerate a location's name",
-					Long:    "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of location, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.\n\nArguments:\n  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location resetName <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4505,7 +4848,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "setTag <name>",
 					Short:   "Set a tag value on a location",
-					Long:    "Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass location setTag <name> --key key --value value",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4605,7 +4948,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label rule locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name (e.g. wing); \"root\" is reserved")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name")
@@ -4635,7 +4978,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List location types",
-					Long:    "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.",
+					Long:    "Lists the location_type catalog (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.",
 					Example: "  omniglass location-type list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -4803,7 +5146,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -4867,7 +5210,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; the console falls back to map-pin when empty")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label rule for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels")
 				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row")
 				cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it")
 				return cmd
@@ -5053,319 +5396,6 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
-			Use:   "node",
-			Short: "Commands for the node resource",
-		}
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fName string
-				var fToken string
-				cmd := &cobra.Command{
-					Use:     "claim",
-					Short:   "Claim a node identity in exchange for its NATS credential",
-					Long:    "The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.",
-					Example: "  omniglass node claim --name name --token token",
-					Args:    pathArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes:claim")
-						body := map[string]any{}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
-						}
-						if cmd.Flags().Changed("token") {
-							body["token"] = fToken
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fName, "name", "", "The node name the enrollment was minted for")
-				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fToken, "token", "", "The one-time enrollment token from node create, exchanged here for the node's NATS credential")
-				_ = cmd.MarkFlagRequired("token")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fDescription string
-				var fLabel string
-				var fLocation string
-				var fName string
-				cmd := &cobra.Command{
-					Use:     "create",
-					Short:   "Create a node",
-					Long:    "Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.",
-					Example: "  omniglass node create --name name",
-					Args:    pathArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes")
-						body := map[string]any{}
-						if cmd.Flags().Changed("description") {
-							body["description"] = fDescription
-						}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						if cmd.Flags().Changed("location") {
-							body["location"] = fLocation
-						}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form operator notes about the node")
-				cmd.Flags().StringVar(&fLabel, "label", "", "Operator label; falls back to the name when empty")
-				cmd.Flags().StringVar(&fLocation, "location", "", "Optional location the node sits in, by name or id (descriptive placement, not scope)")
-				cmd.Flags().StringVar(&fName, "name", "", "Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot")
-				_ = cmd.MarkFlagRequired("name")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "delete <name>",
-					Short:   "Delete a node",
-					Long:    "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
-					Example: "  omniglass node delete <name>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s", pathSegment(args[0]))
-						return runAPICommand(cmd, "DELETE", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "enroll <name>",
-					Short:   "Mint a node's enrollment token",
-					Long:    "Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.",
-					Example: "  omniglass node enroll <name>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s:enroll", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "get <name>",
-					Short:   "Get a node",
-					Long:    "Fetches a node by name. Requires an all-scope read. Gated by node:read.",
-					Example: "  omniglass node get <name>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s", pathSegment(args[0]))
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "list",
-					Short:   "List nodes",
-					Long:    "Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.",
-					Example: "  omniglass node list",
-					Args:    pathArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes")
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "listTags <name>",
-					Short:   "List tags on a node",
-					Long:    "Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-					Example: "  omniglass node listTags <name>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s:listTags", pathSegment(args[0]))
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "log",
-				Short: "Commands for the log resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <name>",
-						Short:   "List a node's recent self-logs",
-						Long:    "Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.",
-						Example: "  omniglass node log list <name>",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/nodes/%s/logs", pathSegment(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fKey string
-				cmd := &cobra.Command{
-					Use:     "removeTag <name>",
-					Short:   "Remove a tag value from a node",
-					Long:    "Removes a key's value from a node. Gated by node:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-					Example: "  omniglass node removeTag <name> --key key",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s:removeTag", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("key") {
-							body["key"] = fKey
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fKey, "key", "", "The tag key to remove")
-				_ = cmd.MarkFlagRequired("key")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fKey string
-				var fValue string
-				cmd := &cobra.Command{
-					Use:     "setTag <name>",
-					Short:   "Set a tag value on a node",
-					Long:    "Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-					Example: "  omniglass node setTag <name> --key key --value value",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s:setTag", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("key") {
-							body["key"] = fKey
-						}
-						if cmd.Flags().Changed("value") {
-							body["value"] = fValue
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fKey, "key", "", "The tag key (must exist and apply to this kind)")
-				_ = cmd.MarkFlagRequired("key")
-				cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
-				_ = cmd.MarkFlagRequired("value")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "simulation <name>",
-					Short:   "Get a node's simulator",
-					Long:    "The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.",
-					Example: "  omniglass node simulation <name>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s/simulation", pathSegment(args[0]))
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			cmd.AddCommand(func() *cobra.Command {
-				parent := &cobra.Command{
-					Use:   "observation",
-					Short: "Commands for the observation resource",
-				}
-				parent.AddCommand(func() *cobra.Command {
-					cmd := func() *cobra.Command {
-						cmd := &cobra.Command{
-							Use:     "list <name>",
-							Short:   "Get a node's endpoint observation",
-							Long:    "What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.",
-							Example: "  omniglass node simulation observation list <name>",
-							Args:    pathArgs(1),
-							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/nodes/%s/simulation/observation", pathSegment(args[0]))
-								return runAPICommand(cmd, "GET", path, nil)
-							},
-						}
-						return cmd
-					}()
-					return cmd
-				}())
-				return parent
-			}())
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fDescription string
-				var fLabel string
-				var fLocation string
-				cmd := &cobra.Command{
-					Use:     "update <name>",
-					Short:   "Update a node",
-					Long:    "Patches a node's label, description, and location (a nil field is unchanged; a location of \"\" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.",
-					Example: "  omniglass node update <name>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("description") {
-							body["description"] = fDescription
-						}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						if cmd.Flags().Changed("location") {
-							body["location"] = fLocation
-						}
-						return runAPICommand(cmd, "PATCH", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fDescription, "description", "", "New free-form operator notes")
-				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fLocation, "location", "", "Set the node's location by name or id, or \"\" to clear it")
-				return cmd
-			}()
-			return cmd
-		}())
-		return parent
-	}())
-	roots = append(roots, func() *cobra.Command {
-		parent := &cobra.Command{
 			Use:   "notification",
 			Short: "Commands for the notification resource",
 		}
@@ -5395,7 +5425,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List notifications",
-					Long:    "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.",
+					Long:    "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.",
 					Example: "  omniglass notification list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5432,7 +5462,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "retry <id>",
 					Short:   "Retry a failed notification",
-					Long:    "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
+					Long:    "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
 					Example: "  omniglass notification retry <id>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5459,14 +5489,14 @@ func generatedCommands() []*cobra.Command {
 				var fKind string
 				var fLabel string
 				var fName string
-				var fPrincipal string
-				var fPrincipalGroup string
 				var fSecret string
 				var fUrl string
+				var fUser string
+				var fUserGroup string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a notification target",
-					Long:    "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+					Long:    "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
 					Example: "  omniglass notification-target create --kind kind --name name",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5490,17 +5520,17 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
-						if cmd.Flags().Changed("principal") {
-							body["principal"] = fPrincipal
-						}
-						if cmd.Flags().Changed("principal-group") {
-							body["principal_group"] = fPrincipalGroup
-						}
 						if cmd.Flags().Changed("secret") {
 							body["secret"] = fSecret
 						}
 						if cmd.Flags().Changed("url") {
 							body["url"] = fUrl
+						}
+						if cmd.Flags().Changed("user") {
+							body["user"] = fUser
+						}
+						if cmd.Flags().Changed("user-group") {
+							body["user_group"] = fUserGroup
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
@@ -5513,10 +5543,10 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The target's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fPrincipal, "principal", "", "A principal target's person, by username or uuid; binding one takes principal:read:admin")
-				cmd.Flags().StringVar(&fPrincipalGroup, "principal-group", "", "A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin")
 				cmd.Flags().StringVar(&fSecret, "secret", "", "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)")
 				cmd.Flags().StringVar(&fUrl, "url", "", "A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is")
+				cmd.Flags().StringVar(&fUser, "user", "", "A user target's person, by username or uuid; binding one takes user:read:admin")
+				cmd.Flags().StringVar(&fUserGroup, "user-group", "", "A user_group target's group, by name or uuid; binding one takes user_group:read:admin")
 				return cmd
 			}()
 			return cmd
@@ -5617,7 +5647,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a notification target",
-					Long:    "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
+					Long:    "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
 					Example: "  omniglass notification-target update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5671,7 +5701,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a notification type",
-					Long:    "Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
+					Long:    "Registers an operator notification type (official=false). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.",
 					Example: "  omniglass notification-type create --name name --subject subject --text text",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5699,9 +5729,9 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The type's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject template")
+				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject, written in the rule language")
 				_ = cmd.MarkFlagRequired("subject")
-				cmd.Flags().StringVar(&fText, "text", "", "The body text template")
+				cmd.Flags().StringVar(&fText, "text", "", "The body text, written in the rule language")
 				_ = cmd.MarkFlagRequired("text")
 				return cmd
 			}()
@@ -5768,7 +5798,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "preview <name>",
 					Short:   "Preview a notification type against an alarm",
-					Long:    "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
+					Long:    "Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.",
 					Example: "  omniglass notification-type preview <name> --component component",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5795,8 +5825,8 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fAlarm, "alarm", "", "The alarm's id; absent previews the component's most recently raised alarm")
 				cmd.Flags().StringVar(&fComponent, "component", "", "The component the alarm is on, by name or dotted address")
 				_ = cmd.MarkFlagRequired("component")
-				cmd.Flags().StringVar(&fSubject, "subject", "", "A draft subject template to render instead of the stored one, so an editor previews before it saves")
-				cmd.Flags().StringVar(&fText, "text", "", "A draft text template to render instead of the stored one")
+				cmd.Flags().StringVar(&fSubject, "subject", "", "A draft subject to render instead of the stored one, so an editor previews before it saves")
+				cmd.Flags().StringVar(&fText, "text", "", "A draft text to render instead of the stored one")
 				cmd.Flags().StringVar(&fTransition, "transition", "", "The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise)")
 				return cmd
 			}()
@@ -5820,7 +5850,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -5835,7 +5865,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a notification type",
-					Long:    "Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
+					Long:    "Patches an operator type's label, description, subject or text (an absent field is unchanged). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.",
 					Example: "  omniglass notification-type update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5858,8 +5888,8 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the message is for")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label (empty clears it)")
-				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject template")
-				cmd.Flags().StringVar(&fText, "text", "", "The body text template")
+				cmd.Flags().StringVar(&fSubject, "subject", "", "The one-line subject, written in the rule language")
+				cmd.Flags().StringVar(&fText, "text", "", "The body text, written in the rule language")
 				return cmd
 			}()
 			return cmd
@@ -5868,481 +5898,53 @@ func generatedCommands() []*cobra.Command {
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
-			Use:   "principal",
-			Short: "Commands for the principal resource",
+			Use:   "outpost",
+			Short: "Commands for the outpost resource",
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fName string
+				var fToken string
 				cmd := &cobra.Command{
-					Use:     "archive <id>",
-					Short:   "Archive a principal",
-					Long:    "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.",
-					Example: "  omniglass principal archive <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:archive", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "avatar",
-				Short: "Commands for the avatar resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <id>",
-						Short:   "Get a principal's profile picture",
-						Long:    "Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.",
-						Example: "  omniglass principal avatar list <id>",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/avatar", pathSegment(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fEmail string
-				var fLabel string
-				var fPassword string
-				var fUsername string
-				cmd := &cobra.Command{
-					Use:     "create",
-					Short:   "Create a human principal",
-					Long:    "Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.",
-					Example: "  omniglass principal create --username username",
+					Use:     "claim",
+					Short:   "Claim an outpost identity in exchange for its NATS credential",
+					Long:    "The outpost-facing exchange: an outpost presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.",
+					Example: "  omniglass outpost claim --name name --token token",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals")
+						path := fmt.Sprintf("/api/v1/outposts:claim")
 						body := map[string]any{}
-						if cmd.Flags().Changed("email") {
-							body["email"] = fEmail
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
 						}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						if cmd.Flags().Changed("password") {
-							body["password"] = fPassword
-						}
-						if cmd.Flags().Changed("username") {
-							body["username"] = fUsername
+						if cmd.Flags().Changed("token") {
+							body["token"] = fToken
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fEmail, "email", "", "Contact email for the account")
-				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists; falls back to the username")
-				cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in")
-				cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name (lowercase letters, digits, and . _ -)")
-				_ = cmd.MarkFlagRequired("username")
+				cmd.Flags().StringVar(&fName, "name", "", "The outpost name the enrollment was minted for")
+				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fToken, "token", "", "The one-time enrollment token from outpost create, exchanged here for the outpost's NATS credential")
+				_ = cmd.MarkFlagRequired("token")
 				return cmd
 			}()
 			return cmd
 		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "disable <id>",
-					Short:   "Disable a principal",
-					Long:    "Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.",
-					Example: "  omniglass principal disable <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:disable", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "enable <id>",
-					Short:   "Enable a principal",
-					Long:    "Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).",
-					Example: "  omniglass principal enable <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:enable", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "get <id>",
-					Short:   "Get a principal",
-					Long:    "Fetches one principal by id with its profile and grants. Gated by principal:read:admin.",
-					Example: "  omniglass principal get <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s", pathSegment(args[0]))
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "grant",
-				Short: "Commands for the grant resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fRole string
-					var fScopeId string
-					var fScopeKind string
-					var fScopeOp string
-					cmd := &cobra.Command{
-						Use:     "create <id>",
-						Short:   "Grant a role to a principal",
-						Long:    "Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
-						Example: "  omniglass principal grant create <id> --role role --scope-kind scope_kind",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/grants", pathSegment(args[0]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("role") {
-								body["role"] = fRole
-							}
-							if cmd.Flags().Changed("scope-id") {
-								body["scope_id"] = fScopeId
-							}
-							if cmd.Flags().Changed("scope-kind") {
-								body["scope_kind"] = fScopeKind
-							}
-							if cmd.Flags().Changed("scope-op") {
-								body["scope_op"] = fScopeOp
-							}
-							return runAPICommand(cmd, "POST", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
-					_ = cmd.MarkFlagRequired("role")
-					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
-					_ = cmd.MarkFlagRequired("scope-kind")
-					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope.")
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "delete <id> <grantId>",
-						Short:   "Revoke a grant",
-						Long:    "Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.",
-						Example: "  omniglass principal grant delete <id> <grantId>",
-						Args:    pathArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
-							return runAPICommand(cmd, "DELETE", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fDurationMinutes int
-				var fMode string
-				cmd := &cobra.Command{
-					Use:     "impersonate <id>",
-					Short:   "Impersonate a principal (view-as or act-as)",
-					Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
-					Example: "  omniglass principal impersonate <id> --mode mode",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:impersonate", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("duration-minutes") {
-							body["duration_minutes"] = fDurationMinutes
-						}
-						if cmd.Flags().Changed("mode") {
-							body["mode"] = fMode
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().IntVar(&fDurationMinutes, "duration-minutes", 0, "Session lifetime in minutes (default 30, max 1440)")
-				cmd.Flags().StringVar(&fMode, "mode", "", "view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal")
-				_ = cmd.MarkFlagRequired("mode")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var qKind string
-				var qIncludeArchived bool
-				cmd := &cobra.Command{
-					Use:     "list",
-					Short:   "List principals",
-					Long:    "Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.",
-					Example: "  omniglass principal list",
-					Args:    pathArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals")
-						q := url.Values{}
-						if cmd.Flags().Changed("kind") {
-							q.Set("kind", fmt.Sprintf("%v", qKind))
-						}
-						if cmd.Flags().Changed("include-archived") {
-							q.Set("include_archived", fmt.Sprintf("%v", qIncludeArchived))
-						}
-						if enc := q.Encode(); enc != "" {
-							path += "?" + enc
-						}
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				cmd.Flags().StringVar(&qKind, "kind", "", "Optionally filter by principal kind")
-				cmd.Flags().BoolVar(&qIncludeArchived, "include-archived", false, "Include archived (soft-deleted) principals, hidden by default")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "purge <id>",
-					Short:   "Purge a principal",
-					Long:    "Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.",
-					Example: "  omniglass principal purge <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:purge", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "removeAvatar <id>",
-					Short:   "Remove a principal's profile picture",
-					Long:    "Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.",
-					Example: "  omniglass principal removeAvatar <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:removeAvatar", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fPassword string
-				cmd := &cobra.Command{
-					Use:     "resetPassword <id>",
-					Short:   "Reset a principal's password",
-					Long:    "Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
-					Example: "  omniglass principal resetPassword <id> --password password",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:resetPassword", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("password") {
-							body["password"] = fPassword
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fPassword, "password", "", "The new password (at least 12 characters, not a common password, not containing the username)")
-				_ = cmd.MarkFlagRequired("password")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "restore <id>",
-					Short:   "Restore a principal",
-					Long:    "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).",
-					Example: "  omniglass principal restore <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:restore", pathSegment(args[0]))
-						return runAPICommand(cmd, "POST", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "session",
-				Short: "Commands for the session resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <id>",
-						Short:   "List a principal's sessions",
-						Long:    "Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no \"this request's own session\" when viewing another principal).",
-						Example: "  omniglass principal session list <id>",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/sessions", pathSegment(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "revoke <id> <sid>",
-						Short:   "Revoke a principal's session",
-						Long:    "Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
-						Example: "  omniglass principal session revoke <id> <sid>",
-						Args:    pathArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/sessions/%s:revoke", pathSegment(args[0]), pathSegment(args[1]))
-							return runAPICommand(cmd, "POST", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fPurpose string
-					cmd := &cobra.Command{
-						Use:     "revokeAll <id>",
-						Short:   "Revoke all of a principal's sessions or tokens",
-						Long:    "Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
-						Example: "  omniglass principal session revokeAll <id> --purpose purpose",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principals/%s/sessions:revokeAll", pathSegment(args[0]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("purpose") {
-								body["purpose"] = fPurpose
-							}
-							return runAPICommand(cmd, "POST", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fPurpose, "purpose", "", "Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens")
-					_ = cmd.MarkFlagRequired("purpose")
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fImageBase64 string
-				cmd := &cobra.Command{
-					Use:     "setAvatar <id>",
-					Short:   "Set a principal's profile picture",
-					Long:    "Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.",
-					Example: "  omniglass principal setAvatar <id> --image-base64 image_base64",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s:setAvatar", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("image-base64") {
-							body["image_base64"] = fImageBase64
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fImageBase64, "image-base64", "", "The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG")
-				_ = cmd.MarkFlagRequired("image-base64")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fEmail string
-				var fLabel string
-				var fUsername string
-				cmd := &cobra.Command{
-					Use:     "update <id>",
-					Short:   "Update a principal",
-					Long:    "Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.",
-					Example: "  omniglass principal update <id>",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principals/%s", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("email") {
-							body["email"] = fEmail
-						}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						if cmd.Flags().Changed("username") {
-							body["username"] = fUsername
-						}
-						return runAPICommand(cmd, "PATCH", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fEmail, "email", "", "Email; empty clears it")
-				cmd.Flags().StringVar(&fLabel, "label", "", "Label; empty clears it")
-				cmd.Flags().StringVar(&fUsername, "username", "", "Sign-in name (lowercase letters, digits, and . _ -); renaming is safe")
-				return cmd
-			}()
-			return cmd
-		}())
-		return parent
-	}())
-	roots = append(roots, func() *cobra.Command {
-		parent := &cobra.Command{
-			Use:   "principal-group",
-			Short: "Commands for the principal-group resource",
-		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
 				var fLabel string
+				var fLocation string
 				var fName string
 				cmd := &cobra.Command{
 					Use:     "create",
-					Short:   "Create a principal group",
-					Long:    "Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.",
-					Example: "  omniglass principal-group create --name name",
+					Short:   "Create an outpost",
+					Long:    "Registers an edge outpost server-side (day-one enrollment: create, then :enroll to mint its token). Gated by outpost:create.",
+					Example: "  omniglass outpost create --name name",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups")
+						path := fmt.Sprintf("/api/v1/outposts")
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -6350,15 +5952,19 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form notes on what the group is for")
-				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists")
-				cmd.Flags().StringVar(&fName, "name", "", "Unique group name (lowercase letters, digits, and hyphens)")
+				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form operator notes about the outpost")
+				cmd.Flags().StringVar(&fLabel, "label", "", "Operator label; falls back to the name when empty")
+				cmd.Flags().StringVar(&fLocation, "location", "", "Optional location the outpost sits in, by name or id (descriptive placement, not scope)")
+				cmd.Flags().StringVar(&fName, "name", "", "Globally unique outpost name (lowercase letters, digits, and hyphens); it is also the outpost's NATS subject token, which is why the rule forbids a dot")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -6367,13 +5973,13 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
-					Use:     "delete <group>",
-					Short:   "Delete a principal group",
-					Long:    "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).",
-					Example: "  omniglass principal-group delete night-shift",
+					Use:     "delete <name>",
+					Short:   "Delete an outpost",
+					Long:    "Decommissions an outpost: a hard delete that cascades its endpoints, their derived tasks, its outpost-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by outpost:delete.",
+					Example: "  omniglass outpost delete <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s", pathSegment(args[0]))
+						path := fmt.Sprintf("/api/v1/outposts/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "DELETE", path, nil)
 					},
 				}
@@ -6384,14 +5990,14 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
-					Use:     "get <group>",
-					Short:   "Get a principal group",
-					Long:    "One principal group, by name or uuid. Gated by principal_group:read:admin.",
-					Example: "  omniglass principal-group get night-shift",
+					Use:     "enroll <name>",
+					Short:   "Mint an outpost's enrollment token",
+					Long:    "Mints (or re-mints) the outpost's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by outpost:enroll.",
+					Example: "  omniglass outpost enroll <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s", pathSegment(args[0]))
-						return runAPICommand(cmd, "GET", path, nil)
+						path := fmt.Sprintf("/api/v1/outposts/%s:enroll", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
 					},
 				}
 				return cmd
@@ -6399,96 +6005,49 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "grant",
-				Short: "Commands for the grant resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					var fRole string
-					var fScopeId string
-					var fScopeKind string
-					var fScopeOp string
-					cmd := &cobra.Command{
-						Use:     "create <group>",
-						Short:   "Grant a role to a group",
-						Long:    "Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.",
-						Example: "  omniglass principal-group grant create night-shift --role role --scope-kind scope_kind",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", pathSegment(args[0]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("role") {
-								body["role"] = fRole
-							}
-							if cmd.Flags().Changed("scope-id") {
-								body["scope_id"] = fScopeId
-							}
-							if cmd.Flags().Changed("scope-kind") {
-								body["scope_kind"] = fScopeKind
-							}
-							if cmd.Flags().Changed("scope-op") {
-								body["scope_op"] = fScopeOp
-							}
-							return runAPICommand(cmd, "POST", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
-					_ = cmd.MarkFlagRequired("role")
-					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
-					_ = cmd.MarkFlagRequired("scope-kind")
-					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree; moot for the all scope")
-					return cmd
-				}()
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <name>",
+					Short:   "Get an outpost",
+					Long:    "Fetches an outpost by name. Requires an all-scope read. Gated by outpost:read.",
+					Example: "  omniglass outpost get <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/outposts/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
 				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "delete <group> <grantId>",
-						Short:   "Revoke a group grant",
-						Long:    "Removes one grant from a group. Gated by principal_grant:delete (all-scope).",
-						Example: "  omniglass principal-group grant delete night-shift <grantId>",
-						Args:    pathArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
-							return runAPICommand(cmd, "DELETE", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <group>",
-						Short:   "List a group's grants",
-						Long:    "The role x scope grants a group confers on its members. Gated by principal_group:read:admin.",
-						Example: "  omniglass principal-group grant list night-shift",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/grants", pathSegment(args[0]))
-							return runAPICommand(cmd, "GET", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			return parent
+			}()
+			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
-					Short:   "List principal groups",
-					Long:    "Every principal group. Gated by principal_group:read:admin.",
-					Example: "  omniglass principal-group list",
+					Short:   "List outposts",
+					Long:    "Lists the edge outposts. An outpost is fleet-wide, so listing requires an all-scope read. Gated by outpost:read.",
+					Example: "  omniglass outpost list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups")
+						path := fmt.Sprintf("/api/v1/outposts")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "listTags <name>",
+					Short:   "List tags on a outpost",
+					Long:    "Lists the tags bound directly on a outpost (not the resolved cascade). Gated by outpost:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Example: "  omniglass outpost listTags <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/outposts/%s:listTags", pathSegment(args[0]))
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
@@ -6498,60 +6057,19 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
-				Use:   "member",
-				Short: "Commands for the member resource",
+				Use:   "log",
+				Short: "Commands for the log resource",
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
-					var fPrincipalId string
 					cmd := &cobra.Command{
-						Use:     "create <group>",
-						Short:   "Add a member to a group",
-						Long:    "Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.",
-						Example: "  omniglass principal-group member create night-shift --principal-id principal_id",
+						Use:     "list <name>",
+						Short:   "List an outpost's recent self-logs",
+						Long:    "Returns the outpost's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the outpost), newest first, bounded to the last 24 hours. Gated by outpost:read; an out-of-scope outpost is a non-disclosing 404.",
+						Example: "  omniglass outpost log list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/members", pathSegment(args[0]))
-							body := map[string]any{}
-							if cmd.Flags().Changed("principal-id") {
-								body["principal_id"] = fPrincipalId
-							}
-							return runAPICommand(cmd, "POST", path, body)
-						},
-					}
-					cmd.Flags().StringVar(&fPrincipalId, "principal-id", "", "The principal to add: a human's username, a service account's name, or its uuid")
-					_ = cmd.MarkFlagRequired("principal-id")
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "delete <group> <principal>",
-						Short:   "Remove a member from a group",
-						Long:    "Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).",
-						Example: "  omniglass principal-group member delete night-shift alice",
-						Args:    pathArgs(2),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/members/%s", pathSegment(args[0]), pathSegment(args[1]))
-							return runAPICommand(cmd, "DELETE", path, nil)
-						},
-					}
-					return cmd
-				}()
-				return cmd
-			}())
-			parent.AddCommand(func() *cobra.Command {
-				cmd := func() *cobra.Command {
-					cmd := &cobra.Command{
-						Use:     "list <group>",
-						Short:   "List a group's members",
-						Long:    "The principals in a group. Gated by principal_group:read:admin.",
-						Example: "  omniglass principal-group member list night-shift",
-						Args:    pathArgs(1),
-						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/principal-groups/%s/members", pathSegment(args[0]))
+							path := fmt.Sprintf("/api/v1/outposts/%s/logs", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -6563,40 +6081,112 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
-				var fName string
+				var fKey string
 				cmd := &cobra.Command{
-					Use:     "rename <group>",
-					Short:   "Rename a principal group",
-					Long:    "Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).",
-					Example: "  omniglass principal-group rename night-shift --name name",
+					Use:     "removeTag <name>",
+					Short:   "Remove a tag value from a outpost",
+					Long:    "Removes a key's value from a outpost. Gated by outpost:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Example: "  omniglass outpost removeTag <name> --key key",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s:rename", pathSegment(args[0]))
+						path := fmt.Sprintf("/api/v1/outposts/%s:removeTag", pathSegment(args[0]))
 						body := map[string]any{}
-						if cmd.Flags().Changed("name") {
-							body["name"] = fName
+						if cmd.Flags().Changed("key") {
+							body["key"] = fKey
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new unique group name (lowercase letters, digits, hyphens)")
-				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fKey, "key", "", "The tag key to remove")
+				_ = cmd.MarkFlagRequired("key")
 				return cmd
 			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fKey string
+				var fValue string
+				cmd := &cobra.Command{
+					Use:     "setTag <name>",
+					Short:   "Set a tag value on a outpost",
+					Long:    "Binds a value for a key on a outpost. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by outpost:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Example: "  omniglass outpost setTag <name> --key key --value value",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/outposts/%s:setTag", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("key") {
+							body["key"] = fKey
+						}
+						if cmd.Flags().Changed("value") {
+							body["value"] = fValue
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fKey, "key", "", "The tag key (must exist and apply to this kind)")
+				_ = cmd.MarkFlagRequired("key")
+				cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
+				_ = cmd.MarkFlagRequired("value")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "simulation <name>",
+					Short:   "Get an outpost's simulator",
+					Long:    "The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.",
+					Example: "  omniglass outpost simulation <name>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/outposts/%s/simulation", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			cmd.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "observation",
+					Short: "Commands for the observation resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						cmd := &cobra.Command{
+							Use:     "list <name>",
+							Short:   "Get an outpost's endpoint observation",
+							Long:    "What the simulated endpoints beside an outpost saw arrive and how each request settled, and what the outpost tallied sending, read in that order: the simulator, then the outpost, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the outpost simulates. An outpost that does not exist is a 404; no simulator answering, or the outpost not answering, a 503.",
+							Example: "  omniglass outpost simulation observation list <name>",
+							Args:    pathArgs(1),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/outposts/%s/simulation/observation", pathSegment(args[0]))
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
 				var fLabel string
+				var fLocation string
 				cmd := &cobra.Command{
-					Use:     "update <group>",
-					Short:   "Update a principal group",
-					Long:    "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).",
-					Example: "  omniglass principal-group update night-shift",
+					Use:     "update <name>",
+					Short:   "Update an outpost",
+					Long:    "Patches an outpost's label, description, and location (a nil field is unchanged; a location of \"\" clears it). The name is immutable. Requires an all-scope action. Gated by outpost:update.",
+					Example: "  omniglass outpost update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/principal-groups/%s", pathSegment(args[0]))
+						path := fmt.Sprintf("/api/v1/outposts/%s", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("description") {
 							body["description"] = fDescription
@@ -6604,11 +6194,15 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDescription, "description", "", "Description; empty clears it")
-				cmd.Flags().StringVar(&fLabel, "label", "", "Label; empty clears it")
+				cmd.Flags().StringVar(&fDescription, "description", "", "New free-form operator notes")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fLocation, "location", "", "Set the outpost's location by name or id, or \"\" to clear it")
 				return cmd
 			}()
 			return cmd
@@ -6670,7 +6264,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fComponentType, "component-type", "", "The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.")
+				cmd.Flags().StringVar(&fComponentType, "component-type", "", "The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to a type in that tree. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.")
 				_ = cmd.MarkFlagRequired("component-type")
 				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "The driver that talks to it, by handle or uuid")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A product-level icon override; unset inherits the component_type's icon")
@@ -6678,7 +6272,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("kind")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
@@ -6726,7 +6320,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List products",
-					Long:    "Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
+					Long:    "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
 					Example: "  omniglass product list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6894,7 +6488,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -6951,7 +6545,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new icon override; an empty string clears it, so the product inherits its component_type's icon")
 				cmd.Flags().StringVar(&fKind, "kind", "", "A new product class")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label rule; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid; an empty string clears it")
 				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid; an empty string clears it")
 				return cmd
@@ -7343,7 +6937,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List your own sessions and tokens",
-					Long:    "Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.",
+					Long:    "Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another user's). The token secret is never returned.",
 					Example: "  omniglass session list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7408,7 +7002,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <namespace>",
 					Short:   "Restore a settings namespace to defaults",
-					Long:    "Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
+					Long:    "Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
 					Example: "  omniglass setting delete <namespace>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7447,7 +7041,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list",
 						Short:   "Get the caller's effective settings",
-						Long:    "The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
+						Long:    "The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
 						Example: "  omniglass setting me list",
 						Args:    pathArgs(0),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -7466,7 +7060,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "restoreDefaults",
 					Short:   "Restore all settings to defaults",
-					Long:    "Removes every platform override (a factory reset). Gated by settings:update and platform:update.",
+					Long:    "Removes every platform binding (a factory reset). Gated by settings:update and platform:update.",
 					Example: "  omniglass setting restoreDefaults",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7480,17 +7074,24 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fBody, fBodyFile string
 				cmd := &cobra.Command{
 					Use:     "update <namespace>",
 					Short:   "Update a settings namespace",
-					Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.",
-					Example: "  omniglass setting update <namespace>",
+					Long:    "Applies an RFC 7386 JSON Merge Patch to the namespace's platform binding; null on a key restores it (for example {\"egress_allow\":null}). Gated by settings:update and platform:update.\n\nThe request body is a JSON object: pass it inline with --body, or from a file (or - for stdin) with --body-file. A malformed document is refused before any request is made.",
+					Example: "  omniglass setting update notification --body '{\"egress_allow\":[\"smtp.example.com\"]}'",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/settings/%s", pathSegment(args[0]))
-						return runAPICommand(cmd, "PATCH", path, nil)
+						body, err := freeFormBody(cmd, fBody, fBodyFile, true)
+						if err != nil {
+							return err
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fBody, "body", "", "the request body as a JSON object")
+				cmd.Flags().StringVar(&fBodyFile, "body-file", "", "read the request body, a JSON object, from this file (- for stdin)")
 				return cmd
 			}()
 			return cmd
@@ -7537,7 +7138,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The level's name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().IntVar(&fRank, "rank", 0, "Its place among the levels: higher is more severe; unique")
+				cmd.Flags().IntVar(&fRank, "rank", 0, "Its position among the levels: higher is more severe; unique")
 				_ = cmd.MarkFlagRequired("rank")
 				return cmd
 			}()
@@ -7627,7 +7228,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fColor, "color", "", "One of gray, blue, green, yellow, orange, red, darkred")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "A new name; every alarm at this level follows")
-				cmd.Flags().IntVar(&fRank, "rank", 0, "Its place among the levels; unique")
+				cmd.Flags().IntVar(&fRank, "rank", 0, "Its position among the levels; unique")
 				return cmd
 			}()
 			return cmd
@@ -7647,11 +7248,11 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "add-component <name>",
 					Short:   "Add a simulated component",
-					Long:    "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.",
+					Long:    "Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the outpost: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the outpost's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. An outpost with no simulator connected is a 409, and a product no profile simulates a 422.",
 					Example: "  omniglass simulation add-component <name> --name name --product product",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/components", pathSegment(args[0]))
+						path := fmt.Sprintf("/api/v1/outposts/%s/simulation/components", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
@@ -7683,11 +7284,11 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "add-system <name>",
 					Short:   "Add a simulated system",
-					Long:    "Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
+					Long:    "Creates a system built to a standard, with a simulated component for each staffed slot in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its slot, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; slots nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its slot writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.",
 					Example: "  omniglass simulation add-system <name> --standard standard --system-type system_type",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/nodes/%s/simulation/systems", pathSegment(args[0]))
+						path := fmt.Sprintf("/api/v1/outposts/%s/simulation/systems", pathSegment(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
@@ -7706,7 +7307,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fLocation, "location", "", "Where the system and its components sit, by name or dotted path")
 				cmd.Flags().StringVar(&fName, "name", "", "The system's name; minted from its type when empty")
-				cmd.Flags().StringVar(&fStandard, "standard", "", "The standard the system is built to; its roles decide the components")
+				cmd.Flags().StringVar(&fStandard, "standard", "", "The standard the system is built to; its slots decide the components")
 				_ = cmd.MarkFlagRequired("standard")
 				cmd.Flags().StringVar(&fSystemType, "system-type", "", "The system's type, which also mints its name when none is given")
 				_ = cmd.MarkFlagRequired("system-type")
@@ -7719,7 +7320,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get",
 					Short:   "Get the simulated fleet",
-					Long:    "Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
+					Long:    "Every outpost a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees an outpost's simulator when its component read scope holds at least one component the outpost simulates (an all-scope reader sees all of them); no outpost read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.",
 					Example: "  omniglass simulation get",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7736,7 +7337,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "plan-system <standard>",
 					Short:   "Plan a simulated system to a standard",
-					Long:    "Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.",
+					Long:    "Previews a simulated system built to a standard: each of the standard's slots (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.",
 					Example: "  omniglass simulation plan-system <standard>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7816,7 +7417,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "createFromTemplate",
 					Short:   "Create a standard from a template",
-					Long:    "Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.",
+					Long:    "Writes one standard of your own (official false) from a standard template in the catalog: its slots, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.",
 					Example: "  omniglass standard createFromTemplate --template template",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7885,7 +7486,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List standards",
-					Long:    "Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.",
+					Long:    "Lists the standard catalog, ordered alphabetically by label. A standard is the contract a system is built to. Gated by standard:read.",
 					Example: "  omniglass standard list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8053,7 +7654,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -8061,19 +7662,19 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
-				Use:   "role",
-				Short: "Commands for the role resource",
+				Use:   "slot",
+				Short: "Commands for the slot resource",
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
-						Use:     "delete <id> <role>",
-						Short:   "Withdraw a role from a standard",
-						Long:    "Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.",
-						Example: "  omniglass standard role delete meeting-room <role>",
+						Use:     "delete <id> <slot>",
+						Short:   "Withdraw a slot from a standard",
+						Long:    "Removes the slot from the standard, and with it every assignment conforming systems made to it. A slot the standard does not declare is a 404. Gated by standard:delete.",
+						Example: "  omniglass standard slot delete meeting-room <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -8085,12 +7686,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <id>",
-						Short:   "List a standard's declared roles",
-						Long:    "Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.",
-						Example: "  omniglass standard role list meeting-room",
+						Short:   "List a standard's declared slots",
+						Long:    "Lists the slots this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.",
+						Example: "  omniglass standard slot list meeting-room",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/roles", pathSegment(args[0]))
+							path := fmt.Sprintf("/api/v1/standards/%s/slots", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -8110,13 +7711,13 @@ func generatedCommands() []*cobra.Command {
 					var fQuorum int
 					var fUpdateMask string
 					cmd := &cobra.Command{
-						Use:     "update <id> <role>",
-						Short:   "Declare a role on a standard",
-						Long:    "Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a role name must mean one role in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.",
-						Example: "  omniglass standard role update meeting-room <role>",
+						Use:     "update <id> <slot>",
+						Short:   "Declare a slot on a standard",
+						Long:    "Declares a slot every conforming system needs filled, or revises it in place (the slot is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a slot name must mean one slot in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.",
+						Example: "  omniglass standard slot update meeting-room <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/standards/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/standards/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
@@ -8149,13 +7750,13 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask")
-					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422")
-					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
-					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
-					cmd.Flags().StringVar(&fLabel, "label", "", "The role's human label; defaults to the role name on first declare")
+					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this slot joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the slot, making it unconditional; an unknown choice or alternate is a 422")
+					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the slot will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
+					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
+					cmd.Flags().StringVar(&fLabel, "label", "", "The slot's human label; defaults to the slot name on first declare")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask")
-					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
-					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the role; one on first declare")
+					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the slot, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
+					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the slot; one on first declare")
 					cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send [\"*\"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it")
 					return cmd
 				}()
@@ -8190,7 +7791,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fMap, "map", "", "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair")
+				cmd.Flags().StringVar(&fMap, "map", "", "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (slot, position) pair")
 				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A new variant parent, by handle or uuid; omit to leave unchanged, \"\" to clear it back to a standalone standard")
 				return cmd
 			}()
@@ -8213,7 +7814,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's members' alarms",
-						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system alarm list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8273,7 +7874,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a system",
-					Long:    "Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.",
+					Long:    "Creates a system, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped system:create grant; a root with no location needs the all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.",
 					Example: "  omniglass system create",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8309,7 +7910,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard it conforms to, by handle or uuid; omit for a one-off system")
-				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified")
+				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified")
 				return cmd
 			}()
 			return cmd
@@ -8320,13 +7921,13 @@ func generatedCommands() []*cobra.Command {
 				var fLabel string
 				var fLocation string
 				var fName string
-				var fNode string
+				var fOutpost string
 				var fStandard string
 				var fTemplate string
 				cmd := &cobra.Command{
 					Use:     "createFromTemplate",
 					Short:   "Start a whole system from a template",
-					Long:    "Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.",
+					Long:    "Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each slot filled to its quorum and assigned, and the declared values. A component whose slot you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the slots.",
 					Example: "  omniglass system createFromTemplate --template template",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8344,8 +7945,8 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
-						if cmd.Flags().Changed("node") {
-							body["node"] = fNode
+						if cmd.Flags().Changed("outpost") {
+							body["outpost"] = fOutpost
 						}
 						if cmd.Flags().Changed("standard") {
 							body["standard"] = fStandard
@@ -8356,11 +7957,11 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fAttach, "attach", "", "Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached")
+				cmd.Flags().StringVar(&fAttach, "attach", "", "Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached")
 				cmd.Flags().StringVar(&fLabel, "label", "", "The system's label")
-				cmd.Flags().StringVar(&fLocation, "location", "", "The place the system and its components sit in, by name or dotted path")
+				cmd.Flags().StringVar(&fLocation, "location", "", "The location the system and its components sit in, by name or dotted path")
 				cmd.Flags().StringVar(&fName, "name", "", "The system's name; minted from its type when empty")
-				cmd.Flags().StringVar(&fNode, "node", "", "The node the endpoints are placed on; needed when any component attaches")
+				cmd.Flags().StringVar(&fOutpost, "outpost", "", "The outpost the endpoints are placed on; needed when any component attaches")
 				cmd.Flags().StringVar(&fStandard, "standard", "", "A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name")
 				cmd.Flags().StringVar(&fTemplate, "template", "", "The system template, by name")
 				_ = cmd.MarkFlagRequired("template")
@@ -8431,7 +8032,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "health",
 					Short:   "Read every system's health verdict",
-					Long:    "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
+					Long:    "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
 					Example: "  omniglass system health",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8446,7 +8047,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Read a system's health",
-						Long:    "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system health list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8482,7 +8083,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "listTags <name>",
 					Short:   "List tags on a system",
-					Long:    "Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system listTags <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8542,7 +8143,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <name> <component>",
 						Short:   "Take a component out of a system",
-						Long:    "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Unbinds this component from the system. Refused with a 409 while it still fills a slot here, since removing it would leave the system staffed by a non-member: unassign the slot first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system member delete <name> <component>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8559,7 +8160,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List the components in a system",
-						Long:    "The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system member list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8686,7 +8287,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "move <name>",
 					Short:   "Move a system",
-					Long:    "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a system for read and create only). A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system move <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8751,7 +8352,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's properties and where each stands",
-						Long:    "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system property list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -8777,7 +8378,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "list <name> <property>",
 							Short:   "Read one property series' change history",
-							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
+							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
 							Example: "  omniglass system property sample list <name> <property>",
 							Args:    pathArgs(2),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -8804,7 +8405,7 @@ func generatedCommands() []*cobra.Command {
 						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
 						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset. Ignored when a resolution is set")
 						cmd.Flags().IntVar(&qResolution, "resolution", 0, "The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused")
-						cmd.Flags().StringVar(&qInstance, "instance", "", "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution")
+						cmd.Flags().StringVar(&qInstance, "instance", "", "The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it")
 						return cmd
 					}()
 					return cmd
@@ -8860,7 +8461,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "removeTag <name>",
 					Short:   "Remove a tag value from a system",
-					Long:    "Removes a key's value from a system. Gated by system:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Removes a key's value from a system. Gated by system:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system removeTag <name> --key key",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -8940,7 +8541,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "The parent system, by name or uuid. Part of the placement bucket a generated name's ordinal is read from. Resolved within the caller's system:create scope.")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard this system conforms to, by name or uuid; omit for a one-off system")
-				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row.")
+				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that catalog row.")
 				return cmd
 			}()
 			return cmd
@@ -8963,9 +8564,39 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fKey string
+				var fValue string
+				cmd := &cobra.Command{
+					Use:     "setTag <name>",
+					Short:   "Set a tag value on a system",
+					Long:    "Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Example: "  omniglass system setTag <name> --key key --value value",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems/%s:setTag", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("key") {
+							body["key"] = fKey
+						}
+						if cmd.Flags().Changed("value") {
+							body["value"] = fValue
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fKey, "key", "", "The tag key (must exist and apply to this kind)")
+				_ = cmd.MarkFlagRequired("key")
+				cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
+				_ = cmd.MarkFlagRequired("value")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
-				Use:   "role",
-				Short: "Commands for the role resource",
+				Use:   "slot",
+				Short: "Commands for the slot resource",
 			}
 			parent.AddCommand(func() *cobra.Command {
 				parent := &cobra.Command{
@@ -8975,13 +8606,13 @@ func generatedCommands() []*cobra.Command {
 				parent.AddCommand(func() *cobra.Command {
 					cmd := func() *cobra.Command {
 						cmd := &cobra.Command{
-							Use:     "delete <name> <role> <component>",
-							Short:   "Unassign a component from a role",
-							Long:    "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-							Example: "  omniglass system role assignment delete <name> <role> <component>",
+							Use:     "delete <name> <slot> <component>",
+							Short:   "Unassign a component from a slot",
+							Long:    "Takes this component out of the slot, leaving the slot understaffed until another fills it. A component that was not filling the slot is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the slot's own read already names it).\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+							Example: "  omniglass system slot assignment delete <name> <slot> <component>",
 							Args:    pathArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
+								path := fmt.Sprintf("/api/v1/systems/%s/slots/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
 								return runAPICommand(cmd, "DELETE", path, nil)
 							},
 						}
@@ -8992,13 +8623,13 @@ func generatedCommands() []*cobra.Command {
 				parent.AddCommand(func() *cobra.Command {
 					cmd := func() *cobra.Command {
 						cmd := &cobra.Command{
-							Use:     "update <name> <role> <component>",
-							Short:   "Assign a component to a role",
-							Long:    "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-							Example: "  omniglass system role assignment update <name> <role> <component>",
+							Use:     "update <name> <slot> <component>",
+							Short:   "Assign a component to a slot",
+							Long:    "Puts this component in the slot for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the slot accepts, or (if the slot pins products) its product not one of them. A slot with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a slot makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.\n  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+							Example: "  omniglass system slot assignment update <name> <slot> <component>",
 							Args:    pathArgs(3),
 							RunE: func(cmd *cobra.Command, args []string) error {
-								path := fmt.Sprintf("/api/v1/systems/%s/roles/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
+								path := fmt.Sprintf("/api/v1/systems/%s/slots/%s/assignments/%s", pathSegment(args[0]), pathSegment(args[1]), pathSegment(args[2]))
 								return runAPICommand(cmd, "PUT", path, nil)
 							},
 						}
@@ -9011,13 +8642,13 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
-						Use:     "delete <name> <role>",
-						Short:   "Withdraw a role from a system",
-						Long:    "Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass system role delete <name> <role>",
+						Use:     "delete <name> <slot>",
+						Short:   "Withdraw a slot from a system",
+						Long:    "Removes a slot declared on this system, and with it every assignment to it. A slot the system does not declare itself is a 404 (a slot inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass system slot delete <name> <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
 							return runAPICommand(cmd, "DELETE", path, nil)
 						},
 					}
@@ -9029,12 +8660,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
-						Short:   "List a system's effective roles",
-						Long:    "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass system role list <name>",
+						Short:   "List a system's effective slots",
+						Long:    "Every slot this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass system slot list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles", pathSegment(args[0]))
+							path := fmt.Sprintf("/api/v1/systems/%s/slots", pathSegment(args[0]))
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}
@@ -9047,13 +8678,13 @@ func generatedCommands() []*cobra.Command {
 					var fPosition int
 					var fWith int
 					cmd := &cobra.Command{
-						Use:     "swapPositions <name> <role>",
-						Short:   "Exchange two occupants' positions within a role",
-						Long:    "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass system role swapPositions <name> <role> --position <int> --with <int>",
+						Use:     "swapPositions <name> <slot>",
+						Short:   "Exchange two occupants' positions within a slot",
+						Long:    "Exchanges the positions of whichever components currently hold position and with within this slot: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass system slot swapPositions <name> <slot> --position <int> --with <int>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s:swapPositions", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/slots/%s:swapPositions", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("position") {
 								body["position"] = fPosition
@@ -9084,13 +8715,13 @@ func generatedCommands() []*cobra.Command {
 					var fQuorum int
 					var fUpdateMask string
 					cmd := &cobra.Command{
-						Use:     "update <name> <role>",
-						Short:   "Declare a role on a system",
-						Long:    "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-						Example: "  omniglass system role update <name> <role>",
+						Use:     "update <name> <slot>",
+						Short:   "Declare a slot on a system",
+						Long:    "Declares a slot directly on this system (how a one-off system gets slots at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. A name the system's standard already declares is a 409: a system slot never shadows an inherited one, since a slot name must mean one slot in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Example: "  omniglass system slot update <name> <slot>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s", pathSegment(args[0]), pathSegment(args[1]))
+							path := fmt.Sprintf("/api/v1/systems/%s/slots/%s", pathSegment(args[0]), pathSegment(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("accepted-types") {
 								body["accepted_types"] = jsonOrString(fAcceptedTypes)
@@ -9123,13 +8754,13 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask")
-					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422")
-					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
-					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
-					cmd.Flags().StringVar(&fLabel, "label", "", "The role's human label; defaults to the role name on first declare")
+					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this slot joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the slot, making it unconditional; an unknown choice or alternate is a 422")
+					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the slot will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
+					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
+					cmd.Flags().StringVar(&fLabel, "label", "", "The slot's human label; defaults to the slot name on first declare")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask")
-					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
-					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the role; one on first declare")
+					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the slot, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
+					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the slot; one on first declare")
 					cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send [\"*\"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it")
 					return cmd
 				}()
@@ -9139,43 +8770,13 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
-				var fKey string
-				var fValue string
-				cmd := &cobra.Command{
-					Use:     "setTag <name>",
-					Short:   "Set a tag value on a system",
-					Long:    "Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.\n\nArguments:\n  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
-					Example: "  omniglass system setTag <name> --key key --value value",
-					Args:    pathArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/systems/%s:setTag", pathSegment(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("key") {
-							body["key"] = fKey
-						}
-						if cmd.Flags().Changed("value") {
-							body["value"] = fValue
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fKey, "key", "", "The tag key (must exist and apply to this kind)")
-				_ = cmd.MarkFlagRequired("key")
-				cmd.Flags().StringVar(&fValue, "value", "", "The bound value")
-				_ = cmd.MarkFlagRequired("value")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
 				var fLabel string
 				var fStandardId string
 				var fSystemTypeId string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a system",
-					Long:    "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+					Long:    "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a slot name the system declares itself is a 409 naming the slot, since a slot name must mean one slot in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited slot moves onto the new standard's slot of the same name when it is still a typed match and the slot has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 					Example: "  omniglass system update <name>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9253,7 +8854,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label rule systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent system_type, by name or uuid; omit for a root type")
@@ -9284,7 +8885,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List system types",
-					Long:    "Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.",
+					Long:    "Lists the system_type catalog (the taxonomy of what a system is for: meeting, teaching, signage), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.",
 					Example: "  omniglass system-type list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9333,7 +8934,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label rule for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels")
 				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).")
 				return cmd
 			}()
@@ -9580,7 +9181,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "push",
 					Short:   "Push telemetry for an owner",
-					Long:    "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key a node writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is a node's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.",
+					Long:    "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.",
 					Example: "  omniglass telemetry push --owner <json>",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9611,7 +9212,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fEvents, "events", "", "Natively caught occurrences, validated against event_type")
-				cmd.Flags().StringVar(&fLogs, "logs", "", "Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422")
+				cmd.Flags().StringVar(&fLogs, "logs", "", "Raw untyped log lines. No catalog gate. Component owners only: a system batch carrying one is refused with a 422")
 				cmd.Flags().StringVar(&fMetrics, "metrics", "", "Numeric observations, validated against metric_type")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The entity every row in the batch lands under")
 				_ = cmd.MarkFlagRequired("owner")
@@ -9684,7 +9285,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List the transports the platform speaks",
-					Long:    "Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.",
+					Long:    "Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.",
 					Example: "  omniglass transport list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9708,7 +9309,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List the sources no endpoint claims",
-					Long:    "The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as nodes are.",
+					Long:    "The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by outpost:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as outposts are.",
 					Example: "  omniglass unclaimed-source list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9716,6 +9317,755 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "user",
+			Short: "Commands for the user resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "archive <id>",
+					Short:   "Archive a user",
+					Long:    "Soft-deletes a user: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by user:archive (all-scope). The last active owner cannot be archived.",
+					Example: "  omniglass user archive <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:archive", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "avatar",
+				Short: "Commands for the avatar resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <id>",
+						Short:   "Get a user's profile picture",
+						Long:    "Returns the user's profile picture as a base64-encoded JPEG. Gated by user:read:admin. A user without a picture is a 404.",
+						Example: "  omniglass user avatar list <id>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/avatar", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fEmail string
+				var fLabel string
+				var fPassword string
+				var fUsername string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a person",
+					Long:    "Creates a person with an optional initial password. Gated by user:create (all-scope). The new user holds no grants; assign roles separately.",
+					Example: "  omniglass user create --username username",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users")
+						body := map[string]any{}
+						if cmd.Flags().Changed("email") {
+							body["email"] = fEmail
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("password") {
+							body["password"] = fPassword
+						}
+						if cmd.Flags().Changed("username") {
+							body["username"] = fUsername
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fEmail, "email", "", "Contact email for the account")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists; falls back to the username")
+				cmd.Flags().StringVar(&fPassword, "password", "", "Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in")
+				cmd.Flags().StringVar(&fUsername, "username", "", "Unique sign-in name (lowercase letters, digits, and . _ -)")
+				_ = cmd.MarkFlagRequired("username")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "disable <id>",
+					Short:   "Disable a user",
+					Long:    "Soft-disables a user so it can no longer authenticate; its audit trail is kept. Gated by user:update (all-scope). The last active owner cannot be disabled.",
+					Example: "  omniglass user disable <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:disable", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "enable <id>",
+					Short:   "Enable a user",
+					Long:    "Re-enables a disabled user, restoring its ability to authenticate. Gated by user:update (all-scope).",
+					Example: "  omniglass user enable <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:enable", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <id>",
+					Short:   "Get a user",
+					Long:    "Fetches one user by id with its profile and grants. Gated by user:read:admin.",
+					Example: "  omniglass user get <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "grant",
+				Short: "Commands for the grant resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fRole string
+					var fScopeId string
+					var fScopeKind string
+					var fScopeOp string
+					cmd := &cobra.Command{
+						Use:     "create <id>",
+						Short:   "Grant a role to a user",
+						Long:    "Assigns a role at a scope to a user. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.",
+						Example: "  omniglass user grant create <id> --role role --scope-kind scope_kind",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/grants", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("role") {
+								body["role"] = fRole
+							}
+							if cmd.Flags().Changed("scope-id") {
+								body["scope_id"] = fScopeId
+							}
+							if cmd.Flags().Changed("scope-kind") {
+								body["scope_kind"] = fScopeKind
+							}
+							if cmd.Flags().Changed("scope-op") {
+								body["scope_op"] = fScopeOp
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
+					_ = cmd.MarkFlagRequired("role")
+					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
+					_ = cmd.MarkFlagRequired("scope-kind")
+					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope.")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <id> <grantId>",
+						Short:   "Revoke a grant",
+						Long:    "Removes one grant from a user. Gated by user_grant:delete (all-scope). The last owner grant cannot be revoked.",
+						Example: "  omniglass user grant delete <id> <grantId>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDurationMinutes int
+				var fMode string
+				cmd := &cobra.Command{
+					Use:     "impersonate <id>",
+					Short:   "Impersonate a user (view-as or act-as)",
+					Long:    "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by user:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.",
+					Example: "  omniglass user impersonate <id> --mode mode",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:impersonate", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("duration-minutes") {
+							body["duration_minutes"] = fDurationMinutes
+						}
+						if cmd.Flags().Changed("mode") {
+							body["mode"] = fMode
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().IntVar(&fDurationMinutes, "duration-minutes", 0, "Session lifetime in minutes (default 30, max 1440)")
+				cmd.Flags().StringVar(&fMode, "mode", "", "view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user")
+				_ = cmd.MarkFlagRequired("mode")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var qKind string
+				var qIncludeArchived bool
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List users",
+					Long:    "Lists all users (people and machine users) with their grants. Gated by user:read:admin.",
+					Example: "  omniglass user list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users")
+						q := url.Values{}
+						if cmd.Flags().Changed("kind") {
+							q.Set("kind", fmt.Sprintf("%v", qKind))
+						}
+						if cmd.Flags().Changed("include-archived") {
+							q.Set("include_archived", fmt.Sprintf("%v", qIncludeArchived))
+						}
+						if enc := q.Encode(); enc != "" {
+							path += "?" + enc
+						}
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				cmd.Flags().StringVar(&qKind, "kind", "", "Optionally filter by user kind")
+				cmd.Flags().BoolVar(&qIncludeArchived, "include-archived", false, "Include archived (soft-deleted) users, hidden by default")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "purge <id>",
+					Short:   "Purge a user",
+					Long:    "Hard-deletes an archived user and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by user:purge:admin (admin-sensitive, all-scope), and the user must be archived first.",
+					Example: "  omniglass user purge <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:purge", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "removeAvatar <id>",
+					Short:   "Remove a user's profile picture",
+					Long:    "Clears another person's profile picture. Gated by user:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.",
+					Example: "  omniglass user removeAvatar <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:removeAvatar", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fPassword string
+				cmd := &cobra.Command{
+					Use:     "resetPassword <id>",
+					Short:   "Reset a user's password",
+					Long:    "Sets a new password for another person (an administrator action; the target's current password is not required). Gated by user:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.",
+					Example: "  omniglass user resetPassword <id> --password password",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:resetPassword", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("password") {
+							body["password"] = fPassword
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fPassword, "password", "", "The new password (at least 12 characters, not a common password, not containing the username)")
+				_ = cmd.MarkFlagRequired("password")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "restore <id>",
+					Short:   "Restore a user",
+					Long:    "Reverses an archive: the account is restored to active and can authenticate again. Gated by user:archive (all-scope).",
+					Example: "  omniglass user restore <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:restore", pathSegment(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "session",
+				Short: "Commands for the session resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <id>",
+						Short:   "List a user's sessions",
+						Long:    "Lists another user's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by user:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no \"this request's own session\" when viewing another user).",
+						Example: "  omniglass user session list <id>",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/sessions", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "revoke <id> <sid>",
+						Short:   "Revoke a user's session",
+						Long:    "Revokes one of another user's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by user:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-user revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
+						Example: "  omniglass user session revoke <id> <sid>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/sessions/%s:revoke", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "POST", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fPurpose string
+					cmd := &cobra.Command{
+						Use:     "revokeAll <id>",
+						Short:   "Revoke all of a user's sessions or tokens",
+						Long:    "Revokes every one of another user's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by user:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.",
+						Example: "  omniglass user session revokeAll <id> --purpose purpose",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/users/%s/sessions:revokeAll", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("purpose") {
+								body["purpose"] = fPurpose
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fPurpose, "purpose", "", "Which credentials to revoke: all of the user's web-login sessions, or all its CLI/API tokens")
+					_ = cmd.MarkFlagRequired("purpose")
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fImageBase64 string
+				cmd := &cobra.Command{
+					Use:     "setAvatar <id>",
+					Short:   "Set a user's profile picture",
+					Long:    "Sets another person's profile picture (an administrator action). Gated by user:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.",
+					Example: "  omniglass user setAvatar <id> --image-base64 image_base64",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s:setAvatar", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("image-base64") {
+							body["image_base64"] = fImageBase64
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fImageBase64, "image-base64", "", "The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG")
+				_ = cmd.MarkFlagRequired("image-base64")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fEmail string
+				var fLabel string
+				var fUsername string
+				cmd := &cobra.Command{
+					Use:     "update <id>",
+					Short:   "Update a user",
+					Long:    "Updates a person's label, email, and username. Gated by user:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.",
+					Example: "  omniglass user update <id>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/users/%s", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("email") {
+							body["email"] = fEmail
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("username") {
+							body["username"] = fUsername
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fEmail, "email", "", "Email; empty clears it")
+				cmd.Flags().StringVar(&fLabel, "label", "", "Label; empty clears it")
+				cmd.Flags().StringVar(&fUsername, "username", "", "Sign-in name (lowercase letters, digits, and . _ -); renaming is safe")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "user-group",
+			Short: "Commands for the user-group resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fLabel string
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create a user group",
+					Long:    "Creates a user group. Gated by user_group:create (all-scope). A duplicate name is 409.",
+					Example: "  omniglass user-group create --name name",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups")
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "Free-form notes on what the group is for")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists")
+				cmd.Flags().StringVar(&fName, "name", "", "Unique group name (lowercase letters, digits, and hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <group>",
+					Short:   "Delete a user group",
+					Long:    "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by user_group:delete (all-scope).",
+					Example: "  omniglass user-group delete night-shift",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <group>",
+					Short:   "Get a user group",
+					Long:    "One user group, by name or uuid. Gated by user_group:read:admin.",
+					Example: "  omniglass user-group get night-shift",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "grant",
+				Short: "Commands for the grant resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fRole string
+					var fScopeId string
+					var fScopeKind string
+					var fScopeOp string
+					cmd := &cobra.Command{
+						Use:     "create <group>",
+						Short:   "Grant a role to a group",
+						Long:    "Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.",
+						Example: "  omniglass user-group grant create night-shift --role role --scope-kind scope_kind",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/grants", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("role") {
+								body["role"] = fRole
+							}
+							if cmd.Flags().Changed("scope-id") {
+								body["scope_id"] = fScopeId
+							}
+							if cmd.Flags().Changed("scope-kind") {
+								body["scope_kind"] = fScopeKind
+							}
+							if cmd.Flags().Changed("scope-op") {
+								body["scope_op"] = fScopeOp
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
+					_ = cmd.MarkFlagRequired("role")
+					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
+					_ = cmd.MarkFlagRequired("scope-kind")
+					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree; moot for the all scope")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <group> <grantId>",
+						Short:   "Revoke a group grant",
+						Long:    "Removes one grant from a group. Gated by user_grant:delete (all-scope).",
+						Example: "  omniglass user-group grant delete night-shift <grantId>",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/grants/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <group>",
+						Short:   "List a group's grants",
+						Long:    "The role x scope grants a group confers on its members. Gated by user_group:read:admin.",
+						Example: "  omniglass user-group grant list night-shift",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/grants", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List user groups",
+					Long:    "Every user group. Gated by user_group:read:admin.",
+					Example: "  omniglass user-group list",
+					Args:    pathArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "member",
+				Short: "Commands for the member resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					var fUserId string
+					cmd := &cobra.Command{
+						Use:     "create <group>",
+						Short:   "Add a member to a group",
+						Long:    "Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.",
+						Example: "  omniglass user-group member create night-shift --user-id user_id",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/members", pathSegment(args[0]))
+							body := map[string]any{}
+							if cmd.Flags().Changed("user-id") {
+								body["user_id"] = fUserId
+							}
+							return runAPICommand(cmd, "POST", path, body)
+						},
+					}
+					cmd.Flags().StringVar(&fUserId, "user-id", "", "The user to add: a person's username, a machine user's name, or its uuid")
+					_ = cmd.MarkFlagRequired("user-id")
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "delete <group> <user>",
+						Short:   "Remove a member from a group",
+						Long:    "Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).",
+						Example: "  omniglass user-group member delete night-shift alice",
+						Args:    pathArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/members/%s", pathSegment(args[0]), pathSegment(args[1]))
+							return runAPICommand(cmd, "DELETE", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <group>",
+						Short:   "List a group's members",
+						Long:    "The users in a group. Gated by user_group:read:admin.",
+						Example: "  omniglass user-group member list night-shift",
+						Args:    pathArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/user-groups/%s/members", pathSegment(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "rename <group>",
+					Short:   "Rename a user group",
+					Long:    "Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by user_group:rename (all-scope).",
+					Example: "  omniglass user-group rename night-shift --name name",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups/%s:rename", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fName, "name", "", "The new unique group name (lowercase letters, digits, hyphens)")
+				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fDescription string
+				var fLabel string
+				cmd := &cobra.Command{
+					Use:     "update <group>",
+					Short:   "Update a user group",
+					Long:    "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by user_group:update (all-scope).",
+					Example: "  omniglass user-group update night-shift",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/user-groups/%s", pathSegment(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("description") {
+							body["description"] = fDescription
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fDescription, "description", "", "Description; empty clears it")
+				cmd.Flags().StringVar(&fLabel, "label", "", "Label; empty clears it")
 				return cmd
 			}()
 			return cmd
@@ -9937,7 +10287,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List vendors",
-					Long:    "Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.",
+					Long:    "Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.",
 					Example: "  omniglass vendor list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -9967,7 +10317,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)")
+				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)")
 				_ = cmd.MarkFlagRequired("name")
 				return cmd
 			}()
@@ -10057,7 +10407,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list",
 						Short:   "Read Omniglass's own health in one call",
-						Long:    "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.",
+						Long:    "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.",
 						Example: "  omniglass view platform list",
 						Args:    pathArgs(0),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -10079,7 +10429,7 @@ func generatedCommands() []*cobra.Command {
 						cmd := &cobra.Command{
 							Use:     "list",
 							Short:   "Read what each simulator saw against what the platform collected",
-							Long:    "Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.",
+							Long:    "Returns the read behind the Platform health page's simulation section: one row per outpost with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. An outpost reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.",
 							Example: "  omniglass view platform simulation list",
 							Args:    pathArgs(0),
 							RunE: func(cmd *cobra.Command, args []string) error {
@@ -10105,14 +10455,31 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
-					Use:     "get <token>",
+					Use:     "receive <token>",
 					Short:   "Receive a webhook post for an endpoint",
-					Long:    "The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.",
-					Example: "  omniglass webhook get <token>",
+					Long:    "The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a user, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.",
+					Example: "  omniglass webhook receive <token>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/webhooks/%s", pathSegment(args[0]))
 						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "verify <token>",
+					Short:   "Answer a webhook sender's verification of its URL",
+					Long:    "A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is.",
+					Example: "  omniglass webhook verify <token>",
+					Args:    pathArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/webhooks/%s", pathSegment(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
 					},
 				}
 				return cmd

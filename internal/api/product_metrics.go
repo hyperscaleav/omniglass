@@ -61,10 +61,10 @@ type setProductMetricInput struct {
 }
 
 // registerProductMetricRoutes wires the product's declared-metric contract, a
-// sub-collection of the product registry and gated with it: the read rides the
+// sub-collection of the product catalog and gated with it: the read rides the
 // product:read viewer floor, the writes sit at product:update / product:delete.
 // Official products ship their contract with the release, so an operator write
-// against one is refused (422) the same way its registry row is.
+// against one is refused (422) the same way its catalog row is.
 func registerProductMetricRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-product-metrics",
@@ -125,7 +125,7 @@ func registerProductMetricRoutes(api huma.API, a *authenticator, gw storage.Gate
 // mapProductMetricErr translates the contract storage sentinels into HTTP
 // status. A metric the catalog does not know is a 422 (the request names a
 // metric that does not exist), everything else falls through to the shared
-// type-registry mapping, where the product is the type: not-found 404, official
+// type-catalog mapping, where the product is the type: not-found 404, official
 // read-only 422.
 func mapProductMetricErr(err error) error {
 	if errors.Is(err, storage.ErrMetricTypeNotFound) {

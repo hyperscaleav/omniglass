@@ -14,7 +14,7 @@ import (
 
 // TestTelemetryPushRefusesKeysItDoesNotWrite holds the push lane to the
 // writer-class invariant (ADR-0161): a push writes only a collected key.
-// collection-failed is the node's account of a task it could not run (#1086),
+// collection-failed is the outpost's account of a task it could not run (#1086),
 // health is the platform's rollup, and a key a calc rule outputs is that
 // rule's, so each is refused by name with the writer that owns it, and none
 // lands; a collected key in the same batch still does.
@@ -52,7 +52,7 @@ func TestTelemetryPushRefusesKeysItDoesNotWrite(t *testing.T) {
 	for _, rej := range r.Rejected {
 		reasons[rej.Name] = rej.Reason
 	}
-	for key, owner := range map[string]string{"collection-failed": "only the node", "command-issued": "a command's issue", "health": "health rollup", "avg-uptime": "uptime-avg"} {
+	for key, owner := range map[string]string{"collection-failed": "only the outpost", "command-issued": "a command's issue", "health": "health rollup", "avg-uptime": "uptime-avg"} {
 		if !strings.Contains(reasons[key], key) || !strings.Contains(reasons[key], owner) {
 			t.Errorf("push of %s: reason %q, want it refused by name naming its writer (%s)", key, reasons[key], owner)
 		}
@@ -87,16 +87,16 @@ func TestWriterClassOnTheWire(t *testing.T) {
 	ctx := context.Background()
 	_, c, tok := pushHarness(t, ctx)
 	for path, want := range map[string]string{
-		"/metric-types/tcp-connect-time":     "node-probe",
-		"/property-types/tcp-open":           "node-probe",
-		"/property-types/session-state":      "node-probe",
-		"/event-types/collection-failed":     "node-probe",
+		"/metric-types/tcp-connect-time":     "outpost-probe",
+		"/property-types/tcp-open":           "outpost-probe",
+		"/property-types/session-state":      "outpost-probe",
+		"/event-types/collection-failed":     "outpost-probe",
 		"/property-types/health":             "platform",
 		"/property-types/video-input":        "collected",
 		"/metric-types/uptime":               "collected",
 		"/event-types/call-started":          "collected",
 		"/event-types/command-issued":        "command-lifecycle",
-		"/property-types/endpoint-rejection": "node-probe",
+		"/property-types/endpoint-rejection": "outpost-probe",
 	} {
 		var body struct {
 			WriterClass string `json:"writer_class"`

@@ -30,8 +30,9 @@ Each is a gate; a red one blocks the ship.
    architecture-of-record stays consistent. Three status surfaces move with the code, never
    silently: the build-log entry is added as **its own file**,
    `docs/src/content/build-log/<YYYY-MM-DD>-<slug>.md` (frontmatter `title`, `date`, `refs`;
-   the body is the entry's prose, the title becomes its heading); **each architecture page the slice
-   advances has its status badge flipped to its new floor** (`Design` to `Partial` to `Built`); and
+   the body is the entry's prose, the title becomes its heading); **each rebuilt page the slice
+   advances has its status badge flipped to its new floor** (`Design` to `Partial` to `Built`; the
+   old pages carry none and leave as their section is rebuilt, ADR-2087.2); and
    if the build diverges from a page's present-tense design, the page carries an inline note **and**
    a [decision-log](/architecture/decisions/) entry (an ADR) lands in the same PR, as its own file
    via `/record-decision`. Never append to `build-log.md` or `decisions.md`: they hold no entries,
@@ -49,8 +50,8 @@ Each is a gate; a red one blocks the ship.
      live screenshots (item 9).
 
    Mechanically, run the docs lint suite; it must be green:
-   `go test ./internal/docslint/ ./internal/cli/ -run 'TestVocabulary|TestDecisionsFormat|TestBuildLogFormat|TestLogsStayFragments|TestDocsOnlyNameRealCommands' -count=1`.
-   Then sweep the architecture pages the slice touches for `Still Design`, `later slice`,
+   `go test ./internal/docslint/ ./internal/cli/ -run 'TestVocabulary|TestDecisionsFormat|TestBuildLogFormat|TestLogsStayFragments|TestDocsOnlyNameRealCommands|TestBadgeFence' -count=1`.
+   Then sweep the pages the slice touches for `Still Design`, `later slice`,
    `not yet`, `soon`, and `deferred` fences and confirm none of them describes what the slice
    just built; a fence still hedging a shipped capability is a red gate. And if the slice
    renames or retires an identifier, the `internal/docslint` denylist entry and the docs sweep
@@ -71,6 +72,12 @@ Each is a gate; a red one blocks the ship.
    any diff wanting the anti-pattern sweep; `code-review` or `cavecrew-reviewer` otherwise),
    findings addressed. Add a `security-review` lens if the slice touches authz, secrets, the
    edge, or an invariant. Verify behavior to the outcome line, not just call sites.
+   Those judge quality; the contract review is the dispatcher's own reviewer, run locally once
+   the PR is pushed: `hah review <owner/repo#pr>` from a checkout of the PR head (agent-harness
+   `docs/hah.md`). It judges the diff against the ticket the PR closes, with the review lane's
+   prompt, role and model, prints the verdict and posts nothing; a `request-changes` verdict's
+   findings are addressed like any other, so a session-built PR meets the review a
+   dispatcher-built one would.
 8. **Scope honesty.** Every thin cut is documented; every deferral is a filed issue.
 9. **Evidence in the PR.** Paste the *actual* fresh test output (the tail of `make test`, plus
    web tests if touched) into the PR body, not a "they pass" claim. For any operator-facing
@@ -216,7 +223,7 @@ Docs:      <what shipped; arch-of-record consistent | divergence note; lint: gre
             neighbor-check hits and how resolved | none>
 Status:    <pages advanced (page: Design->Partial); build-log entry file; ADR-#### file if diverged;
             fences swept: <pages | n/a>>
-Review:    <reviewer findings + how addressed; security: n/a | note>
+Review:    <reviewer findings + how addressed; hah review: approve | findings addressed; security: n/a | note>
 
 Decisions I made (your veto window): <judgment calls that bound the design>
 Decisions I need from you:           <open forks | none>
@@ -239,6 +246,12 @@ Move each issue the PR closes to In Review on the project board:
 ```bash
 scripts/board.sh set <M> "In Review"
 ```
+
+A session the dispatcher launched (the harness sets `AGENT_ROLE`) leaves this move out: the
+script changes nothing there, prints one line saying the dispatcher moves the ticket after its
+gate, and exits 0. The dispatcher moves a ticket to AI Review only while the board still says
+In Progress, so a session that moved its own ticket to In Review would strand it with no
+reviewer verdict. Run the call anyway; it is safe in both places.
 
 Until the board has an "In Review" status the script lands it on In Progress with one warning;
 that is expected, not a failure. The board's own "Pull request linked to issue" workflow makes

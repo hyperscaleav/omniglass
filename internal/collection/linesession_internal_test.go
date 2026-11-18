@@ -476,3 +476,30 @@ func TestLineConnUnanchoredReplyRegexMatchesAPush(t *testing.T) {
 		}
 	}
 }
+
+// The first ask's banner window (#1418) is a pure function of when the
+// connection opened, the declared quiet, the ask's timeout and the clock.
+func TestConnectQuietEnd(t *testing.T) {
+	opened := time.Unix(1000, 0)
+	for _, tc := range []struct {
+		name    string
+		quiet   time.Duration
+		timeout time.Duration
+		since   time.Duration // now, after the connection opened
+		want    time.Duration // the end, after the connection opened
+	}{
+		{"the default window counts from open", 0, 2 * time.Second, 10 * time.Millisecond, DefaultConnectQuiet},
+		{"a declared window", 500 * time.Millisecond, 5 * time.Second, 0, 500 * time.Millisecond},
+		{"never longer than half the ask's timeout", 0, 100 * time.Millisecond, 0, 50 * time.Millisecond},
+		{"an ask long after open pays the drain window alone", 0, 2 * time.Second, time.Minute, time.Minute + drainWindow},
+		{"none is the drain window", NoConnectQuiet, 2 * time.Second, 5 * time.Millisecond, 5*time.Millisecond + drainWindow},
+		{"a tiny timeout still gets the drain window", 0, time.Millisecond, 0, drainWindow},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := connectQuietEnd(opened, tc.quiet, tc.timeout, opened.Add(tc.since))
+			if want := opened.Add(tc.want); !got.Equal(want) {
+				t.Fatalf("end = %s after open, want %s", got.Sub(opened), tc.want)
+			}
+		})
+	}
+}

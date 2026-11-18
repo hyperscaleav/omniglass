@@ -62,7 +62,7 @@ func fakeServerWithTokens(t *testing.T, mints *atomic.Int32) *httptest.Server {
 		http.SetCookie(w, &http.Cookie{Name: "og_session", Value: "s", Path: "/"})
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("GET /api/v1/nodes/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/v1/outposts/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
@@ -125,11 +125,11 @@ func TestReadyFileSaysHowToReachTheLab(t *testing.T) {
 		"LAB_TOKEN='ogp_minted'",
 		"LAB_USER='dev'",
 		"LAB_PASSWORD='dev'",
-		"LAB_IMAGE='omniglass:dev'",
+		"LAB_IMAGE='" + DevImageFor("abc123") + "'",
 		"LAB_DSN='postgres://omniglass:omniglass@db:5432/omniglass?sslmode=disable'",
 		"LAB_DB='ogwalk-1-ab-db-1'",
 		"LAB_SERVER='ogwalk-1-ab-server-1'",
-		"LAB_NODE='ogwalk-1-ab-node-1'",
+		"LAB_OUTPOST='ogwalk-1-ab-outpost-1'",
 		"LAB_OWNER_PID='42'",
 	} {
 		if !strings.Contains(env, want+"\n") {

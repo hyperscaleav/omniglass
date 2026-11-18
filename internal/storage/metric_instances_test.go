@@ -39,18 +39,18 @@ func TestEffectiveMetricsNameTheShownInstance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	conn := connectDSN(t, dsn)
-	mustExec(t, conn, `insert into endpoint (name, transport, component, node_name, params) values
-		('http', 'http', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:80"}'::jsonb),
-		('tcp', 'tcp', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:1710"}'::jsonb)`, comp.ID)
+	mustExec(t, conn, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('http', 'http', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:80"}'::jsonb),
+		('tcp', 'tcp', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:1710"}'::jsonb)`, comp.ID)
 
 	base := time.Now().UTC().Truncate(time.Millisecond).Add(-10 * time.Minute)
 	observe := func(ep string, v float64, at time.Duration) {
 		t.Helper()
-		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(comp.ID, ep), []storage.MetricSampleWrite{{
+		if err := gw.InsertMetricSamples(ctx, storage.OutpostWriter(comp.ID, ep), []storage.MetricSampleWrite{{
 			OwnerKind: "component", OwnerID: comp.ID, Key: "tcp-connect-time", Instance: ep, Value: v, Source: "tcp", TS: base.Add(at),
 		}}); err != nil {
 			t.Fatalf("observe %v on %s: %v", v, ep, err)
@@ -118,7 +118,7 @@ func TestEffectiveMetricsNameTheShownInstance(t *testing.T) {
 	// leaves the read rather than showing a frozen reading.
 	observeOther := func(ep string, v float64) {
 		t.Helper()
-		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(comp.ID, ep), []storage.MetricSampleWrite{{
+		if err := gw.InsertMetricSamples(ctx, storage.OutpostWriter(comp.ID, ep), []storage.MetricSampleWrite{{
 			OwnerKind: "component", OwnerID: comp.ID, Key: "icmp-rtt-avg", Instance: ep, Value: v, Source: "icmp", TS: base,
 		}}); err != nil {
 			t.Fatalf("observe icmp-rtt-avg on %s: %v", ep, err)

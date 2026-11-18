@@ -10,7 +10,7 @@ import (
 // GapRatio is one gap on one protocol read as a loss ratio: Count over In,
 // the figure the hop could have lost it from. 0 is healthy. Ratio is nil when
 // nothing went in (a ratio over nothing is absent, never 0), when the gap is
-// not observed by the sim, and on a restarted node.
+// not observed by the sim, and on a restarted outpost.
 type GapRatio struct {
 	ClosedLoopGap
 	In    int64    `json:"in"`
@@ -25,10 +25,10 @@ func Ratio(count, in int64) (float64, bool) {
 	return float64(count) / float64(in), true
 }
 
-// Ratios reads every gap of one node's window as a ratio, the zeroes
+// Ratios reads every gap of one outpost's window as a ratio, the zeroes
 // Reconcile leaves out included, in travel order and then by protocol. A
-// node whose counters reset reads its one restarted entry.
-func Ratios(b NodeBracket) []GapRatio {
+// outpost whose counters reset reads its one restarted entry.
+func Ratios(b OutpostBracket) []GapRatio {
 	gaps := Reconcile(b)
 	if restarted(b) {
 		return []GapRatio{{ClosedLoopGap: gaps[0]}}
@@ -46,16 +46,16 @@ func Ratios(b NodeBracket) []GapRatio {
 			r.In += in
 			return
 		}
-		rows[k] = &GapRatio{ClosedLoopGap: ClosedLoopGap{Gap: gap, Node: b.Node, Protocol: protocol, Reading: reading}, In: max(in, 0)}
+		rows[k] = &GapRatio{ClosedLoopGap: ClosedLoopGap{Gap: gap, Outpost: b.Outpost, Protocol: protocol, Reading: reading}, In: max(in, 0)}
 		order = append(order, k)
 	}
 
 	s1a, s2b, s2 := b.Start.SimAfter, b.End.SimBefore, b.End.SimAfter
-	put(GapConnectNotAccepted, "", nodeConnections(b))
+	put(GapConnectNotAccepted, "", outpostConnections(b))
 	replied := func(o collection.SimProtocolObservation) int64 { return o.Answered + o.Refused + o.Error }
-	for _, n2 := range b.End.Node.Transports {
+	for _, n2 := range b.End.Outpost.Transports {
 		p := n2.Transport
-		n1 := tallyRow(b.Start.Node, p)
+		n1 := tallyRow(b.Start.Outpost, p)
 		put(GapSentNotReceived, p, n2.Sent-n1.Sent)
 		// Reconcile reads answers over the narrowest sim span, so that span's
 		// answers are what could have been lost on the way back.
@@ -67,9 +67,9 @@ func Ratios(b NodeBracket) []GapRatio {
 	for _, p := range s2.Protocols {
 		put(GapReceivedNotSettled, p.Protocol, p.Received-s1a.Protocol(p.Protocol).Received)
 	}
-	acknowledged := b.End.Node.BatchesAcknowledged - b.Start.Node.BatchesAcknowledged
+	acknowledged := b.End.Outpost.BatchesAcknowledged - b.Start.Outpost.BatchesAcknowledged
 	put(GapPublishedNotLanded, "", acknowledged)
-	put(GapSpoolDropped, "", acknowledged+b.End.Node.BatchesDropped-b.Start.Node.BatchesDropped)
+	put(GapSpoolDropped, "", acknowledged+b.End.Outpost.BatchesDropped-b.Start.Outpost.BatchesDropped)
 	// Reconcile counts an unhit component once per protocol, however many
 	// of its poll tasks land there, so the figure counts components too.
 	components := map[string]bool{}

@@ -6,7 +6,7 @@ summary: "Accepted: the nodes page's post-command wait (a lane that blocks until
 refs: [1651, 1650, 1624, 1648, 1652, 1655]
 ---
 
-- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [commands](/architecture/commands/#the-command_type-registry), [nodes](/architecture/nodes/#implicit-reachability), [collection](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)
+- **Date:** 2026-11-09 | **Status:** Accepted | **Pages:** [commands](/architecture/commands/#the-command_type-catalog), [nodes](/architecture/nodes/#implicit-reachability), [collection](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)
 - **Decision:**
   1. **Disruption is the command type's fact.** `command_type` gains `disruptive`, `quiet_seconds`
      and `hold_seconds`. A non-disruptive type carries neither duration and a disruptive type's

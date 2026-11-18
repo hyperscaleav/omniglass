@@ -18,7 +18,7 @@ func TestAlarmTimeline(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
 	editor := r.editor()
-	r.rule(storage.EventRuleSpec{Name: "timed", Severity: "high", Message: "bar unreachable", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "timed", Severity: "high", Message: "bar unreachable", ClearEventType: "rule-cleared"})
 	r.observe("tcp", "down")
 	alarm := r.openAlarm("tcp")
 	if _, err := r.f.gw.AcknowledgeAlarm(r.ctx, editor, "bar-1", alarm); err != nil {
@@ -33,10 +33,10 @@ func TestAlarmTimeline(t *testing.T) {
 	}
 	type step struct{ kind, what, actor, rule string }
 	want := []step{
-		{"event", "condition-started", "", "timed"},
+		{"event", "rule-fired", "", "timed"},
 		{"audit", "raise", "", "timed"},
 		{"audit", "acknowledge", "root", ""},
-		{"event", "condition-ended", "", "timed"},
+		{"event", "rule-cleared", "", "timed"},
 		{"audit", "clear", "", "timed"},
 	}
 	if len(got) != len(want) {

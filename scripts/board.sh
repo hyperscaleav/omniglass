@@ -19,6 +19,14 @@
 # status, set <issue> "In Review" lands on "In Progress" with one warning. An
 # archived item is restored by add, set and iteration.
 #
+# A dispatcher session is the exception for In Review. The harness sets
+# AGENT_ROLE on every session it launches, and the dispatcher moves a ticket to
+# AI Review after its gate only while the board still says In Progress, so a
+# session that moved its own ticket to In Review would strand it with no
+# reviewer. With AGENT_ROLE set, set <issue> "In Review" changes nothing, says
+# so in one line and exits 0, before it touches the network. Every other move,
+# and every move without AGENT_ROLE, is as above.
+#
 # The board runs workflows of its own, and two meet this script. "Item added to
 # project" gives a new item a Status a moment after it is added, so when this
 # script adds an issue it waits for that (up to BOARD_SETTLE seconds) before
@@ -85,6 +93,11 @@ issue=${2#\#}
 [[ $issue =~ ^[1-9][0-9]*$ ]] || usage_error "not an issue number: $2"
 want_status=${*:3}
 [[ $SETTLE =~ ^[0-9]+$ ]] || bad_input "BOARD_SETTLE is not a number of seconds: $SETTLE"
+
+if [ "$cmd" = set ] && [ -n "${AGENT_ROLE:-}" ] && [ "$(tr '[:upper:]' '[:lower:]' <<<"$want_status")" = "in review" ]; then
+  say "#$issue: left in its Status; the dispatcher moves it to AI Review after its gate"
+  exit 0
+fi
 
 command -v gh >/dev/null 2>&1 || bad_input "gh is required (https://cli.github.com)"
 command -v jq >/dev/null 2>&1 || bad_input "jq is required"

@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 
 // The drivers data layer: thin typed wrappers over the generated client for the
-// driver registry (the driver picker on the product form). A driver is the
+// driver catalog (the driver picker on the product form). A driver is the
 // implementation that gets/emits/sets a product's signals. It carries a uuid
 // (the stable handle that survives a rename) and a kebab name (the handle an
 // operator reads and types, renameable); official (seed-owned) rows are

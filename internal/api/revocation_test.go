@@ -12,25 +12,25 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// meID returns the principal id behind a live token via /auth/me.
+// meID returns the user id behind a live token via /auth/me.
 func meID(t *testing.T, c *apiClient, tok string) string {
 	t.Helper()
 	_, body := c.send(tok, "GET", "/auth/me", nil)
 	var doc struct {
-		Principal struct {
+		User struct {
 			ID string `json:"id"`
-		} `json:"principal"`
+		} `json:"user"`
 	}
-	if err := json.Unmarshal(body, &doc); err != nil || doc.Principal.ID == "" {
+	if err := json.Unmarshal(body, &doc); err != nil || doc.User.ID == "" {
 		t.Fatalf("resolve /auth/me id: err=%v body=%s", err, body)
 	}
-	return doc.Principal.ID
+	return doc.User.ID
 }
 
 // TestDisableRevokesLiveSessionAPI proves disable is instant, not just refused at
-// next sign-in: a principal with a live bearer that is already authenticating is
+// next sign-in: a user with a live bearer that is already authenticating is
 // rejected on its very next request the moment it is disabled, because authn
-// re-reads the principal (and its `active` flag) from Postgres on every call
+// re-reads the user (and its `active` flag) from Postgres on every call
 // rather than trusting a cached session. Re-enabling restores the same token.
 // Skipped under -short.
 func TestDisableRevokesLiveSessionAPI(t *testing.T) {
@@ -45,8 +45,8 @@ func TestDisableRevokesLiveSessionAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
-	subjTok := principalWithGrants(t, ctx, dsn, "subject", []grant{{role: "viewer", scopeKind: "all"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	subjTok := userWithGrants(t, ctx, dsn, "subject", []grant{{role: "viewer", scopeKind: "all"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	subjID := meID(t, c, subjTok)
@@ -56,7 +56,7 @@ func TestDisableRevokesLiveSessionAPI(t *testing.T) {
 		t.Fatalf("live token before disable: want 200, got %d", code)
 	}
 	// Disable the subject with a different admin's token.
-	if code, _ := c.send(ownerTok, "POST", "/principals/"+subjID+":disable", nil); code != http.StatusNoContent {
+	if code, _ := c.send(ownerTok, "POST", "/users/"+subjID+":disable", nil); code != http.StatusNoContent {
 		t.Fatalf("disable: want 204, got %d", code)
 	}
 	// The very next request on the same live token is rejected (401), not served
@@ -65,7 +65,7 @@ func TestDisableRevokesLiveSessionAPI(t *testing.T) {
 		t.Fatalf("disabled token next request: want 401, got %d", code)
 	}
 	// Re-enabling restores the same token immediately.
-	if code, _ := c.send(ownerTok, "POST", "/principals/"+subjID+":enable", nil); code != http.StatusNoContent {
+	if code, _ := c.send(ownerTok, "POST", "/users/"+subjID+":enable", nil); code != http.StatusNoContent {
 		t.Fatalf("enable: want 204, got %d", code)
 	}
 	if code, _ := c.send(subjTok, "GET", "/locations", nil); code != http.StatusOK {
@@ -73,9 +73,9 @@ func TestDisableRevokesLiveSessionAPI(t *testing.T) {
 	}
 }
 
-// TestRevokeCutsScopeLiveSessionAPI proves de-scoping is instant: a principal that
+// TestRevokeCutsScopeLiveSessionAPI proves de-scoping is instant: a user that
 // can write in scope loses that write on its very next request the moment the
-// granting role is revoked, because scope is resolved from the principal's grants
+// granting role is revoked, because scope is resolved from the user's grants
 // on every request. The read grant (viewer@all) is left intact, so the target is
 // still readable: the revoke removes exactly the write, and the previously
 // in-scope write becomes a capability 403, not a silent success. Skipped under
@@ -107,7 +107,7 @@ func TestRevokeCutsScopeLiveSessionAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Owner builds root > child (the first owner request builds the role index).
@@ -130,7 +130,7 @@ func TestRevokeCutsScopeLiveSessionAPI(t *testing.T) {
 	rootID := entityID(t, c, ownerTok, "/locations", "az-root")
 
 	// Subject: viewer@all (read everywhere) + writer@root (write under root).
-	subjTok := principalWithGrants(t, ctx, dsn, "subject", []grant{
+	subjTok := userWithGrants(t, ctx, dsn, "subject", []grant{
 		{role: "viewer", scopeKind: "all"},
 		{role: "location-writer", scopeKind: "location", scopeID: rootID},
 	})
@@ -143,7 +143,7 @@ func TestRevokeCutsScopeLiveSessionAPI(t *testing.T) {
 
 	// Find and revoke the writer grant (leaving viewer@all).
 	subjID := meID(t, c, subjTok)
-	_, detail := c.send(ownerTok, "GET", "/principals/"+subjID, nil)
+	_, detail := c.send(ownerTok, "GET", "/users/"+subjID, nil)
 	var doc struct {
 		Grants []struct {
 			ID   string `json:"id"`
@@ -162,7 +162,7 @@ func TestRevokeCutsScopeLiveSessionAPI(t *testing.T) {
 	if writerGrantID == "" {
 		t.Fatalf("subject should hold a location-writer grant: %s", detail)
 	}
-	if code, _ := c.send(ownerTok, "DELETE", "/principals/"+subjID+"/grants/"+writerGrantID, nil); code != http.StatusNoContent {
+	if code, _ := c.send(ownerTok, "DELETE", "/users/"+subjID+"/grants/"+writerGrantID, nil); code != http.StatusNoContent {
 		t.Fatalf("revoke writer grant: want 204, got %d", code)
 	}
 

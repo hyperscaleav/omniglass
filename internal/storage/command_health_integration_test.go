@@ -24,8 +24,8 @@ var commandQueueSpec = strings.Replace(lineProtoSpec,
 	`{"command_type": "set-input", "request": {"line": "SET INPUT ${value}", "reply": {"prefix": "INPUT "}}},
 		{"command_type": "reboot", "request": {"line": "REBOOT"}}`, 1)
 
-// commandQueueFixture is a fleet of nodes, each actuating one switcher
-// (switcher-<node>) over the line-proto driver, with an owner to issue
+// commandQueueFixture is a fleet of outposts, each actuating one switcher
+// (switcher-<outpost>) over the line-proto driver, with an owner to issue
 // commands as and a raw connection to age the rows past the gateway.
 type commandQueueFixture struct {
 	gw       *storage.PG
@@ -36,7 +36,7 @@ type commandQueueFixture struct {
 	switcher map[string]string
 }
 
-func newCommandQueueFixture(t *testing.T, nodes ...string) commandQueueFixture {
+func newCommandQueueFixture(t *testing.T, outposts ...string) commandQueueFixture {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -49,16 +49,16 @@ func newCommandQueueFixture(t *testing.T, nodes ...string) commandQueueFixture {
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "line-proto", Label: "Line Proto", Version: "1.0.0", Spec: []byte(commandQueueSpec)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
-	for i, n := range nodes {
-		f.platform[n] = platformNode(t, ctx, gw, n).ID
+	for i, n := range outposts {
+		f.platform[n] = platformOutpost(t, ctx, gw, n).ID
 		comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "switcher-" + n}, all, all, all, all)
 		if err != nil {
 			t.Fatalf("create component: %v", err)
 		}
 		f.switcher[n] = comp.ID
-		name, drv, node := comp.Name, "line-proto", n
+		name, drv, outpost := comp.Name, "line-proto", n
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-			Driver: &drv, Component: &name, Node: &node,
+			Driver: &drv, Component: &name, Outpost: &outpost,
 			Inputs: map[string]string{"host": "10.20.5." + string(rune('1'+i))},
 		}, all); err != nil {
 			t.Fatalf("attach %s: %v", n, err)
@@ -76,32 +76,32 @@ func newCommandQueueFixture(t *testing.T, nodes ...string) commandQueueFixture {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { f.conn.Close(context.Background()) })
-	if err := f.conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&f.actor); err != nil {
+	if err := f.conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&f.actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	return f
 }
 
-// issue issues a command on node's switcher: set-input with an intent, or
+// issue issues a command on outpost's switcher: set-input with an intent, or
 // the fire-and-forget reboot.
-func (f commandQueueFixture) issue(t *testing.T, node, commandType string) int64 {
+func (f commandQueueFixture) issue(t *testing.T, outpost, commandType string) int64 {
 	t.Helper()
 	var intent json.RawMessage
 	if commandType == "set-input" {
 		intent = json.RawMessage(`"hdmi-2"`)
 	}
-	c, err := f.gw.IssueCommand(f.ctx, f.actor, "component", "switcher-"+node, commandType, "", intent, nil)
+	c, err := f.gw.IssueCommand(f.ctx, f.actor, "component", "switcher-"+outpost, commandType, "", intent, nil)
 	if err != nil {
-		t.Fatalf("issue %s on %s: %v", commandType, node, err)
+		t.Fatalf("issue %s on %s: %v", commandType, outpost, err)
 	}
 	return c.ID
 }
 
-func (f commandQueueFixture) pull(t *testing.T, node string) []storage.CommandDelivery {
+func (f commandQueueFixture) pull(t *testing.T, outpost string) []storage.CommandDelivery {
 	t.Helper()
-	got, err := f.gw.PendingNodeCommands(f.ctx, node)
+	got, err := f.gw.PendingOutpostCommands(f.ctx, outpost)
 	if err != nil {
-		t.Fatalf("pull %s: %v", node, err)
+		t.Fatalf("pull %s: %v", outpost, err)
 	}
 	return got
 }
@@ -114,25 +114,25 @@ func (f commandQueueFixture) exec(t *testing.T, sql string, args ...any) {
 }
 
 // health reads the fleet's command queues for the window since, keyed by
-// node.
+// outpost.
 func (f commandQueueFixture) health(t *testing.T, since time.Time) (storage.CommandQueueRead, map[string]storage.CommandQueue) {
 	t.Helper()
 	read, err := f.gw.CommandQueueHealth(f.ctx, since)
 	if err != nil {
 		t.Fatalf("command queue health: %v", err)
 	}
-	byNode := map[string]storage.CommandQueue{}
-	for _, q := range read.Nodes {
-		byNode[q.Node] = q
+	byOutpost := map[string]storage.CommandQueue{}
+	for _, q := range read.Outposts {
+		byOutpost[q.Outpost] = q
 	}
-	return read, byNode
+	return read, byOutpost
 }
 
 // latencySamples counts key's samples on component, each observed and with
-// no collector: the process wrote it, not a node's task.
+// no collector: the process wrote it, not an outpost's task.
 func (f commandQueueFixture) latencySamples(t *testing.T, component, key string) []float64 {
 	t.Helper()
-	rows, err := f.conn.Query(f.ctx, `select m.value, m.provenance, m.node_id is null
+	rows, err := f.conn.Query(f.ctx, `select m.value, m.provenance, m.outpost_id is null
 		from `+storagetest.MetricRows+` m join metric_type t on t.id = m.metric_type_id
 		where m.component_id = $1::uuid and t.name = $2`, component, key)
 	if err != nil {
@@ -180,7 +180,7 @@ func TestCommandRedeliveryKeepsTheFirstDispatch(t *testing.T) {
 	if first == nil || last == nil || !first.Equal(*last) || count != 1 {
 		t.Fatalf("after one delivery first=%v last=%v count=%d, want first = last and one delivery", first, last, count)
 	}
-	// The node went silent: age both stamps past redeliverAfter.
+	// The outpost went silent: age both stamps past redeliverAfter.
 	f.exec(t, `update command set dispatched_at = dispatched_at - interval '31 seconds',
 		first_dispatched_at = first_dispatched_at - interval '31 seconds' where id = $1`, id)
 	firstTaken, _, _ := stamps()
@@ -211,9 +211,9 @@ func TestCommandRedeliveryKeepsTheFirstDispatch(t *testing.T) {
 }
 
 // TestCommandPendingCountAgreesWithThePull (#1626): the health read and the
-// pull resolve the same candidates, so each node's pending count is what its
-// pull returns, and stays counted while the node owes its report. A command
-// no endpoint binds is no node's.
+// pull resolve the same candidates, so each outpost's pending count is what its
+// pull returns, and stays counted while the outpost owes its report. A command
+// no endpoint binds is no outpost's.
 func TestCommandPendingCountAgreesWithThePull(t *testing.T) {
 	t.Parallel()
 	f := newCommandQueueFixture(t, "edge-a", "edge-b", "edge-c")
@@ -229,7 +229,7 @@ func TestCommandPendingCountAgreesWithThePull(t *testing.T) {
 		t.Fatal("the health read carries no database time")
 	}
 	if len(before) != 3 {
-		t.Fatalf("health read %+v, want every node with a platform component, an idle one at zero", read.Nodes)
+		t.Fatalf("health read %+v, want every outpost with a platform component, an idle one at zero", read.Outposts)
 	}
 	pulled := map[string]int{}
 	for _, n := range []string{"edge-a", "edge-b", "edge-c"} {
@@ -256,7 +256,7 @@ func TestCommandPendingCountAgreesWithThePull(t *testing.T) {
 		t.Errorf("edge-c has an oldest %v with nothing pending", after["edge-c"].Oldest)
 	}
 
-	// The read maps to the gauges on each node's platform component: an
+	// The read maps to the gauges on each outpost's platform component: an
 	// idle queue's age at zero, no windowed count on the first pass.
 	metrics := storage.CommandQueueMetrics(read, time.Time{})
 	got := map[string]map[string]float64{}
@@ -294,7 +294,7 @@ func TestCommandPendingCountAgreesWithThePull(t *testing.T) {
 
 // TestCommandLatencySamplesLandOnThePlatformComponent (#1626): the first
 // dispatch writes one dispatch-latency sample and the execution report one
-// execution-latency sample, on the node's platform component, as the
+// execution-latency sample, on the outpost's platform component, as the
 // process. A redelivery writes no second dispatch sample.
 func TestCommandLatencySamplesLandOnThePlatformComponent(t *testing.T) {
 	t.Parallel()
@@ -352,7 +352,7 @@ func TestCommandFirstTakesInOnePullEachKeepTheirSample(t *testing.T) {
 
 // TestCommandStuckAndExpiredCounts (#1626): a command dispatched and silent
 // past redeliverAfter is stuck; a command that crosses deliveryTTL
-// unexecuted counts once, in the window it crossed, as undelivered (no node
+// unexecuted counts once, in the window it crossed, as undelivered (no outpost
 // took it, a fire-and-forget reboot reading settled included) or unexecuted
 // (taken, never reported). The count keys on executed_at and age, not status.
 func TestCommandStuckAndExpiredCounts(t *testing.T) {
@@ -400,7 +400,7 @@ func TestCommandStuckAndExpiredCounts(t *testing.T) {
 
 // TestCommandPendingCountSkipsATerminalCommand (#1630): a command its
 // settlement already stamped terminal inside its delivery window is never
-// handed to a node, so the live queue does not count it either: pending and
+// handed to an outpost, so the live queue does not count it either: pending and
 // its oldest agree with a pull that delivers nothing.
 func TestCommandPendingCountSkipsATerminalCommand(t *testing.T) {
 	t.Parallel()
@@ -416,25 +416,25 @@ func TestCommandPendingCountSkipsATerminalCommand(t *testing.T) {
 	}
 }
 
-// redeliveredOver reads node's windows back to back from start until their
+// redeliveredOver reads outpost's windows back to back from start until their
 // redeliveries sum to want or the deadline passes, then reads one window more,
 // which must count none: each redelivery is counted in exactly one window.
-func (f commandQueueFixture) redeliveredOver(t *testing.T, node string, start storage.CommandQueueRead, want int) {
+func (f commandQueueFixture) redeliveredOver(t *testing.T, outpost string, start storage.CommandQueueRead, want int) {
 	t.Helper()
 	prev, total := start, 0
 	deadline := time.Now().Add(20 * time.Second)
 	for total < want && time.Now().Before(deadline) {
 		time.Sleep(200 * time.Millisecond)
 		read, q := f.health(t, prev.Now)
-		total += q[node].Redelivered
+		total += q[outpost].Redelivered
 		prev = read
 	}
 	if total != want {
-		t.Fatalf("%s's windows counted %d redeliveries, want %d", node, total, want)
+		t.Fatalf("%s's windows counted %d redeliveries, want %d", outpost, total, want)
 	}
 	time.Sleep(200 * time.Millisecond)
-	if _, q := f.health(t, prev.Now); q[node].Redelivered != 0 {
-		t.Errorf("a later window counted %d redeliveries again", q[node].Redelivered)
+	if _, q := f.health(t, prev.Now); q[outpost].Redelivered != 0 {
+		t.Errorf("a later window counted %d redeliveries again", q[outpost].Redelivered)
 	}
 }
 
@@ -488,9 +488,9 @@ func TestCommandRedeliveryCommittedAfterAReadIsCounted(t *testing.T) {
 }
 
 // TestCommandQueueKeysRefuseOtherWriters (#1626): the command queue keys are
-// the process's. A push, a node's task (a driver's collection), a calc rule,
-// an operator and a node's report of itself are each refused; the
-// pull-failure count alone rides the node-self lane.
+// the process's. A push, an outpost's task (a driver's collection), a calc rule,
+// an operator and an outpost's report of itself are each refused; the
+// pull-failure count alone rides the outpost-self lane.
 func TestCommandQueueKeysRefuseOtherWriters(t *testing.T) {
 	t.Parallel()
 	f := newCommandQueueFixture(t, "edge-k")
@@ -502,7 +502,7 @@ func TestCommandQueueKeysRefuseOtherWriters(t *testing.T) {
 		sample := []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: platform, Key: key, Value: 1, TS: time.Now()}}
 		for name, write := range map[string]func() error{
 			"push":     func() error { return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), sample) },
-			"driver":   func() error { return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(platform, ""), sample) },
+			"driver":   func() error { return f.gw.InsertMetricSamples(f.ctx, storage.OutpostWriter(platform, ""), sample) },
 			"calc":     func() error { return f.gw.AdmitWrite(f.ctx, "metric", writerclass.CalcRule, key, "") },
 			"operator": func() error { return f.gw.AdmitWrite(f.ctx, "metric", writerclass.Operator, key, "") },
 		} {

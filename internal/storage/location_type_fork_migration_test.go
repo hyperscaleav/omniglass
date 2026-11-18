@@ -23,7 +23,7 @@ import (
 // already carried it.
 //
 // The flip is the whole migration, and the shadow count below is what says so.
-// An earlier draft captured operator edits into registry_shadow ahead of the
+// An earlier draft captured operator edits into catalog_shadow ahead of the
 // flip, discriminating by the audit trail; that half was removed because there
 // are no releases and no operator data for it to protect (ADR-0106, as amended).
 // The first real release changes that calculus and owes its fleets a migration
@@ -93,11 +93,11 @@ func TestShippedLocationTypesFlipToPlatformOwned(t *testing.T) {
 	// wrote a shadow would be preserving data that does not exist yet while
 	// masking the row's next write behind an overlay nobody asked for.
 	var shadows int
-	if err := conn.QueryRow(ctx, `select count(*) from registry_shadow`).Scan(&shadows); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from catalog_shadow`).Scan(&shadows); err != nil {
 		t.Fatalf("count shadows: %v", err)
 	}
 	if shadows != 0 {
-		t.Errorf("the migration wrote %d registry_shadow rows, want 0: the ownership flip is the whole migration", shadows)
+		t.Errorf("the migration wrote %d catalog_shadow rows, want 0: the ownership flip is the whole migration", shadows)
 	}
 
 	// The down leg mirrors the up: rolling back hands the rows to the operator

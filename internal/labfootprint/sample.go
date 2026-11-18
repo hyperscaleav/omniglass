@@ -61,24 +61,10 @@ type SampleLoop struct {
 // sample in flight is measured to its end and written, since a cut-off
 // window is no figure. Only a write that fails ends the run with an error.
 func RunSamples(stop context.Context, l SampleLoop) error {
-	wait := l.wait
-	if wait == nil {
-		wait = sleep
-	}
-	measureCtx := context.WithoutCancel(stop)
-	start := time.Now()
-	for seq := 1; l.Samples == 0 || seq <= l.Samples; seq++ {
-		if seq > 1 {
-			due := start.Add(time.Duration(seq-1) * l.Every)
-			if err := wait(stop, time.Until(due)); err != nil {
-				return nil
-			}
-		}
-		if stop.Err() != nil {
-			return nil
-		}
+	sched := SampleSchedule{Every: l.Every, Samples: l.Samples, wait: l.wait}
+	return sched.Run(stop, func(ctx context.Context, seq int) error {
 		s := ScaleSample{Seq: seq}
-		res, err := l.Measure(measureCtx, seq)
+		res, err := l.Measure(ctx, seq)
 		if err != nil {
 			s.At, s.Error = time.Now().UTC(), err.Error()
 		} else {
@@ -91,6 +77,45 @@ func RunSamples(stop context.Context, l SampleLoop) error {
 		}
 		if _, err := l.Out.Write(line); err != nil {
 			return fmt.Errorf("write sample %d: %w", seq, err)
+		}
+		return nil
+	})
+}
+
+// SampleSchedule is a sampling run's clock, apart from what a sample
+// measures, so `lab measure --every` and `platform health --every` keep one
+// cadence: a sample every Every, Samples of them (0 runs until stopped).
+type SampleSchedule struct {
+	Every   time.Duration
+	Samples int
+	// wait is sleep unless a test replaces it.
+	wait func(context.Context, time.Duration) error
+}
+
+// Run calls each for every sample in turn. Sample k is due Every after
+// sample k-1 was due, or at once when k-1 overran. Cancelling stop ends the
+// run between samples, with no error; the sample in flight runs to its end
+// on a context that stop does not cancel. An error from each ends the run with
+// that error.
+func (s SampleSchedule) Run(stop context.Context, each func(ctx context.Context, seq int) error) error {
+	wait := s.wait
+	if wait == nil {
+		wait = sleep
+	}
+	ctx := context.WithoutCancel(stop)
+	start := time.Now()
+	for seq := 1; s.Samples == 0 || seq <= s.Samples; seq++ {
+		if seq > 1 {
+			due := start.Add(time.Duration(seq-1) * s.Every)
+			if err := wait(stop, time.Until(due)); err != nil {
+				return nil
+			}
+		}
+		if stop.Err() != nil {
+			return nil
+		}
+		if err := each(ctx, seq); err != nil {
+			return err
 		}
 	}
 	return nil

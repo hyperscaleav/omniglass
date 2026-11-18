@@ -111,9 +111,9 @@ func TestGrantGroupScopeKindRefusedBySchema(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	var principalID, roleID string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&principalID); err != nil {
-		t.Fatalf("principal: %v", err)
+	var userID, roleID string
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&userID); err != nil {
+		t.Fatalf("user: %v", err)
 	}
 	if err := conn.QueryRow(ctx, `
 		insert into role (name, official, permissions, inherits)
@@ -121,9 +121,9 @@ func TestGrantGroupScopeKindRefusedBySchema(t *testing.T) {
 		t.Fatalf("role: %v", err)
 	}
 	_, err = conn.Exec(ctx, `
-		insert into principal_grant (principal_id, role_id, scope_kind, scope_id)
-		values ($1, $2, 'group', '00000000-0000-0000-0000-000000000000')`, principalID, roleID)
-	if err == nil || !strings.Contains(err.Error(), "principal_grant_scope_kind_check") {
-		t.Errorf("group-scoped grant insert error = %v, want principal_grant_scope_kind_check violation", err)
+		insert into user_grant (user_id, role_id, scope_kind, scope_id)
+		values ($1, $2, 'group', '00000000-0000-0000-0000-000000000000')`, userID, roleID)
+	if err == nil || !strings.Contains(err.Error(), "user_grant_scope_kind_check") {
+		t.Errorf("group-scoped grant insert error = %v, want user_grant_scope_kind_check violation", err)
 	}
 }

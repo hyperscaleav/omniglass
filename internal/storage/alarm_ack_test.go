@@ -13,15 +13,15 @@ import (
 )
 
 // The acknowledgement is a fact about a PERSON, and an alarm's raised state is a
-// fact about its CONDITION (ADR-0075: the one-open invariant is per (component,
+// fact about its IDENTITY (ADR-0075: the one-open invariant is per (component,
 // dedup_key)). These tests pin that the two never move each other: acknowledging
 // leaves cleared_at and the component's verdict exactly where they were, and
 // clearing neither grants nor erases an acknowledgement.
 
-// ackActor inserts a service principal and returns its id, so the
+// ackActor inserts a service user and returns its id, so the
 // acknowledgement can be checked for WHO as well as WHEN. The read resolves a
-// service principal to its own identifying column, the same answer the audit
-// write denormalizes (internal/storage/principal_ident.go).
+// service user to its own identifying column, the same answer the audit
+// write denormalizes (internal/storage/user_ident.go).
 func ackActor(t *testing.T, dsn, name string) string {
 	t.Helper()
 	ctx := context.Background()
@@ -31,10 +31,10 @@ func ackActor(t *testing.T, dsn, name string) string {
 	}
 	defer conn.Close(ctx)
 	var pid string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		t.Fatalf("insert principal: %v", err)
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, name); err != nil {
+	if _, err := conn.Exec(ctx, `insert into machine (user_id, name) values ($1, $2)`, pid, name); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	return pid
@@ -78,13 +78,13 @@ func TestAcknowledgeRecordsWhoAndWhenWithoutTouchingRaisedState(t *testing.T) {
 		t.Fatal("acknowledging recorded no acknowledgement time")
 	}
 	if acked.AcknowledgedBy != "jordan-ops" {
-		t.Errorf("acknowledged by %q, want the acting principal's name %q", acked.AcknowledgedBy, "jordan-ops")
+		t.Errorf("acknowledged by %q, want the acting user's name %q", acked.AcknowledgedBy, "jordan-ops")
 	}
 	if acked.ClearedAt != nil || !acked.Active() {
-		t.Error("acknowledging cleared the alarm: an alarm's raised state belongs to its condition, not to the person who looked at it")
+		t.Error("acknowledging cleared the alarm: an alarm's raised state belongs to its identity, not to the person who looked at it")
 	}
 	if acked.ID != raised.ID || acked.DedupKey != raised.DedupKey {
-		t.Errorf("acknowledging moved the incident identity: %s/%s then %s/%s", raised.ID, raised.DedupKey, acked.ID, acked.DedupKey)
+		t.Errorf("acknowledging moved the alarm identity: %s/%s then %s/%s", raised.ID, raised.DedupKey, acked.ID, acked.DedupKey)
 	}
 
 	// And the same is true when read back, not only in the returned row.
@@ -136,7 +136,7 @@ func TestAcknowledgingRecordsNoHealthTransition(t *testing.T) {
 // the FIRST sighting is the operationally meaningful one (time to acknowledge),
 // so a second acknowledgement keeps the first person and the first time, returns
 // the row rather than an error, and writes no second audit row, exactly as a
-// re-raise of an open condition returns the existing incident (ADR-0075).
+// re-raise of an open alarm returns the existing row (ADR-0075).
 func TestAcknowledgingTwiceIsIdempotent(t *testing.T) {
 	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
@@ -182,13 +182,13 @@ func TestClearingAndAcknowledgingAreOrthogonal(t *testing.T) {
 	}
 	kept := findAlarm(t, gw, comp, raised.ID)
 	if !kept.Acknowledged() {
-		t.Error("clearing erased the acknowledgement: who looked at the incident outlives the fix, like the row does")
+		t.Error("clearing erased the acknowledgement: who looked at the alarm outlives the fix, like the row does")
 	}
 	if kept.Active() {
 		t.Error("the alarm is still active after clearing")
 	}
 
-	// A second condition that comes and goes with nobody looking at it.
+	// A second alarm that comes and goes with nobody looking at it.
 	quiet, err := gw.RaiseAlarm(ctx, actor, comp, storage.AlarmSpec{
 		Severity: "warning", Message: "fan degraded", DedupKey: "fan.degraded",
 	})
@@ -233,7 +233,7 @@ func TestAcknowledgeWritesItsAuditRow(t *testing.T) {
 	defer conn.Close(ctx)
 	var gotActor, gotResource, gotID, gotUsername string
 	if err := conn.QueryRow(ctx, `
-		select coalesce(actor_principal_id::text, ''), resource, coalesce(resource_id, ''), coalesce(actor_username, '')
+		select coalesce(actor_user_id::text, ''), resource, coalesce(resource_id, ''), coalesce(actor_username, '')
 		from audit_log where verb = 'acknowledge' order by ts desc limit 1`).
 		Scan(&gotActor, &gotResource, &gotID, &gotUsername); err != nil {
 		t.Fatalf("read audit row: %v", err)
@@ -242,7 +242,7 @@ func TestAcknowledgeWritesItsAuditRow(t *testing.T) {
 		t.Errorf("audit row = actor %s / %s / %s, want %s / alarm / %s", gotActor, gotResource, gotID, actor, raised.ID)
 	}
 	if gotUsername != "jordan-ops" {
-		t.Errorf("audit row names %q, want the acting principal's name", gotUsername)
+		t.Errorf("audit row names %q, want the acting user's name", gotUsername)
 	}
 }
 
@@ -319,7 +319,7 @@ func TestListAlarmsExpressesRaisedAndUnacknowledged(t *testing.T) {
 	}
 
 	// The filter is about the acknowledgement, not about the clear: asking for the
-	// history as well brings the cleared, never-acknowledged incident back.
+	// history as well brings the cleared, never-acknowledged alarm back.
 	history, err := gw.ListAlarms(ctx, comp, storage.AlarmFilter{Unacknowledged: true, IncludeCleared: true})
 	if err != nil {
 		t.Fatalf("list unacknowledged history: %v", err)
@@ -410,11 +410,11 @@ func TestTheHealthReportNamesWhoAcknowledged(t *testing.T) {
 
 	var actor string
 	if err := f.conn.QueryRow(ctx,
-		`insert into principal (kind) values ('service') returning id`).Scan(&actor); err != nil {
-		t.Fatalf("insert principal: %v", err)
+		`insert into users (kind) values ('machine') returning id`).Scan(&actor); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
 	if _, err := f.conn.Exec(ctx,
-		`insert into service (principal_id, name) values ($1, 'jordan-ops')`, actor); err != nil {
+		`insert into machine (user_id, name) values ($1, 'jordan-ops')`, actor); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	if _, err := f.gw.AcknowledgeAlarm(ctx, actor, "bar-1", alarm.ID); err != nil {
@@ -425,15 +425,15 @@ func TestTheHealthReportNamesWhoAcknowledged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	if len(rep.Roles) != 1 || len(rep.Roles[0].Alarms) != 1 {
-		t.Fatalf("health report = %+v, want one role naming the one alarm", rep.Roles)
+	if len(rep.Slots) != 1 || len(rep.Slots[0].Alarms) != 1 {
+		t.Fatalf("health report = %+v, want one slot naming the one alarm", rep.Slots)
 	}
-	got := rep.Roles[0].Alarms[0]
+	got := rep.Slots[0].Alarms[0]
 	if got.ID != alarm.ID {
 		t.Fatalf("the report names alarm %s, want %s", got.ID, alarm.ID)
 	}
 	if got.AcknowledgedBy != "jordan-ops" {
-		t.Errorf("the health report says %q acknowledged the alarm, want the acting principal's name %q",
+		t.Errorf("the health report says %q acknowledged the alarm, want the acting user's name %q",
 			got.AcknowledgedBy, "jordan-ops")
 	}
 	if got.AcknowledgedAt == nil {

@@ -103,7 +103,7 @@ var tagBindingConflictArc = map[string]string{
 	"component": "(tag_id, component_id) where owner_kind = 'component'",
 	"system":    "(tag_id, system_id) where owner_kind = 'system'",
 	"location":  "(tag_id, location_id) where owner_kind = 'location'",
-	"node":      "(tag_id, node_id) where owner_kind = 'node'",
+	"outpost":   "(tag_id, outpost_id) where owner_kind = 'outpost'",
 }
 
 // CreateTag mints a new key in the governed vocabulary. Minting is a tenant-wide
@@ -152,7 +152,7 @@ func (p *PG) CreateTag(ctx context.Context, actorID string, spec TagSpec, create
 // #613). `nulls last` is redundant on an ASC sort and written anyway, because it
 // is the half of this ordering that is a DECISION rather than a default, and
 // because it holds only while unset really is SQL NULL (labelOrNull, ADR-0118).
-// The registry is tenant-wide (not ABAC-scoped), so any reader past the tag:read
+// The catalog is tenant-wide (not ABAC-scoped), so any reader past the tag:read
 // floor sees every key; the middleware is the gate.
 func (p *PG) ListTags(ctx context.Context) ([]Tag, error) {
 	rows, err := p.pool.Query(ctx, `select `+tagCols+` from tag order by label nulls last, name`)
@@ -325,13 +325,13 @@ func (p *PG) SetTagBinding(ctx context.Context, actorID, key, ownerKind string, 
 		return nil, ErrTagForbidden
 	}
 	compID, sysID, locID := arcColumns(ownerKind, ownerID)
-	nodeID := nodeArc(ownerKind, ownerID)
+	outpostID := outpostArc(ownerKind, ownerID)
 	b, err := scanBindingRow(tx.QueryRow(ctx, `
-		insert into tag_binding (tag_id, owner_kind, component_id, system_id, location_id, node_id, value)
+		insert into tag_binding (tag_id, owner_kind, component_id, system_id, location_id, outpost_id, value)
 		values ($1, $2, $3, $4, $5, $6, $7)
 		on conflict `+conflict+` do update set value = excluded.value, updated_at = now()
-		returning id, owner_kind, component_id, system_id, location_id, node_id, value, created_at, updated_at`,
-		t.ID, ownerKind, compID, sysID, locID, nodeID, value))
+		returning id, owner_kind, component_id, system_id, location_id, outpost_id, value, created_at, updated_at`,
+		t.ID, ownerKind, compID, sysID, locID, outpostID, value))
 	if err != nil {
 		return nil, fmt.Errorf("storage: write tag binding: %w", err)
 	}
@@ -368,16 +368,16 @@ func (p *PG) DeleteTagBinding(ctx context.Context, actorID, key, ownerKind strin
 		return err
 	}
 	compID, sysID, locID := arcColumns(ownerKind, ownerID)
-	nodeID := nodeArc(ownerKind, ownerID)
+	outpostID := outpostArc(ownerKind, ownerID)
 	b, err := scanBindingRow(tx.QueryRow(ctx, `
 		delete from tag_binding
 		where tag_id = $1 and owner_kind = $2
 		  and component_id is not distinct from $3
 		  and system_id    is not distinct from $4
 		  and location_id  is not distinct from $5
-		  and node_id      is not distinct from $6
-		returning id, owner_kind, component_id, system_id, location_id, node_id, value, created_at, updated_at`,
-		t.ID, ownerKind, compID, sysID, locID, nodeID))
+		  and outpost_id      is not distinct from $6
+		returning id, owner_kind, component_id, system_id, location_id, outpost_id, value, created_at, updated_at`,
+		t.ID, ownerKind, compID, sysID, locID, outpostID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrTagBindingNotFound
 	}
@@ -404,18 +404,18 @@ func (p *PG) ListEntityTags(ctx context.Context, ownerKind string, ownerName *st
 		return nil, err
 	}
 	compID, sysID, locID := arcColumns(ownerKind, ownerID)
-	nodeID := nodeArc(ownerKind, ownerID)
+	outpostID := outpostArc(ownerKind, ownerID)
 	rows, err := p.pool.Query(ctx, `
-		select b.id, b.owner_kind, b.component_id, b.system_id, b.location_id, b.node_id, b.value, b.created_at, b.updated_at, t.name
+		select b.id, b.owner_kind, b.component_id, b.system_id, b.location_id, b.outpost_id, b.value, b.created_at, b.updated_at, t.name
 		from tag_binding b
 		join tag t on t.id = b.tag_id
 		where b.owner_kind = $1
 		  and b.component_id is not distinct from $2
 		  and b.system_id   is not distinct from $3
 		  and b.location_id is not distinct from $4
-		  and b.node_id     is not distinct from $5
+		  and b.outpost_id     is not distinct from $5
 		order by t.name`,
-		ownerKind, compID, sysID, locID, nodeID)
+		ownerKind, compID, sysID, locID, outpostID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list entity tags: %w", err)
 	}
@@ -586,7 +586,7 @@ order by r.key, r.band desc, r.depth asc`
 
 // EffectiveTags resolves the winning effective tags for a batch of owners of one
 // kind in a single query: for each id, the key -> winning value map its cascade
-// produces (the same union-on-key, override-on-value rule ResolveTags applies to
+// produces (the same union-on-key, shadow-on-value rule ResolveTags applies to
 // one component, batched and reduced to winners only). It is the read that feeds
 // the directory Tags column, so it is deliberately scopeless: the caller passes
 // ids already filtered to the read scope by the list query (the same contract as
@@ -611,8 +611,8 @@ func (p *PG) EffectiveTags(ctx context.Context, kind string, ownerIDs []string) 
 		sql = effectiveSystemTagsSQL
 	case "location":
 		sql = effectiveLocationTagsSQL
-	case "node":
-		sql = effectiveNodeTagsSQL
+	case "outpost":
+		sql = effectiveOutpostTagsSQL
 	default:
 		return nil, fmt.Errorf("storage: effective tags: unknown kind %q", kind)
 	}
@@ -697,18 +697,18 @@ ranked as (
 )
 select target_id::text, key, value from ranked where rnk = 1 order by target_id, key`
 
-// A node is fleet-wide, not a scope tree, so its effective tags are just the
-// platform layer plus its own direct bindings (a node-direct value wins over a
-// propagating platform). No recursion: there is nothing above a node to inherit
-// from. Targets and owner ids are node.principal_id.
-const effectiveNodeTagsSQL = `
+// An outpost is fleet-wide, not a scope tree, so its effective tags are just the
+// platform layer plus its own direct bindings (an outpost-direct value wins over a
+// propagating platform). No recursion: there is nothing above an outpost to inherit
+// from. Targets and owner ids are outpost.user_id.
+const effectiveOutpostTagsSQL = `
 with
 targets as (
-    select principal_id as target_id from node where principal_id = any($1)
+    select user_id as target_id from outpost where user_id = any($1)
 ),
 owners(target_id, owner_kind, owner_id, band) as (
                 select target_id, 'platform', null::uuid, 0 from targets
-    union all   select target_id, 'node',     target_id, 1 from targets
+    union all   select target_id, 'outpost',     target_id, 1 from targets
 ),
 ranked as (
     select o.target_id, t.name as key, b.value,
@@ -717,8 +717,8 @@ ranked as (
     join tag t on t.id = b.tag_id
     join owners o
       on o.owner_kind = b.owner_kind
-     and o.owner_id is not distinct from b.node_id
-    where t.propagates or (o.owner_kind = 'node' and o.band = 1)
+     and o.owner_id is not distinct from b.outpost_id
+    where t.propagates or (o.owner_kind = 'outpost' and o.band = 1)
 )
 select target_id::text, key, value from ranked where rnk = 1 order by target_id, key`
 
@@ -819,26 +819,26 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 			return nil, "", err
 		}
 		return &l.ID, l.Name, nil
-	case "node":
-		// A node is fleet-wide (not a scope tree), so tagging it needs an all
-		// scope on both legs, like a global owner; the owner id is its principal_id.
-		// RejectAddressForm first, same as GetNode/UpdateNode/DeleteNode/
-		// SetEnrollmentToken: a node's name stays a single token, and this arm's
-		// raw `where name = $1` had no guard of its own, unlike GetNode et al,
+	case "outpost":
+		// An outpost is fleet-wide (not a scope tree), so tagging it needs an all
+		// scope on both legs, like a global owner; the owner id is its user_id.
+		// RejectAddressForm first, same as GetOutpost/UpdateOutpost/DeleteOutpost/
+		// SetEnrollmentToken: an outpost's name stays a single token, and this arm's
+		// raw `where name = $1` had no guard of its own, unlike GetOutpost et al,
 		// so a dotted ref reached the query and simply missed (task-12-review.md
 		// finding 3).
-		if err := RejectAddressForm("node", *name); err != nil {
+		if err := RejectAddressForm("outpost", *name); err != nil {
 			return nil, "", err
 		}
 		if !read.All || !action.All {
-			return nil, "", ErrNodeForbidden
+			return nil, "", ErrOutpostForbidden
 		}
 		var pid string
-		err := q.QueryRow(ctx, `select principal_id from node where name = $1`, *name).Scan(&pid)
+		err := q.QueryRow(ctx, `select user_id from outpost where name = $1`, *name).Scan(&pid)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, "", ErrNodeNotFound
+			return nil, "", ErrOutpostNotFound
 		} else if err != nil {
-			return nil, "", fmt.Errorf("storage: resolve node tag owner %q: %w", *name, err)
+			return nil, "", fmt.Errorf("storage: resolve outpost tag owner %q: %w", *name, err)
 		}
 		return &pid, *name, nil
 	}
@@ -885,21 +885,21 @@ func scanTagRow(row pgx.Row) (*Tag, error) {
 
 func scanBindingRow(row pgx.Row) (*TagBinding, error) {
 	var (
-		b                    TagBinding
-		comp, sys, loc, node *string
+		b                       TagBinding
+		comp, sys, loc, outpost *string
 	)
-	if err := row.Scan(&b.ID, &b.OwnerKind, &comp, &sys, &loc, &node, &b.Value, &b.CreatedAt, &b.UpdatedAt); err != nil {
+	if err := row.Scan(&b.ID, &b.OwnerKind, &comp, &sys, &loc, &outpost, &b.Value, &b.CreatedAt, &b.UpdatedAt); err != nil {
 		return nil, err
 	}
-	b.OwnerID = firstNonNil(comp, sys, loc, node)
+	b.OwnerID = firstNonNil(comp, sys, loc, outpost)
 	return &b, nil
 }
 
-// nodeArc is the node leg of the tag-binding owner arc: the owner id when the
-// owner is a node, else nil (the shared arcColumns covers component/system/
-// location, which a node binding leaves null).
-func nodeArc(kind string, id *string) *string {
-	if kind == "node" {
+// outpostArc is the outpost leg of the tag-binding owner arc: the owner id when the
+// owner is an outpost, else nil (the shared arcColumns covers component/system/
+// location, which an outpost binding leaves null).
+func outpostArc(kind string, id *string) *string {
+	if kind == "outpost" {
 		return id
 	}
 	return nil
@@ -907,14 +907,14 @@ func nodeArc(kind string, id *string) *string {
 
 func scanBindingListRow(row pgx.Row) (*TagBinding, string, error) {
 	var (
-		b                    TagBinding
-		comp, sys, loc, node *string
-		key                  string
+		b                       TagBinding
+		comp, sys, loc, outpost *string
+		key                     string
 	)
-	if err := row.Scan(&b.ID, &b.OwnerKind, &comp, &sys, &loc, &node, &b.Value, &b.CreatedAt, &b.UpdatedAt, &key); err != nil {
+	if err := row.Scan(&b.ID, &b.OwnerKind, &comp, &sys, &loc, &outpost, &b.Value, &b.CreatedAt, &b.UpdatedAt, &key); err != nil {
 		return nil, "", err
 	}
-	b.OwnerID = firstNonNil(comp, sys, loc, node)
+	b.OwnerID = firstNonNil(comp, sys, loc, outpost)
 	return &b, key, nil
 }
 

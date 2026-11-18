@@ -5,13 +5,13 @@ import type { TreeNode } from "./treeselect";
 
 // The membership data layer: thin typed wrappers over the generated client.
 //
-// MEMBERSHIP is a component's binding to a system, and a ROLE is what that
+// MEMBERSHIP is a component's binding to a system, and a SLOT is what that
 // membership does. They are one attachment at two levels rather than two facts
-// that can drift apart, which is why staffing a role creates the membership.
+// that can drift apart, which is why staffing a slot creates the membership.
 //
 // It is MANY-VALUED: a shared device belongs to every system it serves, so a
 // divisible room's shared bar is a member of both halves. The console reads it
-// from the component's end; membership itself is written by staffing a role.
+// from the component's end; membership itself is written by staffing a slot.
 //
 // PRIMARY is the membership that answers a question asked with no system in hand.
 // It is a default for context-free callers, not a resolution rule: anything naming
@@ -49,7 +49,7 @@ export async function systemMembers(name: string): Promise<Member[]> {
 // PATCH or move: the three routes below are the whole write surface, and each
 // needs system:update on the system AND component:update on the component.
 // Callers surface the server's refusal verbatim (a 403 names which end failed,
-// a 404 is the non-disclosing out-of-scope answer, a 409 is a role still held).
+// a 404 is the non-disclosing out-of-scope answer, a 409 is a slot still held).
 
 // addSystemMember puts the component in the system. Idempotent; the component's
 // first membership becomes its primary on its own.
@@ -61,7 +61,7 @@ export async function addSystemMember(system: string, component: string): Promis
 }
 
 // removeSystemMember takes the component out of the system. Refused with a 409
-// while it still fills a role there.
+// while it still fills a slot there.
 export async function removeSystemMember(system: string, component: string): Promise<void> {
   const { error } = await api.DELETE("/systems/{name}/members/{component}", {
     params: { path: { name: system, component } },

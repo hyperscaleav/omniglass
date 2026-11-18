@@ -15,7 +15,7 @@ import (
 
 // settingsFixture spins up a migrated, seeded gateway behind the live handler and
 // mints an admin and a viewer token, so the settings routes are exercised end to
-// end with realistically-granted principals.
+// end with realistically-granted users.
 type settingsFixture struct {
 	c      *apiClient
 	gw     storage.Gateway
@@ -36,16 +36,16 @@ func newSettingsFixture(t *testing.T) settingsFixture {
 	}
 	t.Cleanup(gw.Close)
 	// An owner must exist so the role index (lazy) loads on the first authenticated
-	// request; the admin and viewer principals carry the grants under test.
+	// request; the admin and viewer users carry the grants under test.
 	bootstrapOwnerTok(t, ctx, gw)
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	return settingsFixture{
 		c:        &apiClient{t: t, ctx: ctx, base: srv.URL},
 		gw:       gw,
-		admin:    principalWithGrants(t, ctx, dsn, "settings-admin", []grant{{role: "admin", scopeKind: "all"}}),
-		viewer:   principalWithGrants(t, ctx, dsn, "settings-viewer", []grant{{role: "viewer", scopeKind: "all"}}),
-		operator: principalWithGrants(t, ctx, dsn, "settings-operator", []grant{{role: "operator", scopeKind: "all"}}),
+		admin:    userWithGrants(t, ctx, dsn, "settings-admin", []grant{{role: "admin", scopeKind: "all"}}),
+		viewer:   userWithGrants(t, ctx, dsn, "settings-viewer", []grant{{role: "viewer", scopeKind: "all"}}),
+		operator: userWithGrants(t, ctx, dsn, "settings-operator", []grant{{role: "operator", scopeKind: "all"}}),
 	}
 }
 
@@ -106,7 +106,7 @@ func TestSettingsPatchThenReadReflectsOverride(t *testing.T) {
 func TestSettingsReadResolvesRowsStoredAtPlatformScope(t *testing.T) {
 	t.Parallel()
 	f := newSettingsFixture(t)
-	if _, err := f.gw.UpsertSettingOverride(f.c.ctx, "", "platform", "ui",
+	if _, err := f.gw.UpsertSettingBinding(f.c.ctx, "", "platform", "ui",
 		map[string]any{"theme": "omniglass-light"}, nil); err != nil {
 		t.Fatalf("seed platform override: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestSettingsPatchStoresAtPlatformScope(t *testing.T) {
 	f := newSettingsFixture(t)
 	f.c.do(f.admin, http.MethodPatch, "/settings/ui", map[string]any{"theme": "omniglass-light"}, http.StatusOK)
 
-	rows, err := f.gw.GetSettingOverrides(f.c.ctx, "platform")
+	rows, err := f.gw.GetSettingBindings(f.c.ctx, "platform")
 	if err != nil {
 		t.Fatalf("read platform overrides: %v", err)
 	}

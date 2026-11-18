@@ -1,10 +1,6 @@
 ---
 title: Alarms and actions
-description: How Omniglass detects a condition with a stateful alarm and responds with an action, which is a flow when it has more than one step.
-sidebar:
-  badge:
-    text: Partial
-    variant: note
+description: How Omniglass raises a stateful alarm when a rule fires and responds with an action, which is a flow when it has more than one step.
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -12,7 +8,7 @@ import SeededSet from '../../../components/SeededSet.astro';
 import NotificationFacts from '../../../components/NotificationFacts.astro';
 import NotificationEnvelope from '../../../components/NotificationEnvelope.astro';
 
-An **alarm** detects a condition and holds it; an **action** does something about it. A simple
+An **alarm** holds a fault from the moment it is raised until it clears; an **action** does something about it. A simple
 action is a single step (a `notify`); a multi-step action is a **flow**. Both are **stateful
 entities that hold their state directly** (not event-sourced). An action's credentials live
 in credentials; the Expr and Go-template machinery in [expressions](/architecture/expressions/).
@@ -20,28 +16,28 @@ in credentials; the Expr and Go-template machinery in [expressions](/architectur
 :::note[Partial]
 Built today: the **alarm as a held row**, raised on a **component** by a caller or by an
 [event rule](#the-event_rule) (#819), carrying a `severity`
-(a level of the [severity registry](#severity-a-registry-of-named-levels), by name), a message, a
+(a level of the [severity catalog](#severity-a-catalog-of-named-levels), by name), a message, a
 `raised_at`, and a nullable `cleared_at` (clearing keeps the row). Any active alarm reaches a system
 through the component's own verdict (any active alarm degrades it, one at or above the `high` level
-is an outage), and such an alarm impairs every [role](/architecture/health/) that component occupies
+is an outage), and such an alarm impairs every [slot](/architecture/health/) that component occupies
 while it stays open, since only an outage
 component stops occupying its slots; a lesser alarm degrades the component but leaves it in place
 (#626: an alarm no longer names what it degrades).
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
-sustains held by a durable streak and a sweep, five official rules (`reachability-lost`; `node-silent` on a node's own component; `ingest-lag-high`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
-live state, and the console's **Rules** and **Severity** pages. The **event-to-alarm edge** (#938,
+sustains held by a durable streak and a sweep, seven official rules (`reachability-lost`; `outpost-silent` and `worklist-stale` on an outpost's own component; `ingest-lag-high`, `rule-sweep-stalled`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
+live state, and the console's **Event rules** and **Severity levels** pages. The **event-to-alarm edge** (#938,
 [ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)):
-a rule's alarm is optional (an informational rule raises none), it writes typed events at each edge of
-its condition, carrying the alarm they opened or resolved, and an **alarm's timeline** merges those
+a rule's alarm is optional (an informational rule raises none), it writes typed events each time it
+fires and clears, carrying the alarm they opened or resolved, and an **alarm's timeline** merges those
 events with its audit rows. **Acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
-human has seen an incident, orthogonal to whether it is still raised. **Snooze**
-([below](#snooze-a-fact-about-a-condition)), a bounded silence on an alarm's condition (#1318).
+human has seen an alarm, orthogonal to whether it is still raised. **Snooze**
+([below](#snooze-silencing-an-alarm-for-a-while)), a bounded silence on an alarm (#1318).
 **Resolve** is not built, and the reason is in the acknowledgement section. The [notification](#notifications) lane (#618):
 **notification types** previewed against a real alarm, **webhook targets** sent through the egress
 primitive, the **action rule** with its one `notify` step, and the **notification** delivery row a
 server tick sends, on the alarm's timeline with a retry. **People as recipients** (#1341): a
-**principal group** or a **person** as a target, told in their console **inbox** and by **email**
+**user group** or a **person** as a target, told in their console **inbox** and by **email**
 through the install's mail relay, each only about the alarms they can read, and **personal action
 rules**, a user's own subscription to the alarms they can see. Flows, grouping and the
 other channel kinds are still design.
@@ -51,19 +47,19 @@ See [implementation status](/architecture/status/).
 ## The alarm (a stateful entity)
 
 **Metaphor: a morning alarm, not a pop-up.** A pop-up *alert* appears and is gone (a `notify`
-action); an **alarm** goes off when its condition is met and **stays high until interacted with**.
+action); an **alarm** goes off when its rule fires and **stays high until interacted with**.
 The `alarm` row **holds its current state directly** (`status`, `opened_at`, `resolved_at` in the
 target design; built today: `severity`, `message`, `raised_at`, `cleared_at`, `acknowledged_at`,
 `acknowledged_by`).
 
 :::design[Target design (ADR-0050)]
-**One incident, a new row per open**, keyed by `(event_rule, owner)` (the exclusive-arc owner, so a
+**One alarm, a new row per open**, keyed by `(event_rule, owner)` (the exclusive-arc owner, so a
 system- or location-owned sample yields a system/location-owned alarm), the ITSM correlation anchor
 ([samples](/architecture/properties/)). The open and resolve **events** carry the `alarm_id` and are
 the edge log; the alarm row is the live state, never reconstructed from them.
 
 **PG-first**: the firing `event_rule` consumer writes the alarm row in the **same Postgres
-transaction** as the event, serialized per `(event_rule, owner)` so an incident never double-opens;
+transaction** as the event, serialized per `(event_rule, owner)` so an alarm never double-opens;
 a [CDC publisher](/architecture/messaging/) fans the committed transition onto JetStream for
 `action_rule` consumers. No dual-write; Postgres is never a message bus.
 
@@ -72,13 +68,13 @@ with the `alarm_id`; the operator-driven transitions are recorded in `audit_log`
 `alarm_id`) and applied to the row. The timeline assembles by `alarm_id` across events + audit. The
 acknowledgement half of that is built and works exactly this way ([below](#acknowledgement-a-fact-about-a-person)),
 as are the rule-driven events and the timeline itself ([below](#the-alarms-timeline)). A snooze is a
-row of its own on the condition rather than on the alarm ([below](#snooze-a-fact-about-a-condition)),
+row of its own on the alarm's component and dedup key rather than on one alarm row ([below](#snooze-silencing-an-alarm-for-a-while)),
 and its acts are audit rows on the alarm they were called on.
 :::
 
 **An alarm's audit rows outlive it.** Each row other than the raise (whose `new` image is the whole
 alarm) carries the field it moved in both images (`cleared_at`, `acknowledged_at` or `snoozed_until`,
-null on the side where it was unset) and names its condition, the component and the dedup key, so the
+null on the side where it was unset) and names the alarm, the component and the dedup key, so the
 row says on its own what was done, what changed and what it became. Removing an alarm (deleting its
 component does today, and retention will, #1339) never touches `audit_log` ([audit](/architecture/audit/#the-model),
 [ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
@@ -115,9 +111,9 @@ and a rule's open alarms.
 
 ## Acknowledgement: a fact about a person
 
-An alarm's **raised** state is a fact about its **condition**: the one-open invariant is per
+An alarm's **raised** state is a fact about the **fault**: the one-open invariant is per
 `(component, dedup_key)` ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)),
-and it is the condition, not a person, that decides whether the alarm is still up. An
+and it is the rule that raised it (or the caller), not a person, that decides whether the alarm is still up. An
 **acknowledgement** is a fact about a **person**: somebody has seen this. The two are therefore
 **orthogonal**, stored as two nullable columns rather than one `status` enum, and an alarm sits in
 any of these states:
@@ -140,12 +136,12 @@ person:
   ([identity and access](/architecture/identity-access/)).
 - **It is idempotent.** The first sighting is the one that matters operationally (time to
   acknowledge), so a second acknowledgement keeps the first person and the first time and writes no
-  second audit row, the same shape as a re-raise of an open condition returning the existing
-  incident.
+  second audit row, the same shape as a re-raise of an open alarm returning the existing
+  one.
 
 The acknowledgement is readable wherever an alarm is read as a cause. A system's
 [health report](/architecture/health/) carries `acknowledged`, `acknowledged_at` and `acknowledged_by` on
-each role alarm, so the system page's Why strip shows who acknowledged and when, and acknowledges a
+each slot alarm, so the system page's Why strip shows who acknowledged and when, and acknowledges a
 causing alarm in place, for an operator holding `alarm:acknowledge`, without opening each affected
 component (#990). It calls the same verb above; the strip refreshes with the report.
 
@@ -157,9 +153,9 @@ decision, not a nullable field somebody flips
 Resolve is commonly bundled with acknowledge, and it is not built, for a reason rather than
 sequencing: it is either the existing `DELETE /components/{name}/alarms/{id}` (clear) under a second
 name, or a different concept nobody has specified. A human "resolving" an alarm whose raised state
-belongs to its condition is a contradiction until somebody says what it means. Snooze was refused
-beside it until there was a notification to suppress; it is built now, as a fact about the condition
-([below](#snooze-a-fact-about-a-condition)).
+belongs to its rule is a contradiction until somebody says what it means. Snooze was refused
+beside it until there was a notification to suppress; it is built now, as a silence on the alarm
+([below](#snooze-silencing-an-alarm-for-a-while)).
 
 A three-verb permission string bundling acknowledge with both of them appeared for most of a year in
 this repo's test fixtures and in an earlier draft of the
@@ -170,24 +166,24 @@ The permission lint now catches any attempt to write it back, because `alarm` is
 route surface knows and the bundled string gates nothing.
 :::
 
-## Snooze: a fact about a condition
+## Snooze: silencing an alarm for a while
 
-An acknowledgement is a fact about a person; a **snooze** is a fact about a **condition** (#1318): stop
-telling people about this for a while. It is keyed by the condition identity, `(component,
+An acknowledgement is a fact about a person; a **snooze** silences an **alarm** (#1318): stop
+telling people about this for a while. It is stored on the alarm's identity, `(component,
 dedup_key)` ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)),
-not by an alarm row, because a row has only two edges: by the time an operator sees a raised alarm its
-raise has already been sent, so a snooze on that one row could only ever hold back its clear. A
-condition that flaps opens a new row on every re-raise ([above](#the-alarm-a-stateful-entity)), and one
-snooze on the condition covers each of them until its deadline
+not on one alarm row, because a row has only two edges: by the time an operator sees a raised alarm its
+raise has already been sent, so a snooze on that one row could only ever hold back its clear. An
+alarm that flaps opens a new row on every re-raise ([above](#the-alarm-a-stateful-entity)), and one
+snooze on its dedup key covers each of them until its deadline
 ([ADR-1318](/architecture/decisions/#adr-1318-a-snooze-is-a-fact-about-an-alarms-condition-its-notifications-are-written-suppressed-and-its-end-tells-people-again)).
 
-`POST /components/{name}/alarms/{id}:snooze` with a `duration` snoozes the condition of the alarm it
-names, set from any alarm of that condition, cleared ones included: silencing a condition that has just
+`POST /components/{name}/alarms/{id}:snooze` with a `duration` snoozes the alarm it
+names, set from any row of that alarm, cleared ones included: silencing an alarm that has just
 cleared is the usual case for one that flaps. The duration runs from now, from `1m` to `7d` (`15m`,
 `1h`, `4h`, `24h`, `7d`); outside that bound it is a 422 naming the bound, since anything longer is a
-maintenance window or a paused rule. `alarm_snooze` holds one row per snoozed condition, and snoozing
+maintenance window or a paused rule. `alarm_snooze` holds one row per snoozed alarm (per component and dedup key), and snoozing
 again replaces its deadline, shorter or longer. `POST /components/{name}/alarms/{id}:unsnooze` ends it
-early; unsnoozing a condition that is not snoozed is a 200 that writes nothing.
+early; unsnoozing an alarm that is not snoozed is a 200 that writes nothing.
 
 ```bash
 omniglass component alarm snooze display-1 <alarm-id> --duration 1h
@@ -199,15 +195,15 @@ scope resolved on the component tier from that permission exactly as `alarm:ackn
 component outside the caller's component read is a non-disclosing 404, and one it can read but not
 snooze on is a 403. Both are audited on the alarm they were called on, the deadline before and after,
 so they show on its [timeline](#the-alarms-timeline) as `snooze` and `unsnooze` with no change to the
-timeline's read. Every alarm read carries `snoozed_until` and `snoozed_by` while its condition is
+timeline's read. Every alarm read carries `snoozed_until` and `snoozed_by` while it is
 snoozed, `snoozed_by` resolved when read as the acknowledger is.
 
-**What it holds back: every notification of the condition, written `suppressed`.** At the one seam
-every raise and clear passes, one indexed lookup of the alarm's condition runs once some
-[action rule](#the-action_rule-when-a-message-is-sent) fires, and while the condition is snoozed each
+**What it holds back: every notification of the alarm, written `suppressed`.** At the one seam
+every raise and clear passes, one indexed lookup of the alarm's snooze runs once some
+[action rule](#the-action_rule-when-a-message-is-sent) fires, and while the alarm is snoozed each
 row the firing rules would write (webhook, email, inbox, a group's people, a personal rule's owner) is
 written with the terminal status **`suppressed`** instead of `queued` or `sent`, the reason in
-`last_error` (`the condition is snoozed until 2026-10-29 14:30 UTC by alice`). A raise and a clear
+`last_error` (`the alarm is snoozed until 2026-10-29 14:30 UTC by alice`). A raise and a clear
 are both suppressed, so nobody gets a closing message about a raise they were never told of. A rule
 whose `when` fails still writes `failed`, so a broken rule stays visible. Nothing is sent and nothing
 reaches an inbox, and the alarm's timeline keeps every row it suppressed, reading **snoozed**. Where a row waits, the tick
@@ -216,18 +212,18 @@ when its turn comes, so "stop paging me" also stops the retry already on its way
 final: it is never released or retried, and `:retry` refuses it. It is the primitive storm
 suppression and dedupe (#1345) consume.
 
-**When it ends, a condition still raised is announced again.** When the deadline passes, or
-`:unsnooze` ends it early, the snooze's row is deleted and, if an alarm of the condition is still
+**When it ends, an alarm still raised is announced again.** When the deadline passes, or
+`:unsnooze` ends it early, the snooze's row is deleted and, if a row of the alarm is still
 open, that alarm is announced again as a plain `raised` transition, judged against the action rules
 and memberships as they stand at that moment: a rule disabled during the snooze stays quiet, and the
-people a group reaches are filtered by the same queue-time scope check as at any raise. A condition
+people a group reaches are filtered by the same queue-time scope check as at any raise. An alarm
 that cleared during the snooze gets nothing. The end is audited just before the rows it causes,
 `unsnooze` naming the operator on the alarm it was called on, or `snooze-end` from the platform on
-the condition's latest alarm, so the timeline reads the end, then the new rows. The held rows are
+the alarm's latest row, so the timeline reads the end, then the new rows. The held rows are
 never replayed: the rules are judged again from scratch, so nobody gets a backlog of stale messages.
 The deadline sweep runs on the notification tick (every 2s) until the time primitive (#419) lands:
 it takes each expired snooze `FOR UPDATE SKIP LOCKED` and deletes it in the transaction that queues
-its announcement, so two replicas never announce one condition twice and a restart loses nothing.
+its announcement, so two replicas never announce one alarm twice and a restart loses nothing.
 
 **It governs notifications and nothing else.**
 
@@ -235,7 +231,7 @@ its announcement, so two replicas never announce one condition twice and a resta
   stays in the queue.
 - It does not recompute health, and a snoozed alarm still degrades its component.
 - A clear does not end it.
-- It notifies nothing itself: it is an operator act, not a condition edge
+- It notifies nothing itself: it is an operator act, not a rule's edge
   ([cycle safety](#cycle-safety-in-the-action-layer) rule 2). Its end is the one exception, above.
 
 ## The `event_rule`
@@ -249,51 +245,51 @@ its fire criteria. There is no separate `alarm_rule`.
 
 The alarm is **optional** (#948): a rule with no severity is **informational** and raises no alarm. A
 rule also names the [event types](/architecture/events/) it records: a required **`fire_event_type`**,
-written when its condition starts, and an optional **`clear_event_type`**, written when it ends, both by
-name from the `event_type` registry (an unknown one is refused, and a type a rule names cannot be
+written when it fires, and an optional **`clear_event_type`**, written when it clears, both by
+name from the `event_type` catalog (an unknown one is refused, and a type a rule names cannot be
 deleted). The platform seeds a generic pair for rules that need no semantic type of their own,
-`condition-started` and `condition-ended`; a rule can name a bracketing pair the registry already
+`rule-fired` and `rule-cleared`; a rule can name a bracketing pair the catalog already
 models instead (`call-started` / `call-ended`).
 
-**Edges, not samples** (#949). A rule's condition is in force on a component and instance while it
-holds a row in **`event_rule_condition`**, for every rule, informational or not. When the condition
-comes into force (after `fire_sustain`) the rule writes the condition row, opens its alarm when it has a
-severity, and writes its **fire event**; when it leaves force (after `clear_sustain`) it deletes the
+**Edges, not samples** (#949). A rule is **firing** on a component and instance while it
+holds a row in **`event_rule_firing`**, for every rule, informational or not; each such row is one of its
+**firings**. When the rule fires (after `fire_sustain`) it writes the firing row, opens its alarm when it has a
+severity, and writes its **fire event**; when it clears (after `clear_sustain`) it deletes the
 row, resolves the alarm, and writes its **clear event** when it has a clear type. Each is written
-once, never per sample while the condition holds, in one transaction with the alarm transition and
+once, never per sample while the firing holds, in one transaction with the alarm transition and
 the health recompute. The [event](/architecture/events/) is `origin = derived`, names its rule
 (`derived_by_rule_id`, and the rule's name and version in `source_rule`, the name it had when the
 event was written, which a rename leaves as written and which outlives a deleted rule), sits on the series' component and instance, carries the rule's message and the sample's key
 and value as attributes, and carries the alarm it opened or resolved in **`event.alarm_id`**. A rule
-with no clear type resolves its alarm with no clear event, and its condition still ends. Turning a
-severity on opens alarms for the conditions in force, and turning it off resolves them while the
-conditions stay in force; neither writes a condition event, since the condition did not move, so an
-episode carries exactly one started and one ended event, and a rule edit's alarm open or resolve is
+with no clear type resolves its alarm with no clear event, and its firing still ends. Turning a
+severity on opens alarms for its firings, and turning it off resolves them while the
+firings stay; neither writes a fire or clear event, since the firing did not move, so a
+firing carries exactly one fire and one clear event, and a rule edit's alarm open or resolve is
 recorded in the alarm's audit rows, naming the editor. On a material edit that also turns a severity
-on, the rule primes first, so a condition the edited rule no longer holds ends before an alarm could
+on, the rule primes first, so a firing the edited rule no longer holds clears before an alarm could
 be raised for it.
 
-**A hand clear of a rule's alarm holds until the condition ends and returns.** In force is the
-condition row, not the alarm, so an operator clearing the alarm leaves the condition row and its
-events untouched, and a further sample of the same condition (a metric over its threshold on every
-poll included) does not reopen it; the next alarm opens on the next new edge, after the condition ends
-and starts again (the same manual close a Zabbix trigger allows); the one exception is a severity turned
-off and back on, which raises for every condition still in force, a hand-cleared one included. A
-condition in force is what the rule's live counts and state read too, so open alarms never outnumber
-conditions. An alarm the rule holds open with no
-condition row behind it (one an older binary raised during a rolling upgrade) also counts as in force:
+**A hand clear of a rule's alarm holds until the rule clears and fires again.** Firing is the
+firing row, not the alarm, so an operator clearing the alarm leaves the firing row and its
+events untouched, and a further sample that still meets the fire criteria (a metric over its threshold on every
+poll included) does not reopen it; the next alarm opens on the next new edge, after the rule clears
+and fires again (the same manual close a Zabbix trigger allows); the one exception is a severity turned
+off and back on, which raises for every firing, a hand-cleared one included. A
+firing is what the rule's live counts and state read too, so open alarms never outnumber
+firings. An alarm the rule holds open with no
+firing row behind it (one an older binary raised during a rolling upgrade) also counts as firing:
 a further fire neither adopts it nor writes an event, and a recovery resolves it with no clear event,
-since no condition row ended.
+since no firing row ended.
 
 **A rule's alarm is found by its rule and instance, whatever key wrote it** (#977). Every path that
-reads a rule's alarms (the in-force check, the live counts and state, the reconcile pass, a recovery,
+reads a rule's alarms (the firing check, the live counts and state, the reconcile pass, a recovery,
 and a disable, delete, narrowing or severity turned off) matches an open alarm by `raised_by_rule_id`
 plus the instance its key names, the suffix after the key's rule segment. The rule segment may be the
 rule's uuid, which this binary always writes, or its name, which a replica from before #977 still
 writes during a rolling upgrade after the migration ran (`rule:<name>[:<instance>]`, the name it read
-then, renamed since or not). So such an alarm counts as in force (a further fire opens no second alarm
+then, renamed since or not). So such an alarm counts as firing (a further fire opens no second alarm
 and writes no event), is listed on its instance, and is resolved on recovery (by the clear event, when
-it has a condition row) or when the rule lets go of it. Only within one rule: a key's rule segment
+it has a firing row) or when the rule lets go of it. Only within one rule: a key's rule segment
 never matches another rule's alarm, since the match starts from `raised_by_rule_id`, and a hand-raised
 alarm may not take a key beginning `rule:` at all (a 422; the key defaults to the message, so a message
 beginning `rule:` needs a key of its own).
@@ -307,19 +303,19 @@ event_rule:
   fire_sustain: 30s                     # how long fire must hold
   clear_sustain: 0s
   severity: high                        # optional: absent, informational (no alarm)
-  fire_event_type: condition-started    # the event written when the condition starts
-  clear_event_type: condition-ended     # optional: the event written when it ends
+  fire_event_type: rule-fired           # the event written when the rule fires
+  clear_event_type: rule-cleared        # optional: the event written when it clears
   selector: { component_types: [display], components: [] }   # empty: every component
 ```
 
 The evaluator judges each sample **as it lands, in the same transaction**, through the same guarded
 conditional insert, audit row and health recompute a hand-raised alarm uses, so a rule-raised alarm
 feeds health exactly as a hand-raised one does; it writes as the system actor. The alarm names its rule
-(`raised_by_rule_id`, set null if the rule is deleted), and its condition identity (its `dedup_key`,
+(`raised_by_rule_id`, set null if the rule is deleted), and its identity (its `dedup_key`,
 `rule:<uuid>[:<instance>]`) is the rule's uuid plus the sample's **instance**, so a per-endpoint input holds **one alarm per endpoint**: a component
 whose SNMP and HTTP both fail carries two, and one recovering clears only its own. A repeated or
-redelivered sample changes nothing. A disabled rule evaluates nothing; disabling or deleting a rule ends
-the conditions it holds in force, each with its clear event, resolving their alarms (they stay in the
+redelivered sample changes nothing. A disabled rule evaluates nothing; disabling or deleting a rule clears
+its firings, each with its clear event, resolving their alarms (they stay in the
 history), and narrowing its selector ends those on the components it no longer watches.
 
 **A rule's name is renameable; its references are by uuid** (#977,
@@ -327,22 +323,22 @@ history), and narrowing its selector ends those on the components it no longer w
 [ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
 `POST /event-rules/{name}:rename` moves an operator rule's name, the address an operator types, and
 answers the rule with its uuid. Everything inside the platform that refers to a rule holds the uuid: an
-alarm's `raised_by_rule_id` and its dedup key, the condition rows, the streaks, an event's
+alarm's `raised_by_rule_id` and its dedup key, the firing rows, the streaks, an event's
 `derived_by_rule_id`, the audit rows. So a rename moves nothing else: the alarms it holds stay open and
-attached, its conditions stay in force, a streak keeps its clock, and the next recovery clears the
+attached, its firings stay, a streak keeps its clock, and the next recovery clears the
 alarm and writes the clear event under the new name. A rename is not a material change and bumps no
 version. An event's `source_rule` is a historical record, the name the rule had when it wrote the
-event, so an episode that spans a rename reads the old name on its fire event and the new one on its
+event, so a firing that spans a rename reads the old name on its fire event and the new one on its
 clear, both by the same `derived_by_rule_id`. An official rule keeps its name (a 409), since the boot
 seed matches it by name. A one-time data migration rewrote the dedup key of every rule-raised alarm,
 open or cleared, from the rule's name to its uuid; an alarm whose rule was deleted keeps the key it had.
 
 **Sustains** hold an edge until it has lasted: `fire_sustain` before the alarm opens and
 `clear_sustain` before it clears, both defaulting to `0s`, set independently (a long clear sustain
-over a short fire sustain holds an incident through a noisy recovery without delaying the page). A
+over a short fire sustain holds an alarm through a noisy recovery without delaying the page). A
 sample pointing at an action starts or continues a **streak** (stored per rule, component and instance,
 so it survives a restart); a sample that points nowhere (neither criterion holds), or at an action
-already in force (a fire with the condition in force, a clear with none), breaks it, as does a sample the rule
+already taken (a fire while firing, a clear while not), breaks it, as does a sample the rule
 cannot evaluate; and once it has held for the sustain the action takes effect, either on a later sample
 or on the server's **sweep** (every five seconds, beside the command settlement sweep), which is what
 lets a sustain work on an input that reports only on change, like `endpoint-reachable`. Before acting,
@@ -351,12 +347,12 @@ serializes with an arriving sample on the same series, so a recovery landing as 
 never leaves the alarm open. A rule write serializes with the samples judged by the rule too: an
 ingest holds the rule for its batch, so a disable, delete or narrowing waits for an in-flight batch and
 then clears whatever it raised. Sustains are timed by the **server's receipt** of each sample, never by the
-sample's own timestamp, so a node whose clock runs behind neither skips nor stretches a sustain (which
+sample's own timestamp, so an outpost whose clock runs behind neither skips nor stretches a sustain (which
 sample is newest is still decided by that timestamp). Only a **material** edit restarts a rule's
 streaks (its key, criteria, clear criteria, selector or sustains); a label, description, message,
 severity or event type edit leaves them running, since the event types change what the rule writes at
 an edge, not when the edge falls. Creating a rule, enabling one, or a material edit **primes** it from
-each selected series' newest sample, so a condition that already holds starts its sustain then (or
+each selected series' newest sample, so fire criteria that already hold start their sustain then (or
 fires at once with no sustain) instead of waiting for a change the input may never send.
 
 Two narrow races can still cost one decision on an input that reports only on change: a rule enabled
@@ -370,7 +366,12 @@ corrects only what disagrees (fires, clears, or starts the streak), each correct
 transaction of its own under the same lock order as an ingest (the rule's row, the series lock, the
 health locks). Agreement is the common case and costs no write: the series, their newest samples (an
 index probe per series on either lane), the open alarms and the streaks are read in one statement per
-lane and judged in memory, and a streak that agrees keeps its clock. A restarted server's first pass
+lane and judged in memory, and a streak that agrees keeps its clock. The pass finds the samples past its
+mark by id alone before it joins a series, through each day's block range index on `id`, so a finished
+day costs a few index pages rather than its heap: the retention pass summarizes each finished day's
+ranges ([ADR-1929](/architecture/decisions/#adr-1929-a-finished-day-is-summarized-and-the-reconcile-keeps-its-id-marks)).
+The marks stay the newest committed id rather than a bound on time, so a sample still in flight or
+stamped late is judged by the pass that reads past it. A restarted server's first pass
 reads back a bounded number of recent samples, not the whole history, since the race it could have lost
 was in flight around its own start; a series whose correction fails is retried on its own for a few
 passes and then dropped with an error logged, while the pass moves on. The platform ships five official rules, rendered here from the seed itself:
@@ -379,22 +380,25 @@ passes and then dropped with an error logged, while the pass moves on. The platf
 
 An endpoint whose verdict reads `down` for the sustain opens a `high` alarm on its component, and
 reading `up` clears it, so unplugging a simulated component takes its system out and plugging it back recovers it, with no
-operator in between. That takes the system out only when the component fills a role whose impact
-is `outage` and losing it drops the role below quorum; otherwise the system reads whatever the role's
-impact says, and a component that fills no role moves no system. The second, `ingest-lag-high`,
+operator in between. That takes the system out only when the component fills a slot whose impact
+is `outage` and losing it drops the slot below quorum; otherwise the system reads whatever the slot's
+impact says, and a component that fills no slot moves no system. The second, `ingest-lag-high`,
 watches Omniglass itself: the server's `ingest-lag-max` held over 30 s for 2 minutes opens a
 `warning` alarm on the server's platform component, and a window back at 30 s or under clears it
-([messaging](/architecture/messaging/#measuring-the-pipeline)). `node-silent` opens a `high` alarm on
-a claimed node's platform component once its `checkin-age`, which the server writes for every claimed
-node every 15 s, reads past 90 s (three missed 30 s heartbeats), with no sustain of its own since the
-age is one; the node's next heartbeat brings the age back under and clears it
-([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)). `disk-nearly-full` opens a
+([messaging](/architecture/messaging/#measuring-the-pipeline)). `outpost-silent` opens a `high` alarm on
+a claimed outpost's platform component once its `checkin-age`, which the server writes for every claimed
+outpost every 15 s, reads past 90 s (three missed 30 s heartbeats), with no sustain of its own since the
+age is one; the outpost's next heartbeat brings the age back under and clears it
+([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)). `disk-nearly-full` opens a
 `warning` alarm on the server's platform component when `data-dir-disk-used-ratio` holds over 0.9 for
 2 minutes, and clears only at 0.85 or under, so a disk at the line does not flap
 ([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
 `retention-behind` opens a `warning` alarm on the server's component when a retention lane or
 compaction stays behind its window for 5 minutes, and clears on the first pass that catches up
-([storage](/architecture/storage/#what-a-retention-pass-reports)).
+([storage](/architecture/storage/#what-a-retention-pass-reports)). `rule-sweep-stalled` opens a
+`high` alarm on a server's component when its `rule-sweep-age`, the seconds since its event rule
+sweep last completed, reads past 30 s, with no sustain since the age is one, and clears when the
+sweep resumes ([collection](/architecture/collection/#what-an-alarm-inside-the-platform-cannot-see)).
 
 Criteria are [expressions](/architecture/expressions/) (#957), stored as `{"expr": "..."}` and
 evaluated against a prepared input of five bindings: **`value`** (a metric's number, or a property's
@@ -433,7 +437,7 @@ the candidate (its key, selector and criteria) is judged over the last 24 hours 
 on the components the caller may read, as the ingest would have judged them with no sustains (the
 answer says so): each series starts from the state its newest deciding sample in the week before set,
 and a late sample older than one before it decides nothing. The answer is the edges it would have
-written and the series it would hold in force now, and a series with no deciding sample in that week
+written and the series it would be firing on now, and a series with no deciding sample in that week
 is reported as having started unknown rather than guessed at. It writes nothing. Its reads are index
 probes per selected series, capped at a row count taken a whole series at a time: a preview that hits
 the cap says how many series it judged of how many, flagged `truncated`. The console authors criteria either way: the rule drawer's comparison
@@ -445,19 +449,19 @@ The **selector** picks the components a rule watches: those whose type falls wit
 type, and those listed by id; empty, every component. A rule outlives what it points at: deleting a
 component or a key it reads leaves it editable, and it simply matches nothing.
 
-Rules **read like a registry**: any `rule:read` grant lists and gets every rule, wherever it is scoped.
+Rules **read like a catalog**: any `rule:read` grant lists and gets every rule, wherever it is scoped.
 Writing one is fleet-wide: authored at `/event-rules` with `rule:*` on an all-scope grant, since a
 rule's selector reaches every component (ADR-0144). A version bumps on every change.
 
 A rule's **live state** is a read, not a stored column: `GET /event-rules/{name}/state` (`omniglass
-event-rule state list <rule>`, gated `rule:read`) returns the conditions it holds in force (component,
+event-rule state list <rule>`, gated `rule:read`) returns its firings (component,
 endpoint instance, since when; #951), the alarms it raised that are still open (component,
 endpoint instance, severity, when) and its streaks waiting out a sustain (component, instance, whether
 it points at fire or clear, since when). The list and a get carry the same state as counts
-(`conditions_in_force`, `open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
+(`firing`, `open_alarms`, `pending_streaks`), aggregated for the whole list in one query, so a page of rules polls
 one list rather than a state read per rule. The state names components, so the lists and the counts
-cover only the components the caller's component read scope admits: a reader scoped to one place sees
-every rule, but only the alarms and streaks it could already see. The console's **Catalog > Actions > Rules** page (#921) lists
+cover only the components the caller's component read scope admits: a reader scoped to one location sees
+every rule, but only the alarms and streaks it could already see. The console's **Catalog > Actions > Event rules** page (#921) lists
 every rule with its criteria in words, its severity and those live counts, opens a rule's blade with
 both lists linked to their components, and authors, edits, disables and deletes operator rules in a
 drawer (official rules are read-only); the operator's walk-through is the
@@ -476,9 +480,9 @@ nothing. It names no component, so it is not fenced by the read scope.
 
 A rule does not declare a health verdict itself: the alarm it raises impairs its owner's own
 verdict (any active alarm degrades it, one at or above `high` is an outage). Only an outage owner stops
-occupying the [system roles](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
+occupying the [system slots](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
 it fills; a lesser alarm degrades it but leaves it in place. When it does drop out (#626), how much
-that matters is the role's **impact** ([health](/architecture/health/)).
+that matters is the slot's **impact** ([health](/architecture/health/)).
 
 :::design[The rest of the event rule (ADR-0050)]
 Still design: an **expression selector** (`scope:
@@ -491,9 +495,9 @@ fires a system-owned alarm).
 :::
 
 
-## Severity: a registry of named levels
+## Severity: a catalog of named levels
 
-Severity is a **registry of named levels**, not a bare integer. It takes the ordinary identity
+Severity is a **catalog of named levels**, not a bare integer. It takes the ordinary identity
 triad, so it adds no fourth vocabulary: a **`name`** on the entity name rule, an optional
 **`label`**, and its uuid **`id`** like any other row, plus a **`color`** and an integer
 **`order`** used only for comparison. Rules reference a level **by name**; official defaults ship
@@ -515,13 +519,13 @@ already taken is a 409, an official level is read-only). An alarm's `severity` r
 **by name** (a rename carries its alarms; a level an alarm names cannot be deleted). A component's
 own verdict reads the rank: **`high` and above is an outage**, anything lower degrades. The retired
 three values mapped by meaning: `critical` became `high`, `info` and `warning` kept their names.
-The console reads the registry everywhere a severity shows: every alarm chip (the component's
-alarms, a system's and a place's "why", a rule's open alarms) renders the level's label in its color
+The console reads the catalog everywhere a severity shows: every alarm chip (the component's
+alarms, a system's and a location's "why", a rule's open alarms) renders the level's label in its color
 and sorts by its rank, so an operator level renders like a shipped one with no console change, and
-**Catalog > Actions > Severity** (#921) lists the levels worst first with their rank, color and
+**Catalog > Actions > Severity levels** (#921) lists the levels worst first with their rank, color and
 effect, and authors operator levels in a drawer (#930): create, rename, relabel, recolor, re-rank and
 delete, gated `severity_level:*` on an all-scope grant like a rule write (ADR-0144, ruled
-2026-10-20): a level's rank moves health fleet-wide, so a holder whose grant stops at one place reads
+2026-10-20): a level's rank moves health fleet-wide, so a holder whose grant stops at one location reads
 the levels but writes none (a 403). Official levels are read-only. Its form teaches the rank as it is typed: where the rank sits among the
 levels, and whether an alarm at it would take its component out or degrade it.
 
@@ -535,26 +539,26 @@ default ack-timeout per level.
 A **notification** is the outbound lane to people: a message about an alarm, sent to the chat or
 paging tool somebody already watches. It is distinct from a [command](/architecture/commands/)
 (sent to a component) and from an [event](/architecture/events/) (a record, never sent). The lane
-is three registries and a delivery row, each answering one question: a **notification type** says
+is three catalogs and a delivery row, each answering one question: a **notification type** says
 *what* a message says, a **notification target** says *where* it goes, an **action rule** says
 *when* it is sent, and a **notification** is one message on its way (#618).
 
 ### Notification types: what a message says
 
 A `notification_type` is the outbound peer of `command_type`: fleet-wide reference data carrying
-the `official` boolean, a `label` and `description`, and two templates, a one-line `subject` and a
+the `official` boolean, a `label` and `description`, and two rules, a one-line `subject` and a
 body `text`. The shipped set is authoritative on every boot and read-only; an operator writes
 their own beside it, and renames one with `:rename`.
 
 <SeededSet kind="notification_types" />
 
-A template is the language a [label rule](/architecture/glossary/) is written in, run by the same
+Each is written in the language a [label rule](/architecture/glossary/) is written in, run by the same
 sandbox (`internal/sandbox`, lifted out of the label engine so there is one): a closed grammar
 (`if`, the comparisons and the label rule's functions; `printf`, `call`, `index`, `range` and
-variables are refused when the template is written, a 422 naming the construct, and it is never
+variables are refused when the rule is written, a 422 naming the construct, and it is never
 stored) over a closed map of strings. The work one render may do is bounded at the primitive, not
-by the grammar alone: a template's source, the arguments of one call, and each fact's length are
-capped, so a template over a long alarm message cannot multiply it. A notification template reads the **alarm facts**, declared once beside
+by the grammar alone: a rule's source, the arguments of one call, and each fact's length are
+capped, so a rule over a long alarm message cannot multiply it. A notification's subject and text read the **alarm facts**, declared once beside
 the accessor that builds them; a fact outside the map renders empty, and a secret is not in it to
 filter out:
 
@@ -562,12 +566,12 @@ filter out:
 
 `Link` is built on the `console_url` key of the `notification` [settings](/architecture/settings/) namespace (a platform
 namespace, admin-only), since the server cannot know the name a receiver reaches it by.
-`POST /notification-types/{name}:preview` renders a type, or a draft of either template, against
+`POST /notification-types/{name}:preview` renders a type, or a draft of either rule, against
 a real alarm on a component the caller can read, exactly as a delivery of that transition would
 carry it, and returns the facts beside the result; it writes nothing. The console's
-**Catalog > Actions > Notifications** page edits the templates and previews them through that
-route, so an author sees what a receiver gets and what a template can read. Its neighbours,
-**Action rules** and **Targets** (#1346), author the other two registries: a target's panel tests it
+**Catalog > Actions > Notifications** page edits the rules and previews them through that
+route, so an author sees what a receiver gets and what a rule can read. Its neighbours,
+**Action rules** and **Notification targets** (#1346), author the other two catalogs: a target's panel tests it
 and shows the receiver's answer, reveals its URL under the audit row, and names the rules sending to
 it; a rule's panel switches it on and off and lists what it recently sent, its `when` written in the
 expression editor at the action site.
@@ -579,7 +583,7 @@ proves itself with. The kinds are a code-declared enum published through the API
 the first, and it reaches people through the tools they already watch (a chat incoming webhook, a
 paging service) without a mail relay. An `email` target is a fixed set of addresses, a shared
 mailbox ([below](#email-a-shared-mailbox-and-a-persons-directory-email)). A target can also name
-people: a `principal_group` or one `principal` ([below](#people-group-and-person-targets-and-the-inbox)).
+people: a `user_group` or one `user` ([below](#people-group-and-person-targets-and-the-inbox)).
 Other channel kinds are later. A target
 is **platform-owned and admin-only**: an egress destination holding a credential reference, so
 `notification_target` is a sensitive resource off the viewer floor, every route takes an
@@ -590,8 +594,8 @@ read masks it to its scheme and host, the audit log records it masked (and an ed
 changed), and `:reveal` returns it whole under an audit row of its own. The bound credential is a
 **platform secret** of the `hmac-key` type (the send signs each body) or the `bearer-token` type
 (the send presents it); a secret a target binds cannot be deleted from under it. Binding one
-takes exactly what revealing it takes (`secret:reveal`, and the admin tier for an admin-sensitive
-secret), and so does moving the URL of a target that keeps one, since every send hands it to
+takes `secret:bind` on it (and the admin tier for an admin-sensitive
+secret, [ADR-2047](/architecture/decisions/#adr-2047-an-agent-may-do-what-its-person-may-except-take-a-credential-out-in-plaintext)), and so does moving the URL of a target that keeps one, since every send hands it to
 whatever the URL names: a target permission alone would make
 the platform a confused deputy, delivering a credential its holder cannot read to a URL it chose.
 `POST /notification-targets/{name}:test` sends one synthetic message (transition `test`, about no
@@ -599,7 +603,7 @@ alarm) exactly as a delivery would be sent, answers what the receiver said, and 
 audit row.
 
 **The send pipeline is render, then sign, then send.** The body is a fixed, versioned JSON
-envelope: the templates render strings, never the JSON itself, so an operator's template cannot
+envelope: the rules render strings, never the JSON itself, so an operator's rule cannot
 produce an invalid body. The signature is over the exact bytes sent and is the scheme the inbound
 `hmac` webhook verifies ([ADR-1024](/architecture/decisions/)), so a receiver can prove the
 sender, and Omniglass can verify its own notifications.
@@ -623,22 +627,22 @@ environment.
 
 ### People: group and person targets, and the inbox
 
-A target can name people instead of a channel (#1341): a **`principal_group`** target reaches every
-member of a group, and a **`principal`** target one person, each on the **channels** it names (`inbox`,
+A target can name people instead of a channel (#1341): a **`user_group`** target reaches every
+member of a group, and a **`user`** target one person, each on the **channels** it names (`inbox`,
 the console inbox, and `email`, each person's directory email). They ride the rule's targets exactly as a webhook does, so "the on-call group gets
 every critical alarm" is an action rule whose target is the group:
 
 ```bash
-omniglass notification-target create --name on-call-page --kind principal_group \
-  --principal-group on-call --channels '["inbox"]'
+omniglass notification-target create --name on-call-page --kind user_group \
+  --user-group on-call --channels '["inbox"]'
 omniglass action-rule create --name page-on-call --on '["raised"]' \
   --when 'severity_rank >= 50' --targets '["on-call-page"]'
 ```
 
 **The group is expanded at the transition**, not when the rule is written: the alarm's own transaction
 reads the membership as it stands, so a member added later is told on the next alarm and a removed one
-is not, with no rule edited. Recipients are people: only active, unarchived **human** members are told
-(a service account or a node in the group is skipped). Each person gets **one row per channel**, with
+is not, with no rule edited. Recipients are people: only active, unarchived **persons** among the members are told
+(a machine user or an outpost in the group is skipped). Each person gets **one row per channel**, with
 their own delivery state; a person one rule reaches twice (two of its groups, or a group and directly)
 is told once.
 
@@ -658,10 +662,10 @@ entry about a component they have since lost is gone from their inbox.
 
 **Who is named.** A person-addressed row is visible wherever its alarm is (`/notifications`, the
 alarm's timeline), so the alarm's history stays whole, but its recipient is named only to that person
-and to holders of `principal:read:admin`; everyone else reads it as withheld
+and to holders of `user:read:admin`; everyone else reads it as withheld
 ([identity and access](/architecture/identity-access/#people-as-notification-audiences)). Binding a group or a person to a
-target takes `principal_group:read:admin` or `principal:read:admin` on top of
-`notification_target:create`, as binding a secret takes the right to reveal it, and a group or person a
+target takes `user_group:read:admin` or `user:read:admin` on top of
+`notification_target:create`, as binding a secret takes `secret:bind`, and a group or person a
 target names cannot be deleted from under it: the refusal names the target.
 
 ### Email: a shared mailbox, and a person's directory email
@@ -674,14 +678,14 @@ webhook is, on the address actually dialed (the session dials through the egress
 dial): an internal relay only when `egress_allow` names it, a metadata address never, and `none` only
 for a relay the allow list names (a lab's mail sim). A credential never crosses an unencrypted session
 to anything but loopback. A settings patch whose **result** binds a `mail_secret` (whichever layer
-binds it, the operator file included) and changes that secret or the relay takes the right to reveal
+binds it, the operator file included) and changes that secret or the relay takes `secret:bind` on
 that secret, judged inside the patch's own transaction, as binding a secret to a target does.
 
 Two kinds of row travel by email. An **`email` target** sends to its `addresses`, admin-owned like a
 webhook. A **person's email row** (a group or person target with the `email` channel) sends to the
-person's **directory email** (`human.email`, admin-set or synced from the identity provider), resolved
+person's **directory email** (`person.email`, admin-set or synced from the identity provider), resolved
 at send. Before it sends, the tick **judges the recipient again**, inside the row's own transaction:
-they are still an active human, still a member of the group the row came through, and their component
+they are still an active person, still a member of the group the row came through, and their component
 read scope as it stands still admits the alarm's component; otherwise the row fails at once with the
 plain reason (`the recipient no longer reads the alarm's component`, `the recipient is no longer a
 member of the target's group`, `the recipient has no directory email`, `the target no longer delivers by
@@ -699,13 +703,13 @@ then opt out of it for themselves with `POST /action-rules/{name}:optOut`, and b
 expand, and a pending email of theirs from that rule fails at send; a target that names them directly
 still tells them (a person a rule reaches both directly and through a group is attributed to the
 direct target), and taking `opt_out_allowed` back off withdraws every opt-out, recorded on the rule's
-audit row, so allowing it again starts from none. [Snooze](#snooze-a-fact-about-a-condition), not
+audit row, so allowing it again starts from none. [Snooze](#snooze-silencing-an-alarm-for-a-while), not
 opt-out, is the answer for one noisy alarm.
 
 ### Personal action rules: subscribing yourself
 
 A user can subscribe themselves (#1353): a **personal action rule** is an `action_rule` with an
-owner (`owner_principal_id`) and the **channels** it tells its owner on, and no targets: its only
+owner (`owner_user_id`) and the **channels** it tells its owner on, and no targets: its only
 recipient is its owner. It is the owner's alone, created, paused, edited, tested and deleted under
 `/auth/me/action-rules` with `notification:subscribe`, which `viewer` carries so every person who can
 see alarms can subscribe; another user's rule is a 404 on every verb, `/action-rules` lists platform
@@ -716,7 +720,7 @@ releases a personal rule naming it to the official type rather than being held b
 
 ```bash
 omniglass auth me action-rule create --name my-boardroom --on '["raised"]' \
-  --when 'place == "Boardroom" && severity_rank >= 40' --channels '["inbox","email"]'
+  --when 'location == "Boardroom" && severity_rank >= 40' --channels '["inbox","email"]'
 omniglass auth me action-rule test my-boardroom --when 'severity_rank >= 50'
 ```
 
@@ -740,33 +744,33 @@ transition to a notification: **on** one or both of an alarm's transitions (`rai
 one for the transition) **to** its targets. Single-step and multi-step actions are one model,
 distinguished only by the length of the step list, so in #618 the rule has the one step `notify`
 and flows extend the same row (#618, decision 1). It is a rule, so it
-rides `rule:*`: reads registry-shaped, writes all-scope like an event rule's. Its `enabled` flag
+rides `rule:*`: reads catalog-shaped, writes all-scope like an event rule's. Its `enabled` flag
 (default true, set on create or patch) pauses it: a disabled rule queues nothing on a transition,
 what it queued before still delivers, and re-enabled it acts on the next transition.
 
 ```bash
 omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
-  --when 'severity_rank >= 40 && place == "Boardroom"' --targets '["ops-chat"]'
+  --when 'severity_rank >= 40 && location == "Boardroom"' --targets '["ops-chat"]'
 ```
 
 `when` is the **action** site of the [expression engine](/architecture/expressions/): its bindings
-are the alarm facts above in snake_case (`component`, `place`, `severity`, `message`, `rule`, ...)
+are the alarm facts above in snake_case (`component`, `location`, `severity`, `message`, `rule`, ...)
 plus `severity_rank`, so a floor reads as a comparison (`severity_rank >= 40` is high and above).
-**Acknowledgement never notifies**, and neither does a snooze: an operator act is not a condition
+**Acknowledgement never notifies**, and neither does a snooze: an operator act is not an alarm's
 edge ([cycle safety](#cycle-safety-in-the-action-layer) rule 2), with the one exception of a snooze's
-end announcing a still-raised condition again ([above](#snooze-a-fact-about-a-condition)). A clear is
-the condition's edge whoever records it, so clearing a hand-raised alarm notifies as a rule's clear
+end announcing a still-raised alarm again ([above](#snooze-silencing-an-alarm-for-a-while)). A clear is
+the alarm's edge whoever records it, so clearing a hand-raised alarm notifies as a rule's clear
 does. One message per transition per rule per target: no grouping, no digest (the storm design
 below is later).
 
 ### Delivery: the `notification` row
 
 A **notification** is one message on its way, a stateful row holding its own delivery state
-(`queued`, `sent`, `failed`, or `suppressed`, written but never sent because its condition was
-[snoozed](#snooze-a-fact-about-a-condition)). It is written **in the same transaction as the alarm transition**, at
+(`queued`, `sent`, `failed`, or `suppressed`, written but never sent because its alarm was
+[snoozed](#snooze-silencing-an-alarm-for-a-while)). It is written **in the same transaction as the alarm transition**, at
 the one seam every hand and rule raise and clear passes, so no transition is lost and none is
 written twice (the one second set of rows is the announcement a
-[snooze's end](#snooze-a-fact-about-a-condition) makes, in that end's own transaction); it is rendered then, so a retry sends the same bytes and a preview is what a
+[snooze's end](#snooze-silencing-an-alarm-for-a-while) makes, in that end's own transaction); it is rendered then, so a retry sends the same bytes and a preview is what a
 delivery carries. A server tick drains the due rows, one per transaction under `FOR UPDATE SKIP
 LOCKED`, the send made while the row is locked, so two replicas never send one twice outside the
 crash window between a send and its commit, and a restart loses nothing
@@ -775,13 +779,21 @@ diverging from the CDC sender below). A failed attempt waits **10s, doubling**, 
 failure is final (about 21 minutes in all); a deleted or disabled target fails it at once. Every
 attempt carries the same `Idempotency-Key`, the row's uuid, so a receiver drops a redelivery.
 
+A transition never waits on this lane. The queue reads the rules, types and targets a transition matches
+`FOR KEY SHARE SKIP LOCKED`, the lock the insert's foreign keys would take anyway, so a rule someone is
+deleting is **skipped for that transition** (it writes no row, as it would not a moment later when it is
+gone) and a target being deleted is dropped from its rule, instead of the transition waiting. The wait it
+avoids: the tick holds a rule's row across a slow send, the rule's `DELETE` waits on it for its `SET NULL`,
+and a raise the rule matches would wait on the delete up to the send timeout (#1335). Every other rule
+still queues its rows.
+
 The delivery is visible where an operator already looks: each row joins its
 [alarm's timeline](#the-alarms-timeline) after the edge that queued it, reading its status as it
 stands (a status row in the console: the target, a status pill shared with the recent-notifications
 list, and the action rule, labelled rather than a "by", #1413), and a failed one that was attempted is re-queued with `POST /notifications/{id}:retry` (`notification:retry`,
 an operator's, beside `alarm:acknowledge`), from the timeline or the CLI. `GET /notifications` lists
 them by alarm, target or status (`?status=suppressed` lists what snoozes suppressed), and every read is scoped by the alarm's component exactly as the
-alarm reads are: a principal never sees a message about a component outside its scope.
+alarm reads are: a user never sees a message about a component outside its scope.
 
 :::design[The rest of the action (ADR-0050)]
 
@@ -792,7 +804,7 @@ state directly:
 
 - **kinds**: a `webhook` action with a per-target
   body, `run` (execute a command; edge realization in [templates](/architecture/templates/) /
-  [nodes](/architecture/nodes/));
+  [outposts](/architecture/outposts/));
 - a **multistep** action is a **flow**, carrying workflow state (current step, waiting, branches).
 
 Still design on the rule: triggers on **events** and **labels** as well as alarm transitions,
@@ -819,6 +831,33 @@ system-owned alarm, dependency suppression mutes the 20 child alarms, and groupi
 rest into one dispatch: the cause, not 20 symptoms.
 :::
 
+## The heartbeat: what an alarm inside the platform cannot see
+
+An alarm is raised by the thing it reports on: the event rule sweep decides it, the server writes it,
+the notifier sends it. So the failures an alarm can never report are the ones that stop all three at
+once. A server that has crashed, lost its network or lost its database raises nothing, and silence
+reads as health. The `rule-sweep-stalled` alarm closes the narrow part of that gap: the sweep is the
+clock that fires and clears every rule that needs time, and when it stops while the server lives on,
+`rule-sweep-age` grows past 30 s and the alarm opens (in the same server's report window, and from a
+second server's read of the shared database). It catches **a stalled sweep, not a dead server**: a peer
+judges only a server that is still marking itself seen, so a dead one drops out of its read rather
+than holding open an alarm nothing would clear.
+
+The remedy for the rest is a **dead-man's switch**: a signal whose *absence* is the alarm, watched from
+outside. The server's **heartbeat** is that signal. Name a webhook
+[notification target](#notification-targets-where-a-message-goes) in the `heartbeat.target` platform
+setting and the server sends it a signed request every `heartbeat.interval_seconds` (60 by default).
+The request is a notification like any other: built and signed by the same pipeline (the target's bound
+`hmac-key` secret signs it, and a target with none bound is refused, never sent unsigned), sent through the egress contract (`internal/egress`, above) so the allow list
+decides where it may go, and audited. The body carries the server's name, its build and the count of
+open alarms on the platform's own components, as the `heartbeat` transition's facts
+(`server`, `build`, `open_platform_alarms`). It is **off by default**: with no target set the server
+sends nothing.
+
+Omniglass does not host the receiver. Point it at a dead-man's-switch service (anything that pages when
+a ping fails to arrive within a grace period) and size that period to a few intervals. Each server
+sends its own; a count that stays above zero tells the receiver the install is up and not quiet.
+
 ::::design[Action durability and egress (ADR-0050)]
 
 ## Durability and egress
@@ -834,7 +873,7 @@ and the dead-letter surface is the `failed` row on the alarm's timeline with its
 
 :::caution[Open question]
 The observed-use auth-failure feedback from actions into credential health (paired with the
-credential-health model in [config and credentials](/architecture/variables/)).
+credential-health model in [variables, secrets, and declared values](/architecture/variables/)).
 :::
 
 ::::
@@ -857,7 +896,7 @@ opens an alarm, fires the action again), closed with three rules:
 2. **Operator transitions do not match `action_rule`s** (only open / resolve do). Built (#618): an
    `action_rule` fires on `raised` and `cleared` alone, and neither acknowledging nor snoozing
    queues anything. The one exception is the end of a snooze, which announces a still-raised
-   condition again as `raised` (#1318,
+   alarm again as `raised` (#1318,
    [ADR-1318](/architecture/decisions/#adr-1318-a-snooze-is-a-fact-about-an-alarms-condition-its-notifications-are-written-suppressed-and-its-end-tells-people-again)):
    it re-sends a transition the platform already announced, judged by the same rules, and a snooze
    ends only once, so it cannot loop.
@@ -890,7 +929,7 @@ tables, no tracing backend.
 A **flow** is a bounded multi-step action: a **DAG of steps** (`notify`, `command`, `wait`,
 `branch`, `parallel`) over one alarm, **instantiated per open alarm**, gated on the alarm staying
 open, **cancelled on resolve or ack**, **cycle-guarded** by the lineage walk above, **finite** by a
-depth / step cap, its `wait` steps on the durable per-incident timer ([time](/architecture/time/)).
+depth / step cap, its `wait` steps on the durable per-alarm timer ([time](/architecture/time/)).
 
 The canonical case is an **escalation**: remediate, `wait`, re-check the **real sample** the alarm
 is built on, escalate if unchanged. The same engine covers a time-bound access grant and an
@@ -903,7 +942,7 @@ multi-step are one model**: only the length of the step list distinguishes them.
 ## Namespacing
 
 Event rules and severity levels carry the same **`official` boolean** discipline as the rest of
-the registries (built, #917 and #920), seeded through each registry's authoritative upsert
+the catalogs (built, #917 and #920), seeded through each catalog's authoritative upsert
 (`UpsertEventRule`, `UpsertSeverityLevel`, beside `UpsertPropertyType` and siblings): `official:
 true` ships vetted and is read-only, `official: false` is operator-authored. An official level never
 takes over an operator's: a clash stops the boot naming it.
@@ -929,30 +968,30 @@ not. The **target design shape** adds the owner arc, `status`, `opened_at`, and 
   notes={{
     severity: 'A severity level by name (FK, ON UPDATE CASCADE); the rollup and the console sort on its rank',
     raised_by_rule_id: 'The event rule that raised it; NULL for a hand-raised alarm or once the rule is deleted',
-    dedup_key: 'The condition identity (ADR-0075): one open alarm per (component, dedup_key), enforced by the partial unique index while open',
-    raised_at: 'When the incident opened',
+    dedup_key: 'The alarm\'s identity (ADR-0075): one open alarm per (component, dedup_key), enforced by the partial unique index while open',
+    raised_at: 'When the alarm was raised',
     cleared_at: 'NULL while open; the one-open index keys on it',
-    component_id: 'The component the incident is about (the thin-cut owner)',
+    component_id: 'The component the alarm is about (the thin-cut owner)',
     acknowledged_at: 'When a human first recorded seeing it; NULL while nobody has. Orthogonal to cleared_at',
-    acknowledged_by: 'Who recorded it; ON DELETE SET NULL, so purging a principal keeps the time, and audit_log keeps the name',
+    acknowledged_by: 'Who recorded it; ON DELETE SET NULL, so purging a user keeps the time, and audit_log keeps the name',
   }}
 />
 
-A snooze is a row of its own, one per snoozed condition, keyed by the condition rather than the alarm
-([above](#snooze-a-fact-about-a-condition)):
+A snooze is a row of its own, one per snoozed alarm, keyed by the alarm's component and dedup key rather than one alarm row
+([above](#snooze-silencing-an-alarm-for-a-while)):
 
 <SchemaTable
   table="alarm_snooze"
   notes={{
-    component_id: 'With dedup_key, the condition identity (ADR-0075) the snooze is on; it goes with its component',
-    dedup_key: 'The condition snoozed; every alarm of it, past and future, reads the snooze while it holds',
+    component_id: 'With dedup_key, the alarm identity (ADR-0075) the snooze is on; it goes with its component',
+    dedup_key: 'The alarm snoozed; every row of it, past and future, reads the snooze while it holds',
     snoozed_until: 'When it ends; the index on it is what the end-of-snooze sweep reads. Snoozing again replaces it',
     snoozed_by: 'Who set it; ON DELETE SET NULL, its name resolved when read, and audit_log keeps the name',
   }}
 />
 
 The notification lane is four tables: the `notification_type` and `notification_target`
-registries, the `action_rule` and the targets it sends to (`action_rule_target`), and the
+catalogs, the `action_rule` and the targets it sends to (`action_rule_target`), and the
 `notification` delivery row.
 
 <SchemaTable
@@ -963,23 +1002,23 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
     notification_type_id: 'The type it sends (ON DELETE RESTRICT, held by a platform rule; a personal rule is released to NULL when the type is deleted); NULL sends the official one for the transition',
     official: 'The rule-row discipline; no official action rule ships',
     opt_out_allowed: 'Whether a member of a group it targets may opt out of it (default false)',
-    owner_principal_id: 'A personal rule\'s owner, its only recipient (ON DELETE CASCADE); NULL is a platform rule',
+    owner_user_id: 'A personal rule\'s owner, its only recipient (ON DELETE CASCADE); NULL is a platform rule',
     channels: 'A personal rule\'s channels (inbox, email); empty for a platform rule, which has targets',
   }}
 />
 
 <SchemaTable table="action_rule_target" notes={{ target_id: 'A target it sends to; a target a rule names cannot be deleted (RESTRICT)' }} />
 
-<SchemaTable table="action_rule_opt_out" notes={{ principal_id: 'A person who opted out of the rule for themselves; read only while the rule is opt_out_allowed' }} />
+<SchemaTable table="action_rule_opt_out" notes={{ user_id: 'A person who opted out of the rule for themselves; read only while the rule is opt_out_allowed' }} />
 
 <SchemaTable
   table="notification_target"
   notes={{
-    kind: 'The target kind, a code-declared enum: webhook, email, principal_group or principal; a CHECK holds each kind to its own columns',
+    kind: 'The target kind, a code-declared enum: webhook, email, user_group or user; a CHECK holds each kind to its own columns',
     addresses: 'An email target\'s recipients, a shared mailbox; empty for every other kind',
     url: 'A webhook\'s destination; masked on every read, revealed whole under an audit row. NULL for a person target',
-    principal_group_id: 'The group a principal_group target reaches, expanded at every transition (ON DELETE RESTRICT)',
-    principal_id: 'The person a principal target reaches (ON DELETE RESTRICT)',
+    user_group_id: 'The group a user_group target reaches, expanded at every transition (ON DELETE RESTRICT)',
+    user_id: 'The one person a person target reaches (ON DELETE RESTRICT)',
     channels: 'The channels a person target delivers on (inbox, email); empty for a webhook or an email target',
     secret_id: 'The platform hmac-key or bearer-token secret it signs or authenticates with; a bound secret cannot be deleted (RESTRICT)',
   }}
@@ -991,12 +1030,12 @@ registries, the `action_rule` and the targets it sends to (`action_rule_target`)
     alarm_id: 'The alarm it is about; written in that alarm transition\'s own transaction',
     component_id: 'The alarm\'s component, denormalized for the scope filter every read injects',
     rule_name: 'The action rule that queued it, kept by name after the rule is deleted (as type_name and target_name are)',
-    facts: 'The alarm facts the templates rendered over, sent as the envelope\'s facts',
-    status: 'queued, sent, failed or suppressed (a snoozed condition\'s row, written but never sent); the partial index on due queued rows is what the tick drains',
+    facts: 'The alarm facts the rules rendered over, sent as the envelope\'s facts',
+    status: 'queued, sent, failed or suppressed (a snoozed alarm\'s row, written but never sent); the partial index on due queued rows is what the tick drains',
     next_attempt_at: 'When the tick next tries a queued row: now, then 10s doubling after each failure',
     channel: 'How it travels: webhook, inbox (delivered by its commit) or email',
-    recipient_principal_id: 'The person it is addressed to; ON DELETE SET NULL, recipient_name keeping who it was',
-    recipient_name: 'The recipient by username, kept after a purge; withheld on read from all but the recipient and principal:read:admin',
+    recipient_user_id: 'The person it is addressed to; ON DELETE SET NULL, recipient_name keeping who it was',
+    recipient_name: 'The recipient by username, kept after a purge; withheld on read from all but the recipient and user:read:admin',
     read_at: 'When its recipient read an inbox entry',
   }}
 />
@@ -1009,20 +1048,20 @@ above; no `action` table exists for flows yet.
 
 The event rule is three tables: the authored **`event_rule`** row, the durable streak each rule
 holds per component and instance while it waits out a sustain, **`event_rule_state`**, and the
-condition each rule holds in force per component and instance, **`event_rule_condition`**, which an
-upgrade backfilled from the rule-raised alarms open at the time. The severity registry is
+firing each rule holds per component and instance, **`event_rule_firing`**, which an
+upgrade backfilled from the rule-raised alarms open at the time. The severity catalog is
 **`severity_level`**.
 
 <SchemaTable
   table="event_rule"
   notes={{
-    sample_key: 'The property or metric it reads, by name; sample_lane records which registry',
-    fire_criteria: 'The expression the condition starts on, {"expr": "..."} (#957); the short form {op, value} is lowered to it on input',
-    clear_criteria: 'The expression it ends on, {"expr": "..."}; NULL clears on the negation of fire_criteria',
+    sample_key: 'The property or metric it reads, by name; sample_lane records which catalog',
+    fire_criteria: 'The expression the rule fires on, {"expr": "..."} (#957); the short form {op, value} is lowered to it on input',
+    clear_criteria: 'The expression it clears on, {"expr": "..."}; NULL clears on the negation of fire_criteria',
     selector: 'Component types and components it watches; empty, every component',
     severity: 'The level its alarms are raised at, by name; NULL is an informational rule, which raises no alarm',
-    fire_event_type_id: 'The event type written when the condition starts (FK event_type, required)',
-    clear_event_type_id: 'The event type written when the condition ends; NULL writes none',
+    fire_event_type_id: 'The event type written when the rule fires (FK event_type, required)',
+    clear_event_type_id: 'The event type written when it clears; NULL writes none',
     version: 'Bumps on every change',
   }}
 />
@@ -1036,17 +1075,17 @@ upgrade backfilled from the rule-raised alarms open at the time. The severity re
 />
 
 <SchemaTable
-  table="event_rule_condition"
+  table="event_rule_firing"
   notes={{
-    since: 'When the condition came into force; one row while it holds, for every rule',
+    since: 'When the rule fired; one row while it is firing, for every rule',
   }}
 />
 
-<SchemaTable table="notification_type" notes={{ subject: 'The one-line subject template, rendered over the alarm facts; whitespace collapses', text: 'The body text template; its lines are kept' }} />
+<SchemaTable table="notification_type" notes={{ subject: 'The one-line subject rule, rendered over the alarm facts; whitespace collapses', text: 'The body text rule; its lines are kept' }} />
 
 <SchemaTable table="severity_level" notes={{ rank: 'Higher is worse; at or above the health rule\'s outage floor an active alarm is an outage (the shipped levels, each marked, are on the rules guide)' }} />
 
-A command **is two real tables**: the `command_type` registry and the `command` invocation row with
+A command **is two real tables**: the `command_type` catalog and the `command` invocation row with
 its computed settlement; see [commands](/architecture/commands/). The `action_rule` config row lives
 with the [rule families](/architecture/calculations/).
 
@@ -1055,4 +1094,4 @@ with the [rule families](/architecture/calculations/).
 An abstract action (`reboot`) resolves to different concrete commands by component type / model
 through the cascade, so one `reboot` targets a heterogeneous fleet and each device runs the command
 its model declares; the edge dispatch and the `command` declaration live in
-[templates](/architecture/templates/) / [nodes](/architecture/nodes/).
+[templates](/architecture/templates/) / [outposts](/architecture/outposts/).

@@ -1,5 +1,5 @@
 // Package avatar normalizes an uploaded image into a fixed-size square JPEG for
-// use as a principal's profile picture. It is pure: decode, guard, crop, resize,
+// use as a user's profile picture. It is pure: decode, guard, crop, resize,
 // re-encode, with no I/O. The guards (payload cap, dimension cap) make it safe to
 // run on untrusted uploads.
 package avatar

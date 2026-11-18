@@ -142,7 +142,7 @@ func TestTheLabelColumnIsCalledLabel(t *testing.T) {
 	// The two tables that spelled their NOT NULL as a NAMED constraint have to
 	// have lost it, under either name. A surviving constraint would make those
 	// two the odd ones out at exactly the moment every other table can hold a
-	// NULL, and the failure would surface as a write refusal on two registries
+	// NULL, and the failure would surface as a write refusal on two catalogs
 	// rather than as a schema difference anybody could see.
 	for _, gone := range []string{
 		"standard_label_not_null", "vendor_label_not_null",

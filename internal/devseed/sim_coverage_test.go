@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
+	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
@@ -43,7 +44,7 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 
 	byProduct := map[string][]string{}
 	// The components the seed places, and the ones it places only with the
-	// simulator on (sim_components: the UCC service, which only a simulator can
+	// simulator on (sim_components: the UCC platform, which only a simulator can
 	// answer for).
 	for _, c := range append(append([]devseed.Component(nil), doc.Components...), doc.SimComponents...) {
 		if c.Product == "" {
@@ -80,4 +81,43 @@ func TestEverySeededComponentIsSimulatedOrAccountedFor(t *testing.T) {
 	}
 	t.Logf("dev fleet: %d components simulated, %d awaiting a profile (%d products), %d passive",
 		simulated, pending, pendingProducts, passive)
+}
+
+// The dev fleet places one UCC shape (#1390): the account-wide
+// conduit. The per-room ucc-service component, its webhook endpoint and its
+// product are retired, and the room bindings hang off the conduit.
+func TestDevFleetPlacesOnlyTheUCCPlatformConduit(t *testing.T) {
+	t.Parallel()
+	s, err := devseed.LookupScenario("dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := s.Doc()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range append(append([]devseed.Component(nil), doc.Components...), doc.SimComponents...) {
+		if c.Product == "ucc-service" || c.Key == "ucc-service" {
+			t.Errorf("component %s is the retired per-room ucc-service (#1390)", c.Key)
+		}
+	}
+	for _, e := range doc.SimEndpoints {
+		if e.Component == "ucc-service" {
+			t.Errorf("sim endpoint %q is on the retired ucc-service component (#1390)", e.Label)
+		}
+	}
+	conduits := 0
+	for _, c := range doc.SimComponents {
+		if strings.HasPrefix(c.Product, "ucc-") {
+			conduits++
+		}
+	}
+	if conduits != 1 {
+		t.Errorf("the dev fleet places %d UCC conduits, want 1", conduits)
+	}
+	for _, p := range seed.ShippedProducts() {
+		if p.Name == "ucc-service" {
+			t.Error("the ucc-service product is still seeded (#1390)")
+		}
+	}
 }

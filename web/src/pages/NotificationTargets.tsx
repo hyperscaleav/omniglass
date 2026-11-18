@@ -15,13 +15,13 @@ import { createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { can, canFleet, fleetView, useMe } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { toggled, PILL_NEUTRAL } from "../lib/subscriptions";
 import { SECRETS_KEY, listSecrets } from "../lib/secrets";
 import { GROUPS_KEY, listGroups } from "../lib/groups";
-import { PRINCIPALS_KEY, listPrincipals, principalName } from "../lib/principals";
+import { USERS_KEY, listUsers, userName } from "../lib/users";
 import { ACTION_RULES_KEY, listActionRules, usedBy } from "../lib/action_rules";
 import {
   KIND_WORDS,
@@ -60,12 +60,12 @@ import {
 // the caller's all-scope permissions (canFleet).
 
 export const TARGET_HINTS = {
-  kind: "Webhook posts a signed JSON envelope to a URL (a chat or paging tool). Email sends to fixed addresses through the install's mail relay. Group tells every member of a group, read at each alarm; Person tells one person. A person is told only about alarms on components they can read.",
+  kind: "Webhook posts a signed JSON envelope to a URL (a chat or paging tool). Email sends to fixed addresses through the install's mail relay. User group tells every member of a user group, read at each alarm; Person tells one person. A person is told only about alarms on components they can read.",
   url: "Masked to its scheme and host on every read, since a chat webhook's URL is often itself a credential. Reveal shows it whole and is audited. A private address is refused until Settings > notification > egress_allow names it.",
   urlEdit: "Leave blank to keep the stored URL. A new one is judged against the egress allow list as it is saved.",
   secret: "A platform hmac-key signs each body (X-Omniglass-Signature); a bearer-token is presented as Authorization: Bearer. None sends unsigned. Binding one takes the right to reveal it.",
   addresses: "The mailbox addresses it sends to, separated by commas or new lines, through the install's mail relay.",
-  group: "Every human member, read at each alarm transition: add someone to the group and they are told next time.",
+  group: "Every person in the user group, read at each alarm transition: add someone to the group and they are told next time.",
   person: "The one person it tells.",
   channels: "Inbox puts an entry in each person's console inbox (the bell in the top bar). Email sends to each person's directory email.",
   enabled: "A disabled target is skipped: a rule sending to it queues nothing for it. It can still be tested.",
@@ -129,7 +129,7 @@ export default function NotificationTargets(): JSX.Element {
             ],
             filterPlaceholder: "filter targets by name, kind…",
             columns,
-            empty: "No notification targets. A target is where a message about an alarm goes: a chat webhook, a mailbox, a group or a person.",
+            empty: "No notification targets. A target is where a message about an alarm goes: a chat webhook, a mailbox, a user group or a person.",
             rowId: (t) => t.name,
             blades: { registry: { notification_target: targetBlade }, rootKind: "notification_target", controller: blades },
             railExtra: () => (
@@ -245,7 +245,7 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
       const t = row();
       if (!t || canUpdate()) return null;
       // A target carries no official flag: judged on the permission arm alone.
-      return registryLock({ official: false }, fleetView(me.data), "notification_target");
+      return catalogLock({ official: false }, fleetView(me.data), "notification_target");
     },
   });
 
@@ -292,12 +292,12 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
                   <For each={t().addresses ?? []}>{(a) => <span class={`${PILL_NEUTRAL} font-data`}>{a}</span>}</For>
                 </span>
               </Match>
-              <Match when={t().kind === "principal_group" || t().kind === "principal"}>
+              <Match when={t().kind === "user_group" || t().kind === "user"}>
                 <div class="grid grid-cols-2 gap-3 text-sm">
                   <KVStacked
-                    label={t().kind === "principal" ? "Person" : "Group"}
-                    hint={t().kind === "principal" ? TARGET_HINTS.person : TARGET_HINTS.group}
-                    value={<span class="font-data">{(t().kind === "principal" ? t().principal : t().principal_group) || "withheld"}</span>}
+                    label={t().kind === "user" ? "Person" : "User group"}
+                    hint={t().kind === "user" ? TARGET_HINTS.person : TARGET_HINTS.group}
+                    value={<span class="font-data">{(t().kind === "user" ? t().user : t().user_group) || "withheld"}</span>}
                   />
                   <KVStacked label="Channels" hint={TARGET_HINTS.channels} value={<ChannelPills channels={t().channels} />} />
                 </div>
@@ -432,8 +432,8 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
   const [url, setUrl] = createSignal(start.url);
   const [secret, setSecret] = createSignal(start.secret);
   const [addresses, setAddresses] = createSignal(start.addresses);
-  const [group, setGroup] = createSignal(start.principalGroup);
-  const [person, setPerson] = createSignal(start.principal);
+  const [group, setGroup] = createSignal(start.userGroup);
+  const [person, setPerson] = createSignal(start.user);
   const [channels, setChannels] = createSignal<PeopleChannel[]>(start.channels);
   const [enabled, setEnabled] = createSignal(start.enabled);
   const [touched, setTouched] = createSignal(false);
@@ -448,17 +448,17 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
   const signing = createMemo(() =>
     (secrets.data ?? []).filter((s) => s.owner_kind === "platform" && (s.secret_type === "hmac-key" || s.secret_type === "bearer-token")).sort((a, b) => a.name.localeCompare(b.name)),
   );
-  const groups = useQuery(() => ({ queryKey: GROUPS_KEY, queryFn: listGroups, enabled: !editing && kind() === "principal_group" }));
+  const groups = useQuery(() => ({ queryKey: GROUPS_KEY, queryFn: listGroups, enabled: !editing && kind() === "user_group" }));
   const people = useQuery(() => ({
-    queryKey: [...PRINCIPALS_KEY, "human"],
-    queryFn: () => listPrincipals("human"),
-    enabled: !editing && kind() === "principal",
+    queryKey: [...USERS_KEY, "person"],
+    queryFn: () => listUsers("person"),
+    enabled: !editing && kind() === "user",
   }));
-  const humans = createMemo(() => (people.data ?? []).filter((x) => x.human?.username).sort((a, b) => a.human!.username.localeCompare(b.human!.username)));
+  const persons = createMemo(() => (people.data ?? []).filter((x) => x.person?.username).sort((a, b) => a.person!.username.localeCompare(b.person!.username)));
 
   const draft = (): TargetDraft => ({
     name: ident.name(), label: ident.display(), kind: kind(), url: url(), secret: secret(), addresses: addresses(),
-    principalGroup: group(), principal: person(), channels: channels(), enabled: enabled(),
+    userGroup: group(), user: person(), channels: channels(), enabled: enabled(),
   });
   const errors = createMemo(() => targetDraftErrors(draft(), editing));
   const valid = () => Object.keys(errors()).length === 0;
@@ -575,36 +575,36 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
             {shown("addresses")}
           </div>
         </Match>
-        <Match when={kind() === "principal_group"}>
+        <Match when={kind() === "user_group"}>
           <Show
             when={!editing}
-            fallback={<KVStacked label="Group" hint={TARGET_HINTS.group} mono value={p.target!.principal_group || "withheld"} />}
+            fallback={<KVStacked label="User group" hint={TARGET_HINTS.group} mono value={p.target!.user_group || "withheld"} />}
           >
             <div class="flex flex-col gap-1">
-              <FieldRow label="Group" info={TARGET_HINTS.group}>
+              <FieldRow label="User group" info={TARGET_HINTS.group}>
                 <select ref={bindSelectValue(group, () => groups.data)} class="select select-bordered w-full" onChange={(e) => setGroup(e.currentTarget.value)} aria-required="true" data-testid="target-group-select">
-                  <option value="">Choose a group</option>
+                  <option value="">Choose a user group</option>
                   <For each={groups.data ?? []}>{(g) => <option value={g.name}>{entityLabel(g) === g.name ? g.name : `${entityLabel(g)} (${g.name})`}</option>}</For>
                 </select>
               </FieldRow>
-              {shown("principalGroup")}
+              {shown("userGroup")}
             </div>
           </Show>
           <ChannelBoxes />
         </Match>
-        <Match when={kind() === "principal"}>
+        <Match when={kind() === "user"}>
           <Show
             when={!editing}
-            fallback={<KVStacked label="Person" hint={TARGET_HINTS.person} mono value={p.target!.principal || "withheld"} />}
+            fallback={<KVStacked label="Person" hint={TARGET_HINTS.person} mono value={p.target!.user || "withheld"} />}
           >
             <div class="flex flex-col gap-1">
               <FieldRow label="Person" info={TARGET_HINTS.person}>
-                <select ref={bindSelectValue(person, humans)} class="select select-bordered w-full" onChange={(e) => setPerson(e.currentTarget.value)} aria-required="true">
+                <select ref={bindSelectValue(person, persons)} class="select select-bordered w-full" onChange={(e) => setPerson(e.currentTarget.value)} aria-required="true">
                   <option value="">Choose a person</option>
-                  <For each={humans()}>{(h) => <option value={h.human!.username}>{principalName(h) === h.human!.username ? h.human!.username : `${principalName(h)} (${h.human!.username})`}</option>}</For>
+                  <For each={persons()}>{(h) => <option value={h.person!.username}>{userName(h) === h.person!.username ? h.person!.username : `${userName(h)} (${h.person!.username})`}</option>}</For>
                 </select>
               </FieldRow>
-              {shown("principal")}
+              {shown("user")}
             </div>
           </Show>
           <ChannelBoxes />

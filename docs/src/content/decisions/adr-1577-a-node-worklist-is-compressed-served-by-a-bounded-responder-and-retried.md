@@ -1,12 +1,12 @@
 ---
 title: "A node's worklist is compressed, served by a bounded responder, and retried without exiting"
 date: 2026-11-08
-status: Accepted
+status: "Accepted; the first-pull heartbeat amended by [ADR-1882](#adr-1882-a-node-heartbeats-and-counts-its-pulls-before-its-first-worklist)"
 summary: "Accepted, narrowed from the proposal: tunes, not a rebuild. The node pulls on its own jittered interval apart from the heartbeat, retries a missed pull with jittered backoff and never exits on one, and keeps its last worklist; the server gzips a reply past 64 KB and answers pulls from a pool of 8 workers held under the database pool, dropping a pull whose node's deadline has passed. Paging, the set-based reads and the materialized worklist are their own tickets; raising max_payload stays rejected."
 refs: [1577, 1571, 1556, 529, 1583, 1581, 1584, 1586, 1250]
 ---
 
-- **Date:** 2026-11-08 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [messaging](/architecture/messaging/), [scaling](/architecture/scaling/)
+- **Date:** 2026-11-08 | **Status:** Accepted; the first-pull heartbeat amended by [ADR-1882](#adr-1882-a-node-heartbeats-and-counts-its-pulls-before-its-first-worklist) | **Pages:** [nodes](/architecture/nodes/), [messaging](/architecture/messaging/), [scaling](/architecture/scaling/)
 - **Decision:** (the architect's option 1, narrowed: the 1,000-system lab is reached with tunes,
   so this is tunes, not a rebuild.)
   1. **The node never exits on a pull.** The first pull and every later one retry with jittered

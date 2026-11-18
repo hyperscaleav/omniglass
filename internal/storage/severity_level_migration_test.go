@@ -8,7 +8,7 @@ import (
 )
 
 // TestSeverityLevelBackfill proves the move from a three-value CHECK to the
-// level registry keeps every existing alarm's meaning: critical (the outage
+// level catalog keeps every existing alarm's meaning: critical (the outage
 // word) becomes high (the outage floor of the ranked levels), info and
 // warning keep their names, the CHECK is gone and the reference stands.
 func TestSeverityLevelBackfill(t *testing.T) {
