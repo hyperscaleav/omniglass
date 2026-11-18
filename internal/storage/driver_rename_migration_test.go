@@ -65,13 +65,13 @@ func TestDriverRenameKeepsAttachedEndpointsCollecting(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-up"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-up"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-up"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	comp, drv, node := "panel-up", "newtron-panel-nvp", "edge-up"
+	comp, drv, outpost := "panel-up", "newtron-panel-nvp", "edge-up"
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver: &drv, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.20.4.61"}, SecretRead: all, CanAdmin: true,
+		Driver: &drv, Component: &comp, Outpost: &outpost,
+		Inputs: map[string]string{"host": "10.20.4.61"}, SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all)
 	if err != nil {
 		t.Fatal(err)

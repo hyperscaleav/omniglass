@@ -9,18 +9,18 @@ import { Ban, Eye, Key, LogOut, Mask, Trash, X } from "../components/icons";
 import PasswordField from "../components/PasswordField";
 import Button from "../components/Button";
 import SessionsList from "../components/SessionsList";
-import { usePrincipalSessions, useRevokePrincipalSession, useRevokeAllPrincipalSessions, type Session } from "../lib/sessions";
+import { useUserSessions, useRevokeUserSession, useRevokeAllUserSessions, type Session } from "../lib/sessions";
 import { useBlades, useBladeEdit } from "../lib/blades";
 import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
 import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
 import {
-  type Principal, type ScopeKind, type UpdatePrincipal,
-  PRINCIPALS_KEY, ROLES_KEY, getPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, listRoles,
-  archivePrincipal, restorePrincipal, purgePrincipal, resetPrincipalPassword,
-  setPrincipalAvatar, removePrincipalAvatar, principalAvatarUrl,
-  principalName, kindBadge, principalInitials,
-} from "../lib/principals";
+  type User, type ScopeKind, type UpdateUser,
+  USERS_KEY, ROLES_KEY, getUser, updateUser, createGrant, revokeGrant, setUserActive, listRoles,
+  archiveUser, restoreUser, purgeUser, resetUserPassword,
+  setUserAvatar, removeUserAvatar, userAvatarUrl,
+  userName, kindBadge, kindLabel, userInitials,
+} from "../lib/users";
 import { useMe, can } from "../lib/auth";
 import { useEditParam } from "../lib/editurl";
 import { impersonate } from "../lib/impersonation";
@@ -30,8 +30,8 @@ import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
 import { listComponents } from "../lib/components";
 
-// UserDetail is a principal's blade body under the read -> Edit -> Save contract.
-// Read mode shows the profile facts, the groups the user belongs to (a drill to the
+// UserDetail is a user's blade body under the read -> Edit -> Save contract.
+// Read mode shows the profile facts, the user groups the user belongs to (a drill to the
 // group when the Users page is the root), the grants (read-only chips), and the
 // impersonate actions. The header pencil opens edit mode: the profile becomes
 // inputs, the grant builder goes live, and the footer reveals Disable / Enable;
@@ -44,13 +44,13 @@ export function UserDetail(props: { id: string }) {
   const me = useMe();
   const blades = useBlades();
   const edit = useBladeEdit();
-  const canUpdate = () => can(me.data, "principal", "update");
-  const canArchive = () => can(me.data, "principal", "archive");
-  const canPurge = () => can(me.data, "principal", "purge", "admin");
-  const canResetPassword = () => can(me.data, "principal", "reset-password");
-  const canSetAvatar = () => can(me.data, "principal", "set-avatar");
-  const canRevokeSession = () => can(me.data, "principal", "revoke-session");
-  const revokeAllSessions = useRevokeAllPrincipalSessions(props.id);
+  const canUpdate = () => can(me.data, "user", "update");
+  const canArchive = () => can(me.data, "user", "archive");
+  const canPurge = () => can(me.data, "user", "purge", "admin");
+  const canResetPassword = () => can(me.data, "user", "reset-password");
+  const canSetAvatar = () => can(me.data, "user", "set-avatar");
+  const canRevokeSession = () => can(me.data, "user", "revoke-session");
+  const revokeAllSessions = useRevokeAllUserSessions(props.id);
   // An owner's credentials cannot be revoked by anyone (the takeover guard, server-side).
   // Detect it from the target's grants so the console hides the revoke affordances rather
   // than offering an action that would 403: an admin can see an owner's sessions, not end
@@ -63,20 +63,20 @@ export function UserDetail(props: { id: string }) {
   const [resetBusy, setResetBusy] = createSignal(false);
   const [resetPwErr, setResetPwErr] = createSignal<string | null>(null);
   const [resetDone, setResetDone] = createSignal(false);
-  // Fetch by id, not from the directory list (which hides archived principals),
+  // Fetch by id, not from the directory list (which hides archived users),
   // so the blade still resolves a user it just soft-deleted and can offer Restore
-  // / Purge. Mutations invalidate the PRINCIPALS_KEY prefix, covering this and the list.
-  const principal = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, props.id], queryFn: () => getPrincipal(props.id) }));
-  const p = () => principal.data ?? null;
-  const refresh = () => qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
+  // / Purge. Mutations invalidate the USERS_KEY prefix, covering this and the list.
+  const user = useQuery(() => ({ queryKey: [...USERS_KEY, props.id], queryFn: () => getUser(props.id) }));
+  const p = () => user.data ?? null;
+  const refresh = () => qc.invalidateQueries({ queryKey: USERS_KEY });
   const [actErr, setActErr] = createSignal<string | null>(null);
 
-  // The profile picture, fetched as a data URL only when the principal has one
+  // The profile picture, fetched as a data URL only when the user has one
   // (has_avatar rides on the detail read, so a pictureless user fires no request).
   // Shown in the header, and (for an admin who can set it) managed in the edit blade.
   const [avatarUrl, { refetch: refetchAvatar }] = createResource(
-    () => p()?.human?.has_avatar ?? false,
-    (has) => (has ? principalAvatarUrl(props.id) : Promise.resolve(null)),
+    () => p()?.person?.has_avatar ?? false,
+    (has) => (has ? userAvatarUrl(props.id) : Promise.resolve(null)),
   );
   let avatarFileInput: HTMLInputElement | undefined;
 
@@ -86,7 +86,7 @@ export function UserDetail(props: { id: string }) {
     if (!pr || !file) return;
     setActErr(null);
     try {
-      await setPrincipalAvatar(pr.id, file);
+      await setUserAvatar(pr.id, file);
       await refresh(); // refresh has_avatar so the flag and image agree
       await refetchAvatar();
     } catch (er) {
@@ -99,7 +99,7 @@ export function UserDetail(props: { id: string }) {
     if (!pr) return;
     setActErr(null);
     try {
-      await removePrincipalAvatar(pr.id);
+      await removeUserAvatar(pr.id);
       await refresh();
       await refetchAvatar();
     } catch (er) {
@@ -116,10 +116,10 @@ export function UserDetail(props: { id: string }) {
   let grantCommit: () => Promise<void> = async () => {};
   let grantCancel: () => void = () => {};
 
-  // Seed the profile inputs from the principal when edit mode opens.
+  // Seed the profile inputs from the user when edit mode opens.
   createEffect(on(() => edit.editing(), (isEditing) => {
     if (isEditing) {
-      const h = p()?.human;
+      const h = p()?.person;
       setUsername(h?.username ?? "");
       setLabel(h?.label ?? "");
       setEmail(h?.email ?? "");
@@ -155,10 +155,10 @@ export function UserDetail(props: { id: string }) {
       } else if (canArchive()) {
         items.push({ label: "Archive", icon: <Ban size={15} />, tone: "danger", onClick: doArchive });
       }
-      if (pr.human && canResetPassword() && pr.id !== me.data?.principal?.id) {
+      if (pr.person && canResetPassword() && pr.id !== me.data?.user?.id) {
         items.push({ label: "Reset password", icon: <Key size={15} />, onClick: startReset });
       }
-      if (can(me.data, "principal", "impersonate") && pr.id !== me.data?.principal?.id) {
+      if (can(me.data, "user", "impersonate") && pr.id !== me.data?.user?.id) {
         items.push({ label: "View as", icon: <Eye size={15} />, onClick: () => doImpersonate(pr, "view_as") });
         items.push({ label: "Act as", icon: <Mask size={15} />, onClick: () => doImpersonate(pr, "act_as") });
       }
@@ -174,16 +174,16 @@ export function UserDetail(props: { id: string }) {
     save: async () => {
       setActErr(null);
       try {
-        const h = p()?.human;
+        const h = p()?.person;
         if (h) {
-          const patch: UpdatePrincipal = {};
+          const patch: UpdateUser = {};
           if (username().trim() !== h.username) patch.username = username().trim();
           if (label().trim() !== (h.label ?? "")) patch.label = label().trim();
           if (email().trim() !== (h.email ?? "")) patch.email = email().trim();
-          if (Object.keys(patch).length) await updatePrincipal(props.id, patch);
+          if (Object.keys(patch).length) await updateUser(props.id, patch);
         }
         await grantCommit();
-        await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
+        await qc.invalidateQueries({ queryKey: USERS_KEY });
       } catch (e) {
         setActErr(describeError(e));
         throw e; // keep edit mode open for a retry
@@ -202,12 +202,12 @@ export function UserDetail(props: { id: string }) {
   // flip a blade the operator merely clicked open into edit.
   const [searchParams] = useSearchParams();
   const linked = () => (Array.isArray(searchParams.u) ? searchParams.u[0] : searchParams.u) === props.id;
-  useEditParam(edit, { ready: () => !!principal.data && linked(), canUpdate });
+  useEditParam(edit, { ready: () => !!user.data && linked(), canUpdate });
 
-  async function toggleActive(pr: Principal) {
+  async function toggleActive(pr: User) {
     setActErr(null);
     try {
-      await setPrincipalActive(pr.id, !pr.active);
+      await setUserActive(pr.id, !pr.active);
       await refresh();
     } catch (e) {
       setActErr(describeError(e));
@@ -216,10 +216,10 @@ export function UserDetail(props: { id: string }) {
 
   async function doArchive() {
     const pr = p();
-    if (!pr || !confirm(`Archive "${principalName(pr)}"? They will be hidden and cannot sign in, reversibly. You can then purge them.`)) return;
+    if (!pr || !confirm(`Archive "${userName(pr)}"? They will be hidden and cannot sign in, reversibly. You can then purge them.`)) return;
     setActErr(null);
     try {
-      await archivePrincipal(pr.id);
+      await archiveUser(pr.id);
       // Archiving hides the user from the directory, so close its blade (like purge
       // and group delete). It stays restorable via the Show archived toggle.
       blades.close();
@@ -234,7 +234,7 @@ export function UserDetail(props: { id: string }) {
     if (!pr) return;
     setActErr(null);
     try {
-      await restorePrincipal(pr.id);
+      await restoreUser(pr.id);
       await refresh();
     } catch (e) {
       setActErr(describeError(e));
@@ -243,25 +243,25 @@ export function UserDetail(props: { id: string }) {
 
   async function doPurge() {
     const pr = p();
-    if (!pr || !confirm(`Purge "${principalName(pr)}"? This permanently deletes the account and its grants and memberships. It cannot be undone. The audit trail is kept.`)) return;
+    if (!pr || !confirm(`Purge "${userName(pr)}"? This permanently deletes the account and its grants and memberships. It cannot be undone. The audit trail is kept.`)) return;
     setActErr(null);
     try {
-      await purgePrincipal(pr.id);
-      // The principal is gone, so close the blade first (this unmounts the body and
+      await purgeUser(pr.id);
+      // The user is gone, so close the blade first (this unmounts the body and
       // deactivates its detail query) and drop the dead detail cache, then refresh the
       // directory. Refreshing before closing would refetch the purged id and 404,
       // leaving the blade open on a broken state.
       blades.close();
-      qc.removeQueries({ queryKey: [...PRINCIPALS_KEY, pr.id] });
+      qc.removeQueries({ queryKey: [...USERS_KEY, pr.id] });
       await refresh();
     } catch (e) {
       setActErr(describeError(e));
     }
   }
 
-  async function doImpersonate(pr: Principal, mode: "view_as" | "act_as") {
+  async function doImpersonate(pr: User, mode: "view_as" | "act_as") {
     setActErr(null);
-    const r = await impersonate(qc, pr.id, principalName(pr), mode);
+    const r = await impersonate(qc, pr.id, userName(pr), mode);
     if (!r.ok) setActErr(r.message);
   }
 
@@ -290,7 +290,7 @@ export function UserDetail(props: { id: string }) {
     setResetPwErr(null);
     setResetDone(false);
     try {
-      await resetPrincipalPassword(pr.id, resetPw());
+      await resetUserPassword(pr.id, resetPw());
       setResetDone(true);
     } catch (e) {
       const msg = describeError(e);
@@ -311,19 +311,19 @@ export function UserDetail(props: { id: string }) {
               fallback={
                 <div class="avatar avatar-placeholder">
                   <div class="w-12 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-                    <span class="font-data text-sm font-bold uppercase">{principalInitials(pr())}</span>
+                    <span class="font-data text-sm font-bold uppercase">{userInitials(pr())}</span>
                   </div>
                 </div>
               }
             >
               <div class="avatar">
                 <div class="w-12 rounded-full">
-                  <img src={avatarUrl()!} alt={principalName(pr())} />
+                  <img src={avatarUrl()!} alt={userName(pr())} />
                 </div>
               </div>
             </Show>
             <span class="flex items-center gap-1.5">
-              <span class={kindBadge(pr().kind)}>{pr().kind}</span>
+              <span class={kindBadge(pr().kind)}>{kindLabel(pr().kind)}</span>
               <Show when={pr().archived_at} fallback={<Show when={!pr().active}><span class="badge badge-soft badge-warning badge-sm">inactive</span></Show>}>
                 <span class="badge badge-soft badge-error badge-sm">archived</span>
               </Show>
@@ -339,31 +339,31 @@ export function UserDetail(props: { id: string }) {
           <Show when={resetting()}>
             <div class="flex flex-col gap-2 rounded-box border border-warning/40 bg-warning/10 p-3">
               <div class="flex items-center justify-between">
-                <span class="eyebrow">Reset password{pr().human ? ` for ${pr().human!.username}` : ""}</span>
+                <span class="eyebrow">Reset password{pr().person ? ` for ${pr().person!.username}` : ""}</span>
                 <Button square size="xs" icon={X} label="Close" onClick={() => setResetting(false)} />
               </div>
-              <PasswordField id="reset-pw" value={resetPw()} onInput={(v) => { setResetPw(v); setResetPwErr(null); setResetDone(false); }} username={pr().human?.username} serverError={resetPwErr()} generate />
+              <PasswordField id="reset-pw" value={resetPw()} onInput={(v) => { setResetPw(v); setResetPwErr(null); setResetDone(false); }} username={pr().person?.username} serverError={resetPwErr()} generate />
               <Show when={resetDone()}>
                 <p class="text-xs text-success">Password set. Copy it above and share it with the user; they can change it after signing in.</p>
               </Show>
               <div class="flex justify-end gap-2">
                 <Button onClick={() => setResetting(false)} disabled={resetBusy()}>Close</Button>
-                <Button intent="action" onClick={doReset} loading={resetBusy()} disabled={!resetPw() || !!passwordError(resetPw(), pr().human?.username)}>Set password</Button>
+                <Button intent="action" onClick={doReset} loading={resetBusy()} disabled={!resetPw() || !!passwordError(resetPw(), pr().person?.username)}>Set password</Button>
               </div>
             </div>
           </Show>
 
           {/* Profile: facts in read mode, inputs in edit mode. */}
           <Show
-            when={editing() && pr().human}
+            when={editing() && pr().person}
             fallback={
               <div class="grid grid-cols-2 gap-3 text-sm">
-                <Show when={pr().human}>
-                  <KVStacked label="Username" value={<span class="font-data">{pr().human!.username}</span>} />
-                  <KVStacked label="Email" value={pr().human!.email || <span class="text-base-content/40">not set</span>} />
+                <Show when={pr().person}>
+                  <KVStacked label="Username" value={<span class="font-data">{pr().person!.username}</span>} />
+                  <KVStacked label="Email" value={pr().person!.email || <span class="text-base-content/40">not set</span>} />
                 </Show>
-                <Show when={pr().service}>
-                  <KVStacked bind="name" value={<span class="font-data">{pr().service!.name}</span>} />
+                <Show when={pr().machine}>
+                  <KVStacked bind="name" value={<span class="font-data">{pr().machine!.name}</span>} />
                 </Show>
               </div>
             }
@@ -378,14 +378,14 @@ export function UserDetail(props: { id: string }) {
                       fallback={
                         <div class="avatar avatar-placeholder">
                           <div class="w-16 rounded-full bg-linear-to-br from-primary to-info text-primary-content">
-                            <span class="font-data text-lg font-bold uppercase">{principalInitials(pr())}</span>
+                            <span class="font-data text-lg font-bold uppercase">{userInitials(pr())}</span>
                           </div>
                         </div>
                       }
                     >
                       <div class="avatar">
                         <div class="w-16 rounded-full">
-                          <img src={avatarUrl()!} alt={principalName(pr())} />
+                          <img src={avatarUrl()!} alt={userName(pr())} />
                         </div>
                       </div>
                     </Show>
@@ -398,7 +398,7 @@ export function UserDetail(props: { id: string }) {
                         onChange={onPickAvatar}
                       />
                       <Button size="sm" onClick={() => avatarFileInput?.click()}>Upload</Button>
-                      <Show when={pr().human?.has_avatar}>
+                      <Show when={pr().person?.has_avatar}>
                         <Button size="sm" intent="danger" onClick={onRemoveAvatar}>Remove</Button>
                       </Show>
                     </div>
@@ -426,25 +426,25 @@ export function UserDetail(props: { id: string }) {
               on the Users page. Membership is edited from the group, not here. */}
           <Show when={pr().groups?.length}>
             <RelatedList
-              label="Groups"
+              label="User groups"
               items={(pr().groups ?? []).map((g) => ({ id: g.id, kind: "group", name: g.name }))}
-              empty="In no groups."
+              empty="In no user groups."
               onOpen={!editing() && canDrillGroups() ? (item) => blades.push({ kind: "group", id: item.id }) : undefined}
             />
           </Show>
 
           <GrantEditor
-            principal={pr()}
+            user={pr()}
             editing={editing()}
-            canGrant={can(me.data, "principal_grant", "create")}
-            canRevoke={can(me.data, "principal_grant", "delete")}
+            canGrant={can(me.data, "user_grant", "create")}
+            canRevoke={can(me.data, "user_grant", "delete")}
             onBind={(h) => { grantCommit = h.commit; grantCancel = h.cancel; }}
           />
 
           {/* Sessions: the target's active sign-ins and API tokens, each revocable.
-              Only rendered when the caller holds principal:revoke-session, so the
+              Only rendered when the caller holds user:revoke-session, so the
               affordance is hidden from an operator (a UI hint; the server is the
-              authority, and it bounds every revoke to this principal). */}
+              authority, and it bounds every revoke to this user). */}
           <Show when={canRevokeSession()}>
             <SessionsSection id={pr().id} revocable={!isOwnerTarget()} />
           </Show>
@@ -454,22 +454,22 @@ export function UserDetail(props: { id: string }) {
   );
 }
 
-// SessionsSection lists a target principal's active sessions and tokens on the admin
+// SessionsSection lists a target user's active sessions and tokens on the admin
 // blade, each with a Revoke. It reuses the same SessionsList presentation as the
 // self-service Profile card; the server bounds every read and revoke to this
-// principal and never returns the secret. current is always false here (there is no
-// "this request's own session" when viewing another principal), so every row reads
-// as "Revoke". Rendered only when the caller holds principal:revoke-session. When the
+// user and never returns the secret. current is always false here (there is no
+// "this request's own session" when viewing another user), so every row reads
+// as "Revoke". Rendered only when the caller holds user:revoke-session. When the
 // target is not revocable (an owner, per the takeover guard), the list stays read-only:
 // the caller can see where the account is signed in but not end any of it.
 function SessionsSection(props: { id: string; revocable: boolean }) {
-  const sessions = usePrincipalSessions(props.id);
-  const revokeSession = useRevokePrincipalSession(props.id);
+  const sessions = useUserSessions(props.id);
+  const revokeSession = useRevokeUserSession(props.id);
   const [revoking, setRevoking] = createSignal<string | null>(null);
   const [err, setErr] = createSignal<string | null>(null);
   // Split by kind so sessions and API tokens each render in their own section, matching
   // the self-service Profile card. current is always false here (viewing another
-  // principal), so every row reads as "Revoke".
+  // user), so every row reads as "Revoke".
   const sessionRows = () => (sessions.data ?? []).filter((s) => s.kind === "session");
   const tokenRows = () => (sessions.data ?? []).filter((s) => s.kind === "token");
   async function revoke(s: Session) {
@@ -511,11 +511,11 @@ function SessionsSection(props: { id: string; revocable: boolean }) {
   );
 }
 
-// GrantEditor wires the shared GrantBuilder to a principal's direct grants. Read
+// GrantEditor wires the shared GrantBuilder to a user's direct grants. Read
 // mode shows chips only (canGrant / canRevoke gated on `editing`); edit mode goes
 // live and binds its commit up so the blade's Save applies the grant diff. Inherited
 // grants (from a group) render read-only below in both modes and drill to the group.
-function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: boolean; canRevoke: boolean; onBind: (h: { commit: () => Promise<void>; cancel: () => void; dirty: () => boolean }) => void }) {
+function GrantEditor(props: { user: User; editing: boolean; canGrant: boolean; canRevoke: boolean; onBind: (h: { commit: () => Promise<void>; cancel: () => void; dirty: () => boolean }) => void }) {
   const qc = useQueryClient();
   const blades = useBlades();
   const needTrees = () => props.canGrant || props.canRevoke;
@@ -533,11 +533,11 @@ function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: 
   });
 
   const current = createMemo<ExistingGrant[]>(() =>
-    props.principal.grants
+    props.user.grants
       .filter((g) => g.id && !g.group_id)
       .map((g) => ({ id: g.id!, role: g.role, scope_kind: g.scope_kind as ScopeKind, scope_id: g.scope_id ?? undefined, scope_op: (g.scope_op as ScopeOp) || undefined })),
   );
-  const inherited = createMemo(() => props.principal.grants.filter((g) => g.group_id));
+  const inherited = createMemo(() => props.user.grants.filter((g) => g.group_id));
 
   const entities = (kind: "location" | "system" | "component"): TreeNode[] => {
     const list = kind === "location" ? locations.data ?? [] : kind === "system" ? systems.data ?? [] : components.data ?? [];
@@ -546,18 +546,18 @@ function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: 
 
   async function onSave(diff: { adds: GrantRef[]; removes: ExistingGrant[] }) {
     for (const a of diff.adds) {
-      await createGrant(props.principal.id, { role: a.role, scope_kind: a.scope_kind, scope_id: a.scope_kind === "all" ? undefined : a.scope_id, scope_op: a.scope_kind === "all" ? undefined : a.scope_op });
+      await createGrant(props.user.id, { role: a.role, scope_kind: a.scope_kind, scope_id: a.scope_kind === "all" ? undefined : a.scope_id, scope_op: a.scope_kind === "all" ? undefined : a.scope_op });
     }
     for (const r of diff.removes) {
-      await revokeGrant(props.principal.id, r.id);
+      await revokeGrant(props.user.id, r.id);
     }
-    await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
+    await qc.invalidateQueries({ queryKey: USERS_KEY });
   }
 
   return (
     <div class="flex flex-col gap-2.5">
       <GrantBuilder
-        principalId={props.principal.id}
+        userId={props.user.id}
         current={current()}
         roles={(roles.data ?? []).map((r) => ({ id: r.id, label: entityLabel(r), title: [r.description, `Grants: ${(r.effective_permissions ?? r.permissions).join(", ")}`].filter(Boolean).join("\n\n") }))}
         entities={entities}
@@ -569,17 +569,17 @@ function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: 
       />
       <Show when={inherited().length}>
         <div class="flex flex-col gap-1">
-          <div class="eyebrow">Inherited from groups</div>
+          <div class="eyebrow">Inherited from user groups</div>
           <div class="flex flex-wrap gap-1.5">
             <For each={inherited()}>
               {(g) => (
                 <span
                   class="inline-flex items-center gap-1 rounded-field border border-dashed border-base-300 bg-base-100 py-[3px] pl-2.5 pr-2 text-xs"
-                  title={`Inherited from the group "${g.group_label ?? g.group}". Edit the group to change it.`}
+                  title={`Inherited from the user group "${g.group_label ?? g.group}". Edit the user group to change it.`}
                 >
                   <span class="font-data">{g.role} @ {g.scope_kind === "all" ? "all" : nameOf().get(g.scope_id ?? "") ?? g.scope_id}</span>
                   <span class="text-base-content/40">from</span>
-                  <button class="text-primary hover:underline" title="Open this group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_label ?? g.group}</button>
+                  <button class="text-primary hover:underline" title="Open this user group" onClick={() => g.group_id && blades.push({ kind: "group", id: g.group_id })}>{g.group_label ?? g.group}</button>
                 </span>
               )}
             </For>
@@ -591,8 +591,8 @@ function GrantEditor(props: { principal: Principal; editing: boolean; canGrant: 
 }
 
 function UserTitle(props: { id: string }) {
-  const principal = useQuery(() => ({ queryKey: [...PRINCIPALS_KEY, props.id], queryFn: () => getPrincipal(props.id) }));
-  return <>{principal.data ? principalName(principal.data) : "User"}</>;
+  const user = useQuery(() => ({ queryKey: [...USERS_KEY, props.id], queryFn: () => getUser(props.id) }));
+  return <>{user.data ? userName(user.data) : "User"}</>;
 }
 
 export const userBlade: BladeDef = {

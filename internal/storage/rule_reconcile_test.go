@@ -77,7 +77,7 @@ func TestReconcileHealsEnableDuringBatch(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	off := false
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "late-on", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: "late-on", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), Severity: "high", Enabled: &off}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -120,9 +120,9 @@ func TestReconcileHealsDeadlockAbort(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	// A collected key: one batch carrying two of its series is a push's (or
-	// a driver's instanced series), where a node-probe key's batch is one
+	// a driver's instanced series), where an outpost-probe key's batch is one
 	// endpoint's alone (ADR-0161).
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "dl", SampleKey: "video-input",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: "dl", SampleKey: "video-input",
 		Fire: criteria("eq", "hdmi1"), Clear: ptrCriteria(criteria("eq", "hdmi2")), Severity: "high"}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestReconcileRetriesAFailedSeriesWithoutPinningTheMark(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "pin", SampleKey: "endpoint-reachable",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: "pin", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), Severity: "high"}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +338,7 @@ func TestReconcileMetricLaneAndSelector(t *testing.T) {
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-c"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "slow", SampleKey: "http-response-time",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: "slow", SampleKey: "http-response-time",
 		Fire: criteria("gt", 30), FireSustain: time.Minute, Severity: "warning",
 		Selector: storage.EventRuleSelector{Components: []string{"bar-1"}}}, all); err != nil {
 		t.Fatal(err)

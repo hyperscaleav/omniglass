@@ -113,10 +113,10 @@ func TestAPersonalRuleIsItsOwnersAlone(t *testing.T) {
 		t.Fatalf("a personal rule naming a target = %v", err)
 	}
 	// Purging the owner takes their rules with them.
-	if err := f.gw.ArchivePrincipal(f.ctx, "", f.ids["bob"], f.all); err != nil {
+	if err := f.gw.ArchiveUser(f.ctx, "", f.ids["bob"], f.all); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.gw.PurgePrincipal(f.ctx, "", f.ids["bob"], f.all); err != nil {
+	if err := f.gw.PurgeUser(f.ctx, "", f.ids["bob"], f.all); err != nil {
 		t.Fatal(err)
 	}
 	if rs, _ := f.gw.ListPersonalRules(f.ctx, f.ids["bob"]); len(rs) != 0 {
@@ -197,7 +197,7 @@ func TestAnOwnerWithoutSubscribeIsToldNothing(t *testing.T) {
 	if _, err := conn.Exec(f.ctx, `insert into role (name, permissions, inherits) values ('reader', '{"*:read"}', '{}')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(f.ctx, `update principal_grant set role_id = (select id from role where name = 'reader') where principal_id = $1`, f.ids["alice"]); err != nil {
+	if _, err := conn.Exec(f.ctx, `update user_grant set role_id = (select id from role where name = 'reader') where user_id = $1`, f.ids["alice"]); err != nil {
 		t.Fatal(err)
 	}
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video"})

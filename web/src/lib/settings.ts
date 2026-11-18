@@ -41,7 +41,7 @@ export function useSettings() {
 
 // Every settings write lands at the platform tier, the least-specific level of the
 // cascade, so the server gates all three on platform:update on top of
-// settings:update. The console hides the controls from a principal missing either
+// settings:update. The console hides the controls from a user missing either
 // half, but a grant revoked mid-session still reaches the server: a 403 then reads
 // as the authority gap it is, not as a generic save failure.
 export const PLATFORM_AUTHORITY_HINT =
@@ -55,7 +55,7 @@ export function writeErrorMessage(status: number, fallback: string): string {
 }
 
 // useSettingsMe reads the caller's effective settings (client-visible namespaces
-// only). Authn-only, so any signed-in principal may read it; it feeds the theme.
+// only). Authn-only, so any signed-in user may read it; it feeds the theme.
 export function useSettingsMe() {
   return useQuery(() => ({
     queryKey: SETTINGS_ME_KEY,

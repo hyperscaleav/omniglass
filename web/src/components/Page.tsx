@@ -1,17 +1,23 @@
 import type { JSX } from "solid-js";
-import { Show } from "solid-js";
+import { createEffect, onCleanup, Show } from "solid-js";
+import { namePage } from "../lib/handover";
 
-// Page scaffold: an optional breadcrumb slot, a title (string or node) + optional
+// Page scaffold: an optional breadcrumb slot, a title (string or outpost) + optional
 // subtitle and right-aligned actions, then the page body, stacked with the
 // density gap. Inventory pages built on TreeList drop the H1 (the top bar
-// already labels the page) and pass their own header in children.
+// already labels the page) and pass their own header in children. A detail
+// page passes its entity's name or address, which ⌘J hands omnibot in place
+// of the uuid its route holds.
 export default function Page(props: {
   title: string | JSX.Element;
+  name?: string;
   subtitle?: string;
   breadcrumb?: JSX.Element;
   actions?: JSX.Element;
   children: JSX.Element;
 }) {
+  createEffect(() => namePage(props.name));
+  onCleanup(() => namePage(undefined));
   return (
     <section class="og-stack flex flex-col">
       <div data-testid="page-header">

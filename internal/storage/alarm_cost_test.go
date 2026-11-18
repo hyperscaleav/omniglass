@@ -26,7 +26,7 @@ import (
 //
 // # What the count actually grows along, measured rather than guessed
 //
-// #674 named two candidates, the number of alarms and the number of roles the
+// #674 named two candidates, the number of alarms and the number of slots the
 // component fills, and asked which. Measured over seven fixtures, two of them
 // held back as out-of-sample predictions:
 //
@@ -54,7 +54,7 @@ import (
 // So the first candidate is FALSE and the second is TRUE. The count is flat in
 // the number of alarms, because activeAlarmSeverities folds a component's open
 // alarms with one array_agg; it grows at five statements per SLOT the component
-// fills (each staffed system takes its advisory lock, resolves its roles, and
+// fills (each staffed system takes its advisory lock, resolves its slots, and
 // records a verdict, which re-takes the lock) and at four per distinct ancestor
 // LOCATION above those systems (lock, verdict, record, which locks again).
 //
@@ -68,7 +68,7 @@ import (
 
 // alarmProbe is a fleet whose two growth dimensions are set independently:
 // `staffs` systems, spread across `roomsN` rooms under one building under one
-// campus, with ONE component staffed into the single role each system inherits
+// campus, with ONE component staffed into the single slot each system inherits
 // from the shared standard. So the slots the component fills is exactly staffs,
 // and the distinct ancestor locations above those systems is roomsN + 2.
 func alarmProbe(t *testing.T, staffs, roomsN int) (storage.Gateway, *querycount.Counter) {
@@ -96,11 +96,11 @@ func alarmProbe(t *testing.T, staffs, roomsN int) (storage.Gateway, *querycount.
 	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "probe-std", Label: "Probe"}); err != nil {
 		t.Fatalf("upsert standard: %v", err)
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "probe-std", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "probe-std", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, sc, sc, sc, sc); err != nil {
@@ -113,8 +113,8 @@ func alarmProbe(t *testing.T, staffs, roomsN int) (storage.Gateway, *querycount.
 			storage.SystemSpec{Name: name, StandardID: &std, LocationName: strptr(roomNames[i%len(roomNames)])}, sc, sc); err != nil {
 			t.Fatalf("create system %d: %v", i, err)
 		}
-		if err := gw.AssignRole(ctx, "", name, "table-mic", "bar-1", sc, sc, sc, sc); err != nil {
-			t.Fatalf("assign role %d: %v", i, err)
+		if err := gw.AssignSlot(ctx, "", name, "table-mic", "bar-1", sc, sc, sc, sc); err != nil {
+			t.Fatalf("assign slot %d: %v", i, err)
 		}
 	}
 	counter.Reset()
@@ -177,9 +177,9 @@ func measureRaiseClear(t *testing.T, gw storage.Gateway, c *querycount.Counter, 
 func TestAlarmRecomputeCostIsFlatInAlarmCount(t *testing.T) {
 	t.Parallel()
 	// 29 in #674, plus #618's savepointed read of the action rules, plus the
-	// facts the shipped platform rule's when is judged over (#1987): with a
-	// rule on every install, every transition reads them.
-	const ceiling = 39
+	// platform flag read first (#1987): a fleet transition skips the shipped
+	// platform rule on it, rather than reading the facts its when is judged on.
+	const ceiling = 33
 
 	quiet, qc := alarmProbe(t, 1, 1)
 	lonelyRaise, lonelyClear, lonelyOpen := measureRaiseClear(t, quiet, qc, 0)
@@ -204,10 +204,10 @@ func TestAlarmRecomputeCostIsFlatInAlarmCount(t *testing.T) {
 // TestAlarmRecomputeCostGrowsWithTheOwnersItTouches PINS A DEFECT, not a target,
 // and the name says so the way #671's pin did.
 //
-// The alarm write path is NOT constant. It costs 22 + 5*S + 4*L statements per
+// The alarm write path is NOT constant. It costs 16 + 5*S + 4*L statements per
 // raise and the same per clear, where S is the number of slots the component
 // fills and L the number of distinct locations above the systems holding them.
-// Every staffed system pays an advisory lock, a role resolution and a recorded
+// Every staffed system pays an advisory lock, a slot resolution and a recorded
 // verdict (which re-takes the lock); every ancestor location pays a lock, a
 // verdict query and a record.
 //
@@ -227,11 +227,11 @@ func TestAlarmRecomputeCostGrowsWithTheOwnersItTouches(t *testing.T) {
 		t.Run(fmt.Sprintf("%d-slots-%d-rooms", tc.staffs, tc.rooms), func(t *testing.T) {
 			gw, counter := alarmProbe(t, tc.staffs, tc.rooms)
 			raise, clear, _ := measureRaiseClear(t, gw, counter, 0)
-			// The constant carries #1987's shipped platform rule: every
-			// transition reads the facts its when is judged over.
-			want := 22 + 5*tc.staffs + 4*(tc.rooms+2)
+			// The constant carries #1987's platform flag, read once per
+			// transition so a fleet component skips the shipped rule's facts.
+			want := 16 + 5*tc.staffs + 4*(tc.rooms+2)
 			if raise != want || clear != want {
-				t.Errorf("the alarm recompute cost %d statements to raise and %d to clear with %d slots filled over %d ancestor locations, want %d each (22 + 5*slots + 4*locations, #674, #618's savepointed action rule read and #1987's shipped rule's facts).\n"+
+				t.Errorf("the alarm recompute cost %d statements to raise and %d to clear with %d slots filled over %d ancestor locations, want %d each (16 + 5*slots + 4*locations, #674, #618's savepointed action rule read and #1987's platform flag).\n"+
 					"If this failed because the write path was REDUCED, that is a fix and this pin should move with it, stating the new equation. If a term grew, the write path got worse in a dimension nothing else measures.",
 					raise, clear, tc.staffs, tc.rooms+2, want)
 			}

@@ -74,7 +74,7 @@ func avgSpec(name string) storage.CalcRuleSpec {
 // honest (#995): its inputs read registered keys under bindable names, its
 // reduce compiles against them and yields the output key's type, its output
 // key is referenced by id on its lane, a write bumps its version and is
-// audited, and rules read like a registry, written only on an all-scope grant.
+// audited, and rules read like a catalog, written only on an all-scope grant.
 func TestCalcRules(t *testing.T) {
 	t.Parallel()
 	r := newCalcRig(t)
@@ -228,7 +228,7 @@ func TestCalcRules(t *testing.T) {
 		t.Errorf("an official delete: %v", err)
 	}
 
-	// The output key a rule writes cannot be deleted from its registry.
+	// The output key a rule writes cannot be deleted from its catalog.
 	if _, err := r.conn.Exec(r.ctx, `delete from metric_type where name = 'avg-temp'`); err == nil {
 		t.Error("the output key a rule writes was deleted")
 	}

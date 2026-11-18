@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/hyperscaleav/omniglass/internal/mcp/tooldef"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -261,14 +262,15 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	registerEntityTagRoutes(api, a, gw, "component")
 	registerEntityTagRoutes(api, a, gw, "system")
 	registerEntityTagRoutes(api, a, gw, "location")
-	registerEntityTagRoutes(api, a, gw, "node")
+	registerEntityTagRoutes(api, a, gw, "outpost")
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "effective-tags",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/effective-tags",
 		Summary:     "Effective tags for a component",
-		Description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
+		Description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
 	}, "component", "read"), func(ctx context.Context, in *effectiveTagsInput) (*effectiveTagsOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
@@ -295,7 +297,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 // entityRemoveTagInput carries the name and the key to remove. The entity kind
 // is fixed by the route the closure registers.
 type entitySetTagInput struct {
-	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token."`
 	Body struct {
 		Key   string `json:"key" minLength:"1" doc:"The tag key (must exist and apply to this kind)"`
 		Value string `json:"value" minLength:"1" doc:"The bound value"`
@@ -303,28 +305,37 @@ type entitySetTagInput struct {
 }
 
 type entityRemoveTagInput struct {
-	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token."`
 	Body struct {
 		Key string `json:"key" minLength:"1" doc:"The tag key to remove"`
 	}
 }
 
 type entityNameInput struct {
-	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); a node's name is always a single token."`
+	Name string `path:"name" doc:"The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token."`
 }
 
 // registerEntityTagRoutes registers the list, set, and remove binding routes for
 // one entity kind. Binding is modeled as custom methods on the entity (like the
-// principal lifecycle actions), so the generated CLI reads `component set-tag
+// user lifecycle actions), so the generated CLI reads `component set-tag
 // <name>` rather than colliding with the top-level tag resource. Reading an
 // entity's tags rides that entity's read floor; setting or removing a value is
 // the entity's own update, so binding a tag needs no permission beyond the write
 // the operator already holds on the entity.
 func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway, kind string) {
 	base := "/" + kind + "s/{name}"
+	// A component's tag bindings are MCP tools (#2025), so an agent fixing a
+	// component can tag it; the other kinds' are not in the curated catalog.
+	exposed := func(hints ...tooldef.Hints) map[string]any {
+		if kind != "component" {
+			return nil
+		}
+		return mcpExposed(hints...)
+	}
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-" + kind + "-tags",
+		Extensions:  exposed(),
 		Method:      http.MethodGet,
 		Path:        base + ":listTags",
 		Summary:     "List tags on a " + kind,
@@ -344,6 +355,7 @@ func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "set-" + kind + "-tag",
+		Extensions:  exposed(),
 		Method:      http.MethodPost,
 		Path:        base + ":setTag",
 		Summary:     "Set a tag value on a " + kind,
@@ -359,6 +371,7 @@ func registerEntityTagRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID:   "remove-" + kind + "-tag",
+		Extensions:    exposed(tooldef.Hints{Destructive: true}),
 		Method:        http.MethodPost,
 		Path:          base + ":removeTag",
 		DefaultStatus: http.StatusNoContent,
@@ -400,13 +413,13 @@ func mapTagErr(err error) error {
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error404NotFound("location not found")
-	case errors.Is(err, storage.ErrNodeNotFound):
-		return huma.Error404NotFound("node not found")
+	case errors.Is(err, storage.ErrOutpostNotFound):
+		return huma.Error404NotFound("outpost not found")
 	case errors.Is(err, storage.ErrTagForbidden),
 		errors.Is(err, storage.ErrComponentForbidden),
 		errors.Is(err, storage.ErrSystemForbidden),
 		errors.Is(err, storage.ErrLocationForbidden),
-		errors.Is(err, storage.ErrNodeForbidden):
+		errors.Is(err, storage.ErrOutpostForbidden):
 		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrTagExists):
 		return huma.Error409Conflict("a tag key with this name already exists")

@@ -13,7 +13,7 @@ import (
 
 // A driver's cost per task is the slope of a straight line through the
 // sweep's steps: three (tasks, bytes) points that lie on a line give its
-// slope exactly, and the line's value at zero tasks is the node's own floor.
+// slope exactly, and the line's value at zero tasks is the outpost's own floor.
 func TestASweepsSlopeIsTheCostPerTask(t *testing.T) {
 	fit, err := FitSlope([]SweepPoint{{Tasks: 0, Value: 30e6}, {Tasks: 100, Value: 32e6}, {Tasks: 200, Value: 34e6}}, 0.1)
 	if err != nil {
@@ -201,10 +201,10 @@ func TestADriversCostIsItsSlopesPerTaskAndPerRun(t *testing.T) {
 	}
 }
 
-// A node's memory jumps when its first tasks land (its lanes start, its heap
+// An outpost's memory jumps when its first tasks land (its lanes start, its heap
 // grows to its working size) and then rises by a slope. The slope is fitted
 // over the loaded steps only, and the jump is the warm cost: the loaded
-// line at zero tasks over the idle node. CPU has no such jump and is fitted
+// line at zero tasks over the idle outpost. CPU has no such jump and is fitted
 // over every step. The read that found it: an SNMP driver's working set
 // went 15.8, 25.9, 27.4 MiB at 0, 400, 800 tasks.
 func TestAWarmUpJumpIsAFixedCostNotPartOfTheSlope(t *testing.T) {
@@ -280,12 +280,12 @@ func TestMemoryAndCPUAreJudgedApart(t *testing.T) {
 	}
 }
 
-// A loaded line that starts below the idle node is no warm cost: the first
-// tasks filled heap the idle node already held, so the jump does not show.
+// A loaded line that starts below the idle outpost is no warm cost: the first
+// tasks filled heap the idle outpost already held, so the jump does not show.
 // The memory slope still stands; the warm figure is left out, with why. The
 // read that found it: a session driver's working set went 30.3, 83.8, 144.8,
 // 206 MiB at 0, 400, 800, 1200 tasks, a line that meets zero tasks 18 MiB
-// under the idle node.
+// under the idle outpost.
 func TestAWarmBelowIdleIsNotAWarmCost(t *testing.T) {
 	target := DriverTarget{Driver: "d", Product: "p", Polls: []time.Duration{time.Minute}}
 	const mb = 1 << 20
@@ -302,7 +302,7 @@ func TestAWarmBelowIdleIsNotAWarmCost(t *testing.T) {
 	if cost.MemoryNotMeasured != "" || cost.MemoryPerTaskBytes <= 0 {
 		t.Fatalf("memory %+v, want the slope kept", cost)
 	}
-	if cost.MemoryWarmBytes != 0 || !strings.Contains(cost.WarmNotMeasured, "below the idle node") {
+	if cost.MemoryWarmBytes != 0 || !strings.Contains(cost.WarmNotMeasured, "below the idle outpost") {
 		t.Fatalf("warm %.0f B, %q; want no warm figure and why", cost.MemoryWarmBytes, cost.WarmNotMeasured)
 	}
 }

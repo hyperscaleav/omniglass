@@ -31,18 +31,18 @@ func TestSelfProfileAuditsRealActor(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 	root, _ := gw.AuthenticateBearer(ctx, zeros)
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice"}, scope.Set{All: true})
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice"}, scope.Set{All: true})
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 
 	name := func(s string) *string { return &s }
 	// A normal self-edit: audited with a null real actor.
-	if err := gw.UpdateHumanProfile(ctx, alice.ID, storage.HumanProfilePatch{Label: name("Alice One")}); err != nil {
+	if err := gw.UpdatePersonProfile(ctx, alice.ID, storage.PersonProfilePatch{Label: name("Alice One")}); err != nil {
 		t.Fatalf("self edit: %v", err)
 	}
 	// The same edit while impersonated: the real actor rides the context.
-	if err := gw.UpdateHumanProfile(storage.WithRealActor(ctx, root.ID), alice.ID, storage.HumanProfilePatch{Label: name("Alice Two")}); err != nil {
+	if err := gw.UpdatePersonProfile(storage.WithRealActor(ctx, root.ID), alice.ID, storage.PersonProfilePatch{Label: name("Alice Two")}); err != nil {
 		t.Fatalf("impersonated edit: %v", err)
 	}
 
@@ -52,8 +52,8 @@ func TestSelfProfileAuditsRealActor(t *testing.T) {
 	}
 	defer ac.Close(ctx)
 	rows, err := ac.Query(ctx, `
-		select actor_principal_id, real_actor_principal_id from audit_log
-		where verb = 'update' and resource = 'principal' and resource_id = $1
+		select actor_user_id, real_actor_user_id from audit_log
+		where verb = 'update' and resource = 'user' and resource_id = $1
 		order by ts asc`, alice.ID)
 	if err != nil {
 		t.Fatalf("query audit: %v", err)

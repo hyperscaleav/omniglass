@@ -14,7 +14,7 @@ func set(perms ...string) rbac.Set { return rbac.NewSet(perms) }
 // never cover a "*", so a lesser admin cannot impersonate an owner).
 func TestCovers(t *testing.T) {
 	owner := set("*:*")
-	admin := set("principal:*", "location:create,update,delete", "system:create,update,delete")
+	admin := set("user:*", "location:create,update,delete", "system:create,update,delete")
 	viewer := set("*:read")
 	locWriter := set("location:create,update,delete")
 
@@ -74,7 +74,7 @@ func TestCovers(t *testing.T) {
 	}
 	// platform is sensitive too: a granter holding a bare write wildcard holds
 	// fleet reach, not install-wide authority, so it must not be able to confer
-	// the tier permission (nor impersonate a principal that holds it).
+	// the tier permission (nor impersonate a user that holds it).
 	if set("*:update").Covers(set("platform:update")) {
 		t.Error("*:update must not cover platform:update (install-wide authority is not fleet reach)")
 	}

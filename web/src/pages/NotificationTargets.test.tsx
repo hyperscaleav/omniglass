@@ -17,22 +17,22 @@ import { GROUPS_KEY } from "../lib/groups";
 // are seeded into the query cache; fetch answers the writes and refuses
 // anything else.
 const at = "2026-10-29T00:00:00Z";
-const admin: Me = { principal: { id: uuidFor("u-root"), kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const admin: Me = { user: { id: uuidFor("u-root"), kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
 // Reads targets, may change nothing: a grant that carries only the read.
-const reader: Me = { principal: { id: uuidFor("u-r"), kind: "human" }, human: { username: "auditor" }, permissions: ["notification_target:read"], fleet_permissions: ["notification_target:read"], grants: [] };
+const reader: Me = { user: { id: uuidFor("u-r"), kind: "person" }, person: { username: "auditor" }, permissions: ["notification_target:read"], fleet_permissions: ["notification_target:read"], grants: [] };
 
 const opsChat: NotificationTarget = {
   id: uuidFor("t-1"), name: "ops-chat", label: "Ops chat", kind: "webhook", url: "https://chat.example.com/…", auth: "hmac",
-  secret: "ops-chat-signing", enabled: true, created_at: at, updated_at: at,
+  secret: "ops-chat-signing", official: false, enabled: true, created_at: at, updated_at: at,
 };
 const onCall: NotificationTarget = {
-  id: uuidFor("t-2"), name: "on-call-page", label: "On-call page", kind: "principal_group", auth: "none", principal_group: "on-call",
-  channels: ["inbox", "email"], enabled: false, created_at: at, updated_at: at,
+  id: uuidFor("t-2"), name: "on-call-page", label: "On-call page", kind: "user_group", auth: "none", user_group: "on-call",
+  channels: ["inbox", "email"], official: false, enabled: false, created_at: at, updated_at: at,
 };
 // The shipped target (#1987): whoever holds admin.
 const admins: NotificationTarget = {
   id: uuidFor("t-3"), name: "platform-admins", label: "Platform admins", kind: "role", auth: "none", role: "admin", role_id: uuidFor("ro-1"),
-  channels: ["inbox", "email"], enabled: true, created_at: at, updated_at: at,
+  channels: ["inbox"], official: true, enabled: true, created_at: at, updated_at: at,
 };
 const pageOps: ActionRule = {
   id: uuidFor("r-1"), name: "page-ops", label: "Page ops", on: ["raised"], when: "", targets: ["ops-chat"], official: false,
@@ -93,7 +93,7 @@ describe("NotificationTargets", () => {
     mount();
     expect(screen.getByText("Ops chat")).toBeTruthy();
     expect(screen.getByText("https://chat.example.com/…")).toBeTruthy();
-    expect(screen.getByText("Group")).toBeTruthy();
+    expect(screen.getByText("User group")).toBeTruthy();
     expect(screen.getAllByText("enabled")).toHaveLength(2);
     expect(screen.getByText("disabled")).toBeTruthy();
   });
@@ -160,6 +160,27 @@ describe("NotificationTargets", () => {
     expect(within(blade).queryByTestId("target-test")).toBeNull();
   });
 
+  it("offers a shipped target's switch and label, never its delete or its channels (#1987)", async () => {
+    stubFetch(refuse);
+    mount();
+    const blade = await openBlade("Platform admins");
+    expect(within(blade).getByTestId("target-official").textContent).toBe("official");
+    expect(within(blade).getByText("Disable")).toBeTruthy();
+    expect(within(blade).queryByLabelText("More actions")).toBeNull();
+    fireEvent.click(within(blade).getByText("Edit"));
+    await screen.findByText("Tell them by");
+    expect(screen.queryByRole("group", { name: "Tell them by" })).toBeNull();
+    expect(screen.getByDisplayValue("Platform admins")).toBeTruthy();
+  });
+
+  it("offers a custom target's delete in the kebab", async () => {
+    stubFetch(refuse);
+    mount();
+    const blade = await openBlade("Ops chat");
+    fireEvent.click(within(blade).getByLabelText("More actions"));
+    expect(within(blade).getByText("Delete")).toBeTruthy();
+  });
+
   it("disables a target from its blade footer", async () => {
     let body: unknown;
     stubFetch(async (req) => {
@@ -189,15 +210,15 @@ describe("NotificationTargets", () => {
     mount();
     fireEvent.click(screen.getByText("New target"));
     const kind = (await screen.findByTestId("target-kind-select")) as HTMLSelectElement;
-    fireEvent.change(kind, { target: { value: "principal_group" } });
+    fireEvent.change(kind, { target: { value: "user_group" } });
     fireEvent.input(screen.getByPlaceholderText("Ops chat"), { target: { value: "Night shift" } });
-    const group = (await screen.findByText("Choose a group")).closest("select") as HTMLSelectElement;
+    const group = (await screen.findByText("Choose a user group")).closest("select") as HTMLSelectElement;
     fireEvent.change(group, { target: { value: "on-call" } });
     const submit = screen.getByRole("button", { name: /Create target/ });
     await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(submit);
     await waitFor(() =>
-      expect(body).toEqual({ name: "night-shift", label: "Night shift", kind: "principal_group", enabled: true, principal_group: "on-call", channels: ["inbox"] }),
+      expect(body).toEqual({ name: "night-shift", label: "Night shift", kind: "user_group", enabled: true, user_group: "on-call", channels: ["inbox"] }),
     );
   });
 
@@ -214,10 +235,10 @@ describe("NotificationTargets", () => {
     mount();
     fireEvent.click(screen.getByText("New target"));
     const kind = (await screen.findByTestId("target-kind-select")) as HTMLSelectElement;
-    fireEvent.change(kind, { target: { value: "principal_group" } });
+    fireEvent.change(kind, { target: { value: "user_group" } });
     fireEvent.change(await screen.findByTestId("target-group-select"), { target: { value: "on-call" } });
     fireEvent.change(kind, { target: { value: "webhook" } });
-    fireEvent.change(kind, { target: { value: "principal_group" } });
+    fireEvent.change(kind, { target: { value: "user_group" } });
     await waitFor(() => expect((screen.getByTestId("target-group-select") as HTMLSelectElement).value).toBe("on-call"));
   });
 

@@ -48,8 +48,8 @@ func deepCopyValue(v any) any {
 // DeepMerge overlays layers left to right: a later layer wins. Nested maps merge
 // recursively; any non-map value (including a slice) replaces wholesale. Inputs
 // are never mutated; the result is a fresh deep copy. Merging in generic-map space
-// is deliberate: key presence, not a Go zero-value, decides an override, so a key
-// set to false or 0 overrides while an absent key inherits.
+// is deliberate: key presence, not a Go zero-value, decides a binding, so a key
+// set to false or 0 shadows while an absent key inherits.
 func DeepMerge(layers ...map[string]any) map[string]any {
 	out := map[string]any{}
 	for _, layer := range layers {
@@ -71,7 +71,7 @@ func DeepMerge(layers ...map[string]any) map[string]any {
 // ApplyMergePatch applies an RFC 7386 JSON Merge Patch to target: a nil value in
 // patch deletes that key (restoring it to whatever a lower layer supplies), a map
 // value recurses, and any other value replaces. Inputs are never mutated. This is
-// how a PATCH write updates an override namespace: null on a key is "restore this
+// how a PATCH write updates a binding namespace: null on a key is "restore this
 // one key to default".
 func ApplyMergePatch(target, patch map[string]any) map[string]any {
 	out := map[string]any{}

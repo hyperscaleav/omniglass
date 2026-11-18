@@ -64,9 +64,9 @@ func TestRenderSoakRecord(t *testing.T) {
 		t.Error("a record carries an em dash")
 	}
 
-	rec.Verdict = SoakVerdict{Reasons: []string{"loss 0.01 at node hop", "an alarm is still open"}}
+	rec.Verdict = SoakVerdict{Reasons: []string{"loss 0.01 at outpost hop", "an alarm is still open"}}
 	fail := RenderSoakRecord(rec)
-	for _, want := range []string{"verdict: fail", "- loss 0.01 at node hop", "- an alarm is still open"} {
+	for _, want := range []string{"verdict: fail", "- loss 0.01 at outpost hop", "- an alarm is still open"} {
 		if !strings.Contains(fail, want) {
 			t.Errorf("a failing record lacks %q:\n%s", want, fail)
 		}

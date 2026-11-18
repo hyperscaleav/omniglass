@@ -3,7 +3,7 @@
  "sites": [
   {
    "name": "action",
-   "summary": "An action rule's when: true or false for one alarm transition, over the alarm facts a notification template reads (in snake_case) and the severity's rank. Empty always holds. No key types it, so none is needed.",
+   "summary": "An action rule's when: true or false for one alarm transition, over the alarm facts a notification's subject and text read (in snake_case) and the severity's rank. Empty always holds. No key types it, so none is needed.",
    "key_required": false,
    "variants": [
     {
@@ -26,7 +26,7 @@
        "doc": "The label of the component type its product classifies it as"
       },
       {
-       "name": "place",
+       "name": "location",
        "type": "string",
        "doc": "How the location the component sits at reads; empty when it sits at none of its own"
       },
@@ -78,7 +78,7 @@
       {
        "name": "platform",
        "type": "bool",
-       "doc": "Whether the component is one of Omniglass's own parts (a server's or a node's), a member of the reserved platform system"
+       "doc": "Whether the component is one of Omniglass's own parts (a server's or an outpost's), a member of the reserved platform system"
       }
      ]
     }
@@ -130,7 +130,7 @@
      "bindings": []
     }
    ],
-   "bindings": "Each of the rule's inputs by its alias, as the list of its current values, typed by its key (a metric is a number, a property text, a bool property a bool). For a component owner, one value per instance: the named instances, the aggregate instance only when it is the key's one, an instance not heard from in an hour left out. For a system owner, every role-bound member's values, ordered by member name then id; and members: one record per member, holding id, name, value.\u003calias\u003e (the member's own current value, the type's zero when it has none) and has.\u003calias\u003e (whether it holds one), so one member's inputs stay together. A list function (avg, max, min, sum, majority, any, all) folds a list into one value.",
+   "bindings": "Each of the rule's inputs by its alias, as the list of its current values, typed by its key (a metric is a number, a property text, a bool property a bool). For a component owner, one value per instance: the named instances, the aggregate instance only when it is the key's one, an instance not heard from in an hour left out. For a system owner, every slot-bound member's values, ordered by member name then id; and members: one record per member, holding id, name, value.\u003calias\u003e (the member's own current value, the type's zero when it has none) and has.\u003calias\u003e (whether it holds one), so one member's inputs stay together. A list function (avg, max, min, sum, majority, any, all) folds a list into one value.",
    "builtins": [
     "abs",
     "all",

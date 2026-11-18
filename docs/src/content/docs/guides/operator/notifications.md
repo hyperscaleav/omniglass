@@ -50,13 +50,13 @@ anything.
 ::screenshot{#notifications-subscribe}
 
 A **personal rule** says which alarms you want to hear about: on which transitions (`raised`,
-`cleared`, or both), when (a predicate over the alarm's facts: `component`, `place`, `severity`,
+`cleared`, or both), when (a predicate over the alarm's facts: `component`, `location`, `severity`,
 `severity_rank`, `message`, ...), and how (`inbox`, `email` to your directory address, or both).
 It tells you alone and names no target.
 
 ```bash
 omniglass auth me action-rule create --name my-boardroom --on '["raised","cleared"]' \
-  --when 'place == "Boardroom" && severity_rank >= 40' --channels '["inbox"]'
+  --when 'location == "Boardroom" && severity_rank >= 40' --channels '["inbox"]'
 ```
 
 Before you rely on it, **test it**: `test` judges the rule against your own most recent alarms and

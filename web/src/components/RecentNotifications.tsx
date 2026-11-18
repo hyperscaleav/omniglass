@@ -14,7 +14,7 @@ import { describeError, fmtTime, rel } from "../lib/format";
 // alarms it is about). A target's rows are narrowed by the server; a rule's
 // are picked out of the newest RECENT_WINDOW, since the route has no rule
 // filter. It polls, so a test alarm's delivery moves from queued to sent in
-// place. Each status wears the shared NotificationStatusPill (#1413). A
+// location. Each status wears the shared NotificationStatusPill (#1413). A
 // suppressed row's last error is why the snooze held it (#1318), not a retry,
 // so it reads plainly, muted.
 

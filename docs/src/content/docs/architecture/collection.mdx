@@ -1,10 +1,6 @@
 ---
 title: Data collection
 description: "Data collection is built from drivers: a declarative spec of inputs, polls, listeners and command bindings, attached to a component's endpoint and run at the edge, which parses on the spot."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -13,7 +9,7 @@ import PlatformKeys from '../../../components/PlatformKeys.astro';
 import PlatformCoverage from '../../../components/PlatformCoverage.astro';
 
 :::note[Partial]
-The first collection path is live end to end: an edge node runs **reachability probes** against a
+The first collection path is live end to end: an edge outpost runs **reachability probes** against a
 component's endpoints (each an **API named by the protocol it speaks**, typed by its **transport**:
 `tcp`, `ssh`, and `http` reach by opening the tcp port, `icmp` pings), ships a protobuf
 `TelemetryBatch` over a JetStream durable consumer, and each probe lands two samples owned by the
@@ -21,37 +17,37 @@ target component: its **state** as a transition-only property (`tcp-open` is `op
 `icmp-reachable` is `up` or `down`; a steady fleet writes each once,
 [ADR-1592](/architecture/decisions/#adr-1592-a-probes-state-is-a-transition-only-property-not-a-metric-row))
 and its **timing** as a metric row each probe (`tcp-connect-time`, `icmp-rtt-avg`). The owner is bound
-**server-side** from the task's endpoint (the node stamps no component identity); the ingest
-consumer confines a node to its own tasks (another node's `task_id` is orphan-dropped) and rejects
+**server-side** from the task's endpoint (the outpost stamps no component identity); the ingest
+consumer confines an outpost to its own tasks (another outpost's `task_id` is orphan-dropped) and rejects
 unregistered sample names per lane. An orphan drop is never silent and never a flood (#1200): the
-first orphaned batch from a node in a minute is logged as a warning naming the node, the task and
+first orphaned batch from an outpost in a minute is logged as a warning naming the outpost, the task and
 the samples dropped, the rest of that minute only counted (the next warning says how many), and
-every one is added to the node's `orphaned_batches` (with `last_orphaned_at`) on `GET /nodes/{name}`,
+every one is added to the outpost's `orphaned_batches` (with `last_orphaned_at`) on `GET /outposts/{name}`,
 written once a minute rather than once a batch. A non-answering icmp target is DATA (`icmp-reachable` reads `down`, with a reason);
-an error means the node cannot do ICMP at all (a once-cached loopback self-check tells them apart).
-The node computes the per-endpoint verdict `endpoint-reachable` (the AND of its probe results) as
+an error means the outpost cannot do ICMP at all (a once-cached loopback self-check tells them apart).
+The outpost computes the per-endpoint verdict `endpoint-reachable` (the AND of its probe results) as
 a built-in **property**; the wire is **per-lane arrays** (`metrics` / `properties` / `events` /
 `logs`, [ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
 each entry validated against its own catalog
 (raw lines ride the log lane per [ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events),
 superseding the [ADR-0046](/architecture/decisions/#adr-0046-the-event-log-kind-sink) log-to-event
 promotion) under the same confinement, the property series **transition-only** (one row per flip,
-guarded at the node and at ingest). The batch also carries the node's **self-logs** as raw
-`LogLine`s (untyped, no registry name, no task), landed in `node_log` keyed to the node before
+guarded at the outpost and at ingest). The batch also carries the outpost's **self-logs** as raw
+`LogLine`s (untyped, no catalog name, no task), landed in `outpost_log` keyed to the outpost before
 the task confinement (a logs-only batch needs no `task_id`); the run loop installs a capturing
-`slog` handler as the process default, so plain `slog.Info(...)` anywhere in node code emits a
-self-log (`facility` / `source` lift into the `node_log` columns), the between-ticks buffer bounded,
+`slog` handler as the process default, so plain `slog.Info(...)` anywhere in outpost code emits a
+self-log (`facility` / `source` lift into the `outpost_log` columns), the between-ticks buffer bounded,
 dropping oldest. The **endpoint** is authored, the **task** derived: an endpoint has a CRUD
 API (gateway + Huma routes at `/endpoints`, generated into the OpenAPI document, the cobra CLI, and
 the typed client) and is named by its protocol (derived from its `transport`, unique per
 component), so create takes a type, not a name; a task is **read-only plumbing** (only `GET /tasks`
-and `GET /tasks/{id}`) with **no node column** (placement **projects from its endpoint**), and a **node purge cascades** endpoints and derived
+and `GET /tasks/{id}`) with **no outpost column** (placement **projects from its endpoint**), and an **outpost purge cascades** endpoints and derived
 tasks. Both surfaces carry the two authorization layers, **scope cascading through the
 owning component** (out-of-scope = non-disclosing 404, no new scope kind). Built: the reach gate
 over four transports, and the **driver poll path**: a driver's baked poll tasks fetch over their
-transport (a v2c scalar SNMP GET, a stateless line exchange over tcp), the node interprets each
+transport (a v2c scalar SNMP GET, a stateless line exchange over tcp), the outpost interprets each
 emit (locate by OID, regex capture, dotted JSON path, or key; apply the declared transform; type
-by the baked lane), the worklist delivers a task's secret inputs unsealed on the per-node subject,
+by the baked lane), the worklist delivers a task's secret inputs unsealed on the per-outpost subject,
 and anything that does not parse lands a `collection-failed` event naming the task, never a silent
 drop and never a wrong-lane sample. Also built, the stateful arc: a **session holds its
 connection** (#816) for an endpoint with a standing listen task, its line polls and commands
@@ -65,7 +61,7 @@ verdict the `endpoint-authenticated` rung, and a refusal retrying cannot fix rea
 stops dialing ([ADR-0155](/architecture/decisions/#adr-0155-auth-is-a-layer-that-gates-a-held-session-and-a-terminal-refusal-reads-rejected),
 [ADR-0156](/architecture/decisions/#adr-0156-a-driver-declares-its-terminal-replies-and-a-transport-classifies-its-own-refusals)).
 Built since: **the line protocol over tls** (#1035): `tls` is its own held line transport whose
-transport rung is the handshake, verified against the node's roots, pinned to the public key on
+transport rung is the handshake, verified against the outpost's roots, pinned to the public key on
 first use, or (by the operator's choice) not verified, a refused certificate reading `rejected`
 with class `certificate` ([below](#tls),
 [ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)).
@@ -76,7 +72,7 @@ credential reading `rejected` with class `auth` ([below](#http-and-https),
 [ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)).
 Built since: **http logins and digest** (#1114): an http session may declare a login, the login
 dialog carried over to http (request steps naming secret fields, a capture of what the answer
-carries, the headers that send it), its cookies and captured values kept per endpoint in the node's
+carries, the headers that send it), its cookies and captured values kept per endpoint in the outpost's
 memory alone, a lapsed session logged in once more and replayed once; and `digest` answers its
 challenge on the `basic-auth` shape ([below](#logging-in-over-http),
 [ADR-1114](/architecture/decisions/#adr-1114-an-http-login-is-the-login-dialog-carried-over-to-http-and-its-session-lives-in-node-memory-alone)).
@@ -87,13 +83,13 @@ last event id with nothing landed twice ([below](#a-server-sent-events-stream),
 [ADR-1038](/architecture/decisions/#adr-1038-an-http-session-holds-a-server-sent-events-stream-and-a-held-connection-carries-messages)).
 Built since: **websocket and wss** (#1034): a held session whose messages are text frames, its
 upgrade riding the session's scheme or login, a subscription armed on every connection, pushes
-claimed by the listeners, and a poll or a command answered by the frame carrying back an id the node
+claimed by the listeners, and a poll or a command answered by the frame carrying back an id the outpost
 mints into it, whatever pushes interleave ([below](#websocket-and-wss),
 [ADR-1034](/architecture/decisions/#adr-1034-a-websocket-is-a-held-session-of-text-frames-and-a-reply-is-matched-by-a-minted-id)).
 Built since: **a driver emit lands on any lane** (#1145): a poll or a listener maps what it reads
 onto a metric, a property, an event (its message and attributes) or a log line (its message,
 severity, facility, source and attributes), its time read from the payload where it carries one; a
-task's log lines land on its component, never as the node's own, and a listener may land what it
+task's log lines land on its component, never as the outpost's own, and a listener may land what it
 does not claim as raw log lines ([below](#an-emit-lands-on-any-lane),
 [ADR-1145](/architecture/decisions/#adr-1145-a-driver-emit-lands-on-any-of-the-four-lanes-and-a-log-lines-severity-is-rfc-5424s)). See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
@@ -108,7 +104,7 @@ endpoint and re-derived when the spec changes. The record below is the authoring
 ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 
 A versioned `ComponentTemplate` (`apiVersion: collection.omniglass.dev/v1alpha1`) was to declare
-how to reach a class of device and a set of **functions**, compiled into a per-node runtime unit:
+how to reach a class of device and a set of **functions**, compiled into a per-outpost runtime unit:
 
 ```text
 ComponentTemplate (apiVersion, kind, metadata.labels)
@@ -143,12 +139,12 @@ endpoints:
     persistent: true               # stateful session, outlives function runs
 ```
 
-- **Type is the `transport`, which is the transport**, not the protocol driver: the registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler turning a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)).
+- **Type is the `transport`, which is the transport**, not the protocol driver: the transport registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler turning a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)).
 - **A label is the one identity string an operator types on an endpoint.** The name is derived from the type, so every SSH endpoint in the fleet reads `ssh`: the row says which protocol it speaks and nothing about what it is for. The label ("Control processor") is where that goes, and it is settable at create rather than on a following edit, an endpoint labelled by a second call being unlabelled at the moment it is made ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)). It is optional; an endpoint with none reads its derived name **verbatim**. Note the corollary of a derived name: since the name IS the protocol and is unique within the component, a component holds at most **one endpoint per protocol**, and a second of the same type is a 409.
-- **`liveness`**: the per-endpoint reachability gate deciding whether its functions run ([nodes](/architecture/nodes/)).
+- **`liveness`**: the per-endpoint reachability gate deciding whether its functions run ([outposts](/architecture/outposts/)).
 - **`persistent: true`** keeps a session open across runs; scheduled functions borrow it to send, listen functions wake on its inbound.
 - **Codec and framing**: raw-TCP AV control planes wrap payloads (line terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes); the endpoint's codec frames outbound and parses inbound to the declared envelope, so a step sees structure, not wire bytes.
-- **Node placement is not declared here**; it is server-assigned from the component's location.
+- **Outpost placement is not declared here**; it is server-assigned from the component's location.
 - **A component that owns endpoints cannot be deleted.** The component delete is refused (409) on
   two conditions: it still has child components, or it still owns endpoints. The second message
   names how many and the next step, delete or reassign them first. The foreign key would otherwise
@@ -171,15 +167,15 @@ proposed. The record below is the model it replaced ([ADR-0827](/architecture/de
 A top-level `functions` array: each **function** one trigger plus a DAG of steps, the trigger a
 `schedule` (a poll, `onStart` arming subscriptions), a `listen` on an inbound source, or a `command`
 invoked by an operator or a [flow](/architecture/alarms-actions/) with typed `args` (the **set**
-function a reconcile would push declared config through).
+function a reconcile would push declared values through).
 :::
 
 ### Two axes: task mode and endpoint transport
 
-A **task** is a node's unit of collection work, described by two independent axes:
+A **task** is an outpost's unit of collection work, described by two independent axes:
 
 - **Task mode** (on the task): **poll** (we ask) or **listen** (we wait), stated from *our* perspective on purpose, since "pull/push" inverts with the frame.
-- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a **session** whose state is the `session-state` property per endpoint, its connect/drop/reconnect reasons in the node's own logs; [ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
+- **Transport** (on the endpoint): **stateless** (a throwaway connection per shot) or **stateful** (a held-open connection, a **session** whose state is the `session-state` property per endpoint, its connect/drop/reconnect reasons in the outpost's own logs; [ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 
 All four cells are real:
 
@@ -192,7 +188,7 @@ Waiting for a frame is one mode (**listen**) regardless of transport; statefulne
 
 ### Sessions
 
-Built (#816): a session **holds its connection** across ticks. The node holds one per endpoint
+Built (#816): a session **holds its connection** across ticks. The outpost holds one per endpoint
 whose worklist carries a standing listen task over a transport with a session dialer (the line
 protocol over `tcp`, `tls` (#1035), `telnet` (#1033) and `ssh` (#1032), a server-sent events
 stream over `http` and `https` (#1038), and a socket over `websocket` and `wss` (#1034)), or any driver poll over `tls`, `telnet`, `ssh`, `websocket` or `wss`, or a driver poll whose driver declares a `session` block (a login a
@@ -216,7 +212,7 @@ beside its name (endpoint names are unique only per component). The machine runs
   A poll issued while the
   first dial is in flight waits for it (on a budget of its own, then the exchange gets its whole
   timeout); any other poll over a session with no connection faults at once with a
-  `collection-failed` naming the state, so a down device never stalls the node's tick, and it never
+  `collection-failed` naming the state, so a down device never stalls the outpost's tick, and it never
   dials a connection of its own.
 - **recover**: a held connection that drops (the peer closed, a read failed, the TCP keepalive gave
   up, an unshaped answer timed out) reads `recovering` at once, without waiting for a poll, and redials with
@@ -229,14 +225,14 @@ beside its name (endpoint names are unique only per component). The machine runs
   listener's push, or outliving 10s unless answers were what failed), so a failing device publishes no flapping; a
   stable connection's drop redials at once.
 - **teardown**: a listen task that leaves the worklist, a change to what the connection depends on
-  (transport, address, timeout, credentials; a listen task's spec re-hash keeps it), or node
-  shutdown closes the connection. Teardown publishes no state (the node stopped wanting the session,
+  (transport, address, timeout, credentials; a listen task's spec re-hash keeps it), or outpost
+  shutdown closes the connection. Teardown publishes no state (the outpost stopped wanting the session,
   which says nothing about the device), so the last `session-state` outlives it and is read by its
   age.
 
 There is **no session table**: each transition lands as the `session-state` property on the
 endpoint's component (instance: the endpoint's name), published at the transition under the listen
-task, and as a node self-log (`facility: session`) carrying the reason
+task, and as an outpost self-log (`facility: session`) carrying the reason
 ([ADR-0150](/architecture/decisions/#adr-0150-a-held-sessions-state-is-a-property-series-and-node-logs-not-a-session-table)).
 Proven against the simulator's line protocol: kill the device's listener mid-session and the session
 reads `recovering`, then `up` once it returns, with the transitions landing on the server.
@@ -289,7 +285,7 @@ An unrelated edit (a label) moves nothing the fingerprint covers, and a rejected
 rejected.
 
 Each transition also lands `session-reason`, the reason as a property (`auth: auth rejected` when
-rejected), so an event rule can alarm on it, and the node logs it once, at the transition. Proven
+rejected), so an event rule can alarm on it, and the outpost logs it once, at the transition. Proven
 over a real socket (`linesession_login_integration_test.go`: a raw tcp line protocol behind a
 password prompt; the right password logs in before the first poll, a wrong one is dialed exactly
 once, never arms, and reads `rejected` with the component's text) and over fakes for the machine
@@ -299,10 +295,10 @@ dials once more, a re-probe fires on its interval, a transient failure still spe
 **In the console** (#1059). The component's reachability read carries each endpoint's latest
 `session-state` with the `session-reason` beside it, while the endpoint is configured to hold a
 session (teardown publishes nothing, so a session nobody holds is not served), and the rung and
-class of its `endpoint-rejection` (never the fingerprint, which is the node's to compare). Like
-every native probe key, a session's state and reason are the node's own facts, which the push lane
+class of its `endpoint-rejection` (never the fingerprint, which is the outpost's to compare). Like
+every native probe key, a session's state and reason are the outpost's own facts, which the push lane
 refuses ([the push lane refuses a native key](#the-push-lane-refuses-a-native-key)), so no push can read a
-rejected session up or plant a reason the node never scrubbed. So the component's
+rejected session up or plant a reason the outpost never scrubbed. So the component's
 Collection card, its Endpoints panel and the endpoint's detail show the session as a pill, the
 ladder with the held rung marked, and, for a down or rejected session, the reason. A state is stored
 only on a transition, so the pill is aged by the endpoint's `last_seen`, as ADR-0150 requires: a
@@ -312,7 +308,7 @@ reason for a caller without it) and the way into the endpoint's edit, where poin
 at the right secret moves the fingerprint. The same refusal shows whatever met it (#1110): an
 endpoint holding no session whose reachability probe was refused (a tls certificate, a udp terminal
 reply, an snmp `authorizationError`, the ssh probe's params credential) carries the gate with its
-reason, `endpoint-rejection-reason`, which the node publishes beside it, so the notice, its reason
+reason, `endpoint-rejection-reason`, which the outpost publishes beside it, so the notice, its reason
 and **Retry** read the same with no session pill beside them, the retry waiting on the gate rather
 than on a session ([ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). The [collection guide](/guides/operator/collection/#held-sessions)
 teaches it, and the `fix-a-rejected-session` walkthrough drives it against the simulated panel.
@@ -323,11 +319,11 @@ the refusal on record still names it ([ADR-0159](/architecture/decisions/#adr-01
 the `trust-a-changed-host-key` walkthrough drives it against the simulated panel's ssh console.
 
 An endpoint with no verdict yet says why (#981): the reachability read carries `pending` beside the
-null `verdict`, derived at read time and never stored. `no-node` means the endpoint has no node
+null `verdict`, derived at read time and never stored. `no-outpost` means the endpoint has no outpost
 assigned, so nothing will probe it until one is (a fresh install ships none); `awaiting-probe` means
-a node is assigned and its first probe has not landed. The field is absent once a verdict exists and
+an outpost is assigned and its first probe has not landed. The field is absent once a verdict exists and
 on a push endpoint, which has no verdict to wait for. The CLI prints it in the read's JSON, and the
-Endpoints panel shows it beneath the row with a link to the Nodes page or the assigned node's blade.
+Endpoints panel shows it beneath the row with a link to the Outposts page or the assigned outpost's blade.
 
 ### The connection fingerprint and the layered gate
 
@@ -361,7 +357,7 @@ verdict. **The gate is a set of reasons** (#1650,
 [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)): the
 refusal above is one kind, `refused`, scoped to its rung and fingerprint; `unreachable`, added when
 the reachability probe reads down twice running and removed on its next up verdict, is another,
-holding the whole host's polls ([nodes](/architecture/nodes/#implicit-reachability)), and
+holding the whole host's polls ([outposts](/architecture/outposts/#implicit-reachability)), and
 `upstream` (#1652) is the gate a component inherits from what it is reached through: while any
 endpoint of a `path` upstream has a closed gate, the dependent's in-band endpoints are held, polls
 and probes alike, naming the root of the closure (a chain A to B to C reads `upstream A` all the way
@@ -377,13 +373,13 @@ credential and starts its session unrejected when the device returns. The gate i
 [ADR-0159](/architecture/decisions/#adr-0159-a-refused-keys-evidence-rides-its-gate-and-trusting-a-key-is-checked-against-the-one-offered);
 every other reason follows after a `;` as `<kind> <since> <source>`, which the reachability read serves as
 `gate_reasons`, an `upstream` reason with the name of the component it names when the caller may read it)
-and carried back on the worklist, so a restarted node makes no attempt against an unchanged
+and carried back on the worklist, so a restarted outpost makes no attempt against an unchanged
 fingerprint and keeps the evidence it adopts; it adopts the refusal, and an `upstream` reason,
 which it re-derives at once from the live gates (held while the upstream is still closed, else
-waiting on the endpoint's own probe), but not `unreachable`, which is the probe's to re-earn. Beside it, in the same batch, the node publishes why:
+waiting on the endpoint's own probe), but not `unreachable`, which is the probe's to re-earn. Beside it, in the same batch, the outpost publishes why:
 `endpoint-rejection-reason`, the refusal's class and the component's own text, scrubbed of anything
-the node sent, so a gate on an endpoint holding no session, which has no `session-reason`, still
-says why it holds. A gate adopted after a restart publishes no reason, since the node never saw that
+the outpost sent, so a gate on an endpoint holding no session, which has no `session-reason`, still
+says why it holds. A gate adopted after a restart publishes no reason, since the outpost never saw that
 refusal, and the read serves the reason only while a gate holds ([ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). The ssh probe's params credential rides the same gate
 (#1060): tried once, then the key exchange runs without it until the fingerprint moves, and never
 past a pinned key that changed. So does the tls probe: under a `certificate` gate it runs only the
@@ -391,7 +387,7 @@ TCP connect, so no handshake reaches a key nobody trusted. A gate for a changed 
 pinned and offered keys after the fingerprint (`responsive certificate <fingerprint> <pinned>
 <offered>`), which the reachability read serves as data (`rejection.pinned_key` and
 `rejection.offered_key`). Proven end to end (`run_session_identity_test.go`): a silent panel
-spends the login budget, then a label edit and a node restart try nothing, while a retry, a
+spends the login budget, then a label edit and an outpost restart try nothing, while a retry, a
 login-declaration change, a rotated secret, and an ssh attachment each attempt again; a wrong
 port reads down on refused connects and tries no login, and the port edited in place connects and
 authenticates within a tick, a label edit through the same route recycles nothing, and the address
@@ -403,33 +399,33 @@ across a restart too, and authenticates after a params edit.
 ### The push lane refuses a native key
 
 Every key a native probe writes, its samples ([below](#poll-protocols-and-their-config)) and the
-node's account of its own connection (the verdict and its rungs, the probe metrics and their
+outpost's account of its own connection (the verdict and its rungs, the probe metrics and their
 timings, a held session's state and reason, the host key or tls public key it trusted, a tls
 endpoint's certificate facts, the gate it publishes), and the `collection-failed` a task lands when it
-cannot collect (#1086), is the node's own observation, and the console reads it as one. So `POST
+cannot collect (#1086), is the outpost's own observation, and the console reads it as one. So `POST
 /telemetry:push` refuses each by name (#1080, [ADR-0158](/architecture/decisions/#adr-0158-one-connection-fingerprint-gates-every-connection-on-a-ladder-the-driver-declares)
 point 5): on every lane, not just its own, under any instance and any casing, and the rejection's
 reason names the key. The set is not a second list: it is `internal/collection/probekeys`, the
-declaration the probes emit from, where each key is ruled node-only or pushable with the reason it may
+declaration the probes emit from, where each key is ruled outpost-only or pushable with the reason it may
 be pushed. None is pushable today, and a key declared there without a ruling fails its test, as does a
-key the reachability read serves that is not ruled node-only. A pusher with a measurement of its own,
-an outside pinger's round trip say, registers a metric type for it rather than borrowing the node's.
+key the reachability read serves that is not ruled outpost-only. A pusher with a measurement of its own,
+an outside pinger's round trip say, registers a metric type for it rather than borrowing the outpost's.
 
 The push lane is one write surface, and the refusal is no longer its alone: every key has one **writer
 class**, and the Storage Gateway holds every write to it
 ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway),
 [the ruling](/architecture/properties/#who-writes-a-key-the-writer-class)). The probekeys set is the
-`node-probe` class, so a declared value, a command, a calc rule or an event rule is refused on it the
+`outpost-probe` class, so a declared value, a command, a calc rule or an event rule is refused on it the
 same way (the ssh host key and the tls certificate admit one declared row, the pin set through an
 endpoint's `:retry`), and a push is refused a `platform` key (`health`, the webhook counts) and a calc rule's output,
-naming the rule. On the node's own lane a node-probe key lands only under the endpoint whose task the
-node ran: an empty instance is that endpoint's name, and any other (another node's endpoint on the same
+naming the rule. On the outpost's own lane an outpost-probe key lands only under the endpoint whose task the
+outpost ran: an empty instance is that endpoint's name, and any other (another outpost's endpoint on the same
 component, a name no endpoint holds) is refused, while a driver's own keys keep the instance they name,
-and a node-probe sample dated more than five minutes past the database's clock is stored at the
-database's now, so a node's account of an endpoint cannot stay current past its tenure. A driver spec
+and an outpost-probe sample dated more than five minutes past the database's clock is stored at the
+database's now, so an outpost's account of an endpoint cannot stay current past its tenure. A driver spec
 may emit only a collected key: a reserved one is refused at the spec's write (#1035 found the pin
 case: a driver emitting one would have the worklist hand it back as the pin), and again where the
-node interprets a task derived before that refusal existed, so a driver cannot speak for the node
+outpost interprets a task derived before that refusal existed, so a driver cannot speak for the outpost
 either.
 
 ### Collection telemetry: every endpoint's account of itself
@@ -446,35 +442,35 @@ of its own:
 
 | Key | Written by | What it counts, per report window | Lands |
 |---|---|---|---|
-| `poll-duration` | the node | the mean time of the endpoint's driver poll runs, scheduled or run now, answered or failed, in ms | when a poll ran |
-| `poll-cpu-time` | the node | the mean CPU time the kernel charged each of those runs on its own thread, in ms: a floor on a poll's cost, leaving out work on other goroutines (a held session's reader among them) and the GC's background workers ([nodes](/architecture/nodes/#self-monitoring-the-node-reports-itself)) | when a poll ran, on a platform with a thread clock |
-| `poll-failure-count` | the node | the polls that failed: a run that faulted and landed nothing, or a due poll a refusal on the endpoint's gate stopped | when nonzero |
-| `poll-held-count` | the node | the due polls held, not sent, while the endpoint's gate held `unreachable` (its probe read down twice running) or `disrupted` (a disruptive command such as a reboot is in flight): not loss, so never a failure, and no backoff booked | when nonzero |
-| `hold-expiry-count` | the node | the disruptions the backstop ended: a disruptive command's held endpoint reopened at the type's `hold_seconds` with no up verdict since its quiet period, a device that did not come back in time | when nonzero |
-| `poll-due-count` | the node | the polls that fell due, each on its own interval, held, refused and skipped ones included | when nonzero |
-| `poll-skipped-count` | the node | the due polls skipped because the poll's last run was still in flight: counted, never queued behind it, so skipped over due is the endpoint's schedule loss | when nonzero |
-| `push-message-count` | the node | the messages its held session or udp socket delivered that a listener claimed | every window while held, zero included |
-| `push-unclaimed-count` | the node | the messages no listener claimed | when nonzero |
+| `poll-duration` | the outpost | the mean time of the endpoint's driver poll runs, scheduled or run now, answered or failed, in ms | when a poll ran |
+| `poll-cpu-time` | the outpost | the mean CPU time the kernel charged each of those runs on its own thread, in ms: a floor on a poll's cost, leaving out work on other goroutines (a held session's reader among them) and the GC's background workers ([outposts](/architecture/outposts/#self-monitoring-the-outpost-reports-itself)) | when a poll ran, on a platform with a thread clock |
+| `poll-failure-count` | the outpost | the polls that failed: a run that faulted and landed nothing, or a due poll a refusal on the endpoint's gate stopped | when nonzero |
+| `poll-held-count` | the outpost | the due polls held, not sent, while the endpoint's gate held `unreachable` (its probe read down twice running) or `disrupted` (a disruptive command such as a reboot is in flight): not loss, so never a failure, and no backoff booked | when nonzero |
+| `hold-expiry-count` | the outpost | the disruptions the backstop ended: a disruptive command's held endpoint reopened at the type's `hold_seconds` with no up verdict since its quiet period, a device that did not come back in time | when nonzero |
+| `poll-due-count` | the outpost | the polls that fell due, each on its own interval, held, refused and skipped ones included | when nonzero |
+| `poll-skipped-count` | the outpost | the due polls skipped because the poll's last run was still in flight: counted, never queued behind it, so skipped over due is the endpoint's schedule loss | when nonzero |
+| `push-message-count` | the outpost | the messages its held session or udp socket delivered that a listener claimed | every window while held, zero included |
+| `push-unclaimed-count` | the outpost | the messages no listener claimed | when nonzero |
 | `webhook-post-count` | the server | the webhook posts it accepted for the endpoint | when nonzero, then one zero after a stream stops |
 | `webhook-refusal-count` | the server | the posts it refused (a bad signature, a stale timestamp, a missing credential) | when nonzero |
 
 Each is counted where it happens and reported once a **report window**, the platform's
 `collection.report_seconds` (a minute by default, 10 seconds to an hour), so it costs a few rows per
-endpoint per window however fast a driver polls or a device pushes. The node reads the window off its
+endpoint per window however fast a driver polls or a device pushes. The outpost reads the window off its
 worklist at heartbeat granularity, and the server's webhook receiver reads it from the settings. A
-node's windows close on a grid: each ends a whole window after the last, at an offset into the window
+outpost's windows close on a grid: each ends a whole window after the last, at an offset into the window
 its name sets, however late the housekeeping pass that takes it runs, so every window holds one
-window's counts and a fleet's nodes land theirs spread across the window rather than together (#1779). A row's
+window's counts and a fleet's outposts land theirs spread across the window rather than together (#1779). A row's
 instance is its endpoint, so an endpoint's several polls share one series, published under a task the
-node holds when the window closes, and a rate is read from the counts rather than stored. A session or
+outpost holds when the window closes, and a rate is read from the counts rather than stored. A session or
 socket recycled mid-window hands its counts to the next report. The server lands each component's
 webhook counts in a transaction of their own, so a component deleted since its last post costs only
 its own. A duration and a message count land every window so a quiet endpoint shows
 as quiet, not missing; the failure, unclaimed and refusal counts land only when there is something to
 count. A webhook endpoint reports one zero after a window with posts, then nothing while quiet: its
-**last heard** says how long. The node's keys are `node-probe`, refused on the push lane like
+**last heard** says how long. The outpost's keys are `outpost-probe`, refused on the push lane like
 every probe key above; the two webhook keys are `platform`, the server's own count, written by the
-process through the Storage Gateway, so neither a node nor a push may write them, and an event rule
+process through the Storage Gateway, so neither an outpost nor a push may write them, and an event rule
 reads them as it reads any metric
 ([ADR-1369](/architecture/decisions/#adr-1369-every-endpoint-reports-its-own-collection-once-a-report-window)).
 
@@ -487,20 +483,20 @@ from it. A driver that only connects does not count. Two methods carry one tier 
 and the live lab check are in [simulation](/architecture/simulation/#the-dev-fleet).
 
 One window for every endpoint type is the first step of the cadence model (#1373): each endpoint type's
-catalog entry holds its built-in data's defaults, a driver overrides them per endpoint type it uses, and
-an operator overrides them down the cascade.
+catalog entry holds its built-in data's defaults, a driver shadows them per endpoint type it uses, and
+an operator shadows them down the cascade.
 
-### Self-monitoring: every node's account of itself
+### Self-monitoring: every outpost's account of itself
 
 Collection telemetry is an endpoint's account of its collection; **self-monitoring** is the
 platform's account of itself (#1094, first built by #1625). The boot seed creates one reserved
-system, `platform`, of the reserved og system type of the same name, and node registration gives
-every node a component in it, an `omniglass-node`, named for the node and named back on the node row
-(`node.platform_component_id`). The platform's own metrics land there, under the `platform` writer
-class, so an operator reads whether a node keeps up the way they read any component: its metrics,
+system, `platform`, of the reserved og system type of the same name, and outpost registration gives
+every outpost a component in it, an `omniglass-outpost`, named for the outpost and named back on the outpost row
+(`outpost.platform_component_id`). The platform's own metrics land there, under the `platform` writer
+class, so an operator reads whether an outpost keeps up the way they read any component: its metrics,
 its trend, and later a rule on them. An operator may relabel the system and the components and
 reshape neither: the Storage Gateway refuses a rename, retype, move or delete of the system, a
-rename, move, reparent or delete of a node's component, and any other component joining the system,
+rename, move, reparent or delete of an outpost's component, and any other component joining the system,
 each a 409 naming the reservation. The system is unplaced, so it resolves through the unplaced root
 and only an all-scope read sees it: a location-scoped operator does not see platform rows
 ([ADR-1625](/architecture/decisions/#adr-1625-a-node-reports-itself-on-its-platform-component-and-platform-keys-take-no-prefix)).
@@ -509,38 +505,38 @@ Every platform metric key, rendered from the writer-class ruling and the seed:
 
 <PlatformKeys />
 
-**Who writes them.** A node reports the node-self keys of itself (every node key but `checkin-age`,
+**Who writes them.** An outpost reports the outpost-self keys of itself (every outpost key but `checkin-age`,
 the two webhook counts and the command queue figures the server measures, and none of the
-[server's](#self-monitoring-the-servers-account-of-itself)), in the **node-self block** of the batch
-its tick already publishes (`TelemetryBatch.node_self`, field 15). The block names no owner and no
-task: the server takes the node from the subject it published on, lands the rows on that node's
-platform component as the process, and holds every row to the node-self keys, so a node writes no
-other platform key (`health`, `checkin-age`, the webhook counts) and no other component's. A node-self
+[server's](#self-monitoring-the-servers-account-of-itself)), in the **outpost-self block** of the batch
+its tick already publishes (`TelemetryBatch.outpost_self`, field 15). The block names no owner and no
+task: the server takes the outpost from the subject it published on, lands the rows on that outpost's
+platform component as the process, and holds every row to the outpost-self keys, so an outpost writes no
+other platform key (`health`, `checkin-age`, the webhook counts) and no other component's. An outpost-self
 sample that names an identity, or a batch that names an owner, never lands; a refused block drops
 alone and the tick's task groups still land. A platform key in a task group, a push, a command or a
-calc is refused like any reserved key. The node's command queue figures are the server's but one: the
+calc is refused like any reserved key. The outpost's command queue figures are the server's but one: the
 wire writes the per-command dispatch and execution latencies as it stamps them, a 15 s timer writes
-the queue's depth, oldest age, stuck commands, redeliveries and expiries, and the node counts only its
-own failed pulls of the queue, on its node-self lane
-([commands](/architecture/commands/#queue-health-each-nodes-command-queue-measured)).
+the queue's depth, oldest age, stuck commands, redeliveries and expiries, and the outpost counts only its
+own failed pulls of the queue, on its outpost-self lane
+([commands](/architecture/commands/#queue-health-each-outposts-command-queue-measured)).
 `checkin-age` is the server's: a timer writes every claimed
-node's age every 15 s, half the default heartbeat, as the seconds since its last heartbeat (or since
-its claim, before its first). It keeps growing while a node is silent, which is the series the
-seeded `node-silent` rule reads: an age past 90 s, three missed heartbeats, opens a `high` alarm on
-the node's platform component, and the next heartbeat clears it. The webhook counts are the receiver's
+outpost's age every 15 s, half the default heartbeat, as the seconds since its last heartbeat (or since
+its claim, before its first). It keeps growing while an outpost is silent, which is the series the
+seeded `outpost-silent` rule reads: an age past 90 s, three missed heartbeats, opens a `high` alarm on
+the outpost's platform component, and the next heartbeat clears it. The webhook counts are the receiver's
 ([above](#collection-telemetry-every-endpoints-account-of-itself)), and the `retention-*`,
 `metric-*`, `table-bytes` and `database-bytes` figures are the retention pass's
 ([storage](/architecture/storage/#what-a-retention-pass-reports)).
 
-**How a node samples.** Two shapes, as collection telemetry has. The each-tick figures (the
+**How an outpost samples.** Two shapes, as collection telemetry has. The each-tick figures (the
 dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's
 depth, the sessions held by state, the process figures) are one observation per sample, never a
-stored average. The counts (dues met in flight, skipped intervals, the node hop's delivery) are
-tallied over the node's report window and land once when it ends, every window, 0 when quiet, so a
+stored average. The counts (dues met in flight, skipped intervals, the outpost hop's delivery) are
+tallied over the outpost's report window and land once when it ends, every window, 0 when quiet, so a
 count's latest value returns to 0 after the window that had it rather than standing on the last
-event; the first window runs from the node's start and lands too. The schedule figures come from the
+event; the first window runs from the outpost's start and lands too. The schedule figures come from the
 dispatcher's window, taken each
-heartbeat ([nodes](/architecture/nodes/#scheduling-concurrency-and-self-observability)), and are
+heartbeat ([outposts](/architecture/outposts/#scheduling-concurrency-and-self-observability)), and are
 measured per scheduled start: a run's lateness is its dispatch against its due time, and its gap
 excess is how far the gap since the task's own previous scheduled start strays from its interval,
 early or late, so a poll keeping its interval reads 0 and a skipped slot reads a whole interval. A
@@ -552,7 +548,7 @@ workers, so 0 is idle and 1 is every worker busy all window. A run still in flig
 ends counts the part it has run, and its remainder lands in the next window (#1686). Every count is a loss count, 0
 healthy: the schedule's drops are the schedule hop of the delivery loss ratio #1641 defines, and the
 dispatcher writes that hop too, runs due in and runs made out per kind at the instance
-`schedule/{kind}` (#1693). The node hop already reads as that ratio (#1659): per item kind as
+`schedule/{kind}` (#1693). The outpost hop already reads as that ratio (#1659): per item kind as
 the instance, `delivery-in-count` is the items that settled at the spool in the window,
 `delivery-out-count` the ones the stream acked, and `delivery-loss-ratio` their `(in - out) / in`,
 written as 0 when nothing came in, so all three land every window and a past window's loss never
@@ -569,7 +565,7 @@ identity's component, so a restart under one identity reports on one component a
 report on two. Boots take the platform step's lock, so two starting at once under one identity still
 make one. Set the name wherever the hostname is not stable: a container's and a pod's change on every
 start, and each new name is a new component. The lab sets `server`. The component is reserved as a
-node's is: an operator may relabel it and never reshape it.
+outpost's is: an operator may relabel it and never reshape it.
 
 The server folds what it sees into the window recorder in `internal/platformmetric`, the primitive
 any Omniglass process records itself through, and lands one sample per key and instance each report
@@ -594,7 +590,7 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   pool exhausted and waited, and how long they waited in all. A wait count is a loss count, 0
   healthy; a nonzero one beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
 - **The `process-*` figures**: the goroutines, heap, garbage-collection pause, CPU time and open
-  files of the server process, read by the one runtime sampler a node reports its own through. The
+  files of the server process, read by the one runtime sampler an outpost reports its own through. The
   server's `process-cpu-seconds` is the CPU time since the previous window, as the Go runtime
   estimates it rather than the kernel's account, so over the window's length it is the cores the
   server kept busy.
@@ -622,7 +618,7 @@ exists. The table is rendered from the rules and the list, so it shows what alar
 <PlatformCoverage />
 
 The boot seeds the platform system before it ensures the component, and a window whose component is
-gone by the write is dropped rather than failed, as a node's is. The same component carries the
+gone by the write is dropped rather than failed, as an outpost's is. The same component carries the
 server's retention pass figures ([storage](/architecture/storage/#what-a-retention-pass-reports)). A
 boot whose ensure fails (an identity of only spaces, a database refusing the write) logs a WARN with
 the identity and the cause and serves anyway, reporting none of these until a boot whose ensure
@@ -641,7 +637,7 @@ from its own side, is not built
 
 ## Endpoint types and their config
 
-The poll types and listeners in the `transport` registry and the operator config they read. How the node *executes* these (scheduling, reachability gating, the task queue) is [nodes](/architecture/nodes/).
+The poll types and listeners in the transport registry and the operator config they read. How the outpost *executes* these (scheduling, reachability gating, the task queue) is [outposts](/architecture/outposts/).
 
 ### Poll protocols and their config
 
@@ -651,7 +647,7 @@ when the params carry a credential, tries it. The ladder facts each observes: an
 whose API never answers is **reached but not responsive**, and a completed SSH exchange that
 refuses the credential is **responded but not authenticated**. A task whose config cannot be used
 lands a `collection-failed` event naming the task, never a silent skip. A probe's config rides
-the endpoint's `params` JSON, unmarshalled on the node:
+the endpoint's `params` JSON, unmarshalled on the outpost:
 
 <SeededSet kind="transports" of="probes" />
 
@@ -663,10 +659,10 @@ row cannot say:
 - A probe lands a key only when its fact exists: the connect time only on an open port, a timing
   only from an answer (a lost request lands none), the certificate's expiry and days left only for a
   certificate the `tls-mode` accepted, and `endpoint-authenticated` only when a credential was tried.
-  `endpoint-reachable` is the verdict the node rolls the samples into, landed on a transition.
+  `endpoint-reachable` is the verdict the outpost rolls the samples into, landed on a transition.
 - `tls-mode` is `verify`, `pin` or `skip`, derived from the driver's `tls-mode` input (verify when
   unset); `https` and `wss` take it as `tls` does, and `listen-port` is derived from a udp driver's
-  input of that name (unset, the node picks one).
+  input of that name (unset, the outpost picks one).
 - `http` draws one `GET /` with no credential, any status an answer, and `websocket` and `wss` run
   the probe of `http` and `https`, so reachability stays observed beneath a refused upgrade (#1034).
   The login of `telnet` and `ssh` is the held session's auth step, never the probe's; `ssh`'s
@@ -682,13 +678,13 @@ protocol behind a telnet filter that strips option negotiation and refuses every
 answered WONT, WILL is answered DONT, a literal 0xFF escaped), its login the driver's login dialog run
 as the session's auth step on establish and every recover; proven against the simulated panel's
 `nvp-telnet` face (login, poll, command, push, recover with a fresh login, and a wrong password
-rejected after one attempt); while the node holds an endpoint's telnet session and it reads up, the
+rejected after one attempt); while the outpost holds an endpoint's telnet session and it reads up, the
 reachability probe takes its verdict from the session rather than dial a second connection (gear that
 admits one telnet client would refuse it). And so is `ssh` (#1032): the line protocol over a shell
 channel (with a PTY when the driver's `session.pty` asks, or an exec channel, `session.exec`), its
 userauth the session's auth step with the credential the driver names (`session.credential`, a
 username with a password or a private key, or keyboard-interactive answered by the login dialog). A
-refused credential is `auth`, and the **host key is pinned on first use**: the node trusts the first
+refused credential is `auth`, and the **host key is pinned on first use**: the outpost trusts the first
 key it sees and publishes it as `ssh-host-key`, the server delivers it back as the pin on every
 worklist, and a changed key reads `rejected`, class `host-key`, naming both fingerprints, which
 the gate carries as data. An operator who trusts the new key (a replaced component) retries the
@@ -696,7 +692,7 @@ endpoint with it (`:retry` with `host_key`, audited with both keys; the console'
 key**), which declares the new pin and redials onto it; a key the refusal on record does not name is
 refused. A declared pin is trusted only as that path wrote it (its row's `source` is `key-pin`): a
 declared row any other path left is never delivered, and a pin the worklist stops delivering is one
-the node forgets, trusting on first use again
+the outpost forgets, trusting on first use again
 ([ADR-1100](/architecture/decisions/#adr-1100-legacy-rows-and-stored-declarations-honor-the-one-writer-ruling)).
 Proven against
 the simulated panel's ssh shell (poll, command, push, recover onto the same key, down after the
@@ -709,24 +705,24 @@ Built (#1035,
 `tls` is the line protocol over a TLS connection, its own transport rather than an option on `tcp`, since an
 endpoint is named by its transport (a component holds a raw control port and a TLS one side by side)
 and its rung is the handshake. The handshake is one primitive: `https` consumes it as its own
-registry entry by the same rule ([http and https](#http-and-https)), as does `wss`
+catalog entry by the same rule ([http and https](#http-and-https)), as does `wss`
 ([websocket and wss](#websocket-and-wss)), and the mqtt carrier consumes it later. Each connection, the held session's and the probe's,
 runs the TCP connect and then the handshake under the endpoint's **verification mode**, its driver's
 `tls-mode` input, edited in place like a host or a port:
 
-- **verify** checks the certificate against the node's system roots, with the host input as the
+- **verify** checks the certificate against the outpost's system roots, with the host input as the
   server name. Any failure (an unknown authority, a name mismatch, an expiry) is a `certificate`
   refusal carrying its reason, never a timeout: the gate's `endpoint-rejection-reason`, held session
   or not, which the console's refusal notice shows (#1110), beside the held session's
-  `session-reason` where one is held, and a node self-log, said once when the probe meets it. A
+  `session-reason` where one is held, and an outpost self-log, said once when the probe meets it. A
   driver that declares no mode verifies.
 - **pin** trusts the first public key the component offers and refuses any other, as the ssh host
   key is pinned. The pin is the key (its SubjectPublicKeyInfo, in the same `SHA256:` form as an ssh
   fingerprint), not the certificate, so a renewal that keeps the key is no change, and a certificate
   past its not-after still connects under its pinned key (its days left read negative, which a rule
-  alarms on). The node publishes
+  alarms on). The outpost publishes
   the key it trusted as `tls-certificate`, the server delivers it back as the pin on every worklist,
-  and the node keeps one pin per endpoint, shared by its session and its probe and carried across a
+  and the outpost keeps one pin per endpoint, shared by its session and its probe and carried across a
   session's recycle. A changed key reads `rejected`, class `certificate`, naming both keys, and an
   operator who trusts it (a replaced component) retries the endpoint with it (`:retry` with
   `certificate`, audited), which declares the new pin. The seeded `newtron-nvp-tls` pins by default,
@@ -744,15 +740,15 @@ pin mode alone. A bare `tls` endpoint's `tls-mode` param is checked where it is 
 driver's input is. TLS 1.2 is the floor, and the
 component is authenticated alone: no client certificates, and no per-endpoint CA bundle. Proven
 against the simulated panel's `nvp-tls` face over a real handshake (poll, command, push, recovery
-onto the same key, a changed key held beneath the gate across a node restart and accepted with
+onto the same key, a changed key held beneath the gate across an outpost restart and accepted with
 `:retry`, verify refusing the self-signed face as `certificate`, skip connecting) and end to end.
 
 #### http and https
 
 Built (#902, [ADR-0902](/architecture/decisions/#adr-0902-http-polls-and-commands-send-real-requests-read-through-one-extraction-authenticated-by-a-declared-scheme)):
 `http` is a full collection transport, stateless: every poll and every command is a request of its
-own, with no connection held (a login's session, below, is state the node keeps, never a held
-connection). `https` is the same over the shared TLS primitive, its own registry
+own, with no connection held (a login's session, below, is state the outpost keeps, never a held
+connection). `https` is the same over the shared TLS primitive, its own catalog
 entry as `tls` is ([ADR-0160](/architecture/decisions/#adr-0160-tls-is-its-own-transport-over-a-shared-primitive-and-its-pin-is-the-public-key)'s
 rule: its rung is the handshake, and a component may serve a plain web port beside a TLS one).
 
@@ -772,16 +768,16 @@ selector, bound to the declared format at write: a `jsonpath` (the dotted path) 
 `xpath` on an xml answer (namespace-aware, its prefixes declared on the request's `namespaces`) or on
 an html answer parsed as a browser would (an OEM component's status page), and a `regex` on any
 body as text. A selector yields exactly one value: an element's text (trimmed) or an attribute's
-value, or a scalar expression's result (`count(...)`); one that finds nothing, or more than one node,
+value, or a scalar expression's result (`count(...)`); one that finds nothing, or more than one outpost,
 faults that emit by name while the rest still land. An answer is parsed once, however many emits
 read it.
 
 **Auth is the session block's scheme.** `session.credential` names the secret input and
 `session.scheme` says how it rides every request: `basic` (a `basic-auth` username and password),
 `bearer` (a `bearer-token`), `api-key` (an `api-key`, in a header or a query parameter as the
-driver's `session.api_key` places and names it), or `digest` (a `basic-auth` username and
+driver's `session.api_key` puts and names it), or `digest` (a `basic-auth` username and
 password, [below](#logging-in-over-http)). The credential is written only into the outgoing
-request: no error, reason, label or log line carries it, a query key is masked in every URL the node
+request: no error, reason, label or log line carries it, a query key is masked in every URL the outpost
 names, and a component's text is scrubbed of it before it reaches a reason.
 
 **The status table.** A rule the driver declares terminal decides first (`session.terminal` may
@@ -804,7 +800,7 @@ A body past 1 MiB (64 KiB for a command's reply) faults naming the cap.
 `endpoint-authenticated` `yes`, and a refusal `no`; a redirect, a 403, another 4xx or a 5xx never
 judged the credential, so proves nothing either way.
 A refusal gates the endpoint at the session rung for its connection fingerprint: no credentialed
-poll or command is sent beneath it, across a node restart too, until the fingerprint moves (the
+poll or command is sent beneath it, across an outpost restart too, until the fingerprint moves (the
 secret rotated, an input edited in place, an operator's `:retry`). The gate publishes its reason
 beside it, `endpoint-rejection-reason` (`auth: the component refused the credential (401)`), so the
 console's refusal notice says why and offers **Retry** on an endpoint holding no session
@@ -821,7 +817,7 @@ expiry and days left for a certificate the mode accepted, then draws a response
 (`http-response-time`). Beneath a certificate gate only the TCP connect runs.
 
 **Commands.** An http command's delivery carries its rendered request and never a credential: the
-node applies the endpoint's scheme from what its worklist delivered, so a credentialed http driver
+outpost applies the endpoint's scheme from what its worklist delivered, so a credentialed http driver
 that declares commands needs a poll to carry its credential (refused at write otherwise). The
 answer is judged by the same table; its body (scrubbed of the credential) is the reply a binding
 settling from the response reads through the same extraction (`settle.extract` may be a `jsonpath`
@@ -832,7 +828,7 @@ call and audio polls; `set-volume`, `set-mute` and `set-power`), and `tessellate
 Tessellate sensor over http with its header key. Proven over real sockets
 (`internal/collection/httpfetch_integration_test.go`: the request and its key, a redirect not
 followed, the body cap, a query key never named, verify, pin and skip, the https probe) and end to
-end against the simulator (`internal/node/run_http_test.go`: the bar polled and actuated three ways,
+end against the simulator (`internal/outpost/run_http_test.go`: the bar polled and actuated three ways,
 each command settled from its reply, a replaced key held beneath the gate across a restart until
 trusted; a wrong header key sent once per fingerprint across a restart, a rotated key bringing it
 up; a bearer token over namespaced XML and a query key over an HTML status page).
@@ -873,12 +869,12 @@ session:
     expired: { regex: "token expired" }
 ```
 
-**The session lives in the node's memory alone.** Each http endpoint has one auth state on its
-node, shared by its polls and its commands: a cookie jar holding the component's cookies, the
+**The session lives in the outpost's memory alone.** Each http endpoint has one auth state on its
+outpost, shared by its polls and its commands: a cookie jar holding the component's cookies, the
 values the login captured and the headers they fill, and a digest challenge. It is never logged,
 published or persisted, and it is dropped whole when the endpoint's connection fingerprint moves
 (every login input is a fingerprint input: the steps, the captures, the headers, the paths, each
-secret's sealed version), on a terminal refusal, and with the node process. A login runs on a fresh
+secret's sealed version), on a terminal refusal, and with the outpost process. A login runs on a fresh
 jar before the first request, and again before a declared expiry lapses (with a tenth of the
 lifetime to spare), never once per poll. A declared lifetime is held between 10 seconds and 30 days
 (gear says "never" with a huge number); one the answer omits, or gives as zero or a word, declares
@@ -886,7 +882,7 @@ none, and the session lasts until a request finds it lapsed. Only a login sessio
 a request under a scheme is its own, as before, and a jar holds at most 64 cookies of at most 4 KiB.
 
 **A lapse logs in once.** A request over a login session whose answer is a 401, a redirect to the
-declared login `path`, or the declared `expired` text has lapsed: the node logs in once more and
+declared login `path`, or the declared `expired` text has lapsed: the outpost logs in once more and
 replays the request once. A lapse right after a fresh login is the credential's terminal `auth`
 refusal (`auth: the component refused the session a fresh login opened (401)`), never a second
 login.
@@ -904,22 +900,22 @@ with the component's last answer; a connection never made sends nothing and char
 redirect anywhere else passes (a form login's way of saying yes).
 
 **Digest** (RFC 7616) is `scheme: digest` on a `basic-auth` secret. The first request draws the
-component's challenge, which the node answers (MD5, SHA-256, or their `-sess` forms; `qop=auth`, or
+component's challenge, which the outpost answers (MD5, SHA-256, or their `-sess` forms; `qop=auth`, or
 the legacy form with none), then holds, answering every later request at once with a rising count.
 A challenge the component marks `stale`, or one under a nonce it rotated without saying so, is
 answered afresh, never read as a refusal; a 401 to an answer of the nonce it still offers is the
-credential's refusal. A 401 offering no digest challenge the node answers (Basic alone, an
+credential's refusal. A 401 offering no digest challenge the outpost answers (Basic alone, an
 algorithm other than MD5 or SHA-256) is the request's own fault, its schemes named: the credential
 was never sent, so it says nothing about it. The password never crosses the wire.
 
 **Never logged.** The values the auth state holds (the secret fields a login sent, the values it
 captured, the component's cookies) are scrubbed from every reason and error as the credential is,
-in every form a component could echo them, and from every URL the node names (a login step may
+in every form a component could echo them, and from every URL the outpost names (a login step may
 render a secret into its query, though never into its host: a step's path opens with a literal
 `/`). What a login would capture is scrubbed even from the reason that refuses it. A captured
 value with a control character, or longer than 8 KiB, refuses rather than riding a header, and a
-command whose delivery names an address the node's worklist does not is never sent, so a session
-opened with one component never rides a request to another. The node logs that it logged in and why (`opening`, `renewing
+command whose delivery names an address the outpost's worklist does not is never sent, so a session
+opened with one component never rides a request to another. The outpost logs that it logged in and why (`opening`, `renewing
 before expiry`, `the session lapsed`), never a value.
 
 **Shaped for OAuth2.** A client-credentials grant (#1119) is this shape with no new primitive: a
@@ -933,10 +929,10 @@ Proven over real sockets (`internal/collection/httpsession_integration_test.go`:
 many requests, one re-login and replay on a lapse, a wrong password one attempt and never retried, a
 token renewed before its expiry, concurrent requests sharing one login, digest with MD5 and SHA-256
 and a stale nonce, nothing the state holds in any reason) and end to end against the simulator
-(`internal/node/run_http_login_test.go`: a form and a token login keep one session across many polls
+(`internal/outpost/run_http_login_test.go`: a form and a token login keep one session across many polls
 and log in exactly once more when the component forgets it; digest answers its challenge, a stale
 nonce, and a command; a wrong password reads `rejected` with its reason after exactly one attempt,
-across a node restart, and the secret fixed in place brings each back).
+across an outpost restart, and the secret fixed in place brings each back).
 
 #### A server-sent events stream
 
@@ -966,7 +962,7 @@ refusal is judged as any request's is (a 401 is a terminal `auth`, a lapsed logi
 a digest challenge is answered), and anything else (a 404, an answer that is not a stream) is a
 failed attempt the session retries on its backoff. `session-state` and `session-reason` land as for
 a held line session, `endpoint-authenticated` lands when the stream carries a credential, and the
-registry's `http` and `https` entries read `held` because they now are. The endpoint's learned auth
+catalog's `http` and `https` entries read `held` because they now are. The endpoint's learned auth
 (the jar, a login's session, the digest challenge) is the one its polls and commands share, so one
 login serves them all.
 
@@ -985,7 +981,7 @@ stream has no upstream, so its listeners declare no `arm`.
 the server's `retry` (held between 250 ms and 30 s, the session backoff's bounds). A server replays
 the events after that id, so nothing is lost and nothing comes twice; one that replays from that
 event, sending it again first, has that one event dropped. A component that reboots and numbers its
-events from 1 again has every new event land. The resume lives with the endpoint in the node's
+events from 1 again has every new event land. The resume lives with the endpoint in the outpost's
 memory, across a session's recycle while the endpoint reaches the same address, never persisted. An
 event whose data passes 1 MiB is dropped whole (its id still counts, and it is named unclaimed) and
 the stream reads on; an id past 1 KiB is ignored; an answer's head is held to 64 KiB, and to the
@@ -1006,7 +1002,7 @@ mute and power arrive the moment they change. Proven by the event-stream interpr
 order, a drop resumed after the server's retry with nothing lost or twice, a refused credential one
 attempt, digest answered across a reconnect, a form login run first and again on a lapse, an
 uncredentialed stream proving no credential, an answer that is not a stream never a refusal), in the
-simulator's events face, and end to end (`internal/node/run_http_stream_test.go`: a change on the bar
+simulator's events face, and end to end (`internal/outpost/run_http_stream_test.go`: a change on the bar
 lands within a second with no poll; a dropped stream reads recovering and resumes, landing each change
 once; a wrong password reads rejected with its reason, sent once under the fingerprint, across a
 restart; the secret fixed in place brings it back; a stream behind a form login logs in first).
@@ -1016,7 +1012,7 @@ restart; the secret fixed in place brings it back; a stream behind a form login 
 Built (#1034, [ADR-1034](/architecture/decisions/#adr-1034-a-websocket-is-a-held-session-of-text-frames-and-a-reply-is-matched-by-a-minted-id)):
 many components' control APIs are a websocket, one socket carrying a subscription's pushes and the
 answers to requests at once. `websocket` holds it, and `wss` holds it over the shared TLS handshake
-(its own registry entry, its key pinned on first use and trusted again with `:retry` and
+(its own catalog entry, its key pinned on first use and trusted again with `:retry` and
 `certificate`, as `tls` and `https` are). A message is a **text frame**, routed by the precedence a
 line session's is ([below](#listeners-over-a-held-session)), and a request is a frame: a
 `line` sent verbatim, or a JSON `body` rendered injection-safe as an http body is (a whole-leaf
@@ -1064,20 +1060,20 @@ the socket coming up lifts the endpoint's gate.
 **A reply is matched by a minted id.** A request whose `reply` declares `correlate: <field>` (a
 dotted path of object keys, on a JSON object body that does not set that field itself and holds an
 object at every step of the path it does carry) has a fresh random id written into that field by
-the node when it sends the frame (at execute, so a redelivered command never reuses one), and its
+the outpost when it sends the frame (at execute, so a redelivered command never reuses one), and its
 answer is the frame carrying the id back: a push before it goes to the listeners, and another
 request's answer is never taken for it. Its `error` shape answers only a frame carrying its id. A
 reply may instead declare a `prefix` or a `regex`, as a line's does, or a JSON `field` match (on any
 held line session). A correlated or shaped request that gets no answer in time fails alone, the
 socket kept; an unshaped one recycles the socket, since its late answer would answer the next.
 
-**Keepalive, bounds and the probe.** The node pings every 30 s and the socket is dead when it hears
+**Keepalive, bounds and the probe.** The outpost pings every 30 s and the socket is dead when it hears
 neither a frame nor a pong for two intervals, so a component that stops answering reads
 `recovering` without waiting for a poll. Whatever the component sent before it closed the socket
 is routed before the connection dies: an answer (a terminal reply among them, which rejects the
 session) or a push read just before the close is never lost to it. A frame past 1 MiB is read off the wire, dropped and named
 unclaimed, and the socket reads on; a binary frame is named unclaimed, since a listener reads text.
-The node sends no `Origin`; a component that admits only its own pages takes one from
+The outpost sends no `Origin`; a component that admits only its own pages takes one from
 `session.upgrade`'s headers. No header the handshake owns (`Upgrade`, `Connection`, a
 `Sec-WebSocket-*` header bar a subprotocol) may be set by the upgrade, an api key's placement or a
 login's headers. The probe is http's (`https`'s over `wss`): a
@@ -1096,7 +1092,7 @@ session's `403`, an answer and pushes before a close routed and a terminal reply
 rejecting every time, a silent
 component caught by the keepalive, an oversize and a binary frame dropped, a pinned key, the head
 bound and a redacted key), in the simulator's websocket face, and end to end
-(`internal/node/run_websocket_test.go`: the subscription armed on connect, a change on the bar
+(`internal/outpost/run_websocket_test.go`: the subscription armed on connect, a change on the bar
 landing within a second, a command settled from the answer to its id, a drop recovered and armed
 again, a wrong password rejected after one upgrade across a restart and fixed in place, and a
 replaced bar's key held beneath the certificate gate until `:retry` trusts it).
@@ -1105,11 +1101,11 @@ replaced bar's key held beneath the certificate gate until `:retry` trusts it).
 
 Built (#1037, [ADR-0163](/architecture/decisions/#adr-0163-a-udp-endpoint-binds-its-own-socket-and-its-rung-is-a-request-answered)):
 `udp` is the line protocol as datagrams, one line each, and stateless: there is no connection to
-hold and no `session-state`. Each udp endpoint binds **its own socket** on the node, on its
+hold and no `session-state`. Each udp endpoint binds **its own socket** on the outpost, on its
 driver's `listen-port` input (unset, a port the kernel picks), and every request it makes leaves
 from that socket, so the component's replies and its pushes arrive on the one socket with no table
-of sources to keep. The operator configures the component to send to the node's address and the
-endpoint's port (and opens the node's firewall for it); a shared node port routed by source address
+of sources to keep. The operator configures the component to send to the outpost's address and the
+endpoint's port (and opens the outpost's firewall for it); a shared outpost port routed by source address
 was rejected, since two endpoints behind one address (the IP-to-serial gateway shape) would be
 indistinguishable. The listen port is derived into the endpoint's params as `host` and `port` are,
 so editing it moves the connection fingerprint. A datagram from any source but the endpoint's
@@ -1120,7 +1116,7 @@ An open udp port cannot be detected, so the **transport rung is the driver's nam
 answered** (`ladder.transport.request`, which a udp driver must name): an answer reads responsive, a
 silent component reads not responsive (`timeout`), and a port the host reports unreachable reads
 `refused`. The socket is not connected (a connected socket filters other sources in the kernel, and
-they must be counted), so the node turns on the socket's error queue (`IP_RECVERR`) to hear that
+they must be counted), so the outpost turns on the socket's error queue (`IP_RECVERR`) to hear that
 report; it names a cause and never gates. With no port to open, the responsive rung is the
 endpoint's verdict too, and no `tcp-open` lands; the ping stays informational, so a component that
 blocks ping but answers reads up, and one that answers ping but not the request reads down. Each
@@ -1150,7 +1146,7 @@ Listeners ride the socket as they ride a held session: their instantiation comma
 each (a subscribe that adds a destination must not add one per retry) when the socket opens and
 again whenever the request rung recovers (a component that rebooted forgot its subscriber), and
 never beneath a gate. Text payloads only, unicast only. Proven over real sockets
-(`internal/collection/udp_integration_test.go`, `internal/node/datagram_test.go`) and end to end against the
+(`internal/collection/udp_integration_test.go`, `internal/outpost/datagram_test.go`) and end to end against the
 simulated panel's `nvp-udp` face dropping 30% of datagrams each way (`run_udp_test.go`: the rung up
 through the loss and its timing, the poll through its retries, a command actuated, a push with no
 poll, a stranger's datagram dropped, a silent face and a refused port down, no `tcp-open` and no
@@ -1176,7 +1172,7 @@ informational, so an agent that blocks ping but answers reads up.
 agent. Only an agent that answers `authorizationError` (a community it knows and refuses) refuses
 detectably: a terminal `auth` refusal at the session rung, `endpoint-authenticated no`, and since
 v2c has no request without the community, nothing is sent under that fingerprint, neither the
-probe's get nor a poll's (a restarted node adopts the gate too), until the fingerprint moves
+probe's get nor a poll's (a restarted outpost adopts the gate too), until the fingerprint moves
 (rotating the community secret brings it up within a tick). The get is snmp's only transport
 probe, so beneath the gate the agent is unobserved: the rung reads down, rejected, and the verdict
 with it, rather than freezing at the last answer. An snmp driver must declare its community, a
@@ -1184,7 +1180,7 @@ secret input named `community` of type `snmp-community`, which the poll and the 
 as a `request` layer timed by `snmp-response-time`, and the Endpoints panel names it the get, its
 why-line naming the v2c limit instead of a control port. A v2c scalar get only: no walk, no tables,
 no v1. Proven against a BER agent of its own (`snmp_integration_test.go`), the simulated faces
-(strict, and answering a refused community with `authorizationError`), on the node over fakes, and
+(strict, and answering a refused community with `authorizationError`), on the outpost over fakes, and
 end to end (`run_snmp_test.go`: the get answered and timed, the poll beside it, a wrong community
 silent and never rejected, the refused community gated and not sent again until the secret
 rotated, a stopped agent down), with loss injected through the impairments under NET_ADMIN.
@@ -1198,7 +1194,7 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 The `raw-tcp` endpoint type an earlier design tabled here is the built `tcp` transport: a line protocol held as a session, driven by its driver's polls and emits rather than per-task `command` and `extract` params ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with transport registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
 Built for every transport above: a driver's spec, not the task, declares what to read; the lane is
 decided by catalog membership, baked into each emit at attach, never by the value's type (an snmp
@@ -1226,11 +1222,11 @@ no bracket = singleton (`instance = ''`). That is #1252.
 ### Listeners over a held session
 
 Built (#817): a listener declared in a driver's spec derives a standing listen task, and the
-node runs every listen task on an endpoint over that endpoint's one held session:
+outpost runs every listen task on an endpoint over that endpoint's one held session:
 
 - **Instantiation commands** (`arm`): the subscribe conversation, sent in order on every connection
   before the session reads `up`, so on establish and again on each recover. They are **plumbing**,
-  not command rows (the #603 ruling): each is a node self-log (`session armed`, with the device's
+  not command rows (the #603 ruling): each is an outpost self-log (`session armed`, with the device's
   reply). The ack is the first line of any kind, one a listener claims included (the listener has
   it too), since a device may acknowledge a subscribe with the push itself; an arm with no ack
   within the timeout is logged at warn (`session armed, unacknowledged`) and does not fail the
@@ -1260,7 +1256,7 @@ Every inbound line on a held session is routed by one precedence
    answers the exchange as a **refusal** carrying the device's text. A line that began before the
    request was written is never its answer.
 3. Anything left is **unclaimed**: counted, and once per housekeeping pass (the report window,
-   never longer than a heartbeat, #1636) the node logs the count and the last such line; a spec
+   never longer than a heartbeat, #1636) the outpost logs the count and the last such line; a spec
    declaring `unmatched: collection-failed` also lands one `collection-failed` per pass naming them, and one declaring `unmatched: log` lands each as a log line on the
    endpoint's component, the whole message as raw arrival (#1145); the default is `discard`.
 
@@ -1272,7 +1268,7 @@ also matches a push containing it. Because shape routing cannot hand a late answ
 a shaped request that gets no answer in time fails only that exchange: the connection is kept and
 the session is not charged (an unshaped one still recycles the connection, ADR-0150). A poll whose
 answer is a refusal lands a `collection-failed` naming the device's text. Commands ride the held
-session too: a delivery names its endpoint, and a node holding a session there actuates over it
+session too: a delivery names its endpoint, and an outpost holding a session there actuates over it
 (falling back to a throwaway connection only when none is held). A command the device answers
 settles from that answer as it did over a throwaway connection; one it refuses reports the
 device's text as both its execution error and its reply, so it fails at once with the reason on
@@ -1282,17 +1278,17 @@ the row rather than timing out.
 
 ### Push ingress: webhooks on the server
 
-A **push endpoint** is one a sender pushes to rather than one a node dials
+A **push endpoint** is one a sender pushes to rather than one an outpost dials
 ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)).
-`webhook` is the first push transport in the registry: nothing is dialed, so its endpoint has no
+`webhook` is the first push transport in the transport registry: nothing is dialed, so its endpoint has no
 reachability task and no ladder (a ladder declared on one refuses at write), and it reads **last
 heard**, stamped by every post that lands, in place of a verdict. It is never shown down for
-silence. A webhook endpoint is hosted by the server (it takes no node) and names one component.
+silence. A webhook endpoint is hosted by the server (it takes no outpost) and names one component.
 
 Every message pushed at omniglass runs one pipeline, the **listener primitive**, whichever host
 runs it: **bound** (token buckets per source, per endpoint and for the listener, a cap on posts in
 flight, a 1 MiB body whose read stops at the cap, a read deadline), **authenticate**, **attribute**,
-**route** (listeners first), **extract**, **land**. The server hosts it for webhooks; a node hosts it
+**route** (listeners first), **extract**, **land**. The server hosts it for webhooks; an outpost hosts it
 for the push transports of #1148, #1149 and #1150.
 
 A webhook sender's **source**, the key its bucket, its refusals and the inbox count it by, is the
@@ -1349,17 +1345,17 @@ Refusals are tallied per endpoint, source and reason, and land on the endpoint's
 `webhook-refusal-count` once a report window, beside the posts it accepted as `webhook-post-count`
 ([collection telemetry](#collection-telemetry-every-endpoints-account-of-itself)). A post to a token no
 endpoint holds lands its sender in the **unclaimed-source inbox** (`GET /unclaimed-sources`, under
-`node:read`): one row per source address, with a count, first and last heard, and the last message
+`outpost:read`): one row per source address, with a count, first and last heard, and the last message
 cut to 512 bytes, bounded at 256 sources per listener and aged out after seven days. The token a
 stranger tried is never kept. Claiming a source is creating its endpoint, and its row is let go once
 its posts land.
 
-:::design[Node-hosted push: shared tcp and udp ports, syslog and SNMP traps, tracked in #1148, #1149 and #1150]
+:::design[Outpost-hosted push: shared tcp and udp ports, syslog and SNMP traps, tracked in #1148, #1149 and #1150]
 
-A node hosts the listener primitive for the push transports that should not cross a WAN: a shared
+An outpost hosts the listener primitive for the push transports that should not cross a WAN: a shared
 udp or tcp port routed by source address, syslog over udp, tcp and tls, and SNMP traps and informs.
-The source address authorizes the endpoints placed on the node that declare it, and a declared
-payload identity only selects within that set. Node-hosted webhooks for LAN senders, and
+The source address authorizes the endpoints placed on the outpost that declare it, and a declared
+payload identity only selects within that set. Outpost-hosted webhooks for LAN senders, and
 server-hosted syslog where the source address survives, are later.
 
 :::
@@ -1414,10 +1410,10 @@ the endpoint's tasks in the same write.
 
 A function runs the parse at the **edge**, not server-side:
 
-- **Steps parse, extract, and normalize on the node**, **publishing** resolved samples to the JetStream [samples](/architecture/properties/) stream, not the typed tables; the [persistence consumer](/architecture/properties/) batch-writes them async, each batch landed once by its receipt ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)), while the [rule engine](/architecture/alarms-actions/) consumes the same stream live. The wire is per-lane, so the lane rides the message shape itself, routing `metric` versus `property`.
+- **Steps parse, extract, and normalize on the outpost**, **publishing** resolved samples to the JetStream [samples](/architecture/properties/) stream, not the typed tables; the [persistence consumer](/architecture/properties/) batch-writes them async, each batch landed once by its receipt ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)), while the [rule engine](/architecture/alarms-actions/) consumes the same stream live. The wire is per-lane, so the lane rides the message shape itself, routing `metric` versus `property`.
 - **Raw payloads are not stored**: a dev raw-mode taps the wire live, a failed parse emits a `collection.failed` event carrying the raw, and there is no telemetry table.
 - **Owner attribution:** a single-owner function stamps identity at the edge; a many-device function publishes for multiple owners, resolved server-side from identity labels (below).
-- **Placement-scoped writes.** A node publishes only the owners in its **placement visible_set** (the owners of its assigned tasks), expressed as **NATS subject permissions** (the `node` gateway mode, [identity and access](/architecture/identity-access/)). An owner label outside the set is never an authoritative write, only an **orphan / discovery candidate** for the `discovery_rule` stream, so a compromised node cannot manufacture writes for owners it was never placed on; the perspectives / `disagree` model backstops a legitimately-placed node reporting bad values.
+- **Placement-scoped writes.** An outpost publishes only the owners in its **placement visible_set** (the owners of its assigned tasks), expressed as **NATS subject permissions** (the `outpost` gateway mode, [identity and access](/architecture/identity-access/)). An owner label outside the set is never an authoritative write, only an **orphan / discovery candidate** for the `discovery_rule` stream, so a compromised outpost cannot manufacture writes for owners it was never placed on; the perspectives / `disagree` model backstops a legitimately-placed outpost reporting bad values.
 - **No separately authored transform rule**: routing is the driver's emit mapping, cross-entity rollups are [calc](/architecture/calculations/) samples; the server-side remainder is shared-endpoint owner-binding and raw ingress no driver claims.
 
 ### Raw sampling: an opt-in re-parsable window
@@ -1434,30 +1430,30 @@ on a schedule ([ADR-1163](/architecture/decisions/#adr-1163-a-poll-runs-once-on-
   down, each on the function it is in (a poll, a listener, a command binding), the first always the
   one a save would name.
 - **Preview** (`POST /drivers:preview`, `driver:preview`) runs a spec's polls **once** through the
-  node named, against the target its inputs name, and answers with what each read: its samples,
+  outpost named, against the target its inputs name, and answers with what each read: its samples,
   each emit that did not locate, and an excerpt of the raw answer, before any emit read it, masked
   of every secret the preview used. **Nothing is stored.** The spec is a stored driver or an unsaved
   one, refused with its findings when it does not validate. A preview runs a poll that is its own
   request (http, https, an snmp get, a tcp line on a throwaway connection); a poll that rides a held
   session or a bound udp socket needs an endpoint, so it is attached and run now instead. A secret
-  input must be one the caller may **reveal**, since the preview hands it to the target named, and
+  input must be one the caller may **bind** (`secret:bind`), since the preview hands it to the target named, and
   each secret used is audited.
 - **Run now** (`POST /endpoints/{endpoint}/polls/{poll}:run`, `endpoint:run`) runs one of an
-  attached endpoint's polls on the node that holds it, outside its schedule, and **lands** what it
+  attached endpoint's polls on the outpost that holds it, outside its schedule, and **lands** what it
   reads as a scheduled run does. A gated endpoint refuses the run with the gate's reason and nothing
   is sent.
 
-Preview and run now share one primitive, the **on-demand node run** ([nodes](/architecture/nodes/)):
-the server asks the node and waits for its one answer. A poll's request is whatever its spec says (a
+Preview and run now share one primitive, the **on-demand outpost run** ([outposts](/architecture/outposts/)):
+the server asks the outpost and waits for its one answer. A poll's request is whatever its spec says (a
 POST, any line), so a preview reaches the component as a command does; its MCP tool says so
-(destructive, open-world). Both hold a request open while a node works, so they are bounded by a
+(destructive, open-world). Both hold a request open while an outpost works, so they are bounded by a
 stricter class than the API's own (#962 is the API-wide limit): a few runs in flight across the
-server, fewer per caller, a run past either refused (429) before anything is asked. On the node
-both are operator work on the [endpoint lane](/architecture/nodes/#the-endpoint-lane): a run now, and
+server, fewer per caller, a run past either refused (429) before anything is asked. On the outpost
+both are operator work on the [endpoint lane](/architecture/outposts/#the-endpoint-lane): a run now, and
 a preview whose transport and target name an attached endpoint, wait for that endpoint's request in
 flight and go ahead of its scheduled polls, and answer 409 naming the reason while its gate is
-closed; a node whose operator lanes are full answers 429 at once. Each asking is
-audited: a preview on the node (and on each secret it used), a run now on the endpoint.
+closed; an outpost whose operator lanes are full answers 429 at once. Each asking is
+audited: a preview on the outpost (and on each secret it used), a run now on the endpoint.
 
 ## Shared-API collection: one component, many owners
 
@@ -1474,12 +1470,12 @@ component per described entity
   against the conduit's [identity bindings](#identity-binding-a-conduits-identity-tied-to-its-owner)
   in one read and lands the batch in its one transaction under its receipt
   ([ADR-0311](/architecture/decisions/#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt)).
-  On the node lane the conduit is the component confinement already holds the node to (the task's
+  On the outpost lane the conduit is the component confinement already holds the outpost to (the task's
   endpoint's component), so a batch confinement orphans is dropped before any identity is read; on
   the [webhook lane](#push-ingress-webhooks-on-the-server) it is the component the token's one
-  endpoint names. A node polling the API and the service posting to its webhook land the same rows.
+  endpoint names. An outpost polling the API and the service posting to its webhook land the same rows.
 - **Nothing in a payload names an owner.** A payload names an identity, and only the bindings of
-  the conduit the batch is already confined to can turn it into an owner, so a compromised node or a
+  the conduit the batch is already confined to can turn it into an owner, so a compromised outpost or a
   leaked webhook token reaches the owners bound to its own conduit, and nothing beyond.
 - **What a fanned sample is.** It is observed, admitted by the Storage Gateway only for a
   `collected` key (the `fan-out` writer, held to an owner one of the conduit's bindings names,
@@ -1490,7 +1486,7 @@ component per described entity
   A sample with no identity lands on the conduit exactly as before. A log line never fans out: a
   system owns none.
 - **The owner can be a system.** SaaS state that is telemetry *of* a room maps to **system-owned
-  samples**; a virtual component is for the genuine *member* case (its own topology node, a
+  samples**; a virtual component is for the genuine *member* case (its own topology outpost, a
   `health_role`, a lifecycle). **Member -> component, telemetry -> system.**
 - **Unmatched identities are kept**, never dropped and never misfiled on the conduit: an identity no
   binding places lands on no owner and is upserted into the conduit's **unbound inbox**
@@ -1504,7 +1500,7 @@ component per described entity
   there are; an identity is held to the engine's bounds again on the server (non-empty, at most 256
   bytes, no control character) before it reaches a read or the inbox.
 
-The design's cascade-scoped index (an identity declared at a place or a system binding every member
+The design's cascade-scoped index (an identity declared at a location or a system binding every member
 below it) and its fallback to an observed identity sample are not built: each would widen who can
 place a value on an owner without the conduit end's consent (ADR-1282, point 8). An event rule over a
 fanned key judges it on its owner like any of the owner's samples; a system owner's rule waits on
@@ -1515,7 +1511,7 @@ event rules judging system samples (#1002).
 ### discovery_rule: orphans become candidates
 
 :::design[The discovery_rule, tracked in #1395]
-A `discovery_rule` turns the orphan stream, every identity a conduit's unbound inbox holds plus a node's out-of-placement labels, into proposed bindings or entities: the onboarding win, no hand-mapping.
+A `discovery_rule` turns the orphan stream, every identity a conduit's unbound inbox holds plus an outpost's out-of-placement labels, into proposed bindings or entities: the onboarding win, no hand-mapping.
 
 - **Creates** candidate components or owners, each seeded with the identity that surfaced it (it becomes an identity binding to the new entity), so the next batch resolves through it.
 - **Idempotent on re-discovery**: keyed on the `(property_type, value)` already bound, so a steady stream of the same orphan resolves to one candidate.
@@ -1529,7 +1525,7 @@ one owner, a system or a component
 ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends)).
 The match key is a registered property type (`ucc-room-id`), so every driver reporting that kind of
 identity shares one name, and the value is what the conduit reports (`R-415A`). One identity on one
-conduit has one owner; the same value on another conduit is another binding. A place or a node is no
+conduit has one owner; the same value on another conduit is another binding. A location or an outpost is no
 owner: neither owns an observed sample
 ([ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)).
 The conduit is never its own identity's owner: a value it reports with no identity already lands on
@@ -1538,9 +1534,9 @@ it, so a binding naming the conduit is refused (422).
 A binding is a relationship with two ends, so it costs a write on both, the
 [ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)
 rule: `component:update` on the conduit and the owner's update (`component:update`, or
-`system:update` for a system). One end alone is not enough in either direction. A principal scoped to
+`system:update` for a system). One end alone is not enough in either direction. A user scoped to
 a system could otherwise claim an identity that belongs to another owner and pull a conduit it cannot read onto its own
-system; a principal scoped to the conduit could write onto systems it cannot update. A move to another
+system; a user scoped to the conduit could write onto systems it cannot update. A move to another
 owner also costs update on the owner it leaves. Consent is given at write: a binding persists if its
 author later loses scope, as a membership does, and deleting the conduit or the owner deletes it. The
 [identity and access](/architecture/identity-access/) page has the refusal each end gives.
@@ -1619,21 +1615,21 @@ spec declares:
 `host` and `port` inputs join into the probed `target`), required inputs must be supplied and
 defaults bake, and the spec's functions derive the endpoint's tasks in the same transaction: a
 poll task per poll function, a standing listen task per listener, each task's spec carrying the
-function **whole with its emit lanes resolved at attach** (the compile step: the node never
+function **whole with its emit lanes resolved at attach** (the compile step: the outpost never
 looks up a catalog at runtime). The tasks **re-derive when the driver's spec changes** (#823): a
 driver update over the API, and the boot seed's upsert of an official spec, rewrite every attached
 endpoint's driver tasks in the same transaction, writing the ones the spec now derives and retiring
 the ones it no longer does. Task ids are content hashes, so an unchanged function keeps its row and
 a re-seed that changes nothing writes nothing at all (not the driver row, not a task); an endpoint
-whose tasks changed has its config generation moved, and its node is nudged to pull at once
-([the change nudge](/architecture/nodes/#the-change-nudge)), so it runs the new spec within a
-second. A spec change that moves no task still nudges every attached endpoint's node: the session
+whose tasks changed has its config generation moved, and its outpost is nudged to pull at once
+([the change nudge](/architecture/outposts/#the-change-nudge)), so it runs the new spec within a
+second. A spec change that moves no task still nudges every attached endpoint's outpost: the session
 block and the ladder ride each task off the live spec and no task id hashes them (#1997). An attach reads the driver row under a share lock, so one that races an update waits for it
 and derives the committed spec, and a re-derive skips an endpoint a concurrent delete removes.
-One gap is accepted: between the re-derive and the node's next pull (under a second, or one tick if
-the nudge is lost), samples the node
+One gap is accepted: between the re-derive and the outpost's next pull (under a second, or one tick if
+the nudge is lost), samples the outpost
 still publishes under a retired task's id are dropped at ingest as orphans, the same confinement
-that drops any unknown task id, warned and counted on the node like any orphan; the next tick
+that drops any unknown task id, warned and counted on the outpost like any orphan; the next tick
 publishes under the new one. Refusals name the fault as a 422: a missing required input, an
 input the spec does not declare, an ambiguous secret name. A secret input is resolved under the
 **caller's own secret read scope and admin tier**, so an attach can only bind a credential the
@@ -1651,27 +1647,34 @@ create offers both moves (a bare probe endpoint, or attach a driver and fill its
 Drivers page renders each spec as the menu it is.
 
 **The interpreter runs the poll functions** (#814) **on their declared schedule** (#822): a poll's
-`schedule.every` is its interval, on the node's own dispatcher rather than the heartbeat (#1634), the
-node running a new task at once and each later run on a stable phase of its interval, skipping a due
+`schedule.every` is its interval, on the outpost's own dispatcher rather than the heartbeat (#1634), the
+outpost running a new task at once and each later run on a stable phase of its interval, skipping a due
 whose last run is still in flight, and retrying a run whose fetch failed on a backoff from one second,
 doubling, capped at the interval; a poll that declares no schedule runs at the heartbeat interval.
-Reachability probes run on the node's probe interval
+Reachability probes run on the outpost's probe interval
 (`--probe-every`, default 30s, [ADR-1273](/architecture/decisions/#adr-1273-a-reachability-probe-runs-on-the-nodes-probe-interval-not-every-heartbeat))
 and a listener's pushes ride the held session as they arrive, never gated ([ADR-0152](/architecture/decisions/#adr-0152-a-driver-poll-runs-on-its-declared-schedule-at-heartbeat-granularity),
 [ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own); the
-[nodes page](/architecture/nodes/#scheduling-concurrency-and-self-observability) has the dispatcher,
+[outposts page](/architecture/outposts/#scheduling-concurrency-and-self-observability) has the dispatcher,
 and [ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time) the per-kind model it is one part of).
-The node tells a baked driver task from a probe task by its spec, fetches over the transport (an http request rides the node's http fetcher with the endpoint's credential, [above](#http-and-https); the v2c scalar GET rides `gosnmp`, proven
+The outpost tells a baked driver task from a probe task by its spec, fetches over the transport (an http request rides the outpost's http fetcher with the endpoint's credential, [above](#http-and-https); the v2c scalar GET rides `gosnmp`, proven
 against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
-connection, or borrows the endpoint's [held session](#sessions) when the node holds one), and interprets the payload against the baked
+connection, or borrows the endpoint's [held session](#sessions) when the outpost holds one), and interprets the payload against the baked
 function: locate each emit by its one extractor, apply the declared transform (enum map, then
 scale, then cast), and type it by the baked lane. A metric-lane value that is not numeric is a
 fault, never a wrong-lane sample; a missing emit faults by name while the rest of the payload
 still lands; a failed fetch lands nothing; every fault is a `collection-failed` event naming the
-task. Secret inputs reach the node **unsealed in the worklist reply**: the server resolves each
-reference once per pull (the per-node NATS grant is the isolation boundary, and the attach that
+task. Secret inputs reach the outpost **unsealed in the worklist reply**: the server resolves each
+reference once per pull (the per-outpost NATS grant is the isolation boundary, and the attach that
 bound the reference is the audited operator action), and a reference that no longer resolves is
-delivered as absence, which the node reports as the missing credential. Sessions and the
+delivered as absence, which the outpost reports as the missing credential. The reply also names
+each task's **mask**: the values of the fields its secrets' types mark secret (a password, a
+community, never a username). Before a collected group is queued, the outpost masks those values,
+and the forms an http credential takes on the wire (a basic authorization's base64), out of every
+string the group carries on every lane: a property's value, a label, an identity, an event's
+message and payload, a log line's text and attributes. A JSON payload is masked string by string,
+so it stays the JSON it was. A component that echoes its credential back never puts it on the
+stream, in storage, or on a read. Sessions and the
 listeners over them are built ([above](#sessions)). The ship-with set:
 
 <SeededSet kind="drivers" />
@@ -1720,17 +1723,17 @@ listeners:
 Any emit may read its **time** out of the payload (`ts`: an extract and a `layout`, one of
 `rfc3339`, `rfc3164`, whose missing year is the one nearest arrival, read in the declared `zone`,
 `unix`, `unix-ms`, or `go:` a Go reference layout carrying at least a month and a day); without
-one, the time it arrived at the node. A time more than five minutes ahead of arrival lands at
-arrival instead, a log line keeping the claim as its `ts_claimed` attribute and the node saying so
+one, the time it arrived at the outpost. A time more than five minutes ahead of arrival lands at
+arrival instead, a log line keeping the claim as its `ts_claimed` attribute and the outpost saying so
 in its self-log; a time that does not parse, or no timestamp could hold (outside the years 1 to
 9999, or not a number), lands the record at arrival and faults. A value cast to a number that is
 not finite (`NaN`, `Inf`) is a fault naming the field, never a payload that cannot be written. On a plain poll an event or a log line fires only
-when its content changes from what that task last landed (remembered in the node's memory, so a
+when its content changes from what that task last landed (remembered in the outpost's memory, so a
 restart may fire one again), so a status page's last error lands once per change.
 
-The node carries a task's log lines in a field of their own (`task_logs`), beside its self-logs, and
+The outpost carries a task's log lines in a field of their own (`task_logs`), beside its self-logs, and
 ingest writes them to `log_line` on the task's component, the endpoint that collected them as the
-line's instance, owner-bound from the task as every sample is: a node lands a line only for a
+line's instance, owner-bound from the task as every sample is: an outpost lands a line only for a
 component its own task collects for, and never as its own. Every writer's line is held at the
 Storage Gateway to one severity vocabulary, RFC 5424's eight levels (`emergency`, `alert`,
 `critical`, `error`, `warning`, `notice`, `info`, `debug`) through one alias table (`warn` reads
@@ -1742,7 +1745,7 @@ clock reset still reads in the last day, its own time shown beside when it arriv
 filters by a severity threshold and a source. Proven end to end against the
 simulator: the Newtron panel's input push lands as the `video-input` property and an
 `input-changed` event carrying the input, its diagnostics line as a `warning` log line, and a scene
-change no listener claims as a raw log line, none of them in the node's self-logs; the Kestrel
+change no listener claims as a raw log line, none of them in the outpost's self-logs; the Kestrel
 bar's feed reports a call starting and ending as named events, which `kestrel-api` lands as
 `call-started` and `call-ended` carrying the call's id.
 
@@ -1769,7 +1772,7 @@ every room or one post naming two. A poll or a listener may declare two fields f
   and bounded: empty, longer than 256 bytes, or carrying a control character, it is a fault.
 
 Every metric, property and event a record yields carries its identity, onto the wire's
-`identity` field (the match key and the value) on the node's batch and on a webhook's. A record
+`identity` field (the match key and the value) on the outpost's batch and on a webhook's. A record
 whose identity misses lands **nothing** (none of its samples, none of its events). Record faults
 collapse to one per kind per run however many records meet them (the identity missed on 10 of 30
 records, naming the first ten), so a renamed id field is one fault, not thousands: a
@@ -1797,27 +1800,27 @@ identity field.
 
 ## Storage
 
-The connection registry, the declared connections, and the node's units of work; the physical layout lives on [storage](/architecture/storage/).
+The connection catalog, the declared connections, and the outpost's units of work; the physical layout lives on [storage](/architecture/storage/).
 
-The **transports** are a **code registry** the binary ships (`internal/transport`), not a table: [ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row) decided it and #811 executed it, retiring the `transport` table and its FK. The registry renders below from the same generated facts the seed doc uses, so this list cannot drift from what a create refuses:
+The **transports** are a **code registry** the binary ships (`internal/transport`), not a table: [ADR-0073](/architecture/decisions/#adr-0073-a-driver-consumes-transports-a-transport-is-code-not-a-row) decided it and #811 executed it, retiring the `transport` table and its FK. The transport registry renders below from the same generated facts the seed doc uses, so this list cannot drift from what a create refuses:
 
 <SeededSet kind="transports" />
 
-`endpoint` is the connection, the **authored** primitive ([nodes](/architecture/nodes/)): name derived from the endpoint type, a set `component_id` means pre-bound while NULL means shared/match-key, and placement cascades from the node so a node purge drops its endpoints.
+`endpoint` is the connection, the **authored** primitive ([outposts](/architecture/outposts/)): name derived from the endpoint type, a set `component_id` means pre-bound while NULL means shared/match-key, and placement cascades from the outpost so an outpost purge drops its endpoints.
 
 <SchemaTable
   table="endpoint"
   notes={{
     label: 'The friendly string an operator reads, and the ONLY identity string they type here since the name is derived; NULL falls back to that name, verbatim',
     component_id: 'Set: pre-bound to the component; NULL: shared, resolved by match key',
-    node_name: 'Placement: holds the node primary key (principal_id), not a name, despite the column name; ON DELETE CASCADE so a purged node takes its endpoints',
+    outpost_id: 'Placement: the outpost primary key (user_id); ON DELETE CASCADE so a purged outpost takes its endpoints',
     params: 'The transport parameters the authoring schema validated',
     driver_id: 'Set when a driver attach authored this endpoint (#813); NULL for a bare probe endpoint',
     inputs: 'The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values',
   }}
 />
 
-`task` is a **derived** unit of collection work: created with its endpoint, read-only (no operator CRUD), its id a content hash. There is **no node column**; placement **projects from the endpoint**. Parsing to samples is the **edge function**, not the task's job.
+`task` is a **derived** unit of collection work: created with its endpoint, read-only (no operator CRUD), its id a content hash. There is **no outpost column**; placement **projects from the endpoint**. Parsing to samples is the **edge function**, not the task's job.
 
 <SchemaTable
   table="task"

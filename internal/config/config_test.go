@@ -65,6 +65,18 @@ func TestLoadReadyFile(t *testing.T) {
 	}
 }
 
+// A server's omnibot plays a recording only when one is named (#2121):
+// unset, it has no model and a run is refused.
+func TestLoadOmnibotReplay(t *testing.T) {
+	if got := Load().OmnibotReplay; got != "" {
+		t.Errorf("OmnibotReplay = %q unset, want empty", got)
+	}
+	t.Setenv("OMNIGLASS_OMNIBOT_REPLAY", "/srv/omnibot/demo.yaml")
+	if got := Load().OmnibotReplay; got != "/srv/omnibot/demo.yaml" {
+		t.Errorf("OmnibotReplay = %q, want the configured path", got)
+	}
+}
+
 // A server is named for its host unless OMNIGLASS_SERVER_NAME says otherwise:
 // the name its own platform component carries, so two servers on one
 // database are two components (#1627).

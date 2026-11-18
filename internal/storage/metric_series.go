@@ -14,7 +14,7 @@ import (
 // The narrow metric lane (#1275, ADR-1275). A metric sample is a row of
 // (id, series_id, ts, value) in metric, range partitioned by UTC day on ts (#1527); what
 // it is a sample of (type, owner arc, instance, provenance, source, and the
-// node that collected it) is one row of metric_series, shared by every sample
+// outpost that collected it) is one row of metric_series, shared by every sample
 // of the series. A command's intended rows live in metric_declared, a plain
 // table retention never touches. Every reader joins the series; nothing reads
 // a sample without it, so a sample whose series is gone (its owner deleted)
@@ -433,7 +433,7 @@ func isPartitionRoutingMiss(err error) bool {
 // landMetricDays makes the partitions a write's samples need after it
 // missed one: the day of every sample, as the write will stamp it (a zero
 // ts lands now). A collected key keeps its producer's time however far it
-// is (TestNodeProbeSampleCannotOutliveItsTime), so its day is made
+// is (TestOutpostProbeSampleCannotOutliveItsTime), so its day is made
 // whatever it is; a day in the past is dropped again by the next
 // retention pass once it is past every window.
 func (p *PG) landMetricDays(ctx context.Context, samples []MetricSampleWrite) error {

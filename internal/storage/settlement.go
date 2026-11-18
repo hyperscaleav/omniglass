@@ -150,8 +150,8 @@ func (p *PG) settleCheck(ctx context.Context, q txQuerier, ct *CommandType, owne
 // commandSeriesSQL is the series a command (aliased c) is judged on
 // (ADR-0456): its own instance when it names one; else the endpoint that
 // carries it, where that driver's observations of the target land: the one
-// it was dispatched over (#900), or, before a node takes it, the one queued
-// to carry it (the endpoint commandRideSQL and PendingNodeCommands pick: the
+// it was dispatched over (#900), or, before an outpost takes it, the one queued
+// to carry it (the endpoint commandRideSQL and PendingOutpostCommands pick: the
 // first by name whose driver binds the type); else the empty string, an
 // owner-level intent no endpoint can carry, judged on every observed instance
 // of its target (agreeingValue).
@@ -216,7 +216,7 @@ func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ow
 				return err
 			}
 			o = settlementOutcome{status: "timed-out", by: SettledByWindow,
-				reason: deliveryTimeoutWords(ct.Name, stop.delivered, stop.carried, stop.endpoint, stop.node)}
+				reason: deliveryTimeoutWords(ct.Name, stop.delivered, stop.carried, stop.endpoint, stop.outpost)}
 		} else {
 			observed, err := p.judgedObservation(ctx, q, ct, ownerKind, arc, pc.instance, intended, reads)
 			if err != nil {
@@ -239,7 +239,7 @@ func (p *PG) judgeCommands(ctx context.Context, q txQuerier, ct *CommandType, ow
 
 // deliveryWindowPassed reports a command issued longer ago than its delivery
 // window (CommandDeliveryWindow) with no execution report: the server will
-// not hand it to a node again, so nothing can still report it.
+// not hand it to an outpost again, so nothing can still report it.
 func (p *PG) deliveryWindowPassed(ctx context.Context, q querier, id int64, now time.Time) (bool, error) {
 	var issued time.Time
 	var executed bool
@@ -382,7 +382,7 @@ func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, ar
 // #1630). The server runs it on a short interval.
 func (p *PG) SweepCommandSettlements(ctx context.Context) error {
 	rows, err := p.pool.Query(ctx, `select distinct c.owner_kind,
-			coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text, ct.name, c.instance
+			coalesce(c.component_id, c.system_id, c.location_id, c.outpost_id)::text, ct.name, c.instance
 		from command c join command_type ct on ct.id = c.command_type_id
 		where c.status = 'issued' and c.ts < now() - case when `+commandOpensIntendedSQL+`
 			then make_interval(secs => ct.settle_window_seconds) else interval '`+deliveryTTL+`' end`)
@@ -534,11 +534,11 @@ func (p *PG) latestMetricValue(ctx context.Context, q querier, ownerKind, ownerI
 		return nil, err
 	}
 	// The newest row of every series of the key's (a series per source and
-	// collecting node), from the tier the provenance lives in: the declared
+	// collecting outpost), from the tier the provenance lives in: the declared
 	// tier for intended rows, the hot tier for the rest (#1275).
 	// The intended tier orders by insertion (`id desc`), every other lane by
 	// `ts desc, id desc`: an intended row's ts is the database's, never a
-	// caller's, while a node supplies the hot tier's (#712, seriesOrderSQL).
+	// caller's, while an outpost supplies the hot tier's (#712, seriesOrderSQL).
 	newest := metricNewestSQL("s.id")
 	order := "n.ts desc, n.id desc"
 	if provenance == "intended" {

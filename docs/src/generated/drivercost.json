@@ -612,7 +612,7 @@
       "cpu_per_run_ms": 1.8104263133584706,
       "thread_cpu_per_run_ms": 0.14369666406575113,
       "thread_share": 0.07937172753481665,
-      "reason": "newtron-core-nvp warm: the loaded line starts 8.9 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+      "reason": "newtron-core-nvp warm: the loaded line starts 8.9 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "newtron-nvp-ssh",
@@ -654,7 +654,7 @@
       "cpu_per_run_ms": 1.6617940525295853,
       "thread_cpu_per_run_ms": 0.12078262858333327,
       "thread_share": 0.07268206815367872,
-      "reason": "newtron-panel-nvp warm: the loaded line starts 20.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+      "reason": "newtron-panel-nvp warm: the loaded line starts 20.7 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "newtron-panel-web",
@@ -677,7 +677,7 @@
       "cpu_per_run_ms": 2.005973277218494,
       "thread_cpu_per_run_ms": 0.11126806335069432,
       "thread_share": 0.05546836770676224,
-      "reason": "newtron-slate-nvp warm: the loaded line starts 24.1 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+      "reason": "newtron-slate-nvp warm: the loaded line starts 24.1 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "polaris-amp-snmp",
@@ -729,7 +729,7 @@
       "cpu_per_run_ms": 5.48409804887775,
       "thread_cpu_per_run_ms": 0.4779903481249993,
       "thread_share": 0.08715933666116962,
-      "reason": "recording-service-api warm: the loaded line starts 13.5 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+      "reason": "recording-service-api warm: the loaded line starts 13.5 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "snmp-generic",
@@ -746,7 +746,7 @@
       "cpu_per_run_ms": 3.9860106665348987,
       "thread_cpu_per_run_ms": 0.3583686765946816,
       "thread_share": 0.08990660250947524,
-      "reason": "snmp-generic warm: the loaded line starts 19.2 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+      "reason": "snmp-generic warm: the loaded line starts 19.2 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "tessellate-census-http",
@@ -781,7 +781,7 @@
       "cpu_per_run_ms": 7.21982653700496,
       "thread_cpu_per_run_ms": 0.6972145544097208,
       "thread_share": 0.09656943291312788,
-      "reason": "ucc-rooms warm: the loaded line starts 15.7 MiB below the idle node, so the first tasks filled heap it already held and no jump shows"
+      "reason": "ucc-rooms warm: the loaded line starts 15.7 MiB below the idle outpost, so the first tasks filled heap it already held and no jump shows"
     },
     {
       "driver": "ucc-webhook",

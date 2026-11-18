@@ -84,6 +84,9 @@ var (
 	ErrActionRuleExists    = errors.New("storage: an action rule with this name already exists")
 	ErrActionRuleInvalid   = errors.New("storage: action rule is invalid")
 	ErrActionRuleForbidden = errors.New("storage: writing an action rule needs an all-scope grant")
+	// ErrActionRuleOfficial is deleting a shipped rule, changing what the
+	// seed owns on it, or dropping a shipped target from it (#1987).
+	ErrActionRuleOfficial = errors.New("storage: a shipped action rule is read-only but for its enabled switch, its opt-out allowance and the targets added to it")
 )
 
 // officialTypeFor is the official notification type a rule naming none sends
@@ -98,7 +101,7 @@ func officialTypeFor(transition string) string {
 const actionRuleCols = `r.id, r.name, coalesce(r.label, ''), r.description, r.on_transitions, r.when_expr,
 	coalesce(nt.name, ''), coalesce(r.notification_type_id::text, ''),
 	coalesce((select array_agg(t.name order by t.name) from action_rule_target art join notification_target t on t.id = art.target_id where art.rule_id = r.id), '{}'),
-	coalesce(r.owner_principal_id::text, ''), r.channels, r.opt_out_allowed, r.enabled, r.official, r.created_at, r.updated_at`
+	coalesce(r.owner_user_id::text, ''), r.channels, r.opt_out_allowed, r.enabled, r.official, r.created_at, r.updated_at`
 
 const actionRuleFrom = ` from action_rule r left join notification_type nt on nt.id = r.notification_type_id`
 
@@ -112,9 +115,9 @@ func scanActionRule(row pgx.Row) (*ActionRule, error) {
 }
 
 // ListActionRules lists every platform rule, by name. Rules read like a
-// registry; a personal rule is its owner's alone and never listed here.
+// catalog; a personal rule is its owner's alone and never listed here.
 func (p *PG) ListActionRules(ctx context.Context) ([]ActionRule, error) {
-	rows, err := p.pool.Query(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.owner_principal_id is null order by r.name`)
+	rows, err := p.pool.Query(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.owner_user_id is null order by r.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list action rules: %w", err)
 	}
@@ -149,8 +152,8 @@ func getActionRule(ctx context.Context, q querier, ref, owner string, forUpdate 
 	if owner != "" && !isUUID(owner) {
 		return nil, ErrActionRuleNotFound
 	}
-	r, err := scanActionRule(q.QueryRow(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.id = (select x.id from `+refRows("action_rule", ref)+` x where x.`+registryRefCol(ref)+` = $1
-		and x.owner_principal_id is not distinct from nullif($2, '')::uuid)`+lock, ref, owner))
+	r, err := scanActionRule(q.QueryRow(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.id = (select x.id from `+refRows("action_rule", ref)+` x where x.`+catalogRefCol(ref)+` = $1
+		and x.owner_user_id is not distinct from nullif($2, '')::uuid)`+lock, ref, owner))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrActionRuleNotFound
 	}
@@ -203,21 +206,28 @@ func resolveRuleType(ctx context.Context, q querier, ref string) (*string, error
 	return &t.ID, nil
 }
 
-func resolveRuleTargets(ctx context.Context, q querier, refs []string) ([]string, error) {
+// resolveRuleTargets turns a rule's target refs into uuids: a name along the
+// search path, or in the one namespace given (og when the boot seed links a
+// shipped rule's targets, so an operator's target of a shipped name is never
+// linked in its place, #1432).
+func resolveRuleTargets(ctx context.Context, q querier, refs []string, namespace string) ([]string, error) {
 	if len(refs) == 0 {
 		return nil, fmt.Errorf("%w: targets: name at least one notification target", ErrActionRuleInvalid)
 	}
 	ids := make([]string, 0, len(refs))
 	for _, ref := range refs {
-		t, err := getNotificationTarget(ctx, q, ref, false)
-		if errors.Is(err, ErrNotificationTargetNotFound) {
+		if err := RejectAddressForm("notification_target", ref); err != nil {
+			return nil, err
+		}
+		id, err := resolveRefIn(ctx, q, "notification_target", ref, namespace)
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%w: target %q is not a notification target", ErrActionRuleInvalid, ref)
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("storage: resolve target %q: %w", ref, err)
 		}
-		if !slices.Contains(ids, t.ID) {
-			ids = append(ids, t.ID)
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
 		}
 	}
 	return ids, nil
@@ -261,7 +271,7 @@ func (p *PG) CreateActionRule(ctx context.Context, actorID string, spec ActionRu
 	if err != nil {
 		return nil, err
 	}
-	targetIDs, err := resolveRuleTargets(ctx, tx, spec.Targets)
+	targetIDs, err := resolveRuleTargets(ctx, tx, spec.Targets, "")
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +326,7 @@ func (p *PG) UpsertActionRule(ctx context.Context, spec ActionRuleSpec) error {
 	if err != nil {
 		return err
 	}
-	targetIDs, err := resolveRuleTargets(ctx, tx, spec.Targets)
+	targetIDs, err := resolveRuleTargets(ctx, tx, spec.Targets, NamespaceOG)
 	if err != nil {
 		return err
 	}
@@ -325,7 +335,7 @@ func (p *PG) UpsertActionRule(ctx context.Context, spec ActionRuleSpec) error {
 	// different row (it shadows this one by the search path, #1432).
 	err = tx.QueryRow(ctx, `insert into action_rule (namespace, name, label, description, on_transitions, when_expr, notification_type_id, official, opt_out_allowed)
 		values ('og', $1, $2, $3, $4, $5, $6::uuid, true, $7)
-		on conflict (namespace, name) where owner_principal_id is null do update set label = excluded.label, description = excluded.description,
+		on conflict (namespace, name) where owner_user_id is null do update set label = excluded.label, description = excluded.description,
 			on_transitions = excluded.on_transitions, when_expr = excluded.when_expr,
 			notification_type_id = excluded.notification_type_id, official = true,
 			updated_at = case when (action_rule.label, action_rule.description, action_rule.on_transitions, action_rule.when_expr,
@@ -373,6 +383,9 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 	if err != nil {
 		return nil, err
 	}
+	if before.Official && (patch.Label != nil || patch.Description != nil || patch.On != nil || patch.When != nil || patch.NotificationType != nil) {
+		return nil, ErrActionRuleOfficial
+	}
 	setType := patch.NotificationType != nil
 	var typeID *string
 	if setType {
@@ -404,9 +417,14 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 		withdrawn = tag.RowsAffected()
 	}
 	if patch.Targets != nil {
-		ids, err := resolveRuleTargets(ctx, tx, *patch.Targets)
+		ids, err := resolveRuleTargets(ctx, tx, *patch.Targets, "")
 		if err != nil {
 			return nil, err
+		}
+		if before.Official {
+			if err := keepsShippedTargets(ctx, tx, before.ID, ids); err != nil {
+				return nil, err
+			}
 		}
 		if err := setRuleTargets(ctx, tx, before.ID, ids); err != nil {
 			return nil, err
@@ -429,6 +447,21 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 	return after, nil
 }
 
+// keepsShippedTargets refuses a target list for a shipped rule that drops one
+// of the shipped targets it sends to: the next boot would only link it again.
+func keepsShippedTargets(ctx context.Context, q querier, ruleID string, ids []string) error {
+	var dropped bool
+	if err := q.QueryRow(ctx, `select exists (select 1 from action_rule_target rt
+			join notification_target t on t.id = rt.target_id
+		where rt.rule_id = $1 and t.official and not rt.target_id = any($2::uuid[]))`, ruleID, ids).Scan(&dropped); err != nil {
+		return fmt.Errorf("storage: read shipped targets: %w", err)
+	}
+	if dropped {
+		return ErrActionRuleOfficial
+	}
+	return nil
+}
+
 // DeleteActionRule removes a rule, audited; its notifications keep its name.
 func (p *PG) DeleteActionRule(ctx context.Context, actorID, ref string, action scope.Set) error {
 	if !action.All {
@@ -443,6 +476,9 @@ func (p *PG) DeleteActionRule(ctx context.Context, actorID, ref string, action s
 	if err != nil {
 		return err
 	}
+	if before.Official {
+		return ErrActionRuleOfficial
+	}
 	if _, err := tx.Exec(ctx, `delete from action_rule where id = $1`, before.ID); err != nil {
 		return fmt.Errorf("storage: delete action rule %q: %w", ref, err)
 	}
@@ -455,12 +491,12 @@ func (p *PG) DeleteActionRule(ctx context.Context, actorID, ref string, action s
 // ErrOptOutNotAllowed is an opt-out of a rule whose admin has not allowed it.
 var ErrOptOutNotAllowed = errors.New("storage: this action rule does not allow opting out")
 
-// SetRuleOptOut opts the principal out of a platform rule (out true) or back
+// SetRuleOptOut opts the user out of a platform rule (out true) or back
 // in, audited and idempotent (#1354). Opting out takes a rule marked
 // opt_out_allowed; opting back in is always allowed. An opt-out reaches the
 // rule's group targets: a person a target names directly is told regardless.
-func (p *PG) SetRuleOptOut(ctx context.Context, actorID, principalID, ref string, out bool) (*ActionRule, error) {
-	if !isUUID(principalID) {
+func (p *PG) SetRuleOptOut(ctx context.Context, actorID, userID, ref string, out bool) (*ActionRule, error) {
+	if !isUUID(userID) {
 		return nil, ErrActionRuleNotFound
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -479,15 +515,15 @@ func (p *PG) SetRuleOptOut(ctx context.Context, actorID, principalID, ref string
 			return nil, ErrOptOutNotAllowed
 		}
 		verb = "opt_out"
-		tag, err = tx.Exec(ctx, `insert into action_rule_opt_out (rule_id, principal_id) values ($1, $2::uuid) on conflict do nothing`, r.ID, principalID)
+		tag, err = tx.Exec(ctx, `insert into action_rule_opt_out (rule_id, user_id) values ($1, $2::uuid) on conflict do nothing`, r.ID, userID)
 	} else {
-		tag, err = tx.Exec(ctx, `delete from action_rule_opt_out where rule_id = $1 and principal_id = $2::uuid`, r.ID, principalID)
+		tag, err = tx.Exec(ctx, `delete from action_rule_opt_out where rule_id = $1 and user_id = $2::uuid`, r.ID, userID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: %s of %s: %w", verb, r.Name, err)
 	}
 	if tag.RowsAffected() > 0 {
-		if err := writeAuditRes(ctx, tx, actorID, verb, "action_rule", r.ID, nil, map[string]any{"principal_id": principalID, "opted_out": out}); err != nil {
+		if err := writeAuditRes(ctx, tx, actorID, verb, "action_rule", r.ID, nil, map[string]any{"user_id": userID, "opted_out": out}); err != nil {
 			return nil, err
 		}
 	}

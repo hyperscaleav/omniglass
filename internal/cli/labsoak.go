@@ -67,10 +67,10 @@ func newLabSoakVerdictCmd() *cobra.Command {
 		Long: "Judges a soak from what the platform says about itself, and nothing else: it reads, through the API " +
 			"(--server and --token, or $OMNIGLASS_SERVER and $OMNIGLASS_TOKEN), the platform system's alarm history " +
 			"and the Platform health page, and prints pass or fail with every reason. The token needs read over " +
-			"nodes, systems and components, all of them, since a verdict from part of the page would pass what it " +
+			"outposts, systems and components, all of them, since a verdict from part of the page would pass what it " +
 			"could not see.\n\n" +
 			"Pass: the soak ran at least 7 days (--since to --until), no platform alarm is still open, none raised in the " +
-			"window was open longer than --tolerance, and every loss ratio on the page (each hop, kind and node, the " +
+			"window was open longer than --tolerance, and every loss ratio on the page (each hop, kind and outpost, the " +
 			"newest window and the last hour, the end to end, the worklist pull) is 0. A reading that cannot answer " +
 			"fails: no build reported, no loss ratio on the page, an alarm history the API cut short, or two builds " +
 			"among the servers.\n\n" +

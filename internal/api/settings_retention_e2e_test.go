@@ -45,14 +45,14 @@ func TestRetentionWindowsAreWritableOnlyByAnAdminAndInRange(t *testing.T) {
 	}
 }
 
-// A node's own log windows (#1350) are unset by default: the effective
-// document leaves them out, so node_log follows the shared bands. An admin sets
+// An outpost's own log windows (#1350) are unset by default: the effective
+// document leaves them out, so outpost_log follows the shared bands. An admin sets
 // one in the same range as every window, and restoring it (a null) removes it
 // again.
-func TestNodeLogRetentionOverrideIsUnsetUntilAnAdminSetsIt(t *testing.T) {
+func TestOutpostLogRetentionOverrideIsUnsetUntilAnAdminSetsIt(t *testing.T) {
 	t.Parallel()
 	f := newSettingsFixture(t)
-	keys := []string{"node_log_debug_days", "node_log_info_days", "node_log_warning_days", "node_log_error_days"}
+	keys := []string{"outpost_log_debug_days", "outpost_log_info_days", "outpost_log_warning_days", "outpost_log_error_days"}
 	admin := decodeSettings(t, f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK)).Values["retention"]
 	for _, key := range keys {
 		if v, ok := admin[key]; ok {
@@ -64,18 +64,18 @@ func TestNodeLogRetentionOverrideIsUnsetUntilAnAdminSetsIt(t *testing.T) {
 		f.c.do(f.admin, http.MethodPatch, "/settings/retention", map[string]any{key: 0}, http.StatusUnprocessableEntity)
 		f.c.do(f.admin, http.MethodPatch, "/settings/retention", map[string]any{key: 36501}, http.StatusUnprocessableEntity)
 	}
-	f.c.do(f.admin, http.MethodPatch, "/settings/retention", map[string]any{"node_log_debug_days": 1}, http.StatusOK)
+	f.c.do(f.admin, http.MethodPatch, "/settings/retention", map[string]any{"outpost_log_debug_days": 1}, http.StatusOK)
 	body := decodeSettings(t, f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK))
-	if body.Values["retention"]["node_log_debug_days"] != float64(1) || body.Sources["retention.node_log_debug_days"] != "platform" {
-		t.Fatalf("retention.node_log_debug_days = %v from %v, want 1 from platform",
-			body.Values["retention"]["node_log_debug_days"], body.Sources["retention.node_log_debug_days"])
+	if body.Values["retention"]["outpost_log_debug_days"] != float64(1) || body.Sources["retention.outpost_log_debug_days"] != "platform" {
+		t.Fatalf("retention.outpost_log_debug_days = %v from %v, want 1 from platform",
+			body.Values["retention"]["outpost_log_debug_days"], body.Sources["retention.outpost_log_debug_days"])
 	}
 	if body.Values["retention"]["log_debug_days"] != float64(3) {
-		t.Errorf("retention.log_debug_days = %v after a node override, want the shared 3 untouched", body.Values["retention"]["log_debug_days"])
+		t.Errorf("retention.log_debug_days = %v after an outpost override, want the shared 3 untouched", body.Values["retention"]["log_debug_days"])
 	}
-	f.c.do(f.admin, http.MethodPatch, "/settings/retention", map[string]any{"node_log_debug_days": nil}, http.StatusOK)
+	f.c.do(f.admin, http.MethodPatch, "/settings/retention", map[string]any{"outpost_log_debug_days": nil}, http.StatusOK)
 	body = decodeSettings(t, f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK))
-	if v, ok := body.Values["retention"]["node_log_debug_days"]; ok {
-		t.Errorf("retention.node_log_debug_days = %v after a restore, want it unset again", v)
+	if v, ok := body.Values["retention"]["outpost_log_debug_days"]; ok {
+		t.Errorf("retention.outpost_log_debug_days = %v after a restore, want it unset again", v)
 	}
 }

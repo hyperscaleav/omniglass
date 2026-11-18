@@ -27,7 +27,7 @@ import (
 
 type locationGrantFixture struct {
 	c *apiClient
-	// dsn is kept so a test can mint a further principal against the same fleet.
+	// dsn is kept so a test can mint a further user against the same fleet.
 	dsn string
 	// owner runs the control half: the identical body, served, so every refusal
 	// below is a scope boundary rather than a broken route.
@@ -58,7 +58,7 @@ func newLocationGrantFixture(t *testing.T) *locationGrantFixture {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "east", "location_type": "campus"}, http.StatusCreated)
 	c.do(owner, http.MethodPost, "/locations", map[string]any{
@@ -85,8 +85,8 @@ func newLocationGrantFixture(t *testing.T) *locationGrantFixture {
 	deployAtEast := grant{role: "deploy", scopeKind: "location", scopeID: eastID, scopeOp: "subtree_excl_root"}
 	return &locationGrantFixture{
 		c: c, dsn: dsn, owner: owner, rackID: rack,
-		techEast: principalWithGrants(t, ctx, dsn, "tech-east", []grant{deployAtEast}),
-		floored:  principalWithGrants(t, ctx, dsn, "tech-east-floored", []grant{deployAtEast, {role: "viewer", scopeKind: "all"}}),
+		techEast: userWithGrants(t, ctx, dsn, "tech-east", []grant{deployAtEast}),
+		floored:  userWithGrants(t, ctx, dsn, "tech-east-floored", []grant{deployAtEast, {role: "viewer", scopeKind: "all"}}),
 	}
 }
 
@@ -249,7 +249,7 @@ func TestTheCrossTierReachIsOnlyASubtreeLocationGrants(t *testing.T) {
 	ctx := context.Background()
 
 	annexID := entityID(t, f.c, f.owner, "/locations", "annex")
-	self := principalWithGrants(t, ctx, f.dsn, "tech-annex-self", []grant{
+	self := userWithGrants(t, ctx, f.dsn, "tech-annex-self", []grant{
 		{role: "deploy", scopeKind: "location", scopeID: annexID, scopeOp: "self"},
 	})
 	// The self grant reads annex itself, so the bind resolves and the refusal
@@ -264,7 +264,7 @@ func TestTheCrossTierReachIsOnlyASubtreeLocationGrants(t *testing.T) {
 	}
 
 	avID := entityID(t, f.c, f.owner, "/systems", "av")
-	sys := principalWithGrants(t, ctx, f.dsn, "tech-av", []grant{{role: "deploy", scopeKind: "system", scopeID: avID}})
+	sys := userWithGrants(t, ctx, f.dsn, "tech-av", []grant{{role: "deploy", scopeKind: "system", scopeID: avID}})
 	if names := listNames(t, f.c, sys, "/locations"); len(names) != 0 {
 		t.Errorf("a system grant lists locations %v, want none", names)
 	}

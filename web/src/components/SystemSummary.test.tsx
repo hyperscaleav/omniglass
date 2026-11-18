@@ -10,8 +10,8 @@ import { STANDARDS_KEY } from "../lib/standards";
 import { uuidFor } from "../lib/testids";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 
-// The brief system card a place holding several systems shows (#872). Its alarm
-// lines wear the severity registry's label and color (#921), worst first, so an
+// The brief system card a location holding several systems shows (#872). Its alarm
+// lines wear the severity catalog's label and color (#921), worst first, so an
 // operator level renders exactly like a shipped one with no console change.
 
 const sys = uuidFor("ss-sys");
@@ -21,7 +21,7 @@ const view = {
 } as unknown as FleetView;
 const health = {
   verdict: "degraded",
-  roles: [
+  slots: [
     {
       name: "display", label: "Display", impact: "degraded", quorum: 1, satisfying: 1, short: 0, spare: 0,
       impaired: true, active: true, assigned_to: ["display-1"], down: [],
@@ -52,7 +52,7 @@ function mount() {
 describe("SystemSummary", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders each alarm's severity by the registry's label and color, worst first", () => {
+  it("renders each alarm's severity by the catalog's label and color, worst first", () => {
     mount();
     const card = screen.getByTestId(`system-summary-${sys}`);
     const chips = [...card.querySelectorAll<HTMLElement>("[data-severity]")];
@@ -60,5 +60,12 @@ describe("SystemSummary", () => {
     expect(chips[0].classList.contains("badge-average")).toBe(true);
     expect(chips[1].className).toContain("badge-warning");
     expect(within(card).getByText("Lamp hours high")).toBeTruthy();
+  });
+
+  it("stamps the card as its system, by name, for omnibot (#2122)", () => {
+    mount();
+    const card = screen.getByTestId(`system-summary-${sys}`);
+    expect(card.dataset.subjectKind).toBe("system");
+    expect(card.dataset.subjectRef).toBe("huddle");
   });
 });

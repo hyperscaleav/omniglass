@@ -117,7 +117,7 @@ type revealSecretOutput struct {
 	}
 }
 
-// registerSecretRoutes wires the secret surface: the shape registry, the
+// registerSecretRoutes wires the secret surface: the shape catalog, the
 // all-scope admin directory, and scoped create/delete. Read (masked) rides the
 // viewer floor; create and delete are gated by the sensitive secret:create /
 // secret:delete.
@@ -128,6 +128,19 @@ type revealSecretOutput struct {
 func (a *authenticator) canSecretAdmin(ctx context.Context, action string) bool {
 	perms, ok := permsFrom(ctx)
 	return ok && perms.Allows("secret", action, "admin")
+}
+
+// secretBind is the caller's right over a secret it binds to a target (an
+// endpoint's attach or edit, a preview, a plan, a simulated system or fleet, a
+// notification target, the mail relay): the secret read scope a reference
+// resolves under, the secret:bind scope it may be bound under, and the bind
+// admin tier for an admin-sensitive one. Every such write makes the server or a
+// outpost send the plaintext wherever the target points, without the caller ever
+// seeing it, so it is its own action, distinct from reveal (#2047). An agent
+// acting for its person holds the person's bind: binding is never plaintext
+// out, so the agent ceiling (#1179) leaves it.
+func (a *authenticator) secretBind(ctx context.Context) storage.SecretUse {
+	return storage.SecretUse{Read: a.scopeFor(ctx, "secret", "read"), Bind: a.scopeFor(ctx, "secret", "bind"), CanAdmin: a.canSecretAdmin(ctx, "bind")}
 }
 
 // resolvedSecretBody is one entry in a component's effective-secrets cascade. Its
@@ -238,7 +251,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID:   "create-secret",
-		Extensions:    mcpExposed(),
+		Extensions:    plaintext(),
 		Method:        http.MethodPost,
 		Path:          "/secrets",
 		DefaultStatus: http.StatusCreated,
@@ -268,6 +281,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.platformGated(a.gated(huma.Operation{
 		OperationID: "update-secret",
+		Extensions:  plaintext(),
 		Method:      http.MethodPatch,
 		Path:        "/secrets/{secret}",
 		Summary:     "Update a secret",
@@ -302,6 +316,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "reveal-secret",
+		Extensions:  plaintext(),
 		Method:      http.MethodPost,
 		Path:        "/secrets/{secret}:reveal",
 		Summary:     "Reveal a secret's plaintext",
@@ -319,6 +334,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "copy-secret",
+		Extensions:  plaintext(),
 		Method:      http.MethodPost,
 		Path:        "/secrets/{secret}:copy",
 		Summary:     "Decrypt a secret for clipboard copy",

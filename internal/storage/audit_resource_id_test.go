@@ -21,7 +21,7 @@ import (
 //
 // The name at the time of the action is not lost: it is in the old and new row
 // images, which is the right place for it. A point-in-time snapshot, not a lookup
-// key. This mirrors actor_username, which is snapshotted beside actor_principal_id
+// key. This mirrors actor_username, which is snapshotted beside actor_user_id
 // for exactly this reason.
 
 // auditedRename is one renameable, dual-addressable resource: how to create it, how
@@ -81,14 +81,14 @@ func auditedRenames() []auditedRename {
 			},
 		},
 		{
-			resource: "node",
+			resource: "outpost",
 			create: func(ctx context.Context, gw *storage.PG, name string) (string, error) {
-				n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all)
+				n, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: name}, all, all)
 				if err != nil {
 					return "", err
 				}
-				// A node IS a principal: principal_id is the node table's primary key.
-				return n.PrincipalID, nil
+				// An outpost IS a user: user_id is the outpost table's primary key.
+				return n.UserID, nil
 			},
 		},
 	}
@@ -97,7 +97,7 @@ func auditedRenames() []auditedRename {
 // A property type is addressed only by name today, so it never acquires two keys
 // for two addressings. The rename hazard is the whole risk here: the name IS the
 // address, which is exactly why the trail cannot also be keyed on it.
-func TestAuditResourceIDOnANameAddressedRegistry(t *testing.T) {
+func TestAuditResourceIDOnANameAddressedCatalog(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
