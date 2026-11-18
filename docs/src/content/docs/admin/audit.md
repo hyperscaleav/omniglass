@@ -1,6 +1,11 @@
 ---
 title: The audit trail
 description: "The read-only record of every privileged action and every sign-in, including who acted behind an impersonation."
+sidebar:
+  order: 3
+  badge:
+    text: Built
+    variant: success
 screenshots:
   - id: audit
     path: /web/audit

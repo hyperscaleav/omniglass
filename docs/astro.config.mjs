@@ -45,13 +45,34 @@ export default defineConfig({
   // The monolithic "the console" guide was split into per-flow operator pages.
   // Keep its old URL alive for external links and bookmarks.
   redirects: {
-    '/guides/console/': '/guides/operator/',
+    '/guides/console/': '/operator/',
     '/architecture/datapoints/': '/architecture/properties/',
     // The joint Types guide split into one page per catalog (#598); the old
     // URL lands on the location half, which inherited most of its content.
     '/guides/admin/types/': '/guides/admin/location-types/',
+    // The Admin guide's access and values pages became the Admin section (#2158);
+    // secret types folded into the secrets page.
+    '/guides/admin/': '/admin/',
+    '/guides/admin/users/': '/admin/users/',
+    '/guides/admin/access/': '/admin/access/',
+    '/guides/admin/audit/': '/admin/audit/',
+    '/guides/admin/secrets/': '/admin/secrets/',
+    '/guides/admin/secret-types/': '/admin/secrets/#secret-types',
+    '/guides/admin/variables/': '/admin/variables/',
+    '/guides/admin/files/': '/admin/files/',
     // Find things in your fleet folded into the outline guide (#861).
-    '/guides/operator/inventory/': '/guides/operator/fleet/',
+    '/guides/operator/inventory/': '/operator/fleet/',
+    // The operator guide became the Operator section (#2157); alarms and
+    // commands moved off the entity page onto their own.
+    '/guides/operator/': '/operator/',
+    '/guides/operator/sign-in/': '/operator/sign-in/',
+    '/guides/operator/fleet/': '/operator/fleet/',
+    '/guides/operator/entities/': '/operator/entities/',
+    '/guides/operator/notifications/': '/operator/notifications/',
+    '/guides/operator/templates/': '/operator/templates/',
+    '/guides/operator/collection/': '/operator/collection/',
+    '/guides/operator/platform-health/': '/operator/platform-health/',
+    '/guides/operator/simulation/': '/operator/simulation/',
     // Walkthroughs became one of a demo's two recorders (#1132).
     '/contributing/walkthroughs/': '/contributing/demos/',
     // The collecting process became the outpost (ADR-2031, #2059).
@@ -211,23 +232,16 @@ export default defineConfig({
                 { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
                 { label: 'Feature loops', slug: 'contributing/feature-loops' },
                 { label: 'Autopilot', slug: 'contributing/autopilot' },
+                { label: 'Agents in CI', slug: 'contributing/agents-in-ci' },
                 { label: 'Synthetic user', slug: 'contributing/synthetic-user' },
                 { label: 'Release and CI', slug: 'contributing/release-ci' },
                 { label: 'Labels and the board', slug: 'contributing/labels' },
               ],
             },
             {
-              label: 'Operator guide',
+              label: 'CLI and agents',
               collapsed: true,
               items: [
-                { label: 'Overview', slug: 'guides/operator' },
-                { label: 'Sign in and your profile', slug: 'guides/operator/sign-in' },
-                { label: 'Explore your fleet', slug: 'guides/operator/fleet' },
-                { label: 'Work with an entity', slug: 'guides/operator/entities' },
-                { label: 'Your inbox and alarm subscriptions', slug: 'guides/operator/notifications' },
-                { label: 'Start from a template', slug: 'guides/operator/templates' },
-                { label: 'Nodes and reachability', slug: 'guides/operator/collection' },
-                { label: 'Simulate a fleet', slug: 'guides/operator/simulation' },
                 { label: 'The CLI', slug: 'guides/cli' },
                 { label: 'Connect an agent', slug: 'guides/agents' },
               ],
@@ -236,15 +250,7 @@ export default defineConfig({
               label: 'Admin guide',
               collapsed: true,
               items: [
-                { label: 'Overview', slug: 'guides/admin' },
-                { label: 'Manage users', slug: 'guides/admin/users' },
-                { label: 'Roles, groups, and grants', slug: 'guides/admin/access' },
-                { label: 'The audit trail', slug: 'guides/admin/audit' },
-                { label: 'Secrets', slug: 'guides/admin/secrets' },
-                { label: 'Variables', slug: 'guides/admin/variables' },
-                { label: 'Files', slug: 'guides/admin/files' },
                 { label: 'Location types', slug: 'guides/admin/location-types' },
-                { label: 'Secret types', slug: 'guides/admin/secret-types' },
                 { label: 'Properties', slug: 'guides/admin/properties' },
                 { label: 'Metrics', slug: 'guides/admin/metrics' },
                 { label: 'Events', slug: 'guides/admin/events' },

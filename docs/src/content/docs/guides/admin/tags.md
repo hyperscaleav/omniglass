@@ -30,7 +30,7 @@ component, system, or location, and its detail blade carries a **Tags** panel: t
 offers the catalog keys that apply to that entity kind, and with `tag:create` a **Create key** shortcut
 opens this same create form), give it a value, and it binds on **Add**; the **x** on a chip removes it.
 Each write is gated by that entity's own `:update`, so an operator tags what it may already edit. The
-[Explore's filter](/guides/operator/fleet/#finding-one-thing) then matches each location, system and component on its **effective** tags
+[Explore's filter](/operator/fleet/#finding-one-thing) then matches each location, system and component on its **effective** tags
 (the resolved cascade, keys unioning and values shadowing most-specific-wins), and the outpost list shows them in a Tags column. The same operations are
 `omniglass component setTag` / `system setTag` / `location setTag` and `omniglass component effective-tag list
 <name>` from the CLI.

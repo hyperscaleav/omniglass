@@ -156,7 +156,7 @@ walkthrough every 2 s ([the lab's cadences](/guides/lab/)).
   unreadable over the pulls made; a window with no pull carries the last outcome, so an outpost refused
   on every pull reads 1. The first worklist's pulls count the same way, so an outpost never served
   one reads 1 too (#1882). The seeded `worklist-stale` rule opens a warning after two minutes at 1,
-  [Platform health](/guides/operator/platform-health/#the-outpost-table) shows it as the outpost's
+  [Platform health](/operator/platform-health/#the-outpost-table) shows it as the outpost's
   Worklist column, and `omniglass lab measure` fails its `worklist_loss` gate on any outpost above 0
   ([the lab guide](/guides/lab/#measuring-a-scale-lab)).
 - **The server fails a pull whole, and says why.** A worklist the server cannot read in full (a
@@ -1050,7 +1050,7 @@ when the stream acks its batch (in and out), or when the spool drops it at a cap
 it never encodes, or (a self-log line) the bounded log buffer drops it (in only, #1692); a batch held for a retry has not settled and counts in the window it
 does. These three replace the old spool-drop and publish-failure counts, so every hop's loss reads
 as the same ratio ([messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio)), and
-[Platform health](/guides/operator/platform-health/#where-work-is-lost) draws this hop beside the
+[Platform health](/operator/platform-health/#where-work-is-lost) draws this hop beside the
 server's ingest, with each outpost's own share as its Loss (#1646). The **schedule hop** writes the
 same three keys at the instance `schedule/{kind}` (#1693): the runs due on the schedule that produce
 the kind in, the runs made out, so a skipped due is that hop's loss; Platform health draws it with

@@ -1,6 +1,12 @@
 ---
 title: Platform health
 description: "Platform health: whether Omniglass itself is well, from the build it runs and how long it has been up to where work is lost hop by hop, each server's request timing, ingest lag, queue depths and retention, and whether each outpost is checking in, keeping its schedule and draining its command queue."
+sidebar:
+  label: Platform health
+  order: 9
+  badge:
+    text: Partial
+    variant: note
 screenshots:
   # The docs lab runs with no outpost collecting, so the one outpost reads never and
   # its only figure is the check-in age the server writes for it. That age, the
@@ -117,7 +123,7 @@ walkthroughs:
 
 Omniglass monitors a fleet, and it is a fleet of its own: a server, a database and the outposts that
 collect. **Platform health** is Omniglass watching itself. It answers one question, whether the
-platform is well, and it answers it the way you would answer it about any room: from the samples
+platform is well, and it answers it the way you would answer it about any system: from the samples
 on the platform's own components.
 
 Open it from **Status** under Admin in the sidebar, or from the **Platform** tile on Home, which
@@ -184,12 +190,15 @@ A failed poll is not lost work. A device that does not answer is a fact the outp
 on (it lands on that device's component, as its poll failures), so the outpost hop still reads 0 while
 a broken device fails every poll. A hop's loss is work the platform itself dropped.
 
-Two parts of the path are not drawn yet. The schedule hop (whether each run the worklist asks for
-is run): outposts write its figures since #1693, at the instance `schedule/{kind}` on their own
-component, where its series already read; the page draws it with #1739. Until then the path starts
-at the outpost's spool. The outpost hop's loss by cause (a spool cap, a bus refusal, a dropped self-log
-line, an encode failure) is not drawn here either: each batch's ledger carries it, and a lab run
-reads it per kind ([reading the delivery table](/guides/lab/#reading-the-delivery-table), #1692).
+The path starts at the outpost's spool. The outpost hop's loss by cause (a spool cap, a bus refusal,
+a dropped self-log line, an encode failure) is not drawn here: each batch's ledger carries it, and a
+lab run reads it per kind ([reading the delivery table](/guides/lab/#reading-the-delivery-table)).
+
+:::design[Target design, tracked in #1739]
+The path starts one hop earlier, at the **schedule** hop: whether each run the worklist asks for is
+run. Outposts already write its figures, at the instance `schedule/{kind}` on their own component,
+where its series read; the page draws them as the path's first hop.
+:::
 
 ## The server panels
 
@@ -229,7 +238,7 @@ template and status class. The slowest routes and the busiest are each ranked, h
 the server cut them from its newest report window: a window is a minute by default, so a ranking
 is the last minute's, and a route that went quiet drops off it. Below them sits the database's side
 of a request: the queries that ran past the slow-query threshold, then the server's pool and the
-database's own connections (#1980), each read as a ratio so a figure means the same at any traffic.
+database's own connections, each read as a ratio so a figure means the same at any traffic.
 
 ::screenshot{#platform-health-connections}
 
@@ -256,7 +265,7 @@ every connection counted but not the state of another role's, so its idle-in-tra
 oldest transaction cover only its own sessions. A window the database cannot answer writes no
 figure rather than a 0.
 
-Last, what the outposts asked of the server over the bus (#1769). **Bus Request Failures** reads as a
+Last, what the outposts asked of the server over the bus. **Bus Request Failures** reads as a
 share of **Bus Requests**, `a / b`, one row per path (an outpost's heartbeat, its command pull, its
 command report): the requests the server failed beside those it handled, in the window. A path that
 answered everything reads `0 / n`, healthy, not **not reported**: the server writes the 0 beside
@@ -270,10 +279,10 @@ the figures on every other page can be; **Ingest Lag (max)** beside it is the ol
 sample's time is the outpost's clock, so an outpost whose clock is skewed reads as lag. Then the batches
 and samples landed in the window. The server hop's delivery (the items of each kind it took in,
 handed on and lost, as a loss ratio where 0 is healthy) lands on its platform component every window
-(#1659) and is read as the Ingest hop under [where work is lost](#where-work-is-lost). An oldest sample more than 30 seconds behind for two minutes raises the seeded Ingest lag high alarm,
+and is read as the Ingest hop under [where work is lost](#where-work-is-lost). An oldest sample more than 30 seconds behind for two minutes raises the seeded Ingest lag high alarm,
 which turns this panel amber.
 
-Below them, the push lane's front door (#1746). Every push and webhook post waits for the server's
+Below them, the push lane's front door. Every push and webhook post waits for the server's
 one publish turn, and a wait past 5 seconds is refused with `503`, so **Push Lane Refusals** reads as
 a share of **Push Lane Publishes**, 0 when healthy, and **Push Lane Turn Wait** at the 99th
 percentile and at worst says how close the lane runs to refusing. A refused push minted nothing, so
@@ -313,7 +322,7 @@ keeps up), and the database's size with each table's. **Retention Pass Failures*
 
 ::screenshot{#platform-health-outposts}
 
-One row per outpost. **Status** is the same liveness pill the [Outposts](/guides/operator/collection/)
+One row per outpost. **Status** is the same liveness pill the [Outposts](/operator/collection/)
 page shows (`up`, `down` or `never`), judged at the same moment the uptime is, beside the outpost's
 verdict. A row's tone is that verdict: the seeded rules on the platform keys decide it, and the
 page adds no threshold of its own.
@@ -333,7 +342,7 @@ The columns are the platform keys, grouped:
   while it waits, so it reads refused rather than down. Two minutes at 100% raises the seeded **Worklist stale** warning on the outpost's
   platform component, cleared by the first pull served.
 - **Loss**: **Outpost Loss** is the outpost's own share of [where work is lost](#where-work-is-lost): the
-  end to end over the last hour of the hops its own component records (the outpost hop today), every
+  end to end over the last hour of the hops its own component records (the outpost hop), every
   kind summed. 0% is healthy; an outpost whose hops took nothing in reads **not reported**. Its series
   are on the outpost's platform component, one per kind.
 
@@ -368,7 +377,7 @@ and the Loss column reads not reported. Without a fleet-wide system read the Pla
 
 ## With a simulator
 
-While a [simulator](/guides/operator/simulation/) is connected, and you hold `simulation:read`, the page
+While a [simulator](/operator/simulation/) is connected, and you hold `simulation:read`, the page
 gains a section below the outpost table: the same condition that shows **Simulation** in the sidebar, so the
 two appear and disappear together. Everything above it is the platform's own account of itself. The
 simulator is the one witness outside the platform: it counts what each simulated device saw arrive and
@@ -381,7 +390,7 @@ infers. Only a simulator can say what a device was asked, so a fleet of real gea
 Each outpost with a simulator gets a card. Its first figures are the telemetry batches the server landed
 for the outpost over the window and the most requests the simulator held at once. **Queue depth** and
 **Busy workers** read `not wired yet`: the outpost does not report them to the server yet, and a blank
-reads truer than a 0 (#1634, #1249).
+reads truer than a 0.
 
 The gap table is the loop itself, one row per hop a request or a batch travels:
 
@@ -408,8 +417,11 @@ connects (a tcp reachability check), or logs in and asks nothing, draws a connec
 those rows count accepted connections beside 0 received. The device table lists every simulated device
 with the requests it received by protocol: a device due a poll that saw none reads **due, never seen**
 and sorts first, then the impaired ones. A device's name opens its drawer on the Simulation page. The
-table does not yet show what each device answered (#1721), nor the system a repeated name belongs to
-(#1724).
+
+:::design[Target design, tracked in #1721 and #1724]
+The device table also shows what each device answered, and tells a repeated device name apart by the
+system it belongs to.
+:::
 
 ### The sliding window
 
@@ -426,7 +438,7 @@ lab you run, every second (a 10 second window) on the throwaway labs the tests a
 `OMNIGLASS_CLOSED_LOOP_BRACKET` sets it on a server, from `1s` to `1m`. To count which poll targets
 were due, the server also has to know how often the outpost polls: set
 `OMNIGLASS_CLOSED_LOOP_HEARTBEAT` and `OMNIGLASS_CLOSED_LOOP_PROBE_EVERY` to the outposts' `--heartbeat`
-and `--probe-every` (the lab sets all three; #1722 has each outpost report its own). The window lives in the server's memory, per process: a
+and `--probe-every` (the lab sets all three). The window lives in the server's memory, per process: a
 server that restarts starts it over, and nothing of it is stored.
 
 ### How each gap reads
@@ -435,10 +447,10 @@ server that restarts starts it over, and nothing of it is stored.
   shows no number, since a count from a partial window would read as a whole one. After three reads
   the window is one bracket long; it grows a bracket at a time to ten, then slides.
 - **loss**: nothing explains the count, so a gap above 0 is a fault, and its row and ratio turn red.
-- **impaired**: the outpost's simulator has an [impairment](/guides/operator/simulation/#break-it-on-purpose)
+- **impaired**: the outpost's simulator has an [impairment](/operator/simulation/#break-it-on-purpose)
   applied, which loses traffic on purpose below the simulator's view. The gap is expected, not a
-  fault, and reads blue. The attribution is outpost-wide today: every gap on that outpost reads impaired
-  while any device on it is (#1662 narrows it to the protocol). Once the window slides past the repair,
+  fault, and reads blue. The attribution is outpost-wide: every gap on that outpost reads impaired while
+  any device on it is. Once the window slides past the repair,
   it clears.
 - **restarted**: a counter went backwards inside the window, because the outpost or its simulator started
   again, or the fleet the simulator serves changed (a device added or removed, or the simulator's
@@ -450,8 +462,14 @@ server that restarts starts it over, and nothing of it is stored.
 An impairment that drops packets shows where the protocol rides on them. Snmp is datagrams: a dropped
 request is gone, so the outpost counts it sent, the simulator never sees it, and **sent, not received**
 opens. Tcp retransmits what it loses, and a connect that never completes sent nothing, so loss on a tcp
-device slows it but opens no gap (#1723 tallies the dial, so a lost connect will). The walkthrough below drops an snmp device's packets and watches the
+device slows it but opens no gap. The walkthrough below drops an snmp device's packets and watches the
 gap open and clear.
+
+:::design[Target design, tracked in #1722, #1662 and #1723]
+Each outpost reports its own cadence, so the server stops being told it (#1722). An impairment's
+attribution narrows from the outpost to the protocol it touched (#1662). An outpost tallies each dial,
+so a dropped tcp connect opens a gap too (#1723).
+:::
 
 ## From the CLI
 

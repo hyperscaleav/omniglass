@@ -44,7 +44,7 @@ type createVendorInput struct {
 		Name         string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
 		Label        string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Kind         string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" default:"manufacturer" doc:"The role the organization plays"`
-		Icon         string `json:"icon,omitempty" doc:"A glyph key, e.g. crestron-logo"`
+		Icon         string `json:"icon,omitempty" doc:"A glyph key, e.g. boreal-logo"`
 		SupportPhone string `json:"support_phone,omitempty" doc:"The vendor's support line"`
 		Website      string `json:"website,omitempty" doc:"The vendor's website (http or https)"`
 	}

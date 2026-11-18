@@ -1,6 +1,12 @@
 ---
 title: Your inbox and alarm subscriptions
 description: "Read the alarms you are told about in your inbox, and subscribe yourself to the ones you care about: a personal rule, tested against your own recent alarms."
+sidebar:
+  label: Your inbox
+  order: 6
+  badge:
+    text: Built
+    variant: success
 screenshots:
   - id: notifications-inbox
     path: /web/inbox

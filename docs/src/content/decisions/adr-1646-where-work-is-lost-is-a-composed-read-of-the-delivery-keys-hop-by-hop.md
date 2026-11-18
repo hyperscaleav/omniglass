@@ -6,7 +6,7 @@ summary: "Accepted: Platform health draws the pipeline as the hops a declared ta
 refs: [1646, 1659, 1641, 1644, 1623, 1692, 1693]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [Platform health](/guides/operator/platform-health/#where-work-is-lost), [messaging](/architecture/messaging/#measuring-the-pipeline), [api](/architecture/api/)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [Platform health](/operator/platform-health/#where-work-is-lost), [messaging](/architecture/messaging/#measuring-the-pipeline), [api](/architecture/api/)
 - **Decision:** (#1646, under #1623.)
   1. **The hops are a declared table, read from one key set.** `storage.PlatformPipelineHops`
      names each hop in pipeline order with its label, what counts as out and lost there, the class of

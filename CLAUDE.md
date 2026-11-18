@@ -106,7 +106,7 @@ approval contract are [docs/contributing/slice-workflow.md](docs/src/content/doc
 **Every slice runs `/ship-slice` before its PR is proposed for merge: a required gate, not
 optional.** Build to PR-ready, then run `/ship-slice`; its emitted ship-review becomes the PR
 body and runs the pre-ship checks (fresh `make test` with the output pasted, `make gen` drift,
-em-dash and attribution scan, docs-with-everything, and **live screenshots for any
+em-dash scan, docs-with-everything, and **live screenshots for any
 operator-facing surface**). A UI PR with no screenshots, or any PR whose `/ship-slice` has not
 been run, is not ready for review. Re-run it after addressing findings.
 
@@ -135,7 +135,6 @@ on close), and never set Priority or the iteration: those are the architect's al
 
 ## House style
 
-- No AI/assistant attribution in commits, PRs, code comments, or any visible artifact.
 - No em dashes in written artifacts; use commas, colons, periods, or parentheses.
 - Head-noun-last naming (`<qualifier>_<genus>`); match the architecture glossary.
 - Any change that alters an operator-facing (UI) surface ships **live screenshots** in the PR
@@ -180,7 +179,7 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
   the path (`/file-bug`, `/define-work`, `/scope-protocol`, `/run-feature-loop`, or a single slice) and
   holds the gates between them (approved issue before a branch, dedupe first, never merge).
 - **`/ship-slice`** - the pre-ship validation pass (fresh `make test`, `make gen` drift check,
-  em-dash and attribution scan, a reviewer pass, docs-with-everything) and the ship-review report
+  em-dash scan, a reviewer pass, docs-with-everything) and the ship-review report
   the architect approves from. Run at PR-ready.
 - **`/autopilot`** - the unattended daily run (ADR-0138): reconcile the standing autopilot PRs,
   pick one thin slice (an in-progress loop, an approved definition, a priority bug, else a

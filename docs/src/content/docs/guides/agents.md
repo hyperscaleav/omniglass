@@ -234,6 +234,23 @@ refused. The server runs omnibot only with a model: until a live provider lands,
 recording `OMNIGLASS_OMNIBOT_REPLAY` names, and without one a run is a 503. The lab's server plays one
 that tags the meeting 405 video bar, so the commands above run there as written.
 
+A recording for the server can hold `conversations` beside its turns, each a `match` and turns of its
+own. A run plays the first conversation whose match its message contains, else the top-level turns,
+and counts its turns from that message, so each prompt in a conversation starts a script of its own.
+The lab's recording triages the video bar's alarm for a [triage-alarm](#skills) skill run, matching
+the skill's heading:
+
+```yaml
+turns:
+  - tool_calls: [{name: get-component, arguments: {name: 'hq.west.level-4.meeting-405.$comp.videobar-1'}}]
+  # ...
+conversations:
+  - match: "# Triage an alarm"
+    turns:
+      - tool_calls: [{name: list-component-alarms, arguments: {name: 'hq.west.level-4.meeting-405.$comp.videobar-1'}}]
+      - text: The meeting 405 video bar's alarm is still active ...
+```
+
 A run can carry what you are looking at as AG-UI `context`: references, a kind and a name or address,
 never a value (#2122). omnibot reads them as data ahead of your message and looks each up with its
 tools, under your grants. At most 20 entries, each value at most 2000 characters:
@@ -277,7 +294,7 @@ model.
 ### Omnibot in the console
 
 The console runs omnibot too, on the server, as above. **Ask omnibot** in the top bar opens it in a
-panel, and so does the [command palette](/guides/operator/#getting-around)'s last row, which carries
+panel, and so does the [command palette](/operator/#getting-around)'s last row, which carries
 what you typed there as a draft for you to send. Each prompt runs on one conversation, kept on the
 server like any other; **New conversation** starts another.
 
@@ -407,7 +424,7 @@ answer: a sample's text, labels and identity, the faults, and a refusal's text.
 
 ## Seeing what it did
 
-An agent's writes are yours in the [audit trail](/guides/admin/audit/), with how they arrived beside
+An agent's writes are yours in the [audit trail](/admin/audit/), with how they arrived beside
 them. In the console, Admin > Audit marks each with an `mcp` pill over its client and, for an agent
 token, an `agent <name>` tag beside you; type `channel:mcp` to see only what came through an agent. An
 admin reads the same from the CLI with:

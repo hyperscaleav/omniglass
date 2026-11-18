@@ -20,8 +20,11 @@
   once saw. Fix: reduce over live observers only, an instance that names a transport the owner
   has no endpoint of being a retired one (`latestObservedPerInstanceSQL`,
   internal/storage/instance_values.go). Age is no test on a transition-only property, where a
-  live, unchanged value carries an old ts. Residual, open as #1217: an endpoint that still exists
-  but whose driver no longer emits the key keeps its last reading live.
+  live, unchanged value carries an old ts. The residual, fixed in #1217: an endpoint that still
+  exists but whose driver's current spec no longer emits the key kept its last reading live, so the
+  same predicate now asks the spec (`driverEmitsSQL`, internal/storage/instance_values.go), with a
+  native probe key and a driverless endpoint staying live. Cue: a liveness test that checks the
+  observer exists but not that it still writes the thing read.
 - **Fourth instance (#1297):** a generic read that lists every observed key. The properties read
   first listed every key an owner has an observed row of, so the native probe keys came with it:
   under a certificate gate `tls-certificate-expiry` read as the component's current value, the

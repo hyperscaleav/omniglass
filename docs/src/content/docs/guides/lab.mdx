@@ -60,7 +60,7 @@ make test-lab-image LAB_IMAGE=omniglass:mine LAB_RUN=TestIntegrationScaleDeliver
 ```
 
 The lab can also be watched whole while it runs. With its simulator connected,
-[Platform health](/guides/operator/platform-health/#with-a-simulator) closes the loop over a window
+[Platform health](/operator/platform-health/#with-a-simulator) closes the loop over a window
 that slides every 10 seconds: every hop a request or a batch travels, from the outpost to the simulated
 device and back to the server, read as a loss ratio. A lab that is whole reads 0 on every gap, and every
 polled protocol draws its requests.
@@ -94,7 +94,7 @@ The throwaway lab each walkthrough is recorded on runs at
 lab a walkthrough that waits on a probe's verdict (watching a rule raise an alarm, say) waits a few
 seconds longer than its recording. Its seed also sets the platform's report window
 (`collection.report_seconds`) to 10s, so the outpost's and the server's own figures, the ones
-[Platform health](/guides/operator/platform-health/) reads, land inside the recording; your lab
+[Platform health](/operator/platform-health/) reads, land inside the recording; your lab
 reports at the platform's 60s, so those figures take up to a minute to appear. `default` is the product's own cadence, what a deployment's
 outpost runs at; the [lab footprint](/contributing/test-driven/#measuring-a-running-lab) measures a lab
 at each to say what that cadence costs.
@@ -733,7 +733,7 @@ push lane that is keeping up from one whose pushers queue behind each other:
   refusals, the measurement the one publish turn stands on
   ([ADR-1746.2](/architecture/decisions/#adr-17462-the-push-lanes-single-publisher-holds-at-the-corporate-3000-push-load)).
 
-Platform health shows all four on the server's [Ingest panel](/guides/operator/platform-health/#ingest),
+Platform health shows all four on the server's [Ingest panel](/operator/platform-health/#ingest),
 the refusals as a share of the publishes. The CLI reads the same panel:
 
 ```bash
@@ -1010,7 +1010,7 @@ shows as `uptime_seconds` falling.
 
 **Retention inside the run.** A soak shorter than the retention windows never sees retention remove
 anything. Once the lab is up, shorten the metric window so the run crosses it: retention's
-`metric_days` on **Admin > Settings** ([how long data is kept](/guides/admin/#how-long-data-is-kept)),
+`metric_days` on **Admin > Settings** ([how long data is kept](/admin/settings/#how-long-data-is-kept)),
 or over the API with a token of the lab's:
 
 ```sh

@@ -1,6 +1,11 @@
 ---
 title: Manage users
 description: "The user directory: create a person, edit and rename, the disable-archive-purge lifecycle, admin password reset, and profile pictures."
+sidebar:
+  order: 1
+  badge:
+    text: Built
+    variant: success
 screenshots:
   - id: users
     path: /web/users
@@ -10,7 +15,7 @@ screenshots:
 **Admin > Users** is the admin directory of every user, persons and machine users,
 each with the roles granted to it. This page is the account lifecycle: creating, editing,
 disabling, and removing a user. Giving a user access, a role at a scope, is the [grant
-builder](/guides/admin/access/#the-grant-builder) on the next page. The model underneath is
+builder](/admin/access/#the-grant-builder) on the next page. The model underneath is
 [identity and access](/architecture/identity-access/).
 
 Every row leads with the user's avatar, its uploaded picture when it has one and its

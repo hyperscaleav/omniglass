@@ -24,5 +24,5 @@ fails the build on any difference or dead reference; a re-copy is followed by a 
 suite gained the walkthrough lint (a script per declared id, every declaration embedded, every directive
 declared, the budget mark, the stills and poster present, no drift between the copy and its script's title,
 description, step count and captions, no orphan copies), the render and the scanner are unit-tested in
-`make test-web`, and [simulate a fleet](/guides/operator/simulation/#see-it) embeds the sample.
+`make test-web`, and [simulate a fleet](/operator/simulation/#see-it) embeds the sample.
 [Walkthroughs](/contributing/walkthroughs/) teaches writing, recording, reviewing and embedding one.

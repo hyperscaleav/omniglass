@@ -14,7 +14,7 @@ The framework on this page is not built: there is no `view` table, no `ViewResul
 hand-written composed reads (reachability, events, the component and outpost log
 reads, the fleet projection at `GET /views/fleet`, the first route actually served under
 `/views/`, and the platform projection at `GET /views/platform`, the second, behind
-[Platform health](/guides/operator/platform-health/), with its closed-loop read at
+[Platform health](/operator/platform-health/), with its closed-loop read at
 `GET /views/platform/simulation`) that stand in until this framework lands,
 which the [API](/architecture/api/) page's views-exception note covers.
 :::

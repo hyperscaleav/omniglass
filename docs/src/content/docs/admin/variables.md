@@ -1,13 +1,18 @@
 ---
 title: Variables
 description: "Plaintext typed free values owned at one scope and resolved down the cascade: the directory, create, and edit."
+sidebar:
+  order: 5
+  badge:
+    text: Built
+    variant: success
 screenshots:
   - id: variables
     path: /web/variables
     alt: "The Variables directory: type badges and the value shown in the clear, the plaintext sibling of Secrets."
 ---
 
-A **variable** is the plaintext sibling of a [secret](/guides/admin/secrets/): a typed free
+A **variable** is the plaintext sibling of a [secret](/admin/secrets/): a typed free
 value (a macro), owned at one scope and resolved down the [cascade](/architecture/cascade/) the
 same way, but shown in the clear because it is not sensitive. The model underneath is [config
 and credentials](/architecture/variables/).

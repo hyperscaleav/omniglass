@@ -6,7 +6,7 @@ summary: "Each simulator observation carries its fleet generation (zero before t
 refs: [1895, 1639, 1874]
 ---
 
-- **Date:** 2026-11-15 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/), [platform health](/guides/operator/platform-health/), [lab](/guides/lab/)
+- **Date:** 2026-11-15 | **Status:** Accepted | **Pages:** [simulation](/architecture/simulation/), [platform health](/operator/platform-health/), [lab](/guides/lab/)
 - **Decision:** (#1895.) The simulator's engine keeps a fleet generation and a changing flag, and
   each endpoint observation carries both (`fleet_generation`, `fleet_changing`). The reconcile reads
   a bracket as restarted when any sim read in it (its four ends and the reads between) has generation

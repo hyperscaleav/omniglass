@@ -96,7 +96,7 @@ and, where several endpoints collect a metric, each one's latest
 
 A metric's values are **telemetry**, not something typed on an instance's detail:
 
-- An **observed** value arrives through [collection](/guides/operator/collection/): a task samples
+- An **observed** value arrives through [collection](/operator/collection/): a task samples
   the device and pushes the reading. The shipped probes write the timings in the seeded set above:
   the TCP-connect probe `tcp-connect-time`, the ICMP probe `icmp-rtt-avg`. Each probe's state
   (`tcp-open`, `icmp-reachable`) is a [property](/guides/admin/properties/), stored when it

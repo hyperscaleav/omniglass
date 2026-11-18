@@ -6,7 +6,7 @@ summary: "A metric sample is (id, series_id, ts, value) in metric, range partiti
 refs: [1275, 420, 1265, 1080, 1274, 417, 1417]
 ---
 
-- **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [samples](/architecture/properties/), [admin guide](/guides/admin/), [testing](/contributing/test-driven/)
+- **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [samples](/architecture/properties/), [platform settings](/admin/settings/), [testing](/contributing/test-driven/)
 - **Decision:** (#1275, with #420's partitioning half, under the approved #1265.)
   1. **A series dimension.** `metric_series` holds one row per series, keyed by a bigint identity:
      the type, the owner arc (and `owner_id`, its one filled column), the instance, the provenance,
