@@ -189,3 +189,21 @@ func TestEveryRequiredCheckRunsInTheMergeQueue(t *testing.T) {
 			strings.Join(gaps, "\n  "))
 	}
 }
+
+// TestAgentReviewIsReadyForTheMergeQueue holds agent-review's check to the
+// same rule before it is required, so making it required (#2182) is only a
+// ruleset change and a line in requiredChecks. In the queue it re-reads the
+// verdict on the PR's head rather than reviewing again (#2211).
+func TestAgentReviewIsReadyForTheMergeQueue(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "agent-review.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gaps, err := mergeGroupGaps(map[string][]byte{"agent-review.yml": body}, []string{"agent-review"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gaps) > 0 {
+		t.Fatalf("agent-review would not run in the merge queue:\n  %s", strings.Join(gaps, "\n  "))
+	}
+}
