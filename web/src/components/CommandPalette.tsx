@@ -1,11 +1,4 @@
-import {
-  For,
-  Show,
-  createMemo,
-  createSignal,
-  createEffect,
-  createUniqueId,
-} from "solid-js";
+import { For, Show, createMemo, createSignal, createEffect, createUniqueId } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
@@ -17,12 +10,7 @@ import { Search, ArrowRight, Bot } from "./icons";
 // The ⌘K command palette: a global jump across the whole app (distinct from a
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
 // free). Arrow keys move the active row, Enter navigates.
-export type Command = {
-  label: string;
-  path: string;
-  group?: string;
-  section?: string;
-};
+export type Command = { label: string; path: string; group?: string; section?: string };
 
 // buildCommands is the palette's source: every destination the caller may
 // reach, flattened to one searchable list.
@@ -55,12 +43,7 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
   const catalog: Command[] = visibleGroups(allow).flatMap((g) =>
     g.entries
       .filter((e) => e.path)
-      .map((e) => ({
-        label: e.label,
-        path: entryHref(e),
-        group: `Catalog · ${g.header}`,
-        section: g.header,
-      })),
+      .map((e) => ({ label: e.label, path: entryHref(e), group: `Catalog · ${g.header}`, section: g.header })),
   );
   return [...rail, ...catalog];
 }
@@ -78,35 +61,19 @@ export type Row = Command | AskRow | TriageRow;
 
 // withAsk ends the results with a triage row for each gathered alarm the query
 // matches, then the ask row, for a person who may run omnibot.
-export function withAsk(
-  results: Command[],
-  q: string,
-  allowed: boolean,
-  gathered: Subject[] = [],
-): Row[] {
+export function withAsk(results: Command[], q: string, allowed: boolean, gathered: Subject[] = []): Row[] {
   if (!allowed) return results;
   const triage = gathered
     .filter((s) => triageCall(s))
     .map((s) => ({ label: `Triage alarm ${s.ref}`, triage: s }))
     .filter((r) => r.label.toLowerCase().includes(q.toLowerCase()));
-  return [
-    ...results,
-    ...triage,
-    { label: q ? `Ask omnibot: ${q}` : "Ask omnibot", ask: true },
-  ];
+  return [...results, ...triage, { label: q ? `Ask omnibot: ${q}` : "Ask omnibot", ask: true }];
 }
 
-export default function CommandPalette(props: {
-  open: boolean;
-  onClose: () => void;
-  onAsk?: (prompt: string) => void;
-  onTriage?: (alarm: Subject) => void;
-}) {
+export default function CommandPalette(props: { open: boolean; onClose: () => void; onAsk?: (prompt: string) => void; onTriage?: (alarm: Subject) => void }) {
   const navigate = useNavigate();
   const me = useMe();
-  const commands = createMemo(() =>
-    buildCommands((tokens) => can(me.data, ...tokens)),
-  );
+  const commands = createMemo(() => buildCommands((tokens) => can(me.data, ...tokens)));
   const [query, setQuery] = createSignal("");
   const [active, setActive] = createSignal(0);
   const listId = createUniqueId();
@@ -116,12 +83,7 @@ export default function CommandPalette(props: {
     const raw = query().trim();
     const q = raw.toLowerCase();
     const found = q ? commands().filter((c) => matches(c, q)) : commands();
-    return withAsk(
-      found,
-      raw,
-      !!props.onAsk && can(me.data, "assistant", "use"),
-      props.onTriage ? tray() : [],
-    );
+    return withAsk(found, raw, !!props.onAsk && can(me.data, "assistant", "use"), props.onTriage ? tray() : []);
   });
 
   // Reset query + selection each time it opens; keep active in range as results change.
@@ -190,9 +152,7 @@ export default function CommandPalette(props: {
                         role="option"
                         aria-selected={i() === active()}
                         class="flex w-full items-center gap-3 rounded-field px-3 py-2 text-left text-sm"
-                        classList={{
-                          "bg-primary/15 text-primary": i() === active(),
-                        }}
+                        classList={{ "bg-primary/15 text-primary": i() === active() }}
                         onMouseEnter={() => setActive(i())}
                         onClick={() => go(c)}
                       >

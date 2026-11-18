@@ -1,12 +1,4 @@
-import {
-  For,
-  Match,
-  Show,
-  Switch,
-  createEffect,
-  createSignal,
-  onCleanup,
-} from "solid-js";
+import { For, Match, Show, Switch, createEffect, createSignal, onCleanup } from "solid-js";
 import Button from "./Button";
 import Drawer from "./Drawer";
 import OmnibotStep, { StepArgs } from "./OmnibotStep";
@@ -26,16 +18,7 @@ import {
   type RunState,
 } from "../lib/assistant";
 import { describeError } from "../lib/format";
-import {
-  clearTray,
-  contextEntries,
-  pendingTriage,
-  removeSubject,
-  requestTriage,
-  tray,
-  triageCall,
-  type Subject,
-} from "../lib/handover";
+import { clearTray, contextEntries, pendingTriage, removeSubject, requestTriage, tray, triageCall, type Subject } from "../lib/handover";
 
 // OmnibotPanel is omnibot in the console (#1167): a drawer over one of the
 // person's conversations, run on the server (#2121). A prompt streams back as
@@ -54,11 +37,7 @@ import {
 // SubjectChip is one handed-over subject: its kind and its name, address or
 // page, with a remove button while it waits in the tray, and a triage button
 // for an alarm there.
-function SubjectChip(props: {
-  subject: Subject;
-  onRemove?: () => void;
-  onTriage?: () => void;
-}) {
+function SubjectChip(props: { subject: Subject; onRemove?: () => void; onTriage?: () => void }) {
   return (
     <span class="badge badge-sm gap-1 max-w-full">
       <span class="text-base-content/60">{props.subject.kind}</span>
@@ -75,12 +54,7 @@ function SubjectChip(props: {
         </button>
       </Show>
       <Show when={props.onRemove}>
-        <button
-          type="button"
-          class="cursor-pointer"
-          aria-label={`Remove ${props.subject.kind} ${props.subject.ref}`}
-          onClick={() => props.onRemove?.()}
-        >
+        <button type="button" class="cursor-pointer" aria-label={`Remove ${props.subject.kind} ${props.subject.ref}`} onClick={() => props.onRemove?.()}>
           <X size={12} />
         </button>
       </Show>
@@ -88,11 +62,7 @@ function SubjectChip(props: {
   );
 }
 
-export default function OmnibotPanel(props: {
-  open: boolean;
-  onClose: () => void;
-  prompt?: string;
-}) {
+export default function OmnibotPanel(props: { open: boolean; onClose: () => void; prompt?: string }) {
   const [state, setState] = createSignal<RunState>(initialRun);
   const [conversation, setConversation] = createSignal<string>();
   const [draft, setDraft] = createSignal("");
@@ -124,12 +94,7 @@ export default function OmnibotPanel(props: {
         name = await startConversation();
         setConversation(name);
       }
-      await runOmnibot(
-        name,
-        input,
-        (ev) => setState((s) => reduce(s, ev)),
-        controller.signal,
-      );
+      await runOmnibot(name, input, (ev) => setState((s) => reduce(s, ev)), controller.signal);
       setState(closed);
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -195,22 +160,10 @@ export default function OmnibotPanel(props: {
       }}
     >
       <Show when={tray().length > 0}>
-        <div
-          data-testid="omnibot-tray"
-          class="flex flex-wrap items-center gap-1.5"
-          aria-label="Handed to omnibot with your next prompt"
-        >
+        <div data-testid="omnibot-tray" class="flex flex-wrap items-center gap-1.5" aria-label="Handed to omnibot with your next prompt">
           <span class="text-xs text-base-content/60">With your prompt</span>
           <For each={tray()}>
-            {(s) => (
-              <SubjectChip
-                subject={s}
-                onRemove={() => removeSubject(s)}
-                onTriage={
-                  triageCall(s) && !busy() ? () => triage(s) : undefined
-                }
-              />
-            )}
+            {(s) => <SubjectChip subject={s} onRemove={() => removeSubject(s)} onTriage={triageCall(s) && !busy() ? () => triage(s) : undefined} />}
           </For>
         </div>
       </Show>
@@ -283,42 +236,19 @@ export default function OmnibotPanel(props: {
                     <div class="self-end flex max-w-[85%] flex-col items-end gap-1">
                       <Show when={u().context}>
                         {(c) => (
-                          <div
-                            data-testid="omnibot-handed"
-                            class="flex flex-wrap justify-end gap-1"
-                          >
-                            <For each={c()}>
-                              {(e) => (
-                                <SubjectChip
-                                  subject={{
-                                    kind: e.description,
-                                    ref: e.value,
-                                  }}
-                                />
-                              )}
-                            </For>
+                          <div data-testid="omnibot-handed" class="flex flex-wrap justify-end gap-1">
+                            <For each={c()}>{(e) => <SubjectChip subject={{ kind: e.description, ref: e.value }} />}</For>
                           </div>
                         )}
                       </Show>
-                      <div class="rounded-box bg-primary/10 px-3 py-2 text-sm whitespace-pre-wrap">
-                        {u().text}
-                      </div>
+                      <div class="rounded-box bg-primary/10 px-3 py-2 text-sm whitespace-pre-wrap">{u().text}</div>
                     </div>
                   )}
                 </Match>
                 <Match when={item.kind === "text" && item}>
-                  {(t) => (
-                    <div class="text-sm whitespace-pre-wrap">{t().text}</div>
-                  )}
+                  {(t) => <div class="text-sm whitespace-pre-wrap">{t().text}</div>}
                 </Match>
-                <Match when={item.kind === "step" && item}>
-                  {(s) => (
-                    <OmnibotStep
-                      step={s()}
-                      waiting={state().interrupt?.id === s().id}
-                    />
-                  )}
-                </Match>
+                <Match when={item.kind === "step" && item}>{(s) => <OmnibotStep step={s()} waiting={state().interrupt?.id === s().id} />}</Match>
               </Switch>
             )}
           </For>
@@ -369,12 +299,7 @@ export default function OmnibotPanel(props: {
           <div ref={end} data-testid="omnibot-end" />
         </div>
       </Drawer>
-      <Drawer
-        open={credential()}
-        onClose={() => setCredential(false)}
-        above
-        title="Add a credential"
-      >
+      <Drawer open={credential()} onClose={() => setCredential(false)} above title="Add a credential">
         <p class="mb-4 text-xs text-base-content/60">
           The secret is sealed on the server. Omnibot gets its name, to use where a call takes a secret, and never its value.
         </p>

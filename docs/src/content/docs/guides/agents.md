@@ -303,12 +303,13 @@ that it ended early, rather than looking busy for good; ask again to carry on.
 alarm, in a list, a tree or a blade) and its name drops into a tray above the composer;
 shift-alt-click another row in the same list adds every row between. ⌘J (Ctrl-J) hands over the page
 itself, its route and filters, when nothing else is gathered; a system, location or component page
-is named by its name or address, never its uuid. The next prompt carries the tray as
-context and clears it. It holds references, never what the screen showed, so omnibot looks each thing
+is named by its name or address, never its uuid. Gathering sends nothing: type your question, and
+that prompt carries the tray as context and clears it. It holds references, never what the screen showed, so omnibot looks each thing
 up itself and sees only what you may. Alt rather than ⌘ or Ctrl, which still open a link in a new tab;
 a button inside a row keeps its own meaning. An alarm in the tray has a **Triage** button that runs
 the `triage-alarm` skill on it in one click, and the [command palette](/guides/operator/#getting-around)
-offers the same for each gathered alarm.
+offers the same for each gathered alarm. An alarm no rule raised is known by its component and
+when it was raised, so its triage starts from the component alone.
 
 ::screenshot{#omnibot-tray}
 

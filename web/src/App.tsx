@@ -1,18 +1,6 @@
-import {
-  type ParentComponent,
-  Show,
-  createMemo,
-  createSignal,
-  createEffect,
-  onCleanup,
-} from "solid-js";
+import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
-import {
-  gatherer,
-  handOverPage,
-  isHandOverKey,
-  requestTriage,
-} from "./lib/handover";
+import { gatherer, handOverer, requestTriage } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
@@ -42,9 +30,7 @@ const App: ParentComponent = (props) => {
   // A lab says it is one on every screen (#1195).
   const authStatus = useAuthStatus();
 
-  const [collapsed, setCollapsed] = createSignal(
-    localStorage.getItem("og-collapsed") === "1",
-  );
+  const [collapsed, setCollapsed] = createSignal(localStorage.getItem("og-collapsed") === "1");
   const [paletteOpen, setPaletteOpen] = createSignal(false);
   const [omnibotOpen, setOmnibotOpen] = createSignal(false);
   const [omnibotPrompt, setOmnibotPrompt] = createSignal<string>();
@@ -59,21 +45,16 @@ const App: ParentComponent = (props) => {
     const me = settingsMe.data;
     applyTheme(me ? themeFromMe(me) : theme());
   });
-  createEffect(() =>
-    localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"),
-  );
+  createEffect(() => localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"));
 
   // Global ⌘K / Ctrl-K toggles the command palette; ⌘J / Ctrl-J hands omnibot
   // the page (#2122) and opens it.
+  const onHandOver = handOverer(mayAsk, () => location, openOmnibot);
   const onKey = (e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();
       setPaletteOpen((o) => !o);
-    } else if (mayAsk() && isHandOverKey(e)) {
-      e.preventDefault();
-      handOverPage(location.pathname, location.search);
-      openOmnibot();
-    }
+    } else onHandOver(e);
   };
   window.addEventListener("keydown", onKey);
   onCleanup(() => window.removeEventListener("keydown", onKey));
@@ -85,44 +66,22 @@ const App: ParentComponent = (props) => {
 
   return (
     <>
-      <div data-app-shell class="flex min-h-screen bg-base-100">
-        <Sidebar
-          collapsed={collapsed()}
-          onToggle={() => setCollapsed(!collapsed())}
-        />
-        <div class="flex min-w-0 flex-1 flex-col">
-          <TopBar
-            section={section()}
-            onOpenPalette={() => setPaletteOpen(true)}
-            onOpenOmnibot={mayAsk() ? () => openOmnibot() : undefined}
-          />
-          <LabBanner lab={authStatus.data?.lab} />
-          <ImpersonationBanner />
-          <main
-            id="scroll-main"
-            class="mx-auto w-full max-w-330 flex-1 overflow-y-auto px-8 pb-16 pt-7"
-          >
-            {props.children}
-          </main>
-        </div>
+    <div data-app-shell class="flex min-h-screen bg-base-100">
+      <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
+      <div class="flex min-w-0 flex-1 flex-col">
+        <TopBar section={section()} onOpenPalette={() => setPaletteOpen(true)} onOpenOmnibot={mayAsk() ? () => openOmnibot() : undefined} />
+        <LabBanner lab={authStatus.data?.lab} />
+        <ImpersonationBanner />
+        <main id="scroll-main" class="mx-auto w-full max-w-330 flex-1 overflow-y-auto px-8 pb-16 pt-7">
+          {props.children}
+        </main>
       </div>
-      <CommandPalette
-        open={paletteOpen()}
-        onClose={() => setPaletteOpen(false)}
-        onAsk={openOmnibot}
-        onTriage={(alarm) => {
-          requestTriage(alarm);
-          openOmnibot();
-        }}
-      />
-      <Show when={mayAsk()}>
-        <OmnibotPanel
-          open={omnibotOpen()}
-          onClose={() => setOmnibotOpen(false)}
-          prompt={omnibotPrompt()}
-        />
-      </Show>
-      <Toaster />
+    </div>
+    <CommandPalette open={paletteOpen()} onClose={() => setPaletteOpen(false)} onAsk={openOmnibot} onTriage={(alarm) => (requestTriage(alarm), openOmnibot())} />
+    <Show when={mayAsk()}>
+      <OmnibotPanel open={omnibotOpen()} onClose={() => setOmnibotOpen(false)} prompt={omnibotPrompt()} />
+    </Show>
+    <Toaster />
     </>
   );
 };

@@ -197,6 +197,23 @@ export function isHandOverKey(
   );
 }
 
+// handOverer is the console's key listener for the hand-over key: it puts the
+// page in the tray and opens omnibot, for a person who may ask omnibot; for
+// anyone else the key is left alone.
+export function handOverer(
+  mayAsk: () => boolean,
+  here: () => { pathname: string; search: string },
+  open: () => void,
+): (e: KeyboardEvent) => void {
+  return (e) => {
+    if (!mayAsk() || !isHandOverKey(e)) return;
+    e.preventDefault();
+    const { pathname, search } = here();
+    handOverPage(pathname, search);
+    open();
+  };
+}
+
 const [pageName, setPageName] = createSignal<string | undefined>();
 
 // namePage is the name or address of the entity the page shows, set by the

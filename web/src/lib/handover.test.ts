@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { addSubjects, alarmSubject, triageCall, clearTray, contextEntries, gathered, gatherer, handOverPage, isHandOverKey, namePage, pageSubject, removeSubject, stamped, subjectOf, tray } from "./handover";
+import { addSubjects, alarmSubject, triageCall, clearTray, contextEntries, gathered, gatherer, handOverPage, handOverer, isHandOverKey, namePage, pageSubject, removeSubject, stamped, subjectOf, tray } from "./handover";
 
 // The context builder (#2122): what the person hands omnibot is references and
 // the page as a query, never what the console rendered and never a uuid.
@@ -106,6 +106,24 @@ describe("the hand-over key", () => {
     addSubjects([{ kind: "alarm", ref: "hq.a/offline" }]);
     handOverPage("/alarms", "");
     expect(tray()).toEqual([{ kind: "alarm", ref: "hq.a/offline" }]);
+  });
+
+  it("puts the page in the tray and opens omnibot, and does nothing for anyone without assistant:use", () => {
+    const here = () => ({ pathname: "/alarms", search: "?state=active" });
+    const press = (may: boolean) => {
+      const open = vi.fn();
+      const e = new KeyboardEvent("keydown", { key: "j", ctrlKey: true, cancelable: true });
+      handOverer(() => may, here, open)(e);
+      return { open, prevented: e.defaultPrevented };
+    };
+    const denied = press(false);
+    expect(denied.open).not.toHaveBeenCalled();
+    expect(denied.prevented).toBe(false);
+    expect(tray()).toEqual([]);
+    const allowed = press(true);
+    expect(allowed.open).toHaveBeenCalledTimes(1);
+    expect(allowed.prevented).toBe(true);
+    expect(tray()).toEqual([{ kind: "page", ref: "/alarms?state=active" }]);
   });
 
   it("hands over a detail page by the name the page shows", () => {
