@@ -4,7 +4,7 @@ date: 2026-11-10
 refs: [1645, 1644, 1627, 1628, 1629, 1646]
 ---
 
-[Platform health](/guides/operator/platform-health/) now gives each Omniglass server a panel set:
+[Platform health](/operator/platform-health/) now gives each Omniglass server a panel set:
 **Requests**, **Ingest**, **Queues** and **Retention**. The first set is open. A row is one
 key: its last hour as a sparkline beside its current figure. Click a row, or press Enter on it, to
 open the full chart. A

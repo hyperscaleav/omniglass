@@ -6,7 +6,7 @@ description: "Administering an Omniglass platform: the people who can sign in, t
 This is the how-to for **administering the platform**, the standing job of deciding who may
 sign in, what each account can see and do, and the config and credentials the fleet runs on.
 It is a different job from **operating** the fleet (running its locations, systems and components, reading the data),
-which is the [operator guide](/guides/operator/), and from **standing the platform up**, which
+which is the [operator guide](/operator/), and from **standing the platform up**, which
 is [deployment](/guides/deployment/).
 
 The dividing line is the [two authorization layers](/architecture/identity-access/), both
@@ -20,7 +20,7 @@ along those grants, so what an administrator sees is what they are allowed to ch
 
 Every task on these pages has two front doors, and they call the same API with the same checks:
 
-- **The console.** The **Admin** area of the [web console](/guides/operator/) holds Users,
+- **The console.** The **Admin** area of the [web console](/operator/) holds Users,
   Roles, User groups, Settings, and Audit. Secrets and Variables have moved to the **Values**
   group. A tab you have no read grant for is hidden and its route refused, so the console never
   paints a page you cannot use.

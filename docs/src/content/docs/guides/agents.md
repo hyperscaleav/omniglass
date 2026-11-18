@@ -277,7 +277,7 @@ model.
 ### Omnibot in the console
 
 The console runs omnibot too, on the server, as above. **Ask omnibot** in the top bar opens it in a
-panel, and so does the [command palette](/guides/operator/#getting-around)'s last row, which carries
+panel, and so does the [command palette](/operator/#getting-around)'s last row, which carries
 what you typed there as a draft for you to send. Each prompt runs on one conversation, kept on the
 server like any other; **New conversation** starts another.
 
