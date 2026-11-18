@@ -17,12 +17,12 @@
 #                           org teams); a team that is missing or unreadable is
 #                           empty, so every gate fails closed
 #
-# Input is one JSON object on stdin. build reads labeler, author, labels (names),
+# Input is one JSON object on stdin. build reads labeler, author,
 # open_prs (count), blocked_by (the numbers of the issue's open blockers),
 # blockers_unreadable (bool: the workflow could not read them), maintainers and
 # contributors (logins). fix reads event
 # ("comment" or "review"), sender, review_state, mentions (bool: the body
-# carries @claude), head_ref, fork (bool), app_bot (the agents' App bot login),
+# carries @claude), fork (bool), app_bot (the agents' App bot login),
 # auto_rounds (the App's Changes-requested reviews on the PR, this one
 # included), maintainers and contributors. verdict reads app_bot, head_sha and
 # reviews ([{user, state, commit_id}] in the order GitHub lists them). actors
@@ -85,12 +85,9 @@ case "$mode" in
 
   build)
     printf '%s' "$facts" | jq -r "$common"'
-      (.labels // []) as $labels
-      | if (.labeler // "") == "" then "refuse: the event names no labeler"
+      if (.labeler // "") == "" then "refuse: the event names no labeler"
         elif maintainer(.labeler) | not then
           "refuse: run:dev-gha was applied by @\(.labeler), who is not on the maintainers team"
-        elif ($labels | index("run:dev-hah")) != null then
-          "refuse: both run:dev-gha and run:dev-hah are set, so neither builds"
         elif member(.author // "") | not then
           "refuse: the issue was written by @\(.author // "unknown"), who is not on the maintainers or contributors team"
         elif (.open_prs // 0) > 0 then
@@ -107,8 +104,6 @@ case "$mode" in
       (.sender // "") as $sender
       | ((.app_bot // "") != "" and ($sender | ascii_downcase) == ((.app_bot // "") | ascii_downcase)) as $from_app
       | if (.fork // false) then "skip: the PR comes from a fork"
-        elif (.head_ref // "") | startswith("agent/issue-") then
-          "skip: the harness built this PR and handles its own feedback"
         elif $from_app then
           if .event != "review" or ((.review_state // "") | ascii_downcase) != "changes_requested" then
             "skip: only the reviewer'"'"'s Changes-requested review starts an automatic fix"

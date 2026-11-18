@@ -2,7 +2,7 @@
 title: "Agent work runs in GitHub Actions, picked by label"
 date: 2026-11-18
 status: "Accepted"
-summary: "Claude Code agents build, review and fix Omniglass work as GitHub Actions jobs on GitHub-hosted runners. The architect picks the builder per ticket with a label (run:dev-gha for Actions, run:dev-hah for the harness dispatcher), only the maintainers team's label starts a build, and only the maintainers' and contributors' words reach a model. A build waits for its blockers, the reviewer's check is its verdict, and a PR the reviewer and fixer cannot settle in five rounds parks for the architect. Rulesets are unchanged, and no agent can merge"
+summary: "Claude Code agents build, review and fix Omniglass work as GitHub Actions jobs on GitHub-hosted runners. They replace the homelab harness dispatcher as the only builder. The architect approves a ticket with the run:dev-gha label, only the maintainers team's label starts a build, and only the maintainers' and contributors' words reach a model. A build waits for its blockers, the reviewer's check is its verdict, and a PR the reviewer and fixer cannot settle in five rounds parks for the architect. Rulesets are unchanged, and no agent can merge"
 refs: [2175]
 ---
 
@@ -12,9 +12,9 @@ refs: [2175]
      `claude-code-action` on GitHub-hosted runners, authenticated with the architect's Claude
      subscription and switchable to an API key or Bedrock by one input. No self-hosted runner
      runs code from this public repo.
-  2. **The label picks the builder.** `run:dev-gha` sends a ticket to `agent-build`, `run:dev-hah`
-     to the harness dispatcher; both labels build nowhere. The label is the approval and is taken
-     off as work starts, so applying it again is the retry. The board shows status only.
+  2. **The label is the approval.** `run:dev-gha` sends a ticket to `agent-build`. It is the only
+     build label: the homelab harness dispatcher is retired. The label is taken off as work
+     starts, so applying it again is the retry. The board shows status only.
   3. **Teams gate the triggers.** A build starts only from a `maintainers` member's label on an
      issue the `maintainers` or `contributors` team wrote. A fix starts only from those teams'
      `@claude` or review, or from agent-review's Changes requested, five rounds per PR at most,
@@ -24,13 +24,14 @@ refs: [2175]
   4. **Outside text stays out of the model.** The build reads the ticket from a file holding the
      body and the two teams' comments; the fix reads only the feedback that started it; the
      conversation is locked while a build runs; no `pull_request_target`, no forks, no bot but
-     the agents' own and the harness's.
+     the agents' own.
   5. **The architect gates start, merge and release.** Builds open draft PRs and mark them ready
      when done; the `agent-review` check is red until the reviewer says ship on the head. Merges
      go to `main` (no staging branch; unfinished features ship behind a flag), and releases
      cherry-pick only fixes. The agents' App has no Workflows permission, the rulesets are
      unchanged, and both still need the architect's approval to merge.
-- **Not chosen:** a staging branch between PRs and `main` (a second merge to review and a
+- **Not chosen:** keeping the homelab harness as a second builder (two builders to secure and
+  keep in step, for no work only it can do); a staging branch between PRs and `main` (a second merge to review and a
   second branch to keep green, for what flags and reverts already give); self-hosted runners (they would run public-repo code on the architect's
   hardware); triggering on board moves (Actions cannot listen for them, so it would mean polling,
   and it would not keep comments out of the model); the official Claude App as identity (it holds

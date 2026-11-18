@@ -87,9 +87,9 @@ jobs:
           github_token: ${{ steps.app.outputs.token }}
           bot_id: ${{ steps.pick.outputs.bot_id }}
           bot_name: ${{ steps.pick.outputs.bot_name }}
-          # Pushes by the agents' own App (agent-build, agent-fix) and the
-          # harness's App are reviewed too; no other bot is admitted.
-          allowed_bots: ${{ steps.app.outputs.app-slug }},${{ vars.HARNESS_APP_SLUG }}
+          # Pushes by the agents' own App (agent-build, agent-fix) are reviewed
+          # too; no other bot is admitted.
+          allowed_bots: ${{ steps.app.outputs.app-slug }}
           claude_args: >-
             --model ${{ steps.pick.outputs.model }}
             --max-turns 60

@@ -1,9 +1,8 @@
 name: agent-build
 
 # Build an approved ticket into a PR with a Claude Code agent on a GitHub-hosted
-# runner (#2175). The architect approves by applying run:dev-gha; run:dev-hah
-# sends the ticket to the harness dispatcher instead, and a ticket with both
-# builds nowhere. Every gate decision is scripts/agent-trust.sh (tested in go
+# runner (#2175). The architect approves by applying run:dev-gha, the only
+# build label. Every gate decision is scripts/agent-trust.sh (tested in go
 # test ./scripts/): the labeler must be on the maintainers team, the issue's
 # author on maintainers or contributors, no open PR may already close it, and
 # no issue it is blocked by (GitHub's issue dependencies) may still be open.

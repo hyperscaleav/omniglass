@@ -6,8 +6,7 @@ name: agent-fix
 # - a review from either team that requests changes or mentions @claude;
 # - a Changes-requested review from agent-review, up to five rounds per PR;
 #   after that the PR parks with needs-fred until a person steps in.
-# Everyone else's mention does nothing. Harness PRs (head branch agent/issue-*)
-# are left to the harness, and fork PRs are skipped. Every decision is
+# Everyone else's mention does nothing, and fork PRs are skipped. Every decision is
 # scripts/agent-trust.sh fix (tested in go test ./scripts/). The agent reads only
 # the comment or review that started it, and pushes to the PR's own branch.
 #

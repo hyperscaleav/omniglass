@@ -55,13 +55,6 @@ func TestAgentTrustBuildRefusesALabelFromOutsideTheMaintainers(t *testing.T) {
 	}
 }
 
-func TestAgentTrustBuildRefusesBothRunLabels(t *testing.T) {
-	got, _ := agentTrust(t, "build", buildFacts("fred", "fred", `"run:dev-gha","run:dev-hah"`, "0"))
-	if !strings.Contains(got, "neither builds") {
-		t.Fatalf("got %q, want the both-labels refusal", got)
-	}
-}
-
 func TestAgentTrustBuildRefusesAnIssueFromOutsideTheTeams(t *testing.T) {
 	got, _ := agentTrust(t, "build", buildFacts("fred", "stranger", `"run:dev-gha"`, "0"))
 	if !strings.Contains(got, "@stranger") || !strings.HasPrefix(got, "refuse:") {
@@ -114,14 +107,19 @@ func TestAgentTrustFixSkipsAnyoneOutsideTheTeams(t *testing.T) {
 	}
 }
 
-func TestAgentTrustFixSkipsHarnessBranchesAndForks(t *testing.T) {
-	for _, f := range []string{
-		`"event":"comment","sender":"fred","mentions":true,"head_ref":"agent/issue-12","fork":false`,
-		`"event":"comment","sender":"fred","mentions":true,"head_ref":"fix/x","fork":true`,
-	} {
-		if got, _ := agentTrust(t, "fix", fixFacts(f)); !strings.HasPrefix(got, "skip:") {
-			t.Fatalf("%s: got %q, want a skip", f, got)
-		}
+func TestAgentTrustFixSkipsForks(t *testing.T) {
+	got, _ := agentTrust(t, "fix", fixFacts(`"event":"comment","sender":"fred","mentions":true,"head_ref":"fix/x","fork":true`))
+	if !strings.HasPrefix(got, "skip:") {
+		t.Fatalf("got %q, want a skip", got)
+	}
+}
+
+// Actions is the only builder, so a branch the retired harness left behind
+// takes fixes like any other.
+func TestAgentTrustFixTakesFeedbackOnAnOldHarnessBranch(t *testing.T) {
+	got, _ := agentTrust(t, "fix", fixFacts(`"event":"comment","sender":"fred","mentions":true,"head_ref":"agent/issue-12","fork":false`))
+	if got != "run" {
+		t.Fatalf("got %q, want run", got)
 	}
 }
 

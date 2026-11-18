@@ -115,12 +115,8 @@ each demo's clip (its GIF or animated preview and its scrubbable link) into the 
 section, replacing only its own marked block. Why a ref rather than a branch is in
 [demos](/contributing/demos/#show-it-on-the-pr).
 
-`run:dev-gha` is `agent-build.yml`. It is the architect's approval for one builder: its sibling
-`run:dev-hah` sends the ticket to the harness dispatcher on the worker instead, and joins this
-table when the dispatcher learns it
-([agent-harness#110](https://github.com/hyperscaleav/agent-harness/issues/110)). A ticket with
-both builds nowhere. A label from anyone outside the `maintainers` team is taken off with a
-comment saying why.
+`run:dev-gha` is `agent-build.yml`, and it is the architect's approval to build. A label from
+anyone outside the `maintainers` team is taken off with a comment saying why.
 
 `run:walkthrough` is `run:demo`'s earlier name, from when walkthroughs were the only demos. The
 workflow still honors it, so a PR that carries it (or a re-run of a run it started) records as

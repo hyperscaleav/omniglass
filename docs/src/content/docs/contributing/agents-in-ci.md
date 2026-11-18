@@ -5,9 +5,8 @@ description: "How Claude Code agents build, review and fix Omniglass work in Git
 
 Three workflows run Claude Code agents (Anthropic's `claude-code-action`) on GitHub-hosted
 runners, the same runners the [test gate](/contributing/release-ci/) uses, so testcontainers work
-and no self-hosted runner ever runs code from a public repo. They sit beside the
-[harness dispatcher](https://github.com/hyperscaleav/agent-harness), not in place of it: the
-architect picks the builder for each ticket by label. None of them changes a required check or a
+and no self-hosted runner ever runs code from a public repo. They are the only builder: the
+homelab harness dispatcher they replace is retired. None of them changes a required check or a
 ruleset, and none can merge ([ADR-2175](/architecture/decisions/#adr-2175-agent-work-runs-in-github-actions-picked-by-label)).
 
 | Workflow | Starts on | Does |
@@ -26,7 +25,7 @@ merging it, and releasing it. Everything between the gates runs without a person
 2. **Todo.** The architect and the assistant groom the backlog about daily into tickets in the
    standard format (`/define-work`), with a `tier:*` and `risk:*` label. A ticket that needs
    another one first says so with GitHub's **blocked by** link, and a build refuses to start
-   while any blocker is open. **Gate 1:** applying `run:dev-gha` (or `run:dev-hah`) is the
+   while any blocker is open. **Gate 1:** applying `run:dev-gha` is the
    approval to start.
 3. **Build and review.** The builder opens a draft PR, and marks it ready once `make test`
    passes and `/ship-slice` is clean. Ready starts agent-review; its Changes requested starts
@@ -49,8 +48,7 @@ otherwise takes the label off and comments why:
   so the workflow checks the team itself.
 - **The issue was written by the `maintainers` or `contributors` team.** A ticket from outside
   the project is rewritten by a maintainer first.
-- **No open PR already closes it**, and it does not also carry `run:dev-hah`. Both labels means
-  neither builder runs.
+- **No open PR already closes it.**
 - **Nothing it is blocked by is still open.** Mark the order with GitHub's issue dependencies
   (**blocked by** on the issue). If the list cannot be read, the build is refused, not guessed.
 
@@ -72,7 +70,6 @@ head requests changes, green when it says ship. The verdict is read with the def
 `scripts/agent-trust.sh`, so a PR cannot rewrite its own check. The check is not in either main
 ruleset yet; making it required is the architect's call. Opus reviews PRs that close a
 `risk:high` ticket, sonnet the rest. The reviewer reads the diff and the code, never the PR's conversation.
-Harness PRs are reviewed too, so the two builders can be compared.
 
 ## Asking for a fix
 
@@ -86,8 +83,8 @@ review that started it. Write the ask the way you would to a colleague:
 
 When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
 PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a
-person to request changes, mention `@claude` or take it over. Harness PRs (branch `agent/issue-<n>`) are left to
-the harness, which answers your review there as before. Fork PRs are skipped.
+person to request changes, mention `@claude` or take it over. Fork PRs
+are skipped.
 
 ## Who can start what
 
@@ -111,8 +108,7 @@ enforced in the workflow rather than asked of the model:
    and only the two teams' comments. The fix reads only the feedback that started it.
 2. **The conversation is locked** to collaborators while a build runs.
 3. **No outside code runs next to a token.** The workflows use `pull_request`, never
-   `pull_request_target`, and skip forks. No bot is admitted but the agents' own App and the
-   harness's.
+   `pull_request_target`, and skip forks. No bot is admitted but the agents' own App.
 4. **The token is narrow.** The agents' App has no Workflows permission, so an agent cannot edit
    these files, and both main rulesets still need the architect's approval to merge. The
    reviewer's token is scoped down to reading code and writing reviews.
@@ -130,7 +126,6 @@ org owner:
 - adds the variable `AGENT_APP_CLIENT_ID` and the secret `AGENT_APP_PRIVATE_KEY` for the agents'
   GitHub App, which needs Contents, Pull requests and Issues write, Projects write (for the
   board), org Members read (for the team checks), and no Workflows permission;
-- sets `HARNESS_APP_SLUG` to the harness's App, so its pushes are reviewed;
 - creates the `contributors` team (`maintainers` exists), and creates the `run:dev-gha` label.
 
 Every run draws on the subscription the token belongs to, and parallel runs share its limits. A
