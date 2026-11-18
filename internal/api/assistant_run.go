@@ -48,6 +48,14 @@ type aguiResumeInput struct {
 	Payload     json.RawMessage `json:"payload,omitempty" required:"false" doc:"The answer, {\"approved\": true} to run the call"`
 }
 
+// aguiContextInput is one AG-UI context entry: what the person handed over
+// with the prompt (#2122), a reference or a page query, read as data.
+type aguiContextInput struct {
+	_           struct{} `additionalProperties:"true"`
+	Description string   `json:"description" maxLength:"100" doc:"What it is: a kind, or page"`
+	Value       string   `json:"value" maxLength:"2000" doc:"A name or dotted address, or a route and its query; never a rendered value"`
+}
+
 type runAssistantConversationInput struct {
 	Name string `path:"name" doc:"Your conversation's name"`
 	Body struct {
@@ -56,6 +64,7 @@ type runAssistantConversationInput struct {
 		RunID    string             `json:"runId,omitempty" required:"false" doc:"The run's id, echoed in its events"`
 		Messages []aguiMessageInput `json:"messages,omitempty" required:"false" doc:"The client's view of the conversation; only its last user message is read, as the prompt"`
 		Resume   []aguiResumeInput  `json:"resume,omitempty" required:"false" doc:"The answer to the interrupt the last run ended on"`
+		Context  []aguiContextInput `json:"context,omitempty" required:"false" maxItems:"20" doc:"What the person handed over with the prompt, read as data ahead of it; ignored on a resume"`
 	}
 }
 
@@ -70,7 +79,8 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 			"A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. " +
 			"The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, " +
 			"and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. " +
-			"A server with no model is a 503. Gated by assistant:use.",
+			"Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. " +
+				"A server with no model is a 503. Gated by assistant:use.",
 	}, "assistant", "use"), func(ctx context.Context, in *runAssistantConversationInput) (*huma.StreamResponse, error) {
 		if o.omnibotModel == nil {
 			return nil, huma.Error503ServiceUnavailable("omnibot has no model on this server")
@@ -166,7 +176,7 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 				out, err = l.Continue(rctx, history, approved)
 			} else {
 				l.Resume(history)
-				out, err = l.Run(rctx, prompt)
+				out, err = l.Run(rctx, assistant.HandedOver(prompt, handover(in.Body.Context)))
 			}
 			if err != nil {
 				o.log.Error("omnibot run", "conversation", conv.Name, "err", err)
@@ -256,6 +266,14 @@ func lastUserText(msgs []aguiMessageInput) string {
 		return strings.TrimSpace(b.String())
 	}
 	return ""
+}
+
+func handover(in []aguiContextInput) []assistant.Handover {
+	out := make([]assistant.Handover, len(in))
+	for i, c := range in {
+		out[i] = assistant.Handover{Description: c.Description, Value: c.Value}
+	}
+	return out
 }
 
 func approvedIn(payload json.RawMessage) bool {

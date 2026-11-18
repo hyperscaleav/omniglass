@@ -416,6 +416,20 @@ export type AgentSettings = {
   write: AgentSettingsWrite;
 };
 
+export type AguiContextInput = {
+  /**
+     * What it is: a kind, or page
+     * @maxLength 100
+     */
+  description: string;
+  /**
+     * A name or dotted address, or a route and its query; never a rendered value
+     * @maxLength 2000
+     */
+  value: string;
+  [key: string]: unknown;
+ };
+
 export type AguiMessageInput = {
   /** Text, or an array of parts whose text parts are read */
   content?: unknown;
@@ -7570,6 +7584,12 @@ export type RunAssistantConversationInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
+     * What the person handed over with the prompt, read as data ahead of it; ignored on a resume
+     * @maxItems 20
+     * @nullable
+     */
+  context?: AguiContextInput[] | null;
+  /**
      * The client's view of the conversation; only its last user message is read, as the prompt
      * @nullable
      */
@@ -9789,7 +9809,7 @@ export const getRunAssistantConversationUrl = (name: string,) => {
 }
 
 /**
- * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. A server with no model is a 503. Gated by assistant:use.
+ * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. A server with no model is a 503. Gated by assistant:use.
  * @summary Run omnibot on one of your conversations
  */
 export const runAssistantConversation = async (name: string,
