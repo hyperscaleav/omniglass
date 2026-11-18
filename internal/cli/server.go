@@ -20,6 +20,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/egress"
+	"github.com/hyperscaleav/omniglass/internal/heartbeat"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/notifier"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
@@ -230,6 +231,10 @@ func runServer(ctx context.Context, version string, lab bool) error {
 	notifyCtx, stopNotify := context.WithCancel(ctx)
 	defer stopNotify()
 	go notifier.New(gw, egress.Options{}).Run(notifyCtx)
+	// The heartbeat (#1986): off until the heartbeat settings name a target,
+	// then a signed request to it every interval, through the egress contract,
+	// until shutdown cancels it.
+	go heartbeat.New(gw, egress.Options{}, c.ServerName, version).Run(notifyCtx)
 	// The server's self-report, once a collection report window, until
 	// shutdown cancels it. A server with no component writes nothing, and
 	// still re-reads its slow-query setting each window.

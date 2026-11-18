@@ -627,6 +627,13 @@
    "description": "Seconds since the outpost's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the outpost is silent."
   },
   {
+   "name": "rule-sweep-age",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Rule Sweep Age",
+   "description": "Seconds since the server's event rule sweep last completed, on the server's platform component; written every report window by the server itself and, from the shared database, by each peer server, so it keeps growing while the sweep is stalled."
+  },
+  {
    "name": "worklist-task-count",
    "data_type": "int",
    "label": "Worklist Tasks",
@@ -4217,6 +4224,17 @@
    "clear_event_type": "rule-cleared"
   },
   {
+   "name": "rule-sweep-stalled",
+   "label": "Rule sweep stalled",
+   "description": "The server's event rule sweep has not completed for more than 30 seconds, so rules that depend on time are not firing or clearing.",
+   "sample_key": "rule-sweep-age",
+   "fire": "value \u003e 30",
+   "clear": "value \u003c= 30",
+   "severity": "high",
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
+  },
+  {
    "name": "worklist-stale",
    "label": "Worklist stale",
    "description": "Every worklist pull the outpost made for two minutes was refused, so it is running its last worklist and misses every change since.",
@@ -4434,6 +4452,13 @@
    "key": "sweep-failure-count",
    "group": "Queues",
    "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "rule-sweep-age",
+   "group": "Queues",
+   "rules": [
+    "rule-sweep-stalled"
+   ]
   },
   {
    "key": "retention-behind",

@@ -51,6 +51,25 @@ rules:
     severity: high
     fire_event_type: rule-fired
     clear_event_type: rule-cleared
+  # A server whose event rule sweep has stopped (#1986): the sweep settles
+  # sustained streaks and wakes silent ones, so a stalled one leaves rules
+  # that need time unable to fire or clear. rule-sweep-age is the seconds since
+  # the last completed sweep, which ticks every 5 s; past 30 s is several
+  # missed sweeps. No sustain: the age is already a stretch of time. Raised on
+  # the stalled server's platform component, from its own report or from a
+  # live peer's read of the shared database, which judges only a server still
+  # marking itself seen. It catches a stalled sweep, not a dead server: a dead
+  # server writes nothing and drops out of its peers' read, and a lone server
+  # has no peer. The outbound heartbeat covers a dead server.
+  - name: rule-sweep-stalled
+    label: Rule sweep stalled
+    description: The server's event rule sweep has not completed for more than 30 seconds, so rules that depend on time are not firing or clearing.
+    sample_key: rule-sweep-age
+    fire: 'value > 30'
+    clear: 'value <= 30'
+    severity: high
+    fire_event_type: rule-fired
+    clear_event_type: rule-cleared
   # An outpost running a stale worklist (#1868): every worklist pull in its report
   # window refused (the bus gave no worklist it could read), so it ran the
   # whole window on its last one, unaware of any edit since. Sustained, so a
