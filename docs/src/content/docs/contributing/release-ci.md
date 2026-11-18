@@ -62,6 +62,28 @@ workflow re-records every demo on main and opens an issue when one fails. **`dem
 the PR body's demo tag on every PR. **`demo-prune.yml`** deletes an evidence ref 30 days after its
 PR closes.
 
+## Merging through the queue
+
+A PR reaches `main` through GitHub's merge queue (#2181), so nobody rebases a green PR or re-runs
+its CI by hand. Once its required checks are green on the PR and it is approved, the architect
+queues it with one click. The queue builds a temporary branch of the PR on top of the current
+`main` (and of any PRs queued ahead of it), runs the required checks there, and squash-merges it
+when they pass; when they fail, the PR leaves the queue and `main` is untouched. That is the
+up-to-date rule met on the commit that actually lands, without a rebase loop or the admin bypass.
+
+The queue waits for each required check (`test`, `e2e`, `gen-drift`, `smoke-lab` and `lint`) to
+report on the queue entry, so every workflow that reports one also runs on `merge_group`. A
+queue entry has its own ref, so the workflows' `github.ref` concurrency groups give each entry a
+run of its own. Two lints have nothing to read there: `pr-title.yml` and `demo-tag.yml` checked
+the PR's title and body before it could be queued, so on `merge_group` their `lint` job passes
+without reading a PR. `image.yml` runs only `smoke-lab` in the queue and publishes no image, since
+a queue entry's commit may never land; the arm64 smoke and the publish run on the PR and on `main`.
+
+A guard test, `internal/build/merge_group_guard_test.go`, reads `.github/workflows/` and fails when
+a workflow that reports a required check lacks `merge_group`, or when no workflow reports one. The
+required names are a list in the test, kept in step with the rulesets on `main` by hand: a check
+made required there is added to the list in the same change, or the queue would wait on it forever.
+
 ## Pinned actions and Dependabot
 
 Every action a workflow uses, first-party `actions/*` included, is pinned to a full commit SHA
