@@ -89,6 +89,27 @@ and fanned outward by the **CDC publisher**
 
 Column schemas live with each owning feature: [samples](/architecture/properties/#the-sample-tables), [events](/architecture/events/#storage), [alarms and actions](/architecture/alarms-actions/#storage) (`alarm` / `action`), [commands](/architecture/commands/), [variables, secrets, and declared values](/architecture/variables/#storage), [core entities](/architecture/core-entities/) and [templates](/architecture/templates/), [collection](/architecture/collection/#storage), [calculations](/architecture/calculations/#storage), [files](/architecture/files/), [time](/architecture/time/#storage), and [identity and access](/architecture/identity-access/#storage).
 
+## Package import boundaries
+
+Two rules hold at the package level, enforced by `TestImportBoundaries` in
+`internal/build/import_boundary_guard_test.go` (run by `make test`):
+
+1. **Only `internal/storage` and named tooling may import the database packages.**
+   `github.com/jackc/pgx` and `database/sql` are allowed in `internal/storage`,
+   `internal/storage/storagetest`, its sub-packages, `cmd/erdgen`, `internal/erd`, and
+   `internal/compressbench`. Every other package reaches Postgres through the Storage Gateway,
+   not by opening a connection of its own.
+
+2. **`internal/outpost` (production code) must not import `internal/storage` or
+   `internal/api`.** The outpost is a separate edge binary; importing the server's DB or API
+   graph would inflate it and couple its release cycle to the server's. Code that both the
+   outpost and the server need lives in a package neither of them is a dependency of (for
+   example, `internal/metric` for the metric timestamp rounding that both apply before a
+   sample leaves the outpost or lands in the database).
+
+The guard's allowlist has stale-entry detection: a package allowed to import a controlled
+dependency that no longer imports it fails the test, so the list cannot silently grow stale.
+
 ## Conventions
 
 - **Identity is three columns.** **`id`** is a uuid: immutable, the primary key, and what every

@@ -10,7 +10,7 @@ import (
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/hyperscaleav/omniglass/internal/delivery"
-	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/metric"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -381,7 +381,7 @@ func stampMetricMillis(ev *ogv1.TelemetryBatch) {
 				ts = ev.GetTs()
 			}
 			if ts != nil {
-				m.Ts = timestamppb.New(storage.MetricTime(ts.AsTime()))
+				m.Ts = timestamppb.New(metric.Time(ts.AsTime()))
 			}
 		}
 	}
@@ -396,7 +396,7 @@ func stampGroupMillis(g *ogv1.TaskGroup) {
 			ts = g.GetTs()
 		}
 		if ts != nil {
-			m.Ts = timestamppb.New(storage.MetricTime(ts.AsTime()))
+			m.Ts = timestamppb.New(metric.Time(ts.AsTime()))
 		}
 	}
 }
