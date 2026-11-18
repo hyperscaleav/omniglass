@@ -20,7 +20,10 @@
 # findings: [{severity, path, line, rule, failure, fix}]}], inline (bool,
 # default true)}. A blocking finding, or one whose severity is not "advisory",
 # makes the review REQUEST_CHANGES; otherwise it is COMMENT. It never
-# approves. With inline false every finding goes in the body instead of on a
+# approves. With own_pr true (the App posting the review also wrote the PR,
+# and GitHub refuses Request changes on your own PR) a blocking review is a
+# COMMENT too; its body still opens with the blocking count, which is what
+# agent-trust.sh verdict reads then. With inline false every finding goes in the body instead of on a
 # line, for when GitHub refuses a line that is not in the diff.
 #
 # The workflow runs the default branch's copy, like agent-trust.sh, because
@@ -104,6 +107,7 @@ case "$mode" in
       def text: "**[\(tag)] \(.rule // "finding" | cut(200))** (lens \(.lens | cut(40)))\n\n"
         + "Failure: \(.failure // "" | cut(3000))\n\nFix: \(.fix // "" | cut(1500))";
       (.inline != false) as $inline
+      | (.own_pr == true) as $own
       | [.lenses[] | .name as $l | (.findings // [])[] | select(type == "object") | . + {lens: $l}] as $all
       | ($all | map(select(blocking)) | length) as $b
       | ($all | length - $b) as $a
@@ -111,7 +115,7 @@ case "$mode" in
       | ($all | map(select(($inline and onaline) | not))) as $loose
       | {
           commit_id: .head_sha,
-          event: (if $b > 0 then "REQUEST_CHANGES" else "COMMENT" end),
+          event: (if $b > 0 and ($own | not) then "REQUEST_CHANGES" else "COMMENT" end),
           body: (
             (if ($all | length) == 0
               then "agent-review: swept, nothing survived"

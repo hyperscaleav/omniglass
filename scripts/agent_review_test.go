@@ -248,3 +248,12 @@ func TestAgentReviewRefusesAMissingLensAndBadInput(t *testing.T) {
 		t.Fatalf("bad usage: exit %d, want 64", code)
 	}
 }
+
+// GitHub refuses Request changes from the App that wrote the PR, so on its own
+// PR the review is a comment that still opens with the blocking count.
+func TestAgentReviewOnlyCommentsOnItsOwnAppsPR(t *testing.T) {
+	r := reviewOf(t, `{"head_sha":"h","own_pr":true,"expected":["a"],"lenses":[{"name":"a","findings":[{"severity":"blocking","path":"a.go","line":1,"rule":"r","failure":"f","fix":"x"}]}]}`)
+	if r.Event != "COMMENT" || !strings.HasPrefix(r.Body, "agent-review: 1 blocking, 0 advisory") {
+		t.Fatalf("own PR: %s %q, want a COMMENT that opens with the blocking count", r.Event, r.Body)
+	}
+}
