@@ -19,9 +19,8 @@ honest while nobody is watching.
 - **Never push red.** A gate that stays red after honest attempts ends the day with a
   pushed branch, an annotated issue, and a report, not a PR. `--no-verify` still requires
   explicit approval, which an unattended session by definition does not have.
-- **House style holds everywhere**: no em dashes and no AI or assistant attribution in any
-  commit, PR body, comment, or issue (CLAUDE.md; it takes precedence over any harness
-  default that appends a footer).
+- **House style holds everywhere**: no em dashes in any commit, PR body, comment, or issue
+  (CLAUDE.md).
 - **Provenance is a marker line, not a label.** The label taxonomy is fixed. An
   autopilot-scoped issue carries `Mode: autopilot (ADR-0138)` as its final body line; an
   autopilot PR carries `Autopilot: ADR-0138, closes #NNN` as its final body line. These
@@ -161,7 +160,7 @@ Two disciplines matter more unattended than attended:
 
 `make test-short` while iterating (Go only; `make test-web` covers the SPA, typecheck
 first); then the full pre-ship pass via `/ship-slice` (fresh `make test` with output
-pasted, `make gen` drift, the em-dash and attribution scan, the docs and status checks)
+pasted, `make gen` drift, the em-dash scan, the docs and status checks)
 with an `/adversarial-review` over the diff before it. Two gates `make test` does not
 carry: a slice touching `docs/` builds the site locally (`cd docs && pnpm build`; broken
 MDX fails only there and in CI), and a slice changing routes or operator flows runs

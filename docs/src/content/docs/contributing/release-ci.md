@@ -8,6 +8,8 @@ validate locally, do not lean on CI). CI is the backstop, and the release workfl
 release from a release branch.
 Thirteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
 `docs-build`, `migrations`, `preview-comment`, `demo`, `demo-tag`, `demo-prune`, `release`, and `goreleaser`.
+The three agent workflows (`agent-build`, `agent-review`, `agent-fix`) run Claude Code agents
+on GitHub-hosted runners and have a page of their own, [Agents in CI](/contributing/agents-in-ci/).
 
 ## On every pull request
 
