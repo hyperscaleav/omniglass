@@ -113,7 +113,9 @@ func newBoard(t *testing.T, st boardState) *board {
 	}
 	env := []string{}
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "BOARD_") && !strings.HasPrefix(kv, "PATH=") {
+		// AGENT_ROLE is the harness's marker of a dispatcher session; a test
+		// sets it itself, so a session running the suite does not leak it in.
+		if !strings.HasPrefix(kv, "BOARD_") && !strings.HasPrefix(kv, "PATH=") && !strings.HasPrefix(kv, "AGENT_ROLE=") {
 			env = append(env, kv)
 		}
 	}
@@ -431,6 +433,58 @@ func TestBoardInReviewLandsWhenTheBoardHasIt(t *testing.T) {
 	} else {
 		inReview, _ := fields(&boardState{InReview: true})
 		wantStatusEdit(t, w[0], "PVTI_1145", inReview.optionID("Status", "In Review"))
+	}
+}
+
+// A dispatcher session (the harness sets AGENT_ROLE) leaves In Review to the
+// dispatcher, which moves the ticket to AI Review after its gate only while the
+// board still says In Progress.
+func TestBoardInReviewIsLeftToTheDispatcherUnderAnAgentRole(t *testing.T) {
+	b := newBoard(t, boardState{InReview: true, Issues: map[string]*issue{
+		"1145": onBoard("feat: a slice", item{ID: "PVTI_1145", Status: "In Progress"}),
+	}})
+	r := b.run([]string{"AGENT_ROLE=dev"}, "set", "1145", "In Review")
+	r.wantCode(t, 0)
+	if w := r.writes(); len(w) != 0 {
+		t.Errorf("wrote %q, want no Status mutation", w)
+	}
+	if got := strings.Count(strings.TrimSpace(r.stdout), "\n"); got != 0 || strings.TrimSpace(r.stdout) == "" {
+		t.Errorf("stdout = %q, want one line", r.stdout)
+	}
+	wantContains(t, "stdout", r.stdout, "dispatcher")
+	if st := b.state().Issues["1145"].Item.Status; st != "In Progress" {
+		t.Errorf("Status = %q, want In Progress", st)
+	}
+}
+
+func TestBoardInReviewStillMovesWithoutAnAgentRole(t *testing.T) {
+	b := newBoard(t, boardState{InReview: true, Issues: map[string]*issue{
+		"1145": onBoard("feat: a slice", item{ID: "PVTI_1145", Status: "In Progress"}),
+	}})
+	r := b.run([]string{"AGENT_ROLE="}, "set", "1145", "In Review")
+	r.wantCode(t, 0)
+	wantContains(t, "stdout", r.stdout, "#1145: In Progress -> In Review")
+}
+
+func TestBoardOtherMovesAreUnchangedUnderAnAgentRole(t *testing.T) {
+	b := newBoard(t, boardState{Issues: map[string]*issue{
+		"1145": onBoard("feat: a slice", item{ID: "PVTI_1145", Status: "Todo"}),
+		"1146": {Title: "feat: another"},
+	}})
+	r := b.run([]string{"AGENT_ROLE=dev"}, "set", "1145", "In Progress")
+	r.wantCode(t, 0)
+	wantContains(t, "stdout", r.stdout, "#1145: Todo -> In Progress")
+	if w := r.writes(); len(w) != 1 {
+		t.Fatalf("writes = %q, want one", w)
+	} else {
+		wantStatusEdit(t, w[0], "PVTI_1145", inProgressID)
+	}
+
+	a := b.run([]string{"AGENT_ROLE=dev"}, "add", "1146")
+	a.wantCode(t, 0)
+	wantContains(t, "stdout", a.stdout, "#1146")
+	if st := b.state().Issues["1146"]; st.Item == nil || st.Item.Status != "Backlog" {
+		t.Errorf("add under AGENT_ROLE left %+v, want the item in Backlog", st.Item)
 	}
 }
 

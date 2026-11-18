@@ -61,9 +61,9 @@ func TestBootstrapOwnerIdempotent(t *testing.T) {
 		sql  string
 		want int
 	}{
-		{"human", `select count(*) from human where username = 'root'`, 1},
-		{"credential", `select count(*) from credential c join human h on h.principal_id = c.principal_id where h.username = 'root'`, 1},
-		{"owner@all grant", `select count(*) from principal_grant g join human h on h.principal_id = g.principal_id where h.username = 'root' and g.role_id = (select id from role where name = 'owner') and g.scope_kind = 'all'`, 1},
+		{"person", `select count(*) from person where username = 'root'`, 1},
+		{"credential", `select count(*) from credential c join person h on h.user_id = c.user_id where h.username = 'root'`, 1},
+		{"owner@all grant", `select count(*) from user_grant g join person h on h.user_id = g.user_id where h.username = 'root' and g.role_id = (select id from role where name = 'owner') and g.scope_kind = 'all'`, 1},
 	} {
 		var got int
 		if err := conn.QueryRow(ctx, c.sql).Scan(&got); err != nil {

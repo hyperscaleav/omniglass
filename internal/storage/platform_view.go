@@ -16,29 +16,29 @@ import (
 // The platform projection (#1644): the read behind the Platform health page.
 //
 // The page answers one question, whether Omniglass itself is well, and it
-// answers it from parts the fleet already has: every node and every server is
+// answers it from parts the fleet already has: every outpost and every server is
 // a component of the platform system (#1625, #1627), and every figure on the
 // page is a sample on one of those components. So this read invents no data;
-// it gathers the running build, the platform verdict and each node's current
+// it gathers the running build, the platform verdict and each outpost's current
 // figure per key (PlatformWindowKeys) into one body, in a fixed number of statements however many
-// nodes there are.
+// outposts there are.
 //
-// Scope is injected per tier, as FleetProjection does. node:read lets the
-// caller see the rows at all, and only an all-scope read reaches a node
-// (ListNodes). component:read is the figures, the verdicts and the server's
+// Scope is injected per tier, as FleetProjection does. outpost:read lets the
+// caller see the rows at all, and only an all-scope read reaches an outpost
+// (ListOutposts). component:read is the figures, the verdicts and the server's
 // identity: the platform components are unplaced, so only an all-scope read
 // reaches them, and anything less leaves the figures out rather than zeroing
 // them. system:read is the platform system's own verdict, null short of an
 // all-scope read for the same reason.
 
-// PlatformViewGroup is one titled run of columns in the node table.
+// PlatformViewGroup is one titled run of columns in the outpost table.
 type PlatformViewGroup struct {
 	Name  string
 	Label string
 	Keys  []string
 }
 
-// PlatformViewGroups is the node table's columns, in order: the one place the
+// PlatformViewGroups is the outpost table's columns, in order: the one place the
 // page's key set is written. The page renders the groups the view returns and
 // has no list of its own, so a key added here is a column there. Each key is
 // a seeded platform metric (TestPlatformViewKeysAreSeeded).
@@ -72,7 +72,7 @@ func platformViewKeys() []string {
 // something (a request, a landed batch, a slow query): its last
 // sample is that window's figure, not a current reading, so the view leaves
 // it out once platformWindowHorizon has passed, as PlatformWindowKeys does
-// for a node. Every other key is a gauge sampled each window or a retention
+// for an outpost. Every other key is a gauge sampled each window or a retention
 // fact its hourly pass writes, current however old.
 type PlatformServerKey struct {
 	Name   string
@@ -92,7 +92,7 @@ type PlatformServerGroup struct {
 const platformRouteRank = 10
 
 // PlatformServerGroups is each server's panels, in order (#1645): the one
-// place their key set is written, as PlatformViewGroups is the node table's.
+// place their key set is written, as PlatformViewGroups is the outpost table's.
 // The page renders the panels the view returns and has no list of its own.
 // Each key is a seeded platform metric (TestPlatformServerGroupKeysAreSeeded).
 // The request keys are ranked: the ten slowest and the ten busiest routes of
@@ -108,7 +108,17 @@ var PlatformServerGroups = []PlatformServerGroup{
 		{Name: writerclass.BusRequestCount, Window: true},
 		{Name: writerclass.DBPoolAcquired, Of: writerclass.DBPoolMax},
 		{Name: writerclass.DBPoolMax},
-		{Name: writerclass.DBPoolWaitCount},
+		// Waits against the acquires they were a share of, so a pool that
+		// waited 40 times reads differently at 50 acquires than at 50,000.
+		{Name: writerclass.DBPoolWaitCount, Of: writerclass.DBPoolAcquireCount},
+		{Name: writerclass.DBPoolAcquireCount},
+		{Name: writerclass.DBPoolWaitDuration},
+		// The database's own side (#1980): what the pool cannot see, the
+		// connections other clients hold and a transaction left open.
+		{Name: writerclass.DBConnectionCount, Of: writerclass.DBConnectionLimit},
+		{Name: writerclass.DBConnectionLimit},
+		{Name: writerclass.DBConnectionIdleInTransactionCount, Of: writerclass.DBConnectionCount},
+		{Name: writerclass.DBTransactionOldestAge},
 	}},
 	{Name: "ingest", Label: "Ingest", Keys: []PlatformServerKey{
 		{Name: writerclass.IngestLag, Window: true},
@@ -137,6 +147,7 @@ var PlatformServerGroups = []PlatformServerGroup{
 		{Name: writerclass.IngestLaneBusy},
 		{Name: writerclass.SweepFailureCount, Of: writerclass.SweepCount, Window: true},
 		{Name: writerclass.SweepCount, Window: true},
+		{Name: writerclass.RuleSweepAge},
 	}},
 	{Name: "retention", Label: "Retention", Keys: []PlatformServerKey{
 		{Name: writerclass.RetentionBehind},
@@ -163,7 +174,7 @@ func platformServerKeys() (names []string, ranks []int, windows []bool) {
 }
 
 // PlatformPageKeys is every key the Platform health page reads, in no order:
-// the node table's columns, each server panel's keys and the keys they are
+// the outpost table's columns, each server panel's keys and the keys they are
 // read against, the pipeline's delivery keys and the server's identity. A
 // platform key outside it is off the page, which TestPlatformPageListsEveryPlatformKey
 // allows only with a reason.
@@ -179,6 +190,115 @@ func PlatformPageKeys() []string {
 	}
 	out = append(out, pipelineKeys...)
 	return append(out, writerclass.ServerVersion, writerclass.ServerStartedAt)
+}
+
+// PlatformHealthKey is one figure the page reads as health: a key and the
+// panel it sits in.
+type PlatformHealthKey struct {
+	Key   string
+	Group string
+}
+
+// PlatformHealthKeys is every figure the page reads as health, in page order
+// (#1983): each outpost column, each server panel key, and the pipeline's loss
+// ratio. A key a panel reads only as another's denominator (Of), and the
+// pipeline's in and out counts, are operands of a figure and not figures: the
+// pair is watched through its numerator, a rule on the ratio's key where one
+// exists and on the numerator otherwise. TestEveryPlatformHealthFigureHasARuleOrAnExemption
+// holds each to a shipped event rule or to PlatformRuleExemptions.
+func PlatformHealthKeys() []PlatformHealthKey {
+	var out []PlatformHealthKey
+	for _, g := range PlatformViewGroups {
+		for _, k := range g.Keys {
+			out = append(out, PlatformHealthKey{Key: k, Group: g.Label})
+		}
+	}
+	for _, g := range PlatformServerGroups {
+		operand := map[string]bool{}
+		for _, k := range g.Keys {
+			if k.Of != "" {
+				operand[k.Of] = true
+			}
+		}
+		for _, k := range g.Keys {
+			// A pure denominator is the scale a ratio is read against, not a
+			// figure. A key that is a denominator and is itself read against
+			// one (connections held: idle's Of, and held of the limit) keeps
+			// its row, as the page's panelSections does (#1980).
+			if !operand[k.Name] || k.Of != "" {
+				out = append(out, PlatformHealthKey{Key: k.Name, Group: g.Label})
+			}
+		}
+	}
+	return append(out, PlatformHealthKey{Key: writerclass.DeliveryLossRatio, Group: "Pipeline"})
+}
+
+// The reasons a health figure has no event rule of its own.
+const (
+	exThroughput   = "a throughput count: its rate is load, not health"
+	exBesideLag    = "read beside ingest-lag-max, which the ingest-lag-high rule watches"
+	exBesideBehind = "read beside retention-behind, which flags a failing pass too"
+	exPosition     = "a stream position, read against the stream's head by the lab's measure, not a health figure"
+	exNoRule       = "no rule yet, #1982"
+)
+
+// PlatformRuleExemptions is every health figure with no shipped event rule,
+// each with a one-line reason (#1983): a throughput count, a figure only read
+// beside one that is watched, or a figure whose rule is still to come, which
+// names the issue that adds it. A figure leaves this list in the change that
+// ships its rule, and the test fails if it does not. The collection page
+// renders it beside the rules, so an operator sees which figures alarm and
+// which do not.
+var PlatformRuleExemptions = map[string]string{
+	// The outpost table.
+	writerclass.ScheduleLateness:    exNoRule,
+	writerclass.TickOverrunCount:    exNoRule,
+	writerclass.ScheduleSkipCount:   exNoRule,
+	writerclass.CommandPendingCount: exNoRule,
+	writerclass.CommandPendingAge:   exNoRule,
+	writerclass.CommandStuckCount:   exNoRule,
+	writerclass.CommandExpiredCount: exNoRule,
+
+	// The server's requests panel.
+	writerclass.HTTPRequestDurationMax:             exNoRule,
+	writerclass.HTTPRequestCount:                   exThroughput,
+	writerclass.DBSlowQueryCount:                   exNoRule,
+	writerclass.BusRequestFailureCount:             exNoRule,
+	writerclass.DBPoolAcquired:                     "no rule yet, #1984",
+	writerclass.DBPoolWaitCount:                    "no rule yet, #1984",
+	writerclass.DBPoolWaitDuration:                 "no rule yet, #1984",
+	writerclass.DBConnectionCount:                  "no rule yet, #1984",
+	writerclass.DBConnectionIdleInTransactionCount: "no rule yet, #1984",
+	writerclass.DBTransactionOldestAge:             "no rule yet, #1984",
+
+	// Ingest.
+	writerclass.IngestLag:            exBesideLag,
+	writerclass.IngestBatchCount:     exThroughput,
+	writerclass.IngestSampleCount:    exThroughput,
+	writerclass.PushLaneRefusalCount: exNoRule,
+	writerclass.PushLaneTurnWaitP99:  exNoRule,
+	writerclass.PushLaneTurnWaitMax:  exNoRule,
+
+	// Queues.
+	writerclass.BusConsumerPending:          "no rule yet, #1977",
+	writerclass.BusConsumerAckPending:       exNoRule,
+	writerclass.BusConsumerAckFloor:         exPosition,
+	writerclass.BusTelemetryAckFailureCount: exNoRule,
+	writerclass.CalcPendingDepth:            exNoRule,
+	writerclass.OutboxQueuedDepth:           exNoRule,
+	writerclass.OutboxDueAge:                exNoRule,
+	writerclass.IngestLaneBusy:              "no rule yet, #1977",
+	writerclass.SweepFailureCount:           exNoRule,
+
+	// Retention.
+	writerclass.RetentionDeletedCount:     exThroughput,
+	writerclass.RetentionPassFailureCount: exBesideBehind,
+	writerclass.MetricOldestDayAge:        exNoRule,
+	writerclass.DatabaseBytes:             exNoRule,
+	writerclass.TableBytes:                exNoRule,
+
+	// The pipeline.
+	writerclass.DeliveryLossRatio: "no rule yet, #1977",
 }
 
 // PlatformKey is one column's catalog facts: its metric type's label, unit
@@ -257,13 +377,13 @@ type PlatformServer struct {
 	Alarms      []PlatformAlarm
 }
 
-// PlatformNode is one node's row. ComponentID is nil for a node the boot has
+// PlatformOutpost is one outpost's row. ComponentID is nil for an outpost the boot has
 // not yet given a platform component. Verdict and Figures are the
-// component's, nil without an all-scope component read; a key the node has
+// component's, nil without an all-scope component read; a key the outpost has
 // never reported is absent from Figures, never zero. Loss is the last hour's
-// end to end over the hops the node's own component records (LossHops), nil
+// end to end over the hops the outpost's own component records (LossHops), nil
 // without the read or when nothing went in on any of them.
-type PlatformNode struct {
+type PlatformOutpost struct {
 	Name            string
 	Label           string
 	Enrolled        bool
@@ -276,40 +396,40 @@ type PlatformNode struct {
 
 // PlatformView is the whole projection. FiguresRead says whether the caller's
 // component read reached the platform components: false means Servers is
-// empty and every node's Verdict and Figures are nil because the caller may
+// empty and every outpost's Verdict and Figures are nil because the caller may
 // not read them, not because nothing was reported. Pipeline is the hop by
 // hop delivery read (#1646), nil without that read; LossHops names the hops a
-// node's Loss composes.
+// outpost's Loss composes.
 type PlatformView struct {
 	System      *PlatformSystem
 	Servers     []PlatformServer
 	Groups      []PlatformViewGroup
 	Keys        []PlatformKey
-	Nodes       []PlatformNode
+	Outposts    []PlatformOutpost
 	FiguresRead bool
 	Pipeline    *PlatformPipeline
 	LossHops    []delivery.Hop
 }
 
 // PlatformView reads the platform as the Platform health page shows it. A
-// node read short of all-scope is ErrNodeForbidden, as ListNodes answers.
-func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope.Set) (*PlatformView, error) {
-	nodes, err := p.ListNodes(ctx, nodeRead)
+// outpost read short of all-scope is ErrOutpostForbidden, as ListOutposts answers.
+func (p *PG) PlatformView(ctx context.Context, outpostRead, sysRead, compRead scope.Set) (*PlatformView, error) {
+	outposts, err := p.ListOutposts(ctx, outpostRead)
 	if err != nil {
 		return nil, err
 	}
 	view := &PlatformView{
 		Servers:  []PlatformServer{},
 		Groups:   PlatformViewGroups,
-		Nodes:    make([]PlatformNode, 0, len(nodes)),
-		LossHops: nodeLossHops(),
+		Outposts: make([]PlatformOutpost, 0, len(outposts)),
+		LossHops: outpostLossHops(),
 	}
 	if view.Keys, err = p.platformKeys(ctx, platformViewKeys()); err != nil {
 		return nil, err
 	}
 	var componentIDs []string
-	for _, n := range nodes {
-		view.Nodes = append(view.Nodes, PlatformNode{
+	for _, n := range outposts {
+		view.Outposts = append(view.Outposts, PlatformOutpost{
 			Name: n.Name, Label: n.Label, Enrolled: n.Enrolled,
 			LastHeartbeatAt: n.LastHeartbeatAt, ComponentID: n.PlatformComponentID,
 		})
@@ -343,18 +463,18 @@ func (p *PG) PlatformView(ctx context.Context, nodeRead, sysRead, compRead scope
 	if view.Pipeline, err = p.platformPipeline(ctx); err != nil {
 		return nil, err
 	}
-	for i := range view.Nodes {
-		id := view.Nodes[i].ComponentID
+	for i := range view.Outposts {
+		id := view.Outposts[i].ComponentID
 		if id == nil {
 			continue
 		}
 		if v, ok := verdicts[*id]; ok {
-			view.Nodes[i].Verdict = &v
+			view.Outposts[i].Verdict = &v
 		}
-		view.Nodes[i].Loss = nodeLoss(*view.Pipeline, *id)
-		view.Nodes[i].Figures = figures[*id]
-		if view.Nodes[i].Figures == nil {
-			view.Nodes[i].Figures = map[string]PlatformFigure{}
+		view.Outposts[i].Loss = outpostLoss(*view.Pipeline, *id)
+		view.Outposts[i].Figures = figures[*id]
+		if view.Outposts[i].Figures == nil {
+			view.Outposts[i].Figures = map[string]PlatformFigure{}
 		}
 	}
 	return view, nil

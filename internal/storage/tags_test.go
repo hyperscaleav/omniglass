@@ -39,9 +39,9 @@ func mustTag(t *testing.T, gw storage.Gateway, name string, appliesTo []string, 
 	return tg
 }
 
-// TestTagRegistryCRUD covers minting keys, the all-scope gate, key/applies_to
+// TestTagCatalogCRUD covers minting keys, the all-scope gate, key/applies_to
 // validation, the duplicate conflict, listing, and update.
-func TestTagRegistryCRUD(t *testing.T) {
+func TestTagCatalogCRUD(t *testing.T) {
 	t.Parallel()
 	gw := tagGateway(t)
 	ctx := context.Background()

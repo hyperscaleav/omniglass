@@ -72,7 +72,7 @@ type CalcSample struct {
 	Instance string
 }
 
-// CalcMember is one role-bound member of a system as a system rule reads
+// CalcMember is one slot-bound member of a system as a system rule reads
 // it: its id and name, its values of each input in the rule's order (one per
 // instance, under the instance rules), and its own value of each input (its
 // aggregate instance's; nil when it has none), which its record carries.

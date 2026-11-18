@@ -21,3 +21,13 @@ func mcpExposed(hints ...tooldef.Hints) map[string]any {
 	}
 	return map[string]any{tooldef.Extension: h}
 }
+
+// plaintext is the stamp on an operation whose request or response carries a
+// credential in plaintext (a minted token, a password, a secret's values, a
+// reveal), set as the operation's Extensions at registration (#2025). It is the
+// opposite of mcpExposed: the generator refuses a tool on such an operation
+// (tooldef.CredentialBlind), and TestPlaintextOperationsAreStamped fails when a
+// credential-shaped operation goes without it.
+func plaintext() map[string]any {
+	return map[string]any{tooldef.PlaintextExtension: true}
+}

@@ -41,7 +41,9 @@ type operation struct {
 	Summary     string          `json:"summary"`
 	Description string          `json:"description"`
 	Permission  string          `json:"x-omniglass-permission"`
+	Conditional string          `json:"x-omniglass-conditional-permission"`
 	Stamp       json.RawMessage `json:"x-omniglass-mcp"`
+	Plaintext   bool            `json:"x-omniglass-plaintext"`
 	Parameters  []struct {
 		Name        string         `json:"name"`
 		In          string         `json:"in"`
@@ -59,7 +61,9 @@ type operation struct {
 // Build reads an OpenAPI document and returns the tool for every stamped
 // operation, in path then method order. What cannot be served honestly (an
 // argument name used twice, a stamp the rule refuses, a required header, a
-// dangling reference, no description) is an error naming the operation.
+// dangling reference, no description) is an error naming the operation, and so
+// is a stamp on an operation that reveals or carries a credential in plaintext
+// (tooldef.CredentialBlind).
 func Build(raw []byte) ([]tooldef.Def, error) {
 	var doc document
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -98,6 +102,9 @@ func buildOne(doc document, path, method string, op operation) (tooldef.Def, err
 	if strings.TrimSpace(op.Description) == "" {
 		return tooldef.Def{}, fmt.Errorf("a tool needs its operation's description, and it has none")
 	}
+	if err := tooldef.CredentialBlind(op.Permission, op.Plaintext); err != nil {
+		return tooldef.Def{}, err
+	}
 	hints, err := tooldef.ParseHints(op.Stamp)
 	if err != nil {
 		return tooldef.Def{}, err
@@ -109,6 +116,7 @@ func buildOne(doc document, path, method string, op operation) (tooldef.Def, err
 	d := tooldef.Def{
 		Name: op.OperationID, Title: op.Summary, Description: op.Description,
 		Method: method, Path: path, Permission: op.Permission, Annotations: ann,
+		Class: tooldef.Classify(ann, op.Permission, op.Conditional),
 	}
 	props := map[string]any{}
 	var required []string

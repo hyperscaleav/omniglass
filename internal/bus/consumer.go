@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -21,7 +22,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// telemetryStream is the JetStream stream capturing every node's telemetry
+// telemetryStream is the JetStream stream capturing every outpost's telemetry
 // publish; telemetryConsumer is the server's durable, at-least-once worker over
 // it. The durable consumer IS the ingest worklist (no separate Postgres queue in
 // this checkpoint): its handler derives, confines, writes, and acks inline.
@@ -33,13 +34,13 @@ import (
 // (see startTelemetryConsumer).
 //
 // telemetryDuplicateWindow is how long the stream remembers a batch's
-// Nats-Msg-Id (#453): a publisher retrying inside it (a node's next tick, the
+// Nats-Msg-Id (#453): a publisher retrying inside it (an outpost's next tick, the
 // push route's bounded retry) is answered with the first copy's ack and
 // nothing is stored twice. A retry past it is stored again, and the receipt
 // (#311, LandBatch) keeps it from landing twice, so the window saves work and
 // the receipt is the guarantee. ReceiptHorizon is how long a receipt is kept
 // far past the stream's redelivery (maxTelemetryDeliveries acks) and a
-// node's retry of a batch it could not ship, ADR-0311.
+// outpost's retry of a batch it could not ship, ADR-0311.
 const (
 	telemetryStream          = "OG_TELEMETRY"
 	telemetryConsumer        = "og-telemetry-worker"
@@ -50,21 +51,38 @@ const (
 
 // telemetryAckWait is how long the stream waits for the consumer's ack
 // before it redelivers: a consumer that died with a batch unacked hands it
-// to the next one after this. A var so a test can shorten it.
+// to the next one after this. A landing that outlasts it keeps the wait
+// reset by sending InProgress (landing), so only a consumer that has gone
+// silent is waited out. A var so a test can shorten it.
 var telemetryAckWait = 30 * time.Second
+
+// heartbeatEvery is how often a landing tells the stream it is still at
+// work, given the ack wait it must stay inside: a third of it, so a beat
+// that is late or lost still leaves two before the wait is spent. Pure.
+func heartbeatEvery(ackWait time.Duration) time.Duration { return ackWait / 3 }
 
 // telemetryNakDelay is the base of the backoff a transiently failed batch is
 // redelivered after (the delay grows with each delivery). A var so a test can
 // shorten it.
 var telemetryNakDelay = 500 * time.Millisecond
 
-// startTelemetryConsumer creates (idempotently) the telemetry stream + durable
-// consumer over the full-permission internal client and begins consuming. The
-// stream persists a TelemetryBatch the instant a node publishes it, and (WorkQueuePolicy)
+// startTelemetryConsumer creates (idempotently) the telemetry stream and its
+// durables over the full-permission internal client and begins consuming. The
+// stream persists a TelemetryBatch the instant an outpost publishes it, and (WorkQueuePolicy)
 // deletes it the instant it is acked, so disk stays bounded to the current
-// backlog rather than growing forever; the consumer redelivers a transient
+// backlog rather than growing forever; each durable redelivers a transient
 // failure up to maxTelemetryDeliveries (nakOrTerm), so a DB hiccup never loses a
 // sample but a permanently-failing one still leaves the queue.
+//
+// The stream files each outpost's batches under the outpost's partition among
+// s.partitions (#1896, partitionTransform), and each partition has a durable
+// of its own; the durable named telemetryConsumer keeps the push lane's
+// subject and any batch stored under an outpost's own subject before the stream
+// filed by partition. A partition past the count, filed under by a server
+// that ran more lanes or left with a durable, is drained until empty and its
+// durable then deleted. A count changed over a held backlog is logged: a
+// outpost's batches filed before and after the change are on different lanes
+// and may land out of order (reorderRisk).
 //
 // The stream keeps a duplicate window over each batch's Nats-Msg-Id (#453),
 // and the stream's creation time is recorded as the epoch a batch with no id
@@ -77,39 +95,157 @@ func (s *Server) startTelemetryConsumer() error {
 	s.js = js
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	transform := partitionTransform(s.partitions)
+	prior, held, err := priorPartitions(ctx, js)
+	if err != nil {
+		return err
+	}
+	if reorderRisk(prior, s.partitions, held) {
+		slog.Warn("ingest partitions changed over a held backlog: an outpost's batches filed before and after may land out of order",
+			"facility", "ingest", "prior", prior, "partitions", s.partitions, "held", held)
+	}
+	// The stream also names the partitioned form among its subjects, so the
+	// durable that keeps the unpartitioned subjects is filtered to a strict
+	// subset of them. A durable whose filters equal the stream's subjects
+	// counts as unfiltered, and the work queue then holds every partition
+	// batch for it after its own partition acknowledged it. No outpost can
+	// publish the partitioned form: an outpost's grant is its own subject alone.
 	stream, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
-		Name:       telemetryStream,
-		Subjects:   []string{collection.TelemetryWildcard, collection.APITelemetrySubject},
-		Retention:  jetstream.WorkQueuePolicy,
-		Duplicates: telemetryDuplicateWindow,
+		Name:             telemetryStream,
+		Subjects:         []string{collection.TelemetryWildcard, telemetryPrefix + "*.*", collection.APITelemetrySubject},
+		Retention:        jetstream.WorkQueuePolicy,
+		Duplicates:       telemetryDuplicateWindow,
+		SubjectTransform: &transform,
 	})
 	if err != nil {
 		return err
 	}
 	s.streamEpoch = stream.CachedInfo().Created.UTC().Format(time.RFC3339Nano)
-	cons, err := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:    telemetryConsumer,
-		AckPolicy:  jetstream.AckExplicitPolicy,
-		AckWait:    telemetryAckWait,
-		MaxDeliver: maxTelemetryDeliveries,
+	s.telemetry = stream
+
+	// The durable that keeps the unpartitioned subjects is filtered first: a
+	// work queue refuses two durables whose filters overlap, and one an older
+	// server created takes every subject.
+	other := s.tallies[s.partitions]
+	if err := s.consumeLane(ctx, stream, telemetryConsumer, []string{collection.TelemetryWildcard, collection.APITelemetrySubject}, other); err != nil {
+		return err
+	}
+	for i := range s.partitions {
+		if err := s.consumeLane(ctx, stream, partitionDurable(i), []string{partitionFilter(i)}, s.tallies[i]); err != nil {
+			return err
+		}
+	}
+	return s.drainPastPartitions(ctx, stream, prior, other)
+}
+
+// priorPartitions is the partition count the telemetry stream filed by
+// before this start, 0 for none, and how many batches it holds; -1 when
+// there is no stream yet.
+func priorPartitions(ctx context.Context, js jetstream.JetStream) (int, uint64, error) {
+	stream, err := js.Stream(ctx, telemetryStream)
+	if errors.Is(err, jetstream.ErrStreamNotFound) {
+		return -1, 0, nil
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("read the telemetry stream: %w", err)
+	}
+	info := stream.CachedInfo()
+	return transformPartitions(info.Config.SubjectTransform), info.State.Msgs, nil
+}
+
+// consumeLane creates (or updates) the durable name over filters and
+// consumes it, each batch's time in the handler kept in tally.
+func (s *Server) consumeLane(ctx context.Context, stream jetstream.Stream, name string, filters []string, tally *laneTally) error {
+	cons, err := stream.CreateOrUpdateConsumer(ctx, laneConfig(name, filters))
+	if err != nil {
+		return fmt.Errorf("durable %s: %w", name, err)
+	}
+	return s.consume(name, cons, tally)
+}
+
+// laneConfig is a lane's durable name over filters.
+func laneConfig(name string, filters []string) jetstream.ConsumerConfig {
+	return jetstream.ConsumerConfig{
+		Durable:        name,
+		FilterSubjects: filters,
+		AckPolicy:      jetstream.AckExplicitPolicy,
+		AckWait:        telemetryAckWait,
+		MaxDeliver:     maxTelemetryDeliveries,
 		// One batch in flight: nothing is delivered past a batch the
-		// consumer has not acked or dropped, a redelivery included, so each
-		// publisher's batches land in the order the stream stored them. The
-		// property lane's transition guard (a value equal to its series'
-		// latest is not written) is right only in that order (ADR-0311).
+		// durable has not acked or dropped, a redelivery included, so each
+		// publisher's batches land in the order the stream stored them, and
+		// an outpost's batches all share one durable. The property lane's
+		// transition guard (a value equal to its series' latest is not
+		// written) is right only in that order (ADR-0311, ADR-1896).
 		MaxAckPending: 1,
+	}
+}
+
+// consume runs cons's pull loop into the handler, as one of the server's
+// lanes.
+func (s *Server) consume(name string, cons jetstream.Consumer, tally *laneTally) error {
+	cc, err := cons.Consume(func(msg jetstream.Msg) {
+		start := time.Now()
+		s.handleTelemetry(msg)
+		tally.observe(time.Since(start))
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("consume %s: %w", name, err)
 	}
-	s.cons = cons
-	s.telemetry = stream
-	cc, err := cons.Consume(func(msg jetstream.Msg) { s.handleTelemetry(msg) })
-	if err != nil {
-		return err
-	}
-	s.consumeCtx = cc
+	s.lanesMu.Lock()
+	s.lanes = append(s.lanes, &ingestLane{name: name, cons: cons, cc: cc})
+	s.lanesMu.Unlock()
 	return nil
+}
+
+// drainPastPartitions drains each partition past the count (pastPartitions:
+// every one the prior count filed under, and every durable left past it):
+// its durable, created again if it is gone, is deleted when it holds nothing
+// and consumed while it still does, so a server started with fewer lanes
+// lands what one with more left behind. The stream files no new batch under
+// it, so it empties and a later start deletes it.
+func (s *Server) drainPastPartitions(ctx context.Context, stream jetstream.Stream, prior int, tally *laneTally) error {
+	names := stream.ConsumerNames(ctx)
+	var durables []string
+	for name := range names.Name() {
+		durables = append(durables, name)
+	}
+	if err := names.Err(); err != nil {
+		return fmt.Errorf("list telemetry durables: %w", err)
+	}
+	for _, i := range pastPartitions(s.partitions, prior, durables) {
+		name := partitionDurable(i)
+		cons, err := stream.CreateOrUpdateConsumer(ctx, laneConfig(name, []string{partitionFilter(i)}))
+		if err != nil {
+			return fmt.Errorf("durable %s: %w", name, err)
+		}
+		info, err := cons.Info(ctx)
+		if err != nil {
+			return fmt.Errorf("durable %s: %w", name, err)
+		}
+		if info.NumPending+uint64(info.NumAckPending) == 0 {
+			if err := stream.DeleteConsumer(ctx, name); err != nil {
+				return fmt.Errorf("delete durable %s: %w", name, err)
+			}
+			continue
+		}
+		slog.Info("ingest partition draining", "facility", "ingest", "durable", name,
+			"pending", info.NumPending, "partitions", s.partitions)
+		if err := s.consume(name, cons, tally); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// stopLanes stops every lane's pull loop.
+func (s *Server) stopLanes() {
+	s.lanesMu.Lock()
+	defer s.lanesMu.Unlock()
+	for _, l := range s.lanes {
+		l.cc.Stop()
+	}
+	s.lanes = nil
 }
 
 // maxBatchIDLen bounds a Nats-Msg-Id the receipt keys verbatim; a longer one
@@ -118,7 +254,7 @@ func (s *Server) startTelemetryConsumer() error {
 const maxBatchIDLen = 128
 
 // batchID is a batch's idempotency key (#311): the subject it arrived on and
-// its Nats-Msg-Id. The subject is the publisher's (a node's grant reaches only
+// its Nats-Msg-Id. The subject is the publisher's (an outpost's grant reaches only
 // its own), so no publisher can claim another's id and suppress its batch. A
 // batch with no id (a publisher from before #453) is keyed by its stream
 // sequence under the stream's creation epoch, which holds across its own
@@ -130,13 +266,13 @@ func (s *Server) batchID(msg jetstream.Msg) string {
 			sum := sha256.Sum256([]byte(id))
 			id = "sha256:" + hex.EncodeToString(sum[:])
 		}
-		return msg.Subject() + " " + id
+		return canonicalSubject(msg.Subject()) + " " + id
 	}
 	meta, err := msg.Metadata()
 	if err != nil {
 		return ""
 	}
-	return fmt.Sprintf("%s seq:%s/%d", msg.Subject(), s.streamEpoch, meta.Sequence.Stream)
+	return fmt.Sprintf("%s seq:%s/%d", canonicalSubject(msg.Subject()), s.streamEpoch, meta.Sequence.Stream)
 }
 
 // ack confirms a batch to the stream and waits for the stream to take it
@@ -156,20 +292,19 @@ func (s *Server) ack(msg jetstream.Msg) {
 // confine the owner, apply reject-not-project, write the surviving typed
 // samples, and ack. The ack discipline is deliberate: a permanent condition
 // (undecodable payload, or an orphan the confinement fence drops) is terminated /
-// acked so it is not redelivered; only a transient failure (DB, registry read) is
+// acked so it is not redelivered; only a transient failure (DB, catalog read) is
 // left for nakOrTerm, which redelivers (Nak) up to maxTelemetryDeliveries and then
 // terminates the message so it does not loop forever.
 func (s *Server) handleTelemetry(msg jetstream.Msg) {
-	start := time.Now()
-	defer func() { s.lane.observe(time.Since(start)) }()
 	ctx := context.Background()
+	subject := canonicalSubject(msg.Subject())
 
 	var ev ogv1.TelemetryBatch
 	if err := proto.Unmarshal(msg.Data(), &ev); err != nil {
 		// No ledger can be read from it, so it records no receipt: its items
 		// read as missing at the ledger's next read (#1641, ADR-1691); the
 		// warning says why.
-		slog.Warn(undecodableLog, "facility", "ingest", "subject", msg.Subject(), "bytes", len(msg.Data()), "error", err.Error())
+		slog.Warn(undecodableLog, "facility", "ingest", "subject", subject, "bytes", len(msg.Data()), "error", err.Error())
 		s.drop(msg, nil) // undecodable: it will never succeed, stop redelivery
 		return
 	}
@@ -177,15 +312,15 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 	b := termed{id: id, ledger: ev.GetLedger()}
 
 	// TRUST DECIDED BY SUBJECT, never by which fields are populated. The API lane
-	// carries an owner the route already authorized; the node lane's owner is the
+	// carries an owner the route already authorized; the outpost lane's owner is the
 	// server's to resolve from the task's interface.
-	if msg.Subject() == collection.APITelemetrySubject {
+	if subject == collection.APITelemetrySubject {
 		bind, ok := apiBinding(&ev)
 		if !ok {
 			s.drop(msg, delivery.BatchItems(&ev)) // malformed owner: it will never resolve, stop redelivery
 			return
 		}
-		if err := s.land(ctx, id, &ev, bind); err != nil {
+		if err := s.landing(msg, func() error { return s.land(ctx, id, &ev, bind) }); err != nil {
 			s.failed(msg, b, delivery.BatchItems(&ev), err)
 			return
 		}
@@ -193,47 +328,70 @@ func (s *Server) handleTelemetry(msg jetstream.Msg) {
 		return
 	}
 
-	// The node published only its own telemetry subject (per-node grant), so the
-	// node extracted from the subject is trusted, the same trust the heartbeat sink
+	// The outpost published only its own telemetry subject (per-outpost grant), so the
+	// outpost extracted from the subject is trusted, the same trust the heartbeat sink
 	// relies on.
-	node := collection.NodeFromSubject(msg.Subject())
-	b.node = node
+	outpost := collection.OutpostFromSubject(subject)
+	b.outpost = outpost
 
-	// A node does not get to assert its own owner. Populating owner on this lane is a
+	// An outpost does not get to assert its own owner. Populating owner on this lane is a
 	// protocol error, not something to quietly ignore: ignoring it would leave a
 	// field that looks authoritative and is not, so say so and stop redelivery.
 	if ev.GetOwner() != nil {
-		slog.Warn("node-lane batch asserted an owner, dropped", "node", node)
+		slog.Warn("outpost-lane batch asserted an owner, dropped", "outpost", outpost)
 		s.term(msg, b, delivery.RefusedOwner, delivery.BatchItems(&ev))
 		return
 	}
 
-	// A node's tick is its groups (#1582): every task-bound row rides in a
+	// An outpost's tick is its groups (#1582): every task-bound row rides in a
 	// TaskGroup, so the batch's own task_id and sample lanes are the shape a
-	// node no longer sends. Landing them would bind them to no task, and
+	// outpost no longer sends. Landing them would bind them to no task, and
 	// ignoring them would drop data that looks delivered, so say so and stop
 	// redelivery. The batch's self-logs are the only top-level rows it carries.
 	if ev.GetTaskId() != "" || taskBound(&ev) > 0 {
-		slog.Warn(topLevelTaskLog, "facility", "ingest", "node", node, "task", ev.GetTaskId())
+		slog.Warn(topLevelTaskLog, "facility", "ingest", "outpost", outpost, "task", ev.GetTaskId())
 		s.term(msg, b, delivery.RefusedTask, delivery.BatchItems(&ev))
 		return
 	}
 
-	stamp, err := s.landNode(ctx, id, node, &ev)
-	if err != nil {
+	if err := s.landing(msg, func() error { return s.landOutpost(ctx, id, outpost, &ev) }); err != nil {
 		s.failed(msg, b, delivery.BatchItems(&ev), err) // a refused write is dropped; a transient failure redelivered (bounded)
 		return
 	}
 	s.ack(msg)
-	// Each landed group's endpoint delivered this tick, whatever the sinks
-	// kept of it (#933), stamped in one write after the ack so it holds
-	// nothing in flight. A failed stamp loses one tick's freshness, which the
-	// next tick restamps; it is not worth a redelivery of the whole tick.
-	if len(stamp) > 0 {
-		if err := s.store.StampEndpointsSeen(ctx, stamp); err != nil {
-			slog.Warn("endpoint seen stamp failed", "facility", "ingest", "node", node, "endpoints", len(stamp), "error", err.Error())
+}
+
+// landing runs land and, for as long as it runs, sends msg's InProgress every
+// heartbeatEvery(telemetryAckWait), which resets the stream's ack wait without
+// spending a delivery. A landing can wait minutes on the block lock behind a
+// fold chunk (ADR-1529 decision 9); with no beat the stream redelivers the
+// batch every ack wait, and once its deliveries are spent frees the one
+// ack-pending slot, so the publisher's next batch lands ahead of this one
+// (the order the property lane's transition guard relies on, ADR-0311). The
+// beats stop before landing returns, so none follows the ack.
+func (s *Server) landing(msg jetstream.Msg, land func() error) error {
+	stop, done := make(chan struct{}), make(chan struct{})
+	every := heartbeatEvery(telemetryAckWait)
+	go func() {
+		defer close(done)
+		tick := time.NewTicker(every)
+		defer tick.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+				if err := msg.InProgress(); err != nil {
+					slog.Warn("telemetry in-progress heartbeat not sent, the batch may be redelivered and held by its receipt", "subject", msg.Subject(), "error", err)
+				}
+			}
 		}
-	}
+	}()
+	defer func() {
+		close(stop)
+		<-done
+	}()
+	return land()
 }
 
 // undecodableLog is the warning for a telemetry message that does not
@@ -248,74 +406,76 @@ const (
 	declaredOverLog  = "batch decoded more items than its ledger declared"
 )
 
-// topLevelTaskLog is the warning for a node-lane batch that carries a task or
+// topLevelTaskLog is the warning for an outpost-lane batch that carries a task or
 // samples outside its groups (#1582), which is Term'd.
-const topLevelTaskLog = "node-lane batch carried task rows outside its groups, dropped"
+const topLevelTaskLog = "outpost-lane batch carried task rows outside its groups, dropped"
 
-// refusedGroupLog is the warning for one group of a node's tick the Storage
+// refusedGroupLog is the warning for one group of an outpost's tick the Storage
 // Gateway refused (#1582): that group is dropped and its siblings land.
 const refusedGroupLog = "task group refused, dropped; its siblings landed"
 
-// nodeSelfRefusedLog is the warning for a node's self-report the Storage
+// outpostSelfRefusedLog is the warning for an outpost's self-report the Storage
 // Gateway refused (#1625): the report drops and the tick's groups land.
-const nodeSelfRefusedLog = "node-self report refused, dropped; the tick's groups landed"
+const outpostSelfRefusedLog = "outpost-self report refused, dropped; the tick's groups landed"
 
-// nodeSelfOwnerLog is the warning for a node-self block one of whose samples
-// names an identity (#1625): the report is the node's own, never about an
+// outpostSelfOwnerLog is the warning for an outpost-self block one of whose samples
+// names an identity (#1625): the report is the outpost's own, never about an
 // owner it names, so the block drops and the tick's groups land.
-const nodeSelfOwnerLog = "node-self report named an identity, dropped; the tick's groups landed"
+const outpostSelfOwnerLog = "outpost-self report named an identity, dropped; the tick's groups landed"
 
-// nodeSelfReport is the tick's node-self block as the report the gateway
-// lands on node's platform component (#1625), each sample's time resolved
+// outpostSelfReport is the tick's outpost-self block as the report the gateway
+// lands on outpost's platform component (#1625), each sample's time resolved
 // against the batch's. It is nil for a tick with no block. named reports a
 // block one of whose samples names an identity: such a block is no report of
-// the node's own, so it is nil too. The keys are not filtered here: the
-// gateway's node-self writer refuses a key that is not the node's. Pure.
-func nodeSelfReport(ev *ogv1.TelemetryBatch, node string) (r *storage.NodeSelfReport, named bool) {
-	ms := ev.GetNodeSelf().GetMetrics()
+// the outpost's own, so it is nil too. The keys are not filtered here: the
+// gateway's outpost-self writer refuses a key that is not the outpost's. Pure.
+func outpostSelfReport(ev *ogv1.TelemetryBatch, outpost string) (r *storage.OutpostSelfReport, named bool) {
+	ms := ev.GetOutpostSelf().GetMetrics()
 	if len(ms) == 0 {
 		return nil, false
 	}
-	r = &storage.NodeSelfReport{Node: node, Metrics: make([]storage.NodeSelfSample, 0, len(ms))}
+	r = &storage.OutpostSelfReport{Outpost: outpost, Metrics: make([]storage.OutpostSelfSample, 0, len(ms))}
 	for _, m := range ms {
 		if m.GetIdentity() != nil {
 			return nil, true
 		}
-		r.Metrics = append(r.Metrics, storage.NodeSelfSample{Key: m.GetName(), Instance: m.GetInstance(),
+		r.Metrics = append(r.Metrics, storage.OutpostSelfSample{Key: m.GetName(), Instance: m.GetInstance(),
 			Value: m.GetValue(), TS: sampleTime(ev, m.GetTs())})
 	}
 	return r, false
 }
 
-// landNode lands one node tick (#1582): the node's self-logs, its self-report
+// landOutpost lands one outpost tick (#1582): the outpost's self-logs, its self-report
 // (#1625, on its platform component) and each task group under its own
 // writer, in ONE LandBatch under the tick's receipt.
-// Every group's task resolves in one read; a group whose task the node does
-// not hold (another node's, unknown, a shared interface) is an orphan the
+// Every group's task resolves in one read; a group whose task the outpost does
+// not hold (another outpost's, unknown, a shared interface) is an orphan the
 // fence drops (#1200) while its siblings land. A group the gateway refuses is
-// warned and dropped, never the tick. It returns the endpoints to stamp seen:
-// every resolved group's that was not refused. A returned error is the
-// resolve's, the registry's or the batch's (failed decides what it means).
+// warned and dropped, never the tick. Each resolved group carries the
+// endpoint that delivered its task, which the batch stamps seen in its own
+// transaction unless it refuses the group (#933, #1928). A returned error is
+// the resolve's, the catalog's or the batch's (failed decides what it
+// means).
 //
-// The batch carries the node's ledger, and every item the consumer lands no
+// The batch carries the outpost's ledger, and every item the consumer lands no
 // row for is counted on its Tally under its outcome (#1641): refused by its
-// lane, unplaced by the fan-out, orphaned, a node-self block that names an
+// lane, unplaced by the fan-out, orphaned, an outpost-self block that names an
 // identity, or declared by the ledger and absent from the batch. The
 // gateway counts the rest.
-func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.TelemetryBatch) ([]string, error) {
-	batch := storage.IngestBatch{BatchID: id, Node: node, NodeLogs: nodeLogWrites(ev, node)}
+func (s *Server) landOutpost(ctx context.Context, id, outpost string, ev *ogv1.TelemetryBatch) error {
+	batch := storage.IngestBatch{BatchID: id, Outpost: outpost, OutpostLogs: outpostLogWrites(ev, outpost)}
 	t := &batch.Tally
 	if l := ev.GetLedger(); l != nil {
 		stamp := delivery.FromProto(l)
 		batch.Ledger = &stamp
-		declaredShortfall(t, stamp, ev, node)
+		declaredShortfall(t, stamp, ev, outpost)
 	}
-	self, named := nodeSelfReport(ev, node)
+	self, named := outpostSelfReport(ev, outpost)
 	if named {
-		slog.Warn(nodeSelfOwnerLog, "facility", "ingest", "node", node)
-		t.Add(delivery.Metric, delivery.RefusedInvalid, len(ev.GetNodeSelf().GetMetrics()))
+		slog.Warn(outpostSelfOwnerLog, "facility", "ingest", "outpost", outpost)
+		t.Add(delivery.Metric, delivery.RefusedInvalid, len(ev.GetOutpostSelf().GetMetrics()))
 	}
-	batch.NodeSelf = self
+	batch.OutpostSelf = self
 
 	views := make([]*ogv1.TelemetryBatch, 0, len(ev.GetGroups()))
 	var tasks []string
@@ -330,8 +490,8 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 	var owners map[string]storage.TaskOwner
 	if len(tasks) > 0 {
 		var err error
-		if owners, err = s.store.ResolveTaskOwners(ctx, node, tasks); err != nil {
-			return nil, err
+		if owners, err = s.store.ResolveTaskOwners(ctx, outpost, tasks); err != nil {
+			return err
 		}
 	}
 
@@ -344,52 +504,51 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 	}
 	resolved := make([]resolvedGroup, 0, len(views))
 	wants := map[string][]storage.IdentityKey{}
-	sampled := false
+	var sampled []*ogv1.TelemetryBatch
 	for _, v := range views {
 		owner, ok := owners[v.GetTaskId()]
 		if !ok {
 			// The fence drops an orphan group by design, but never silently
-			// (#1200), and only that group: its siblings are the node's own.
-			s.recordOrphan(node, v.GetTaskId(), sampleCount(v), len(v.GetTaskLogs()))
+			// (#1200), and only that group: its siblings are the outpost's own.
+			s.recordOrphan(outpost, v.GetTaskId(), sampleCount(v), len(v.GetTaskLogs()))
 			tallySamples(t, v, delivery.Orphaned)
 			t.Add(delivery.Log, delivery.Orphaned, len(v.GetTaskLogs()))
 			continue
 		}
-		bind := nodeBinding(node, owner)
+		bind := outpostBinding(outpost, owner)
 		if sampleCount(v) > 0 {
-			sampled = true
+			sampled = append(sampled, v)
 			identityWants(wants, v, bind.Conduit)
 		}
 		resolved = append(resolved, resolvedGroup{view: v, owner: owner, bind: bind})
 	}
-	var reg collection.Registry
+	var reg collection.Catalog
 	var identities map[string]*storage.IdentityResolution
-	if sampled {
+	if len(sampled) > 0 {
 		var err error
-		if reg, batch.CommandTargeted, err = s.registry.get(ctx, s.store); err != nil {
-			return nil, err
+		if reg, batch.CommandTargeted, err = s.catalog.get(ctx, s.store, sampled...); err != nil {
+			return err
 		}
 		if identities, err = s.resolveIdentities(ctx, wants); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	endpoints := make([]string, 0, len(resolved)) // parallel to batch.Groups
 	for _, r := range resolved {
 		v := r.view
-		group := storage.IngestGroup{TaskID: v.GetTaskId(), Writer: r.bind.Writer, LogLines: taskLogWrites(v, r.owner)}
+		group := storage.IngestGroup{TaskID: v.GetTaskId(), Writer: r.bind.Writer, LogLines: taskLogWrites(v, r.owner),
+			SeenEndpoint: r.owner.EndpointID}
 		if sampleCount(v) > 0 {
 			rows := s.deriveSamples(v, r.bind, reg, identities, t)
 			group.Metrics, group.Properties, group.Events = rows.Metrics, rows.Properties, rows.Events
 			group.Fanned, group.Unbound = rows.Fanned, rows.Unbound
 		}
 		batch.Groups = append(batch.Groups, group)
-		endpoints = append(endpoints, r.owner.EndpointID)
 	}
 
 	res, err := s.store.LandBatch(ctx, batch)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.settled(ev, res)
 	refused := make(map[int]bool, len(res.Refused))
@@ -399,11 +558,11 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		if r.Err != nil {
 			cause = r.Err.Error()
 		}
-		if r.Index == storage.NodeSelfIndex {
-			slog.Warn(nodeSelfRefusedLog, "facility", "ingest", "node", node, "error", cause)
+		if r.Index == storage.OutpostSelfIndex {
+			slog.Warn(outpostSelfRefusedLog, "facility", "ingest", "outpost", outpost, "error", cause)
 			continue
 		}
-		slog.Warn(refusedGroupLog, "facility", "ingest", "node", node, "task", r.TaskID, "error", cause)
+		slog.Warn(refusedGroupLog, "facility", "ingest", "outpost", outpost, "task", r.TaskID, "error", cause)
 	}
 	if res.Landed {
 		var l landing // the groups that landed, parallel to batch.Groups
@@ -414,48 +573,32 @@ func (s *Server) landNode(ctx context.Context, id, node string, ev *ogv1.Telemet
 		}
 		s.committed(l)
 	}
-	return seenEndpoints(endpoints, refused), nil
+	return nil
 }
 
 // declaredShortfall counts on t, as missing, each item stamp declared that
 // ev does not carry, and warns of each kind ev carries more of than it
 // declared (#1641).
-func declaredShortfall(t *delivery.Tally, stamp delivery.Stamp, ev *ogv1.TelemetryBatch, node string) {
+func declaredShortfall(t *delivery.Tally, stamp delivery.Stamp, ev *ogv1.TelemetryBatch, outpost string) {
 	short, over := stamp.Kinds.Against(delivery.BatchItems(ev))
 	for _, k := range delivery.Kinds {
 		if n := short[k]; n > 0 {
-			slog.Warn(declaredShortLog, "facility", "ingest", "node", node, "boot", stamp.Boot, "seq", stamp.Seq, "kind", string(k), "missing", n)
+			slog.Warn(declaredShortLog, "facility", "ingest", "outpost", outpost, "boot", stamp.Boot, "seq", stamp.Seq, "kind", string(k), "missing", n)
 			t.Add(k, delivery.Missing, n)
 		}
 		if n := over[k]; n > 0 {
-			slog.Warn(declaredOverLog, "facility", "ingest", "node", node, "boot", stamp.Boot, "seq", stamp.Seq, "kind", string(k), "over", n)
+			slog.Warn(declaredOverLog, "facility", "ingest", "outpost", outpost, "boot", stamp.Boot, "seq", stamp.Seq, "kind", string(k), "over", n)
 		}
 	}
-}
-
-// seenEndpoints is the endpoints a tick stamps seen: each landed group's,
-// once, in group order, skipping the refused groups (by index) and a group
-// with no endpoint.
-func seenEndpoints(endpoints []string, refused map[int]bool) []string {
-	var out []string
-	seen := make(map[string]bool, len(endpoints))
-	for i, e := range endpoints {
-		if refused[i] || e == "" || seen[e] {
-			continue
-		}
-		seen[e] = true
-		out = append(out, e)
-	}
-	return out
 }
 
 // groupView is one task group read as the single-task batch every derivation
 // already takes: the group's task, rows and ts (its observation time, so a
-// sample naming no ts of its own takes the group's), on the tick's node.
+// sample naming no ts of its own takes the group's), on the tick's outpost.
 func groupView(ev *ogv1.TelemetryBatch, g *ogv1.TaskGroup) *ogv1.TelemetryBatch {
 	return &ogv1.TelemetryBatch{
 		TaskId:     g.GetTaskId(),
-		NodeId:     ev.GetNodeId(),
+		OutpostId:  ev.GetOutpostId(),
 		Ts:         g.GetTs(),
 		Metrics:    g.GetMetrics(),
 		Properties: g.GetProperties(),
@@ -464,16 +607,16 @@ func groupView(ev *ogv1.TelemetryBatch, g *ogv1.TaskGroup) *ogv1.TelemetryBatch 
 	}
 }
 
-// nodeBinding is a resolved task group's binding on the node lane. The node's
-// writer is bound to the task's endpoint: the only instance a node-probe key
+// outpostBinding is a resolved task group's binding on the outpost lane. The outpost's
+// writer is bound to the task's endpoint: the only instance an outpost-probe key
 // lands under (ADR-0161). The task's component is the conduit a fanned
-// sample's identity resolves against, and only it (#1282): the node is
+// sample's identity resolves against, and only it (#1282): the outpost is
 // already confined to it.
-func nodeBinding(node string, owner storage.TaskOwner) ingestBinding {
-	w := storage.NodeWriter(owner.ComponentID, owner.EndpointName)
-	w.Node = owner.NodeID
+func outpostBinding(outpost string, owner storage.TaskOwner) ingestBinding {
+	w := storage.OutpostWriter(owner.ComponentID, owner.EndpointName)
+	w.Outpost = owner.OutpostID
 	return ingestBinding{
-		LogNode:         node,
+		LogOutpost:      outpost,
 		SampleOwner:     &owner,
 		Arc:             componentArc(owner),
 		Writer:          w,
@@ -484,11 +627,11 @@ func nodeBinding(node string, owner storage.TaskOwner) ingestBinding {
 
 // apiBinding builds the binding for a batch that arrived on the API push lane. The
 // route already authorized the caller against this owner, so the batch lands on
-// it: unlike the node lane, a push has one owner, not two.
+// it: unlike the outpost lane, a push has one owner, not two.
 //
 // It returns false for a batch whose owner is missing or not addressable, which the
 // caller terminates rather than redelivers: a malformed owner will never resolve.
-// A push names a component or a system (ADR-0422); a location or a node owner is
+// A push names a component or a system (ADR-0422); a location or an outpost owner is
 // refused, since no route pushes for one and nothing authorized that arc. A
 // system batch carries no log lines: log_line is component-only (#589, a log line
 // comes off a component), so a system batch with one is refused whole rather
@@ -501,7 +644,7 @@ func nodeBinding(node string, owner storage.TaskOwner) ingestBinding {
 // this wire message resolves the caller's owner and sends its id
 // (internal/api/telemetry.go), so in practice this is always already a uuid,
 // but nothing here assumes that. Downstream (InsertMetricSamples et al.)
-// resolves either form the same way TaskOwner.ComponentID's node-lane sibling
+// resolves either form the same way TaskOwner.ComponentID's outpost-lane sibling
 // does.
 func apiBinding(ev *ogv1.TelemetryBatch) (ingestBinding, bool) {
 	o := ev.GetOwner()
@@ -558,19 +701,19 @@ func componentArc(owner storage.TaskOwner) sampleArc {
 
 // ingestBinding is the resolved destination for one batch: where its log lines
 // land and where its samples land. They differ by lane, which is the whole
-// reason this is explicit rather than a single owner. On the node lane, log
-// lines are the node's self-logs (node_log) while samples are owned by the
+// reason this is explicit rather than a single owner. On the outpost lane, log
+// lines are the outpost's self-logs (outpost_log) while samples are owned by the
 // task's component. On the push lane, both land under the component the API
 // authorized, or the samples alone under the system it authorized. At most one
-// of LogNode / LogComponent is set per lane; a nil SampleOwner means the
+// of LogOutpost / LogComponent is set per lane; a nil SampleOwner means the
 // batch's samples must not be written (no samples, or an orphan task). Arc is
 // the owner arc the samples land on, set with SampleOwner; SampleOwner itself
 // carries the observing endpoint, if any. Writer is who the samples speak
-// for, which the Storage Gateway holds every key to (ADR-0161): the node bound
+// for, which the Storage Gateway holds every key to (ADR-0161): the outpost bound
 // to its task's endpoint, or the push lane.
 type ingestBinding struct {
 	LogComponent string
-	LogNode      string
+	LogOutpost   string
 	SampleOwner  *storage.TaskOwner
 	Arc          sampleArc
 	Writer       storage.KeyWriter
@@ -581,8 +724,8 @@ type ingestBinding struct {
 	ConduitEndpoint string
 }
 
-// sampleCount is how many registry-resolved observations a batch carries across
-// its three typed lanes. Zero means no registry to read.
+// sampleCount is how many catalog-resolved observations a batch carries across
+// its three typed lanes. Zero means no catalog to read.
 func sampleCount(ev *ogv1.TelemetryBatch) int {
 	return len(ev.GetMetrics()) + len(ev.GetProperties()) + len(ev.GetEvents())
 }
@@ -596,15 +739,15 @@ func taskBound(ev *ogv1.TelemetryBatch) int {
 
 // land writes one single-owner batch to its sinks: the raw log lines and the
 // three typed lanes (#594: the lane is the array, so each validates against
-// its own catalog). The push lane calls it; a node's tick lands its groups
-// through landNode (#1582). Both derive through deriveSamples, so neither
+// its own catalog). The push lane calls it; an outpost's tick lands its groups
+// through landOutpost (#1582). Both derive through deriveSamples, so neither
 // lane can drift from the other's semantics (reject-not-project, per-lane
 // validation, the transition-only state guard).
 //
 // It deliberately knows nothing about JetStream: no message, no ack, no nak. The
 // caller owns delivery semantics and decides what a returned error means, which is
 // what lets a synchronous API caller reuse it. A returned error is always transient
-// (a registry read or a sink write); anything permanent is dropped in place, since
+// (a catalog read or a sink write); anything permanent is dropped in place, since
 // re-delivering it would not help.
 //
 // The batch lands as ONE unit under id, its receipt (#311, ADR-0311): every sink
@@ -621,26 +764,27 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		batch.Ledger = &stamp
 		declaredShortfall(&batch.Tally, stamp, ev, "")
 	}
-	// The raw log sink, routed by lane: a node's self-logs to node_log, a push's
+	// The raw log sink, routed by lane: an outpost's self-logs to outpost_log, a push's
 	// component-owned lines to log_line (#589). The storage layer refuses any
 	// other binding, so a future lane cannot quietly widen the log owner.
-	if bind.LogNode != "" {
-		batch.NodeLogs = nodeLogWrites(ev, bind.LogNode)
+	if bind.LogOutpost != "" {
+		batch.OutpostLogs = outpostLogWrites(ev, bind.LogOutpost)
 	} else if bind.LogComponent != "" {
 		batch.LogLines = logLineWrites(ev, bind.LogComponent)
 	}
-	// A task's collected log lines (#1145), on the node lane alone: they land
+	// A task's collected log lines (#1145), on the outpost lane alone: they land
 	// on the task's component, owner-bound server-side from the task as every
-	// sample is, so a node can land a line only for a component its own task
+	// sample is, so an outpost can land a line only for a component its own task
 	// collects for. An orphan batch (no resolved owner) lands none.
-	if bind.LogNode != "" && bind.SampleOwner != nil {
+	if bind.LogOutpost != "" && bind.SampleOwner != nil {
 		batch.LogLines = append(batch.LogLines, taskLogWrites(ev, *bind.SampleOwner)...)
 	}
 	if bind.SampleOwner != nil && sampleCount(ev) > 0 {
-		// The registry is kept between batches and rebuilt only when the
+		// The catalog is kept between batches and rebuilt only when the
 		// catalogs change (#1279): one fingerprint read, not three catalogs.
-		// The command-targeted property names ride with it (#1299).
-		reg, targeted, err := s.registry.get(ctx, s.store)
+		// The command-targeted property names ride with it (#1299). A name
+		// the kept catalog lacks reads the catalogs at once (#1928).
+		reg, targeted, err := s.catalog.get(ctx, s.store, ev)
 		if err != nil {
 			return err
 		}
@@ -655,6 +799,15 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 		batch.Metrics, batch.Properties, batch.Events = rows.Metrics, rows.Properties, rows.Events
 		batch.Fanned, batch.Unbound = rows.Fanned, rows.Unbound
 	}
+	// The endpoint delivered this batch, whatever the sinks kept of it: an
+	// instanced series, an unchanged property the guard skipped, a sample a
+	// outpost's clock dated ahead, or a copy of a batch that already landed. Its
+	// freshness is the server's receipt (#933), stamped by the batch's own
+	// transaction (#1928). The push lane has no endpoint, so nothing is
+	// stamped there.
+	if bind.SampleOwner != nil && taskBound(ev) > 0 {
+		batch.SeenEndpoint = bind.SampleOwner.EndpointID
+	}
 	res, err := s.store.LandBatch(ctx, batch)
 	if err != nil {
 		return err
@@ -662,17 +815,6 @@ func (s *Server) land(ctx context.Context, id string, ev *ogv1.TelemetryBatch, b
 	s.settled(ev, res)
 	if res.Landed {
 		s.committed(batchLanding(ev))
-	}
-	// The endpoint delivered this batch, whatever the sinks kept of it: an
-	// instanced series, an unchanged property the guard skipped, a sample a
-	// node's clock dated ahead, or a copy of a batch that already landed. Its
-	// freshness is the server's receipt (#933), stamped after the batch's
-	// transaction so it adds no lock to it. The push lane has no endpoint, so
-	// nothing is stamped there.
-	if bind.SampleOwner != nil && taskBound(ev) > 0 {
-		if id := bind.SampleOwner.EndpointID; id != "" {
-			return s.store.StampEndpointsSeen(ctx, []string{id})
-		}
 	}
 	return nil
 }
@@ -701,7 +843,7 @@ type sampleRows struct {
 // conduit, placed by identities, the batch's (or its tick's) one read.
 // Every sample that derives no row is counted in t under its outcome
 // (#1641); nil counts nothing.
-func (s *Server) deriveSamples(ev *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, identities map[string]*storage.IdentityResolution, t *delivery.Tally) sampleRows {
+func (s *Server) deriveSamples(ev *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Catalog, identities map[string]*storage.IdentityResolution, t *delivery.Tally) sampleRows {
 	own, fanned := splitIdentified(ev)
 	rows := sampleRows{
 		Metrics:    deriveMetrics(own, bind.Arc, *bind.SampleOwner, reg, bind.Writer, t),
@@ -754,7 +896,7 @@ func (s *Server) resolveIdentities(ctx context.Context, wants map[string][]stora
 // no conduit to resolve against (a system push, which never carries an
 // identity) lands none of them, nor does one whose conduit resolved nothing:
 // those count unidentified in t, an unbound one unbound (#1641).
-func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Registry, res *storage.IdentityResolution, t *delivery.Tally) (*storage.FannedRows, []storage.UnboundIdentityWrite) {
+func (s *Server) fanOut(fanned *ogv1.TelemetryBatch, bind ingestBinding, reg collection.Catalog, res *storage.IdentityResolution, t *delivery.Tally) (*storage.FannedRows, []storage.UnboundIdentityWrite) {
 	n := sampleCount(fanned)
 	if bind.Conduit == "" {
 		slog.Warn("identified samples on a batch with no conduit, dropped", "facility", "ingest", "samples", n)
@@ -836,12 +978,12 @@ func (s *Server) nakOrTerm(msg jetstream.Msg, b termed, items map[delivery.Kind]
 }
 
 // termed is what the consumer knows of a batch it may Term whole: its id,
-// the node that sent it ("" on the API lane), and the ledger it carried (the
+// the outpost that sent it ("" on the API lane), and the ledger it carried (the
 // push lane's, under the server's boot, on the API lane; nil from a publisher
 // that stamps none).
 type termed struct {
-	id, node string
-	ledger   *ogv1.DeliveryLedger
+	id, outpost string
+	ledger      *ogv1.DeliveryLedger
 }
 
 // term Terms a batch whole and records its Term receipt (#1691): every item
@@ -854,7 +996,7 @@ func (s *Server) term(msg jetstream.Msg, b termed, cause delivery.Outcome, items
 	if b.id != "" && b.ledger != nil {
 		stamp := delivery.FromProto(b.ledger)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		err := s.store.RecordTermedBatch(ctx, storage.TermedBatch{BatchID: b.id, Node: b.node, Ledger: stamp, Outcome: stamp.Kinds.Under(cause)})
+		err := s.store.RecordTermedBatch(ctx, storage.TermedBatch{BatchID: b.id, Outpost: b.outpost, Ledger: stamp, Outcome: stamp.Kinds.Under(cause)})
 		cancel()
 		if err != nil {
 			slog.Warn("telemetry Term receipt not recorded, its items read missing", "facility", "ingest", "subject", msg.Subject(), "cause", string(cause), "error", err.Error())
@@ -865,7 +1007,7 @@ func (s *Server) term(msg jetstream.Msg, b termed, cause delivery.Outcome, items
 
 // logLineWrites turns a push batch's raw log lines into component-owned
 // log_line writes (ADR-0066, narrowed by #589): the component is the owner the
-// API authorized. Pure: no I/O and no registry (a log line is untyped by
+// API authorized. Pure: no I/O and no catalog (a log line is untyped by
 // design). Each line's own ts and source win when set, else the batch's; empty
 // severity/facility/correlation stay "" and the storage layer maps them to NULL.
 func logLineWrites(ev *ogv1.TelemetryBatch, component string) []storage.LogLineWrite {
@@ -892,7 +1034,7 @@ func logLineWrites(ev *ogv1.TelemetryBatch, component string) []storage.LogLineW
 	return out
 }
 
-// taskLogWrites turns a node-lane batch's task_logs (#1145) into log_line
+// taskLogWrites turns an outpost-lane batch's task_logs (#1145) into log_line
 // writes on the task's component: its collecting endpoint is the line's
 // instance, and a line naming no source takes the endpoint's transport. Pure,
 // and the same ts resolution as a push's lines; the severity table and the
@@ -925,19 +1067,19 @@ func taskLogWrites(ev *ogv1.TelemetryBatch, owner storage.TaskOwner) []storage.L
 	return out
 }
 
-// nodeLogWrites turns a node-lane batch's raw log lines into node_log writes:
-// the node's self-logs (ADR-0066), owned by the publishing node the subject
+// outpostLogWrites turns an outpost-lane batch's raw log lines into outpost_log writes:
+// the outpost's self-logs (ADR-0066), owned by the publishing outpost the subject
 // authenticated. Pure, and the same per-line ts and source resolution as
 // logLineWrites, so the two lanes cannot drift on the fallbacks.
-func nodeLogWrites(ev *ogv1.TelemetryBatch, node string) []storage.NodeLogWrite {
+func outpostLogWrites(ev *ogv1.TelemetryBatch, outpost string) []storage.OutpostLogWrite {
 	logs := ev.GetLogs()
 	if len(logs) == 0 {
 		return nil
 	}
-	out := make([]storage.NodeLogWrite, 0, len(logs))
+	out := make([]storage.OutpostLogWrite, 0, len(logs))
 	for _, l := range logs {
-		out = append(out, storage.NodeLogWrite{
-			Node:          node,
+		out = append(out, storage.OutpostLogWrite{
+			Outpost:       outpost,
 			Source:        lineSource(ev, l),
 			Severity:      l.GetSeverity(),
 			Facility:      l.GetFacility(),
@@ -966,7 +1108,7 @@ func lineTime(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) time.Time {
 }
 
 // lineSource resolves one log line's source: its own wins, else the batch's (a
-// push declares it once for the batch; a node's self-logs set it per line).
+// push declares it once for the batch; an outpost's self-logs set it per line).
 func lineSource(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) string {
 	if s := l.GetSource(); s != "" {
 		return s
@@ -979,20 +1121,20 @@ func lineSource(ev *ogv1.TelemetryBatch, l *ogv1.LogLine) string {
 // reject-not-project is per lane: a sample whose name is not registered in the
 // lane's OWN catalog is dropped, even when another catalog knows the name. The
 // owner is stamped identically on every lane from the binding: the arc it
-// resolved (the task's component on the node lane, the authorized component or
+// resolved (the task's component on the outpost lane, the authorized component or
 // system on the push lane), source=the endpoint's transport, instance=the
 // endpoint's name where the sample names none;
 // provenance is observed (the insert path fixes that). A sample whose type's
 // writer class does not admit the batch's writer is dropped too (ADR-0161; the
 // gateway refuses it again, so this keeps one stray row from failing a whole
 // batch). A validation failure is permanent, so it is dropped in place (with a
-// warning: the node lane has no reply channel), never returned as an error the
+// warning: the outpost lane has no reply channel), never returned as an error the
 // caller would redeliver.
 
 // deriveMetrics maps the metric lane to metric rows: the name must be a
 // registered metric_type. The value is a double by wire type, so there is no
 // shape to validate beyond the name.
-func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter, t *delivery.Tally) []storage.MetricSampleWrite {
+func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Catalog, w storage.KeyWriter, t *delivery.Tally) []storage.MetricSampleWrite {
 	var out []storage.MetricSampleWrite
 	for _, dp := range ev.GetMetrics() {
 		mt, ok := reg.Metric(dp.GetName())
@@ -1022,7 +1164,7 @@ func deriveMetrics(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwn
 // registered property_type, the value must be canonical JSON of the type's
 // data_type, and when the type declares a validation schema the value must
 // satisfy it (key.ValidateValue, the same validator every registered key obeys).
-func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter, t *delivery.Tally) []storage.PropertySampleWrite {
+func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Catalog, w storage.KeyWriter, t *delivery.Tally) []storage.PropertySampleWrite {
 	var out []storage.PropertySampleWrite
 	for _, dp := range ev.GetProperties() {
 		pt, ok := reg.Property(dp.GetName())
@@ -1062,7 +1204,7 @@ func deriveProperties(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.Task
 // sample). A component published the occurrence natively (an xAPI event, an
 // SNMP trap): origin caught, the platform did not derive it. Raw log lines are
 // a separate ingest lane, not this path (ADR-0066).
-func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Registry, w storage.KeyWriter, t *delivery.Tally) []storage.EventWrite {
+func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwner, reg collection.Catalog, w storage.KeyWriter, t *delivery.Tally) []storage.EventWrite {
 	var out []storage.EventWrite
 	for _, dp := range ev.GetEvents() {
 		et, ok := reg.Event(dp.GetName())
@@ -1108,16 +1250,16 @@ func deriveEvents(ev *ogv1.TelemetryBatch, arc sampleArc, owner storage.TaskOwne
 // laneInstance resolves a sample's instance discriminator, or refuses the
 // sample, naming the refusal's outcome (#1641); refused is empty for a
 // sample it admits. The wire value wins where supplied, else the task
-// endpoint's name: the node lane sets none (its endpoint name IS the
+// endpoint's name: the outpost lane sets none (its endpoint name IS the
 // discriminator), a driver may name its own (one series per port), and a push
 // has no endpoint, so it must be able to say it.
 //
 // Two refusals come first (ADR-0161). A sample whose type's writer class does
 // not admit the batch's writer is dropped: a push of a calc rule's output, a
-// node lane carrying a key a stored driver may no longer emit. And a node-probe
-// key is the node's account of the endpoint whose task it ran, so on the node
+// outpost lane carrying a key a stored driver may no longer emit. And an outpost-probe
+// key is the outpost's account of the endpoint whose task it ran, so on the outpost
 // lane its instance is that endpoint's name: empty is filled with it, and any
-// other (another node's endpoint on the same component, a name no endpoint
+// other (another outpost's endpoint on the same component, a name no endpoint
 // holds) is refused, never written into a series the console reads as that
 // endpoint's.
 func laneInstance(class writerclass.Class, name, instance string, owner storage.TaskOwner, w storage.KeyWriter) (string, delivery.Outcome) {
@@ -1126,9 +1268,9 @@ func laneInstance(class writerclass.Class, name, instance string, owner storage.
 			"name", name, "class", class, "writer", w.Kind)
 		return "", delivery.RefusedWriter
 	}
-	if class == writerclass.NodeProbe && w.Kind == writerclass.Node {
+	if class == writerclass.OutpostProbe && w.Kind == writerclass.Outpost {
 		if owner.EndpointName == "" || (instance != "" && instance != owner.EndpointName) {
-			slog.Warn("node-probe sample refused: a node writes one only under its task's endpoint",
+			slog.Warn("outpost-probe sample refused: an outpost writes one only under its task's endpoint",
 				"name", name, "instance", instance, "endpoint", owner.EndpointName)
 			return "", delivery.RefusedInstance
 		}

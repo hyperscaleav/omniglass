@@ -16,7 +16,7 @@ import (
 // TestCommandTypeAPI drives the /command-types catalog over HTTP: an owner registers,
 // reads, updates, and deletes a custom command type (with a settle window and a target
 // property); an official (seeded) type is read-only; a malformed name, a duplicate, and
-// an unknown target property are rejected; an ungranted principal is forbidden to
+// an unknown target property are rejected; an ungranted user is forbidden to
 // create. Mirrors the property_type and event_type catalog e2e.
 func TestCommandTypeAPI(t *testing.T) {
 	t.Parallel()
@@ -193,8 +193,8 @@ func TestCommandTypeAPI(t *testing.T) {
 	// Delete the custom command type.
 	c.do(ownerTok, http.MethodDelete, "/command-types/set-dimmer", nil, http.StatusNoContent)
 
-	// An ungranted principal is forbidden to create.
-	noneTok := principalWithGrants(t, ctx, dsn, "nocmds", nil)
+	// An ungranted user is forbidden to create.
+	noneTok := userWithGrants(t, ctx, dsn, "nocmds", nil)
 	c.do(noneTok, http.MethodPost, "/command-types", map[string]any{"name": "nope_cmd"}, http.StatusForbidden)
 }
 

@@ -47,7 +47,7 @@ func (r *edgeRig) rule(spec storage.EventRuleSpec) {
 	spec.Clear = ptrCriteria(criteria("eq", "up"))
 	spec.Selector = storage.EventRuleSelector{Components: []string{"bar-1"}}
 	if spec.FireEventType == "" {
-		spec.FireEventType = "condition-started"
+		spec.FireEventType = "rule-fired"
 	}
 	if _, err := r.f.gw.CreateEventRule(r.ctx, "", spec, r.f.all); err != nil {
 		r.t.Fatal(err)
@@ -109,12 +109,12 @@ func (r *edgeRig) openAlarm(instance string) string {
 	return id
 }
 
-func (r *edgeRig) conditions() int {
+func (r *edgeRig) firings() int {
 	r.t.Helper()
-	return count(r.t, r.f.conn, `select count(*) from event_rule_condition c join event_rule e on e.id = c.rule_id where e.name = '`+r.name+`'`)
+	return count(r.t, r.f.conn, `select count(*) from event_rule_firing c join event_rule e on e.id = c.rule_id where e.name = '`+r.name+`'`)
 }
 
-// editor bootstraps a named principal (root) to act as a rule's editor.
+// editor bootstraps a named user (root) to act as a rule's editor.
 func (r *edgeRig) editor() string {
 	r.t.Helper()
 	zeros := make([]byte, 32)
@@ -140,15 +140,15 @@ func edgeStr(p *string) string {
 	return *p
 }
 
-// An alarm-raising rule writes one fire event when its condition starts,
+// An alarm-raising rule writes one fire event when it fires,
 // carrying the alarm it opened, and one clear event when it ends, carrying
 // the alarm it resolved: derived, naming its rule, with the rule's message
-// and the sample's key and value. A condition held across many samples, and
+// and the sample's key and value. A firing held across many samples, and
 // a redelivered sample, write nothing more.
 func TestRuleEdgeEventsCarryTheAlarm(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
-	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", Message: "bar unreachable", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", Message: "bar unreachable", ClearEventType: "rule-cleared"})
 	id := r.ruleID()
 
 	r.observe("tcp", "down")
@@ -158,27 +158,27 @@ func TestRuleEdgeEventsCarryTheAlarm(t *testing.T) {
 		t.Fatalf("after down: alarm %q, events %+v; want an open alarm and one fire event", alarm, evs)
 	}
 	e := evs[0]
-	if e.key != "condition-started" || e.instance != "tcp" || e.origin != "derived" || edgeStr(e.alarmID) != alarm ||
+	if e.key != "rule-fired" || e.instance != "tcp" || e.origin != "derived" || edgeStr(e.alarmID) != alarm ||
 		edgeStr(e.ruleID) != id || e.message != "bar unreachable" || e.attrs["key"] != "endpoint-reachable" || e.attrs["value"] != "down" {
-		t.Fatalf("fire event = %+v (alarm %s, rule %s), want condition-started on tcp, derived, carrying both, with the message, key and value",
+		t.Fatalf("fire event = %+v (alarm %s, rule %s), want rule-fired on tcp, derived, carrying both, with the message, key and value",
 			e, edgeStr(e.alarmID), edgeStr(e.ruleID))
 	}
-	if r.conditions() != 1 {
-		t.Fatalf("conditions = %d, want 1 in force", r.conditions())
+	if r.firings() != 1 {
+		t.Fatalf("firings = %d, want 1 in force", r.firings())
 	}
 	r.observe("tcp", "down")
 	r.observe("tcp", "down")
 	if n := len(r.events()); n != 1 {
-		t.Fatalf("a condition held across samples wrote %d events, want still 1", n)
+		t.Fatalf("a firing held across samples wrote %d events, want still 1", n)
 	}
 
 	r.observe("tcp", "up")
 	evs = r.events()
-	if len(evs) != 2 || evs[1].key != "condition-ended" || edgeStr(evs[1].alarmID) != alarm || evs[1].attrs["value"] != "up" {
+	if len(evs) != 2 || evs[1].key != "rule-cleared" || edgeStr(evs[1].alarmID) != alarm || evs[1].attrs["value"] != "up" {
 		t.Fatalf("after up: events %+v, want a clear event carrying alarm %s", evs, alarm)
 	}
-	if r.openAlarm("tcp") != "" || r.conditions() != 0 {
-		t.Fatalf("after up: alarm %q open, %d conditions; want none", r.openAlarm("tcp"), r.conditions())
+	if r.openAlarm("tcp") != "" || r.firings() != 0 {
+		t.Fatalf("after up: alarm %q open, %d firings; want none", r.openAlarm("tcp"), r.firings())
 	}
 	r.observe("tcp", "up")
 	if n := len(r.events()); n != 2 {
@@ -188,15 +188,15 @@ func TestRuleEdgeEventsCarryTheAlarm(t *testing.T) {
 
 // An informational rule writes its fire and clear events and opens no
 // alarm; a rule with no clear type resolves its alarm with no clear event,
-// and its condition still ends.
+// and its firing still ends.
 func TestRuleEdgeInformationalAndNoClearType(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
-	r.rule(storage.EventRuleSpec{Name: "note", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "note", ClearEventType: "rule-cleared"})
 	r.observe("tcp", "down")
 	r.observe("tcp", "up")
 	evs := r.events()
-	if len(evs) != 2 || evs[0].key != "condition-started" || evs[1].key != "condition-ended" || evs[0].alarmID != nil || evs[1].alarmID != nil {
+	if len(evs) != 2 || evs[0].key != "rule-fired" || evs[1].key != "rule-cleared" || evs[0].alarmID != nil || evs[1].alarmID != nil {
 		t.Fatalf("informational events = %+v, want a fire and a clear event, neither carrying an alarm", evs)
 	}
 	if n := count(t, r.f.conn, `select count(*) from alarm where component_id = (select id from component where name = 'bar-1')`); n != 0 {
@@ -212,21 +212,21 @@ func TestRuleEdgeInformationalAndNoClearType(t *testing.T) {
 	if alarm == "" || len(evs) != 1 || edgeStr(evs[0].alarmID) != alarm {
 		t.Fatalf("no-clear-type events = %+v (alarm %q), want the fire event alone, carrying the alarm", evs, alarm)
 	}
-	if r2.openAlarm("icmp") != "" || r2.conditions() != 0 {
-		t.Fatal("a rule with no clear type left its alarm open or its condition in force")
+	if r2.openAlarm("icmp") != "" || r2.firings() != 0 {
+		t.Fatal("a rule with no clear type left its alarm open or its firing in force")
 	}
 }
 
 // Sustains, the sweep, priming and the reconcile pass write the same
-// events as live ingest: a condition sustained past its fire sustain writes
+// events as live ingest: a firing sustained past its fire sustain writes
 // its fire event once, a later sweep or reconcile pass writes nothing, and
-// the reconcile pass sees an informational condition in force as settled,
+// the reconcile pass sees an informational firing in force as settled,
 // leaving no streak behind.
 func TestRuleEdgeSweepPrimeReconcile(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
 	r.observe("tcp", "down") // before the rule exists: priming finds it
-	r.rule(storage.EventRuleSpec{Name: "slow", FireSustain: 10 * time.Second, ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "slow", FireSustain: 10 * time.Second, ClearEventType: "rule-cleared"})
 	if n := len(r.events()); n != 0 {
 		t.Fatalf("inside the sustain: %d events, want 0", n)
 	}
@@ -236,7 +236,7 @@ func TestRuleEdgeSweepPrimeReconcile(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if evs := r.events(); len(evs) != 1 || evs[0].key != "condition-started" {
+	if evs := r.events(); len(evs) != 1 || evs[0].key != "rule-fired" {
 		t.Fatalf("after the sweep: %+v, want one fire event", evs)
 	}
 	st := &storage.RuleReconcileState{}
@@ -249,7 +249,7 @@ func TestRuleEdgeSweepPrimeReconcile(t *testing.T) {
 		t.Fatalf("the reconcile pass wrote %d events, want still 1", n)
 	}
 	if n := count(t, r.f.conn, `select count(*) from event_rule_state s join event_rule e on e.id = s.rule_id where e.name = 'slow'`); n != 0 {
-		t.Fatalf("a condition in force left %d streaks after reconcile, want 0 (nothing to wait for)", n)
+		t.Fatalf("a firing in force left %d streaks after reconcile, want 0 (nothing to wait for)", n)
 	}
 
 	// Priming on create: a rule with no sustain created while the series reads
@@ -261,16 +261,16 @@ func TestRuleEdgeSweepPrimeReconcile(t *testing.T) {
 	}
 }
 
-// Turning a rule's severity on opens alarms for the conditions it holds in
-// force, and turning it off resolves them, with no condition event either
-// way: the condition did not move, so the episode keeps one started and one
+// Turning a rule's severity on opens alarms for the firings it holds in
+// force, and turning it off resolves them, with no firing event either
+// way: the firing did not move, so the episode keeps one started and one
 // ended event, and the alarm's open and resolve are recorded in its audit
 // rows, naming the editor.
 func TestRuleEdgeSeverityToggle(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
 	editor := r.editor()
-	r.rule(storage.EventRuleSpec{Name: "toggle", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "toggle", ClearEventType: "rule-cleared"})
 	r.observe("tcp", "down")
 	if r.openAlarm("tcp") != "" {
 		t.Fatal("an informational rule opened an alarm")
@@ -280,7 +280,7 @@ func TestRuleEdgeSeverityToggle(t *testing.T) {
 	}
 	alarm := r.openAlarm("tcp")
 	if alarm == "" || len(r.events()) != 1 {
-		t.Fatalf("severity on: alarm %q, events %+v; want the condition in force alarmed, and no new event", alarm, r.events())
+		t.Fatalf("severity on: alarm %q, events %+v; want the firing in force alarmed, and no new event", alarm, r.events())
 	}
 	if got := scalar(t, r.f.conn, `select coalesce(actor_username, '') from audit_log where resource = 'alarm' and verb = 'create' and resource_id = '`+alarm+`'`); got != "root" {
 		t.Fatalf("the severity-on raise is audited as %q, want the editor (root)", got)
@@ -289,44 +289,44 @@ func TestRuleEdgeSeverityToggle(t *testing.T) {
 	if r.openAlarm("tcp") != "" || len(r.events()) != 1 {
 		t.Fatalf("severity off: alarm %q, events %+v; want the alarm resolved, and no new event", r.openAlarm("tcp"), r.events())
 	}
-	if r.conditions() != 1 {
-		t.Fatalf("severity off left %d conditions, want the condition still in force", r.conditions())
+	if r.firings() != 1 {
+		t.Fatalf("severity off left %d firings, want the firing still in force", r.firings())
 	}
 	// Still in force: a further down writes nothing; the recovery ends it.
 	r.observe("tcp", "down")
 	r.observe("tcp", "up")
 	evs := r.events()
-	if len(evs) != 2 || evs[0].key != "condition-started" || evs[1].key != "condition-ended" || evs[1].alarmID != nil {
+	if len(evs) != 2 || evs[0].key != "rule-fired" || evs[1].key != "rule-cleared" || evs[1].alarmID != nil {
 		t.Fatalf("the episode wrote %+v, want one started and one ended event, the ended one carrying no alarm", evs)
 	}
 }
 
-// A material edit that also turns a severity on primes first: a condition
+// A material edit that also turns a severity on primes first: a firing
 // the edited rule no longer holds ends (with its clear event) before the
 // severity reaches it, so no alarm is raised and resolved in one write.
 func TestRuleEdgeMaterialEditPrimesBeforeSeverity(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
-	r.rule(storage.EventRuleSpec{Name: "reword", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "reword", ClearEventType: "rule-cleared"})
 	r.observe("tcp", "down")
 	fire := criteria("eq", "gone")
 	r.patch(storage.EventRulePatch{Fire: &fire, ClearNegates: true, Severity: ptrString("high")})
 	if n := count(t, r.f.conn, `select count(*) from alarm a join event_rule e on e.id = a.raised_by_rule_id where e.name = 'reword'`); n != 0 {
-		t.Fatalf("the edit raised %d alarms for a condition it ended, want 0", n)
+		t.Fatalf("the edit raised %d alarms for a firing it ended, want 0", n)
 	}
-	if evs := r.events(); len(evs) != 2 || evs[1].key != "condition-ended" || r.conditions() != 0 {
-		t.Fatalf("events %+v, %d conditions; want the condition ended with its clear event", evs, r.conditions())
+	if evs := r.events(); len(evs) != 2 || evs[1].key != "rule-cleared" || r.firings() != 0 {
+		t.Fatalf("events %+v, %d firings; want the firing ended with its clear event", evs, r.firings())
 	}
 }
 
-// A hand clear of a rule's alarm holds while the condition does: on a
+// A hand clear of a rule's alarm holds while the firing does: on a
 // polled input that keeps reporting down, the alarm stays cleared and
-// nothing is written, the condition row and its events untouched; it
-// reopens only on the next new edge, after the condition ends and returns.
+// nothing is written, the firing row and its events untouched; it
+// reopens only on the next new edge, after the firing ends and returns.
 func TestRuleEdgeHandClearHolds(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
-	r.rule(storage.EventRuleSpec{Name: "polled", Severity: "high", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "polled", Severity: "high", ClearEventType: "rule-cleared"})
 	r.observe("tcp", "down")
 	alarm := r.openAlarm("tcp")
 	if err := r.f.gw.ClearAlarm(r.ctx, "", "bar-1", alarm); err != nil {
@@ -335,50 +335,50 @@ func TestRuleEdgeHandClearHolds(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		r.observe("tcp", "down")
 	}
-	if r.openAlarm("tcp") != "" || len(r.events()) != 1 || r.conditions() != 1 {
-		t.Fatalf("after a hand clear and more downs: alarm %q, events %+v, %d conditions; want it cleared, one event, the condition in force",
-			r.openAlarm("tcp"), r.events(), r.conditions())
+	if r.openAlarm("tcp") != "" || len(r.events()) != 1 || r.firings() != 1 {
+		t.Fatalf("after a hand clear and more downs: alarm %q, events %+v, %d firings; want it cleared, one event, the firing in force",
+			r.openAlarm("tcp"), r.events(), r.firings())
 	}
 	r.observe("tcp", "up")
 	r.observe("tcp", "down")
 	evs := r.events()
 	again := r.openAlarm("tcp")
-	if again == "" || again == alarm || len(evs) != 3 || evs[1].key != "condition-ended" || evs[1].alarmID != nil || edgeStr(evs[2].alarmID) != again {
-		t.Fatalf("after the condition returned: alarm %q, events %+v; want the end (carrying no alarm), then a new alarm with its fire event", again, evs)
+	if again == "" || again == alarm || len(evs) != 3 || evs[1].key != "rule-cleared" || evs[1].alarmID != nil || edgeStr(evs[2].alarmID) != again {
+		t.Fatalf("after the firing returned: alarm %q, events %+v; want the end (carrying no alarm), then a new alarm with its fire event", again, evs)
 	}
 }
 
-// An alarm the rule holds open with no condition row (written by an older
+// An alarm the rule holds open with no firing row (written by an older
 // binary mid-upgrade) counts as in force: a further fire neither adopts it
 // nor writes an event, and a recovery resolves it, with no clear event,
-// since no condition row ended.
+// since no firing row ended.
 func TestRuleEdgeOrphanAlarmIsInForce(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
-	r.rule(storage.EventRuleSpec{Name: "orphan", Severity: "high", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "orphan", Severity: "high", ClearEventType: "rule-cleared"})
 	mustExec(t, r.f.conn, `insert into alarm (component_id, severity, message, dedup_key, raised_by_rule_id)
 		values ((select id from component where name = 'bar-1'), 'high', 'old', 'rule:' || (select id::text from event_rule where name = 'orphan') || ':tcp',
 			(select id from event_rule where name = 'orphan'))`)
 	alarm := r.openAlarm("tcp")
 	r.observe("tcp", "down")
-	if r.openAlarm("tcp") != alarm || len(r.events()) != 0 || r.conditions() != 0 {
-		t.Fatalf("a down over an orphan alarm: alarm %q (was %q), events %+v, %d conditions; want it untouched, nothing written",
-			r.openAlarm("tcp"), alarm, r.events(), r.conditions())
+	if r.openAlarm("tcp") != alarm || len(r.events()) != 0 || r.firings() != 0 {
+		t.Fatalf("a down over an orphan alarm: alarm %q (was %q), events %+v, %d firings; want it untouched, nothing written",
+			r.openAlarm("tcp"), alarm, r.events(), r.firings())
 	}
 	// The live state agrees with the evaluator: the orphan counts as a
-	// condition in force, so open alarms never outnumber conditions.
+	// firing in force, so open alarms never outnumber firings.
 	got, err := r.f.gw.GetEventRule(r.ctx, "orphan", r.f.all)
-	if err != nil || got.ConditionsInForce != 1 || got.OpenAlarms != 1 {
-		t.Fatalf("an orphan alarm reads %+v (%v), want 1 condition in force and 1 open", got, err)
+	if err != nil || got.Firing != 1 || got.OpenAlarms != 1 {
+		t.Fatalf("an orphan alarm reads %+v (%v), want 1 firing in force and 1 open", got, err)
 	}
 	for _, x := range mustList(t, r) {
-		if x.Name == "orphan" && x.ConditionsInForce != 1 {
-			t.Fatalf("the list counts %d conditions for the orphan, want 1", x.ConditionsInForce)
+		if x.Name == "orphan" && x.Firing != 1 {
+			t.Fatalf("the list counts %d firings for the orphan, want 1", x.Firing)
 		}
 	}
 	st, err := r.f.gw.EventRuleState(r.ctx, "orphan", r.f.all)
-	if err != nil || len(st.Conditions) != 1 || st.Conditions[0].Instance != "tcp" {
-		t.Fatalf("the state lists %+v (%v), want the orphan's condition on tcp", st, err)
+	if err != nil || len(st.Firings) != 1 || st.Firings[0].Instance != "tcp" {
+		t.Fatalf("the state lists %+v (%v), want the orphan's firing on tcp", st, err)
 	}
 	r.observe("tcp", "up")
 	if r.openAlarm("tcp") != "" || len(r.events()) != 0 {
@@ -386,12 +386,12 @@ func TestRuleEdgeOrphanAlarmIsInForce(t *testing.T) {
 	}
 }
 
-// Disabling, narrowing or deleting a rule ends its conditions and writes
+// Disabling, narrowing or deleting a rule ends its firings and writes
 // their clear events, carrying the alarms they resolve.
-func TestRuleEdgeSettlePathsEndConditions(t *testing.T) {
+func TestRuleEdgeSettlePathsEndFirings(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
-	r.rule(storage.EventRuleSpec{Name: "settle", Severity: "high", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "settle", Severity: "high", ClearEventType: "rule-cleared"})
 	end := func(what string, act func(), wantEvents int) {
 		t.Helper()
 		r.observe("tcp", "up")
@@ -403,8 +403,8 @@ func TestRuleEdgeSettlePathsEndConditions(t *testing.T) {
 			t.Fatalf("%s: no events at all", what)
 		}
 		last := evs[len(evs)-1]
-		if alarm == "" || len(evs) != wantEvents || last.key != "condition-ended" || edgeStr(last.alarmID) != alarm || r.conditions() != 0 || r.openAlarm("tcp") != "" {
-			t.Fatalf("%s: events %+v, alarm %q; want the condition ended with a clear event carrying it", what, evs, alarm)
+		if alarm == "" || len(evs) != wantEvents || last.key != "rule-cleared" || edgeStr(last.alarmID) != alarm || r.firings() != 0 || r.openAlarm("tcp") != "" {
+			t.Fatalf("%s: events %+v, alarm %q; want the firing ended with a clear event carrying it", what, evs, alarm)
 		}
 	}
 	off, on := false, true
@@ -426,15 +426,15 @@ func TestRuleEdgeSettlePathsEndConditions(t *testing.T) {
 		t.Fatal(err)
 	}
 	evs := r.events()
-	if len(evs) != n+2 || evs[len(evs)-1].key != "condition-ended" || evs[len(evs)-1].ruleID != nil || evs[len(evs)-1].sourceRule != "settle" {
+	if len(evs) != n+2 || evs[len(evs)-1].key != "rule-cleared" || evs[len(evs)-1].ruleID != nil || evs[len(evs)-1].sourceRule != "settle" {
 		t.Fatalf("delete: events %+v, want a final clear event naming the rule by name, its id set null with the rule", evs[n:])
 	}
 }
 
-// TestRuleConditionBackfill proves an upgrade gives every rule-raised
-// alarm open at upgrade its condition row, so the next recovery resolves it
+// TestRuleFiringBackfill proves an upgrade gives every rule-raised
+// alarm open at upgrade its firing row, so the next recovery resolves it
 // with a clear event; a cleared or hand-raised alarm gets none.
-func TestRuleConditionBackfill(t *testing.T) {
+func TestRuleFiringBackfill(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -463,20 +463,20 @@ func TestRuleConditionBackfill(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := scalar(t, conn, `select string_agg(instance || '@' || to_char(since at time zone 'UTC', 'YYYY-MM-DD'), ',' order by instance)
-		from event_rule_condition`)
+		from event_rule_firing`)
 	if got != "@2026-10-01,tcp@2026-10-01" {
-		t.Fatalf("backfilled conditions = %q, want the two open rule alarms (no instance, and tcp), since they opened", got)
+		t.Fatalf("backfilled firings = %q, want the two open rule alarms (no instance, and tcp), since they opened", got)
 	}
 	if n := count(t, conn, `select count(*) from pg_constraint where conname = 'event_derived_by_rule_id_fkey' and contype = 'f'`); n != 1 {
 		t.Fatal("event.derived_by_rule_id does not reference event_rule")
 	}
 }
 
-// TestRuleConditionsInForceRead proves a rule's live state counts and lists
-// the conditions it holds in force (#951), fenced to the reader's component
+// TestRuleFiringRead proves a rule's live state counts and lists
+// the firings it holds in force (#951), fenced to the reader's component
 // scope like its alarms and streaks: an informational rule holding a
-// condition reads one in force and no open alarm.
-func TestRuleConditionsInForceRead(t *testing.T) {
+// firing reads one in force and no open alarm.
+func TestRuleFiringRead(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "watching"})
@@ -487,26 +487,26 @@ func TestRuleConditionsInForceRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, x := range list {
-		if x.Name == "watching" && (x.ConditionsInForce != 1 || x.OpenAlarms != 0) {
-			t.Fatalf("listed %+v, want 1 condition in force and no open alarm", x)
+		if x.Name == "watching" && (x.Firing != 1 || x.OpenAlarms != 0) {
+			t.Fatalf("listed %+v, want 1 firing in force and no open alarm", x)
 		}
 	}
 	got, err := r.f.gw.GetEventRule(r.ctx, "watching", r.f.all)
-	if err != nil || got.ConditionsInForce != 1 {
-		t.Fatalf("got %+v (%v), want 1 condition in force", got, err)
+	if err != nil || got.Firing != 1 {
+		t.Fatalf("got %+v (%v), want 1 firing in force", got, err)
 	}
-	if got, _ := r.f.gw.GetEventRule(r.ctx, "watching", none); got.ConditionsInForce != 0 {
-		t.Fatalf("a reader who sees no component counts %d conditions, want 0", got.ConditionsInForce)
+	if got, _ := r.f.gw.GetEventRule(r.ctx, "watching", none); got.Firing != 0 {
+		t.Fatalf("a reader who sees no component counts %d firings, want 0", got.Firing)
 	}
 	st, err := r.f.gw.EventRuleState(r.ctx, "watching", r.f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(st.Conditions) != 1 || st.Conditions[0].ComponentName != "bar-1" || st.Conditions[0].Instance != "tcp" || st.Conditions[0].Since.IsZero() {
-		t.Fatalf("state conditions = %+v, want bar-1 on tcp with its since", st.Conditions)
+	if len(st.Firings) != 1 || st.Firings[0].ComponentName != "bar-1" || st.Firings[0].Instance != "tcp" || st.Firings[0].Since.IsZero() {
+		t.Fatalf("state firings = %+v, want bar-1 on tcp with its since", st.Firings)
 	}
-	if st, _ := r.f.gw.EventRuleState(r.ctx, "watching", none); len(st.Conditions) != 0 {
-		t.Fatalf("a reader who sees no component lists %+v, want none", st.Conditions)
+	if st, _ := r.f.gw.EventRuleState(r.ctx, "watching", none); len(st.Firings) != 0 {
+		t.Fatalf("a reader who sees no component lists %+v, want none", st.Firings)
 	}
 }
 

@@ -63,7 +63,7 @@ func latestObservedPerInstanceSQL(lane, value, col string) string {
 // latestObservedMetricPerInstanceSQL is latestObservedPerInstanceSQL on the
 // metric lane (#1275): the owner's observed series of the key, each one's
 // newest sample a probe of its own, the newest per live instance (an
-// instance has a series per source and collecting node), newest first.
+// instance has a series per source and collecting outpost), newest first.
 var latestObservedMetricPerInstanceSQL = `select x.value, x.ts, x.provenance, x.instance from (
 		select distinct on (s.instance) n.value, n.ts, n.id, s.provenance, s.instance
 		from metric_series s cross join lateral (` + metricNewestSQL("s.id") + `) n

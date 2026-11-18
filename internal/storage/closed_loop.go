@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ReceiptWindow is one node's telemetry receipts around a closed-loop
+// ReceiptWindow is one outpost's telemetry receipts around a closed-loop
 // window [start, end], read over [from, next]: every receipt landed in that
 // span, and of those, how many landed before start (the margin) and how
 // many after end.
@@ -19,20 +19,20 @@ type ReceiptWindow struct {
 }
 
 // ClosedLoopPollTarget is one enabled poll task's endpoint with a component,
-// by the node that holds it. Every is a driver poll's declared schedule
+// by the outpost that holds it. Every is a driver poll's declared schedule
 // ("0s" when it declares none) and empty for a reachability probe, which
-// runs at its node's probe interval.
+// runs at its outpost's probe interval.
 type ClosedLoopPollTarget struct {
-	Node        string
+	Outpost     string
 	ComponentID string
 	Transport   string
 	Every       string
 }
 
 // CountTelemetryReceipts counts the receipts whose batch id begins with
-// batchPrefix (a node's telemetry subject and a space) landed in [from,
+// batchPrefix (an outpost's telemetry subject and a space) landed in [from,
 // next], split by start and end. starts_with keeps the prefix's own
-// characters literal, so a node named edge-1 never counts edge-10's. A Term
+// characters literal, so an outpost named edge-1 never counts edge-10's. A Term
 // receipt (#1691) landed nothing, so it never counts.
 func (p *PG) CountTelemetryReceipts(ctx context.Context, batchPrefix string, from, start, end, next time.Time) (ReceiptWindow, error) {
 	var w ReceiptWindow
@@ -49,14 +49,14 @@ func (p *PG) CountTelemetryReceipts(ctx context.Context, batchPrefix string, fro
 }
 
 // ListClosedLoopPollTargets lists every enabled poll task's endpoint with a
-// component, by node, component and transport. The driver test is
-// driver.IsBaked's, and the join the node's worklist read.
+// component, by outpost, component and transport. The driver test is
+// driver.IsBaked's, and the join the outpost's worklist read.
 func (p *PG) ListClosedLoopPollTargets(ctx context.Context) ([]ClosedLoopPollTarget, error) {
 	rows, err := p.pool.Query(ctx, `select n.name, i.component::text, i.transport,
 			case when coalesce(t.spec->>'driver', '') <> '' then coalesce(t.spec->'schedule'->>'every', '0s') else '' end
 		from task t
 		join endpoint i on i.id = t.endpoint_id
-		join node n on n.principal_id = i.node_name
+		join outpost n on n.user_id = i.outpost_id
 		where t.enabled and t.mode = 'poll' and i.component is not null
 		order by 1, 2, 3`)
 	if err != nil {
@@ -64,7 +64,7 @@ func (p *PG) ListClosedLoopPollTargets(ctx context.Context) ([]ClosedLoopPollTar
 	}
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ClosedLoopPollTarget, error) {
 		var t ClosedLoopPollTarget
-		return t, r.Scan(&t.Node, &t.ComponentID, &t.Transport, &t.Every)
+		return t, r.Scan(&t.Outpost, &t.ComponentID, &t.Transport, &t.Every)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("storage: list closed-loop poll targets: %w", err)

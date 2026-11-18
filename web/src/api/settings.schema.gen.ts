@@ -1,5 +1,60 @@
 // Generated from api/openapi.json by web/scripts/gen-settings-schema.mjs (make gen). Do not edit by hand.
 export const settingsSchema = {
+  "agent": {
+    "credential_destination": {
+      "description": "Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind)",
+      "type": "string",
+      "enum": [
+        "always",
+        "ask",
+        "never"
+      ]
+    },
+    "destructive": {
+      "description": "Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE)",
+      "type": "string",
+      "enum": [
+        "always",
+        "ask",
+        "never"
+      ]
+    },
+    "read": {
+      "description": "Policy for an agent's reads (a GET, or a POST gated on a read permission)",
+      "type": "string",
+      "enum": [
+        "always",
+        "ask",
+        "never"
+      ]
+    },
+    "roles": {
+      "description": "Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter",
+      "type": "object"
+    },
+    "tools": {
+      "description": "Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter",
+      "type": "object"
+    },
+    "write": {
+      "description": "Policy for an agent's writes that create or act (a POST that is not a read)",
+      "type": "string",
+      "enum": [
+        "always",
+        "ask",
+        "never"
+      ]
+    }
+  },
+  "assistant": {
+    "conversation_days": {
+      "description": "Days a stored omnibot conversation is kept after it last changed",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 36500,
+      "format": "int64"
+    }
+  },
   "collection": {
     "report_seconds": {
       "description": "Seconds each endpoint's collection telemetry covers: its polls' mean duration and failures, and the pushes its listeners claimed or did not, reported once a window",
@@ -16,6 +71,19 @@ export const settingsSchema = {
       "minimum": 0,
       "maximum": 600000,
       "format": "int64"
+    }
+  },
+  "heartbeat": {
+    "interval_seconds": {
+      "description": "Seconds between heartbeats",
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 86400,
+      "format": "int64"
+    },
+    "target": {
+      "description": "The webhook notification target the server sends its heartbeat to, by name; empty turns the heartbeat off. The request is signed by the target's bound hmac-key secret and subject to the egress allow list",
+      "type": "string"
     }
   },
   "keybindings": {
@@ -44,7 +112,7 @@ export const settingsSchema = {
   },
   "notification": {
     "console_url": {
-      "description": "The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty",
+      "description": "The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a notification's subject and text read. Empty leaves Link empty",
       "type": "string"
     },
     "egress_allow": {
@@ -60,7 +128,7 @@ export const settingsSchema = {
       "type": "string"
     },
     "mail_secret": {
-      "description": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes the right to reveal that secret",
+      "description": "A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret",
       "type": "string"
     },
     "mail_security": {
@@ -103,35 +171,35 @@ export const settingsSchema = {
       "format": "int64"
     },
     "metric_days": {
-      "description": "Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days)",
+      "description": "Days a metric sample is kept, unless its type keeps its own (a metric type's retention_days); a sample on the lane's window leaves with its UTC day, up to a day later",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,
       "format": "int64"
     },
-    "node_log_debug_days": {
-      "description": "Days a node's own debug log line is kept; unset follows log_debug_days",
+    "outpost_log_debug_days": {
+      "description": "Days an outpost's own debug log line is kept; unset follows log_debug_days",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,
       "format": "int64"
     },
-    "node_log_error_days": {
-      "description": "Days a node's own error, critical, alert or emergency log line is kept; unset follows log_error_days",
+    "outpost_log_error_days": {
+      "description": "Days an outpost's own error, critical, alert or emergency log line is kept; unset follows log_error_days",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,
       "format": "int64"
     },
-    "node_log_info_days": {
-      "description": "Days a node's own info or notice log line, or one with no severity, is kept; unset follows log_info_days",
+    "outpost_log_info_days": {
+      "description": "Days an outpost's own info or notice log line, or one with no severity, is kept; unset follows log_info_days",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,
       "format": "int64"
     },
-    "node_log_warning_days": {
-      "description": "Days a node's own warning log line is kept; unset follows log_warning_days",
+    "outpost_log_warning_days": {
+      "description": "Days an outpost's own warning log line is kept; unset follows log_warning_days",
       "type": "integer",
       "minimum": 1,
       "maximum": 36500,

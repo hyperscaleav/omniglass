@@ -34,13 +34,13 @@ var ErrComponentTypeNoStem = errors.New("storage: component_type chain has no st
 // (ErrRootSystemTypeNeedsStem), so this is reachable only through data that
 // predates that guard or through the trusted boot-seed upsert. A refusal by
 // policy for the same reason the component one is: a room called "1" says
-// nothing about what kind of space it is.
+// nothing about what it is for.
 var ErrSystemTypeNoStem = errors.New("storage: system_type chain has no stem to generate a name from")
 
 // ErrSystemTypeRequiredForName is a system asking the platform to name it while
 // carrying no system_type at all. system_type_id is nullable (the floor waits
 // for the shipped tree to prove out), and the stem a name is minted from lives
-// on that registry, so an unclassified system has no source for one.
+// on that catalog, so an unclassified system has no source for one.
 //
 // It is also what an operator meets when they un-classify a system whose name
 // the platform owns: that path re-mints the name (the stem may have changed),
@@ -55,7 +55,7 @@ var ErrSystemTypeRequiredForName = errors.New("storage: a system with no system_
 // mints one instead. One rule, no branches: a nameMint's "<resolved-stem>-<n>",
 // n the smallest ordinal whose minted name no sibling in the same placement
 // scope already holds. The number that was picked is then STORED (#681) rather
-// than left to be read back out of the name by whoever needs it. Roles,
+// than left to be read back out of the name by whoever needs it. Slots,
 // positions, and staffing feed nothing into it; :swap, assign, and unassign
 // never touch a name.
 //
@@ -788,7 +788,7 @@ func systemTypeStemMoved(ctx context.Context, q querier, fromTypeID, toTypeID *s
 // fork whose image carries no rule, so reading the official column here would
 // keep naming locations from a rule the operator had already turned off.
 func locationNameRule(ctx context.Context, q querier, locationTypeID string) (*NameRule, error) {
-	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", locationTypeID)+` r where r.`+registryRefCol(locationTypeID)+` = $1)`, locationTypeID))
+	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.id = (select r.id from `+refRows("location_type", locationTypeID)+` r where r.`+catalogRefCol(locationTypeID)+` = $1)`, locationTypeID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownType
 	}

@@ -17,9 +17,9 @@ import (
 // TestIntegrationScaleEndpointsCloseTheLoop measures a scale lab at the
 // ladder's smoke size (corporate at 20 systems, #1719, no drain probe), checks
 // every figure is read and the fleet is named from the lab's labels, and holds
-// its closed loop shut: every protocol the nodes poll
+// its closed loop shut: every protocol the outposts poll
 // drew requests, no poll target went unhit, every gap is zero, and no face
-// saw two requests at once. It is what a fake cannot prove: real nodes, real
+// saw two requests at once. It is what a fake cannot prove: real outposts, real
 // sims and real receipts, bracketed through the server's API. The sim hop
 // of the delivery table reads 0 on every protocol (#1694).
 func TestIntegrationScaleEndpointsCloseTheLoop(t *testing.T) {
@@ -89,7 +89,7 @@ func TestIntegrationScaleEndpointsCloseTheLoop(t *testing.T) {
 			t.Errorf("unhit endpoint: %+v", g)
 		}
 		if g.Reading == closedloop.ReadingRestarted {
-			t.Errorf("a node restarted inside the window: %+v", g)
+			t.Errorf("an outpost restarted inside the window: %+v", g)
 		}
 	}
 }

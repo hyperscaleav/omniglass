@@ -35,19 +35,19 @@ var ErrRootComponentTypeNeedsStem = errors.New("storage: a root component_type (
 // depth limit any seeded or operator-built tree approaches.
 const maxComponentTypeDepth = 32
 
-// ComponentType is a registry row in the hierarchical taxonomy a product is
+// ComponentType is a catalog row in the hierarchical taxonomy a product is
 // classified by (mic, camera, wireless-mic under mic): a stable id, the
 // official flag, a label, and an optional parent for a tree of
 // arbitrary depth. Stem, Icon, and Abbrev are nullable: null means "inherit
 // from parent," resolved by ResolveTypeFacts walking ParentID in Go (no DB
 // logic) until it finds the first non-null value. DefaultTags follows the
-// same first-non-empty-wins rule. The registry lists alphabetically by
+// same first-non-empty-wins rule. The catalog lists alphabetically by
 // label; there is no ordering field.
 //
 // Official and Forked are the two halves of the origin an operator reads
 // (#655, ADR-0095): official alone is "shipped", neither is "yours", and both
 // together is "yours, overriding shipped". Forked is derived at read time from
-// the presence of a registry_shadow row, never stored on the registry itself.
+// the presence of a catalog_shadow row, never stored on the catalog itself.
 type ComponentType struct {
 	ID uuid.UUID
 	// Namespace is who named the type (#318): og for the platform's.
@@ -58,7 +58,7 @@ type ComponentType struct {
 	Icon        *string
 	Abbrev      *string
 	DefaultTags []string
-	// LabelRule is this node's label template (#682), nullable on the same
+	// LabelRule is this node's label rule (#682), nullable on the same
 	// inherit-from-parent rule Stem/Icon/Abbrev follow: null defers to the
 	// nearest ancestor that sets one, and then to the global tier.
 	LabelRule *string
@@ -80,9 +80,9 @@ type ComponentTypePatch struct {
 
 const componentTypeCols = `id, name, coalesce(label, ''), stem, icon, abbrev, label_rule, default_tags, official, parent_id, namespace`
 
-// componentTypeRegistry is this registry's key in registry_shadow, the first
-// adopter of the fork primitive (registryshadow.go).
-const componentTypeRegistry = "component_type"
+// componentTypeCatalog is this catalog's key in catalog_shadow, the first
+// adopter of the fork primitive (catalogshadow.go).
+const componentTypeCatalog = "component_type"
 
 // componentTypeResolved selects a component_type together with its operator
 // shadow, the read every caller outside the seed goes through. The join is a
@@ -91,7 +91,7 @@ const componentTypeRegistry = "component_type"
 const componentTypeResolved = `
 	select ct.id, ct.name, coalesce(ct.label, ''), ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, ct.official, ct.parent_id, ct.namespace, s.image
 	from component_type ct
-	left join registry_shadow s on s.registry = '` + componentTypeRegistry + `' and s.row_id = ct.id`
+	left join catalog_shadow s on s.catalog = '` + componentTypeCatalog + `' and s.row_id = ct.id`
 
 func scanComponentType(row pgx.Row) (*ComponentType, error) {
 	var ct ComponentType
@@ -121,7 +121,7 @@ func scanComponentTypeResolved(row pgx.Row) (*ComponentType, error) {
 // componentTypeShadowImage is the mutable-column projection a fork captures:
 // the whole set, every time (ADR-0095 decision 2), each nullable column written
 // as an explicit null rather than dropped, because null is a value on this
-// registry ("inherit from the nearest ancestor that sets one") and a dropped
+// catalog ("inherit from the nearest ancestor that sets one") and a dropped
 // key would re-inherit the official row's on the next read.
 //
 // It deliberately omits id, name, official and parent_id. Those are structure,
@@ -145,7 +145,7 @@ func componentTypeShadowImage(ct ComponentType) ([]byte, error) {
 
 // applyComponentTypeImage overlays a shadow image onto the official row. An
 // empty image is the unforked case and returns the row untouched; a key the
-// image does not carry (a column added to the registry after the fork was
+// image does not carry (a column added to the catalog after the fork was
 // taken) falls back to the official value; a key it carries as null clears the
 // column, which on stem/icon/abbrev means "inherit from the parent" and is a
 // real answer, not an absence.
@@ -201,7 +201,7 @@ func normalizeComponentTypeTags(s []string) []string {
 }
 
 // mapComponentTypeWriteErr translates Postgres constraint violations on a
-// component_type write into the registry sentinels: a duplicate name is
+// component_type write into the catalog sentinels: a duplicate name is
 // ErrTypeExists, and an unknown parent_id is ErrParentTypeNotFound.
 func mapComponentTypeWriteErr(err error) error {
 	var pgErr *pgconn.PgError
@@ -246,11 +246,11 @@ func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) (uuid.UU
 // ListComponentTypes returns every component_type, ordered alphabetically by
 // label then name, each row resolved over its operator shadow. A forked
 // row is one row here, not two: the shadow is an overlay on the row it names,
-// never a second entry in the registry.
+// never a second entry in the catalog.
 //
 // The ORDER BY reads the resolved label (the shadow's when there is
 // one) so a rename through a fork sorts where an operator expects it, and it
-// stays in SQL rather than moving to a Go sort so the collation the registry
+// stays in SQL rather than moving to a Go sort so the collation the catalog
 // has always ordered by is the collation it still orders by.
 //
 // The ORDER BY resolves the shadow the way applyComponentTypeImage does, on the
@@ -285,7 +285,7 @@ func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
 // holds) and gets theirs if they have one, the shipped row otherwise. The
 // namespace is not part of the address and never reaches a caller.
 func (p *PG) GetComponentType(ctx context.Context, ref string) (*ComponentType, error) {
-	ct, err := scanComponentTypeResolved(p.pool.QueryRow(ctx, componentTypeResolved+` where ct.id = (select r.id from `+refRows("component_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
+	ct, err := scanComponentTypeResolved(p.pool.QueryRow(ctx, componentTypeResolved+` where ct.id = (select r.id from `+refRows("component_type", ref)+` r where r.`+catalogRefCol(ref)+` = $1)`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -402,11 +402,11 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 	// The fork leg writes the whole mutable row back, so two concurrent edits
 	// of different fields would otherwise each compute an image from the same
 	// starting point and the second would silently undo the first (#709). The
-	// separate statement is the point rather than a style: see lockRegistryRow.
-	if err := lockRegistryRow(ctx, tx, "component_type", ref); err != nil {
+	// separate statement is the point rather than a style: see lockCatalogRow.
+	if err := lockCatalogRow(ctx, tx, "component_type", ref); err != nil {
 		return nil, err
 	}
-	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.id = (select r.id from `+refRows("component_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
+	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.id = (select r.id from `+refRows("component_type", ref)+` r where r.`+catalogRefCol(ref)+` = $1)`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -425,7 +425,7 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 		return p.forkComponentType(ctx, tx, actorID, *current, patch)
 	}
 
-	before, err := registryAuditImage(ctx, tx, "component_type", ref)
+	before, err := catalogAuditImage(ctx, tx, "component_type", ref)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -455,7 +455,7 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 			label_rule   = case when $6::text is null then label_rule else nullif($6::text, '') end,
 			default_tags = coalesce($7, default_tags),
 			updated_at   = now()
-		where id = (select id from `+refRows("component_type", ref)+` t where `+registryRefCol(ref)+` = $1)
+		where id = (select id from `+refRows("component_type", ref)+` t where `+catalogRefCol(ref)+` = $1)
 		returning `+componentTypeCols,
 		ref, labelVal, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule, tags, setLabel))
 	if err != nil {
@@ -464,7 +464,7 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 		}
 		return nil, fmt.Errorf("storage: update component_type %q: %w", ref, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "component_type", ref)
+	after, err := catalogAuditImage(ctx, tx, "component_type", ref)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image component_type %q: %w", ref, err)
 	}
@@ -524,11 +524,11 @@ func (p *PG) forkComponentType(ctx context.Context, tx pgx.Tx, actorID string, c
 	if err != nil {
 		return nil, err
 	}
-	if err := putShadowImage(ctx, tx, componentTypeRegistry, current.ID, after); err != nil {
+	if err := putShadowImage(ctx, tx, componentTypeCatalog, current.ID, after); err != nil {
 		return nil, err
 	}
 	resID := current.ID.String()
-	if err := writeAuditRes(ctx, tx, actorID, "update", componentTypeRegistry, resID,
+	if err := writeAuditRes(ctx, tx, actorID, "update", componentTypeCatalog, resID,
 		json.RawMessage(before), json.RawMessage(after)); err != nil {
 		return nil, err
 	}
@@ -560,10 +560,10 @@ func (p *PG) RestoreComponentType(ctx context.Context, actorID, ref string) (*Co
 	// restore that read a stale shadow would report ErrTypeNotForked for a fork
 	// a concurrent edit had just taken, or audit an image that was already
 	// replaced (#709).
-	if err := lockRegistryRow(ctx, tx, "component_type", ref); err != nil {
+	if err := lockCatalogRow(ctx, tx, "component_type", ref); err != nil {
 		return nil, err
 	}
-	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.id = (select r.id from `+refRows("component_type", ref)+` r where r.`+registryRefCol(ref)+` = $1)`, ref))
+	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.id = (select r.id from `+refRows("component_type", ref)+` r where r.`+catalogRefCol(ref)+` = $1)`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -577,7 +577,7 @@ func (p *PG) RestoreComponentType(ctx context.Context, actorID, ref string) (*Co
 	if err != nil {
 		return nil, err
 	}
-	dropped, err := dropShadowImage(ctx, tx, componentTypeRegistry, current.ID)
+	dropped, err := dropShadowImage(ctx, tx, componentTypeCatalog, current.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -589,7 +589,7 @@ func (p *PG) RestoreComponentType(ctx context.Context, actorID, ref string) (*Co
 		return nil, fmt.Errorf("storage: reload component_type %q: %w", ref, err)
 	}
 	resID := current.ID.String()
-	if err := writeAuditRes(ctx, tx, actorID, "restore", componentTypeRegistry, resID,
+	if err := writeAuditRes(ctx, tx, actorID, "restore", componentTypeCatalog, resID,
 		json.RawMessage(before), nil); err != nil {
 		return nil, err
 	}
@@ -638,13 +638,13 @@ func loadComponentTypeChain(ctx context.Context, q querier, id uuid.UUID) ([]com
 		with recursive chain as (
 			select ct.id, ct.parent_id, ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, s.image, 1 as depth
 			from component_type ct
-			left join registry_shadow s on s.registry = '`+componentTypeRegistry+`' and s.row_id = ct.id
+			left join catalog_shadow s on s.catalog = '`+componentTypeCatalog+`' and s.row_id = ct.id
 			where ct.id = $1
 			union all
 			select ct.id, ct.parent_id, ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, s.image, chain.depth + 1
 			from chain
 			join component_type ct on ct.id = chain.parent_id
-			left join registry_shadow s on s.registry = '`+componentTypeRegistry+`' and s.row_id = ct.id
+			left join catalog_shadow s on s.catalog = '`+componentTypeCatalog+`' and s.row_id = ct.id
 			where chain.depth < $2
 		)
 		select id, parent_id, stem, icon, abbrev, label_rule, default_tags, image

@@ -16,8 +16,8 @@ import { NOTIFICATION_TYPES_KEY } from "../lib/notification_types";
 // save. The lists are seeded into the query cache; fetch answers the writes
 // and the expression check, and refuses anything else.
 const at = "2026-10-29T00:00:00Z";
-const admin: Me = { principal: { id: uuidFor("u-root"), kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
-const viewer: Me = { principal: { id: uuidFor("u-view"), kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+const admin: Me = { user: { id: uuidFor("u-root"), kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { user: { id: uuidFor("u-view"), kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
 
 const pageOps: ActionRule = {
   id: uuidFor("r-1"), name: "page-ops", label: "Page ops", on: ["raised", "cleared"], when: "severity_rank >= 40", targets: ["ops-chat"],

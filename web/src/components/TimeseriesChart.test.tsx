@@ -68,4 +68,14 @@ describe("TimeseriesChart over buckets and steps (#1269)", () => {
     expect(m).toBeTruthy();
     expect(m![1]).toBe(m![3]);
   });
+
+  it("step mode draws a carried-in value from the left edge when the window holds no change (#1488)", () => {
+    const { getByTestId, queryByText } = render(() => <TimeseriesChart mode="step" samples={[]} carriedIn={1} now={now} windowMs={24 * 3600_000} />);
+    expect(queryByText("No samples in the window.")).toBeNull();
+    const d = getByTestId("timeseries-chart").querySelector("path[stroke-width]")?.getAttribute("d") ?? "";
+    const [m, e] = d.split(" ").map((c) => c.slice(1).split(",").map(Number));
+    expect(m[0]).toBeCloseTo(44, 2);
+    expect(e[0]).toBeCloseTo(640 - 16, 2);
+    expect(e[1]).toBe(m[1]);
+  });
 });

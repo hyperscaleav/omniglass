@@ -225,3 +225,47 @@ func TestAReceiverEchoNeverCarriesTheURLOrTheToken(t *testing.T) {
 		t.Fatalf("straddling echo reason = %q, want the path scrubbed before the cut", res.Reason)
 	}
 }
+
+// Fetch is the contract's GET (#2074): a document the server reads from a
+// URL it was handed, bounded in bytes, refused on the same terms as a send.
+func TestFetchReadsADocumentUnderTheContract(t *testing.T) {
+	var hits int
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		switch r.URL.Path {
+		case "/doc.json":
+			if r.Header.Get("Accept") != "application/json" {
+				http.Error(w, "accept", http.StatusNotAcceptable)
+				return
+			}
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/big.json":
+			_, _ = w.Write([]byte(strings.Repeat("x", 65)))
+		case "/moved":
+			http.Redirect(w, r, "/doc.json", http.StatusFound)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	roots := x509.NewCertPool()
+	roots.AddCert(srv.Certificate())
+	ctx := context.Background()
+
+	if _, err := egress.New(egress.Policy{}, egress.Options{RootCAs: roots}).Fetch(ctx, srv.URL+"/doc.json", 64); !errors.Is(err, egress.ErrRefused) || hits != 0 {
+		t.Fatalf("default policy = %v (hits %d), want refused before any request", err, hits)
+	}
+	c := egress.New(mustPolicy(t, "127.0.0.1"), egress.Options{RootCAs: roots})
+	if b, err := c.Fetch(ctx, srv.URL+"/doc.json", 64); err != nil || string(b) != `{"ok":true}` {
+		t.Fatalf("allowed = %q, %v, want the document", b, err)
+	}
+	if _, err := c.Fetch(ctx, srv.URL+"/big.json", 64); err == nil || !strings.Contains(err.Error(), "64 bytes") {
+		t.Errorf("oversized = %v, want refused at the limit", err)
+	}
+	if _, err := c.Fetch(ctx, srv.URL+"/moved", 64); err == nil || !strings.Contains(err.Error(), "302") {
+		t.Errorf("redirect = %v, want the 302 as the answer, not followed", err)
+	}
+	if _, err := c.Fetch(ctx, srv.URL+"/missing", 64); err == nil || !strings.Contains(err.Error(), "404") {
+		t.Errorf("missing = %v, want the 404", err)
+	}
+}

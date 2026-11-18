@@ -57,19 +57,19 @@ type ContractCopy = { hint: string; lede: string; empty: string; confirm: (name:
 const CONTRACT_COPY: Record<ClassifierKind, ContractCopy> = {
   product: {
     hint: "the product contract",
-    lede: "A component of this product inherits every property declared here, resolved to the default below unless the component overrides it.",
+    lede: "A component of this product inherits every property declared here, resolved to the default below unless the component sets its own value.",
     empty: "This product declares no properties.",
     confirm: (property) => `Withdraw "${property}" from this product's contract?`,
   },
   standard: {
     hint: "the standard contract",
-    lede: "A system conforming to this standard inherits every property declared here, resolved to the default below unless the system overrides it.",
+    lede: "A system conforming to this standard inherits every property declared here, resolved to the default below unless the system sets its own value.",
     empty: "This standard declares no properties.",
     confirm: (property) => `Withdraw "${property}" from this standard's contract?`,
   },
   "location-type": {
     hint: "the location type contract",
-    lede: "A location of this type inherits every property declared here, resolved to the default below unless the location overrides it.",
+    lede: "A location of this type inherits every property declared here, resolved to the default below unless the location sets its own value.",
     empty: "This location type declares no properties.",
     confirm: (property) => `Withdraw "${property}" from this location type's contract?`,
   },

@@ -6,7 +6,7 @@
 # unreachable, its scheduled polls are held and counted as held, a run now or a preview answers
 # 409 naming the reason, and the probe's next up verdict reopens it (#1650).
 
-Type "# An occupancy sensor with an http endpoint; its edge node probes the sensor's address"
+Type "# An occupancy sensor with an http endpoint; its edge outpost probes the sensor's address"
 Enter
 Wait
 Type `s='east.hall.mezzanine.class-202.$comp.sensor-1'`
@@ -63,10 +63,10 @@ Wait
 Type `omniglass endpoint poll run "$s/http" occupancy 2>/dev/null | jq -r '"\(.status) \(.detail)"' || true`
 Enter
 Wait
-Type "# So is a preview against the sensor's address, through the same node"
+Type "# So is a preview against the sensor's address, through the same outpost"
 Enter
 Wait
-Type `omniglass driver preview --node edge-hq --driver http-json --polls '["occupancy"]' --inputs "$inputs" 2>/dev/null | jq -r '"\(.status) \(.detail)"' || true`
+Type `omniglass driver preview --outpost edge-hq --driver tessellate-census-http --polls '["occupancy"]' --inputs "$inputs" 2>/dev/null | jq -r '"\(.status) \(.detail)"' || true`
 Enter
 Wait
 

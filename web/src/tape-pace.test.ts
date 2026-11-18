@@ -51,7 +51,7 @@ describe("the rows a command's output fills", () => {
 
 describe("the hold after a line", () => {
   it("holds a command's output by its rows, on the rule's table", () => {
-    expect(sh(`demo__hold "omniglass node list" 80`, "a\nb\nc\n")).toBe(`${outputHoldMs(3)} output 3`);
+    expect(sh(`demo__hold "omniglass outpost list" 80`, "a\nb\nc\n")).toBe(`${outputHoldMs(3)} output 3`);
     expect(sh(`demo__hold "true" 80`, "")).toBe(`${outputHoldMs(0)} output 0`);
   });
 

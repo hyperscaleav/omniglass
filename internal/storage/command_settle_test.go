@@ -17,7 +17,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// settleRig is a component with a line-protocol driver attached on a node,
+// settleRig is a component with a line-protocol driver attached on an outpost,
 // whose set-input binding settles as settle declares.
 type settleRig struct {
 	ctx   context.Context
@@ -42,7 +42,7 @@ func newSettleRig(t *testing.T, settle string) *settleRig {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "switcher"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	settleField := ""
@@ -57,8 +57,8 @@ func newSettleRig(t *testing.T, settle string) *settleRig {
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "settle-proto", Label: "Settle Proto", Version: "1.0.0", Spec: []byte(spec)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
-	comp, drv, node := "switcher", "settle-proto", "edge"
-	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
+	comp, drv, outpost := "switcher", "settle-proto", "edge"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpost,
 		Inputs: map[string]string{"host": "10.20.4.60"}}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -75,20 +75,20 @@ func newSettleRig(t *testing.T, settle string) *settleRig {
 	}
 	t.Cleanup(func() { conn.Close(ctx) })
 	r := &settleRig{ctx: ctx, gw: gw, conn: conn}
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&r.actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&r.actor); err != nil {
 		t.Fatal(err)
 	}
 	return r
 }
 
-// issueAndDispatch issues set-input and has the node pull it.
+// issueAndDispatch issues set-input and has the outpost pull it.
 func (r *settleRig) issueAndDispatch(t *testing.T, input string) int64 {
 	t.Helper()
 	cmd, err := r.gw.IssueCommand(r.ctx, r.actor, "component", "switcher", "set-input", "", json.RawMessage(`"`+input+`"`), nil)
 	if err != nil {
 		t.Fatalf("issue: %v", err)
 	}
-	got, err := r.gw.PendingNodeCommands(r.ctx, "edge")
+	got, err := r.gw.PendingOutpostCommands(r.ctx, "edge")
 	if err != nil || len(got) != 1 || got[0].ID != cmd.ID {
 		t.Fatalf("dispatch = %+v (%v), want command %d", got, err, cmd.ID)
 	}
@@ -259,6 +259,78 @@ func TestARepeatedReplyValueIsOneTransition(t *testing.T) {
 	}
 }
 
+// A reply that reaches the server after the device has already pushed a newer
+// value settles its command, but never overwrites that value (#1606): the
+// latest observation of the target stays the push's, not the reply's.
+func TestALateReplyDoesNotOverwriteANewerObservation(t *testing.T) {
+	t.Parallel()
+	r := newSettleRig(t, valueReply)
+	id := r.issueAndDispatch(t, "hdmi3")
+	// The device's own pushes land while the exchange is still retrying.
+	r.observeOn(t, "tcp", "hdmi3")
+	r.observeOn(t, "tcp", "dp1")
+	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hdmi3"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.status(t, id); got != "settled" {
+		t.Fatalf("status = %q, want settled from its reply", got)
+	}
+	latest, err := r.gw.LatestProperty(r.ctx, "switcher", "video-input", "tcp")
+	if err != nil || latest == nil || latest.Value != "dp1" {
+		t.Fatalf("latest video-input = %+v (%v), want the newer push dp1", latest, err)
+	}
+	if n := r.observedRows(t); n != 2 {
+		t.Fatalf("%d observed rows, want the two pushes and no reply row", n)
+	}
+}
+
+// A redelivery moves dispatched_at past a push the device made after the
+// first take, yet the first delivery's report is still accepted: the reply
+// must be judged against the first delivery, or that push is overwritten
+// (#1606).
+func TestALateReplyAfterARedeliveryDoesNotOverwriteANewerObservation(t *testing.T) {
+	t.Parallel()
+	r := newSettleRig(t, valueReply)
+	id := r.issueAndDispatch(t, "hdmi3")
+	r.observeOn(t, "tcp", "dp1")
+	// The node went silent: age both stamps past the redelivery interval, so
+	// the push sits after the first take and the pull below redelivers.
+	if _, err := r.conn.Exec(r.ctx, `update command set dispatched_at = dispatched_at - interval '31 seconds',
+		first_dispatched_at = first_dispatched_at - interval '31 seconds' where id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.gw.PendingOutpostCommands(r.ctx, "edge")
+	if err != nil || len(got) != 1 || got[0].ID != id {
+		t.Fatalf("redelivery = %+v (%v), want command %d again", got, err, id)
+	}
+	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hdmi3"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.status(t, id); got != "settled" {
+		t.Fatalf("status = %q, want settled from its reply", got)
+	}
+	latest, err := r.gw.LatestProperty(r.ctx, "switcher", "video-input", "tcp")
+	if err != nil || latest == nil || latest.Value != "dp1" {
+		t.Fatalf("latest video-input = %+v (%v), want the newer push dp1", latest, err)
+	}
+}
+
+// An observation older than the exchange does not stop the reply being
+// recorded: only one taken after the command was dispatched is newer than it.
+func TestAReplyIsRecordedOverAnObservationOlderThanTheExchange(t *testing.T) {
+	t.Parallel()
+	r := newSettleRig(t, valueReply)
+	r.observeOn(t, "tcp", "dp1")
+	id := r.issueAndDispatch(t, "hdmi3")
+	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hdmi3"); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := r.gw.LatestProperty(r.ctx, "switcher", "video-input", "tcp")
+	if err != nil || latest == nil || latest.Value != "hdmi3" {
+		t.Fatalf("latest video-input = %+v (%v), want the reply hdmi3", latest, err)
+	}
+}
+
 // A reply that cannot be stored (a NUL byte) fails the command, and the
 // execution is still recorded, so the command is not redelivered.
 func TestAnUnstorableReplyStillRecordsTheExecution(t *testing.T) {
@@ -300,7 +372,7 @@ func TestNonEvidenceLeavesACommandPending(t *testing.T) {
 	}
 }
 
-// issueQueued issues set-input with no instance and leaves it queued: no node
+// issueQueued issues set-input with no instance and leaves it queued: no outpost
 // has taken it, so it names no endpoint it was dispatched over.
 func (r *settleRig) issueQueued(t *testing.T, input string) int64 {
 	t.Helper()
@@ -312,13 +384,13 @@ func (r *settleRig) issueQueued(t *testing.T, input string) int64 {
 }
 
 // observeOn lands an observation of video-input on one instance: on the
-// rig's endpoint (tcp) through the node lane, as the consumer does for a task
+// rig's endpoint (tcp) through the outpost lane, as the consumer does for a task
 // on it; on any other instance as a push that names it.
 func (r *settleRig) observeOn(t *testing.T, instance, value string) {
 	t.Helper()
 	w := storage.PushWriter()
 	if instance == "tcp" {
-		w = storage.NodeWriter("switcher", instance)
+		w = storage.OutpostWriter("switcher", instance)
 	}
 	if err := r.gw.InsertPropertySamples(r.ctx, w, []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "switcher", Key: "video-input", Instance: instance, Value: value, Source: "tcp",
@@ -327,7 +399,7 @@ func (r *settleRig) observeOn(t *testing.T, instance, value string) {
 	}
 }
 
-// A queued un-instanced command (no node has taken it yet) is judged on the
+// A queued un-instanced command (no outpost has taken it yet) is judged on the
 // endpoint queued to carry it, the one whose driver binds its type, where
 // that driver's observations of the target land (ADR-0456): another
 // instance agreeing does not settle it, and its carrier agreeing does, the
@@ -353,12 +425,12 @@ func TestAQueuedCommandIsJudgedOnTheEndpointQueuedToCarryIt(t *testing.T) {
 	}
 }
 
-// A command no node took never reached the device, so a reading of its
+// A command no outpost took never reached the device, so a reading of its
 // target that disagrees is not the device's answer to it: past the window
 // it times out, saying it stopped in the queue, whether its carrier had
 // observed another value or nothing at all (ADR-0456, the commands page's
-// "timed-out covers a command no node picked up").
-func TestAQueuedCommandNoNodeTookTimesOut(t *testing.T) {
+// "timed-out covers a command no outpost picked up").
+func TestAQueuedCommandNoOutpostTookTimesOut(t *testing.T) {
 	t.Parallel()
 	r := newSettleRig(t, "")
 	if _, err := r.conn.Exec(r.ctx, `update command_type set settle_window_seconds = 1 where name = 'set-input'`); err != nil {
@@ -377,8 +449,8 @@ func TestAQueuedCommandNoNodeTookTimesOut(t *testing.T) {
 			Scan(&status, &settledBy, &reason); err != nil {
 			t.Fatal(err)
 		}
-		if status != "timed-out" || settledBy != "window" || !strings.Contains(reason, "queued for node edge") {
-			t.Fatalf("command %d no node took: status %q by %q (%s), want timed-out by the window, queued for node edge", id, status, settledBy, reason)
+		if status != "timed-out" || settledBy != "window" || !strings.Contains(reason, "queued for outpost edge") {
+			t.Fatalf("command %d no outpost took: status %q by %q (%s), want timed-out by the window, queued for outpost edge", id, status, settledBy, reason)
 		}
 	}
 }
@@ -490,11 +562,11 @@ func TestARetiredObserverDoesNotSettleAnOwnerLevelCommand(t *testing.T) {
 	r := newSettleRig(t, "")
 	r.ownerLevelDisplay(t)
 	all := scope.Set{All: true}
-	if _, err := r.conn.Exec(r.ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('telnet', 'telnet', (select id from component where name = 'display'), (select principal_id from node where name = 'edge'), '{"target":"10.20.4.61:23"}'::jsonb)`); err != nil {
+	if _, err := r.conn.Exec(r.ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('telnet', 'telnet', (select id from component where name = 'display'), (select user_id from outpost where name = 'edge'), '{"target":"10.20.4.61:23"}'::jsonb)`); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.gw.InsertPropertySamples(r.ctx, storage.NodeWriter("display", "telnet"), []storage.PropertySampleWrite{{
+	if err := r.gw.InsertPropertySamples(r.ctx, storage.OutpostWriter("display", "telnet"), []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "display", Key: "video-input", Instance: "telnet", Value: "hdmi3", Source: "telnet",
 	}}); err != nil {
 		t.Fatalf("observe on telnet: %v", err)

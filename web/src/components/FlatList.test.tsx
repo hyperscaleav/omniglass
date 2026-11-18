@@ -52,7 +52,7 @@ describe("FlatList blades rowKind", () => {
   });
 });
 
-// The list primitive renders rows in the order it is given (#757). Registry
+// The list primitive renders rows in the order it is given (#757). Catalog
 // pages hand it the server's order, which is the SQL label rule, so a new list
 // picks that order up by default; sorting is the operator's, by a column header.
 describe("FlatList row order", () => {
@@ -71,5 +71,38 @@ describe("FlatList row order", () => {
     ));
     const cells = screen.getAllByRole("row").slice(1).map((tr) => tr.textContent);
     expect(cells).toEqual(["zulu", "alpha", "mike"]);
+  });
+});
+
+// A list that opts in with loadingRows holds its table space while the first read
+// is in flight (skeleton rows of the typical page), so the loaded rows land in
+// location instead of pushing the content below them down (the probe's layout-shift
+// budget, #1461). Without the opt-in the "Loading…" line is unchanged.
+describe("FlatList loading placeholder", () => {
+  const cfg = (loading: boolean, loadingRows?: number) => ({
+    entity: { name: "thing", plural: "things" },
+    rows: () => [] as R[],
+    loading: () => loading,
+    filterKeys: [{ key: "name", type: "string" as const, hint: "substring", get: (r: R) => r.id, values: () => [] }],
+    columns: [{ key: "id", label: "Id", cell: (r: R) => <span>{r.id}</span> }],
+    loadingRows,
+  });
+
+  it("renders loadingRows skeleton rows while loading, keeping the header", () => {
+    render(() => <FlatList<R> config={cfg(true, 6)} />);
+    expect(screen.getAllByTestId("list-loading-row")).toHaveLength(6);
+    expect(screen.getByText("Id")).toBeInTheDocument();
+    expect(screen.queryByText("Loading…")).toBeNull();
+  });
+
+  it("keeps the text line when loadingRows is not set", () => {
+    render(() => <FlatList<R> config={cfg(true)} />);
+    expect(screen.queryAllByTestId("list-loading-row")).toHaveLength(0);
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+  });
+
+  it("drops the skeleton once loading ends", () => {
+    render(() => <FlatList<R> config={cfg(false, 6)} />);
+    expect(screen.queryAllByTestId("list-loading-row")).toHaveLength(0);
   });
 });

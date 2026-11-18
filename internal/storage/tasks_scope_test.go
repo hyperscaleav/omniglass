@@ -13,7 +13,7 @@ import (
 
 // TestTaskDerivedScope covers the task tier as DERIVED read-only plumbing: a task
 // is created automatically when its interface is created (one poll task per
-// interface), has no operator write surface, projects its node placement from its
+// interface), has no operator write surface, projects its outpost placement from its
 // interface, cascades away when its interface is deleted, and reads through its
 // interface's owning component's scope (A-scope sees A's task, B's is a
 // non-disclosing 404).
@@ -73,17 +73,17 @@ func TestTaskDerivedScope(t *testing.T) {
 		t.Errorf("get B's task under A-scope = %v, want ErrTaskNotFound (non-disclosing)", err)
 	}
 
-	// Node PROJECTION: placing the interface on a node projects onto its task (the
-	// task carries no node column of its own).
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	// Outpost PROJECTION: placing the interface on an outpost projects onto its task (the
+	// task carries no outpost column of its own).
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
-	if _, err := gw.UpdateEndpoint(ctx, "", ifA.ID, storage.EndpointPatch{Node: strptr("edge-1")}, all, all); err != nil {
+	if _, err := gw.UpdateEndpoint(ctx, "", ifA.ID, storage.EndpointPatch{Outpost: strptr("edge-1")}, all, all); err != nil {
 		t.Fatalf("place interface on edge-1: %v", err)
 	}
 	placed, err := gw.GetTask(ctx, taskA.ID, all)
-	if err != nil || placed.Node == nil || *placed.Node != "edge-1" {
-		t.Fatalf("derived task node = %v (err %v), want projected edge-1", placed.Node, err)
+	if err != nil || placed.Outpost == nil || *placed.Outpost != "edge-1" {
+		t.Fatalf("derived task outpost = %v (err %v), want projected edge-1", placed.Outpost, err)
 	}
 
 	// Cascade DELETE: deleting the interface removes its derived task.

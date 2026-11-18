@@ -8,12 +8,12 @@ import (
 )
 
 // The fixture writers: a test batch speaks for the writer its keys admit
-// (ADR-0161). A batch carrying a native probe key is the node's, and a node
+// (ADR-0161). A batch carrying a native probe key is the outpost's, and an outpost
 // writes only for the component and the endpoint its task ran, so the batch
-// lands as one node batch per component and endpoint its samples name, in
+// lands as one outpost batch per component and endpoint its samples name, in
 // order; every other batch is a push's. A native sample naming no endpoint of
-// its component is a fixture the node lane could never produce, and the
-// gateway refuses it as it would the node's.
+// its component is a fixture the outpost lane could never produce, and the
+// gateway refuses it as it would the outpost's.
 
 type sampleSink interface {
 	InsertMetricSamples(context.Context, storage.KeyWriter, []storage.MetricSampleWrite) error
@@ -26,7 +26,7 @@ type sampleSink interface {
 func fixtureBatches(n int, key, owner, instance func(int) string) []fixtureBatch {
 	native := false
 	for i := 0; i < n; i++ {
-		if c, ok := writerclass.Reserved(key(i)); ok && c == writerclass.NodeProbe {
+		if c, ok := writerclass.Reserved(key(i)); ok && c == writerclass.OutpostProbe {
 			native = true
 		}
 	}
@@ -45,7 +45,7 @@ func fixtureBatches(n int, key, owner, instance func(int) string) []fixtureBatch
 		if !ok {
 			j = len(out)
 			at[comp+"\x00"+ep] = j
-			out = append(out, fixtureBatch{w: storage.NodeWriter(comp, ep)})
+			out = append(out, fixtureBatch{w: storage.OutpostWriter(comp, ep)})
 		}
 		out[j].idx = append(out[j].idx, i)
 	}

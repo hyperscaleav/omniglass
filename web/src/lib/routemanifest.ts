@@ -36,7 +36,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   // The canvas address retired with #826; it redirects to Explore.
   { path: "/fleet", shell: "protected", page: "FleetRedirect", smoke: "/fleet" },
   // Explore (#826, #861): the sidebar's one door into the fleet, the outline
-  // of places; it replaced the Fleet entry and the reserved Explore stub.
+  // of locations; it replaced the Fleet entry and the reserved Explore stub.
   { path: "/explore", shell: "protected", page: "Explore", smoke: "/explore" },
   // The fleet kinds. A bare index address redirects to Explore, whose outline
   // lists every kind (#798, #861). The :id route is the entity's
@@ -50,7 +50,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/systems/:id", shell: "protected", page: "Systems", smoke: `/systems/${UNKNOWN_UUID}` },
   { path: "/components", shell: "protected", page: "FleetRedirect", smoke: "/components" },
   { path: "/components/:id", shell: "protected", page: "Components", smoke: `/components/${UNKNOWN_UUID}` },
-  { path: "/nodes", shell: "protected", page: "Nodes", smoke: "/nodes" },
+  { path: "/outposts", shell: "protected", page: "Outposts", smoke: "/outposts" },
   // Platform health (#1644): Omniglass's own health, read off the platform components.
   { path: "/platform", shell: "protected", page: "PlatformHealth", smoke: "/platform" },
   // The simulated fleet (#890); its sidebar door shows only while a simulator
@@ -60,6 +60,9 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/files", shell: "protected", page: "Files", smoke: "/files" },
   { path: "/files/:id", shell: "protected", page: "Files", smoke: `/files/${UNKNOWN_UUID}` },
   { path: "/profile", shell: "protected", page: "Profile", smoke: "/profile" },
+  // OAuth consent for MCP clients (#2048): /oauth/authorize sends the person
+  // here with the client's request; it smokes its incomplete-request face.
+  { path: "/oauth/authorize", shell: "protected", page: "OAuthConsent", smoke: "/oauth/authorize" },
   // A person's own alarm subscriptions (#1355), in the profile area like the
   // account they belong to; the page gates its writes on notification:subscribe.
   { path: "/profile/subscriptions", shell: "protected", page: "Subscriptions", smoke: "/profile/subscriptions" },
@@ -67,7 +70,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/inbox", shell: "protected", page: "Inbox", smoke: "/inbox" },
   { path: "/users", shell: "protected", page: "Users", smoke: "/users" },
   { path: "/roles", shell: "protected", page: "Roles", smoke: "/roles" },
-  { path: "/groups", shell: "protected", page: "Groups", smoke: "/groups" },
+  { path: "/user-groups", shell: "protected", page: "Groups", smoke: "/user-groups" },
   { path: "/secrets", shell: "protected", page: "Secrets", smoke: "/secrets" },
   { path: "/variables", shell: "protected", page: "Variables", smoke: "/variables" },
   { path: "/audit", shell: "protected", page: "Audit", smoke: "/audit" },
@@ -88,11 +91,11 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/properties", shell: "catalog", page: "Properties", smoke: "/properties" },
   { path: "/event-types", shell: "catalog", page: "EventTypes", smoke: "/event-types" },
   { path: "/command-types", shell: "catalog", page: "CommandTypes", smoke: "/command-types" },
-  // The event rule registry (#921), live since the rules epic (#819).
-  { path: "/rules", shell: "catalog", page: "Rules", smoke: "/rules" },
-  // The calc rule registry (#999, epic #525), the event rules' sibling.
+  // The event rule catalog (#921), live since the rules epic (#819).
+  { path: "/event-rules", shell: "catalog", page: "Rules", smoke: "/event-rules" },
+  // The calc rule catalog (#999, epic #525), the event rules' sibling.
   { path: "/calc-rules", shell: "catalog", page: "CalcRules", smoke: "/calc-rules" },
-  // The severity registry the rules raise at (#917, read view #921).
+  // The severity catalog the rules raise at (#917, read view #921).
   { path: "/severity-levels", shell: "catalog", page: "SeverityLevels", smoke: "/severity-levels" },
   { path: "/vendors", shell: "catalog", page: "Vendors", smoke: "/vendors" },
   { path: "/products", shell: "catalog", page: "Products", smoke: "/products" },

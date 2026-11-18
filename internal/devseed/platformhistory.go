@@ -50,7 +50,7 @@ func zero() []historySeries { return []historySeries{{}} }
 
 // consoleRoutes is the routes a console polling platform health calls, each
 // with its typical slowest response in milliseconds, read off a live lab. A
-// capture lab has no node, so these are the routes its server serves.
+// capture lab has no outpost, so these are the routes its server serves.
 var consoleRoutes = []struct {
 	route string
 	ms    float64
@@ -80,7 +80,7 @@ var sparklineReads = struct {
 // table's bands.
 func retentionLaneNames() []string {
 	lanes := []string{"metric", "property", "metric_trend"}
-	for _, table := range []string{"log_line", "node_log"} {
+	for _, table := range []string{"log_line", "outpost_log"} {
 		for _, band := range logline.RetentionBands() {
 			lanes = append(lanes, table+"/"+band)
 		}
@@ -90,21 +90,31 @@ func retentionLaneNames() []string {
 
 // platformHistory is the hour each server panel key draws, keyed by metric
 // key. Every value is a healthy capture lab's: failures and queues read 0, the
-// pool holds a connection of its size, and with no node nothing is ingested.
+// pool holds a connection of its size, and with no outpost nothing is ingested.
 // The sizes are measured instead (platformHistoryMeasured). A key on a panel
 // that is in none of the three fails
 // TestPlatformHistoryCoversEveryServerPanelKey.
 var platformHistory = func() map[string][]historySeries {
 	h := map[string][]historySeries{
-		writerclass.DBPoolAcquired:            count(0.3, 1),
-		writerclass.DBPoolMax:                 count(12, 0),
-		writerclass.DBPoolWaitCount:           zero(),
-		writerclass.BusConsumerPending:        zero(),
-		writerclass.BusConsumerAckPending:     zero(),
-		writerclass.CalcPendingDepth:          zero(),
-		writerclass.OutboxQueuedDepth:         zero(),
-		writerclass.OutboxDueAge:              zero(),
-		writerclass.IngestLaneBusy:            zero(),
+		writerclass.DBPoolAcquired:     count(0.3, 1),
+		writerclass.DBPoolMax:          count(12, 0),
+		writerclass.DBPoolAcquireCount: count(120, 0.3),
+		writerclass.DBPoolWaitCount:    zero(),
+		writerclass.DBPoolWaitDuration: zero(),
+		// The database's side: the lab's server and a few sessions against
+		// a stock 100 connections less the 3 reserved, nothing left open.
+		writerclass.DBConnectionCount:                  count(9, 0.15),
+		writerclass.DBConnectionLimit:                  count(97, 0),
+		writerclass.DBConnectionIdleInTransactionCount: zero(),
+		writerclass.DBTransactionOldestAge:             {{base: 0.2, swing: 0.5}},
+		writerclass.BusConsumerPending:                 zero(),
+		writerclass.BusConsumerAckPending:              zero(),
+		writerclass.CalcPendingDepth:                   zero(),
+		writerclass.OutboxQueuedDepth:                  zero(),
+		writerclass.OutboxDueAge:                       zero(),
+		writerclass.IngestLaneBusy:                     zero(),
+		// The sweep ticks every 5 s, so a healthy lab's age runs 0 to 5.
+		writerclass.RuleSweepAge:              one(2.5, 0.4),
 		writerclass.RetentionPassFailureCount: zero(),
 		writerclass.RetentionWindowDays:       {{instance: "metric", base: 14, whole: true}},
 	}
@@ -140,7 +150,7 @@ var platformHistoryMeasured = map[string]bool{
 }
 
 // windowUnwritten is why a window key a capture lab never writes is left out:
-// with no node, nothing is ingested or pushed and no query runs slow, and a
+// with no outpost, nothing is ingested or pushed and no query runs slow, and a
 // window key past two report windows reads "not reported" however much
 // history it has, so a seeded hour of it would never draw.
 const windowUnwritten = "a window key no capture lab writes: it reads not reported once its newest sample is two report windows old, so a seeded hour would never draw"
@@ -162,7 +172,7 @@ var platformHistoryExempt = map[string]string{
 	writerclass.PushLanePublishCount: windowUnwritten,
 	writerclass.PushLaneTurnWaitP99:  windowUnwritten,
 	writerclass.PushLaneTurnWaitMax:  windowUnwritten,
-	// A node's bus requests and the telemetry acks of its batches.
+	// An outpost's bus requests and the telemetry acks of its batches.
 	writerclass.BusRequestCount:             windowUnwritten,
 	writerclass.BusRequestFailureCount:      windowUnwritten,
 	writerclass.BusTelemetryAckFailureCount: windowUnwritten,

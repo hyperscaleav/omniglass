@@ -40,24 +40,24 @@ func TestReconciliationResolvesEveryObservedInstance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	conn := connectDSN(t, dsn)
-	mustExec(t, conn, `insert into endpoint (name, transport, component, node_name, params) values
-		('ip-control', 'tcp', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb),
-		('serial', 'tcp', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.2:23"}'::jsonb)`, comp.ID)
+	mustExec(t, conn, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('ip-control', 'tcp', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb),
+		('serial', 'tcp', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.2:23"}'::jsonb)`, comp.ID)
 
 	// want: the operator's owner-level declaration.
 	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "video-input", "", json.RawMessage(`"hdmi1"`), all, all); err != nil {
 		t.Fatalf("declare video-input: %v", err)
 	}
 	base := time.Now().UTC().Truncate(time.Microsecond).Add(-10 * time.Minute)
-	// observe lands one reading through the node lane, as the consumer does
+	// observe lands one reading through the outpost lane, as the consumer does
 	// for a task on endpoint ep: the instance is the endpoint's name.
 	observe := func(ep, value string, at time.Duration) {
 		t.Helper()
-		if err := gw.InsertPropertySamples(ctx, storage.NodeWriter(comp.ID, ep), []storage.PropertySampleWrite{{
+		if err := gw.InsertPropertySamples(ctx, storage.OutpostWriter(comp.ID, ep), []storage.PropertySampleWrite{{
 			OwnerKind: "component", OwnerID: comp.ID, Key: "video-input", Instance: ep, Value: value, Source: "tcp", TS: base.Add(at),
 		}}); err != nil {
 			t.Fatalf("observe %s on %s: %v", value, ep, err)
@@ -98,7 +98,7 @@ func TestReconciliationResolvesEveryObservedInstance(t *testing.T) {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.IssueCommand(ctx, actor, "component", comp.ID, "set-input", "serial", json.RawMessage(`"dp1"`), nil); err != nil {
@@ -135,13 +135,13 @@ func TestReconciliationLeavesOutARetiredObserver(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	conn := connectDSN(t, dsn)
-	mustExec(t, conn, `insert into endpoint (name, transport, component, node_name, params) values
-		('telnet', 'telnet', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb),
-		('ssh', 'ssh', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:22"}'::jsonb)`, comp.ID)
+	mustExec(t, conn, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('telnet', 'telnet', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb),
+		('ssh', 'ssh', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:22"}'::jsonb)`, comp.ID)
 	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "video-input", "", json.RawMessage(`"hdmi1"`), all, all); err != nil {
 		t.Fatalf("declare video-input: %v", err)
 	}
@@ -159,14 +159,14 @@ func TestReconciliationLeavesOutARetiredObserver(t *testing.T) {
 		return reconOf(t, gw, "component", "panel-1", "video-input")
 	}
 
-	land(storage.NodeWriter(comp.ID, "telnet"), "telnet", "hdmi4", time.Second)
+	land(storage.OutpostWriter(comp.ID, "telnet"), "telnet", "hdmi4", time.Second)
 	if r := pivot(); string(r.Is) != `"hdmi4"` || r.IsInstance != "telnet" || !r.Drift {
 		t.Fatalf("a live endpoint disagreeing: want is=hdmi4 from telnet, drift; got is=%s from %q drift=%v", r.Is, r.IsInstance, r.Drift)
 	}
 	if err := gw.DeleteEndpoint(ctx, "", comp.ID+"/telnet", all, all); err != nil {
 		t.Fatalf("delete the telnet endpoint: %v", err)
 	}
-	land(storage.NodeWriter(comp.ID, "ssh"), "ssh", "hdmi1", 2*time.Second)
+	land(storage.OutpostWriter(comp.ID, "ssh"), "ssh", "hdmi1", 2*time.Second)
 	if r := pivot(); string(r.Is) != `"hdmi1"` || r.IsInstance != "ssh" || r.Drift {
 		t.Fatalf("the disagreeing endpoint retired: want is=hdmi1 from ssh, no drift; got is=%s from %q drift=%v", r.Is, r.IsInstance, r.Drift)
 	}
@@ -207,7 +207,7 @@ func TestToldReadsOnlyTheInstancesCommandsNamed(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.IssueCommand(ctx, actor, "component", comp.ID, "set-input", "", json.RawMessage(`"dp1"`), nil); err != nil {

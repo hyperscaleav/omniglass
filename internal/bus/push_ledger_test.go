@@ -15,7 +15,7 @@ import (
 // The push lane's ledger (#1696), driven through a real JetStream and a real
 // Postgres: the server mints a ledger on every batch it publishes for the
 // API's push route and webhooks, under its own boot, and the lab's read
-// reconciles their receipts into a push-lane row apart from the nodes'.
+// reconciles their receipts into a push-lane row apart from the outposts'.
 
 // pushReceipt is one push-lane receipt as stored.
 type pushReceipt struct {
@@ -27,11 +27,11 @@ type pushReceipt struct {
 	outcome  delivery.Tally
 }
 
-// pushReceipts is every ledgered push-lane receipt (no node), in seq order.
+// pushReceipts is every ledgered push-lane receipt (no outpost), in seq order.
 func (f deliveryFixture) pushReceipts(t *testing.T) []pushReceipt {
 	t.Helper()
 	rows, err := f.conn.Query(f.ctx, `select boot, seq, resolved, minted, ledger, coalesce(outcome, '{}')
-		from telemetry_receipt where node is null and ledger is not null order by seq`)
+		from telemetry_receipt where outpost is null and ledger is not null order by seq`)
 	if err != nil {
 		t.Fatalf("read push receipts: %v", err)
 	}
@@ -65,7 +65,7 @@ func (f deliveryFixture) waitPushReceipts(t *testing.T, srv *bus.Server, n int) 
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		var got int
-		if err := f.conn.QueryRow(f.ctx, `select count(*) from telemetry_receipt where node is null`).Scan(&got); err != nil {
+		if err := f.conn.QueryRow(f.ctx, `select count(*) from telemetry_receipt where outpost is null`).Scan(&got); err != nil {
 			t.Fatalf("count push receipts: %v", err)
 		}
 		if got >= n {
@@ -199,11 +199,11 @@ func TestPushedBatchWithheldReadsMissing(t *testing.T) {
 	}
 }
 
-// TestPushAndNodeLanesReadApart: a node's batches and pushed batches in the
+// TestPushAndOutpostLanesReadApart: an outpost's batches and pushed batches in the
 // same window read as a row per lane and kind, each lane reconciled over its
-// own boots: the node boot's hole reads as the node lane's loss, never the
+// own boots: the outpost boot's hole reads as the outpost lane's loss, never the
 // push lane's.
-func TestPushAndNodeLanesReadApart(t *testing.T) {
+func TestPushAndOutpostLanesReadApart(t *testing.T) {
 	r := newLedgerRig(t)
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, r.gw)
 	if err != nil {
@@ -211,7 +211,7 @@ func TestPushAndNodeLanesReadApart(t *testing.T) {
 	}
 	defer srv.Shutdown()
 	nc := r.connect(t, srv)
-	// The node's batch 3 never reaches the stream.
+	// The outpost's batch 3 never reaches the stream.
 	r.publish(t, nc, r.ledgered(1, 0), r.ledgered(2, 1), r.ledgered(4, 3))
 	w := pushWindow(t, r.deliveryFixture, srv, []*ogv1.TelemetryBatch{pushBatch("push-a")})
 	w.From = r.window().From
@@ -229,17 +229,17 @@ func TestPushAndNodeLanesReadApart(t *testing.T) {
 	for _, row := range rows {
 		lanes[row.Lane] = append(lanes[row.Lane], row)
 	}
-	wantRow(t, lanes[labfootprint.LaneNode], delivery.Metric, 4, 3, 0, map[delivery.Outcome]uint64{delivery.Stored: 3, delivery.Missing: 1})
+	wantRow(t, lanes[labfootprint.LaneOutpost], delivery.Metric, 4, 3, 0, map[delivery.Outcome]uint64{delivery.Stored: 3, delivery.Missing: 1})
 	wantRow(t, lanes[labfootprint.LanePush], delivery.Metric, 1, 1, 0, map[delivery.Outcome]uint64{delivery.Stored: 1})
-	if rows[0].Lane != labfootprint.LaneNode || rows[len(rows)-1].Lane != labfootprint.LanePush {
-		t.Fatalf("rows %+v, want the node lane's first", rows)
+	if rows[0].Lane != labfootprint.LaneOutpost || rows[len(rows)-1].Lane != labfootprint.LanePush {
+		t.Fatalf("rows %+v, want the outpost lane's first", rows)
 	}
 }
 
 // TestPushedBatchShortOfItsLedgerReadsMissing: a pushed batch that carries
 // fewer items than its ledger declares (a publisher that lost some between
 // minting and sending) reads the shortfall as missing on the push lane, as
-// the node lane does, and the items it does carry as stored.
+// the outpost lane does, and the items it does carry as stored.
 func TestPushedBatchShortOfItsLedgerReadsMissing(t *testing.T) {
 	f := newDeliveryFixture(t)
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, f.gw)

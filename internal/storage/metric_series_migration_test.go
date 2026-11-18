@@ -157,6 +157,11 @@ func TestNarrowMetricKeepsEveryRow(t *testing.T) {
 	if err := migrate.Run(dsn); err != nil {
 		t.Fatalf("migrate forward: %v", err)
 	}
+	// The snapshots read the schema these rows were planted under, before
+	// the node became an outpost (#2059).
+	if err := migrate.RollbackBelow(dsn, outpostRenameVersion); err != nil {
+		t.Fatal(err)
+	}
 	if got := snapshotRows(t, conn, narrowAsWideSQL, true); !slices.Equal(got, want) {
 		t.Fatalf("the narrow lane read as wide rows differs from the wide table:\n got  %d rows\n want %d rows\n first got  %v\n first want %v",
 			len(got), len(want), first(got), first(want))
@@ -208,6 +213,9 @@ func TestNarrowMetricKeepsEveryRow(t *testing.T) {
 	}
 	if err := migrate.Run(dsn); err != nil {
 		t.Fatalf("migrate forward again: %v", err)
+	}
+	if err := migrate.RollbackBelow(dsn, outpostRenameVersion); err != nil {
+		t.Fatal(err)
 	}
 	if got := snapshotRows(t, conn, narrowAsWideSQL, true); len(got) != len(want) {
 		t.Errorf("forward again: %d rows, want %d", len(got), len(want))

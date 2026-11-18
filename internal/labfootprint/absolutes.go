@@ -15,7 +15,7 @@ import (
 // growth, retention and vacuum keeping up, or not (#1632). A table's figure
 // sums over its partitions, and a table this build lacks reads 0.
 const AbsolutesQuery = `with tree(name, relid) as (
-    select l, t.relid from unnest(array['property', 'log_line', 'node_log', 'metric_block', 'metric_trend']) l,
+    select l, t.relid from unnest(array['property', 'log_line', 'outpost_log', 'metric_block', 'metric_trend']) l,
       lateral (select relid from pg_partition_tree(to_regclass(l)) union select to_regclass(l)) t
     where t.relid is not null),
   part(lo) as (
@@ -29,13 +29,13 @@ select pg_database_size(current_database()),
   (select coalesce(sum(pg_total_relation_size(relid)), 0)::bigint from tree where name = 'metric_trend'),
   (select coalesce(sum(s.n_dead_tup), 0)::bigint from tree join pg_stat_user_tables s using (relid) where tree.name = 'property'),
   (select coalesce(sum(s.n_dead_tup), 0)::bigint from tree join pg_stat_user_tables s using (relid) where tree.name = 'log_line'),
-  (select coalesce(sum(s.n_dead_tup), 0)::bigint from tree join pg_stat_user_tables s using (relid) where tree.name = 'node_log')`
+  (select coalesce(sum(s.n_dead_tup), 0)::bigint from tree join pg_stat_user_tables s using (relid) where tree.name = 'outpost_log')`
 
 // DeadTuples is the dead tuples awaiting vacuum per table.
 type DeadTuples struct {
-	Property int64 `json:"property"`
-	LogLine  int64 `json:"log_line"`
-	NodeLog  int64 `json:"node_log"`
+	Property   int64 `json:"property"`
+	LogLine    int64 `json:"log_line"`
+	OutpostLog int64 `json:"outpost_log"`
 }
 
 // Absolutes is one reading of AbsolutesQuery.
@@ -68,7 +68,7 @@ func ParseAbsolutes(out string) (Absolutes, error) {
 	return Absolutes{
 		DatabaseBytes: n[0], MetricPartitions: n[1], MetricOldestDay: f[2],
 		MetricBlockBytes: n[2], MetricTrendBytes: n[3],
-		DeadTuples: DeadTuples{Property: n[4], LogLine: n[5], NodeLog: n[6]},
+		DeadTuples: DeadTuples{Property: n[4], LogLine: n[5], OutpostLog: n[6]},
 	}, nil
 }
 
@@ -81,6 +81,6 @@ func (a Absolutes) lines(line func(name, value string)) {
 	line("database size", size(float64(a.DatabaseBytes)))
 	line("metric partitions", fmt.Sprintf("%d   (oldest %s)", a.MetricPartitions, oldest))
 	line("metric blocks and trends", size(float64(a.MetricBlockBytes))+" and "+size(float64(a.MetricTrendBytes)))
-	line("dead tuples", fmt.Sprintf("%s property, %s log_line, %s node_log",
-		count(float64(a.DeadTuples.Property)), count(float64(a.DeadTuples.LogLine)), count(float64(a.DeadTuples.NodeLog))))
+	line("dead tuples", fmt.Sprintf("%s property, %s log_line, %s outpost_log",
+		count(float64(a.DeadTuples.Property)), count(float64(a.DeadTuples.LogLine)), count(float64(a.DeadTuples.OutpostLog))))
 }

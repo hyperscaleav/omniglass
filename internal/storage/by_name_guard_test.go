@@ -47,7 +47,7 @@ var sqlAliasStop = map[string]bool{
 }
 
 // sqlText renders a SQL expression the way the database sees its shape: a
-// string literal verbatim, a `+` chain joined, registryRefCol(...) as `name`
+// string literal verbatim, a `+` chain joined, catalogRefCol(...) as `name`
 // (it picks the name column for anything not a uuid), and any other operand as
 // a placeholder. An operand that holds a table name renders as `dyntable`, so a
 // by-name comparison against a table chosen at run time is caught too.
@@ -78,7 +78,7 @@ func sqlTextIn(e ast.Expr, consts map[string]ast.Expr) (string, bool) {
 	case *ast.ParenExpr:
 		return sqlText(x.X)
 	case *ast.CallExpr:
-		if id, ok := x.Fun.(*ast.Ident); ok && id.Name == "registryRefCol" {
+		if id, ok := x.Fun.(*ast.Ident); ok && id.Name == "catalogRefCol" {
 			return "name", false
 		}
 		if id, ok := x.Fun.(*ast.Ident); ok && (id.Name == "refRows" || id.Name == "catalogRows") {

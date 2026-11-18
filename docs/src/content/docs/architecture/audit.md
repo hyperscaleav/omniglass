@@ -1,10 +1,9 @@
 ---
 title: Audit
 description: The who-did-what record, written once in the same transaction as the change it describes.
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
 sidebar:
-  badge:
-    text: Partial
-    variant: note
+  hidden: true
 ---
 
 The audit log answers "who changed this, and to what?": every mutation is recorded once, at the source.
@@ -12,7 +11,7 @@ The audit log answers "who changed this, and to what?": every mutation is record
 :::note[Partial]
 Built today: the `audit_log` row written in the same transaction as every entity mutation; the
 secret-decrypt audit (distinct `reveal` and `copy` verbs); the auth-event lane; a token's minting and
-revoking; the channel an MCP tool call arrived through; and the
+revoking; the channel an MCP tool call arrived through; the agent an agent token acts as; and the
 `GET /audit-log` read, rendered by the console Admin > Audit page with a per-row before/after diff
 drawer. See [implementation status](/architecture/status/).
 :::
@@ -29,11 +28,11 @@ drawer. See [implementation status](/architecture/status/).
   whichever reference the caller happened to use would give one entity two audit keys and orphan
   every row keyed on a name the moment somebody renamed it. The name at the time of the action is
   not lost: it is in the `old` and `new` images, which is a point-in-time snapshot rather than a
-  lookup key, exactly as `actor_username` is snapshotted beside `actor_principal_id`. A guard reads
+  lookup key, exactly as `actor_username` is snapshotted beside `actor_user_id`. A guard reads
   every `writeAuditRes` call site and fails on an argument that is not primary-key **shaped**, which
   catches the two ways this went wrong (a name, and a dual-accept route's reference) without being
   able to prove that a given uuid is the right table's. The remaining gap is narrow and known: a
-  password change or reset row (`resource = 'credential'`) is keyed on its principal's uuid rather
+  password change or reset row (`resource = 'credential'`) is keyed on its user's uuid rather
   than the credential's own; a token's rows are keyed on the token's credential id.
 - **A row outlives its subject.** `resource_id` is stored as text and is never a foreign key, so
   deleting or aging out the thing a row is about never deletes or rewrites the row. What makes the row
@@ -43,12 +42,12 @@ drawer. See [implementation status](/architecture/status/).
   keeps their rows, and alarm retention (#1339) will remove cleared ones. Several other writers still
   write an update with no before image or a delete with no image (#1444) ([ADR-1442](/architecture/decisions/#adr-1442-an-audit-row-outlives-its-subject-both-images-and-a-string-reference)).
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
-  human, service, or node. The read resolves it to the actor's **identifier**, a human's username, a
-  service account's name, or a node's name, through the gateway's one resolution
+  person, machine user, or outpost. The read resolves it to the actor's **identifier**, a person's username, a
+  machine user's name, or an outpost's name, through the gateway's one resolution
   ([ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)),
-  falling back to the snapshot on the row once that principal is purged. All three profiled kinds
-  resolve, so only a principal with no profile row at all reads empty; a **node** actor read blank
-  until [#738](https://github.com/hyperscaleav/omniglass/issues/738) made `node.name` the third
+  falling back to the snapshot on the row once that user is purged. All three profiled kinds
+  resolve, so only a user with no profile row at all reads empty; an **outpost** actor read blank
+  until [#738](https://github.com/hyperscaleav/omniglass/issues/738) made `outpost.name` the third
   source. Nothing here surfaces a raw uuid where a name was expected.
 - **How it arrived rides beside the actor.** A row carries `channel` and `client`: an
   [MCP](/architecture/api/#also-an-mcp-surface) tool call's row reads `channel = 'mcp'` and the name
@@ -56,10 +55,22 @@ drawer. See [implementation status](/architecture/status/).
   call carries neither. The MCP dispatch sets them on the request context, which no HTTP header or body
   reaches, so a caller cannot claim a channel, and a check holds the column to the channels the server
   knows ([ADR-1162](/architecture/decisions/#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token)).
-  `GET /audit-log` returns both.
-- **An AI-taken action is one row.** An AI tool acts with a bearer token as a `human` or `service`
-  principal, so the actor is that principal, and the channel is the AI-sourced marking riding
+  An [omnibot](/architecture/ai/) run's rows read `channel = 'omnibot'` instead: `authn` stamps it from
+  the credential (an agent token held to the `omnibot` channel), never from what the client declares
+  ([ADR-1166](/architecture/decisions/#adr-1166-omnibot-is-an-mcp-client-on-its-own-agent-token-confirming-in-its-client)).
+  `GET /audit-log` returns and filters on both ([reading the trail](#reading-the-trail)), and the
+  console's [audit page](/guides/admin/audit/) shows them: a Channel column with a pill over the
+  declared client (empty on a direct row), the agent tagged beside the person, `channel`, `client`
+  and `agent` facets, and a drawer that names the client as the agent reported it.
+- **An AI-taken action is one row.** An AI tool acts with a bearer token as a person or a machine
+  user, so the actor is that user, and the channel is the AI-sourced marking riding
   alongside the row ([AI](/architecture/ai/)).
+- **An agent token names its agent.** A row written with an
+  [agent token](/architecture/identity-access/#agent-tokens) carries `agent`, the name fixed when
+  the person minted it, beside that person as the actor, on every channel: MCP, REST and the CLI
+  alike. `authn` sets it on the request context from the credential, so a caller cannot claim or
+  shed it. `GET /audit-log?agent=<name>` lists what one agent did, and the column is indexed for it
+  ([ADR-1179](/architecture/decisions/#adr-1179-an-agent-token-is-a-token-type-on-its-persons-credential-and-never-reveals)).
 - **A token is audited.** Minting one writes a `create` row (the bootstrap token's with no actor)
   and revoking one (singly, in bulk, or by logging out with it) a `revoke` row on
   `resource = 'credential'`, carrying the token's prefix, purpose, description and
@@ -90,7 +101,8 @@ The read-audit granularity: per-resource opt-in versus a global verbosity settin
 
 `GET /audit-log` is gated by the admin-sensitive `audit:read:admin`, out of a two-token wildcard's
 reach, so only admin and owner see the security trail. Rows return newest first, filterable by
-`resource` and `verb`, paged backward with `before` plus `limit` (default 100, capped at 500), each
+`resource`, `verb`, `agent`, `channel` (`mcp`, `omnibot`, or `direct` for the rows with none, a plain API call) and
+`client` (a case-insensitive contains, since a client's version moves), paged backward with `before` plus `limit` (default 100, capped at 500), each
 carrying the `old` and `new` images the write recorded: a create only `new`, a delete only `old`, an
 update both, auth events neither. Redaction is the write side's (sealed secret material and
 credential hashes never enter an image); the read passes images through verbatim. An image carries a
@@ -104,16 +116,19 @@ Auth events ride a **second write lane**: login and logout run on read / no-tran
 they emit through a standalone non-transactional seam under `resource = 'auth'`,
 with the verbs `login`, `logout`, `login_failed` (a wrong password on a real account),
 `login_denied` (a correct password on a disabled account), `login_locked` (an attempt inside the
-lockout window), and `revoke_session` (an admin ending another principal's session). Self-service
-logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'principal'` and
-`resource_id` set to the target principal's id so the trail answers "whose sessions did this admin
-revoke?". An impersonated action records **both** actors (`actor_principal_id` the impersonated principal,
-`real_actor_principal_id` the admin behind it); both identifiers are **denormalized onto the row**
+lockout window), `revoke_session` (an admin ending another user's session), and
+`agent_refused` (an agent's call the install's [agent policy](/guides/agents/#what-an-agent-may-do)
+sets to never, with `resource = 'operation'` and `resource_id` the operation's id, written as the
+agent's with its channel). Self-service
+logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'user'` and
+`resource_id` set to the target user's id so the trail answers "whose sessions did this admin
+revoke?". An impersonated action records **both** actors (`actor_user_id` the impersonated user,
+`real_actor_user_id` the admin behind it); both identifiers are **denormalized onto the row**
 (`actor_username`, `real_actor_username`) with the foreign keys going `ON DELETE SET NULL`, so the
 trail stays attributable after its actor is purged
 ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it)).
-What gets written there is the actor's **identifier**, a human's username, a service account's name,
-or a node's name, and the platform's answer to which one belongs to the gateway rather than to the schema: the
+What gets written there is the actor's **identifier**, a person's username, a machine user's name,
+or an outpost's name, and the platform's answer to which one belongs to the gateway rather than to the schema: the
 stored function that used to resolve it retired, so the order is stated once in Go and rendered into
 the statements the gateway binds
 ([ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)).

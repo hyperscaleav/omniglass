@@ -43,6 +43,7 @@ func Validate(namespace string, patch map[string]any) error {
 		if val == nil {
 			continue // null = delete
 		}
+		val = withoutNulls(val)
 		prop, ok := schema.Properties[key]
 		if !ok {
 			return &FieldError{Namespace: namespace, Key: key, Message: "unknown setting"}
@@ -60,6 +61,23 @@ func Validate(namespace string, patch map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// withoutNulls is a patch value with every nested null dropped: a merge
+// patch deletes the key a null names at any depth, so there is nothing of it
+// left to validate.
+func withoutNulls(v any) any {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return v
+	}
+	out := make(map[string]any, len(m))
+	for k, e := range m {
+		if e != nil {
+			out[k] = withoutNulls(e)
+		}
+	}
+	return out
 }
 
 // valueChecks are the settings whose values mean more than their schema type
@@ -80,5 +98,17 @@ var valueChecks = map[string]func(any) error{
 		}
 		_, err := egress.ParsePolicy(entries)
 		return err
+	},
+	// A per-tool agent override (#2088) is one of the three policies.
+	"agent.tools": func(v any) error {
+		tools, _ := v.(map[string]any)
+		for tool, p := range tools {
+			switch p {
+			case AgentAlways, AgentAsk, AgentNever:
+			default:
+				return fmt.Errorf("tool %s: policy must be always, ask or never", tool)
+			}
+		}
+		return nil
 	},
 }

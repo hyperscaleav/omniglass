@@ -9,7 +9,7 @@ import (
 )
 
 // The log tables retention prunes (#417).
-var logTables = map[string]bool{"log_line": true, "node_log": true}
+var logTables = map[string]bool{"log_line": true, "outpost_log": true}
 
 // pruneLogsSQL deletes at most $2 lines of one log table older than $1: the
 // lines of the levels in $3 for "rated", or the lines with no severity for
@@ -31,7 +31,7 @@ func pruneLogsSQL(table, kind string) string {
 	return fmt.Sprintf(`delete from %[1]s where id = any(array(select c.id from %[1]s c where %[2]s order by %[3]s limit $2))`, table, where, order)
 }
 
-// PruneLogs deletes up to limit lines of one log table (log_line or node_log)
+// PruneLogs deletes up to limit lines of one log table (log_line or outpost_log)
 // in one retention band (logline.RetentionBands) older than before: the band's
 // levels, and for the band a line with no severity is kept in, those lines too.
 // It returns the lines deleted; fewer than limit means the band holds nothing
