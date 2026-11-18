@@ -1186,7 +1186,7 @@ earns its own tier only when composing the entity reads in the browser would be 
   components the caller may read, which is the Home Open alarms tile. It is absent, never zero,
   for a caller with no component read.
 - `GET /views/platform` (`outpost:read`) is the read behind
-  [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
+  [Platform health](/operator/platform-health/): the platform system's verdict, each
   server's build and start time with its panel groups (each key's current figure, a key written
   only for a window that saw something only while that window is current, a ranked key's
   instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
@@ -1202,7 +1202,7 @@ earns its own tier only when composing the entity reads in the browser would be 
   and each outpost's `loss`, the end to end of the hops `loss_hops` names (#1646); a hop, kind or
   outpost with nothing in has no loss, never 0.
 - `GET /views/platform/simulation` (`simulation:read`) is the read behind Platform health's
-  [simulation section](/guides/operator/platform-health/#with-a-simulator): one row per outpost with a
+  [simulation section](/operator/platform-health/#with-a-simulator): one row per outpost with a
   connected simulator, read over a sliding window the server holds in memory (`internal/closedloop`'s
   ring, ten brackets of `bracket_seconds`). Each gap is a loss ratio (null when nothing went into the
   hop), its masking term and its reading (`loss`, `impaired`, `restarted`); beside them each

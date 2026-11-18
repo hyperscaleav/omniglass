@@ -1,6 +1,12 @@
 ---
 title: Start from a template
 description: "The Templates page: the examples Omniglass ships, what each one creates read from the template itself, and starting a standard, a component, a whole system or a subtree of locations from one."
+sidebar:
+  label: Templates
+  order: 7
+  badge:
+    text: Built
+    variant: success
 screenshots:
   - id: templates
     path: /web/templates?kind=standard_template,system_template
@@ -29,7 +35,7 @@ screenshots:
     alt: "A system template's panel: the standard it is built to, its system type, and a component for each slot with the component template that fills it, above the Start from this template action."
 ---
 
-import SeededSet from '../../../../components/SeededSet.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
 A **template** is an example Omniglass ships that you clone. Starting from one writes ordinary rows
 that are **yours from that moment**: nothing points back at the template, so a later release can change

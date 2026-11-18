@@ -313,7 +313,7 @@ endpoint holding no session whose reachability probe was refused (a tls certific
 reply, an snmp `authorizationError`, the ssh probe's params credential) carries the gate with its
 reason, `endpoint-rejection-reason`, which the outpost publishes beside it, so the notice, its reason
 and **Retry** read the same with no session pill beside them, the retry waiting on the gate rather
-than on a session ([ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). The [collection guide](/guides/operator/collection/#held-sessions)
+than on a session ([ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). The [collection guide](/operator/collection/#held-sessions)
 teaches it, and the `fix-a-rejected-session` walkthrough drives it against the simulated panel.
 A refusal of a changed key (#1078) names both keys, the pinned and the offered, which the gate
 carries as data, and offers **Trust this key**: a confirm that teaches why a key changes, then

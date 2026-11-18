@@ -1,6 +1,12 @@
 ---
 title: Outposts and reachability
 description: "Enrolling a collection outpost, adding a transport-named endpoint to a component, and reading the per-endpoint reachability and the log events an outpost reports."
+sidebar:
+  label: Outposts and reachability
+  order: 8
+  badge:
+    text: Built
+    variant: success
 walkthroughs:
   - id: set-up-monitoring
   - id: fix-an-endpoint-in-place
@@ -14,7 +20,7 @@ outpost** runs the probes, a component's **endpoint** is the API the outpost rea
 **Reachability** panel shows the verdict, and its **Events** and **Logs** panels show recent occurrences
 the outpost ships back. This page walks the console surfaces; the model behind them is
 [data collection](/architecture/collection/), and every action here has the same
-[scope](/guides/operator/#what-you-see-is-your-scope) and permission checks as the rest of the console.
+[scope](/operator/#what-you-see-is-your-scope) and permission checks as the rest of the console.
 
 ## Outposts
 
@@ -184,7 +190,7 @@ real reading from the outpost, and the panel is also the authoring surface: its 
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.
 
-A **webhook** endpoint is a push endpoint, hosted by the server (#1024): a sender posts to its URL,
+A **webhook** endpoint is a push endpoint, hosted by the server: a sender posts to its URL,
 nothing is dialed, so its row carries no ladder, no strip and no verdict. It reads **last heard**
 (never heard until a post lands, and silence is never read as down), the scheme that checks each
 post (`hmac`, `token`, `basic`, or **unsigned** for scheme none, where anyone holding the URL can
@@ -378,6 +384,6 @@ takes the same filters. Most log lines never become events.
 
 Where a reachability verdict is a sampled state, an event or a log line is a past occurrence, so the
 panels are read differently: the verdict answers "is it reachable *now*", the logs and events answer
-"what did it *say*, and when". Both land under the same [scope](/guides/operator/#what-you-see-is-your-scope) and owner
+"what did it *say*, and when". Both land under the same [scope](/operator/#what-you-see-is-your-scope) and owner
 checks as every other reading, so an out-of-scope component's events and logs are a non-disclosing 404,
 exactly like its reachability. Every value is a real occurrence from the outpost.

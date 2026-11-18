@@ -1,6 +1,12 @@
 ---
 title: Work with an entity
 description: "Opening an entity's blade, drilling into its children, and creating, editing, or deleting through the footer action bar."
+sidebar:
+  label: Create and edit
+  order: 3
+  badge:
+    text: Partial
+    variant: note
 screenshots:
   - id: entity-blade
     path: /web/explore
@@ -32,7 +38,7 @@ screenshots:
     # clock), and the form renders from the seed deterministically.
 ---
 
-Once you have [found an entity](/guides/operator/fleet/), you open it, read it, and change
+Once you have [found an entity](/operator/fleet/), you open it, read it, and change
 it the same way everywhere in the console.
 
 ## Open an entity
@@ -40,7 +46,7 @@ it the same way everywhere in the console.
 Click a row to open its **blade**, a panel that slides in from the right with the entity's
 details. From a blade you can drill into a child (it stacks another blade behind the first),
 step back with the breadcrumb, or **Expand** to the entity's own page: a fleet entity opens
-its [detail view](/guides/operator/fleet/#one-view-per-system), an identity entity its full detail. The page has its own URL, so it is
+its [detail view](/operator/fleet/#one-view-per-system), an identity entity its full detail. The page has its own URL, so it is
 shareable and bookmarkable; a blade opened by a click is a quick look that does not change
 the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link, which the
 create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and press
@@ -56,7 +62,7 @@ the systems a component serves, with the slot it fills in each, and its location
 somewhere else; a location's systems, each with its verdict, one click from its own blade. Then
 the entity's **form**: its name, classification, a location's parent, and tags, read or edited
 in place. Each fact is said once: the blade's title is the label (the Label field appears only
-while editing), a room's only system is the room (its card names no location and offers no second
+while editing), a location's only system is the location (its card names no location and offers no second
 blade for it, only **Configure location**), and the standard is in Classification, not repeated
 above it. Configuration (a
 system's slots, the properties and their cascade, the reconciliation, a component's
@@ -75,7 +81,7 @@ read-only reference.
 A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
 chrome only (back, full-page, close). **Edit** turns the whole blade live in place, fleet
 and identity blades alike: a fleet blade's form (the identity, classification and tags of the
-same form the detail view's [Configure tab](/guides/operator/fleet/) renders) and an identity blade's profile, members,
+same form the detail view's [Configure tab](/operator/fleet/) renders) and an identity blade's profile, members,
 and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
@@ -102,8 +108,8 @@ the detail view's **Configure** tab, already editing (#800), so a "fix the label
 location" handoff is one link, not a link plus instructions. The same permission gates apply: without `<resource>:update` the
 link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so refreshing
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
-left. A room holding one system is configured on its system's view, so `?edit=1` on that
-room's address lands on the system's Configure with the room's own form editing
+left. A location holding one system is configured on its system's view, so `?edit=1` on that
+location's address lands on the system's Configure with the location's own form editing
 (`?edit=location`). The console itself uses these links for its handoffs: creating an entity lands on
 `/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
 identity pages.
@@ -114,7 +120,7 @@ identity pages.
 
 - **New** opens a **draft** at the entity's own `/create` address, **From scratch** by default; **From a
   template** instead starts from one of the examples Omniglass ships
-  ([starting from a template](/guides/operator/templates/)). From scratch, it asks **what** and **where**
+  ([starting from a template](/operator/templates/)). From scratch, it asks **what** and **where**
   before it asks what to call it, because those are what the naming and labelling rules read.
   **Classification** comes first: a component picks its [product](/guides/admin/products/), a system
   its type and the [standard](/guides/admin/standards/) it conforms to, a location its
@@ -249,24 +255,29 @@ identity pages.
   placement-type mismatch, or a taken name at the destination, naming both parties) leaves the rest of
   the edit in place rather than undoing it.
 - A **location**'s edit mode makes its **Parent** editable, the console's one live placement picker
-  today (with the move permission): the Placement section swaps its read-only fact for a picker
+  (with the move permission): the Placement section swaps its read-only fact for a picker
   narrowed to the location type's allowed parents (or, when unconstrained, every location), excluding
   the location's own subtree. Moving back to root is not offered here, and the platform has no
   clear-to-root capability for a location at all, not even from the API or CLI.
 - A **component**'s and a **system**'s Placement (System, Location, Parent, and, for a component,
-  Product) is **read-only in the console today**, in view and in edit alike: you set them at create
+  Product) is **read-only in the console**, in view and in edit alike: you set them at create
   and re-home an entity through the API or CLI (`omniglass component move`, `omniglass system move`).
   Both are movable via `:move` the same way a location's Parent is (an empty location unplaces a
   component or a system; clearing parent to lift an entity to a root needs an all-scoped grant, the
   same authorization creating a root entity already requires, since a scope-limited operator clearing
   parent would otherwise walk an entity out of every subtree their own grant was ever limited to; a
-  re-parent that would put an entity under itself or one of its own children is refused); the console
-  just has no picker for either yet. From the CLI, an entity's `<name>` argument takes a uuid, a bare
+  re-parent that would put an entity under itself or one of its own children is refused). From the CLI, an entity's `<name>` argument takes a uuid, a bare
   name, or its full **dotted address** (`boi.17c.415a.$comp.display-1`), the location path down to a
   `$comp`/`$sys` accessor and the entity's own location from there. **Quote it**: an unquoted `$comp`
   disappears before the shell ever sends the request, so `omniglass component get
   'boi.17c.415a.$comp.display-1'` (single quotes), never bare.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
+
+:::design[Target design, tracked in #1804]
+A component's and a system's edit face carries **Location** and **Parent** pickers that issue the
+move, the way a location's Parent picker does, so a placement made at create is changeable from the
+surface that made it.
+:::
 
 ## Labels the platform writes
 
@@ -282,7 +293,7 @@ identity pages.
   `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**.
   Nothing you typed yourself is touched by either.
 - **The same applies to systems, and that upgrade is worth running.** A system's shipped label
-  reads its location, so a room and its system read as one name instead of the room's name above the
+  reads its location, so a location and its one system read as one name instead of the location's name above the
   system's type ("Meeting" under Briefing Room). A fleet created before the upgrade keeps its
   old labels until you run `omniglass system previewLabels`, then `omniglass system
   recomputeLabels`. Only the second of a kind in a location adds its type and number: a location with one
@@ -341,212 +352,3 @@ sign you picked the wrong component or that the slot needs widening.
 Declaring the slots is on the [Standards guide](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled);
 this panel is where they get staffed.
 
-## Alarms on a component
-
-An **alarm** says what is wrong with **one component**. The component's **Alarms** panel lists the
-active ones newest first, with a **Recently cleared** group beneath them: what is wrong now on top,
-what was wrong underneath.
-
-Raising one takes two things:
-
-- a **severity**: one of the severity levels, listed with their rank, color and effect under **Catalog,
-  under Actions: Severity** (the [rules guide](/guides/admin/rules/#severity-levels) renders the shipped
-  set, and an admin can add more between them on that page). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
-  **component's own** verdict (any active alarm makes the component degraded, one at a level marked
-  outage takes it out). Only an **outage** stops a component occupying a slot it fills: an info or warning
-  alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
-  a system on its own;
-- a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
-
-**Not every alarm is raised by hand.** An [event rule](/guides/admin/rules/) raises and clears its
-own as telemetry lands: such an alarm says **by rule** and the rule's name, and the rule clears it
-when the rule clears (the official reachability rule does this for every endpoint that stops
-answering). You acknowledge it like any other. Clearing it by hand works too, and **a hand clear of a
-rule's alarm holds until the rule clears and fires again**, whatever the input: a rule acts on
-edges, not on each sample, so a metric still reading over its threshold on every poll does
-not reopen it. The rule still counts itself as firing there (the firing and the events it wrote
-are untouched); once the value recovers the rule clears, and if it fires again later it raises
-a new alarm. Fix the fault rather than clearing its alarm.
-
-**Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
-and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
-
-Both writes take effect immediately and completely: the system's verdict, the location above it, and the
-recorded history all move in the same transaction as the alarm. There is no wait and no refresh cycle.
-
-### Acknowledging: saying you have seen it
-
-**Acknowledging an alarm records that a human has looked at it, and changes nothing else.** The alarm
-stays exactly as raised as it was, the component stays exactly as broken, and no verdict moves.
-Acknowledging is not fixing; clearing is.
-
-That is why the two are independent, and the panel shows both facts at once:
-
-- an alarm nobody has looked at carries an **unacknowledged** chip, and the panel header counts them,
-  so the queue you actually work (raised, and nobody on it) is visible without opening each one;
-- an acknowledged alarm names **who** looked and **when**, and stays in the active list, because it
-  is still broken;
-- a cleared alarm that was **never acknowledged** says so in the history: it came and went with
-  nobody looking, which is worth spotting later.
-
-The **eye** button beside an active alarm acknowledges it. Unlike raising and clearing, it is
-available **without entering edit mode**: edit mode guards this component's own data, and an
-acknowledgement writes none of it. It needs the `alarm:acknowledge` permission, which the
-**Operator** role carries; a viewer sees the indicator and gets no button.
-
-Acknowledging twice is harmless. The first person and the first time are what the alarm keeps, so a
-second click (or a colleague reaching it a moment after you) changes nothing and is not an error.
-There is no un-acknowledge yet.
-
-### Snoozing: silencing a noisy alarm for a while
-
-**Snoozing stops the people an alarm notifies from being told about it, for a bounded time.** It is
-for the alarm that flaps or that you are already working on: **Snooze** beside the alarm (in the
-**Why** strip and the alarms panel, active or recently cleared) offers 15 minutes, 1 hour, 4 hours
-or 24 hours. While it holds, every notification about that alarm, a raise or a clear, on a
-webhook, by email or in an inbox, is recorded instead of sent, and each one stays on the alarm's
-timeline reading **snoozed**, with the reason. The alarm wears a **snoozed until** chip naming the time, and its tooltip
-names who snoozed it.
-
-A snooze belongs to the alarm's **identity** (its component and dedup key), not to one alarm row: when
-the alarm clears and is raised again, the new alarm is snoozed too, until the deadline. Another alarm on
-the same component is not affected. When the snooze ends, by its deadline or by **Unsnooze**, and the
-alarm is still raised, the people its rules reach are told again; an alarm that cleared meanwhile gets nothing.
-
-It is not acknowledging (nobody is recorded as having looked), not [opting out](/guides/admin/notifications/)
-(that silences only you), and not pausing an action rule (that silences a rule for every alarm). It
-changes nothing about the alarm itself: the component stays exactly as broken, and an unacknowledged
-alarm stays in the queue. It needs the `alarm:snooze` permission, which the **Operator** role carries;
-a viewer sees the chip and gets no button.
-
-```bash
-omniglass component alarm snooze display-1 <alarm-id> --duration 1h
-omniglass component alarm unsnooze display-1 <alarm-id>
-```
-
-### Reading an alarm's timeline
-
-The **clock** button on an alarm row (in the **Why** strip at the top of a component's or a system's
-page, and in the alarms panel, active or recently cleared) opens the alarm's **timeline** under the row: everything recorded about it, oldest first. An **event** line is what a rule saw (its
-`rule-fired` when it fired and raised the alarm, its `rule-cleared`
-when it cleared and resolved it), named by the rule and the endpoint; an **audit** line is what was
-done to the alarm (raised, acknowledged, cleared, snoozed, unsnoozed, snooze ended) and by whom, a person by name or the rule the
-platform acted for. A **notify** line is a notification the alarm's raise or clear queued, read as a
-status row: its target, how its delivery stands (**on its way**, **sent**, **failed** with the
-receiver's answer and a **Retry**, or **snoozed** with the snooze's reason), and the **action rule**
-that queued it. A hand-raised alarm's timeline is its audit lines alone. The same button sits on
-each open alarm in a rule's blade on the Event rules page. Click it again to fold the timeline away; any
-number can be open at once.
-
-From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unacknowledged]`,
-`omniglass component alarm create <name> --severity <level> --message <text>`,
-`omniglass component alarm acknowledge <name> <id>`, `omniglass component alarm timeline <name> <id>`, and
-`omniglass component alarm delete <name> <id>`.
-
-## Commands on a component
-
-A component's **Activity** tab carries its **Commands** above its events: what the component was told
-and where each command stands, newest first. A command in flight wears its phase, **queued** (waiting
-for its outpost to take it), **delivered** (its outpost has it, and the next observation settles it),
-**awaiting reply** or **awaiting observation**, with its settle window counting down beside it; a
-terminal one reads **settled**, **failed** or **timed out**, with why. Hover the phase for what it
-means for that command. A fire-and-forget command such as a reboot has nothing to observe, so its
-outpost's report decides it: **settled** once the outpost carried it out, **failed** when it could not,
-and **timed out** when no report arrives within ten minutes of its issue. The list refreshes every second while anything is in flight.
-
-The arrow at a row's end opens the command in place: its **arc**, the issue's time and each later
-step (delivered to its outpost, answered, settled) as how long after the issue it came; **why** it
-settled, failed or timed out; how it **settles** (from the component's reply or an observation of
-what it sets), its window, the **endpoint**, **outpost** and **driver** that carried it, and who
-**issued** it; and the **evidence**: the component's **reply** (the endpoint's login and anything it labels a
-credential masked before it was stored, or withheld when that login could not be read), or the **observed** sample that matched. A timed-out command says where it stopped:
-queued for an outpost that never took it, delivered with no answer, or answered with nothing observed
-after.
-
-**Issue a command** (with `command:issue`, which the **Operator** role carries) sits in the section's
-header wherever a driver attached to one of the component's endpoints binds a command, and offers
-only those commands, since only those reach it. Pick the command, give the value it sets (a number
-for a metric such as a volume, any value for a property such as an input; a fire-and-forget command
-such as a reboot takes none), and **Issue**. A **toast** follows the new command live, from queued to
-its outcome, and its **Open** brings you to its row here, opened. A component no driver can command
-says so where its history would be.
-
-Reading a component's commands takes `command:read`, which every viewer holds; a viewer reads the
-history and the evidence and gets no Issue button.
-
-From the CLI: `omniglass component command issue <name> --command-type <type> [--value <v>] [--wait]`,
-`omniglass component command list <name> [--status <s>]`, and `omniglass component command get <name> <id>`
-([commands](/guides/admin/commands/#read-a-command-back)).
-
-## Health on a system or location
-
-A **system** and a **location** each carry a **health verdict**, shown as a badge on its detail view and in
-the outline:
-
-| verdict | means |
-|---|---|
-| **healthy** | nothing it depends on is impaired |
-| **incomplete** | something it needs was never installed |
-| **degraded** | it is working, worse |
-| **outage** | it is not working |
-
-**`incomplete` is not a fault.** It means a slot is short because nobody has put the hardware in
-yet, so no alarm will ever fire for it: there is nothing there to alarm. A system mid-installation
-reads incomplete, and it stays that way until somebody fills the slot. That is deliberately a
-different colour from a system that is broken, because during a rollout most of your fleet is in
-the first state and you need to be able to see past it to the second.
-
-A location's verdict is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
-when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **slots** it
-needs filled.
-
-**The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
-view names the chain instead: **Why** leads its Overview, each alarm naming the down component
-and the slot it impairs, and the component rows beneath carry the arithmetic. Read together they are this
-chain:
-
-```text
-alarm on mic-pod-2 (high, "no audio on channel 1")
-  -> mic-pod-2 is down (its own verdict, from the alarm)
-    -> slot room-mic wants 2, and mic-pod-2 no longer occupies its slot
-      -> only 1 assigned component still occupies it
-        -> slot impaired, impact degraded
-          -> hq-r1 is degraded
-```
-
-Read it bottom-up when you want the verdict and top-down when you want the fix. A slot can also be
-impaired with **no down component named**, which means it is **short-staffed** rather than broken:
-nobody is assigned. Those are two different jobs, and the view keeps them apart: an unstaffed seat
-reads **incomplete** as an empty slot, a down occupant keeps its seat and reads the impact its slot
-declared.
-
-**The History strip is the answer to "since when".** It is the same shape as the reachability
-availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**
-over the last 30 days. It is not a sample and not a redraw of what somebody happened to look at; each edge
-was written at the moment the fleet changed, by the write that changed it. That is what makes "it broke
-Friday at 18:40 and came back Monday at 09:15" answerable on Tuesday.
-
-From the CLI: `omniglass system health list <name>` and `omniglass location health list <name>`.
-
-## The whole loop, end to end
-
-Once, in order, on a real system:
-
-1. **Declare the slots with their impact.** On the system's
-   [standard](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled), give **Main Display**
-   impact **outage** and **Room Microphone** impact **degraded** with quorum 2, accepting `video-bar`.
-   Every conforming system inherits both immediately.
-2. **Staff the system.** Assign components to each slot from the system's **Slots** panel. A component
-   of the wrong type is refused by name (`component "panel-1" is a display; slot "Room Microphone"
-   wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
-3. **Raise an alarm.** On one of the mic pods, raise a `high` alarm.
-4. **Watch the system move.** The system goes **degraded** (the `room-mic` slot now has one occupant
-   against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
-   the alarm been on the main display instead, the system would be an **outage**, because that slot says so.
-5. **Read the system's Overview** to find the cause: the active alarm, the component it took down and
-   the slot that component fills, with the message and the time it was raised. Walk to the pod.
-6. **Clear the alarm** once it is fixed. The system returns to **healthy** in the same transaction, and the
-   alarm row stays in the component's history.
-7. **Read the history afterwards.** The transition strip now shows the exact stretch the system was
-   degraded, with the edge at the moment the alarm went up rather than the moment you opened this page.
-   That is the whole point: come back in three weeks and the answer is still exact.

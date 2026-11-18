@@ -35,7 +35,7 @@ readings, its protocols and its simulated devices. The views model, the renderer
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the
-[operator guide](/guides/operator/); per-slice breakdown:
+[operator guide](/operator/); per-slice breakdown:
 [implementation status](/architecture/status/).
 :::
 

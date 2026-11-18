@@ -1,6 +1,12 @@
 ---
 title: Explore your fleet
 description: "Explore: every location in the fleet as one outline, and the detail view for each system, with its location as context."
+sidebar:
+  label: Explore the fleet
+  order: 2
+  badge:
+    text: Partial
+    variant: note
 screenshots:
   # Component names repeat across rooms (every huddle has a videobar-1), so the
   # component is reached the way an operator reaches it: from the degraded
@@ -136,8 +142,8 @@ the panel the **detail view** at the entity's own address. The old `/fleet`, `/l
 Explore opens with only the top-level locations showing, every row collapsed, so the first
 screen is the whole fleet in a handful of lines. You open what you want to look into.
 
-**A location wears its system.** An operator thinks of a room as its system, so a location where
-one system sits shows that system on its own row: the **Standard** column names the
+**A location wears its system.** An operator thinks of a location that holds one system as that
+system, so a location where one system sits shows that system on its own row: the **Standard** column names the
 [standard](/guides/admin/standards/) it conforms to, and **Health** its verdict. Open it and
 the system's components are directly beneath, each with its product and health, and a
 component's active alarm reads in the **Detail** column. A location holding two systems lists a
@@ -155,10 +161,10 @@ worst-wins light would be red everywhere and say nothing.
 
 **A chain of one folds.** A location whose only content is one child location folds into it:
 **Headquarters / West Building** is one row rather than two levels to click through. Its
-**+** offers each place it joins, so giving that campus a second building is the same click
-as giving the building a room.
+**+** offers each location it joins, so adding a sibling under the outer one is the same click
+as adding a child under the inner one.
 
-None of this knows the shipped type names. Campus, building, floor and room are defaults,
+None of this knows the shipped type names. The shipped location types are defaults,
 and a fleet of plots, sectors and coordinates, or any hierarchy your
 [location types](/guides/admin/location-types/) allow, nests, folds and counts by the same
 rules and is described in its own words.
@@ -189,8 +195,8 @@ value; each commit becomes a chip.
 - Within one chip, several values are **OR** (match any); across chips, the filters are
   **AND** (match all). Click a chip's operator to cycle it, its value to re-edit it, and the
   **x** to remove it.
-- A bare term matches a name, or any fragment of the path above it, so typing a building's
-  name finds everything in that building. `verdict:`, `type:`, `standard:`, `product:` and
+- A bare term matches a name, or any fragment of the path above it, so typing a location's
+  name finds everything in it. `verdict:`, `type:`, `standard:`, `product:` and
   `path:` narrow precisely.
 - Every [tag](/architecture/tags/) in use is a field too: choose the tag's key, then a value,
   to match its **effective** value (a component matches a tag it inherits from its system or
@@ -205,7 +211,7 @@ verdict chip the bar shows, so the two can never disagree.
 
 What the filter bar does **not** offer is a location facet. Filtering on live state (a
 verdict, a standard, a type, a name) is exploring; naming the part of your fleet to include
-is choosing a scope, which is what a dashboard owns.
+is choosing a scope, which is a different job.
 
 The address carries what you were looking at. `?chips=` carries the filter, so a link hands
 somebody exactly the matches you saw, and `?node=` reveals one row: a location, system or
@@ -213,18 +219,24 @@ component by its id, or by a name that names exactly one thing, so `?node=huddle
 the huddle room, opened down to it and selected.
 
 **Create where you stand.** A row's **+**, or **New** above the outline, offers a location,
-a system or a component: the same create [form](/guides/operator/entities/), with the
-placement already filled in, or the same thing [from a template](/guides/operator/templates/). It offers a location only where your location types let one
+a system or a component: the same create [form](/operator/entities/), with the
+placement already filled in, or the same thing [from a template](/operator/templates/). It offers a location only where your location types let one
 sit, and only what you hold the create permission for.
 
 Everything on the page is already filtered to [your scope](#scope). Verdicts here are a
-glance; monitoring lives on the detail views and, later, the dashboards.
+glance; monitoring lives on the detail views.
+
+:::design[Target design, tracked in #1833 and #1830]
+A **dashboard** owns a chosen part of the fleet: a grid of widgets you drag and resize (#1833), each
+reading through one scoped binding that streams its live tail (#1830). Choosing a scope is the
+dashboard's job, which is why the outline's filter has no location facet.
+:::
 
 ## One view per system
 
 Omniglass monitors **systems**. A location is a folder and its facts; a component is a piece of
-a system. So the fleet has one detail view per system, and a room does not have a second,
-thinner view of its own: a location holding exactly one system (nearly every room) opens **as
+a system. So the fleet has one detail view per system, and a location does not have a second,
+thinner view of its own: a location holding exactly one system (most of them) opens **as
 that system**. Its address lands there, and so does the panel's Expand.
 
 ::screenshot{#fleet-system}
@@ -234,14 +246,14 @@ The view reads top-down:
 - **The location card**: where the system sits, as context. It names the location's type in your
   catalog's words and its tags, and **Location details** opens the location's own panel (its
   form, its Edit) without leaving the view. The view is titled by the location, so the card
-  does not name it again, and the breadcrumb ends at the location's parent: the room is named
+  does not name it again, and the breadcrumb ends at the location's parent: the location is named
   once. The breadcrumb's **Explore** goes back up to where you were: the outline, opened down
   to this row and selected.
 - **The system card**: the verdict and **since when** (the last recorded change and its
   age), the standard it is built to, how many components it holds, and slot arithmetic only
   while hardware is missing. Each fact is said once; there is no counts line above it.
 - **Three tabs.** **Overview** is the system itself. **Activity** is what happened to it.
-  **Configure** is the [form](/guides/operator/entities/) that edits it in place.
+  **Configure** is the [form](/operator/entities/) that edits it in place.
 
 A location holding a system and locations beneath it lists those locations under the system, as the
 outline rooted there.
@@ -253,13 +265,13 @@ verdict and the alarm in Why without a reload, and every age on the page (since 
 alarm has been raised) keeps counting. It reads only this system and its members, never the whole
 fleet, and stops while the browser tab is hidden.
 
-A system's label is its location's by default, so a room and its system read as one name. A location
+A system's label is its location's by default, so a location and its one system read as one name. A location
 holding several systems names each one's kind ("Media Lab Meeting", "Media Lab Signage"),
 and a system with no location reads its kind. Type your own label and it stays yours.
 
 ## A location's own view
 
-A location holding no system (a campus, a building, a floor) or more than one keeps a view of
+A location holding no system (one that only holds other locations) or more than one keeps a view of
 its own. Its card is the subject, with its own **Overview** and **Configure** tabs.
 
 ::screenshot{#fleet-location}
@@ -273,7 +285,7 @@ over this subtree. A location holding two or more systems shows a brief card per
 
 A location holding one system has no view of its own even to be configured: its location is
 configured on the system's **Configure** tab, in a **Location** section with its own Edit, so the
-room is one page. An address asking to configure such a location lands there (`?edit=1` on the
+location and its system are one page. An address asking to configure such a location lands there (`?edit=1` on the
 location becomes `?tab=configure&edit=location` on its system).
 
 ## Overview: why, then the components
@@ -300,7 +312,7 @@ Cause before arithmetic:
 
 ## Overview: the map and the data
 
-A standard may declare the system's physical layout (a room, a stage, a vehicle, whatever
+A standard may declare the system's physical layout (a meeting space, a stage, a vehicle, whatever
 the system occupies): where each slot position sits, top-down. Every
 system built to that standard draws the **map** inside Overview, under the components:
 one marker per declared position. A staffed position shows the component's type icon in
@@ -396,7 +408,7 @@ on its label's tooltip.
 transport answers the service, the login answers the credential; each rung teaches itself on
 hover), a held session's state where the endpoint holds one, with why and **Retry** when it was
 rejected, and both keys with **Trust this key** when what changed was the component's host key
-([held sessions](/guides/operator/collection/#held-sessions)), the outpost, its state, and when
+([held sessions](/operator/collection/#held-sessions)), the outpost, its state, and when
 it was last seen: when the server last
 received anything the endpoint's task delivered, not its last up/down change (hours old on an
 endpoint that never stopped answering) and not a time the outpost wrote on a sample. Every
@@ -407,7 +419,7 @@ healthy outpost points at the component or the network path, not at collection. 
 says nothing about the component. This card is the one place an outpost appears on these pages.
 
 **Identities** appears only on a component that speaks for many owners, a **conduit** (a cloud
-service reporting every room it runs, a controller fronting many components). Each value it reports
+service reporting every meeting space it runs, a controller fronting many components). Each value it reports
 names an identity, a match key and its value (`ucc-room-id` `zr-boardroom-a`), and an identity
 binding ties that identity to the system or component it is about, so its values land there and
 not on the conduit
