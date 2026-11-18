@@ -29,25 +29,28 @@ type notificationTargetBody struct {
 	ID        string    `json:"id" doc:"The target's uuid, the stable form of name"`
 	Name      string    `json:"name"`
 	Label     string    `json:"label,omitempty"`
-	Kind      string    `json:"kind" enum:"webhook,email,user_group,user" doc:"The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person. A person is told only about alarms on components they can read"`
+	Kind      string    `json:"kind" enum:"webhook,email,user_group,user,role" doc:"The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person; role reaches every person holding the role, directly or through a group grant, read at each alarm transition. A person is told only about alarms on components they can read"`
 	URL       string    `json:"url,omitempty" doc:"A webhook's destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole"`
 	Group     string    `json:"user_group,omitempty" doc:"The group a user_group target reaches, by name; shown to a caller who reads the group directory (user_group:read:admin, all-scope)"`
 	GroupID   string    `json:"user_group_id,omitempty" doc:"The group's uuid"`
 	User      string    `json:"user,omitempty" doc:"The person a user target reaches, by username; shown to a caller who reads the user directory (user:read:admin, all-scope)"`
 	PrincID   string    `json:"user_id,omitempty" doc:"The person's uuid"`
+	Role      string    `json:"role,omitempty" doc:"The role a role target reaches the holders of, by name; shown to a caller who reads roles (role:read:admin, all-scope)"`
+	RoleID    string    `json:"role_id,omitempty" doc:"The role's uuid"`
 	Channels  []string  `json:"channels,omitempty" doc:"The channels a group or person target delivers on: inbox (the console inbox) and email (each person's directory email)"`
 	Addresses []string  `json:"addresses,omitempty" doc:"An email target's recipients: a shared mailbox, sent through the install's mail relay"`
 	Secret    string    `json:"secret,omitempty" doc:"The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned"`
 	SecretID  string    `json:"secret_id,omitempty" doc:"The bound secret's uuid, the stable form of secret"`
 	Auth      string    `json:"auth" enum:"none,hmac,bearer" doc:"How a send proves itself: hmac signs each body with the bound hmac-key (X-Omniglass-Signature), bearer presents the bound bearer-token, none sends unsigned"`
 	Enabled   bool      `json:"enabled" doc:"Whether deliveries go to it; a disabled target is skipped"`
+	Official  bool      `json:"official" doc:"Shipped with Omniglass by the boot seed: only its label and enabled switch are the operator's, and it cannot be deleted"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// toNotificationTargetBody renders a target; the group or person a target
-// names is shown only to a caller who reads that directory (people), since a
-// target read is not a directory read.
+// toNotificationTargetBody renders a target; the group, person or role a
+// target names is shown only to a caller who reads that directory (people),
+// since a target read is not a directory read.
 func toNotificationTargetBody(t *storage.NotificationTarget, people storage.PeopleUse) notificationTargetBody {
 	auth := "none"
 	switch t.SecretType {
@@ -61,12 +64,15 @@ func toNotificationTargetBody(t *storage.NotificationTarget, people storage.Peop
 		url = storage.MaskURL(t.URL)
 	}
 	b := notificationTargetBody{ID: t.ID, Name: t.Name, Label: t.Label, Kind: t.Kind, URL: url, Channels: t.Channels, Addresses: t.Addresses,
-		Secret: t.Secret, SecretID: t.SecretID, Auth: auth, Enabled: t.Enabled, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
+		Secret: t.Secret, SecretID: t.SecretID, Auth: auth, Enabled: t.Enabled, Official: t.Official, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
 	if people.Groups {
 		b.Group, b.GroupID = t.UserGroup, t.UserGroupID
 	}
 	if people.Users {
 		b.User, b.PrincID = t.User, t.UserID
+	}
+	if people.Roles {
+		b.Role, b.RoleID = t.Role, t.RoleID
 	}
 	return b
 }
@@ -87,11 +93,12 @@ type createNotificationTargetInput struct {
 	Body struct {
 		Name    string   `json:"name" minLength:"1" doc:"The target's name (lowercase kebab)"`
 		Label   string   `json:"label,omitempty" required:"false" doc:"A human label"`
-		Kind    string   `json:"kind" enum:"webhook,email,user_group,user" doc:"The target kind"`
+		Kind    string   `json:"kind" enum:"webhook,email,user_group,user,role" doc:"The target kind"`
 		URL     string   `json:"url,omitempty" required:"false" doc:"A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"`
 		Group   string   `json:"user_group,omitempty" required:"false" doc:"A user_group target's group, by name or uuid; binding one takes user_group:read:admin"`
 		Princ   string   `json:"user,omitempty" required:"false" doc:"A user target's person, by username or uuid; binding one takes user:read:admin"`
-		Chans   []string `json:"channels,omitempty" required:"false" doc:"A group or person target's channels: inbox, email"`
+		Role    string   `json:"role,omitempty" required:"false" doc:"A role target's role, by name or uuid; binding one takes role:read:admin and user:read:admin, since it reaches whoever holds the role"`
+		Chans   []string `json:"channels,omitempty" required:"false" doc:"A group, person or role target's channels: inbox, email"`
 		Addrs   []string `json:"addresses,omitempty" required:"false" doc:"An email target's recipient addresses"`
 		Secret  string   `json:"secret,omitempty" required:"false" doc:"A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)"`
 		Enabled *bool    `json:"enabled,omitempty" required:"false" doc:"Whether deliveries go to it (default true)"`
@@ -104,7 +111,7 @@ type updateNotificationTargetInput struct {
 		Label   *string   `json:"label,omitempty" required:"false" doc:"A human label (empty clears it)"`
 		URL     *string   `json:"url,omitempty" required:"false" doc:"The destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"`
 		Secret  *string   `json:"secret,omitempty" required:"false" doc:"A platform secret by name or uuid; empty unbinds it"`
-		Chans   *[]string `json:"channels,omitempty" required:"false" doc:"A group or person target's channels: inbox, email"`
+		Chans   *[]string `json:"channels,omitempty" required:"false" doc:"A group, person or role target's channels: inbox, email; refused on a shipped (official) target"`
 		Addrs   *[]string `json:"addresses,omitempty" required:"false" doc:"An email target's recipient addresses"`
 		Enabled *bool     `json:"enabled,omitempty" required:"false" doc:"Whether deliveries go to it"`
 	}
@@ -168,11 +175,11 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		Path:          "/notification-targets",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a notification target",
-		Description:   "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
+		Description:   "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition), one user, or a role (every person holding it, directly or through a group grant, read at each alarm transition), on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin, binding a person user:read:admin, and binding a role role:read:admin and user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.",
 	}, "notification_target", "create"), "secret", "bind"), func(ctx context.Context, in *createNotificationTargetInput) (*notificationTargetOutput, error) {
 		t, err := gw.CreateNotificationTarget(ctx, actorID(ctx), storage.NotificationTargetSpec{
 			Name: in.Body.Name, Label: in.Body.Label, Kind: in.Body.Kind, URL: in.Body.URL,
-			Secret: in.Body.Secret, UserGroup: in.Body.Group, User: in.Body.Princ, Channels: in.Body.Chans, Addresses: in.Body.Addrs, Enabled: in.Body.Enabled,
+			Secret: in.Body.Secret, UserGroup: in.Body.Group, User: in.Body.Princ, Role: in.Body.Role, Channels: in.Body.Chans, Addresses: in.Body.Addrs, Enabled: in.Body.Enabled,
 		}, a.scopeFor(ctx, "notification_target", "create"), a.secretBind(ctx), peopleUse(ctx, a))
 		if err != nil {
 			return nil, mapNotificationTargetErr(err)
@@ -186,7 +193,7 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		Method:      http.MethodPatch,
 		Path:        "/notification-targets/{name}",
 		Summary:     "Update a notification target",
-		Description: "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
+		Description: "Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. A shipped (official) target takes only its label and enabled flag; any other field is a 409. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.",
 	}, "notification_target", "update"), "secret", "bind"), func(ctx context.Context, in *updateNotificationTargetInput) (*notificationTargetOutput, error) {
 		t, err := gw.UpdateNotificationTarget(ctx, actorID(ctx), in.Name, storage.NotificationTargetPatch{
 			Label: in.Body.Label, URL: in.Body.URL, Secret: in.Body.Secret, Channels: in.Body.Chans, Addresses: in.Body.Addrs, Enabled: in.Body.Enabled,
@@ -203,7 +210,7 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		Path:          "/notification-targets/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a notification target",
-		Description:   "Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.",
+		Description:   "Removes a target. One an action rule still sends to is a 409, and so is a shipped (official) one, which is disabled instead. Audited. Gated by notification_target:delete with an all-scope grant.",
 	}, "notification_target", "delete"), func(ctx context.Context, in *notificationTargetRefInput) (*struct{}, error) {
 		if err := gw.DeleteNotificationTarget(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "notification_target", "delete")); err != nil {
 			return nil, mapNotificationTargetErr(err)
@@ -233,7 +240,7 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 		Method:      http.MethodPost,
 		Path:        "/notification-targets/{name}:test",
 		Summary:     "Send a test notification to a target",
-		Description: "Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
+		Description: "Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group, person or role target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.",
 	}, "notification_target", "test"), func(ctx context.Context, in *notificationTargetRefInput) (*testNotificationTargetOutput, error) {
 		ts, err := gw.TargetForTest(ctx, in.Name, a.scopeFor(ctx, "notification_target", "test"))
 		if err != nil {
@@ -250,10 +257,11 @@ func registerNotificationTargetRoutes(api huma.API, a *authenticator, gw storage
 }
 
 // peopleUse is the caller's right over the people a target names: reading
-// the group or the user directory, each its admin-tier read on an
+// the group, the user or the role directory, each its admin-tier read on an
 // all-scope grant (canReadDirectory).
 func peopleUse(ctx context.Context, a *authenticator) storage.PeopleUse {
-	return storage.PeopleUse{Groups: a.canReadDirectory(ctx, "user_group"), Users: a.canReadDirectory(ctx, "user")}
+	return storage.PeopleUse{Groups: a.canReadDirectory(ctx, "user_group"), Users: a.canReadDirectory(ctx, "user"),
+		Roles: a.canReadDirectory(ctx, "role")}
 }
 
 // testSend builds and sends a target's synthetic message.
@@ -295,7 +303,9 @@ func mapNotificationTargetErr(err error) error {
 	}
 	switch {
 	case errors.Is(err, storage.ErrNotificationTargetPeopleForbidden):
-		return huma.Error403Forbidden("binding a group takes user_group:read:admin and binding a person user:read:admin: the target reaches whoever they name")
+		return huma.Error403Forbidden("binding a group takes user_group:read:admin, binding a person user:read:admin, and binding a role role:read:admin and user:read:admin: the target reaches whoever they name")
+	case errors.Is(err, storage.ErrNotificationTargetOfficial):
+		return huma.Error409Conflict("a shipped notification target is read-only but for its label and enabled switch, and cannot be deleted; disable it instead")
 	case errors.Is(err, storage.ErrNotificationTargetForbidden):
 		return huma.Error403Forbidden("notification targets take an all-scope grant: a target is install-wide")
 	case errors.Is(err, storage.ErrNotificationTargetNotFound):
