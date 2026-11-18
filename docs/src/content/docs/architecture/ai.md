@@ -1,10 +1,6 @@
 ---
 title: AI
 description: "AI as a governed capability acting through the same API, permission, and scope seams as any caller, marked and audited, with human-in-the-loop gating."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[Partial]

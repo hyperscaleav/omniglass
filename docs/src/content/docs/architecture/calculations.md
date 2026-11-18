@@ -1,10 +1,6 @@
 ---
 title: Calculations
 description: "The rule families that run server-side over typed samples, and calc_rule in detail: cross-key and system-level derivation."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[The event rule is built; the calc rule runs on components and systems]

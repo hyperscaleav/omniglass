@@ -1,7 +1,7 @@
 ---
 title: "The rewritten pages are the architecture of record; the architecture pages archive"
 date: 2026-11-18
-status: "Accepted"
+status: "Accepted, amended by ADR-2087.2"
 summary: "The architecture pages freeze as dated history, beside the ADRs and the build log, and the vocabulary denylist exempts them. The overview and guide pages, rewritten one per slice in the vocabulary table's words, become the architecture of record: they carry the Design, Partial and Built badges, the badge-fence lint and the /ship-slice status gate read them, and CLAUDE.md and docs-with-everything point at them. Generated reference pages keep following the code"
 refs: [2087, 2028, 2029]
 ---

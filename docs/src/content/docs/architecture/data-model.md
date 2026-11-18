@@ -1,10 +1,6 @@
 ---
 title: Data model
 description: "The platform entity-relationship diagram, generated from the live schema by make gen: every table, its keys, and its foreign keys, grouped by subsystem."
-sidebar:
-  badge:
-    text: Built
-    variant: success
 ---
 
 The whole platform's relational shape in one diagram: every table, its primary

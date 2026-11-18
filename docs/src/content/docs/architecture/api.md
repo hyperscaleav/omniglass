@@ -1,10 +1,6 @@
 ---
 title: API
 description: "The API contract: AIP-style resources and :verb methods, cursor lists, a problem+json error envelope, idempotent writes, and long-running operations carried by the action row."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 The contract is **two typed surfaces, one source of truth**. The **public HTTP / OpenAPI contract**
