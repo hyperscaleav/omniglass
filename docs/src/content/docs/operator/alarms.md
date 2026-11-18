@@ -7,6 +7,24 @@ sidebar:
   badge:
     text: Partial
     variant: note
+screenshots:
+  - id: alarm-troubleshoot
+    path: /web/systems/auditorium
+    alt: "The auditorium DSP's blade: its Why strip holds the high alarm, No route to host on the control interface, with the bot button that asks omnibot to troubleshoot it."
+    # The auditorium is degraded on its DSP's high alarm; the alarm opens the
+    # DSP's blade, whose Why row carries the troubleshoot button.
+    steps:
+      - action: click
+        selector: "[data-testid=alarm-strip] button"
+      - action: wait
+        selector: "[data-testid=blade-why] button[aria-label*='with omnibot']"
+    # The blade's since line, and behind it the system's since line and its
+    # alarm strip (the row's age), all count from the capture's own clock.
+    mask:
+      - selector: "[data-testid=blade-since]"
+        width: 184
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=alarm-strip]"
 ---
 
 An **alarm** says what is wrong with one component. **Health** is what that means for the systems the
@@ -115,6 +133,20 @@ From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unac
 `omniglass component alarm acknowledge <name> <id>`, `omniglass component alarm timeline <name> <id>`, and
 `omniglass component alarm delete <name> <id>`.
 
+### Troubleshooting an alarm with omnibot
+
+The **bot** button on an active alarm (in the **Why** strip and the alarms panel) asks
+[omnibot](/guides/agents/#omnibot-in-the-console) to troubleshoot it: the panel opens and runs the
+triage-alarm skill the server ships on that alarm. Omnibot is handed the alarm **by reference**, its
+component and the rule that raised it (or, for a hand-raised alarm, when it was raised), never the
+message or anything else the row shows, and it reads the component, its alarms and its reachability
+itself, under your grants. It says whether the alarm is still true, the likely cause with its
+evidence, and one next step, and changes nothing until you agree: any write it proposes waits on your
+[agent policy](/guides/agents/#what-an-agent-may-do) like every other. A cleared alarm offers no
+button: there is nothing left to troubleshoot. It needs the `assistant:use` permission; without it the
+row has no button.
+
+::screenshot{#alarm-troubleshoot}
 
 ## Health on a system or location
 
@@ -171,7 +203,7 @@ From the CLI: `omniglass system health list <name>` and `omniglass location heal
 Once, in order, on a real system:
 
 1. **Declare the slots with their impact.** On the system's
-   [standard](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled), give **Main Display**
+   [standard](/admin/standards/#slots-what-a-conforming-system-needs-filled), give **Main Display**
    impact **outage** and **Room Microphone** impact **degraded** with quorum 2, accepting `video-bar`.
    Every conforming system inherits both immediately.
 2. **Staff the system.** Assign components to each slot from the system's **Slots** panel. A component

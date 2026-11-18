@@ -318,6 +318,11 @@ move on carries the new page. It is a reference, never what the screen showed, s
 page up itself and sees only what you may. Dismiss the chip to leave the page out of your next prompt;
 the one after carries it again (#2162).
 
+**Troubleshoot an alarm in one click.** The bot button on an active alarm row runs the triage-alarm
+[skill](#skills) on that alarm, handed by its component and rule, never its message: the panel opens
+and omnibot reads the alarm, its component and its reachability before it says anything (#2164). The
+[alarms guide](/operator/alarms/#troubleshooting-an-alarm-with-omnibot) has the rest.
+
 ::screenshot{#omnibot-page}
 
 **Add a credential** is the console's `/secret`: it creates the secret with your token through the

@@ -134,7 +134,7 @@ func decodePlatformView(body []byte) (platformView, error) {
 var platformHeadlineKeys = []string{
 	"ingest-lag", "ingest-lag-max", "ingest-lane-busy", "db-pool-wait-count",
 	"bus-consumer-pending", "bus-consumer-ack-pending", "calc-pending-depth", "outbox-queued-depth",
-	"database-bytes", "retention-behind", "retention-pass-failure-count", "metric-oldest-day-age",
+	"db-size", "retention-behind", "retention-pass-failure-count", "metric-oldest-day-age",
 }
 
 // platformFailureWords mark a figure that counts something going wrong: a
@@ -373,7 +373,7 @@ func platformFailureKey(key string) bool {
 // platformWindowKeys are the figures a window reads as growth: the database
 // and its tables, and the telemetry stream's head and ack floor, whose rates
 // are what ingest is asked to carry and what it does carry.
-var platformWindowKeys = []string{"database-bytes", "table-bytes", "bus-stream-last-seq", "bus-consumer-ack-floor"}
+var platformWindowKeys = []string{"db-size", "table-bytes", "bus-stream-last-seq", "bus-consumer-ack-floor"}
 
 // platformWindow is how the growth figures moved between two readings.
 type platformWindow struct {

@@ -23,7 +23,7 @@ per approved definition) while this lifecycle holds inside each slice: see
 | **Validate** | `make test` green (run fresh), `make gen` clean, no drift | green, fresh |
 | **Demo** | the feature recorded working, on the PR: a [terminal demo](/contributing/demos/) for CLI and API behavior, a walkthrough for a console flow, tagged in the PR body (`demo: <id>`) and recorded by the `run:demo` label, which writes its clip into the body | the tag and the clip, or `demo: none (<reason>)` |
 | **Review** | a reviewer pass over the diff, findings addressed; a security lens when it touches authz, secrets, the edge, or an invariant | findings cleared |
-| **Ship** | the ship-review (below), then squash-merge | architect approves |
+| **Ship** | the ship-review (below), then squash-merge through the [merge queue](/contributing/release-ci/#merging-through-the-queue) | architect approves |
 | **Log** | record what shipped, the decisions, and the follow-ups | logged |
 
 The first eight stages (Define through Review) are the [five doctrines](/) in motion; the
@@ -101,7 +101,11 @@ Decisions I need from you:           open forks, or none
 Diff / Risk: size, PR link; outward-facing? invariant-changing? reversible?
 ```
 
-Approval means squash-merge (the conventional-commit PR title drives the release). A redirect
+Approval means squash-merge (the conventional-commit PR title drives the release), through the
+merge queue: the architect queues the green PR, the queue reruns the required checks on it on top
+of the current `main`, and merges it when they pass. Nobody rebases or re-runs CI by hand, and a PR
+that fails in the queue leaves it with `main` untouched
+([Release and CI](/contributing/release-ci/#merging-through-the-queue)). A redirect
 adjusts the slice. The two lines that matter most are **Decisions I need from you** and **Risk**.
 
 ## Lessons held

@@ -185,3 +185,43 @@ func TestAgentTrustRefusesUnreadableInputAndBadUsage(t *testing.T) {
 		t.Fatalf("bad usage: exit %d, want 64", code)
 	}
 }
+
+// open: agent-open-pr opens a PR as the agents' App, so the architect can
+// approve it. Only a maintainer may dispatch it, only from a claude/ branch,
+// and never twice for one branch.
+
+func openFacts(sender, ref, openPRs string) string {
+	return `{"sender":"` + sender + `","head_ref":"` + ref + `","open_prs":` + openPRs + `,` + teams + `}`
+}
+
+func TestAgentTrustOpenRunsForAMaintainersClaudeBranch(t *testing.T) {
+	for _, ref := range []string{"claude/agent-open-pr", "claude/fix-2189", "claude/a/b.c_d-e"} {
+		if got, _ := agentTrust(t, "open", openFacts("fred", ref, "0")); got != "run" {
+			t.Fatalf("%s: got %q, want run", ref, got)
+		}
+	}
+}
+
+func TestAgentTrustOpenRefusesAnyoneButAMaintainer(t *testing.T) {
+	for _, sender := range []string{"casey", "stranger", ""} {
+		got, _ := agentTrust(t, "open", openFacts(sender, "claude/x", "0"))
+		if !strings.HasPrefix(got, "refuse:") {
+			t.Fatalf("sender %q: got %q, want refuse", sender, got)
+		}
+	}
+}
+
+func TestAgentTrustOpenRefusesABranchThatIsNotASessions(t *testing.T) {
+	for _, ref := range []string{"main", "fix/x", "claude", "claude/", "claude/../main", "claude/a b", "claude//x", "release/0.1", "xclaude/x"} {
+		got, _ := agentTrust(t, "open", openFacts("fred", ref, "0"))
+		if !strings.Contains(got, "is not a claude/ branch") {
+			t.Fatalf("%q: got %q, want refuse", ref, got)
+		}
+	}
+}
+
+func TestAgentTrustOpenRefusesABranchThatAlreadyHasAPR(t *testing.T) {
+	if got, _ := agentTrust(t, "open", openFacts("fred", "claude/x", "1")); got != "refuse: claude/x already has an open PR" {
+		t.Fatalf("got %q", got)
+	}
+}

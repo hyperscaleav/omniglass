@@ -1,6 +1,6 @@
 import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
-import { pageHere } from "./lib/handover";
+import { pageHere, pendingTriage } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
@@ -17,7 +17,7 @@ import { useSettingsMe } from "./lib/settings";
 // App is the authenticated shell (the data-app-shell root, which an open blade
 // makes inert): the nav rail, the sticky top bar, the routed
 // page, the global ⌘K command palette, omnibot's panel (#1167, for a person who
-// may run it, from the top bar or the palette), and the toasts any surface raises. It
+// may run it, from the top bar, the palette or an alarm's troubleshoot button), and the toasts any surface raises. It
 // owns the rail collapse state, the theme effect (mirrors the mode onto
 // <html>), and the ⌘K keybinding.
 const App: ParentComponent = (props) => {
@@ -40,6 +40,12 @@ const App: ParentComponent = (props) => {
     setOmnibotPrompt(prompt || undefined);
     setOmnibotOpen(true);
   };
+
+  // An alarm's troubleshoot button (#2164) asks for a triage; the panel runs
+  // it once open.
+  createEffect(() => {
+    if (pendingTriage() && mayAsk()) setOmnibotOpen(true);
+  });
 
   createEffect(() => {
     const me = settingsMe.data;

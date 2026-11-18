@@ -10,7 +10,7 @@ form: bullet
   its place. **`product_property`** is the product's declared-property **contract** (`product_id`,
   `property_name`, an optional `default_value`, a `required` flag, unique per pair), replacing
   `field_definition` and its per-`component_type` catalog; `data_type` and `validation` are **not** duplicated,
-  they stay on the [property catalog](/guides/admin/properties/). **`property_value`** is the value store,
+  they stay on the [property catalog](/admin/properties/). **`property_value`** is the value store,
   carrying the **same owner exclusive-arc** as `metric_datapoint` and `event` (`owner_kind` plus
   `component_id` / `system_id` / `location_id` / `node_id`, one-set CHECK) plus an `instance` discriminator, a
   **`provenance`** (`observed` / `calculated` / `intended` / `declared`, default `declared`), and a jsonb

@@ -72,8 +72,7 @@ func TestRetentionSamplesMapAPassToItsRows(t *testing.T) {
 			{Name: "metric_p20261027", From: time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)},
 			{Name: "metric_p20261112", From: time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC)},
 		},
-		TableBytes:    map[string]int64{"metric": 81920, "metric_trend": 16384, "log_line": 8192},
-		DatabaseBytes: 9 << 20,
+		TableBytes: map[string]int64{"metric": 81920, "metric_trend": 16384, "log_line": 8192},
 	}
 	got := rowsByKey(t, retentionSamples("srv", rep, status, now), "srv", now)
 	want := map[string]float64{
@@ -99,7 +98,6 @@ func TestRetentionSamplesMapAPassToItsRows(t *testing.T) {
 		writerclass.TableBytes + "|metric":                       81920,
 		writerclass.TableBytes + "|metric_trend":                 16384,
 		writerclass.TableBytes + "|log_line":                     8192,
-		writerclass.DatabaseBytes + "|":                          9 << 20,
 	}
 	diffRows(t, got, want)
 }

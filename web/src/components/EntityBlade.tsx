@@ -28,6 +28,7 @@ import { contentsOf, isRoomOf, slotsOf, systemsAtLocation } from "../lib/detail"
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
+import TroubleshootButton from "./TroubleshootButton";
 
 // EntityBlade (#799, refit in #826, the glance since #872): ONE blade per
 // fleet kind, and it is where an operator lands from a row. Verdict and
@@ -108,7 +109,7 @@ function useDelete(opts: {
 // one raised it. A row that names its alarm (timeline) opens the alarm's
 // timeline in place (#950).
 function Why(props: {
-  rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element; timeline?: { component: string; alarmId: string } }[];
+  rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element; timeline?: { component: string; alarmId: string }; troubleshoot?: { component: string; raised_by_rule?: string | null; raised_at: string; message?: string } }[];
 }) {
   const timelines = createTimelineToggles();
   return (
@@ -130,6 +131,7 @@ function Why(props: {
                   {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
                 </Show>
                 {a.ack}
+                <Show when={a.troubleshoot}>{(t) => <TroubleshootButton alarm={t()} />}</Show>
                 <Show when={a.timeline}>{(tl) => timelines.button(tl().alarmId, a.message)}</Show>
               </div>
               <Show when={a.timeline && timelines.isOpen(a.timeline.alarmId)}>
@@ -188,6 +190,7 @@ function SystemBody(props: { id: string }) {
           component: a.component,
           onOpen: a.componentId ? () => blades.push({ kind: "component", id: a.componentId! }) : undefined,
           timeline: a.componentId ? { component: a.componentId, alarmId: a.id } : undefined,
+          troubleshoot: { component: a.component, raised_at: a.raisedAt, message: a.message },
         }))}
       />
       {/* The room's only system is the room: the title already names it. */}
@@ -278,6 +281,7 @@ function ComponentBody(props: { id: string }) {
             </>
           ),
           timeline: { component: props.id, alarmId: a.id },
+          troubleshoot: a,
         }))}
       />
       {/* Where its location is the room a system it serves makes, Serves names

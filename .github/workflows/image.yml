@@ -11,6 +11,10 @@ on:
   push:
     branches: [main, "release/**"]
   pull_request:
+  # The merge queue (#2181) needs smoke-lab, a required check, on each queue
+  # entry. Only smoke-lab runs there: a queue entry's commit may never land, so
+  # nothing is published for it, and the arm64 smoke only gates the publish.
+  merge_group:
 
 # Least privilege: read the repo, write packages (GHCR). Fork PRs get a
 # read-only token, so the login and push steps are skipped for them.
@@ -27,6 +31,7 @@ jobs:
   # binary under QEMU. This is the only arm64 validation, and it gates the
   # publish below so a broken arm64 build never reaches the GHCR manifest.
   smoke-arm64:
+    if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,6 +90,7 @@ jobs:
     # Only publish the multi-arch manifest once arm64 cross-build boots and a
     # lab on the amd64 image actually comes up end to end.
     needs: [smoke-arm64, smoke-lab]
+    if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

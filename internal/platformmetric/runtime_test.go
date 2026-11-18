@@ -11,13 +11,14 @@ import (
 
 func TestProcessReadingsNameTheProcessKeys(t *testing.T) {
 	t.Parallel()
-	p := Process{Goroutines: 12, HeapBytes: 4 << 20, GCs: 3, LastGCPause: 1500 * time.Microsecond, FDs: 9}
+	p := Process{Goroutines: 12, HeapBytes: 4 << 20, GCs: 3, LastGCPause: 1500 * time.Microsecond, FDs: 9, Uptime: 90 * time.Minute}
 	got := p.Readings()
 	want := []Reading{
 		{Key: writerclass.ProcessGoroutineCount, Value: 12},
 		{Key: writerclass.ProcessHeapSize, Value: 4 << 20},
 		{Key: writerclass.ProcessGCPause, Value: 1.5},
 		{Key: writerclass.ProcessFDCount, Value: 9},
+		{Key: writerclass.ProcessUptime, Value: 5400},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("readings = %v, want %v", got, want)
@@ -64,13 +65,16 @@ func TestReadProcessReadsThisProcess(t *testing.T) {
 	if runtime.GOOS == "linux" && p.FDs < 3 {
 		t.Errorf("fds = %d, want at least stdin, stdout and stderr on linux", p.FDs)
 	}
+	if p.Uptime <= 0 {
+		t.Errorf("uptime = %v, want the time since this process started", p.Uptime)
+	}
 }
 
 func TestEveryReadingKeyIsAPlatformKey(t *testing.T) {
 	t.Parallel()
 	var rt Runtime
 	rt.Readings(Process{CPU: time.Second})
-	for _, r := range rt.Readings(Process{Goroutines: 1, HeapBytes: 1, GCs: 1, LastGCPause: time.Millisecond, CPU: 2 * time.Second, FDs: 3}) {
+	for _, r := range rt.Readings(Process{Goroutines: 1, HeapBytes: 1, GCs: 1, LastGCPause: time.Millisecond, CPU: 2 * time.Second, FDs: 3, Uptime: time.Hour}) {
 		if !writerclass.OutpostSelf(r.Key) {
 			t.Errorf("%s is not a declared outpost-self platform key", r.Key)
 		}
@@ -116,7 +120,7 @@ func TestRuntimeSamplerReadsEveryKeyNonnegative(t *testing.T) {
 		got[row.Key] = row.Value
 	}
 	want := []string{writerclass.ProcessGoroutineCount, writerclass.ProcessHeapSize, writerclass.ProcessGCPause,
-		writerclass.ProcessCPUSeconds}
+		writerclass.ProcessCPUSeconds, writerclass.ProcessUptime}
 	if runtime.GOOS == "linux" {
 		want = append(want, writerclass.ProcessFDCount)
 	}
