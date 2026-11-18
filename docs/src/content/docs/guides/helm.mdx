@@ -1,10 +1,6 @@
 ---
 title: "Deploying with Helm"
 description: "The Omniglass Helm chart: install, values, durable state, and the bundled-Postgres preview mode versus BYO-Postgres production."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import ConfigVars from '../../../components/ConfigVars.astro';
@@ -119,7 +115,7 @@ layout as the [lab](/guides/lab/). With `persistence.enabled` (the default) the 
 `helm.sh/resource-policy: keep`. The Deployment uses the `Recreate` strategy: one server owns one
 bus and one volume, so the old pod stops before the new one starts.
 
-The guarantee this buys: **a batch the stream acknowledged before a restart lands after it.** A node
+The guarantee this buys: **a batch the stream acknowledged before a restart lands after it.** An outpost
 drops a batch from its spool once the `OG_TELEMETRY` stream acknowledges it
 ([messaging](/architecture/messaging/#delivery-a-batch-lands-once)); the stream's store is on the
 volume, so a batch acknowledged and not yet written to Postgres by `og-telemetry-worker` is still
