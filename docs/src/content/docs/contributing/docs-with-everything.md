@@ -71,6 +71,13 @@ states its one-line justification in the PR body.
 
 ## Status moves with the code
 
+:::note[Moving to the rewritten pages]
+[ADR-2087](/architecture/decisions/#adr-2087-the-rewritten-pages-are-the-architecture-of-record-the-architecture-pages-archive)
+moves the architecture of record from the architecture pages to the overview and guide pages rewritten in
+the vocabulary's words, which take over the status badge. Until the archive lands, the rule below applies
+to the architecture pages as written.
+:::
+
 The architecture pages are written in the present tense as the **target design**, so build status is
 carried *alongside* the prose, not woven into it, and keeping it current is part of docs-with-everything.
 A slice that advances a page updates three surfaces in the **same PR**:
