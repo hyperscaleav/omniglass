@@ -300,9 +300,11 @@ run omnibot) or that fails names the reason. A run whose connection closes befor
 that it ended early, rather than looking busy for good; ask again to carry on.
 
 **Hand omnibot what you are looking at.** Alt-click a row (a component, a system, a location, an
-alarm, in a list, a tree or a blade) and its name drops into a tray above the composer;
-shift-alt-click another row in the same list adds every row between. ⌘J (Ctrl-J) hands over the page
-itself, its route and filters, when nothing else is gathered; a system, location or component page
+alarm, in a list, a tree or a blade), a system card, a marker on a system's map or a chart, and its
+name drops into a tray above the composer (a chart is its metric, by its owner's name and the
+metric's); shift-alt-click another row in the same list adds every row between, which is how a set
+goes in. ⌘J (Ctrl-J) hands over the page itself, its route and filters, when nothing else is gathered,
+and replaces a page handed over earlier and not yet sent; a system, location or component page
 is named by its name or address, never its uuid. Gathering sends nothing: type your question, and
 that prompt carries the tray as context and clears it. It holds references, never what the screen showed, so omnibot looks each thing
 up itself and sees only what you may. Alt rather than ⌘ or Ctrl, which still open a link in a new tab;

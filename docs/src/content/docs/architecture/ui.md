@@ -106,8 +106,9 @@ A detail view accepts a name-shaped address as an operator convenience, resolved
 A person hands [omnibot](/architecture/ai/) what they are looking at as references, never as what
 the console rendered (#2122). A row says what it is with a **subject stamp**, `data-subject-kind` and
 `data-subject-ref` (a component's dotted address, a system's name, an alarm's `component/rule`), and
-the shared primitives set it from their row: `FlatList`, `Outline`, the entity blades and the alarm
-rows. One console-wide handler reads it, so a page built from those primitives is gatherable with no
+the shared primitives set it from their row: `FlatList`, `Outline`, the entity blades, the alarm
+rows, the system card, the system map's markers and `TimeseriesChart` (a metric, as
+`owner/metric`). One console-wide handler reads it, so a page built from those primitives is gatherable with no
 code of its own: alt-click adds a row to omnibot's tray, shift-alt-click every stamped row from the
 last one gathered, and a control inside a row keeps its own meaning. ⌘J hands over the page itself, as
 its route and arguments; a detail page names its entity by name or address (the `Page` primitive's
