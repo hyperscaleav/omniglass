@@ -92,6 +92,7 @@ promise: if a label runs automation it is named `run:<task>`, and if a label is 
 | --- | --- | --- |
 | `run:preview` | spins up a live [PR preview environment](/guides/pr-previews/); removing it tears the preview down | yes |
 | `run:demo` | records the [demos](/contributing/demos/) the PR body tags (`demo: <id>`) in CI, upserts one comment listing every demo, and writes each demo's clip into the PR body's Demo section | yes |
+| `run:dev-gha` | on an issue, has a Claude Code agent in GitHub Actions build the ticket into a PR ([agents in CI](/contributing/agents-in-ci/)); only a maintainer's label counts, and the label comes off as the build starts | yes |
 
 `run:preview` is live today (the [PR previews guide](/guides/pr-previews/) covers it, and
 `preview-comment.yml` is the workflow behind it). So is `run:demo` (`demo.yml`). Applying it
@@ -113,6 +114,13 @@ job; a demo whose lab never came up is reported as that, not as a failure). The 
 each demo's clip (its GIF or animated preview and its scrubbable link) into the PR body's Demo
 section, replacing only its own marked block. Why a ref rather than a branch is in
 [demos](/contributing/demos/#show-it-on-the-pr).
+
+`run:dev-gha` is `agent-build.yml`. It is the architect's approval for one builder: its sibling
+`run:dev-hah` sends the ticket to the harness dispatcher on the worker instead, and joins this
+table when the dispatcher learns it
+([agent-harness#110](https://github.com/hyperscaleav/agent-harness/issues/110)). A ticket with
+both builds nowhere. A label from anyone outside the `maintainers` team is taken off with a
+comment saying why.
 
 `run:walkthrough` is `run:demo`'s earlier name, from when walkthroughs were the only demos. The
 workflow still honors it, so a PR that carries it (or a re-run of a run it started) records as
@@ -182,6 +190,7 @@ owns the moment:
 | a slice starts | `/run-feature-loop` | `scripts/board.sh set <n> "In Progress"` |
 | the PR opens | `/ship-slice` | `scripts/board.sh set <n> "In Review"`; a dispatcher session leaves it to the dispatcher (below) |
 | the day's slice starts, then its PR opens | `/autopilot` | the same two moves, listed in the day report |
+| an Actions build starts | `agent-build.yml` | `scripts/board.sh set <n> "In Progress"`; the PR's link moves it to In Review |
 
 The board's own workflows move it too, and two of them meet those moves at the same
 moment, so each is pointed at the same status (the setup below):
