@@ -166,26 +166,33 @@ route's own error and exits non-zero.
 
 ## Omnibot, the assistant in the CLI
 
-`omniglass omnibot` is Omniglass's own agent on the same MCP surface. Signed in as you, it mints itself a
-one-day agent token named `omnibot`, held to the `omnibot` channel, so it holds what you hold and never
-more; it revokes that token when the run ends, however it ends (Ctrl-C included). It runs read-only tools freely and stops
-before anything else to ask you on the terminal (`Run it? [y/N]`); anything but `y` declines, and the
-model hears that you declined. With no terminal to ask, it declines every write.
+`omniglass omnibot` is Omniglass's own agent. It runs your conversation on the server, on the model the
+install is [configured with](#pointing-omnibot-at-a-model), and prints the run as it happens: the model's
+text, and a line for each tool call. The model's key stays on the server, so it never reaches your
+terminal. Read-only tools run freely; anything else stops to ask you on the terminal
+(`Run it? [y/N]`), and anything but `y` declines, and the model hears that you declined. With no
+terminal to ask, it declines every write. Its writes land in the audit trail as yours, tagged
+`agent omnibot`, on the `omnibot` channel.
 
 ```bash
-omniglass omnibot --replay recording.yaml "add a panel in the lobby"
+omniglass omnibot "add a panel in the lobby"
+omnibot: conversation omnibot-3f2a (pick it up with --resume omnibot-3f2a)
 ```
-
-The model is not built yet: `--replay` plays a recorded conversation (a list of the model's turns, its
-tool calls and its last answer), which is how the tests and the demo drive it. `--max-steps` bounds a
-run (10 by default). Its writes land in the audit trail as yours, tagged `agent omnibot`, on the
-`omnibot` channel.
 
 Given no prompt, omnibot opens a chat: each line you type is a prompt, and each answer continues the
 conversation the last one left. `/exit` or Ctrl-D ends it.
 
 ```bash
-omniglass omnibot --replay recording.yaml
+omniglass omnibot
+```
+
+`--replay <file>` runs the loop on your machine instead, on a recorded model (a list of the model's
+turns, its tool calls and its last answer), which is how the tests and the demos drive it. That loop
+mints itself a one-day agent token named `omnibot`, held to the `omnibot` channel, and revokes it
+when the run ends, however it ends (Ctrl-C included); `--max-steps` bounds it (10 by default).
+
+```bash
+omniglass omnibot --replay recording.yaml "add a panel in the lobby"
 ```
 
 ### Carrying a conversation on
@@ -194,8 +201,8 @@ omniglass omnibot --replay recording.yaml
 on: a later run with the same name starts where the last one stopped.
 
 ```bash
-omniglass omnibot --replay recording.yaml --resume triage "what is down"
-omniglass omnibot --replay recording.yaml --resume triage
+omniglass omnibot --resume triage "what is down"
+omniglass omnibot --resume triage
 omnibot: conversation triage, 2 messages kept
 ```
 
@@ -230,9 +237,9 @@ omniglass assistant conversation run lobby --resume '[{"interruptId":"call-2","s
 that you declined. A run that names a call that is not waiting, a new prompt while one waits, or a
 run while another still holds the conversation is a 409, so a call the server runs runs once, however
 many clients answer it; while a run holds the conversation, an append is a 409 too. A run lasts 30 minutes at most. Only you run your conversations, as yourself: an agent token or an impersonation session is
-refused. The server runs omnibot only with a model: until a live provider lands, it plays the
-recording `OMNIGLASS_OMNIBOT_REPLAY` names, and without one a run is a 503. The lab's server plays one
-that tags the meeting 405 video bar, so the commands above run there as written.
+refused. The server runs omnibot only with a model: the one [configured](#pointing-omnibot-at-a-model),
+else the recording `OMNIGLASS_OMNIBOT_REPLAY` names, and with neither a run is a 503. The lab's
+server plays one that tags the meeting 405 video bar, so the commands above run there as written.
 
 A recording for the server can hold `conversations` beside its turns, each a `match` and turns of its
 own. A run plays the first conversation whose match its message contains, else the top-level turns,
@@ -269,6 +276,32 @@ An unknown skill, or one missing an argument it requires, is a 422:
 omniglass assistant conversation run lobby --messages '[]' \
   --forwardedProps '{"skill":{"name":"triage-alarm","arguments":{"component":"hq.lobby.mic-1"}}}'
 ```
+
+### Pointing omnibot at a model
+
+omnibot's model is an install setting, the `assistant` namespace, set by an admin. One adapter speaks
+the OpenAI-compatible chat completions API, so it reaches GitHub Models (the default), OpenAI, or a
+model you run yourself (Ollama, vLLM, LM Studio) by its base URL. Store the key as a platform secret
+of type `api-key`, then name it:
+
+```bash
+omniglass secret create --name models-key --owner-kind platform --secret-type api-key \
+  --fields "{\"key\":\"$GITHUB_TOKEN\"}"
+omniglass setting update assistant --body '{"provider":"openai","key_secret":"models-key"}'
+```
+
+That runs `openai/gpt-4.1-mini` on GitHub Models; `model` names another, and `base_url` another
+server (`http://ollama.internal:11434/v1`, say). The server reads these at the start of each run, so a
+change is the next run's, with no restart. It unseals the key for each run and sends it only to the
+model; no setting, route, event or log line shows it, and omnibot never sees it. A server on an
+internal address is one the [egress guard](/guides/admin/notifications/) refuses until
+`notification.egress_allow` names it. A run whose provider fails (a refused key, a rate limit, the
+server down) ends on an error that names the cause; a configured key secret that is gone refuses the
+run, naming it, rather than playing the recording. `{"provider":"none"}` turns the model off.
+
+A lab runs omnibot on a live model with one flag: `omniglass lab run --omnibot-key-env GITHUB_TOKEN`
+stores that variable's value as the lab's key and points `assistant` at GitHub Models. Without the
+flag the lab plays its recording, and a lab started without it again forgets the key.
 
 ### Giving omnibot a credential
 

@@ -145,6 +145,12 @@ command itself; here is when you would reach for each:
 - `--image` runs an omniglass image of your choosing (env `OMNIGLASS_LAB_IMAGE`), with a warning: a lab
   whose server and binary disagree is yours to debug. A build-keyed `make` image needs no flag; reach
   for it for an image that is not the one this binary's `make` built, such as a private build.
+- `--omnibot-key-env <VAR>` runs omnibot on a live model: the lab stores that variable's value as its
+  model key and points omnibot at GitHub Models (`--omnibot-key-env GITHUB_TOKEN`), so the panel and
+  `omniglass omnibot` answer for real ([pointing omnibot at a model](/guides/agents/#pointing-omnibot-at-a-model)).
+  The key travels to the lab's seed in its environment, visible to `docker inspect` on this machine
+  while the seed runs, as the outpost's token is. Without the flag omnibot plays the lab's recording,
+  and the key a run before stored is removed. A scale lab runs no omnibot, so it refuses the flag.
 
 - `--systems` and `--plan` size a [scale lab scenario](#scale-lab-scenarios) instead of a seeded
   fleet, and preview it with its preflight.
