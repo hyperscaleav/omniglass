@@ -27,6 +27,25 @@ screenshots:
       # its hop row are full width and one line tall whatever they hold.
       - "[data-testid=pipeline] [role=group] >> xpath=.."
       - "[data-testid=pipeline] ol >> xpath=.."
+  # The Requests panel's database rows sit below its ranked routes, past the
+  # viewport, so this shot hovers the last row's figure: the hover scrolls the
+  # rows into view and, the figure not being a tooltip trigger, covers none of
+  # them. The figures move with every capture, so the panel grid is masked.
+  - id: platform-health-connections
+    path: /web/platform
+    alt: "The Requests panel scrolled to its database rows: Pool In Use against the pool's size, Pool Waits against Pool Acquires with Pool Wait Time beside them, then Database Connections Held against the database's limit, Idle In Transaction against those held, and the Oldest Transaction age under them."
+    steps:
+      - action: wait
+        selector: "[data-testid=server-panel-requests] tr[data-testid=panel-row-http-request-duration-max][aria-expanded]"
+        timeout: 150000
+      - action: hover
+        selector: "[data-testid=panel-row-db-transaction-oldest-age] td:last-child"
+    mask:
+      - "[data-testid=platform-version] >> xpath=ancestor::div[3]"
+      - "[data-testid=platform-uptime] >> xpath=ancestor::div[3]"
+      - "[data-testid=server-panels-server] >> xpath=./div"
+      - "[data-testid=pipeline] [role=group] >> xpath=.."
+      - "[data-testid=pipeline] ol >> xpath=.."
   # The outpost table sits under where work is lost and the server panels, whose height moves with the
   # routes a window saw, so this shot closes the server's panel set first: the
   # table then sits at a fixed position under the header and the closed set.
@@ -209,8 +228,33 @@ How the API is answering, measured inside the server for every request by its me
 template and status class. The slowest routes and the busiest are each ranked, highest first, as
 the server cut them from its newest report window: a window is a minute by default, so a ranking
 is the last minute's, and a route that went quiet drops off it. Below them sits the database's side
-of a request: the queries that ran past the slow-query threshold, the connection pool in use
-against its size, and the acquires that found the pool exhausted and waited.
+of a request: the queries that ran past the slow-query threshold, then the server's pool and the
+database's own connections (#1980), each read as a ratio so a figure means the same at any traffic.
+
+::screenshot{#platform-health-connections}
+
+The pool, from the server's side. **Pool In Use** reads the connections checked out against the
+pool's size, `a / b`. **Pool Waits** reads the acquires that found the pool exhausted and had to
+wait against **Pool Acquires**, all the connections the pool handed out in the window: `a / b`, the
+share of requests for a connection that queued. 40 waits of 50 acquires is a starved pool and 40 of
+50,000 is a blip, which a bare count could not say. **Pool Wait Time** is the time those waits
+cost in all, in milliseconds. Healthy is `0 / n` and 0 ms. A nonzero ratio means requests queued on
+the pool's cap; if In Use sits at its size, the cap is the ceiling.
+
+The database, from its own side. A pool sees only the connections it opened, so Postgres can run out
+while every pool shows headroom: a `migrate`, a lab measure, a `psql` session or a second server each
+hold connections the pool never counted. **Database Connections Held** reads every client backend
+Postgres lists against its limit, `a / b`, where the limit is `max_connections` less
+`superuser_reserved_connections`, the share an ordinary role may take. Near the limit, the next
+client, the pool included, is refused. **Idle In Transaction** reads the connections sitting inside
+an open transaction against those held, `a / b`, and 0 is healthy: each such connection holds its
+slot and its locks and keeps vacuum from reclaiming rows, a leak that shows nowhere until something
+fails. **Oldest Transaction** is the age in seconds of the oldest open transaction in any state, the
+context for the count: a figure that only climbs is a transaction nothing is finishing. The server
+reads these from `pg_stat_activity` each window; a role that is not a member of `pg_monitor` sees
+every connection counted but not the state of another role's, so its idle-in-transaction count and
+oldest transaction cover only its own sessions. A window the database cannot answer writes no
+figure rather than a 0.
 
 Last, what the outposts asked of the server over the bus (#1769). **Bus Request Failures** reads as a
 share of **Bus Requests**, `a / b`, one row per path (an outpost's heartbeat, its command pull, its

@@ -108,7 +108,17 @@ var PlatformServerGroups = []PlatformServerGroup{
 		{Name: writerclass.BusRequestCount, Window: true},
 		{Name: writerclass.DBPoolAcquired, Of: writerclass.DBPoolMax},
 		{Name: writerclass.DBPoolMax},
-		{Name: writerclass.DBPoolWaitCount},
+		// Waits against the acquires they were a share of, so a pool that
+		// waited 40 times reads differently at 50 acquires than at 50,000.
+		{Name: writerclass.DBPoolWaitCount, Of: writerclass.DBPoolAcquireCount},
+		{Name: writerclass.DBPoolAcquireCount},
+		{Name: writerclass.DBPoolWaitDuration},
+		// The database's own side (#1980): what the pool cannot see, the
+		// connections other clients hold and a transaction left open.
+		{Name: writerclass.DBConnectionCount, Of: writerclass.DBConnectionLimit},
+		{Name: writerclass.DBConnectionLimit},
+		{Name: writerclass.DBConnectionIdleInTransactionCount, Of: writerclass.DBConnectionCount},
+		{Name: writerclass.DBTransactionOldestAge},
 	}},
 	{Name: "ingest", Label: "Ingest", Keys: []PlatformServerKey{
 		{Name: writerclass.IngestLag, Window: true},
@@ -210,7 +220,11 @@ func PlatformHealthKeys() []PlatformHealthKey {
 			}
 		}
 		for _, k := range g.Keys {
-			if !operand[k.Name] {
+			// A pure denominator is the scale a ratio is read against, not a
+			// figure. A key that is a denominator and is itself read against
+			// one (connections held: idle's Of, and held of the limit) keeps
+			// its row, as the page's panelSections does (#1980).
+			if !operand[k.Name] || k.Of != "" {
 				out = append(out, PlatformHealthKey{Key: k.Name, Group: g.Label})
 			}
 		}
@@ -245,12 +259,16 @@ var PlatformRuleExemptions = map[string]string{
 	writerclass.CommandExpiredCount: exNoRule,
 
 	// The server's requests panel.
-	writerclass.HTTPRequestDurationMax: exNoRule,
-	writerclass.HTTPRequestCount:       exThroughput,
-	writerclass.DBSlowQueryCount:       exNoRule,
-	writerclass.BusRequestFailureCount: exNoRule,
-	writerclass.DBPoolAcquired:         "no rule yet, #1984",
-	writerclass.DBPoolWaitCount:        "no rule yet, #1984",
+	writerclass.HTTPRequestDurationMax:             exNoRule,
+	writerclass.HTTPRequestCount:                   exThroughput,
+	writerclass.DBSlowQueryCount:                   exNoRule,
+	writerclass.BusRequestFailureCount:             exNoRule,
+	writerclass.DBPoolAcquired:                     "no rule yet, #1984",
+	writerclass.DBPoolWaitCount:                    "no rule yet, #1984",
+	writerclass.DBPoolWaitDuration:                 "no rule yet, #1984",
+	writerclass.DBConnectionCount:                  "no rule yet, #1984",
+	writerclass.DBConnectionIdleInTransactionCount: "no rule yet, #1984",
+	writerclass.DBTransactionOldestAge:             "no rule yet, #1984",
 
 	// Ingest.
 	writerclass.IngestLag:            exBesideLag,
