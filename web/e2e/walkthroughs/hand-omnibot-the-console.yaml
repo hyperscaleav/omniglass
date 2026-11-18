@@ -15,8 +15,8 @@ steps:
     hold: 1500
   - click: { role: button, name: Close, exact: true }
     caption: Close omnibot. The tray keeps what you gathered for your next prompt.
-  - click: '[data-testid=alarm-strip] button'
-    caption: Open why the auditorium is alarming.
+  - click: '[data-testid=alarm-strip] button >> nth=0'
+    caption: Open the first alarming component from why the auditorium is degraded.
   - wait: { selector: '[data-testid=blade-why] [data-subject-kind="alarm"]' }
     caption: Every alarm row carries a subject stamp, its component and the rule or time that raised it.
   - click: '[data-testid=blade-why] [data-subject-kind="alarm"] [data-severity]'
