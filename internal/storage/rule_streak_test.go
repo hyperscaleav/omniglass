@@ -277,6 +277,52 @@ func TestOfficialRuleSeedPrimes(t *testing.T) {
 	}
 }
 
+// An official rule can ship off (#1985): the seed inserts it disabled, so it
+// judges nothing; a re-seed that says the same writes nothing; and the seed
+// stays authoritative over the state, so a release that ships it on turns it
+// on and it judges the newest sample as an enable does.
+func TestOfficialRuleShipsDisabled(t *testing.T) {
+	t.Parallel()
+	f := newHealthFixture(t)
+	ctx, all := context.Background(), scope.Set{All: true}
+	if err := insertProperties(ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+		Key: "endpoint-reachable", Instance: "tcp", Value: "down", TS: time.Now().UTC()}}); err != nil {
+		t.Fatal(err)
+	}
+	off := false
+	spec := storage.EventRuleSpec{FireEventType: "rule-fired", Name: "shipped-off", SampleKey: "endpoint-reachable", Fire: criteria("eq", "down"),
+		Severity: "high", Enabled: &off}
+	if err := f.gw.UpsertEventRule(ctx, spec); err != nil {
+		t.Fatal(err)
+	}
+	seeded, err := f.gw.GetEventRule(ctx, "shipped-off", all)
+	if err != nil || seeded.Enabled || !seeded.Official {
+		t.Fatalf("the rule shipped off reads %+v (%v), want an official rule, disabled", seeded, err)
+	}
+	if err := f.gw.SweepEventRules(ctx, time.Now().Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if n := openRuleAlarms(t, f, "shipped-off"); n != 0 {
+		t.Fatalf("a rule shipped off opened %d alarms on a down endpoint, want none", n)
+	}
+	if err := f.gw.UpsertEventRule(ctx, spec); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := f.gw.GetEventRule(ctx, "shipped-off", all); err != nil || again.Version != seeded.Version {
+		t.Fatalf("a re-seed that says the same moved the rule to %+v (%v), want version %d", again, err, seeded.Version)
+	}
+	spec.Enabled = nil
+	if err := f.gw.UpsertEventRule(ctx, spec); err != nil {
+		t.Fatal(err)
+	}
+	if on, err := f.gw.GetEventRule(ctx, "shipped-off", all); err != nil || !on.Enabled {
+		t.Fatalf("re-seeded on, the rule reads %+v (%v), want it enabled", on, err)
+	}
+	if n := openRuleAlarms(t, f, "shipped-off"); n != 1 {
+		t.Fatalf("re-seeded on with a zero sustain on a down endpoint: %d alarms, want 1", n)
+	}
+}
+
 // A rule write serializes with the samples it judges: an ingest that read a
 // zero-sustain rule as enabled, and stalls mid-raise while the rule is
 // disabled, must not leave an alarm open on a rule that is off (nothing
