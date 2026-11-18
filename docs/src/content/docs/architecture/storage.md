@@ -724,6 +724,13 @@ The append-only id type under partitioning: bigint identity versus uuid v7.
 
 The **Storage Gateway is the only door to the database** (no direct access, no PostgREST), and it injects IAM scope **per action**: every query carries `visible_set(P, action)` for the specific action it performs, so a read filters by read-scope and an `:ack` write by ack-scope. A write whose action-scoped predicate matches **0 rows** surfaces as a 403 or 404, never a silent success, matching the up-front `canDo` decision ([identity and access](/architecture/identity-access/)). Per-database isolation (one database per tenant, paired one-to-one with one NATS account) means no tenant context to set. Scope arrives as an **explicit per-call `scope.Set` argument**; the named three-mode contract (scoped / outpost / system) is the Design formalization of that convention, not a built mode switch. The [CDC publisher](/architecture/messaging/#two-lanes-one-bus) reads committed changes from the WAL, a replication-protocol stream beneath the table surface, not a second path around the Gateway. Every read and write goes through the Gateway, so the physical backend swaps beneath it:
 
+**Package import rules, enforced by `internal/build/import_boundary_guard_test.go`:**
+
+- Only `internal/storage` (and named schema tooling: `internal/erd`, `internal/compressbench`, `cmd/erdgen`) may import `github.com/jackc/pgx` or `database/sql` in non-test files. Any other direct import bypasses the scope injector and writer-class invariants.
+- `internal/outpost` non-test files must not import `internal/storage` or `internal/api`. The outpost is the edge binary; linking the server DB or API layer into it would pull pgx and the full server stack into that build. Shared helpers that both sides need live in narrower packages neither owns (e.g. `internal/metrictime`).
+
+The guard test fails when a package outside the allowlist gains a direct pgx import, and also fails when an allowlist entry goes stale (the listed package no longer holds a qualifying import), so the rules stay honest without manual review.
+
 - **default**: Postgres for everything (samples, ground-truth records, views, catalogs). Postgres is **BYO today**.
 - **blobs**: opaque bytes (a firmware image, a config dump, a capture, later a large `log_line` body or a `collection.failed` raw payload) live in the content-addressed [blob store](/architecture/files/), a `blob.Store` seam behind the same gateway. The default **pgblobs** backend holds bytes inline in Postgres; a row references a blob by its `sha256`, never inline bytes.
 
