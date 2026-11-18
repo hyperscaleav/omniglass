@@ -16,6 +16,7 @@ import { entityLabel } from "../lib/entities";
 import { verdictOf } from "../lib/health";
 import type { OutpostStatus } from "../lib/outposts";
 import { SERIES_POLL_MS, metricBuckets, metricBucketsKey } from "../lib/series";
+import { metricSubject } from "../lib/handover";
 import {
   NOT_REPORTED,
   PLATFORM_VIEW_KEY,
@@ -440,7 +441,7 @@ function Row(props: { row: PanelRow; server: PlatformServer; view: PlatformView;
   const chart = (spark: boolean) => (
     <TimeseriesChart
       spark={spark}
-      subject={props.server.component ? { kind: "metric", ref: `${props.server.component}/${props.row.key}` } : undefined}
+      subject={metricSubject(props.server.component, props.row.key)}
       buckets={series.data?.buckets ?? []}
       resolutionMs={PANEL_SERIES_RESOLUTION_S * 1000}
       now={now()}

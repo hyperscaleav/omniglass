@@ -306,7 +306,7 @@ metric's); shift-alt-click another row in the same list adds every row between, 
 goes in. ⌘J (Ctrl-J) hands over the page itself, its route and filters, when nothing else is gathered,
 and replaces a page handed over earlier and not yet sent; a system, location or component page
 is named by its name or address, never its uuid. Gathering sends nothing: type your question, and
-that prompt carries the tray as context and clears it. It holds references, never what the screen showed, so omnibot looks each thing
+that prompt carries the tray as context and clears it, as does signing out. It holds references, never what the screen showed, so omnibot looks each thing
 up itself and sees only what you may. Alt rather than ⌘ or Ctrl, which still open a link in a new tab;
 a button inside a row keeps its own meaning. An alarm in the tray has a **Triage** button that runs
 the `triage-alarm` skill on it in one click, and the [command palette](/guides/operator/#getting-around)

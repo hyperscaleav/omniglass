@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { addSubjects, alarmSubject, triageCall, clearTray, contextEntries, gathered, gatherer, handOverPage, handOverer, isHandOverKey, namePage, pageSubject, removeSubject, stamped, subjectOf, tray } from "./handover";
+import { addSubjects, alarmSubject, triageCall, clearTray, contextEntries, gathered, gatherer, handOverPage, handOverer, isHandOverKey, metricSubject, namePage, pageSubject, removeSubject, stamped, subjectOf, tray } from "./handover";
 
 // The context builder (#2122): what the person hands omnibot is references and
 // the page as a query, never what the console rendered and never a uuid.
@@ -47,6 +47,14 @@ describe("stamped", () => {
     expect(stamped({ kind: "vendor", ref: "" })).toBeUndefined();
     expect(stamped({ kind: "vendor", ref: UUID })).toBeUndefined();
     expect(stamped(undefined)).toBeUndefined();
+  });
+});
+
+describe("metricSubject", () => {
+  it("is the metric by its owner's name and the metric's, and nothing before the owner's name is known", () => {
+    expect(metricSubject("huddle", "cpu_temp")).toEqual({ kind: "metric", ref: "huddle/cpu_temp" });
+    expect(metricSubject(undefined, "cpu_temp")).toBeUndefined();
+    expect(metricSubject("", "cpu_temp")).toBeUndefined();
   });
 });
 

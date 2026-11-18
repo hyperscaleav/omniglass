@@ -110,6 +110,15 @@ export function stamped(s: Subject | undefined): Subject | undefined {
   return s && s.kind && s.ref && !UUID.test(s.ref) ? s : undefined;
 }
 
+// metricSubject is a chart's metric, by its owner's name and the metric's;
+// nothing until the owner's name is known.
+export function metricSubject(
+  owner: string | undefined,
+  metric: string,
+): Subject | undefined {
+  return owner && metric ? { kind: "metric", ref: `${owner}/${metric}` } : undefined;
+}
+
 const same = (a: Subject, b: Subject) => a.kind === b.kind && a.ref === b.ref;
 
 // contextEntries is what a run is sent for the subjects: one entry each, in
