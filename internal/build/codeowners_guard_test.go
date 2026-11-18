@@ -90,10 +90,9 @@ func TestIsWildcardOnly(t *testing.T) {
 	}
 }
 
-// isWildcardOnly reports whether a CODEOWNERS pattern is a pure wildcard
-// (contains no path separator and is or contains only glob characters).
-// Such patterns match by content rather than by a single directory path
-// and cannot be verified with a stat.
+// isWildcardOnly reports whether a CODEOWNERS pattern contains a glob
+// character anywhere (*.go, /docs/**, /web/*.ts). Such patterns match by
+// content rather than by a single path, so there is nothing to stat.
 func isWildcardOnly(pattern string) bool {
 	// Remove leading slash before checking.
 	p := strings.TrimPrefix(pattern, "/")

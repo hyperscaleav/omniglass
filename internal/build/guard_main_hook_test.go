@@ -1,6 +1,7 @@
 package build
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -93,6 +94,24 @@ func TestGuardMainBranchHook(t *testing.T) {
 			blocked: true,
 		},
 		{
+			name:    "force push to main by refspec is blocked",
+			branch:  "feat/my-feature",
+			command: "git push --force origin HEAD:main",
+			blocked: true,
+		},
+		{
+			name:    "force push to a branch named feature/main-nav passes",
+			branch:  "feature/main-nav",
+			command: "git push --force origin feature/main-nav",
+			blocked: false,
+		},
+		{
+			name:    "force push to a branch named main-rewrite passes",
+			branch:  "main-rewrite",
+			command: "git push -f origin main-rewrite",
+			blocked: false,
+		},
+		{
 			name:    "git status on main passes",
 			branch:  "main",
 			command: "git status",
@@ -166,8 +185,9 @@ func makeTestRepo(t *testing.T, branch string) string {
 }
 
 // runHook executes hookScript with stdin as its standard input, using repoDir
-// as the working directory. It returns true when the hook exits with a
-// blocking code (non-zero), false when it exits 0.
+// as the working directory. It returns true when the hook exits 2, the code
+// Claude Code reads as a block, and false when it exits 0. Any other exit is a
+// crash, not a block, and fails the test.
 func runHook(t *testing.T, hookScript, repoDir, stdin string) bool {
 	t.Helper()
 	absScript, err := filepath.Abs(hookScript)
@@ -179,5 +199,15 @@ func runHook(t *testing.T, hookScript, repoDir, stdin string) bool {
 	cmd.Stdin = strings.NewReader(stdin)
 	cmd.Env = os.Environ()
 	err = cmd.Run()
-	return err != nil
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if exitErr.ExitCode() != 2 {
+			t.Fatalf("hook exited %d, want 0 (allow) or 2 (block)", exitErr.ExitCode())
+		}
+		return true
+	}
+	if err != nil {
+		t.Fatalf("run hook: %v", err)
+	}
+	return false
 }
