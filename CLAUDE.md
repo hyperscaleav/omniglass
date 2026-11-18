@@ -95,8 +95,11 @@ cd .claude/worktrees/<type>+<short-name>
 - Branch prefix and PR title use the conventional-commit type (`feat`, `fix`, `docs`,
   `ci`, `chore`, `refactor`, `test`, `perf`). PR title is `<type>: <description>`; CI
   enforces it and the release notes list it.
-- Squash-merge. Releases are cut from a `release/<major>.<minor>` branch, whose name sets
-  the version; a fix reaches a release branch by cherry-pick from `main`.
+- Squash-merge, through the merge queue: the architect queues a green PR and the queue reruns
+  the required checks on top of `main` before it merges
+  ([release CI](docs/src/content/docs/contributing/release-ci.md#merging-through-the-queue)).
+  Releases are cut from a `release/<major>.<minor>` branch, whose name sets the version; a fix
+  reaches a release branch by cherry-pick from `main`.
 - Validate locally: `make test-short` to iterate, `make test` before the PR.
 - No `--no-verify` without explicit approval.
 

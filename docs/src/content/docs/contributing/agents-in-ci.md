@@ -32,9 +32,10 @@ merging it, and releasing it. Everything between the gates runs without a person
    agent-fix, whose push starts agent-review again. The loop ends when the reviewer says ship,
    which turns its check green, or after five fix rounds, when the PR parks with `needs-fred`.
 4. **Merge.** **Gate 2:** the architect approves a PR whose checks are all green, the reviewer's
-   verdict among them, and it squash-merges to `main`. There is no staging branch: `main` is
-   the integration branch, a feature that is not ready ships dark behind a flag, and a bad merge
-   is reverted on `main`.
+   verdict among them, and queues it; the [merge queue](/contributing/release-ci/#merging-through-the-queue)
+   reruns the required checks on it on top of `main` and squash-merges it when they pass. There is
+   no staging branch: `main` is the integration branch, a feature that is not ready ships dark
+   behind a flag, and a bad merge is reverted on `main`.
 5. **Release.** A `release/x.y` branch is cut from `main` and tagged `rc.N`
    ([release CI](/contributing/release-ci/)). Only fixes are cherry-picked onto it, never
    features. **Gate 3:** the architect approves the final tag.
