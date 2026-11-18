@@ -131,4 +131,19 @@ describe("Drawer action rail", () => {
     expect(body.contains(box)).toBe(false);
     expect(body.nextElementSibling?.contains(box)).toBe(true);
   });
+
+  // Omnibot opens over whatever the person gathered from, a blade included
+  // (#2122): a drawer marked above sits over the blade stack, whose blades
+  // stack upward from z-index 61.
+  it("sits over the blade stack when marked above", () => {
+    render(() => (
+      <Drawer open={true} onClose={() => {}} title="omnibot" above>
+        <div>transcript</div>
+      </Drawer>
+    ));
+    const content = screen.getByRole("dialog");
+    const overlay = content.previousElementSibling as HTMLElement;
+    expect(Number(content.style.zIndex)).toBeGreaterThan(61 + 100);
+    expect(Number(overlay.style.zIndex)).toBe(Number(content.style.zIndex));
+  });
 });

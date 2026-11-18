@@ -1303,6 +1303,10 @@ an append that does not name the conversation's last message is a 409 ([ADR-2113
 `{name}:run` runs omnibot on one on the server and answers `text/event-stream`, the run narrated as
 AG-UI events; it ends in an interrupt when a call waits on the person, answered by the next run's
 `resume` ([ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui)).
+Its AG-UI `context` (at most 20 entries of at most 2000 characters) is framed for the model as data
+ahead of the person's message, and `forwardedProps.skill` (`{name, arguments}`) runs an embedded
+skill's rendered prompt in place of one; an unknown skill or a missing argument is a 422
+([ADR-2122](/architecture/decisions/#adr-2122-a-console-subject-is-a-stamp-on-the-shared-primitives-gathered-by-one-modifier-click-handler)).
 It is a 503 on a server with no model, a 403 for an agent or an impersonation session, and a 409 for a
 resume that names no waiting call, a prompt while one waits, or a run while another holds the
 conversation (a run claims it before any tool runs; an append while the claim is live is a 409 too). It is not an MCP tool.

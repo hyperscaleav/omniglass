@@ -62,7 +62,7 @@ function SubjectChip(props: {
   return (
     <span class="badge badge-sm gap-1 max-w-full">
       <span class="text-base-content/60">{props.subject.kind}</span>
-      <span class="font-data truncate">{props.subject.ref}</span>
+      <span class="font-data truncate min-w-0">{props.subject.ref}</span>
       <Show when={props.onTriage}>
         <button
           type="button"
@@ -259,6 +259,7 @@ export default function OmnibotPanel(props: {
         open={props.open}
         onClose={props.onClose}
         wide
+        above
         title={
           <span class="inline-flex items-center gap-2">
             <Bot size={16} /> Omnibot
@@ -432,6 +433,7 @@ export default function OmnibotPanel(props: {
       <Drawer
         open={credential()}
         onClose={() => setCredential(false)}
+        above
         title="Add a credential"
       >
         <p class="mb-4 text-xs text-base-content/60">

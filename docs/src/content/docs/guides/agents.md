@@ -8,6 +8,18 @@ screenshots:
     steps:
       - { action: click, selector: 'button[aria-label="Ask omnibot"]' }
       - { action: wait, selector: '[data-testid="omnibot-empty"]' }
+  - id: omnibot-tray
+    path: /web/systems/auditorium
+    alt: "An alarm alt-clicked from a component's Why into omnibot's tray: its chip names the component and when the alarm was raised, with a Triage button beside it."
+    steps:
+      - { action: click, selector: "[data-testid=alarm-strip] button" }
+      - { action: click, selector: '[data-testid=blade-why] [data-subject-kind="alarm"] [data-severity]', modifiers: [Alt] }
+      - { action: wait, selector: 'button[aria-label^="Triage alarm"]' }
+    # The seeded alarm has no rule, so its chip names it by when it was raised,
+    # which moves every seed: the tray row is masked whole, a full-width box
+    # that holds still whatever the chip says.
+    mask:
+      - "[data-testid=omnibot-tray]"
 ---
 
 Omniglass serves the **Model Context Protocol** (MCP), so an AI agent you already use (Claude Code, or
@@ -225,6 +237,25 @@ refused. The server runs omnibot only with a model: until a live provider lands,
 recording `OMNIGLASS_OMNIBOT_REPLAY` names, and without one a run is a 503. The lab's server plays one
 that tags the meeting 405 video bar, so the commands above run there as written.
 
+A run can carry what you are looking at as AG-UI `context`: references, a kind and a name or address,
+never a value (#2122). omnibot reads them as data ahead of your message and looks each up with its
+tools, under your grants. At most 20 entries, each value at most 2000 characters:
+
+```bash
+omniglass assistant conversation run lobby \
+  --context '[{"description":"alarm","value":"hq.lobby.mic-1/icmp-unreachable"}]' \
+  --messages '[{"role":"user","content":"why is this raised?"}]'
+```
+
+A run can also name one of the server's [skills](#skills) in `forwardedProps` in place of a message;
+the server renders the skill's own prompt from its arguments, so a client never composes skill text.
+An unknown skill, or one missing an argument it requires, is a 422:
+
+```bash
+omniglass assistant conversation run lobby --messages '[]' \
+  --forwardedProps '{"skill":{"name":"triage-alarm","arguments":{"component":"hq.lobby.mic-1"}}}'
+```
+
 ### Giving omnibot a credential
 
 omnibot can bind a credential to a device without ever seeing it. In the chat, `/secret` hands it one:
@@ -265,6 +296,18 @@ which. A destructive call says it cannot be undone. A run that reaches its step 
 asking again carries on from there; one the server refuses (an agent or impersonation session cannot
 run omnibot) or that fails names the reason. A run whose connection closes before it finished says
 that it ended early, rather than looking busy for good; ask again to carry on.
+
+**Hand omnibot what you are looking at.** Alt-click a row (a component, a system, a location, an
+alarm, in a list, a tree or a blade) and its name drops into a tray above the composer;
+shift-alt-click another row in the same list adds every row between. ⌘J (Ctrl-J) hands over the page
+itself, its route and filters, when nothing else is gathered. The next prompt carries the tray as
+context and clears it. It holds references, never what the screen showed, so omnibot looks each thing
+up itself and sees only what you may. Alt rather than ⌘ or Ctrl, which still open a link in a new tab;
+a button inside a row keeps its own meaning. An alarm in the tray has a **Triage** button that runs
+the `triage-alarm` skill on it in one click, and the [command palette](/guides/operator/#getting-around)
+offers the same for each gathered alarm.
+
+::screenshot{#omnibot-tray}
 
 **Add a credential** is the console's `/secret`: it creates the secret with your token through the
 same form as Values > Secrets, and puts only `secret <name>` in your draft, so omnibot learns the
