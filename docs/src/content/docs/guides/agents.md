@@ -17,9 +17,11 @@ screenshots:
       - { action: wait, selector: 'button[aria-label^="Triage alarm"]' }
     # The seeded alarm has no rule, so its chip names it by when it was raised,
     # which moves every seed: the tray row is masked whole, a full-width box
-    # that holds still whatever the chip says.
+    # that holds still whatever the chip says. The system's since line behind
+    # the drawer ages with the clock.
     mask:
       - "[data-testid=omnibot-tray]"
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
 ---
 
 Omniglass serves the **Model Context Protocol** (MCP), so an AI agent you already use (Claude Code, or
