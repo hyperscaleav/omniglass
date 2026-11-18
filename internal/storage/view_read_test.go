@@ -453,16 +453,16 @@ func TestReadViewsMetricTrendTierCoversOlderHistory(t *testing.T) {
 		t.Fatalf("insert metric for trend series: %v", err)
 	}
 
-	// Seed one trend bucket at trendHour directly (bypass compaction).
-	if err := gw.ExportInsertMetricTrend(ctx, "component", "view-a", "icmp-rtt-avg", "icmp", trendHour, 10, 10, 10, 10, 1); err != nil {
-		t.Fatalf("insert trend row: %v", err)
-	}
-
 	// Insert a raw sample at rawHour+30m (within raw retention).
 	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: "view-a", Key: "icmp-rtt-avg", Instance: "icmp", Value: 20, Source: "t", TS: rawHour.Add(30 * time.Minute)},
 	}); err != nil {
 		t.Fatalf("insert metric for raw tier: %v", err)
+	}
+
+	// Seed one trend bucket at trendHour directly (bypass compaction).
+	if err := gw.ExportInsertMetricTrend(ctx, "component", "view-a", "icmp-rtt-avg", "icmp", trendHour, 10, 10, 10, 10, 1); err != nil {
+		t.Fatalf("insert trend row: %v", err)
 	}
 
 	snap, err := gw.ReadViews(ctx, []storage.ViewBinding{{
