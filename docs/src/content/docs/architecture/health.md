@@ -1,6 +1,9 @@
 ---
 title: Health, KPIs, and service levels
 description: "Health as a verdict rolled up from alarms through the slots its components occupy, recorded as a transition so the edges are accurate, plus the KPIs every fleet should track and SLI / SLO / SLA."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 Health answers "is this system working right now?" and "since when?". It is a **first-class

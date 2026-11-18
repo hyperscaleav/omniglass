@@ -120,7 +120,7 @@ func checkInvocation(idx map[string]*cobra.Command, words []string) error {
 			continue
 		}
 		leftover := words[k:]
-		if len(leftover) > 0 && cmd.Run == nil && cmd.RunE == nil && cmd.HasSubCommands() {
+		if len(leftover) > 0 && IsGroup(cmd) {
 			return fmt.Errorf("%q resolves to the %q command group, which takes no arguments; %q is a wrong or doubled segment",
 				strings.Join(words, " "), strings.Join(words[:k], " "), leftover[0])
 		}

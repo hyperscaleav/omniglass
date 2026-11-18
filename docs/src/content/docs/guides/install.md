@@ -56,7 +56,7 @@ running server from the command line, see [the CLI](/guides/cli/).
 
 To try it first, with nothing to set up but Docker, run `omniglass lab run`: it brings up a working
 omniglass, its own Postgres and an edge outpost collecting from a simulated fleet, prints the console's
-address and the login, and removes it all on Ctrl-C. The [lab guide](/guides/lab/) walks through it.
+address and the login, and removes it all on Ctrl-C. [Your first ten minutes](/start/first-ten-minutes/) walks through it.
 
 ## Run a simulator
 

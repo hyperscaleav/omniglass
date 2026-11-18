@@ -31,7 +31,7 @@ type peopleFixture struct {
 	ids   map[string]string // username -> user uuid
 }
 
-var bindAll = storage.PeopleUse{Groups: true, Users: true}
+var bindAll = storage.PeopleUse{Groups: true, Users: true, Roles: true}
 
 func newPeopleFixture(t *testing.T) *peopleFixture {
 	t.Helper()
