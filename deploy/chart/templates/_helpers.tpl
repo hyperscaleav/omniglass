@@ -37,3 +37,28 @@ postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@{{ includ
 {{- required "externalDsn is required when postgres.enabled is false" .Values.externalDsn -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+The Secret the encryption key is read from: an operator's existingSecret wins,
+else the one the chart generates. Neither is a chart that would boot keyless.
+*/}}
+{{- define "omniglass.encryptionKeySecret" -}}
+{{- if .Values.encryptionKey.existingSecret -}}
+{{- .Values.encryptionKey.existingSecret -}}
+{{- else if .Values.encryptionKey.generate -}}
+{{- include "omniglass.fullname" . }}-encryption-key
+{{- else -}}
+{{- required "set encryptionKey.existingSecret (a Secret holding encryption-key) or encryptionKey.generate=true" "" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+OMNIGLASS_ENCRYPTION_KEY, read from the key Secret, for a container's env list.
+*/}}
+{{- define "omniglass.encryptionKeyEnv" -}}
+- name: OMNIGLASS_ENCRYPTION_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "omniglass.encryptionKeySecret" . }}
+      key: encryption-key
+{{- end -}}
