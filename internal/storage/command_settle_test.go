@@ -299,7 +299,7 @@ func TestALateReplyAfterARedeliveryDoesNotOverwriteANewerObservation(t *testing.
 		first_dispatched_at = first_dispatched_at - interval '31 seconds' where id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
-	got, err := r.gw.PendingNodeCommands(r.ctx, "edge")
+	got, err := r.gw.PendingOutpostCommands(r.ctx, "edge")
 	if err != nil || len(got) != 1 || got[0].ID != id {
 		t.Fatalf("redelivery = %+v (%v), want command %d again", got, err, id)
 	}
