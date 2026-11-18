@@ -63,7 +63,7 @@ git push -u origin <type>/<short-name>
   `docs`, `ci`, `chore`, `refactor`, `test`, `perf`. CI will enforce the PR-title format
   once the toolchain lands; today it is convention.
 - **Squash merge only.** The PR title becomes the commit on `main` and a line in the
-  next release's generated notes. Releases are cut from a `release/<major>.<minor>` branch,
+  next release's notes, grouped by its type. Releases are cut from a `release/<major>.<minor>` branch,
   whose name sets the version, not the titles (see
   [Release and CI](docs/src/content/docs/contributing/release-ci.md)).
 - **Validate locally before pushing.** Once the Go toolchain lands, `make test-short`
