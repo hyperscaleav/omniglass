@@ -61,10 +61,8 @@ There are two ways to operate, and they are the same API with the same checks be
   `telemetry` lists Metrics, Properties, and Events. The palette offers only what you may read,
   the same rule that hides a sidebar tab. If you may use the assistant, its last row is **Ask omnibot**
   (**Ask omnibot: <your text>** once you type), which opens omnibot with that text as a draft, sent
-  only when you send it. An alarm you have gathered for omnibot gets a **Triage** row of its own
-  above it, which runs omnibot's triage on that alarm.
-- Press **⌘J** (or Ctrl-J) to hand [omnibot](/guides/agents/#omnibot-in-the-console) the page you are
-  on, and alt-click any row to hand it that one thing.
+  only when you send it. [Omnibot](/guides/agents/#omnibot-in-the-console) is handed the page you
+  are on with each prompt.
 - You only see what you can use: a tab you have no read grant for is **hidden**, and an
   action you cannot perform does not render. The same permission map also **guards the route**,
   so a hidden tab is an unreachable URL: typing or bookmarking a page you cannot read redirects

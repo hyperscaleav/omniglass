@@ -7,7 +7,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import OmnibotPanel from "./OmnibotPanel";
 import { uuidFor } from "../lib/testids";
-import { addSubjects, clearTray, requestTriage, tray } from "../lib/handover";
+import { createSignal, type Accessor } from "solid-js";
+import { requestTriage, type Subject } from "../lib/handover";
 
 // The omnibot panel (#1167): a prompt starts a conversation and runs it,
 // omnibot's text and each tool call stream in, a call the person's policy
@@ -50,16 +51,17 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  clearTray();
+  requestTriage(undefined);
   vi.restoreAllMocks();
 });
 
-function open(prompt?: string) {
+function open(prompt?: string, page?: Subject | Accessor<Subject | undefined>) {
+  const looking = typeof page === "function" ? page : () => page;
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router>
-        <Route path="*" component={() => <OmnibotPanel open onClose={() => {}} prompt={prompt} />} />
+        <Route path="*" component={() => <OmnibotPanel open onClose={() => {}} prompt={prompt} page={looking()} />} />
       </Router>
     </QueryClientProvider>
   ));
@@ -214,68 +216,53 @@ describe("the omnibot panel", () => {
     expect(JSON.stringify(calls.filter((c) => c.url.includes(":run")))).not.toContain("s3cret-value");
   });
 
-  it("hands over what the person gathered with the prompt, and empties the tray", async () => {
-    addSubjects([
-      { kind: "page", ref: "/alarms?state=active" },
-      { kind: "alarm", ref: "hq.lobby.display-1/offline" },
-    ]);
-    open();
-    const chips = within(screen.getByTestId("omnibot-tray"));
-    expect(chips.getByText("hq.lobby.display-1/offline")).toBeTruthy();
+  it("hands omnibot the page the person is looking at with the prompt", async () => {
+    open(undefined, { kind: "page", ref: "/alarms?state=active" });
+    expect(within(screen.getByTestId("omnibot-page")).getByText("/alarms?state=active")).toBeTruthy();
     send("why is this down?");
     await screen.findByTestId("omnibot-ask");
     const run = calls.find((c) => c.url.includes(":run"))!;
-    expect(run.body.context).toEqual([
-      { description: "page", value: "/alarms?state=active" },
-      { description: "alarm", value: "hq.lobby.display-1/offline" },
-    ]);
-    expect(tray()).toEqual([]);
-    expect(screen.queryByTestId("omnibot-tray")).toBeNull();
-    expect(within(screen.getByTestId("omnibot-handed")).getByText("hq.lobby.display-1/offline")).toBeTruthy();
+    expect(run.body.context).toEqual([{ description: "page", value: "/alarms?state=active" }]);
+    expect(within(screen.getByTestId("omnibot-handed")).getByText("/alarms?state=active")).toBeTruthy();
   });
 
-  it("leaves out a subject the person removed from the tray", async () => {
-    addSubjects([
-      { kind: "page", ref: "/alarms" },
-      { kind: "system", ref: "hq.room-1" },
-    ]);
-    open();
-    fireEvent.click(screen.getByRole("button", { name: "Remove page /alarms" }));
+  it("follows the person to the next page", async () => {
+    const [page, setPage] = createSignal<Subject | undefined>({ kind: "page", ref: "/alarms" });
+    open(undefined, page);
+    setPage({ kind: "page", ref: "/systems/boardroom" });
+    expect(within(screen.getByTestId("omnibot-page")).getByText("/systems/boardroom")).toBeTruthy();
     send("what is in this room?");
     await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
-    expect(calls.find((c) => c.url.includes(":run"))!.body.context).toEqual([{ description: "system", value: "hq.room-1" }]);
+    expect(calls.find((c) => c.url.includes(":run"))!.body.context).toEqual([{ description: "page", value: "/systems/boardroom" }]);
   });
 
-  it("triages a gathered alarm in one click, running the triage-alarm skill on it", async () => {
-    addSubjects([
-      { kind: "alarm", ref: "mic-1/icmp-unreachable" },
-      { kind: "system", ref: "boardroom" },
-    ]);
-    open();
-    fireEvent.click(screen.getByRole("button", { name: "Triage alarm mic-1/icmp-unreachable" }));
+  it("leaves out a page the person dismissed, for that prompt only", async () => {
+    const [page, setPage] = createSignal<Subject | undefined>({ kind: "page", ref: "/alarms" });
+    open(undefined, page);
+    fireEvent.click(screen.getByRole("button", { name: "Leave out page /alarms" }));
+    expect(screen.queryByTestId("omnibot-page")).toBeNull();
+    send("hello");
+    await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
+    expect(calls.find((c) => c.url.includes(":run"))!.body.context).toBeUndefined();
+    setPage({ kind: "page", ref: "/systems/boardroom" });
+    expect(within(screen.getByTestId("omnibot-page")).getByText("/systems/boardroom")).toBeTruthy();
+  });
+
+  it("runs a triage asked for from outside the panel, with the page as context", async () => {
+    requestTriage({ kind: "alarm", ref: "mic-1/icmp-unreachable" });
+    open(undefined, { kind: "page", ref: "/alarms" });
     await screen.findByTestId("omnibot-ask");
     const run = calls.find((c) => c.url.includes(":run"))!;
     expect(run.body.forwardedProps).toEqual({ skill: { name: "triage-alarm", arguments: { component: "mic-1", alarm: "icmp-unreachable" } } });
     expect(run.body.messages).toEqual([]);
     expect(run.body.context).toEqual([
       { description: "alarm", value: "mic-1/icmp-unreachable" },
-      { description: "system", value: "boardroom" },
+      { description: "page", value: "/alarms" },
     ]);
-    expect(tray()).toEqual([]);
     expect(screen.getByText("Triage alarm mic-1/icmp-unreachable")).toBeTruthy();
   });
 
-  it("runs a triage handed in from the palette", async () => {
-    addSubjects([{ kind: "alarm", ref: "mic-1/icmp-unreachable" }]);
-    requestTriage({ kind: "alarm", ref: "mic-1/icmp-unreachable" });
-    open();
-    await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
-    expect(calls.find((c) => c.url.includes(":run"))!.body.forwardedProps).toEqual({
-      skill: { name: "triage-alarm", arguments: { component: "mic-1", alarm: "icmp-unreachable" } },
-    });
-  });
-
-  it("sends no context when nothing was handed over", async () => {
+  it("sends no context when there is no page to name", async () => {
     open();
     send("hello");
     await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));

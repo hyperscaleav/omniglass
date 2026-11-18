@@ -78,13 +78,4 @@ describe("TimeseriesChart over buckets and steps (#1269)", () => {
     expect(e[0]).toBeCloseTo(640 - 16, 2);
     expect(e[1]).toBe(m[1]);
   });
-
-  it("stamps the chart as the metric it draws, for omnibot, and never as a uuid (#2122)", () => {
-    const { getByTestId } = render(() => <TimeseriesChart spark subject={{ kind: "metric", ref: "huddle/cpu_temp" }} samples={samples} now={now} windowMs={24 * 3600_000} />);
-    expect(getByTestId("sparkline").dataset.subjectKind).toBe("metric");
-    expect(getByTestId("sparkline").dataset.subjectRef).toBe("huddle/cpu_temp");
-    cleanup();
-    const { getByTestId: again } = render(() => <TimeseriesChart spark subject={{ kind: "metric", ref: "3f2b8c1e-9a4d-4e6f-8b2a-1c5d7e9f0a3b/cpu_temp" }} samples={samples} now={now} windowMs={24 * 3600_000} />);
-    expect(again("sparkline").dataset.subjectKind).toBeUndefined();
-  });
 });

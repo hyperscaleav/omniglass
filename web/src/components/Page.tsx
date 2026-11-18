@@ -6,8 +6,8 @@ import { namePage } from "../lib/handover";
 // subtitle and right-aligned actions, then the page body, stacked with the
 // density gap. Inventory pages built on TreeList drop the H1 (the top bar
 // already labels the page) and pass their own header in children. A detail
-// page passes its entity's name or address, which ⌘J hands omnibot in place
-// of the uuid its route holds.
+// page passes its entity's name or address, which omnibot is handed as the
+// page in place of the uuid its route holds (#2162).
 export default function Page(props: {
   title: string | JSX.Element;
   name?: string;

@@ -9180,6 +9180,26 @@ export type HTTPStatusCode4xx = 400 | 401 | 402 | 403 | 404 | 405 | 406 | 407 | 
 export type HTTPStatusCode5xx = 500 | 501 | 502 | 503 | 504 | 505 | 507 | 511;
 export type HTTPStatusCodes = HTTPStatusCode1xx | HTTPStatusCode2xx | HTTPStatusCode3xx | HTTPStatusCode4xx | HTTPStatusCode5xx;
 
+const getHeaders = (...sources: (RequestInit['headers'] | Record<string, string | undefined>)[]) => {
+  const seen = new Set<string>();
+  const layers: [string, string | readonly string[]][][] = [];
+  for (const source of sources.reverse()) {
+    if (!source) continue;
+    const entries = source instanceof Headers
+      ? source.entries()
+      : Symbol.iterator in source
+        ? Array.from(source as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string])
+        : Object.entries<string | readonly string[] | undefined>(source);
+    const layer: [string, string | readonly string[]][] = [];
+    for (const [name, value] of entries) {
+      if (value !== undefined && !seen.has(name.toLowerCase())) layer.push([name, value]);
+    }
+    for (const [name] of layer) seen.add(name.toLowerCase());
+    layers.push(layer);
+  }
+  return Object.fromEntries(layers.reverse().flat()) as Extract<RequestInit['headers'], Record<string, unknown>>;
+};
+
 export type listActionRuleResponse200 = {
   data: ListActionRulesOutputBody
   status: 200
@@ -9257,25 +9277,11 @@ export const getCreateActionRuleUrl = () => {
  */
 export const createActionRule = async (createActionRuleInputBody: NonReadonly<CreateActionRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createActionRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createActionRuleResponse>(getCreateActionRuleUrl(),
+  return ogFetch<createActionRuleResponse>(getCreateActionRuleUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createActionRuleInputBody)
   }
 );}
@@ -9404,25 +9410,11 @@ export const getUpdateActionRuleUrl = (name: string,) => {
 export const updateActionRule = async (name: string,
     updateActionRuleInputBody: NonReadonly<UpdateActionRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateActionRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateActionRuleResponse>(getUpdateActionRuleUrl(name),
+  return ogFetch<updateActionRuleResponse>(getUpdateActionRuleUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateActionRuleInputBody)
   }
 );}
@@ -9645,25 +9637,11 @@ export const getCreateAssistantConversationUrl = () => {
  */
 export const createAssistantConversation = async (createAssistantConversationInputBody?: NonReadonly<CreateAssistantConversationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createAssistantConversationResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createAssistantConversationResponse>(getCreateAssistantConversationUrl(),
+  return ogFetch<createAssistantConversationResponse>(getCreateAssistantConversationUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createAssistantConversationInputBody)
   }
 );}
@@ -9792,25 +9770,11 @@ export const getAppendAssistantConversationUrl = (name: string,) => {
 export const appendAssistantConversation = async (name: string,
     appendAssistantConversationInputBody: NonReadonly<AppendAssistantConversationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<appendAssistantConversationResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<appendAssistantConversationResponse>(getAppendAssistantConversationUrl(name),
+  return ogFetch<appendAssistantConversationResponse>(getAppendAssistantConversationUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(appendAssistantConversationInputBody)
   }
 );}
@@ -9851,25 +9815,11 @@ export const getRunAssistantConversationUrl = (name: string,) => {
 export const runAssistantConversation = async (name: string,
     runAssistantConversationInputBody: NonReadonly<RunAssistantConversationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<runAssistantConversationResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<runAssistantConversationResponse>(getRunAssistantConversationUrl(name),
+  return ogFetch<runAssistantConversationResponse>(getRunAssistantConversationUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(runAssistantConversationInputBody)
   }
 );}
@@ -9975,25 +9925,11 @@ export const getLoginUrl = () => {
  */
 export const login = async (loginInputBody: NonReadonly<LoginInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<loginResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<loginResponse>(getLoginUrl(),
+  return ogFetch<loginResponse>(getLoginUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(loginInputBody)
   }
 );}
@@ -10121,25 +10057,11 @@ export const getUpdateAuthMeUrl = () => {
  */
 export const updateAuthMe = async (updateMeInputBody: NonReadonly<UpdateMeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateAuthMeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateAuthMeResponse>(getUpdateAuthMeUrl(),
+  return ogFetch<updateAuthMeResponse>(getUpdateAuthMeUrl(),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateMeInputBody)
   }
 );}
@@ -10223,25 +10145,11 @@ export const getCreateAuthMeActionRuleUrl = () => {
  */
 export const createAuthMeActionRule = async (createPersonalRuleInputBody: NonReadonly<CreatePersonalRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createAuthMeActionRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createAuthMeActionRuleResponse>(getCreateAuthMeActionRuleUrl(),
+  return ogFetch<createAuthMeActionRuleResponse>(getCreateAuthMeActionRuleUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createPersonalRuleInputBody)
   }
 );}
@@ -10370,25 +10278,11 @@ export const getUpdateAuthMeActionRuleUrl = (name: string,) => {
 export const updateAuthMeActionRule = async (name: string,
     updatePersonalRuleInputBody: NonReadonly<UpdatePersonalRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateAuthMeActionRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateAuthMeActionRuleResponse>(getUpdateAuthMeActionRuleUrl(name),
+  return ogFetch<updateAuthMeActionRuleResponse>(getUpdateAuthMeActionRuleUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updatePersonalRuleInputBody)
   }
 );}
@@ -10429,25 +10323,11 @@ export const getTestAuthMeActionRuleUrl = (name: string,) => {
 export const testAuthMeActionRule = async (name: string,
     testPersonalRuleInputBody?: NonReadonly<TestPersonalRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<testAuthMeActionRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<testAuthMeActionRuleResponse>(getTestAuthMeActionRuleUrl(name),
+  return ogFetch<testAuthMeActionRuleResponse>(getTestAuthMeActionRuleUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(testPersonalRuleInputBody)
   }
 );}
@@ -10487,25 +10367,11 @@ export const getTestAuthMeActionRulesDraftUrl = () => {
  */
 export const testAuthMeActionRulesDraft = async (testDraftInputBody?: NonReadonly<TestDraftInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<testAuthMeActionRulesDraftResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<testAuthMeActionRulesDraftResponse>(getTestAuthMeActionRulesDraftUrl(),
+  return ogFetch<testAuthMeActionRulesDraftResponse>(getTestAuthMeActionRulesDraftUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(testDraftInputBody)
   }
 );}
@@ -10870,25 +10736,11 @@ export const getRevokeAllAuthMeSessionsUrl = () => {
  */
 export const revokeAllAuthMeSessions = async (revokeAllMeSessionsInputBody: NonReadonly<RevokeAllMeSessionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<revokeAllAuthMeSessionsResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<revokeAllAuthMeSessionsResponse>(getRevokeAllAuthMeSessionsUrl(),
+  return ogFetch<revokeAllAuthMeSessionsResponse>(getRevokeAllAuthMeSessionsUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(revokeAllMeSessionsInputBody)
   }
 );}
@@ -10938,25 +10790,11 @@ export const getCreateAuthMeTokenUrl = () => {
  */
 export const createAuthMeToken = async (createMeTokenInputBody: NonReadonly<CreateMeTokenInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createAuthMeTokenResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createAuthMeTokenResponse>(getCreateAuthMeTokenUrl(),
+  return ogFetch<createAuthMeTokenResponse>(getCreateAuthMeTokenUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createMeTokenInputBody)
   }
 );}
@@ -10996,25 +10834,11 @@ export const getChangeAuthMePasswordUrl = () => {
  */
 export const changeAuthMePassword = async (changePasswordInputBody: NonReadonly<ChangePasswordInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<changeAuthMePasswordResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<changeAuthMePasswordResponse>(getChangeAuthMePasswordUrl(),
+  return ogFetch<changeAuthMePasswordResponse>(getChangeAuthMePasswordUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(changePasswordInputBody)
   }
 );}
@@ -11098,25 +10922,11 @@ export const getSetAuthMeAvatarUrl = () => {
  */
 export const setAuthMeAvatar = async (setAvatarMeInputBody: NonReadonly<SetAvatarMeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setAuthMeAvatarResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setAuthMeAvatarResponse>(getSetAuthMeAvatarUrl(),
+  return ogFetch<setAuthMeAvatarResponse>(getSetAuthMeAvatarUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setAvatarMeInputBody)
   }
 );}
@@ -11275,25 +11085,11 @@ export const getAuthorizeOauthClientUrl = (id: string,) => {
 export const authorizeOauthClient = async (id: string,
     authorizeOAuthClientInputBody: NonReadonly<AuthorizeOAuthClientInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<authorizeOauthClientResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<authorizeOauthClientResponse>(getAuthorizeOauthClientUrl(id),
+  return ogFetch<authorizeOauthClientResponse>(getAuthorizeOauthClientUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(authorizeOAuthClientInputBody)
   }
 );}
@@ -11421,25 +11217,11 @@ export const getCreateCalcRuleUrl = () => {
  */
 export const createCalcRule = async (createCalcRuleInputBody: NonReadonly<CreateCalcRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createCalcRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createCalcRuleResponse>(getCreateCalcRuleUrl(),
+  return ogFetch<createCalcRuleResponse>(getCreateCalcRuleUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createCalcRuleInputBody)
   }
 );}
@@ -11568,25 +11350,11 @@ export const getUpdateCalcRuleUrl = (name: string,) => {
 export const updateCalcRule = async (name: string,
     updateCalcRuleInputBody: NonReadonly<UpdateCalcRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateCalcRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateCalcRuleResponse>(getUpdateCalcRuleUrl(name),
+  return ogFetch<updateCalcRuleResponse>(getUpdateCalcRuleUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateCalcRuleInputBody)
   }
 );}
@@ -11680,25 +11448,11 @@ export const getRenameCalcRuleUrl = (name: string,) => {
 export const renameCalcRule = async (name: string,
     renameCalcRuleInputBody: NonReadonly<RenameCalcRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameCalcRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameCalcRuleResponse>(getRenameCalcRuleUrl(name),
+  return ogFetch<renameCalcRuleResponse>(getRenameCalcRuleUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameCalcRuleInputBody)
   }
 );}
@@ -11738,25 +11492,11 @@ export const getPreviewCalcRuleUrl = () => {
  */
 export const previewCalcRule = async (calcPreviewInputBody: NonReadonly<CalcPreviewInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewCalcRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<previewCalcRuleResponse>(getPreviewCalcRuleUrl(),
+  return ogFetch<previewCalcRuleResponse>(getPreviewCalcRuleUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(calcPreviewInputBody)
   }
 );}
@@ -11840,25 +11580,11 @@ export const getCreateCommandTypeUrl = () => {
  */
 export const createCommandType = async (createCommandTypeInputBody: NonReadonly<CreateCommandTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createCommandTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createCommandTypeResponse>(getCreateCommandTypeUrl(),
+  return ogFetch<createCommandTypeResponse>(getCreateCommandTypeUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createCommandTypeInputBody)
   }
 );}
@@ -11987,25 +11713,11 @@ export const getUpdateCommandTypeUrl = (name: string,) => {
 export const updateCommandType = async (name: string,
     updateCommandTypeInputBody: NonReadonly<UpdateCommandTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateCommandTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateCommandTypeResponse>(getUpdateCommandTypeUrl(name),
+  return ogFetch<updateCommandTypeResponse>(getUpdateCommandTypeUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateCommandTypeInputBody)
   }
 );}
@@ -12089,25 +11801,11 @@ export const getCreateComponentTypeUrl = () => {
  */
 export const createComponentType = async (createComponentTypeInputBody: NonReadonly<CreateComponentTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createComponentTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createComponentTypeResponse>(getCreateComponentTypeUrl(),
+  return ogFetch<createComponentTypeResponse>(getCreateComponentTypeUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createComponentTypeInputBody)
   }
 );}
@@ -12192,25 +11890,11 @@ export const getUpdateComponentTypeUrl = (id: string,) => {
 export const updateComponentType = async (id: string,
     updateComponentTypeInputBody: NonReadonly<UpdateComponentTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateComponentTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateComponentTypeResponse>(getUpdateComponentTypeUrl(id),
+  return ogFetch<updateComponentTypeResponse>(getUpdateComponentTypeUrl(id),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateComponentTypeInputBody)
   }
 );}
@@ -12338,25 +12022,11 @@ export const getCreateComponentUrl = () => {
  */
 export const createComponent = async (createComponentInputBody: NonReadonly<CreateComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createComponentResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createComponentResponse>(getCreateComponentUrl(),
+  return ogFetch<createComponentResponse>(getCreateComponentUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createComponentInputBody)
   }
 );}
@@ -12485,25 +12155,11 @@ export const getUpdateComponentUrl = (name: string,) => {
 export const updateComponent = async (name: string,
     updateComponentInputBody: NonReadonly<UpdateComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateComponentResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateComponentResponse>(getUpdateComponentUrl(name),
+  return ogFetch<updateComponentResponse>(getUpdateComponentUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateComponentInputBody)
   }
 );}
@@ -12597,25 +12253,11 @@ export const getRaiseComponentAlarmUrl = (name: string,) => {
 export const raiseComponentAlarm = async (name: string,
     raiseAlarmInputBody: NonReadonly<RaiseAlarmInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<raiseComponentAlarmResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<raiseComponentAlarmResponse>(getRaiseComponentAlarmUrl(name),
+  return ogFetch<raiseComponentAlarmResponse>(getRaiseComponentAlarmUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(raiseAlarmInputBody)
   }
 );}
@@ -12750,25 +12392,11 @@ export const snoozeComponentAlarm = async (name: string,
     id: string,
     snoozeAlarmInputBody: NonReadonly<SnoozeAlarmInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<snoozeComponentAlarmResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<snoozeComponentAlarmResponse>(getSnoozeComponentAlarmUrl(name,id),
+  return ogFetch<snoozeComponentAlarmResponse>(getSnoozeComponentAlarmUrl(name,id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(snoozeAlarmInputBody)
   }
 );}
@@ -13009,25 +12637,11 @@ export const issueComponentCommand = async (name: string,
     issueCommandInputBody: NonReadonly<IssueCommandInputBody>,
     params?: IssueComponentCommandParams, options?: Parameters<typeof ogFetch>[1]): Promise<issueComponentCommandResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<issueComponentCommandResponse>(getIssueComponentCommandUrl(name,params),
+  return ogFetch<issueComponentCommandResponse>(getIssueComponentCommandUrl(name,params),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(issueCommandInputBody)
   }
 );}
@@ -13112,25 +12726,11 @@ export const getCreateComponentDependencyUrl = (name: string,) => {
 export const createComponentDependency = async (name: string,
     createComponentDependencyInputBody: NonReadonly<CreateComponentDependencyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createComponentDependencyResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createComponentDependencyResponse>(getCreateComponentDependencyUrl(name),
+  return ogFetch<createComponentDependencyResponse>(getCreateComponentDependencyUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createComponentDependencyInputBody)
   }
 );}
@@ -13500,25 +13100,11 @@ export const putIdentityBinding = async (name: string,
     value: string,
     putIdentityBindingInputBody: NonReadonly<PutIdentityBindingInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<putIdentityBindingResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<putIdentityBindingResponse>(getPutIdentityBindingUrl(name,key,value),
+  return ogFetch<putIdentityBindingResponse>(getPutIdentityBindingUrl(name,key,value),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(putIdentityBindingInputBody)
   }
 );}
@@ -13603,25 +13189,11 @@ export const getSetComponentImpairmentUrl = (name: string,) => {
 export const setComponentImpairment = async (name: string,
     impairmentFields: NonReadonly<ImpairmentFields>, options?: Parameters<typeof ogFetch>[1]): Promise<setComponentImpairmentResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setComponentImpairmentResponse>(getSetComponentImpairmentUrl(name),
+  return ogFetch<setComponentImpairmentResponse>(getSetComponentImpairmentUrl(name),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(impairmentFields)
   }
 );}
@@ -13950,25 +13522,11 @@ export const setComponentProperty = async (name: string,
     property: string,
     setComponentPropertyInputBody: NonReadonly<SetComponentPropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setComponentPropertyResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setComponentPropertyResponse>(getSetComponentPropertyUrl(name,property),
+  return ogFetch<setComponentPropertyResponse>(getSetComponentPropertyUrl(name,property),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setComponentPropertyInputBody)
   }
 );}
@@ -14152,25 +13710,11 @@ export const getFireComponentSimulationUrl = (name: string,) => {
 export const fireComponentSimulation = async (name: string,
     fireSimInputBody: NonReadonly<FireSimInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<fireComponentSimulationResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<fireComponentSimulationResponse>(getFireComponentSimulationUrl(name),
+  return ogFetch<fireComponentSimulationResponse>(getFireComponentSimulationUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(fireSimInputBody)
   }
 );}
@@ -14299,25 +13843,11 @@ export const getMoveComponentUrl = (name: string,) => {
 export const moveComponent = async (name: string,
     moveComponentInputBody: NonReadonly<MoveComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<moveComponentResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<moveComponentResponse>(getMoveComponentUrl(name),
+  return ogFetch<moveComponentResponse>(getMoveComponentUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(moveComponentInputBody)
   }
 );}
@@ -14358,25 +13888,11 @@ export const getRemoveComponentTagUrl = (name: string,) => {
 export const removeComponentTag = async (name: string,
     entityRemoveTagInputBody: NonReadonly<EntityRemoveTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<removeComponentTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<removeComponentTagResponse>(getRemoveComponentTagUrl(name),
+  return ogFetch<removeComponentTagResponse>(getRemoveComponentTagUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entityRemoveTagInputBody)
   }
 );}
@@ -14417,25 +13933,11 @@ export const getRenameComponentUrl = (name: string,) => {
 export const renameComponent = async (name: string,
     renameComponentInputBody: NonReadonly<RenameComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameComponentResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameComponentResponse>(getRenameComponentUrl(name),
+  return ogFetch<renameComponentResponse>(getRenameComponentUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameComponentInputBody)
   }
 );}
@@ -14520,25 +14022,11 @@ export const getSetComponentTagUrl = (name: string,) => {
 export const setComponentTag = async (name: string,
     entitySetTagInputBody: NonReadonly<EntitySetTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setComponentTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setComponentTagResponse>(getSetComponentTagUrl(name),
+  return ogFetch<setComponentTagResponse>(getSetComponentTagUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entitySetTagInputBody)
   }
 );}
@@ -14578,25 +14066,11 @@ export const getCheckComponentNameUrl = () => {
  */
 export const checkComponentName = async (checkNameInputBody: NonReadonly<CheckNameInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<checkComponentNameResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<checkComponentNameResponse>(getCheckComponentNameUrl(),
+  return ogFetch<checkComponentNameResponse>(getCheckComponentNameUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(checkNameInputBody)
   }
 );}
@@ -14636,25 +14110,11 @@ export const getCreateComponentFromTemplateUrl = () => {
  */
 export const createComponentFromTemplate = async (createComponentFromTemplateInputBody: NonReadonly<CreateComponentFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createComponentFromTemplateResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createComponentFromTemplateResponse>(getCreateComponentFromTemplateUrl(),
+  return ogFetch<createComponentFromTemplateResponse>(getCreateComponentFromTemplateUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createComponentFromTemplateInputBody)
   }
 );}
@@ -14782,25 +14242,11 @@ export const getRenderComponentLabelUrl = () => {
  */
 export const renderComponentLabel = async (renderComponentLabelInputBody: NonReadonly<RenderComponentLabelInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renderComponentLabelResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renderComponentLabelResponse>(getRenderComponentLabelUrl(),
+  return ogFetch<renderComponentLabelResponse>(getRenderComponentLabelUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renderComponentLabelInputBody)
   }
 );}
@@ -14884,25 +14330,11 @@ export const getCreateDriverUrl = () => {
  */
 export const createDriver = async (createDriverInputBody: NonReadonly<CreateDriverInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createDriverResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createDriverResponse>(getCreateDriverUrl(),
+  return ogFetch<createDriverResponse>(getCreateDriverUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createDriverInputBody)
   }
 );}
@@ -15031,25 +14463,11 @@ export const getUpdateDriverUrl = (id: string,) => {
 export const updateDriver = async (id: string,
     updateDriverInputBody: NonReadonly<UpdateDriverInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateDriverResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateDriverResponse>(getUpdateDriverUrl(id),
+  return ogFetch<updateDriverResponse>(getUpdateDriverUrl(id),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateDriverInputBody)
   }
 );}
@@ -15090,25 +14508,11 @@ export const getRenameDriverUrl = (id: string,) => {
 export const renameDriver = async (id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameDriverResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameDriverResponse>(getRenameDriverUrl(id),
+  return ogFetch<renameDriverResponse>(getRenameDriverUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameCatalogInputBody)
   }
 );}
@@ -15148,25 +14552,11 @@ export const getPreviewDriverUrl = () => {
  */
 export const previewDriver = async (previewDriverInputBody: NonReadonly<PreviewDriverInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewDriverResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<previewDriverResponse>(getPreviewDriverUrl(),
+  return ogFetch<previewDriverResponse>(getPreviewDriverUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(previewDriverInputBody)
   }
 );}
@@ -15206,25 +14596,11 @@ export const getValidateDriverSpecUrl = () => {
  */
 export const validateDriverSpec = async (validateDriverInputBody: NonReadonly<ValidateDriverInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<validateDriverSpecResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<validateDriverSpecResponse>(getValidateDriverSpecUrl(),
+  return ogFetch<validateDriverSpecResponse>(getValidateDriverSpecUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(validateDriverInputBody)
   }
 );}
@@ -15308,25 +14684,11 @@ export const getCreateEndpointUrl = () => {
  */
 export const createEndpoint = async (createEndpointInputBody: NonReadonly<CreateEndpointInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createEndpointResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createEndpointResponse>(getCreateEndpointUrl(),
+  return ogFetch<createEndpointResponse>(getCreateEndpointUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createEndpointInputBody)
   }
 );}
@@ -15455,25 +14817,11 @@ export const getUpdateEndpointUrl = (endpoint: string,) => {
 export const updateEndpoint = async (endpoint: string,
     updateEndpointInputBody: NonReadonly<UpdateEndpointInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateEndpointResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateEndpointResponse>(getUpdateEndpointUrl(endpoint),
+  return ogFetch<updateEndpointResponse>(getUpdateEndpointUrl(endpoint),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateEndpointInputBody)
   }
 );}
@@ -15569,25 +14917,11 @@ export const getRetryEndpointUrl = (endpoint: string,) => {
 export const retryEndpoint = async (endpoint: string,
     retryEndpointInputBody?: NonReadonly<RetryEndpointInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<retryEndpointResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<retryEndpointResponse>(getRetryEndpointUrl(endpoint),
+  return ogFetch<retryEndpointResponse>(getRetryEndpointUrl(endpoint),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(retryEndpointInputBody)
   }
 );}
@@ -15715,25 +15049,11 @@ export const getCreateEventRuleUrl = () => {
  */
 export const createEventRule = async (createEventRuleInputBody: NonReadonly<CreateEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createEventRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createEventRuleResponse>(getCreateEventRuleUrl(),
+  return ogFetch<createEventRuleResponse>(getCreateEventRuleUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createEventRuleInputBody)
   }
 );}
@@ -15862,25 +15182,11 @@ export const getUpdateEventRuleUrl = (name: string,) => {
 export const updateEventRule = async (name: string,
     updateEventRuleInputBody: NonReadonly<UpdateEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateEventRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateEventRuleResponse>(getUpdateEventRuleUrl(name),
+  return ogFetch<updateEventRuleResponse>(getUpdateEventRuleUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateEventRuleInputBody)
   }
 );}
@@ -15965,25 +15271,11 @@ export const getRenameEventRuleUrl = (name: string,) => {
 export const renameEventRule = async (name: string,
     renameEventRuleInputBody: NonReadonly<RenameEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameEventRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameEventRuleResponse>(getRenameEventRuleUrl(name),
+  return ogFetch<renameEventRuleResponse>(getRenameEventRuleUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameEventRuleInputBody)
   }
 );}
@@ -16023,25 +15315,11 @@ export const getPreviewEventRuleUrl = () => {
  */
 export const previewEventRule = async (previewEventRuleInputBody: NonReadonly<PreviewEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewEventRuleResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<previewEventRuleResponse>(getPreviewEventRuleUrl(),
+  return ogFetch<previewEventRuleResponse>(getPreviewEventRuleUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(previewEventRuleInputBody)
   }
 );}
@@ -16125,25 +15403,11 @@ export const getCreateEventTypeUrl = () => {
  */
 export const createEventType = async (createEventTypeInputBody: NonReadonly<CreateEventTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createEventTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createEventTypeResponse>(getCreateEventTypeUrl(),
+  return ogFetch<createEventTypeResponse>(getCreateEventTypeUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createEventTypeInputBody)
   }
 );}
@@ -16272,25 +15536,11 @@ export const getUpdateEventTypeUrl = (name: string,) => {
 export const updateEventType = async (name: string,
     updateEventTypeInputBody: NonReadonly<UpdateEventTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateEventTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateEventTypeResponse>(getUpdateEventTypeUrl(name),
+  return ogFetch<updateEventTypeResponse>(getUpdateEventTypeUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateEventTypeInputBody)
   }
 );}
@@ -16330,25 +15580,11 @@ export const getValidateExpressionUrl = () => {
  */
 export const validateExpression = async (validateExpressionInputBody: NonReadonly<ValidateExpressionInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<validateExpressionResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<validateExpressionResponse>(getValidateExpressionUrl(),
+  return ogFetch<validateExpressionResponse>(getValidateExpressionUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(validateExpressionInputBody)
   }
 );}
@@ -16432,25 +15668,11 @@ export const getCreateFileUrl = () => {
  */
 export const createFile = async (createFileInputBody: NonReadonly<CreateFileInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createFileResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createFileResponse>(getCreateFileUrl(),
+  return ogFetch<createFileResponse>(getCreateFileUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createFileInputBody)
   }
 );}
@@ -16710,25 +15932,11 @@ export const getCreateLocationTypeUrl = () => {
  */
 export const createLocationType = async (createLocationTypeInputBody: NonReadonly<CreateLocationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createLocationTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createLocationTypeResponse>(getCreateLocationTypeUrl(),
+  return ogFetch<createLocationTypeResponse>(getCreateLocationTypeUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createLocationTypeInputBody)
   }
 );}
@@ -16813,25 +16021,11 @@ export const getUpdateLocationTypeUrl = (id: string,) => {
 export const updateLocationType = async (id: string,
     updateLocationTypeInputBody: NonReadonly<UpdateLocationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateLocationTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateLocationTypeResponse>(getUpdateLocationTypeUrl(id),
+  return ogFetch<updateLocationTypeResponse>(getUpdateLocationTypeUrl(id),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateLocationTypeInputBody)
   }
 );}
@@ -16964,25 +16158,11 @@ export const setLocationTypeMetric = async (id: string,
     metric: string,
     setLocationTypeMetricInputBody: NonReadonly<SetLocationTypeMetricInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setLocationTypeMetricResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setLocationTypeMetricResponse>(getSetLocationTypeMetricUrl(id,metric),
+  return ogFetch<setLocationTypeMetricResponse>(getSetLocationTypeMetricUrl(id,metric),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setLocationTypeMetricInputBody)
   }
 );}
@@ -17115,25 +16295,11 @@ export const setLocationTypeProperty = async (id: string,
     property: string,
     setLocationTypePropertyInputBody: NonReadonly<SetLocationTypePropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setLocationTypePropertyResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setLocationTypePropertyResponse>(getSetLocationTypePropertyUrl(id,property),
+  return ogFetch<setLocationTypePropertyResponse>(getSetLocationTypePropertyUrl(id,property),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setLocationTypePropertyInputBody)
   }
 );}
@@ -17174,25 +16340,11 @@ export const getRenameLocationTypeUrl = (id: string,) => {
 export const renameLocationType = async (id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameLocationTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameLocationTypeResponse>(getRenameLocationTypeUrl(id),
+  return ogFetch<renameLocationTypeResponse>(getRenameLocationTypeUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameCatalogInputBody)
   }
 );}
@@ -17320,25 +16472,11 @@ export const getCreateLocationUrl = () => {
  */
 export const createLocation = async (createLocationInputBody: NonReadonly<CreateLocationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createLocationResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createLocationResponse>(getCreateLocationUrl(),
+  return ogFetch<createLocationResponse>(getCreateLocationUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createLocationInputBody)
   }
 );}
@@ -17467,25 +16605,11 @@ export const getUpdateLocationUrl = (name: string,) => {
 export const updateLocation = async (name: string,
     updateLocationInputBody: NonReadonly<UpdateLocationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateLocationResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateLocationResponse>(getUpdateLocationUrl(name),
+  return ogFetch<updateLocationResponse>(getUpdateLocationUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateLocationInputBody)
   }
 );}
@@ -17706,25 +16830,11 @@ export const setLocationProperty = async (name: string,
     property: string,
     setLocationPropertyInputBody: NonReadonly<SetLocationPropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setLocationPropertyResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setLocationPropertyResponse>(getSetLocationPropertyUrl(name,property),
+  return ogFetch<setLocationPropertyResponse>(getSetLocationPropertyUrl(name,property),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setLocationPropertyInputBody)
   }
 );}
@@ -17809,25 +16919,11 @@ export const getMoveLocationUrl = (name: string,) => {
 export const moveLocation = async (name: string,
     moveLocationInputBody: NonReadonly<MoveLocationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<moveLocationResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<moveLocationResponse>(getMoveLocationUrl(name),
+  return ogFetch<moveLocationResponse>(getMoveLocationUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(moveLocationInputBody)
   }
 );}
@@ -17868,25 +16964,11 @@ export const getRemoveLocationTagUrl = (name: string,) => {
 export const removeLocationTag = async (name: string,
     entityRemoveTagInputBody: NonReadonly<EntityRemoveTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<removeLocationTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<removeLocationTagResponse>(getRemoveLocationTagUrl(name),
+  return ogFetch<removeLocationTagResponse>(getRemoveLocationTagUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entityRemoveTagInputBody)
   }
 );}
@@ -17927,25 +17009,11 @@ export const getRenameLocationUrl = (name: string,) => {
 export const renameLocation = async (name: string,
     renameLocationInputBody: NonReadonly<RenameLocationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameLocationResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameLocationResponse>(getRenameLocationUrl(name),
+  return ogFetch<renameLocationResponse>(getRenameLocationUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameLocationInputBody)
   }
 );}
@@ -18030,25 +17098,11 @@ export const getSetLocationTagUrl = (name: string,) => {
 export const setLocationTag = async (name: string,
     entitySetTagInputBody: NonReadonly<EntitySetTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setLocationTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setLocationTagResponse>(getSetLocationTagUrl(name),
+  return ogFetch<setLocationTagResponse>(getSetLocationTagUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entitySetTagInputBody)
   }
 );}
@@ -18088,25 +17142,11 @@ export const getCheckLocationNameUrl = () => {
  */
 export const checkLocationName = async (checkNameInputBody: NonReadonly<CheckNameInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<checkLocationNameResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<checkLocationNameResponse>(getCheckLocationNameUrl(),
+  return ogFetch<checkLocationNameResponse>(getCheckLocationNameUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(checkNameInputBody)
   }
 );}
@@ -18146,25 +17186,11 @@ export const getCreateLocationsFromTemplateUrl = () => {
  */
 export const createLocationsFromTemplate = async (createLocationsFromTemplateInputBody: NonReadonly<CreateLocationsFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createLocationsFromTemplateResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createLocationsFromTemplateResponse>(getCreateLocationsFromTemplateUrl(),
+  return ogFetch<createLocationsFromTemplateResponse>(getCreateLocationsFromTemplateUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createLocationsFromTemplateInputBody)
   }
 );}
@@ -18292,25 +17318,11 @@ export const getRenderLocationLabelUrl = () => {
  */
 export const renderLocationLabel = async (renderLocationLabelInputBody: NonReadonly<RenderLocationLabelInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renderLocationLabelResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renderLocationLabelResponse>(getRenderLocationLabelUrl(),
+  return ogFetch<renderLocationLabelResponse>(getRenderLocationLabelUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renderLocationLabelInputBody)
   }
 );}
@@ -18394,25 +17406,11 @@ export const getCreateMetricTypeUrl = () => {
  */
 export const createMetricType = async (createMetricTypeInputBody: NonReadonly<CreateMetricTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createMetricTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createMetricTypeResponse>(getCreateMetricTypeUrl(),
+  return ogFetch<createMetricTypeResponse>(getCreateMetricTypeUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createMetricTypeInputBody)
   }
 );}
@@ -18541,25 +17539,11 @@ export const getUpdateMetricTypeUrl = (name: string,) => {
 export const updateMetricType = async (name: string,
     updateMetricTypeInputBody: NonReadonly<UpdateMetricTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateMetricTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateMetricTypeResponse>(getUpdateMetricTypeUrl(name),
+  return ogFetch<updateMetricTypeResponse>(getUpdateMetricTypeUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateMetricTypeInputBody)
   }
 );}
@@ -18600,25 +17584,11 @@ export const getSetMetricTypeRetentionUrl = (name: string,) => {
 export const setMetricTypeRetention = async (name: string,
     setTypeRetentionBody: NonReadonly<SetTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setMetricTypeRetentionResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(name),
+  return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setTypeRetentionBody)
   }
 );}
@@ -18702,25 +17672,11 @@ export const getCreateNotificationTargetUrl = () => {
  */
 export const createNotificationTarget = async (createNotificationTargetInputBody: NonReadonly<CreateNotificationTargetInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNotificationTargetResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createNotificationTargetResponse>(getCreateNotificationTargetUrl(),
+  return ogFetch<createNotificationTargetResponse>(getCreateNotificationTargetUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createNotificationTargetInputBody)
   }
 );}
@@ -18849,25 +17805,11 @@ export const getUpdateNotificationTargetUrl = (name: string,) => {
 export const updateNotificationTarget = async (name: string,
     updateNotificationTargetInputBody: NonReadonly<UpdateNotificationTargetInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateNotificationTargetResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateNotificationTargetResponse>(getUpdateNotificationTargetUrl(name),
+  return ogFetch<updateNotificationTargetResponse>(getUpdateNotificationTargetUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateNotificationTargetInputBody)
   }
 );}
@@ -19039,25 +17981,11 @@ export const getCreateNotificationTypeUrl = () => {
  */
 export const createNotificationType = async (createNotificationTypeInputBody: NonReadonly<CreateNotificationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNotificationTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createNotificationTypeResponse>(getCreateNotificationTypeUrl(),
+  return ogFetch<createNotificationTypeResponse>(getCreateNotificationTypeUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createNotificationTypeInputBody)
   }
 );}
@@ -19098,25 +18026,11 @@ export const getRenameNotificationTypeUrl = (id: string,) => {
 export const renameNotificationType = async (id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameNotificationTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameNotificationTypeResponse>(getRenameNotificationTypeUrl(id),
+  return ogFetch<renameNotificationTypeResponse>(getRenameNotificationTypeUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameCatalogInputBody)
   }
 );}
@@ -19245,25 +18159,11 @@ export const getUpdateNotificationTypeUrl = (name: string,) => {
 export const updateNotificationType = async (name: string,
     updateNotificationTypeInputBody: NonReadonly<UpdateNotificationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateNotificationTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateNotificationTypeResponse>(getUpdateNotificationTypeUrl(name),
+  return ogFetch<updateNotificationTypeResponse>(getUpdateNotificationTypeUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateNotificationTypeInputBody)
   }
 );}
@@ -19304,25 +18204,11 @@ export const getPreviewNotificationTypeUrl = (name: string,) => {
 export const previewNotificationType = async (name: string,
     previewNotificationTypeInputBody: NonReadonly<PreviewNotificationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewNotificationTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<previewNotificationTypeResponse>(getPreviewNotificationTypeUrl(name),
+  return ogFetch<previewNotificationTypeResponse>(getPreviewNotificationTypeUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(previewNotificationTypeInputBody)
   }
 );}
@@ -19545,25 +18431,11 @@ export const getCreateOutpostUrl = () => {
  */
 export const createOutpost = async (createOutpostInputBody: NonReadonly<CreateOutpostInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createOutpostResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createOutpostResponse>(getCreateOutpostUrl(),
+  return ogFetch<createOutpostResponse>(getCreateOutpostUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createOutpostInputBody)
   }
 );}
@@ -19692,25 +18564,11 @@ export const getUpdateOutpostUrl = (name: string,) => {
 export const updateOutpost = async (name: string,
     updateOutpostInputBody: NonReadonly<UpdateOutpostInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateOutpostResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateOutpostResponse>(getUpdateOutpostUrl(name),
+  return ogFetch<updateOutpostResponse>(getUpdateOutpostUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateOutpostInputBody)
   }
 );}
@@ -19839,25 +18697,11 @@ export const getAddOutpostSimulationComponentUrl = (name: string,) => {
 export const addOutpostSimulationComponent = async (name: string,
     addSimComponentInputBody: NonReadonly<AddSimComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addOutpostSimulationComponentResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<addOutpostSimulationComponentResponse>(getAddOutpostSimulationComponentUrl(name),
+  return ogFetch<addOutpostSimulationComponentResponse>(getAddOutpostSimulationComponentUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(addSimComponentInputBody)
   }
 );}
@@ -19942,25 +18786,11 @@ export const getAddOutpostSimulationSystemUrl = (name: string,) => {
 export const addOutpostSimulationSystem = async (name: string,
     addSimSystemInputBody: NonReadonly<AddSimSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addOutpostSimulationSystemResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<addOutpostSimulationSystemResponse>(getAddOutpostSimulationSystemUrl(name),
+  return ogFetch<addOutpostSimulationSystemResponse>(getAddOutpostSimulationSystemUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(addSimSystemInputBody)
   }
 );}
@@ -20089,25 +18919,11 @@ export const getRemoveOutpostTagUrl = (name: string,) => {
 export const removeOutpostTag = async (name: string,
     entityRemoveTagInputBody: NonReadonly<EntityRemoveTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<removeOutpostTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<removeOutpostTagResponse>(getRemoveOutpostTagUrl(name),
+  return ogFetch<removeOutpostTagResponse>(getRemoveOutpostTagUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entityRemoveTagInputBody)
   }
 );}
@@ -20148,25 +18964,11 @@ export const getSetOutpostTagUrl = (name: string,) => {
 export const setOutpostTag = async (name: string,
     entitySetTagInputBody: NonReadonly<EntitySetTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setOutpostTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setOutpostTagResponse>(getSetOutpostTagUrl(name),
+  return ogFetch<setOutpostTagResponse>(getSetOutpostTagUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entitySetTagInputBody)
   }
 );}
@@ -20216,25 +19018,11 @@ export const getClaimOutpostUrl = () => {
  */
 export const claimOutpost = async (claimOutpostInputBody: NonReadonly<ClaimOutpostInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<claimOutpostResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<claimOutpostResponse>(getClaimOutpostUrl(),
+  return ogFetch<claimOutpostResponse>(getClaimOutpostUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(claimOutpostInputBody)
   }
 );}
@@ -20318,25 +19106,11 @@ export const getCreateProductUrl = () => {
  */
 export const createProduct = async (createProductInputBody: NonReadonly<CreateProductInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createProductResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createProductResponse>(getCreateProductUrl(),
+  return ogFetch<createProductResponse>(getCreateProductUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createProductInputBody)
   }
 );}
@@ -20465,25 +19239,11 @@ export const getUpdateProductUrl = (id: string,) => {
 export const updateProduct = async (id: string,
     updateProductInputBody: NonReadonly<UpdateProductInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateProductResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateProductResponse>(getUpdateProductUrl(id),
+  return ogFetch<updateProductResponse>(getUpdateProductUrl(id),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateProductInputBody)
   }
 );}
@@ -20616,25 +19376,11 @@ export const setProductMetric = async (id: string,
     metric: string,
     setProductMetricInputBody: NonReadonly<SetProductMetricInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setProductMetricResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setProductMetricResponse>(getSetProductMetricUrl(id,metric),
+  return ogFetch<setProductMetricResponse>(getSetProductMetricUrl(id,metric),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setProductMetricInputBody)
   }
 );}
@@ -20767,25 +19513,11 @@ export const setProductProperty = async (id: string,
     property: string,
     setProductPropertyInputBody: NonReadonly<SetProductPropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setProductPropertyResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setProductPropertyResponse>(getSetProductPropertyUrl(id,property),
+  return ogFetch<setProductPropertyResponse>(getSetProductPropertyUrl(id,property),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setProductPropertyInputBody)
   }
 );}
@@ -20826,25 +19558,11 @@ export const getRenameProductUrl = (id: string,) => {
 export const renameProduct = async (id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameProductResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameProductResponse>(getRenameProductUrl(id),
+  return ogFetch<renameProductResponse>(getRenameProductUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameCatalogInputBody)
   }
 );}
@@ -20928,25 +19646,11 @@ export const getCreatePropertyTypeUrl = () => {
  */
 export const createPropertyType = async (createPropertyInputBody: NonReadonly<CreatePropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createPropertyTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createPropertyTypeResponse>(getCreatePropertyTypeUrl(),
+  return ogFetch<createPropertyTypeResponse>(getCreatePropertyTypeUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createPropertyInputBody)
   }
 );}
@@ -21075,25 +19779,11 @@ export const getUpdatePropertyTypeUrl = (name: string,) => {
 export const updatePropertyType = async (name: string,
     updatePropertyInputBody: NonReadonly<UpdatePropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updatePropertyTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updatePropertyTypeResponse>(getUpdatePropertyTypeUrl(name),
+  return ogFetch<updatePropertyTypeResponse>(getUpdatePropertyTypeUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updatePropertyInputBody)
   }
 );}
@@ -21134,25 +19824,11 @@ export const getSetPropertyTypeRetentionUrl = (name: string,) => {
 export const setPropertyTypeRetention = async (name: string,
     setTypeRetentionBody: NonReadonly<SetTypeRetentionBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setPropertyTypeRetentionResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setPropertyTypeRetentionResponse>(getSetPropertyTypeRetentionUrl(name),
+  return ogFetch<setPropertyTypeRetentionResponse>(getSetPropertyTypeRetentionUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setTypeRetentionBody)
   }
 );}
@@ -21324,25 +20000,11 @@ export const getCreateSecretUrl = () => {
  */
 export const createSecret = async (createSecretInputBody: NonReadonly<CreateSecretInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createSecretResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createSecretResponse>(getCreateSecretUrl(),
+  return ogFetch<createSecretResponse>(getCreateSecretUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createSecretInputBody)
   }
 );}
@@ -21427,25 +20089,11 @@ export const getUpdateSecretUrl = (secret: string,) => {
 export const updateSecret = async (secret: string,
     updateSecretInputBody: NonReadonly<UpdateSecretInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateSecretResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateSecretResponse>(getUpdateSecretUrl(secret),
+  return ogFetch<updateSecretResponse>(getUpdateSecretUrl(secret),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateSecretInputBody)
   }
 );}
@@ -21706,25 +20354,11 @@ export const getPatchSettingsNamespaceUrl = (namespace: string,) => {
 export const patchSettingsNamespace = async (namespace: string,
     patchSettingsNamespaceBody: PatchSettingsNamespaceBody, options?: Parameters<typeof ogFetch>[1]): Promise<patchSettingsNamespaceResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<patchSettingsNamespaceResponse>(getPatchSettingsNamespaceUrl(namespace),
+  return ogFetch<patchSettingsNamespaceResponse>(getPatchSettingsNamespaceUrl(namespace),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(patchSettingsNamespaceBody)
   }
 );}
@@ -21852,25 +20486,11 @@ export const getCreateSeverityLevelUrl = () => {
  */
 export const createSeverityLevel = async (createSeverityLevelInputBody: NonReadonly<CreateSeverityLevelInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createSeverityLevelResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createSeverityLevelResponse>(getCreateSeverityLevelUrl(),
+  return ogFetch<createSeverityLevelResponse>(getCreateSeverityLevelUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createSeverityLevelInputBody)
   }
 );}
@@ -21999,25 +20619,11 @@ export const getUpdateSeverityLevelUrl = (name: string,) => {
 export const updateSeverityLevel = async (name: string,
     updateSeverityLevelInputBody: NonReadonly<UpdateSeverityLevelInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateSeverityLevelResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateSeverityLevelResponse>(getUpdateSeverityLevelUrl(name),
+  return ogFetch<updateSeverityLevelResponse>(getUpdateSeverityLevelUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateSeverityLevelInputBody)
   }
 );}
@@ -22233,25 +20839,11 @@ export const getCreateStandardUrl = () => {
  */
 export const createStandard = async (createStandardInputBody: NonReadonly<CreateStandardInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createStandardResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createStandardResponse>(getCreateStandardUrl(),
+  return ogFetch<createStandardResponse>(getCreateStandardUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createStandardInputBody)
   }
 );}
@@ -22380,25 +20972,11 @@ export const getUpdateStandardUrl = (id: string,) => {
 export const updateStandard = async (id: string,
     updateStandardInputBody: NonReadonly<UpdateStandardInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateStandardResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateStandardResponse>(getUpdateStandardUrl(id),
+  return ogFetch<updateStandardResponse>(getUpdateStandardUrl(id),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateStandardInputBody)
   }
 );}
@@ -22531,25 +21109,11 @@ export const setStandardMetric = async (id: string,
     metric: string,
     setStandardMetricInputBody: NonReadonly<SetStandardMetricInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardMetricResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setStandardMetricResponse>(getSetStandardMetricUrl(id,metric),
+  return ogFetch<setStandardMetricResponse>(getSetStandardMetricUrl(id,metric),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setStandardMetricInputBody)
   }
 );}
@@ -22682,25 +21246,11 @@ export const setStandardProperty = async (id: string,
     property: string,
     setStandardPropertyInputBody: NonReadonly<SetStandardPropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardPropertyResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setStandardPropertyResponse>(getSetStandardPropertyUrl(id,property),
+  return ogFetch<setStandardPropertyResponse>(getSetStandardPropertyUrl(id,property),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setStandardPropertyInputBody)
   }
 );}
@@ -22833,25 +21383,11 @@ export const setStandardSlot = async (id: string,
     slot: string,
     slotSpecBody: NonReadonly<SlotSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardSlotResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setStandardSlotResponse>(getSetStandardSlotUrl(id,slot),
+  return ogFetch<setStandardSlotResponse>(getSetStandardSlotUrl(id,slot),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(slotSpecBody)
   }
 );}
@@ -22892,25 +21428,11 @@ export const getRenameStandardUrl = (id: string,) => {
 export const renameStandard = async (id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameStandardResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameStandardResponse>(getRenameStandardUrl(id),
+  return ogFetch<renameStandardResponse>(getRenameStandardUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameCatalogInputBody)
   }
 );}
@@ -22950,25 +21472,11 @@ export const getCreateStandardFromTemplateUrl = () => {
  */
 export const createStandardFromTemplate = async (createStandardFromTemplateInputBody: NonReadonly<CreateStandardFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createStandardFromTemplateResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createStandardFromTemplateResponse>(getCreateStandardFromTemplateUrl(),
+  return ogFetch<createStandardFromTemplateResponse>(getCreateStandardFromTemplateUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createStandardFromTemplateInputBody)
   }
 );}
@@ -23052,25 +21560,11 @@ export const getCreateSystemTypeUrl = () => {
  */
 export const createSystemType = async (createSystemTypeInputBody: NonReadonly<CreateSystemTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createSystemTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createSystemTypeResponse>(getCreateSystemTypeUrl(),
+  return ogFetch<createSystemTypeResponse>(getCreateSystemTypeUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createSystemTypeInputBody)
   }
 );}
@@ -23155,25 +21649,11 @@ export const getUpdateSystemTypeUrl = (id: string,) => {
 export const updateSystemType = async (id: string,
     updateSystemTypeInputBody: NonReadonly<UpdateSystemTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateSystemTypeResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateSystemTypeResponse>(getUpdateSystemTypeUrl(id),
+  return ogFetch<updateSystemTypeResponse>(getUpdateSystemTypeUrl(id),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateSystemTypeInputBody)
   }
 );}
@@ -23257,25 +21737,11 @@ export const getCreateSystemUrl = () => {
  */
 export const createSystem = async (createSystemInputBody: NonReadonly<CreateSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createSystemResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createSystemResponse>(getCreateSystemUrl(),
+  return ogFetch<createSystemResponse>(getCreateSystemUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createSystemInputBody)
   }
 );}
@@ -23404,25 +21870,11 @@ export const getUpdateSystemUrl = (name: string,) => {
 export const updateSystem = async (name: string,
     updateSystemInputBody: NonReadonly<UpdateSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateSystemResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateSystemResponse>(getUpdateSystemUrl(name),
+  return ogFetch<updateSystemResponse>(getUpdateSystemUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateSystemInputBody)
   }
 );}
@@ -24021,25 +22473,11 @@ export const setSystemProperty = async (name: string,
     property: string,
     setSystemPropertyInputBody: NonReadonly<SetSystemPropertyInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setSystemPropertyResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setSystemPropertyResponse>(getSetSystemPropertyUrl(name,property),
+  return ogFetch<setSystemPropertyResponse>(getSetSystemPropertyUrl(name,property),
   {
     ...options,
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setSystemPropertyInputBody)
   }
 );}
@@ -24227,25 +22665,11 @@ export const setSystemSlot = async (name: string,
     slot: string,
     slotSpecBody: NonReadonly<SlotSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setSystemSlotResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setSystemSlotResponse>(getSetSystemSlotUrl(name,slot),
+  return ogFetch<setSystemSlotResponse>(getSetSystemSlotUrl(name,slot),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(slotSpecBody)
   }
 );}
@@ -24384,25 +22808,11 @@ export const swapSlotPositions = async (name: string,
     slot: string,
     swapSlotPositionsInputBody: NonReadonly<SwapSlotPositionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<swapSlotPositionsResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<swapSlotPositionsResponse>(getSwapSlotPositionsUrl(name,slot),
+  return ogFetch<swapSlotPositionsResponse>(getSwapSlotPositionsUrl(name,slot),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(swapSlotPositionsInputBody)
   }
 );}
@@ -24487,25 +22897,11 @@ export const getMoveSystemUrl = (name: string,) => {
 export const moveSystem = async (name: string,
     moveSystemInputBody: NonReadonly<MoveSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<moveSystemResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<moveSystemResponse>(getMoveSystemUrl(name),
+  return ogFetch<moveSystemResponse>(getMoveSystemUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(moveSystemInputBody)
   }
 );}
@@ -24546,25 +22942,11 @@ export const getRemoveSystemTagUrl = (name: string,) => {
 export const removeSystemTag = async (name: string,
     entityRemoveTagInputBody: NonReadonly<EntityRemoveTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<removeSystemTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<removeSystemTagResponse>(getRemoveSystemTagUrl(name),
+  return ogFetch<removeSystemTagResponse>(getRemoveSystemTagUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entityRemoveTagInputBody)
   }
 );}
@@ -24605,25 +22987,11 @@ export const getRenameSystemUrl = (name: string,) => {
 export const renameSystem = async (name: string,
     renameSystemInputBody: NonReadonly<RenameSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameSystemResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameSystemResponse>(getRenameSystemUrl(name),
+  return ogFetch<renameSystemResponse>(getRenameSystemUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameSystemInputBody)
   }
 );}
@@ -24708,25 +23076,11 @@ export const getSetSystemTagUrl = (name: string,) => {
 export const setSystemTag = async (name: string,
     entitySetTagInputBody: NonReadonly<EntitySetTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setSystemTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setSystemTagResponse>(getSetSystemTagUrl(name),
+  return ogFetch<setSystemTagResponse>(getSetSystemTagUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(entitySetTagInputBody)
   }
 );}
@@ -24766,25 +23120,11 @@ export const getCheckSystemNameUrl = () => {
  */
 export const checkSystemName = async (checkNameInputBody: NonReadonly<CheckNameInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<checkSystemNameResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<checkSystemNameResponse>(getCheckSystemNameUrl(),
+  return ogFetch<checkSystemNameResponse>(getCheckSystemNameUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(checkNameInputBody)
   }
 );}
@@ -24824,25 +23164,11 @@ export const getCreateSystemFromTemplateUrl = () => {
  */
 export const createSystemFromTemplate = async (createSystemFromTemplateInputBody: NonReadonly<CreateSystemFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createSystemFromTemplateResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createSystemFromTemplateResponse>(getCreateSystemFromTemplateUrl(),
+  return ogFetch<createSystemFromTemplateResponse>(getCreateSystemFromTemplateUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createSystemFromTemplateInputBody)
   }
 );}
@@ -25014,25 +23340,11 @@ export const getRenderSystemLabelUrl = () => {
  */
 export const renderSystemLabel = async (renderSystemLabelInputBody: NonReadonly<RenderSystemLabelInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renderSystemLabelResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renderSystemLabelResponse>(getRenderSystemLabelUrl(),
+  return ogFetch<renderSystemLabelResponse>(getRenderSystemLabelUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renderSystemLabelInputBody)
   }
 );}
@@ -25116,25 +23428,11 @@ export const getCreateTagUrl = () => {
  */
 export const createTag = async (createTagInputBody: NonReadonly<CreateTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createTagResponse>(getCreateTagUrl(),
+  return ogFetch<createTagResponse>(getCreateTagUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createTagInputBody)
   }
 );}
@@ -25219,25 +23517,11 @@ export const getUpdateTagUrl = (name: string,) => {
 export const updateTag = async (name: string,
     updateTagInputBody: NonReadonly<UpdateTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateTagResponse>(getUpdateTagUrl(name),
+  return ogFetch<updateTagResponse>(getUpdateTagUrl(name),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateTagInputBody)
   }
 );}
@@ -25322,25 +23606,11 @@ export const getSetPlatformTagUrl = (name: string,) => {
 export const setPlatformTag = async (name: string,
     platformBindingInputBody: NonReadonly<PlatformBindingInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setPlatformTagResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setPlatformTagResponse>(getSetPlatformTagUrl(name),
+  return ogFetch<setPlatformTagResponse>(getSetPlatformTagUrl(name),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(platformBindingInputBody)
   }
 );}
@@ -25512,25 +23782,11 @@ export const getPushTelemetryUrl = () => {
  */
 export const pushTelemetry = async (pushInputBody: NonReadonly<PushInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<pushTelemetryResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<pushTelemetryResponse>(getPushTelemetryUrl(),
+  return ogFetch<pushTelemetryResponse>(getPushTelemetryUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(pushInputBody)
   }
 );}
@@ -25797,25 +24053,11 @@ export const getCreateGroupUrl = () => {
  */
 export const createGroup = async (createGroupInputBody: NonReadonly<CreateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createGroupResponse>(getCreateGroupUrl(),
+  return ogFetch<createGroupResponse>(getCreateGroupUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createGroupInputBody)
   }
 );}
@@ -25944,25 +24186,11 @@ export const getUpdateGroupUrl = (group: string,) => {
 export const updateGroup = async (group: string,
     updateGroupInputBody: NonReadonly<UpdateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateGroupResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateGroupResponse>(getUpdateGroupUrl(group),
+  return ogFetch<updateGroupResponse>(getUpdateGroupUrl(group),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateGroupInputBody)
   }
 );}
@@ -26047,25 +24275,11 @@ export const getCreateGroupGrantUrl = (group: string,) => {
 export const createGroupGrant = async (group: string,
     createGroupGrantInputBody: NonReadonly<CreateGroupGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupGrantResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createGroupGrantResponse>(getCreateGroupGrantUrl(group),
+  return ogFetch<createGroupGrantResponse>(getCreateGroupGrantUrl(group),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createGroupGrantInputBody)
   }
 );}
@@ -26196,25 +24410,11 @@ export const getAddGroupMemberUrl = (group: string,) => {
 export const addGroupMember = async (group: string,
     addMemberInputBody: NonReadonly<AddMemberInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addGroupMemberResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<addGroupMemberResponse>(getAddGroupMemberUrl(group),
+  return ogFetch<addGroupMemberResponse>(getAddGroupMemberUrl(group),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(addMemberInputBody)
   }
 );}
@@ -26301,25 +24501,11 @@ export const getRenameGroupUrl = (group: string,) => {
 export const renameGroup = async (group: string,
     renameGroupInputBody: NonReadonly<RenameGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameGroupResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameGroupResponse>(getRenameGroupUrl(group),
+  return ogFetch<renameGroupResponse>(getRenameGroupUrl(group),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameGroupInputBody)
   }
 );}
@@ -26410,25 +24596,11 @@ export const getCreateUserUrl = () => {
  */
 export const createUser = async (createUserInputBody: NonReadonly<CreateUserInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createUserResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createUserResponse>(getCreateUserUrl(),
+  return ogFetch<createUserResponse>(getCreateUserUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createUserInputBody)
   }
 );}
@@ -26513,25 +24685,11 @@ export const getUpdateUserUrl = (id: string,) => {
 export const updateUser = async (id: string,
     updateUserInputBody: NonReadonly<UpdateUserInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateUserResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateUserResponse>(getUpdateUserUrl(id),
+  return ogFetch<updateUserResponse>(getUpdateUserUrl(id),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateUserInputBody)
   }
 );}
@@ -26616,25 +24774,11 @@ export const getCreateGrantUrl = (id: string,) => {
 export const createGrant = async (id: string,
     createGrantInputBody: NonReadonly<CreateGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGrantResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createGrantResponse>(getCreateGrantUrl(id),
+  return ogFetch<createGrantResponse>(getCreateGrantUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createGrantInputBody)
   }
 );}
@@ -26856,25 +25000,11 @@ export const getRevokeAllUserSessionsUrl = (id: string,) => {
 export const revokeAllUserSessions = async (id: string,
     revokeAllUserSessionsInputBody: NonReadonly<RevokeAllUserSessionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<revokeAllUserSessionsResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<revokeAllUserSessionsResponse>(getRevokeAllUserSessionsUrl(id),
+  return ogFetch<revokeAllUserSessionsResponse>(getRevokeAllUserSessionsUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(revokeAllUserSessionsInputBody)
   }
 );}
@@ -27062,25 +25192,11 @@ export const getImpersonateUserUrl = (id: string,) => {
 export const impersonateUser = async (id: string,
     impersonateInputBody: NonReadonly<ImpersonateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<impersonateUserResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<impersonateUserResponse>(getImpersonateUserUrl(id),
+  return ogFetch<impersonateUserResponse>(getImpersonateUserUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(impersonateInputBody)
   }
 );}
@@ -27209,25 +25325,11 @@ export const getResetUserPasswordUrl = (id: string,) => {
 export const resetUserPassword = async (id: string,
     resetPasswordInputBody: NonReadonly<ResetPasswordInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<resetUserPasswordResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<resetUserPasswordResponse>(getResetUserPasswordUrl(id),
+  return ogFetch<resetUserPasswordResponse>(getResetUserPasswordUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(resetPasswordInputBody)
   }
 );}
@@ -27312,25 +25414,11 @@ export const getSetUserAvatarUrl = (id: string,) => {
 export const setUserAvatar = async (id: string,
     setAvatarInputBody: NonReadonly<SetAvatarInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setUserAvatarResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setUserAvatarResponse>(getSetUserAvatarUrl(id),
+  return ogFetch<setUserAvatarResponse>(getSetUserAvatarUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(setAvatarInputBody)
   }
 );}
@@ -27414,25 +25502,11 @@ export const getCreateVariableUrl = () => {
  */
 export const createVariable = async (createVariableInputBody: NonReadonly<CreateVariableInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createVariableResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createVariableResponse>(getCreateVariableUrl(),
+  return ogFetch<createVariableResponse>(getCreateVariableUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createVariableInputBody)
   }
 );}
@@ -27517,25 +25591,11 @@ export const getUpdateVariableUrl = (variable: string,) => {
 export const updateVariable = async (variable: string,
     updateVariableInputBody: NonReadonly<UpdateVariableInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateVariableResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateVariableResponse>(getUpdateVariableUrl(variable),
+  return ogFetch<updateVariableResponse>(getUpdateVariableUrl(variable),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateVariableInputBody)
   }
 );}
@@ -27619,25 +25679,11 @@ export const getCreateVendorUrl = () => {
  */
 export const createVendor = async (createVendorInputBody: NonReadonly<CreateVendorInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createVendorResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createVendorResponse>(getCreateVendorUrl(),
+  return ogFetch<createVendorResponse>(getCreateVendorUrl(),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(createVendorInputBody)
   }
 );}
@@ -27766,25 +25812,11 @@ export const getUpdateVendorUrl = (id: string,) => {
 export const updateVendor = async (id: string,
     updateVendorInputBody: NonReadonly<UpdateVendorInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateVendorResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateVendorResponse>(getUpdateVendorUrl(id),
+  return ogFetch<updateVendorResponse>(getUpdateVendorUrl(id),
   {
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(updateVendorInputBody)
   }
 );}
@@ -27825,25 +25857,11 @@ export const getRenameVendorUrl = (id: string,) => {
 export const renameVendor = async (id: string,
     renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameVendorResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameVendorResponse>(getRenameVendorUrl(id),
+  return ogFetch<renameVendorResponse>(getRenameVendorUrl(id),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/json' }, options?.headers),
     body: JSON.stringify(renameCatalogInputBody)
   }
 );}
@@ -28159,25 +26177,11 @@ export const getReceiveWebhookUrl = (token: string,) => {
 export const receiveWebhook = async (token: string,
     receiveWebhookBody: Blob, options?: Parameters<typeof ogFetch>[1]): Promise<receiveWebhookResponse> => {
 
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<receiveWebhookResponse>(getReceiveWebhookUrl(token),
+  return ogFetch<receiveWebhookResponse>(getReceiveWebhookUrl(token),
   {
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/octet-stream', ...getHeaders(options?.headers) },
+    headers: getHeaders({ 'Content-Type': 'application/octet-stream' }, options?.headers),
     body: receiveWebhookBody
   }
 );}

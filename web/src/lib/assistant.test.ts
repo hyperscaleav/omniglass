@@ -131,7 +131,7 @@ describe("running omnibot", () => {
     expect(seen.at(-1)).toBe("RUN_FINISHED");
   });
 
-  it("hands over the context the person gathered, as AG-UI context entries", async () => {
+  it("hands over the prompt's context as AG-UI context entries", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(streamOf(fixture("step-limit.sse"))));
     const context = [{ description: "alarm", value: "hq.lobby.display-1/offline" }];
     await runOmnibot("lobby", { prompt: "why?", context }, () => {});

@@ -61,11 +61,4 @@ describe("SystemSummary", () => {
     expect(chips[1].className).toContain("badge-warning");
     expect(within(card).getByText("Lamp hours high")).toBeTruthy();
   });
-
-  it("stamps the card as its system, by name, for omnibot (#2122)", () => {
-    mount();
-    const card = screen.getByTestId(`system-summary-${sys}`);
-    expect(card.dataset.subjectKind).toBe("system");
-    expect(card.dataset.subjectRef).toBe("huddle");
-  });
 });
