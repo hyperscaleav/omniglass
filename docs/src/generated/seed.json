@@ -753,6 +753,13 @@
    "description": "File descriptors the Omniglass process holds open, sockets included; absent where the platform does not expose them."
   },
   {
+   "name": "process-uptime",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Uptime",
+   "description": "Seconds since the Omniglass process started; a rule's age on a process key runs from it, so the refill after a restart does not read as growth."
+  },
+  {
    "name": "retention-deleted-count",
    "data_type": "int",
    "label": "Retention Deleted",

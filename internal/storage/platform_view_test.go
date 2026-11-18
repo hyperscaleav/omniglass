@@ -815,6 +815,9 @@ var platformKeysOffPage = map[string]string{
 	writerclass.ProcessGCPause:        offProcess,
 	writerclass.ProcessCPUSeconds:     offProcess,
 	writerclass.ProcessFDCount:        offProcess,
+	// A rule's age on a process key runs from it (#1985); the panel reads the
+	// figures it gates, not the gate.
+	writerclass.ProcessUptime: offProcess,
 
 	// The panels rank the slowest routes by their max; the mean is the
 	// component page's.

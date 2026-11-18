@@ -127,6 +127,7 @@ const (
 	ProcessGCPause        = "process-gc-pause"
 	ProcessCPUSeconds     = "process-cpu-seconds"
 	ProcessFDCount        = "process-fd-count"
+	ProcessUptime         = "process-uptime"
 )
 
 // The retention pass's figures (#1629), landed by the process on the
@@ -323,6 +324,7 @@ var platform = map[string]string{
 	ProcessGCPause:        processSelfWriter,
 	ProcessCPUSeconds:     processSelfWriter,
 	ProcessFDCount:        processSelfWriter,
+	ProcessUptime:         processSelfWriter,
 	DeliveryInCount:       deliveryWriter,
 	DeliveryOutCount:      deliveryWriter,
 	DeliveryLossRatio:     deliveryWriter,
@@ -405,6 +407,11 @@ var platform = map[string]string{
 // outpost's self-report never speaks for another writer's key: an outpost naming
 // health or checkin-age on the lane is refused like any undeclared key.
 func OutpostSelf(key string) bool { return outpostSelf(platform[key]) }
+
+// ProcessSelf reports whether key is one any Omniglass process reports of
+// itself (the process-* keys): a series that restarts with the process, so
+// a rule's age on it runs from the process's start, ProcessUptime (#1985).
+func ProcessSelf(key string) bool { return platform[key] == processSelfWriter }
 
 // outpostSelf reports a writer whose keys an outpost reports of itself.
 func outpostSelf(by string) bool {

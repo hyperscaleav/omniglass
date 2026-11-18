@@ -117,6 +117,7 @@
       "process-gc-pause",
       "process-goroutine-count",
       "process-heap-size",
+      "process-uptime",
       "push-lane-publish-count",
       "push-lane-refusal-count",
       "push-lane-turn-wait-max",
