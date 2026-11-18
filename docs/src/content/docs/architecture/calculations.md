@@ -1,6 +1,9 @@
 ---
 title: Calculations
 description: "The rule families that run server-side over typed samples, and calc_rule in detail: cross-key and system-level derivation."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 :::note[The event rule is built; the calc rule runs on components and systems]

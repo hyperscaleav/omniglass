@@ -44,30 +44,46 @@ declares. A new transport's row, such as snmp's, appears with its registry entry
 
 ## What "the docs" means here
 
-- **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
-  documents, and the current decisions. Each official term is defined once and not redefined in
-  the leaves. A word an operator or an admin reads (an entity, a nav label, a verdict) is a row
-  in `internal/vocab/terms.yaml`: its word and plural, a one-sentence definition, its API
-  collection, schema and permission noun, its nav entry, and any word it retired. `make gen`
-  renders the [glossary](/reference/glossary/) and the entity descriptions in the OpenAPI spec
-  from it, and the guards fail a new collection, nav entry or verdict that names no row, or a
-  retired word back in console strings or docs prose. Internal architecture terms stay in the
-  frozen [architecture glossary](/architecture/glossary/).
-- **Guides** (`/guides/`) are how-to pages for someone *using* the product, split by
-  audience: the **operator guide** (running the fleet from the console and the CLI), the
-  **admin guide** (managing accounts, access, audit, and config), and **deployment**
-  (standing the platform up). **A slice that ships or changes a user-facing surface ships or
-  updates its guide in the same PR**, not just the architecture page, filed under the section
-  that matches who does the task. The architecture page says how the surface is built; the
-  guide says how to use it.
-- **Concept and learning pages** teach a concept interactively (see
-  [the learning-tool restriction](/contributing/learning-tool/)). When a feature introduces a concept
-  an operator must understand, the teaching surface ships with it.
-- **Contributor pages** (`/contributing/`) are this doctrine set.
+The site is laid out by audience, one directory per section, and each section's sidebar except
+Reference's is generated from its directory, so a new page needs no config edit (it orders itself
+with `sidebar.order`). Reference is listed in the config: its pages come from generators, so a new
+one is a generator change that adds its entry in the same PR:
 
-So a feature that adds an operator surface usually touches two homes: the **architecture**
-page (the model) and a **guide** (the how-to). A purely internal change touches neither and
-states its one-line justification in the PR body.
+- **Start here** (`/start/`): what Omniglass is, the model in one pass, the first ten minutes.
+- **Operator** (`/operator/`): running the fleet from the console and the CLI.
+- **Admin** (`/admin/`): accounts, access, audit, secrets and variables, the catalog, automation.
+- **Developer** (`/developer/`): the API, the CLI, agents and MCP, the lab and PR previews, and
+  contributing.
+- **Deployment** (`/deployment/`): installing Omniglass and running it in production.
+- **Architecture** (`/architecture/`): how it is built, one page per subsystem, badged; the
+  architecture of record, where each official term is defined once and not redefined, with the [implementation status](/architecture/status/) grid, the
+  [roadmap](/architecture/roadmap/), the [decision log](/architecture/decisions/) and the
+  [build log](/architecture/build-log/).
+- **Reference** (`/reference/`): generated, never hand-written: the
+  [glossary](/reference/glossary/), the [CLI](/reference/cli/), the [MCP tools](/reference/mcp/)
+  and the API.
+
+**A slice that ships or changes a user-facing surface updates the page for whoever does the task in
+the same PR**, not just the architecture page: the architecture page says how the surface is built,
+the audience page says how to use it. Until a section is rebuilt, its old pages (under **Being
+rebuilt** in the sidebar: `/guides/`, `/contributing/` and the unbadged `/architecture/` pages, which
+set `sidebar.hidden` so the Architecture section lists only rebuilt pages) are where that update
+goes; the section's PR deletes them and their sidebar entries.
+
+A word an operator or an admin reads (an entity, a nav label, a verdict) is a row in
+`internal/vocab/terms.yaml`: its word and plural, a one-sentence definition, its API collection,
+schema and permission noun, its nav entry, and any word it retired. `make gen` renders the
+[glossary](/reference/glossary/) and the entity descriptions in the OpenAPI spec from it, and the
+guards fail a new collection, nav entry or verdict that names no row, or a retired word back in
+console strings or docs prose. Internal architecture terms stay in the frozen
+[architecture glossary](/architecture/glossary/).
+
+When a feature introduces a concept an operator must understand, the teaching surface ships with it
+([the learning-tool restriction](/contributing/learning-tool/)).
+
+So a feature that adds an operator surface usually touches two homes: the **Architecture**
+page (the model) and the audience section's page (the how-to). A purely internal change
+touches neither and states its one-line justification in the PR body.
 
 ## Status moves with the code
 

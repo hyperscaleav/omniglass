@@ -176,7 +176,10 @@ func measureRaiseClear(t *testing.T, gw storage.Gateway, c *querycount.Counter, 
 // beautifully flat number while varying nothing at all.
 func TestAlarmRecomputeCostIsFlatInAlarmCount(t *testing.T) {
 	t.Parallel()
-	const ceiling = 32 // 29 in #674, plus #618's savepointed read of the action rules
+	// 29 in #674, plus #618's savepointed read of the action rules, plus the
+	// platform flag read first (#1987): a fleet transition skips the shipped
+	// platform rule on it, rather than reading the facts its when is judged on.
+	const ceiling = 33
 
 	quiet, qc := alarmProbe(t, 1, 1)
 	lonelyRaise, lonelyClear, lonelyOpen := measureRaiseClear(t, quiet, qc, 0)
@@ -201,7 +204,7 @@ func TestAlarmRecomputeCostIsFlatInAlarmCount(t *testing.T) {
 // TestAlarmRecomputeCostGrowsWithTheOwnersItTouches PINS A DEFECT, not a target,
 // and the name says so the way #671's pin did.
 //
-// The alarm write path is NOT constant. It costs 15 + 5*S + 4*L statements per
+// The alarm write path is NOT constant. It costs 16 + 5*S + 4*L statements per
 // raise and the same per clear, where S is the number of slots the component
 // fills and L the number of distinct locations above the systems holding them.
 // Every staffed system pays an advisory lock, a slot resolution and a recorded
@@ -224,9 +227,11 @@ func TestAlarmRecomputeCostGrowsWithTheOwnersItTouches(t *testing.T) {
 		t.Run(fmt.Sprintf("%d-slots-%d-rooms", tc.staffs, tc.rooms), func(t *testing.T) {
 			gw, counter := alarmProbe(t, tc.staffs, tc.rooms)
 			raise, clear, _ := measureRaiseClear(t, gw, counter, 0)
-			want := 15 + 5*tc.staffs + 4*(tc.rooms+2)
+			// The constant carries #1987's platform flag, read once per
+			// transition so a fleet component skips the shipped rule's facts.
+			want := 16 + 5*tc.staffs + 4*(tc.rooms+2)
 			if raise != want || clear != want {
-				t.Errorf("the alarm recompute cost %d statements to raise and %d to clear with %d slots filled over %d ancestor locations, want %d each (15 + 5*slots + 4*locations, #674 and #618's savepointed action rule read).\n"+
+				t.Errorf("the alarm recompute cost %d statements to raise and %d to clear with %d slots filled over %d ancestor locations, want %d each (16 + 5*slots + 4*locations, #674, #618's savepointed action rule read and #1987's platform flag).\n"+
 					"If this failed because the write path was REDUCED, that is a fix and this pin should move with it, stating the new equation. If a term grew, the write path got worse in a dimension nothing else measures.",
 					raise, clear, tc.staffs, tc.rooms+2, want)
 			}
