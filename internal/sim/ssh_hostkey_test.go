@@ -9,7 +9,7 @@ import (
 )
 
 // A simulated device's ssh host key is derived from its id (#1370), as its
-// https key is: a node that pinned it on first use finds the same key after
+// https key is: an outpost that pinned it on first use finds the same key after
 // the simulator restarts, so a healthy ssh endpoint in a kept lab stays up.
 // Another device presents another key, and a rotation (a reimaged device)
 // still moves it.

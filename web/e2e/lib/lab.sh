@@ -1,6 +1,6 @@
 # Sourced, not run: the lab a demo recorder or the probe drives (#1197). The
 # demo pipeline rides the product's own lab (omniglass lab run, #1193), not a
-# recipe of its own: Postgres, the server in lab mode, and the node edge-hq
+# recipe of its own: Postgres, the server in lab mode, and the outpost edge-hq
 # running the simulator in its own process, seeded with the dev fleet, at the
 # 2s cadence every walkthrough is recorded at.
 #
@@ -27,7 +27,7 @@
 #   . web/e2e/lib/lab.sh
 #   lab_init ogwalk                # run id, traps
 #   lab_up [lab run flags...]      # the lab, seeded with STACK_SCENARIO (default dev);
-#                                  # flags pass through (--no-node: a fleet that holds still)
+#                                  # flags pass through (--no-outpost: a fleet that holds still)
 #   lab_run <docker run args...>   # a one-shot container on the lab network
 #   lab_pw <command...>            # a Playwright container on the lab network
 #   lab_assert_intact              # fail loudly if the lab was disturbed
@@ -35,10 +35,10 @@
 # LAB_SERVER_URL (the server on the lab network), LAB_HOST_URL
 # (the console's published loopback address, on a port Docker picked),
 # LAB_TOKEN, LAB_USER, LAB_PASSWORD,
-# LAB_IMAGE, LAB_DSN, LAB_SERVER, LAB_NODE;
+# LAB_IMAGE, LAB_DSN, LAB_SERVER, LAB_OUTPOST;
 # and LAB_LABEL_ARGS, the --label flags a helper container carries.
 
-LAB_PWIMG=mcr.microsoft.com/playwright:v1.65.0-jammy
+LAB_PWIMG=mcr.microsoft.com/playwright:v1.65.1-jammy
 LAB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 LAB_BIN="$LAB_ROOT/bin/omniglass"
 
@@ -110,7 +110,7 @@ lab_down() {
 }
 
 # Bring the lab up and source its ready file; args are extra lab run flags
-# (--no-node, the fleet with no node collecting from it, for the docs
+# (--no-outpost, the fleet with no outpost collecting from it, for the docs
 # screenshots, #1267). The lab's own status lines go to
 # stderr, prefixed with the run id. Fails, saying why, if the lab exits before
 # it is ready.
@@ -146,9 +146,9 @@ lab_up() {
   local kv
   for kv in $LAB_LABELS; do LAB_LABEL_ARGS+=(--label "$kv"); done
   LAB_CONTAINERS=("$LAB_DB" "$LAB_SERVER")
-  # A scenario with no node (empty) runs none.
-  if docker inspect "$LAB_NODE" >/dev/null 2>&1; then
-    LAB_CONTAINERS+=("$LAB_NODE")
+  # A scenario with no outpost (empty) runs none.
+  if docker inspect "$LAB_OUTPOST" >/dev/null 2>&1; then
+    LAB_CONTAINERS+=("$LAB_OUTPOST")
   fi
 }
 

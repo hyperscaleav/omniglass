@@ -9,13 +9,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestNodeWorklistCarriesPathUpstreams pins #1652's worklist end: an in-band
+// TestOutpostWorklistCarriesPathUpstreams pins #1652's worklist end: an in-band
 // endpoint of a component reached through another carries the upstream, by
-// id and name, with the upstream's in-band endpoints on the same node. An
+// id and name, with the upstream's in-band endpoints on the same outpost. An
 // out-of-band endpoint carries none, an upstream with no in-band endpoint on
-// the node is left out, power and host edges are not path upstreams, and
+// the outpost is left out, power and host edges are not path upstreams, and
 // deleting the edge drops it.
-func TestNodeWorklistCarriesPathUpstreams(t *testing.T) {
+func TestOutpostWorklistCarriesPathUpstreams(t *testing.T) {
 	t.Parallel()
 	f := newDepFixture(t)
 	ctx := context.Background()
@@ -23,15 +23,15 @@ func TestNodeWorklistCarriesPathUpstreams(t *testing.T) {
 	for _, c := range []string{"gw-p", "dev-p", "far-p", "pdu-p", "host-p"} {
 		f.component(t, c)
 	}
-	if _, err := f.gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-far"}, all, all); err != nil {
-		t.Fatalf("create far node: %v", err)
+	if _, err := f.gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-far"}, all, all); err != nil {
+		t.Fatalf("create far outpost: %v", err)
 	}
 	gwIn := f.endpoint(t, "gw-p", "icmp", false)
 	f.endpoint(t, "gw-p", "http", true)
 	devIn := f.endpoint(t, "dev-p", "icmp", false)
 	devOOB := f.endpoint(t, "dev-p", "http", true)
 	far, comp := "edge-far", "far-p"
-	if _, err := f.gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "icmp", Component: &comp, Node: &far}, all); err != nil {
+	if _, err := f.gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "icmp", Component: &comp, Outpost: &far}, all); err != nil {
 		t.Fatalf("place far endpoint: %v", err)
 	}
 	f.endpoint(t, "pdu-p", "icmp", false)
@@ -43,7 +43,7 @@ func TestNodeWorklistCarriesPathUpstreams(t *testing.T) {
 
 	byEndpoint := func() map[string]storage.WorklistTask {
 		t.Helper()
-		wl, err := f.gw.NodeWorklist(ctx, f.node)
+		wl, err := f.gw.OutpostWorklist(ctx, f.outpost)
 		if err != nil {
 			t.Fatalf("worklist: %v", err)
 		}
@@ -60,7 +60,7 @@ func TestNodeWorklistCarriesPathUpstreams(t *testing.T) {
 	}
 	want := []storage.PathUpstream{{ComponentID: gwTask.ComponentID, ComponentName: "gw-p", EndpointIDs: []string{gwIn}}}
 	if !slices.EqualFunc(devTask.PathUpstreams, want, samePathUpstream) {
-		t.Fatalf("dev path upstreams = %+v; want only the gateway's in-band endpoint on this node %+v", devTask.PathUpstreams, want)
+		t.Fatalf("dev path upstreams = %+v; want only the gateway's in-band endpoint on this outpost %+v", devTask.PathUpstreams, want)
 	}
 	if len(oobTask.PathUpstreams) != 0 {
 		t.Fatalf("out-of-band endpoint carries %+v; want none", oobTask.PathUpstreams)

@@ -198,7 +198,7 @@ func addAcronyms(t *testing.T, gw *storage.PG, ctx context.Context, acronyms ...
 	for i, a := range acronyms {
 		list[i] = a
 	}
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "label",
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "label",
 		map[string]any{"acronyms": list}); err != nil {
 		t.Fatalf("patch acronym list: %v", err)
 	}

@@ -117,15 +117,15 @@ func TestMoveIsItsOwnPermission(t *testing.T) {
 	for _, r := range moveables {
 		t.Run(r.resource, func(t *testing.T) {
 			slug := roleSlug(r.resource)
-			updaterTok := principalWithGrants(t, ctx, dsn, slug+"-mv-updater-svc",
+			updaterTok := userWithGrants(t, ctx, dsn, slug+"-mv-updater-svc",
 				[]grant{{role: slug + "-mv-updater", scopeKind: "all"}})
-			moverTok := principalWithGrants(t, ctx, dsn, slug+"-mv-mover-svc",
+			moverTok := userWithGrants(t, ctx, dsn, slug+"-mv-mover-svc",
 				[]grant{{role: slug + "-mv-mover", scopeKind: "all"}})
 
 			// Both custom roles grant scopeKind "all", so a no-op clear-to-root
 			// on an already-root row (component, system) isolates the
 			// permission-token question from the scope-guard question
-			// TestScopedPrincipalCannotLiftToRoot covers. Location has no
+			// TestScopedUserCannotLiftToRoot covers. Location has no
 			// clear-to-root at all, so its body targets a real destination
 			// instead (see moveBody above); the permission question is the
 			// same either way.

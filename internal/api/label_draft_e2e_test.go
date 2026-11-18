@@ -21,7 +21,7 @@ import (
 // is compared with the label the CREATE then stores, over the same wire, so a
 // drift between the draft's placement resolve and the stamp's would fail here
 // rather than shipping as a form that promises one label and writes another.
-// And the disclosure gate is driven by a NARROW-SCOPED principal, not by an
+// And the disclosure gate is driven by a NARROW-SCOPED user, not by an
 // owner: three scope defects in this epic survived review because every fixture
 // held an all scope, most recently the preview-scope bug this branch fixed.
 
@@ -60,7 +60,7 @@ func TestTheRenderedLabelIsTheLabelTheCreateStoresAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "room-204b", "location_type": "room", "parent": "hq", "label": "204B"}, http.StatusCreated)
@@ -135,7 +135,7 @@ func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "room-204b", "location_type": "room", "parent": "hq"}, http.StatusCreated)
@@ -249,7 +249,7 @@ func TestTheDraftedOrdinalFollowsThePlacementBucketAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "room-204b", "location_type": "room", "parent": "hq"}, http.StatusCreated)
@@ -292,13 +292,13 @@ func TestTheDraftedOrdinalFollowsThePlacementBucketAPI(t *testing.T) {
 }
 
 // TestTheRenderedLabelStopsAtTheCallersReadScope is the disclosure gate, driven
-// by a principal scoped to ONE wing.
+// by a user scoped to ONE wing.
 //
 // The rendered string is assembled from a location's label, so a caller who can
 // create components but cannot read a location must not be able to read that
 // location's label back out of the create form. The owner is asserted alongside
 // only to prove the fixture would have disclosed it: an assertion that a narrow
-// principal sees nothing passes just as well when the route is broken.
+// user sees nothing passes just as well when the route is broken.
 func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
@@ -311,7 +311,7 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	// A rule that reads the placement, so the leak this gate exists to close is
 	// actually present in the answer.
@@ -323,7 +323,7 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "wing-b", "location_type": "building", "parent": "hq", "label": "Secret Wing"}, http.StatusCreated)
 
 	wingA := entityID(t, c, owner, "/locations", "wing-a")
-	// A rack for the narrow principal to draft UNDER. Every body below names it,
+	// A rack for the narrow user to draft UNDER. Every body below names it,
 	// so the axis this test isolates is the location read scope alone: the
 	// parentless bucket is gated on an all-scoped create grant (#702 review), and
 	// a body that omitted the parent would be refused for that instead, which
@@ -332,12 +332,12 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 		"name": "rack", "product": "generic-device", "location": "wing-a",
 	}, http.StatusCreated))
 	p := storagetest.MintProduct(t, ctx, gw, "")
-	narrow := principalWithGrants(t, ctx, dsn, "wing-a-operator", []grant{
+	narrow := userWithGrants(t, ctx, dsn, "wing-a-operator", []grant{
 		{role: "operator", scopeKind: "location", scopeID: wingA},
 		{role: "operator", scopeKind: "component", scopeID: rack},
 	})
 
-	// Inside its own wing the narrow principal gets a real answer, carrying the
+	// Inside its own wing the narrow user gets a real answer, carrying the
 	// label of the location it may read.
 	got := renderLabelAt(t, c, narrow, "/components:renderLabel",
 		map[string]any{"product": p.Name, "name": "panel", "parent": rack, "location": "wing-a"}, http.StatusOK)
@@ -377,7 +377,7 @@ func TestTheRenderedLabelNeedsTheCreatePermission(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	viewer := principalWithGrants(t, ctx, dsn, "viewer-all", []grant{{role: "viewer", scopeKind: "all"}})
+	viewer := userWithGrants(t, ctx, dsn, "viewer-all", []grant{{role: "viewer", scopeKind: "all"}})
 	p := storagetest.MintProduct(t, ctx, gw, "")
 	c.do(viewer, http.MethodPost, "/components:renderLabel",
 		map[string]any{"product": p.Name, "name": "panel"}, http.StatusForbidden)
@@ -403,7 +403,7 @@ func TestTheRenderedLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	// An unclassified system, and a room: the two states a shipped fleet can
 	// reach through the pickers. EVERY shipped location type is in the second
@@ -445,7 +445,7 @@ func TestTheRenderedLocationLabelIsTheShippedRulesInAShippedFleet(t *testing.T) 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	got := renderLabelAt(t, c, owner, "/locations:renderLabel",
 		map[string]any{"location_type": "building", "name": "north-wing"}, http.StatusOK)
@@ -498,7 +498,7 @@ func TestTheDraftRefusesTheRootBucketItCannotCreateIn(t *testing.T) {
 	f.c.do(f.techEast, http.MethodPost, "/locations:renderLabel", root, http.StatusForbidden)
 	f.c.do(f.techEast, http.MethodPost, "/locations", root, http.StatusForbidden)
 
-	// Inside its own subtree the same principal drafts and creates normally, so
+	// Inside its own subtree the same user drafts and creates normally, so
 	// what is gated is the bucket rather than the route.
 	inside := map[string]any{"location_type": "room", "parent": "annex", "name": "studio-a"}
 	f.c.do(f.techEast, http.MethodPost, "/locations:renderLabel", inside, http.StatusOK)
@@ -536,7 +536,7 @@ func TestThePreconditionBindsTheNameTheFormShowed(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
 	disp := storagetest.MintProduct(t, ctx, gw, "display")

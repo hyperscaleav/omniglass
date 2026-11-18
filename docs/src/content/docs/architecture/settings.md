@@ -1,18 +1,14 @@
 ---
 title: Settings
 description: "A cascade-resolved, lockable settings engine: ordered layers merged into an effective document, with per-key provenance, top-down locks, and a platform-versus-profile domain split."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[Partial]
-Slice-0 ships the **platform** rung end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_override` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The deferred fast-follow list is the design fence under [Slice-0 boundary](#slice-0-boundary). Slice-1 makes a setting a reflected **typed struct** ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation), [below](#slice-1-boundary)), retiring `defaults.yaml` and the hand-kept namespace list.
+Slice-0 ships the **platform** rung end to end: the pure `settings` merge and resolve primitive, the single unscoped `setting_binding` table, the Huma routes, the two `settings:<action>` permissions, the two seeded `profile`-domain namespaces (`ui`, `keybindings`), `ui.theme` wired through to re-theme the SPA, and the Admin settings page ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory), [ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it), [ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)). The deferred fast-follow list is the design fence under [Slice-0 boundary](#slice-0-boundary). Slice-1 makes a setting a reflected **typed struct** ([ADR-0041](/architecture/decisions/#adr-0041-settings-are-a-reflected-typed-struct-with-generated-client-and-server-validation), [below](#slice-1-boundary)), retiring `defaults.yaml` and the hand-kept namespace list.
 :::
 
 Omniglass resolves a **setting** the same way it resolves a secret or a variable: down a cascade,
-most-specific-wins, with provenance, but on the **principal** axis (platform to group to user)
+most-specific-wins, with provenance, but on the **user** axis (platform to group to user)
 rather than the [fleet cascade](/architecture/cascade/)'s location to system to component. Same
 primitive (doctrine 5) pointed at identity; the least-specific level is `platform`, an admin's
 **install-wide** value
@@ -32,37 +28,37 @@ document is complete, except for an [optional setting](#the-single-source-struct
 none and is absent until a level sets it. It is the **fall-through**, not the bottom rung
 ([cascade](/architecture/cascade/#bindings-cascade-declarations-do-not)).
 
-**The base layer** is recomputed into memory on every boot and never stored in the override table:
+**The base layer** is recomputed into memory on every boot and never stored in the binding table:
 
 1. **`file`**: an operator settings file (`settings.json` or YAML) at a bootstrap-configured path,
    optional. The GitOps / Kubernetes ConfigMap layer; a change lands on pod restart.
 
-**Override levels** are rows in Postgres, the identity cascade:
+**Binding levels** are rows in Postgres, the identity cascade: a value set at a level is that level's **binding**, and a more-specific binding **shadows** a broader one.
 
-2. **`platform`**: the install-wide admin override. **Slice-0.**
+2. **`platform`**: the install-wide admin binding. **Slice-0.**
 
-:::design[The group and user override rungs, tracked in #270]
-3. **`group`**: per user-group override. **Fast-follow.**
-4. **`user`**: per-user override. **Fast-follow.**
+:::design[The group and user binding rungs, tracked in #270]
+3. **`group`**: per user-group binding. **Fast-follow.**
+4. **`user`**: per-user binding. **Fast-follow.**
 :::
 
 ### Most-specific wins
 
 Absent any lock, a more-specific level wins: `user > group > platform > file`. Where no level set
 the key, the value is the setting's `default`, which provenance reports as a **declaration**, not a
-level. Merge is a **deep merge in JSON map-space**, so key **presence** decides an override, not a
-Go zero-value: a key set to `false` overrides, an absent key inherits. A write is an RFC 7386 JSON
-Merge Patch, so `null` on a key deletes it from that level's override, restoring the layer below or
+level. Merge is a **deep merge in JSON map-space**, so key **presence** decides a binding, not a
+Go zero-value: a key set to `false` shadows, an absent key inherits. A write is an RFC 7386 JSON
+Merge Patch, so `null` on a key deletes it from that level's binding, restoring the layer below or
 the declared default.
 
 ## Locking: enforced from above
 
 An admin **locks** a key at a level. A lock at level L pins L's contributed value and forbids any
-more-specific level from overriding it: lock `ui.theme` at `platform` and no group or user can
+more-specific level from shadowing it: lock `ui.theme` at `platform` and no group or user can
 change it.
 
 **Lock conflict: broader wins.** A `platform` lock supersedes a `group` lock. The editability rule
-falls out: a principal may edit a key at level L if and only if no broader level has locked it.
+falls out: a user may edit a key at level L if and only if no broader level has locked it.
 
 ## Provenance
 
@@ -77,7 +73,7 @@ default" in the layer stack); a row expands to teach the full layer stack (doctr
 Each namespace carries a `domain` classifier. The `platform` domain is **named after the level**:
 set only at the `platform` level, never further down.
 
-- **`profile`**: cascades platform to group to user, **client-visible**, lockable, user-overridable
+- **`profile`**: cascades platform to group to user, **client-visible**, lockable, settable per user
   in the fast-follow. `ui` and `keybindings` are the two seeded `profile` namespaces (`ui.theme` and
   `ui.default_landing`; the default keymap as data).
 - **`platform`**: platform-level only, does not cascade (for example `retention`, `integrations`).
@@ -90,34 +86,37 @@ platform-domain namespace is admin-write by definition, and `label` is `platform
 console renders a label from the same dictionary the server did, which an ordinary viewer has to be
 able to read. `retention` is `platform,client` too: a window is no secret, and a chart of a series'
 history can say how far back it reaches ([ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks)). Omitting `client` on a platform namespace
-makes it admin-only-read as well (`integrations`, and `database`, whose `slow_query_ms` is the
+makes it admin-only-read as well (`integrations`; `assistant`, whose `conversation_days` is how long a
+stored omnibot conversation outlives its last change ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone)); `agent`, the install's policy for what an agent
+may do in each class of operation, which a caller reads only as it applies to them through
+`GET /auth/me/agent-policy` ([ADR-2063](/architecture/decisions/#adr-2063-an-install-sets-always-ask-or-never-per-class-of-operation-for-every-agent)); and `database`, whose `slow_query_ms` is the
 threshold past which the server logs and counts a query as slow, re-read each report window:
 [the server's account of itself](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
 
-## Storage: one override table, unscoped
+## Storage: one binding table, unscoped
 
-The declared defaults and the file layer live in memory, so Postgres holds **only the override
-levels**: a single `setting_override(scope, principal_id, namespace, doc, locks, ...)` table with a
-`unique nulls not distinct (scope, principal_id, namespace)` identity (a surrogate `id` primary
-key; `principal_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a
+The declared defaults and the file layer live in memory, so Postgres holds **only the binding
+levels**: a single `setting_binding(scope, user_id, namespace, doc, locks, ...)` table with a
+`unique nulls not distinct (scope, user_id, namespace)` identity (a surrogate `id` primary
+key; `user_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a
 CHECK naming the persisted levels, today `platform` alone, so a level the resolver would
 never read cannot be written and a future tier rename fails loudly. Restore falls out of the layer
 model: **restore a namespace** is a `DELETE` of its row, **restore everything** truncates the
 scope, and the file layer plus declared defaults re-supply the values. The table is **never
-boot-seeded** (operator data). Persisting only the override is a recorded call
+boot-seeded** (operator data). Persisting only the bindings is a recorded call
 ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
 diverging from the scaling page's "materialized in Postgres" sketch.
 
 ### The unscoped-Gateway carve-out
 
 The two-layer authorization model has one exception here: Settings Gateway methods are
-**unscoped**. Settings describe the platform and its principals, not the fleet, so the ABAC
-storage-scope invariant is **not applicable** (as with the registry-type reads, `GET /property-types` and its catalog siblings);
+**unscoped**. Settings describe the platform and its users, not the fleet, so the ABAC
+storage-scope invariant is **not applicable** (as with the catalog-type reads, `GET /property-types` and its catalog siblings);
 only the `settings:<action>` permission gates them, a recorded carve-out
 ([ADR-0034](/architecture/decisions/#adr-0034-the-settings-gateway-is-unscoped-only-the-permission-gates-it)),
-not a missed invariant. The group and user levels will constrain override reads and writes by the
-acting principal (a user edits only their own `user` row), a per-principal ownership check distinct
-from fleet ABAC. Every override write and delete writes an `audit_log` row in the same transaction
+not a missed invariant. The group and user levels will constrain binding reads and writes by the
+acting user (a user edits only their own `user` row), a per-user ownership check distinct
+from fleet ABAC. Every binding write and delete writes an `audit_log` row in the same transaction
 (the existing `writeAuditRes` pattern).
 
 ## The single-source struct
@@ -198,11 +197,18 @@ a boot panic like any other. Three consequences worth knowing before declaring o
 - **Declare it `nullable:"false"`.** Huma makes arrays nullable by default, and `null` is the merge
   patch's delete sentinel, so a nullable list invites a write that means something else entirely.
 
+**A map-valued setting** is a `map[string]T` field with `omitempty` and no default: the agent
+policy's `roles` and `tools` overrides are the first ([ADR-2088](/architecture/decisions/#adr-2088-role-and-per-tool-overrides-narrow-the-agent-policy-strictest-wins)).
+Unlike a list it merges by key, so a patch adds or replaces one entry and a nested `null` deletes
+one, without restating the rest. Its entries are checked by a value check rather than a tag, since a
+tag cannot reach a map's values. The console edits it as its JSON text, from the generated
+`"type": "object"` constraint, and refuses inline anything that does not parse to a JSON object.
+
 **An optional setting** declares no `default` tag and a `json:"<key>,omitempty"`: the effective
 document leaves it out until a level sets it, the published schema does not list it as required, and
-its Go reader treats the zero value as "unset" and falls back to whatever the setting overrides. The
-node log windows are the first (`retention.node_log_debug_days` and its three siblings, #1350): unset,
-a node's own logs follow the shared band. A merge-patch `null` restores one to unset. The Admin page
+its Go reader treats the zero value as "unset" and falls back to whatever the setting replaces. The
+outpost log windows are the first (`retention.outpost_log_debug_days` and its three siblings, #1350): unset,
+an outpost's own logs follow the shared band. A merge-patch `null` restores one to unset. The Admin page
 lists every key the generated schema declares, not only the keys the effective document resolved, so
 an optional setting shows as `not set` and is still settable from the console
 ([ADR-1350](/architecture/decisions/#adr-1350-a-node-log-window-is-an-optional-setting-unset-follows-the-shared-band)).
@@ -253,27 +259,42 @@ Two read audiences, two read endpoints, and merge-patch writes:
   namespaces only, no provenance**. Feeds the SPA at boot; dedicated (not folded into `/auth/me`) so
   a settings change never disturbs the identity cache, and correct as the cascade grows.
 - **`PATCH /settings/{namespace}`** (`settings:update` **and** `platform:update`): an RFC 7386 JSON
-  Merge Patch onto the namespace's override at the acting scope (`platform` in slice-0); `null`
+  Merge Patch onto the namespace's binding at the acting scope (`platform` in slice-0); `null`
   restores a key.
-- **`DELETE /settings/{namespace}`** (same gates): drop the override, restoring the namespace to
+- **`DELETE /settings/{namespace}`** (same gates): drop the binding, restoring the namespace to
   defaults.
 - **`POST /settings:restoreDefaults`** (same gates): an AIP custom method, a factory reset of the
   acting scope.
 
 Every settings write lands at the **platform** tier by definition, so all three writes carry
 `platform:update` on top of `settings:update`, the same install-wide authority a platform-tier
-variable, secret, or tag binding needs. The console gates Edit and Restore on **both**; a principal
+variable, secret, or tag binding needs. The console gates Edit and Restore on **both**; a user
 holding only `settings:update` reads a note naming the missing capability rather than a 403 on
 Save.
 
 Per doctrine 1 the effective document is a Huma struct, so the OpenAPI, the typed SPA client, the
-CLI command, and the JSONSchema all generate from it (`make gen`); only the override **storage** is
+CLI command, and the JSONSchema all generate from it (`make gen`); only the binding **storage** is
 raw JSONB partials.
+
+From the CLI the merge patch is the whole body: `setting update <namespace>` takes it as `--body`
+(a JSON object) or `--body-file` (a path, or `-` for stdin), because a namespace's keys are its own
+and the OpenAPI body declares no properties for the generator to turn into flags. The generator
+treats any object body with no declared properties this way (#1333), so the next free-form body gets
+the same pair of flags. A malformed or non-object document is refused before any request is made.
+
+```bash
+omniglass setting update notification --body '{"egress_allow":["smtp.example.com"]}'   # bind a key
+omniglass setting update notification --body '{"egress_allow":null}'                   # restore it
+omniglass setting list                                                                  # value, source, lock
+```
+
+Per-key flags for each namespace are a follow-up ([#1914](https://github.com/hyperscaleav/omniglass/issues/1914)): the keys come from the reflected settings struct,
+not from the OpenAPI document the CLI generates from, so the generator cannot derive them today.
 
 `settings:read` and `settings:update` (write, restore, lock and unlock) live on the admin role. The
 store is a singleton, so there is no create or delete-of-resource permission.
 
-## The cascade-over-principals model
+## The cascade-over-users model
 
 Reusing the [cascade](/architecture/cascade/) primitive on the principal axis is the deliberate call
 ([ADR-0035](/architecture/decisions/#adr-0035-settings-resolve-as-a-cascade-over-principals-with-a-broader-wins-lock)):
@@ -285,11 +306,11 @@ caller (the Storage Gateway) through a narrow function seam.
 ## Slice-0 boundary
 
 **In:** the platform level (file plus DB), the full cascade-shaped payload, and the platform lock
-stored, shown, and enforced, end to end through the pure engine, the override table, the Gateway,
+stored, shown, and enforced, end to end through the pure engine, the binding table, the Gateway,
 the API, the two permissions, the two seeded `profile` namespaces, and the Admin settings page.
 
 :::design[The fast-follow rungs and platform-domain namespaces, tracked in #270]
-**Fast-follow (not this slice):** the group and user override rungs and the Profile preferences tab
+**Fast-follow (not this slice):** the group and user binding rungs and the Profile preferences tab
 (editable, user-scoped Gateway reads), the `settings:lock` permission split for group-admins, the
 remaining `platform`-domain namespaces (`integrations`) with their features (`label` has since
 landed with the acronym dictionary, `retention` with sample retention, #417, and `collection` with

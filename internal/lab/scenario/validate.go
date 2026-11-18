@@ -43,7 +43,7 @@ var nameRule = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 var repeatedName = regexp.MustCompile(`^-[0-9]+$`)
 
 // compiled is a validated manifest: each standard with the components one of
-// its systems takes, in role order.
+// its systems takes, in slot order.
 type compiled struct {
 	standards map[string]compiledStandard
 }
@@ -52,7 +52,7 @@ type compiledStandard struct {
 	name       string
 	systemType string
 	components []Count
-	roles      []RoleFill
+	slots      []SlotFill
 }
 
 // Validate checks a manifest against the catalog: every standard a template
@@ -110,7 +110,7 @@ func compile(m *Manifest, cat Catalog) (*compiled, error) {
 
 // compileStandard checks one standard and plans the components a system of
 // it takes, through the shared system planner (internal/systemplan) with
-// each role's one candidate the product the manifest names for it, the way
+// each slot's one candidate the product the manifest names for it, the way
 // a system template is planned.
 func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 	var probs []Problem
@@ -135,12 +135,12 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 		return cs, probs
 	}
 
-	roles := sortedRoles(s.Products)
+	slots := sortedSlots(s.Products)
 	fills := map[string]string{}
 	products := []systemplan.Product{}
 	productsOK := true
-	for _, role := range roles {
-		ref := s.Products[role]
+	for _, slot := range slots {
+		ref := s.Products[slot]
 		ct, ok := cat.Product(ref.Name)
 		switch {
 		case !ok:
@@ -151,32 +151,32 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 			add(ref.Line, "product %q has no simulator profile, so the lab cannot simulate it", ref.Name)
 			productsOK = false
 		}
-		fills[role] = ref.Name
+		fills[slot] = ref.Name
 		products = append(products, systemplan.Product{Name: ref.Name, ComponentType: ct})
 	}
 	if !known {
 		return cs, probs
 	}
 
-	roleDeclared := map[string]bool{}
-	for _, r := range st.Roles {
-		roleDeclared[r.Name] = true
+	slotDeclared := map[string]bool{}
+	for _, r := range st.Slots {
+		slotDeclared[r.Name] = true
 	}
 	undeclared := false
-	for _, role := range roles {
-		if !roleDeclared[role] {
-			add(s.Products[role].Line, "standard %q declares no role %q", name, role)
+	for _, slot := range slots {
+		if !slotDeclared[slot] {
+			add(s.Products[slot].Line, "standard %q declares no slot %q", name, slot)
 			undeclared = true
 		}
 	}
 	if undeclared {
 		return cs, probs
 	}
-	sys := &template.System{Standard: name, Roles: map[string]template.RoleFill{}}
-	for role, ref := range s.Products {
-		sys.Roles[role] = template.RoleFill{Product: ref.Name}
+	sys := &template.System{Standard: name, Slots: map[string]template.SlotFill{}}
+	for slot, ref := range s.Products {
+		sys.Slots[slot] = template.SlotFill{Product: ref.Name}
 	}
-	staffed, err := template.StaffedRoles(st, sys)
+	staffed, err := template.StaffedSlots(st, sys)
 	if err != nil {
 		add(s.Line, "standard %q: the products %v", name, err)
 		return cs, probs
@@ -185,28 +185,28 @@ func compileStandard(s Standard, cat Catalog) (compiledStandard, []Problem) {
 		return cs, probs
 	}
 
-	planRoles := make([]systemplan.Role, 0, len(staffed))
+	planSlots := make([]systemplan.Slot, 0, len(staffed))
 	for _, r := range staffed {
 		alt := ""
 		if r.Choice != "" {
 			alt = r.Choice + "/" + r.Alternate
 		}
-		planRoles = append(planRoles, systemplan.Role{Name: r.Name, Quorum: r.Quorate(), Capacity: r.Capacity,
+		planSlots = append(planSlots, systemplan.Slot{Name: r.Name, Quorum: r.Quorate(), Capacity: r.Capacity,
 			AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts, Alternate: alt})
 	}
-	plan := systemplan.PlanSystem(planRoles, products, systemplan.Catalog{
-		Candidate: func(role, product string) bool { return fills[role] == product },
+	plan := systemplan.PlanSystem(planSlots, products, systemplan.Catalog{
+		Candidate: func(slot, product string) bool { return fills[slot] == product },
 		Within:    cat.Within,
 		Noun:      "named",
 	})
-	for _, f := range plan.Roles {
+	for _, f := range plan.Slots {
 		if f.Missing > 0 {
-			ref := s.Products[f.Role]
-			add(ref.Line, "role %s of standard %q takes %s: %s", f.Role, name, ref.Name, f.Reason)
+			ref := s.Products[f.Slot]
+			add(ref.Line, "slot %s of standard %q takes %s: %s", f.Slot, name, ref.Name, f.Reason)
 			continue
 		}
 		cs.components = append(cs.components, Count{Name: f.Product, Count: f.Count})
-		cs.roles = append(cs.roles, RoleFill{Role: f.Role, Product: f.Product, Count: f.Count})
+		cs.slots = append(cs.slots, SlotFill{Slot: f.Slot, Product: f.Product, Count: f.Count})
 	}
 	return cs, probs
 }
@@ -374,7 +374,7 @@ func lineOr(line, fallback int) int {
 	return line
 }
 
-func sortedRoles(m map[string]Ref) []string {
+func sortedSlots(m map[string]Ref) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

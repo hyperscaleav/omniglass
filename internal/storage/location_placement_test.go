@@ -18,7 +18,7 @@ import (
 //
 // The hierarchy fixture is built from custom types created in this test
 // (t-campus/t-building/t-floor/t-room) rather than the official
-// campus/building/floor/room registry, to keep this test independent of the
+// campus/building/floor/room catalog, to keep this test independent of the
 // seed's exact values, while exercising the same shape the boot seed ships
 // (campus={root}, building={root,campus}, floor={building,campus},
 // room={floor,building,campus}).
@@ -132,7 +132,7 @@ func TestLocationRootPlacementRejected(t *testing.T) {
 // Like TestLocationPlacementEnforcement, the placement half of this fixture
 // uses custom types (t-campus/t-building/t-room) with an explicit
 // allowed_parent_types rather than the official campus/building/room
-// registry, keeping the move path's placement enforcement testable
+// catalog, keeping the move path's placement enforcement testable
 // independent of the seed's exact values (see that test's doc comment).
 func TestLocationReparentEnforcement(t *testing.T) {
 	t.Parallel()

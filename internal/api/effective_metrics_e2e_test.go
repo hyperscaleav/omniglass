@@ -19,6 +19,7 @@ import (
 type effectiveMetricWire struct {
 	MetricTypeName string          `json:"metric_type_name"`
 	DataType       string          `json:"data_type"`
+	Unit           *string         `json:"unit"`
 	Required       bool            `json:"required"`
 	IsSampled      bool            `json:"is_sampled"`
 	FromContract   bool            `json:"from_contract"`
@@ -170,13 +171,13 @@ func TestComponentMetricsNameTheShownEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
-	node := "edge"
+	outpost := "edge"
 	for _, ep := range []struct{ transport, target string }{{"http", "10.0.0.1:80"}, {"tcp", "10.0.0.1:1710"}} {
 		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-			Transport: ep.transport, Component: &comp.ID, Node: &node,
+			Transport: ep.transport, Component: &comp.ID, Outpost: &outpost,
 			Params: []byte(`{"target":"` + ep.target + `"}`),
 		}, all); err != nil {
 			t.Fatalf("create %s endpoint: %v", ep.transport, err)
@@ -192,7 +193,7 @@ func TestComponentMetricsNameTheShownEndpoint(t *testing.T) {
 		{"tcp", "tcp-connect-time", 4.8, 2 * time.Second},
 		{"tcp", "icmp-rtt-avg", 1, time.Second},
 	} {
-		if err := gw.InsertMetricSamples(ctx, storage.NodeWriter(comp.ID, s.ep), []storage.MetricSampleWrite{{
+		if err := gw.InsertMetricSamples(ctx, storage.OutpostWriter(comp.ID, s.ep), []storage.MetricSampleWrite{{
 			OwnerKind: "component", OwnerID: comp.ID, Key: s.key, Instance: s.ep, Value: s.v, Source: "test", TS: base.Add(s.at),
 		}}); err != nil {
 			t.Fatalf("observe %s on %s: %v", s.key, s.ep, err)
@@ -217,5 +218,83 @@ func TestComponentMetricsNameTheShownEndpoint(t *testing.T) {
 	one := byName["icmp-rtt-avg"]
 	if string(one.Value) != `1` || one.Instance == nil || *one.Instance != "tcp" || one.InstanceCount != 1 || one.Instances != nil {
 		t.Fatalf("one endpoint: want 1 from tcp, count 1, no list, got %+v", one)
+	}
+}
+
+// TestEffectiveMetricsCarryTheirUnit drives the read the Vitals card renders
+// (#1550): a sampled metric whose type names a unit returns it, on a
+// component, a system and a location alike, and a type without one omits the
+// field, so a bare number never has to guess its unit. Skipped under -short.
+func TestEffectiveMetricsCarryTheirUnit(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := seededDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "vent-speed", "data_type": "float", "unit": "rpm"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "vent-count", "data_type": "int"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "dsp-u", "product": "generic-device"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "sys-u"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "loc-u", "location_type": "campus"}, http.StatusCreated)
+
+	var writes []storage.MetricSampleWrite
+	for _, o := range []struct{ kind, name string }{{"component", "dsp-u"}, {"system", "sys-u"}, {"location", "loc-u"}} {
+		writes = append(writes,
+			storage.MetricSampleWrite{OwnerKind: o.kind, OwnerID: o.name, Key: "vent-speed", Value: 1200.5, Source: "test"},
+			storage.MetricSampleWrite{OwnerKind: o.kind, OwnerID: o.name, Key: "vent-count", Value: 2, Source: "test"},
+		)
+	}
+	if err := insertMetrics(ctx, gw, writes); err != nil {
+		t.Fatalf("insert samples: %v", err)
+	}
+
+	for _, path := range []string{"/components/dsp-u/metrics", "/systems/sys-u/metrics", "/locations/loc-u/metrics"} {
+		raw := c.do(ownerTok, http.MethodGet, path, nil, http.StatusOK)
+		var got struct {
+			Metrics []effectiveMetricWire `json:"metrics"`
+		}
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatalf("%s: decode: %v", path, err)
+		}
+		if len(got.Metrics) != 2 {
+			t.Fatalf("%s: metrics = %+v, want vent-count and vent-speed", path, got.Metrics)
+		}
+		for _, m := range got.Metrics {
+			switch m.MetricTypeName {
+			case "vent-speed":
+				if m.Unit == nil || *m.Unit != "rpm" {
+					t.Errorf("%s: vent-speed unit = %v, want rpm", path, m.Unit)
+				}
+			case "vent-count":
+				if m.Unit != nil {
+					t.Errorf("%s: vent-count unit = %q, want the field omitted", path, *m.Unit)
+				}
+			}
+		}
+		// Omitted, not null: a client reads absence as "no unit".
+		var loose struct {
+			Metrics []map[string]json.RawMessage `json:"metrics"`
+		}
+		if err := json.Unmarshal(raw, &loose); err != nil {
+			t.Fatalf("%s: decode loose: %v", path, err)
+		}
+		for _, m := range loose.Metrics {
+			if string(m["metric_type_name"]) == `"vent-count"` {
+				if _, has := m["unit"]; has {
+					t.Errorf("%s: vent-count carries a unit key, want it omitted", path)
+				}
+			}
+		}
 	}
 }

@@ -13,7 +13,7 @@ import { CLIP_END, CLIP_START, PENDING_SHA } from "../e2e/walkthroughpr.mjs";
 // holds no write token), the matrix fan-in, and the splice the publish job
 // runs to write the clip into the PR body, played here against fixtures
 // exactly as the job plays it.
-type Step = { name?: string; uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> };
+type Step = { name?: string; if?: string; uses?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> };
 type Job = { permissions?: Record<string, string>; steps: Step[]; needs?: string | string[]; if?: string; strategy?: { "fail-fast"?: boolean; matrix?: unknown } };
 type Workflow = { on: Record<string, unknown>; permissions: Record<string, string>; concurrency?: unknown; jobs: Record<string, Job> };
 
@@ -112,6 +112,33 @@ describe("the run:demo workflow's matrix", () => {
     expect(steps[record].run).toContain("web/e2e/demo.sh record");
     const socket = steps.filter((s) => JSON.stringify(s.env ?? {}).includes("DEMO_DOCKER_SOCKET"));
     expect(socket.map((s) => s.name)).toEqual(["Record"]);
+  });
+
+  // download-artifact v8 (src/download-artifact.ts at 9000827) extracts into
+  // path itself when merge-multiple is on or the pattern matched one artifact,
+  // and into path/<name>/ only otherwise, so a lone leg landed flat and combine
+  // read it as never run (#1885).
+  const extractsInto = (w: Record<string, unknown> | undefined, name: string, matched: number) =>
+    w?.["merge-multiple"] === true || matched === 1 ? "" : `${name}/`;
+
+  it("lays each leg out as LEGS/demo-leg-<id>/ whether one demo is selected or many", () => {
+    const record = demo.jobs.record.steps;
+    const upload = record.find((s) => s.name === "Upload the recording")!;
+    const root = String(upload.with?.path).replace("${{ runner.temp }}", "$RUNNER_TEMP");
+    const wrap = record.find((s) => s.run?.includes(`${root}demo-leg-$ID`));
+    expect(wrap, "a step moves the recorder's out/ into the uploaded directory as demo-leg-$ID").toBeDefined();
+    expect(wrap!.if).toBe(upload.if);
+    const download = demo.jobs.combine.steps.find((s) => s.with?.pattern === "demo-leg-*");
+    for (const matched of [1, 3]) {
+      expect(extractsInto(download?.with, "demo-leg-<id>", matched) + "demo-leg-<id>/", `${matched} leg(s)`).toBe("demo-leg-<id>/");
+    }
+  });
+
+  it("commits the outcome even when no demo staged a file, as an empty evidence tree", () => {
+    const run = demo.jobs.publish.steps.find((s) => s.name === "Commit the evidence")!.run!;
+    const mkdir = run.indexOf('mkdir -p "$staged/tree"');
+    expect(mkdir).toBeGreaterThan(-1);
+    expect(mkdir).toBeLessThan(run.indexOf("add -A"));
   });
 
   it("swaps the pending SHA the staged clip and comment are written against for the evidence commit's", () => {

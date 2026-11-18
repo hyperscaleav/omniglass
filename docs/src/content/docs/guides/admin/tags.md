@@ -22,15 +22,15 @@ carry none at the end.
   write, done on that entity's own page.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `tag:update`) edits the
   governance fields (applies_to, propagates); the **name** is fixed, and a tag carries no rename (only a
-  component, system, location, and principal group have one). **Delete** (with `tag:delete`)
+  component, system, location, and user group have one). **Delete** (with `tag:delete`)
   removes the key and, with it, every binding across the fleet, behind a confirm.
 
 Minting a **key** is admin-gated here; **setting a value** on a key is the ordinary entity write. Open a
 component, system, or location, and its detail blade carries a **Tags** panel: type a key (the picker
-offers the registry keys that apply to that entity kind, and with `tag:create` a **Create key** shortcut
+offers the catalog keys that apply to that entity kind, and with `tag:create` a **Create key** shortcut
 opens this same create form), give it a value, and it binds on **Add**; the **x** on a chip removes it.
 Each write is gated by that entity's own `:update`, so an operator tags what it may already edit. The
-[Explore's filter](/guides/operator/fleet/#finding-one-thing) then matches each place, system and component on its **effective** tags
-(the resolved cascade, keys unioning and values overriding most-specific-wins), and the node list shows them in a Tags column. The same operations are
+[Explore's filter](/guides/operator/fleet/#finding-one-thing) then matches each location, system and component on its **effective** tags
+(the resolved cascade, keys unioning and values shadowing most-specific-wins), and the outpost list shows them in a Tags column. The same operations are
 `omniglass component setTag` / `system setTag` / `location setTag` and `omniglass component effective-tag list
 <name>` from the CLI.

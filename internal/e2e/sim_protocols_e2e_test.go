@@ -99,15 +99,15 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-p"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-p"}, all, all); err != nil {
 		t.Fatal(err)
 	}
-	nodeTok := "protocols-e2e-token"
-	sum := sha256.Sum256([]byte(nodeTok))
+	outpostTok := "protocols-e2e-token"
+	sum := sha256.Sum256([]byte(outpostTok))
 	if _, err := gw.SetEnrollmentToken(ctx, "", "edge-p", hex.EncodeToString(sum[:]), all); err != nil {
 		t.Fatal(err)
 	}
-	snmpProduct, nvpProduct := simulatedProductOn(t, "snmp-generic"), simulatedProductOn(t, "newtron-nvp")
+	snmpProduct, nvpProduct := simulatedProductOn(t, "snmp-generic"), simulatedProductOn(t, "newtron-panel-nvp")
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 	}
 
 	// The operator's configuration, through the CLI: a community secret and
-	// two driver attaches placed on the node.
+	// two driver attaches placed on the outpost.
 	cli := runCLI(t, root, binPath, os.Environ())
 	as := func(args ...string) string {
 		t.Helper()
@@ -139,20 +139,20 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 	// addresses, so the endpoints target them and each device takes an
 	// address no other test process holds.
 	displayIP, panelIP := simtest.ClaimLoopback(t), simtest.ClaimLoopback(t)
-	as("endpoint", "create", "--component", "sim-display", "--node", "edge-p", "--driver", "snmp-generic",
+	as("endpoint", "create", "--component", "sim-display", "--outpost", "edge-p", "--driver", "snmp-generic",
 		"--inputs", fmt.Sprintf(`{"host":%q,"port":"%d","community":"sim-community"}`, displayIP, 161+protocolsPortShift))
-	as("endpoint", "create", "--component", "sim-panel", "--node", "edge-p", "--driver", "newtron-nvp",
+	as("endpoint", "create", "--component", "sim-panel", "--outpost", "edge-p", "--driver", "newtron-panel-nvp",
 		"--inputs", fmt.Sprintf(`{"host":%q}`, panelIP))
 
-	// The simulator and the collector beside each other, on the node's identity.
-	nodeEnv := append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_NODE_NAME=edge-p", "OMNIGLASS_NODE_TOKEN="+nodeTok)
+	// The simulator and the collector beside each other, on the outpost's identity.
+	outpostEnv := append(os.Environ(), "OMNIGLASS_SERVER="+server, "OMNIGLASS_OUTPOST_NAME=edge-p", "OMNIGLASS_OUTPOST_TOKEN="+outpostTok)
 	for _, args := range [][]string{
 		{"sim", "run", "--port-offset", fmt.Sprint(protocolsPortShift), "--poll", "300ms"},
-		{"node", "run", "--server", server, "--name", "edge-p", "--token", nodeTok, "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s"},
+		{"outpost", "run", "--server", server, "--name", "edge-p", "--token", outpostTok, "--heartbeat", "1s", "--probe-every", "1s", "--worklist-every", "1s"},
 	} {
 		pctx, stop := context.WithCancel(ctx)
 		p := exec.CommandContext(pctx, binPath, args...)
-		p.Env = nodeEnv
+		p.Env = outpostEnv
 		p.Stdout, p.Stderr = os.Stderr, os.Stderr
 		if err := p.Start(); err != nil {
 			t.Fatalf("start %v: %v", args, err)
@@ -208,6 +208,6 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 		t.Fatal(err)
 	}
 	if took >= 10 {
-		t.Fatalf("settled %.1fs after the issue; the reply should settle it within the node's tick, not the next poll", took)
+		t.Fatalf("settled %.1fs after the issue; the reply should settle it within the outpost's tick, not the next poll", took)
 	}
 }

@@ -95,11 +95,11 @@ func TestSystemReparentScope(t *testing.T) {
 	}
 }
 
-// TestSystemScopedPrincipalCannotLiftToRoot is TestScopedPrincipalCannotLiftToRoot's
-// system twin: a system-scoped (not all-scoped) principal is refused a
+// TestSystemScopedUserCannotLiftToRoot is TestScopedUserCannotLiftToRoot's
+// system twin: a system-scoped (not all-scoped) user is refused a
 // clear-to-root move even though the system itself sits inside its own move
 // scope, and remains free to reparent within its own subtree.
-func TestSystemScopedPrincipalCannotLiftToRoot(t *testing.T) {
+func TestSystemScopedUserCannotLiftToRoot(t *testing.T) {
 	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()

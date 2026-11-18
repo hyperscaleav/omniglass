@@ -13,7 +13,7 @@ import (
 )
 
 // TestIssueBearerCredential proves a second bearer credential can be minted for
-// an existing principal and authenticates to the same identity, and that an
+// an existing user and authenticates to the same identity, and that an
 // unknown username is reported (not an error). This backs `omniglass token` and
 // the dev login when the owner already exists.
 func TestIssueBearerCredential(t *testing.T) {
@@ -42,14 +42,14 @@ func TestIssueBearerCredential(t *testing.T) {
 		t.Fatalf("issue for root = (%v, %v), want (true, nil)", ok, err)
 	}
 
-	// Both tokens authenticate to the same principal.
+	// Both tokens authenticate to the same user.
 	for name, tok := range map[string]string{"first": tok1, "second": tok2} {
 		pr, err := gw.AuthenticateBearer(ctx, auth.HashToken(tok))
 		if err != nil {
 			t.Fatalf("authenticate %s: %v", name, err)
 		}
-		if pr.Human == nil || pr.Human.Username != "root" {
-			t.Errorf("%s token resolved to %+v, want human root", name, pr.Human)
+		if pr.Person == nil || pr.Person.Username != "root" {
+			t.Errorf("%s token resolved to %+v, want human root", name, pr.Person)
 		}
 	}
 
@@ -90,7 +90,7 @@ func TestBearerExpiry(t *testing.T) {
 	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: okHash, Prefix: okPrefix, Purpose: "token", ExpiresAt: &future}); err != nil || !ok {
 		t.Fatalf("issue future: ok=%v err=%v", ok, err)
 	}
-	if pr, err := gw.AuthenticateBearer(ctx, auth.HashToken(okTok)); err != nil || pr.Human == nil || pr.Human.Username != "root" {
+	if pr, err := gw.AuthenticateBearer(ctx, auth.HashToken(okTok)); err != nil || pr.Person == nil || pr.Person.Username != "root" {
 		t.Fatalf("future bearer should authenticate: pr=%v err=%v", pr, err)
 	}
 }

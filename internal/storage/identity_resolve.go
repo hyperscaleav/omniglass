@@ -32,7 +32,7 @@ type IdentityResolution struct {
 }
 
 // ResolveIdentityBindings resolves, in one read, the identities named on each
-// conduit (by its id) against that conduit's bindings alone: a node's tick
+// conduit (by its id) against that conduit's bindings alone: an outpost's tick
 // names a conduit per task group (#1582), a push names one. The result holds
 // a resolution per conduit that exists; a conduit that is no uuid, or no
 // longer exists, is absent and binds nothing.

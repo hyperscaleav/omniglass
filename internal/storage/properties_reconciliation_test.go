@@ -42,12 +42,12 @@ func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	conn := connectDSN(t, dsn)
-	mustExec(t, conn, `insert into endpoint (name, transport, component, node_name, params) values
-		('telnet', 'telnet', $1::uuid, (select principal_id from node where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb)`, comp.ID)
+	mustExec(t, conn, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('telnet', 'telnet', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb)`, comp.ID)
 	base := time.Now().UTC().Truncate(time.Microsecond).Add(-10 * time.Minute)
 	land := func(w storage.KeyWriter, key, instance, value string, at time.Duration) {
 		t.Helper()
@@ -62,12 +62,12 @@ func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
 	if _, err := gw.SetProperty(ctx, "", "component", "panel-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all, all); err != nil {
 		t.Fatalf("declare firmware-version: %v", err)
 	}
-	land(storage.NodeWriter(comp.ID, "panel-ip"), "firmware-version", "panel-ip", "2.0.0", time.Second)
+	land(storage.OutpostWriter(comp.ID, "panel-ip"), "firmware-version", "panel-ip", "2.0.0", time.Second)
 	// Observed only: nothing declares serial-number.
-	land(storage.NodeWriter(comp.ID, "panel-ip"), "serial-number", "panel-ip", "SN-42", 2*time.Second)
+	land(storage.OutpostWriter(comp.ID, "panel-ip"), "serial-number", "panel-ip", "SN-42", 2*time.Second)
 	// Observed only through an endpoint since deleted: a retired observer, so
 	// the owner has no live value of mac-address and no row for it.
-	land(storage.NodeWriter(comp.ID, "telnet"), "mac-address", "telnet", "00:11:22:33:44:55", 3*time.Second)
+	land(storage.OutpostWriter(comp.ID, "telnet"), "mac-address", "telnet", "00:11:22:33:44:55", 3*time.Second)
 	if err := gw.DeleteEndpoint(ctx, "", comp.ID+"/telnet", all, all); err != nil {
 		t.Fatalf("delete the telnet endpoint: %v", err)
 	}
@@ -96,10 +96,10 @@ func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
 		t.Fatalf("serial-number: want want=null is=SN-42 from panel-ip, no drift; got %+v", r)
 	}
 
-	// A native probe key is the node's verdict on an endpoint, read on the
+	// A native probe key is the outpost's verdict on an endpoint, read on the
 	// reachability read where a gated rung's frozen fact is withheld; it is
 	// not a property the owner has (ADR-0161's reserved family).
-	land(storage.NodeWriter(comp.ID, "panel-ip"), "tls-certificate-expiry", "panel-ip", "2027-01-01T00:00:00Z", 4*time.Second)
+	land(storage.OutpostWriter(comp.ID, "panel-ip"), "tls-certificate-expiry", "panel-ip", "2027-01-01T00:00:00Z", 4*time.Second)
 	props = byName(mustResolveOwner(t, gw, "component", "panel-1", all))
 	if p, ok := props["tls-certificate-expiry"]; ok {
 		t.Fatalf("a native probe key is listed among the properties: %+v", p)
@@ -117,7 +117,7 @@ func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.IssueCommand(ctx, actor, "component", "switcher-1", "set-input", "", json.RawMessage(`"dp1"`), nil); err != nil {

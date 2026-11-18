@@ -14,7 +14,7 @@ Wait
 Type "# One kind at a time: the system templates and the standard each builds to"
 Enter
 Wait
-Type `omniglass template list --kind system_template | jq -c '.templates[] | {name, standard: .system.standard, roles: (.system.roles | keys)}'`
+Type `omniglass template list --kind system_template | jq -c '.templates[] | {name, standard: .system.standard, slots: (.system.slots | keys)}'`
 Enter
 Wait
 
@@ -23,10 +23,10 @@ Type "clear"
 Enter
 Wait
 Show
-Type "# A variant reads whole: its parent, and the role its size pins"
+Type "# A variant reads whole: its parent, and the slot its size pins"
 Enter
 Wait
-Type `omniglass template get mr55 | jq -c '{name, parent: .standard.parent, pinned: [.standard.roles[] | select(.pinned_products) | {name, pinned_products}], metrics: [.standard.metrics[].name]}'`
+Type `omniglass template get mr55 | jq -c '{name, parent: .standard.parent, pinned: [.standard.slots[] | select(.pinned_products) | {name, pinned_products}], metrics: [.standard.metrics[].name]}'`
 Enter
 Wait
 Type "# A component template presets every driver input but the address"

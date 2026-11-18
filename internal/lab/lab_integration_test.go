@@ -2,8 +2,9 @@
 
 // The lab against a real Docker daemon: the integration test that closes the
 // runner's capability gate (the fake-engine tests are its checkpoint). It
-// needs the image `make` builds (omniglass:dev), or the one OMNIGLASS_LAB_IMAGE
-// names, and runs through make test-lab.
+// needs the image `make` builds (omniglass:dev-<build id>, tagged beside
+// omniglass:dev), or the one OMNIGLASS_LAB_IMAGE names, and runs through make
+// test-lab.
 // Everything it creates carries a project name of its own, so it never meets
 // a person's lab on the same daemon, and it removes only that project.
 package lab
@@ -27,22 +28,36 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/labcheck"
 )
 
-// labTestImage is the image these tests run: omniglass:dev, which make
-// test-lab builds, unless OMNIGLASS_LAB_IMAGE names another, a private tag
-// for a run that must not rebuild the shared omniglass:dev.
-func labTestImage() string {
-	if ref := os.Getenv("OMNIGLASS_LAB_IMAGE"); ref != "" {
-		return ref
-	}
-	return DevImage
-}
+// labTestBuild is the build id make test-lab hands the tests: the build id of
+// the image and binary its `all` just built, which the lab selects its own
+// image by (#1422). Empty when the tests run on their own.
+func labTestBuild() string { return os.Getenv("OMNIGLASS_LAB_TEST_BUILD") }
 
-// labTestChoice runs image as a dev image held to its own build id, so an
-// override is checked the way omniglass:dev is.
-func labTestChoice(image string, labels map[string]string) ImageChoice {
-	c := SelectImage(labels[VersionLabel], "")
-	c.Ref = image
-	return c
+// labTestChoice is the image these tests run, selected the way `lab run`
+// selects it: omniglass:dev-<build id> for the build make test-lab built.
+// OMNIGLASS_LAB_IMAGE names another instead (a private tag for a run that
+// must not rebuild); with neither, the shared omniglass:dev. An image named
+// either way is held to the build id it carries, so it is checked the way a
+// dev image is.
+func labTestChoice(t *testing.T, ctx context.Context, eng Engine) ImageChoice {
+	t.Helper()
+	ref := os.Getenv("OMNIGLASS_LAB_IMAGE")
+	if ref == "" && labTestBuild() != "" {
+		c, err := SelectImage(labTestBuild(), "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ref = c.Ref
+	}
+	if ref == "" {
+		ref = DevImage
+	}
+	info, found, err := eng.InspectImage(ctx, ref)
+	if err != nil || !found {
+		t.Fatalf("the image %s (run make first): found %v, %v", ref, found, err)
+	}
+	v := info.Labels[VersionLabel]
+	return ImageChoice{Ref: ref, WantVersion: v, Why: "built by make beside this binary", BinaryVersion: v}
 }
 
 func TestIntegrationLabOnARealDaemon(t *testing.T) {
@@ -59,11 +74,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	image := labTestImage()
-	labels, found, err := eng.ImageLabels(ctx, image)
-	if err != nil || !found {
-		t.Fatalf("the image %s (run make first): found %v, %v", image, found, err)
-	}
+	choice := labTestChoice(t, ctx, eng)
 	host, _ := os.Hostname()
 	project := fmt.Sprintf("omniglass-lab-it-%d", os.Getpid())
 	t.Cleanup(func() {
@@ -77,12 +88,12 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	})
 	cfg := func(pid int) Config {
 		return Config{
-			Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: image, Scenario: DefaultScenario,
-				NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
-				Pushers: []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Node: NodeName,
+			Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: choice.Ref, Scenario: DefaultScenario,
+				OutpostToken: "lab-it-outpost-token", OutpostTokenHash: tokenHash("lab-it-outpost-token"),
+				Pushers: []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Outpost: OutpostName,
 					Token: "lab-it-push-token", TokenHash: tokenHash("lab-it-push-token"), TokenPrefix: "labitpsh"}},
 				Owner: Owner{Host: host, PID: pid, PIDNS: CurrentPIDNS()}},
-			Image:         labTestChoice(image, labels),
+			Image:         choice,
 			PlantedFaults: []string{"Panel SNMP", "Panel SSH", "Panel console"},
 		}
 	}
@@ -107,7 +118,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Run("compose sees one project of db, server and node", func(t *testing.T) {
+	t.Run("compose sees one project of db, server and outpost", func(t *testing.T) {
 		if _, err := exec.LookPath("docker"); err != nil {
 			t.Skip("no docker CLI to ask compose")
 		}
@@ -116,7 +127,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 			t.Fatalf("docker compose ps: %v\n%s", err, out)
 		}
 		got := strings.Fields(string(out))
-		for _, want := range []string{"db", "server", "node"} {
+		for _, want := range []string{"db", "server", "outpost"} {
 			if !strings.Contains(" "+strings.Join(got, " ")+" ", " "+want+" ") {
 				t.Errorf("docker compose -p %s ps lists %v, want %s among them", project, got, want)
 			}
@@ -131,9 +142,9 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		}
 	})
 
-	t.Run("one published port, on loopback, and NET_ADMIN on the node alone", func(t *testing.T) {
+	t.Run("one published port, on loopback, and NET_ADMIN on the outpost alone", func(t *testing.T) {
 		published := 0
-		for _, svc := range []string{"db", "server", "node"} {
+		for _, svc := range []string{"db", "server", "outpost"} {
 			st, err := eng.Inspect(ctx, lab.ID(svc))
 			if err != nil {
 				t.Fatal(err)
@@ -145,12 +156,33 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 				}
 			}
 			hasNetAdmin := strings.Contains(strings.Join(st.CapAdd, ","), "NET_ADMIN")
-			if hasNetAdmin != (svc == "node") {
-				t.Errorf("%s caps %v: NET_ADMIN belongs to the node alone", svc, st.CapAdd)
+			if hasNetAdmin != (svc == "outpost") {
+				t.Errorf("%s caps %v: NET_ADMIN belongs to the outpost alone", svc, st.CapAdd)
 			}
 		}
 		if published != 1 {
 			t.Errorf("%d published ports across the lab, want exactly 1", published)
+		}
+	})
+
+	// #1892: Docker enforces the outpost's caps, and the outpost reads them from
+	// its cgroup to size its lane pool to the one figure a capped outpost gets.
+	t.Run("the outpost runs capped and sizes its lanes to the cap", func(t *testing.T) {
+		logs, err := eng.Logs(ctx, lab.ID("outpost"), 0)
+		if err != nil {
+			t.Fatalf("outpost logs: %v\n%s", err, logs)
+		}
+		var line string
+		for l := range strings.Lines(logs) {
+			if strings.Contains(l, `msg="lane workers"`) {
+				line = l
+				break
+			}
+		}
+		for _, want := range []string{"workers=23", "cpu.max=1,", "memory.max=512MiB"} {
+			if !strings.Contains(line, want) {
+				t.Errorf("outpost lane log %q lacks %s", line, want)
+			}
 		}
 	})
 
@@ -264,7 +296,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 				Status      string `json:"status"`
 			} `json:"devices"`
 		}
-		if err := getJSON(ctx, client, lab.BaseURL+"/api/v1/nodes/"+NodeName+"/simulation", &sim); err != nil {
+		if err := getJSON(ctx, client, lab.BaseURL+"/api/v1/outposts/"+OutpostName+"/simulation", &sim); err != nil {
 			t.Fatal(err)
 		}
 		var target string
@@ -428,11 +460,7 @@ func TestIntegrationThrowawayLabHeldForAProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	image := labTestImage()
-	labels, found, err := eng.ImageLabels(ctx, image)
-	if err != nil || !found {
-		t.Fatalf("the image %s (run make first): found %v, %v", image, found, err)
-	}
+	choice := labTestChoice(t, ctx, eng)
 	host, _ := os.Hostname()
 	project := fmt.Sprintf("omniglass-lab-it-throwaway-%d", os.Getpid())
 	t.Cleanup(func() {
@@ -450,10 +478,10 @@ func TestIntegrationThrowawayLabHeldForAProcess(t *testing.T) {
 	t.Cleanup(func() { _ = holder.Process.Kill(); _ = holder.Wait() })
 	file := t.TempDir() + "/lab.env"
 	cfg := Config{
-		Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: image, Scenario: "empty",
-			NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
+		Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: choice.Ref, Scenario: "empty",
+			OutpostToken: "lab-it-outpost-token", OutpostTokenHash: tokenHash("lab-it-outpost-token"),
 			Owner: Owner{Host: host, PID: os.Getpid(), PIDNS: CurrentPIDNS()}, Ephemeral: true},
-		Image: labTestChoice(image, labels), Hold: true, ReadyFile: file, WhilePID: holder.Process.Pid,
+		Image: choice, Hold: true, ReadyFile: file, WhilePID: holder.Process.Pid,
 	}
 	var out bytes.Buffer
 	done := make(chan error, 1)
@@ -497,5 +525,110 @@ func TestIntegrationThrowawayLabHeldForAProcess(t *testing.T) {
 	vs, _ := eng.Volumes(ctx, ProjectLabels(project))
 	if len(cs)+len(ns)+len(vs) != 0 {
 		t.Fatalf("after its process went: %d containers, %d networks, %d volumes remain, want none\n%s", len(cs), len(ns), len(vs), out.String())
+	}
+}
+
+// Another checkout's make re-points the shared omniglass:dev tag to its own
+// build (#1422). A lab run by this binary, which selects the tag keyed to its
+// own build id, still comes up on its own build: no "built from another
+// tree" refusal, and the server and the outpost both run this build's image.
+func TestIntegrationLabRunsItsOwnBuildWhileTheSharedTagMovesOn(t *testing.T) {
+	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
+		t.Skip("the lab's integration test runs through make test-lab (it needs the image make builds)")
+	}
+	build := labTestBuild()
+	if build == "" || os.Getenv("OMNIGLASS_LAB_IMAGE") != "" {
+		t.Skip("this test needs the build-keyed image make test-lab builds, not a private tag")
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("no docker CLI to tag an image")
+	}
+	ctx := context.Background()
+	home, _ := os.UserHomeDir()
+	daemon, err := ResolveDaemon(Env{Getenv: os.Getenv, ReadFile: os.ReadFile, Home: home, GOOS: "linux"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	eng, err := NewDockerEngine(daemon.Host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	docker := func(stdin string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command("docker", args...)
+		cmd.Env = append(os.Environ(), "DOCKER_HOST="+daemon.Host)
+		if stdin != "" {
+			cmd.Stdin = strings.NewReader(stdin)
+		}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("docker %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	choice, err := SelectImage(build, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	own, found, err := eng.InspectImage(ctx, choice.Ref)
+	if err != nil || !found || own.Labels[VersionLabel] != build {
+		t.Fatalf("the image %s (run make first): found %v, %v, labels %v", choice.Ref, found, err, own.Labels)
+	}
+
+	// Another build takes omniglass:dev: same layers, another version label.
+	// The tag's present image is held under a tag of its own meanwhile (an ID
+	// does not survive losing its last tag on every image store), and put
+	// back after.
+	_, hadShared, err := eng.InspectImage(ctx, DevImage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held := fmt.Sprintf("omniglass:held-%d", os.Getpid())
+	if hadShared {
+		docker("", "tag", DevImage, held)
+	}
+	foreign := fmt.Sprintf("another-checkout-%d", os.Getpid())
+	t.Cleanup(func() {
+		if hadShared {
+			docker("", "tag", held, DevImage)
+			docker("", "rmi", held)
+		} else {
+			docker("", "rmi", DevImage)
+		}
+	})
+	docker(fmt.Sprintf("FROM %s\nLABEL %s=%s\n", choice.Ref, VersionLabel, foreign), "build", "-t", DevImage, "-")
+	if moved, _, _ := eng.InspectImage(ctx, DevImage); moved.Labels[VersionLabel] != foreign {
+		t.Fatalf("omniglass:dev carries %q, want the other checkout's %q", moved.Labels[VersionLabel], foreign)
+	}
+
+	host, _ := os.Hostname()
+	project := fmt.Sprintf("omniglass-lab-it-own-%d", os.Getpid())
+	t.Cleanup(func() {
+		r := runner(eng, io.Discard, host)
+		r.TearDown(Spec{Project: project, Network: project + "_default"})
+		vols, _ := eng.Volumes(context.Background(), ProjectLabels(project))
+		for _, v := range vols {
+			_ = eng.RemoveVolume(context.Background(), v.Name)
+		}
+	})
+	var out bytes.Buffer
+	l, err := runner(eng, &out, host).Run(ctx, Config{
+		Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: choice.Ref, Scenario: DefaultScenario,
+			OutpostToken: "lab-it-outpost-token", OutpostTokenHash: tokenHash("lab-it-outpost-token"), Ephemeral: true,
+			Owner: Owner{Host: host, PID: os.Getpid(), PIDNS: CurrentPIDNS()}},
+		Image:         choice,
+		PlantedFaults: []string{"Panel SNMP", "Panel SSH", "Panel console"},
+	})
+	if err != nil {
+		t.Fatalf("the lab did not come up on its own build while omniglass:dev was another's: %v\n%s", err, out.String())
+	}
+	if !l.OutpostRunning {
+		t.Fatalf("the lab has no outpost running:\n%s", out.String())
+	}
+	for _, svc := range []Service{l.Spec.Server, l.Spec.Outpost} {
+		if got := docker("", "inspect", "-f", "{{.Image}}", svc.Container); got != own.ID {
+			t.Errorf("the %s container runs image %s, want this build's %s", svc.Name, got, own.ID)
+		}
 	}
 }

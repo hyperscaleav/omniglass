@@ -14,8 +14,8 @@ import (
 
 // TestSeedCreatesThePlatformSystemOnce proves the boot seed creates the one
 // reserved platform system and its type (#1625), unplaced, and that a second
-// boot neither duplicates them nor renames them. It also adopts a node that
-// registered before the seed ran: a node created on an unseeded database has
+// boot neither duplicates them nor renames them. It also adopts an outpost that
+// registered before the seed ran: an outpost created on an unseeded database has
 // no platform to join, and the next boot gives it its platform component.
 func TestSeedCreatesThePlatformSystemOnce(t *testing.T) {
 	t.Parallel()
@@ -28,12 +28,12 @@ func TestSeedCreatesThePlatformSystemOnce(t *testing.T) {
 	defer gw.Close()
 	all := scope.Set{All: true}
 
-	early, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "early-node"}, all, all)
+	early, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "early-outpost"}, all, all)
 	if err != nil {
-		t.Fatalf("create node before the seed: %v", err)
+		t.Fatalf("create outpost before the seed: %v", err)
 	}
 	if early.PlatformComponentID != nil {
-		t.Fatalf("a node on an unseeded database has a platform component %q; there is no platform system for it yet", *early.PlatformComponentID)
+		t.Fatalf("an outpost on an unseeded database has a platform component %q; there is no platform system for it yet", *early.PlatformComponentID)
 	}
 
 	for i := 0; i < 2; i++ {
@@ -73,12 +73,12 @@ func TestSeedCreatesThePlatformSystemOnce(t *testing.T) {
 		t.Error("the platform system's name is generated; it is the reserved name platform")
 	}
 
-	adopted, err := gw.GetNode(ctx, "early-node", all)
+	adopted, err := gw.GetOutpost(ctx, "early-outpost", all)
 	if err != nil {
-		t.Fatalf("read node: %v", err)
+		t.Fatalf("read outpost: %v", err)
 	}
 	if adopted.PlatformComponentID == nil {
-		t.Fatal("the boot seed did not give the early node its platform component")
+		t.Fatal("the boot seed did not give the early outpost its platform component")
 	}
 	var system string
 	if err := conn.QueryRow(ctx, `
@@ -87,7 +87,7 @@ func TestSeedCreatesThePlatformSystemOnce(t *testing.T) {
 		t.Fatalf("read the component's system: %v", err)
 	}
 	if system != "platform" {
-		t.Errorf("the early node's component is in %q, want platform", system)
+		t.Errorf("the early outpost's component is in %q, want platform", system)
 	}
 }
 
@@ -151,13 +151,13 @@ func TestSeedBootsBesideAnOperatorSystemNamedPlatform(t *testing.T) {
 	}
 }
 
-// TestSeedAdoptsANodeBesideAnOperatorComponentOfItsName proves the boot that
-// adopts a node registered before the platform still boots when an operator's
-// unplaced component already holds the node's name (#1625): registration
-// refuses that collision, but a boot cannot, so the adopted node's platform
+// TestSeedAdoptsAOutpostBesideAnOperatorComponentOfItsName proves the boot that
+// adopts an outpost registered before the platform still boots when an operator's
+// unplaced component already holds the outpost's name (#1625): registration
+// refuses that collision, but a boot cannot, so the adopted outpost's platform
 // component takes the next free name and the operator's component is left
 // as it was.
-func TestSeedAdoptsANodeBesideAnOperatorComponentOfItsName(t *testing.T) {
+func TestSeedAdoptsAOutpostBesideAnOperatorComponentOfItsName(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -174,7 +174,7 @@ func TestSeedAdoptsANodeBesideAnOperatorComponentOfItsName(t *testing.T) {
 	defer conn.Close(ctx)
 
 	// A database from the release before the platform: seeded, with no
-	// platform system, an operator's component and a node of one name.
+	// platform system, an operator's component and an outpost of one name.
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("first seed: %v", err)
 	}
@@ -185,8 +185,8 @@ func TestSeedAdoptsANodeBesideAnOperatorComponentOfItsName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create the operator's component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create the node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create the outpost: %v", err)
 	}
 
 	for i := 0; i < 2; i++ {
@@ -195,22 +195,22 @@ func TestSeedAdoptsANodeBesideAnOperatorComponentOfItsName(t *testing.T) {
 		}
 	}
 
-	n, err := gw.GetNode(ctx, "edge-1", all)
+	n, err := gw.GetOutpost(ctx, "edge-1", all)
 	if err != nil {
-		t.Fatalf("read node: %v", err)
+		t.Fatalf("read outpost: %v", err)
 	}
 	if n.PlatformComponentID == nil {
-		t.Fatal("the boot did not adopt the node")
+		t.Fatal("the boot did not adopt the outpost")
 	}
 	if *n.PlatformComponentID == mine.ID {
-		t.Fatal("the boot took the operator's component as the node's platform component")
+		t.Fatal("the boot took the operator's component as the outpost's platform component")
 	}
 	var name string
 	if err := conn.QueryRow(ctx, `select name from component where id = $1`, *n.PlatformComponentID).Scan(&name); err != nil {
 		t.Fatalf("read the platform component: %v", err)
 	}
 	if name != "edge-1-2" {
-		t.Errorf("the adopted node's platform component is %q, want edge-1-2 beside the operator's edge-1", name)
+		t.Errorf("the adopted outpost's platform component is %q, want edge-1-2 beside the operator's edge-1", name)
 	}
 	var operatorName string
 	if err := conn.QueryRow(ctx, `select name from component where id = $1`, mine.ID).Scan(&operatorName); err != nil {

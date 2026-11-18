@@ -33,10 +33,10 @@ Wait
 Type `omniglass secret create --name demo-display-login --owner-kind platform --secret-type basic-auth --fields '{"username":"admin","password":"boreal"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'`
 Enter
 Wait
-Type `omniglass endpoint create --component "$panel" --driver newtron-panel-web --node edge-hq --label 'Panel web API' --inputs '{"host":"'$panel_host'","port":"443","login":"demo-panel-login"}' | jq -c '{name, driver}'`
+Type `omniglass endpoint create --component "$panel" --driver newtron-panel-web --outpost edge-hq --label 'Panel web API' --inputs '{"host":"'$panel_host'","port":"443","login":"demo-panel-login"}' | jq -c '{name, driver}'`
 Enter
 Wait
-Type `omniglass endpoint create --component "$display" --driver boreal-edge-web --node edge-hq --label 'Display web admin' --inputs '{"host":"'$display_host'","port":"80","login":"demo-display-login"}' | jq -c '{name, driver}'`
+Type `omniglass endpoint create --component "$display" --driver boreal-edge-web --outpost edge-hq --label 'Display web admin' --inputs '{"host":"'$display_host'","port":"80","login":"demo-display-login"}' | jq -c '{name, driver}'`
 Enter
 Wait
 
@@ -64,7 +64,7 @@ Wait
 Type `omniglass component property sample list "$panel" model-number --limit 5 | jq -c '[.samples[] | select(.instance == "https")][0] | {instance, value}'`
 Enter
 Wait
-Type `grep 'msg="http login"' /stack/logs/node.log | grep "$panel_ep" | grep -o 'why=.*'`
+Type `grep 'msg="http login"' /stack/logs/outpost.log | grep "$panel_ep" | grep -o 'why=.*'`
 Enter
 Wait
 
@@ -73,18 +73,18 @@ Type "clear"
 Enter
 Wait
 Show
-Type "# The panel forgets its sessions, as on a reboot: the node logs in exactly once more"
+Type "# The panel forgets its sessions, as on a reboot: the outpost logs in exactly once more"
 Enter
 Wait
 Type `omniglass component simulation fire "$panel" --surface http-api --method POST --path /api/admin/sessions/expire | jq -c '{status, body: (.body | fromjson)}'`
 Enter
 Wait
 Hide
-Type `demo_until 90 'grep "msg=\"http login\"" /stack/logs/node.log | grep "$panel_ep" | grep -q "session lapsed"'`
+Type `demo_until 90 'grep "msg=\"http login\"" /stack/logs/outpost.log | grep "$panel_ep" | grep -q "session lapsed"'`
 Enter
 Wait@120s
 Show
-Type `grep 'msg="http login"' /stack/logs/node.log | grep "$panel_ep" | grep -o 'why=.*'`
+Type `grep 'msg="http login"' /stack/logs/outpost.log | grep "$panel_ep" | grep -o 'why=.*'`
 Enter
 Wait
 Type `reach "$panel" https`
@@ -118,7 +118,7 @@ Show
 Type "# Seventy seconds (two polls) later, the refused login is still the last"
 Enter
 Wait
-Type `grep 'msg="http login"' /stack/logs/node.log | grep "$panel_ep" | grep -o 'why=.*'`
+Type `grep 'msg="http login"' /stack/logs/outpost.log | grep "$panel_ep" | grep -o 'why=.*'`
 Enter
 Wait
 

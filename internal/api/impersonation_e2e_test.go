@@ -14,7 +14,7 @@ import (
 
 // TestImpersonationAPI drives impersonation end to end against the real binary: an
 // owner acts as a scoped writer (mutations land in the target's scope and the audit
-// row names BOTH the impersonated principal and the real owner), a view-as session
+// row names BOTH the impersonated user and the real owner), a view-as session
 // is read-only, a lesser admin cannot impersonate the owner (the escalation guard),
 // self is refused, a non-impersonator is capability-gated, and stopping the session
 // kills the token. Skipped under -short.
@@ -37,17 +37,17 @@ func TestImpersonationAPI(t *testing.T) {
 		conn.Close(ctx)
 		t.Fatalf("insert role: %v", err)
 	}
-	// user-admin: all-scope principal management (can reach impersonation) with no
+	// user-admin: all-scope user management (can reach impersonation) with no
 	// infra authority. Inserted before the first request builds the lazy role index.
 	if _, err := conn.Exec(ctx, `insert into role (name, official, permissions, inherits) values ('user-admin', false, $1, '{}')`,
-		[]string{"principal:read,impersonate"}); err != nil {
+		[]string{"user:read,impersonate"}); err != nil {
 		conn.Close(ctx)
 		t.Fatalf("insert user-admin role: %v", err)
 	}
 	// grant-admin: authority over grants only (a non-tree resource), for the
 	// non-tree scope-escalation case below. Inserted before the lazy role index.
 	if _, err := conn.Exec(ctx, `insert into role (name, official, permissions, inherits) values ('grant-admin', false, $1, '{}')`,
-		[]string{"principal_grant:create,delete"}); err != nil {
+		[]string{"user_grant:create,delete"}); err != nil {
 		conn.Close(ctx)
 		t.Fatalf("insert grant-admin role: %v", err)
 	}
@@ -80,14 +80,14 @@ func TestImpersonationAPI(t *testing.T) {
 	childID := entityID(t, c, ownerTok, "/locations", "child")
 
 	// Target: a writer scoped to root, plus a full admin (for the escalation case).
-	targetTok := principalWithGrants(t, ctx, dsn, "scoped-writer", []grant{{role: "loc-writer", scopeKind: "location", scopeID: rootID}})
+	targetTok := userWithGrants(t, ctx, dsn, "scoped-writer", []grant{{role: "loc-writer", scopeKind: "location", scopeID: rootID}})
 	targetID := meID(t, c, targetTok)
-	adminTok := principalWithGrants(t, ctx, dsn, "an-admin", []grant{{role: "admin", scopeKind: "all"}})
+	adminTok := userWithGrants(t, ctx, dsn, "an-admin", []grant{{role: "admin", scopeKind: "all"}})
 	patch := map[string]any{"label": "x"}
 
 	// --- ACT-AS: owner acts as the scoped writer ---
 	begin := func(id, mode string, want int) string {
-		code, b := c.send(ownerTok, http.MethodPost, "/principals/"+id+":impersonate", map[string]any{"mode": mode})
+		code, b := c.send(ownerTok, http.MethodPost, "/users/"+id+":impersonate", map[string]any{"mode": mode})
 		if code != want {
 			t.Fatalf(":impersonate %s %s = %d, want %d (%s)", id, mode, code, want, b)
 		}
@@ -108,7 +108,7 @@ func TestImpersonationAPI(t *testing.T) {
 	// The impersonation token acts in the TARGET's scope: a write under root works.
 	c.do(actTok, http.MethodPatch, "/locations/child", patch, http.StatusOK)
 
-	// The audit row for that write names the impersonated principal AND the real owner.
+	// The audit row for that write names the impersonated user AND the real owner.
 	var actor, realActor string
 	ac, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -116,7 +116,7 @@ func TestImpersonationAPI(t *testing.T) {
 	}
 	defer ac.Close(ctx)
 	if err := ac.QueryRow(ctx, `
-		select actor_principal_id, real_actor_principal_id from audit_log
+		select actor_user_id, real_actor_user_id from audit_log
 		where verb = 'update' and resource = 'location' and resource_id = $1
 		order by ts desc limit 1`, childID).Scan(&actor, &realActor); err != nil {
 		t.Fatalf("read audit: %v", err)
@@ -155,16 +155,16 @@ func TestImpersonationAPI(t *testing.T) {
 	}
 
 	// --- ESCALATION GUARD: a lesser admin cannot impersonate the owner ---
-	if code, b := c.send(adminTok, http.MethodPost, "/principals/"+ownerID+":impersonate", map[string]any{"mode": "act_as"}); code != http.StatusForbidden {
+	if code, b := c.send(adminTok, http.MethodPost, "/users/"+ownerID+":impersonate", map[string]any{"mode": "act_as"}); code != http.StatusForbidden {
 		t.Fatalf("admin impersonating owner: want 403 (escalation), got %d (%s)", code, b)
 	}
 
 	// --- OWNER PROTECTION: an owner target is un-impersonatable by ANYONE, including
 	// another owner (not just blocked by the capability-cover arithmetic). Both modes. ---
-	otherOwnerTok := principalWithGrants(t, ctx, dsn, "other-owner", []grant{{role: "owner", scopeKind: "all"}})
+	otherOwnerTok := userWithGrants(t, ctx, dsn, "other-owner", []grant{{role: "owner", scopeKind: "all"}})
 	otherOwnerID := meID(t, c, otherOwnerTok)
 	for _, mode := range []string{"view_as", "act_as"} {
-		if code, b := c.send(ownerTok, http.MethodPost, "/principals/"+otherOwnerID+":impersonate", map[string]any{"mode": mode}); code != http.StatusForbidden {
+		if code, b := c.send(ownerTok, http.MethodPost, "/users/"+otherOwnerID+":impersonate", map[string]any{"mode": mode}); code != http.StatusForbidden {
 			t.Fatalf("owner impersonating another owner (%s): want 403 (owner protection), got %d (%s)", mode, code, b)
 		}
 	}
@@ -173,8 +173,8 @@ func TestImpersonationAPI(t *testing.T) {
 	begin(ownerID, "act_as", http.StatusUnprocessableEntity)
 
 	// --- CAPABILITY GATE: a viewer cannot impersonate at all ---
-	viewerTok := principalWithGrants(t, ctx, dsn, "a-viewer", []grant{{role: "viewer", scopeKind: "all"}})
-	if code, _ := c.send(viewerTok, http.MethodPost, "/principals/"+targetID+":impersonate", map[string]any{"mode": "view_as"}); code != http.StatusForbidden {
+	viewerTok := userWithGrants(t, ctx, dsn, "a-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	if code, _ := c.send(viewerTok, http.MethodPost, "/users/"+targetID+":impersonate", map[string]any{"mode": "view_as"}); code != http.StatusForbidden {
 		t.Fatalf("viewer impersonating: want 403 (no capability), got %d", code)
 	}
 
@@ -185,17 +185,17 @@ func TestImpersonationAPI(t *testing.T) {
 	yID := entityID(t, c, ownerTok, "/locations", "campus-y")
 	// A split-grant admin: all-scope user-admin (can reach impersonation) + deploy
 	// scoped to root only; it has NO authority in campus-y.
-	splitTok := principalWithGrants(t, ctx, dsn, "split-admin",
+	splitTok := userWithGrants(t, ctx, dsn, "split-admin",
 		[]grant{{role: "user-admin", scopeKind: "all"}, {role: "deploy", scopeKind: "location", scopeID: rootID}})
 	// The target is a deployer scoped to the disjoint campus-y.
-	yTargetTok := principalWithGrants(t, ctx, dsn, "y-deployer", []grant{{role: "deploy", scopeKind: "location", scopeID: yID}})
+	yTargetTok := userWithGrants(t, ctx, dsn, "y-deployer", []grant{{role: "deploy", scopeKind: "location", scopeID: yID}})
 	yTargetID := meID(t, c, yTargetTok)
 
-	if code, b := c.send(splitTok, http.MethodPost, "/principals/"+yTargetID+":impersonate", map[string]any{"mode": "act_as"}); code != http.StatusForbidden {
+	if code, b := c.send(splitTok, http.MethodPost, "/users/"+yTargetID+":impersonate", map[string]any{"mode": "act_as"}); code != http.StatusForbidden {
 		t.Fatalf("split admin act-as into disjoint scope: want 403 (scope escalation), got %d (%s)", code, b)
 	}
 	// View-as of the same disjoint target is allowed (read-only).
-	c.do(splitTok, http.MethodPost, "/principals/"+yTargetID+":impersonate", map[string]any{"mode": "view_as"}, http.StatusCreated)
+	c.do(splitTok, http.MethodPost, "/users/"+yTargetID+":impersonate", map[string]any{"mode": "view_as"}, http.StatusCreated)
 
 	// --- NON-TREE SCOPE ESCALATION: the guard is resource-agnostic. A split-grant
 	// admin who holds grant authority only through a SCOPED grant (which for a
@@ -206,14 +206,14 @@ func TestImpersonationAPI(t *testing.T) {
 	// view-as remains available. ---
 	// Attacker: all-scope user-admin (reaches impersonation) + grant-admin scoped to
 	// root only (non-tree, so effectively empty: cannot create grants on its own).
-	grantSplitTok := principalWithGrants(t, ctx, dsn, "grant-split-admin",
+	grantSplitTok := userWithGrants(t, ctx, dsn, "grant-split-admin",
 		[]grant{{role: "user-admin", scopeKind: "all"}, {role: "grant-admin", scopeKind: "location", scopeID: rootID}})
 	// Target holds grant authority at ALL scope.
-	grantTargetTok := principalWithGrants(t, ctx, dsn, "grant-target", []grant{{role: "grant-admin", scopeKind: "all"}})
+	grantTargetTok := userWithGrants(t, ctx, dsn, "grant-target", []grant{{role: "grant-admin", scopeKind: "all"}})
 	grantTargetID := meID(t, c, grantTargetTok)
 
-	if code, b := c.send(grantSplitTok, http.MethodPost, "/principals/"+grantTargetID+":impersonate", map[string]any{"mode": "act_as"}); code != http.StatusForbidden {
+	if code, b := c.send(grantSplitTok, http.MethodPost, "/users/"+grantTargetID+":impersonate", map[string]any{"mode": "act_as"}); code != http.StatusForbidden {
 		t.Fatalf("act-as to launder all-scope grant authority: want 403 (scope escalation), got %d (%s)", code, b)
 	}
-	c.do(grantSplitTok, http.MethodPost, "/principals/"+grantTargetID+":impersonate", map[string]any{"mode": "view_as"}, http.StatusCreated)
+	c.do(grantSplitTok, http.MethodPost, "/users/"+grantTargetID+":impersonate", map[string]any{"mode": "view_as"}, http.StatusCreated)
 }

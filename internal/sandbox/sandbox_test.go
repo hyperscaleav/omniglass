@@ -10,8 +10,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/sandbox"
 )
 
-// The sandbox is shared by every caller that renders an operator's template
-// (#618): a label rule and a notification template. These pin what a second
+// The sandbox is shared by every caller that renders an operator's rule
+// (#618): a label rule and a notification's subject and text. These pin what a second
 // caller relies on beyond what the label tests already cover: the grammar's
 // refusals name the construct, the output cap is the caller's, and the output
 // is returned as written (a message body keeps its lines).

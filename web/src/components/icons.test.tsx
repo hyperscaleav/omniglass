@@ -3,7 +3,7 @@ import { resolveIcon, Landmark, Building, Layers, DoorOpen, MapPin, Monitor, Mic
 
 // resolveIcon is the seam that lets the API name a type's glyph: a known key maps
 // to its component, and anything unknown or missing falls back to MapPin so the
-// tree stays renderable if the registry ships a key the console does not know yet.
+// tree stays renderable if the catalog ships a key the console does not know yet.
 describe("resolveIcon", () => {
   it("maps each seeded location_type icon key to its glyph", () => {
     expect(resolveIcon("landmark")).toBe(Landmark);

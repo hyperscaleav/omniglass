@@ -12,7 +12,7 @@ import {
 import type { FilterKey } from "./predicate";
 
 // A node shape like the inventory pages build (id, display, children + a domain
-// field). The place tree: hq > [b1 > f1 > [r1, r2]].
+// field). The location tree: hq > [b1 > f1 > [r1, r2]].
 type N = { id: string; display: string; children: N[]; type: string };
 const node = (id: string, display: string, type: string, children: N[] = []): N => ({ id, display, type, children });
 

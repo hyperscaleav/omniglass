@@ -13,13 +13,13 @@ import (
 // before the alarm opens, whether a later sample or the sweep (a
 // transition-only input sends no later sample) finds it held; a spike
 // shorter than the sustain opens nothing; a recovery shorter than the clear
-// sustain holds the incident open; and the streak survives a restart.
+// sustain holds the alarm open; and the streak survives a restart.
 func TestRuleSustains(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	gw, all := f.gw, scope.Set{All: true}
-	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "reach-lost", SampleKey: "endpoint-reachable",
+	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: "reach-lost", SampleKey: "endpoint-reachable",
 		Fire: criteria("eq", "down"), FireSustain: 10 * time.Second, Clear: ptrCriteria(criteria("eq", "up")),
 		ClearSustain: 10 * time.Second, Severity: "high"}, all); err != nil {
 		t.Fatal(err)

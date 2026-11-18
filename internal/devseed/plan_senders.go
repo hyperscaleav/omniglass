@@ -17,7 +17,7 @@ import (
 // A plan's webhook sender (#1747) is an outside actor that speaks for a site
 // as a component of its own: a meeting platform account whose rooms are the
 // site's systems. It seeds as that component, one webhook endpoint of the
-// driver its simulator profile names (server hosted, so on no node), a
+// driver its simulator profile names (server hosted, so on no outpost), a
 // signing secret minted for this seed alone, and one identity binding per
 // system, named for the system, on the driver's room identity. The simulator
 // learns the bound names from the bindings and adds each as a room, so its
@@ -162,7 +162,7 @@ func seedPlanSenders(ctx context.Context, gw storage.Gateway, actorID string, se
 		comp, drv := compIDs[s.Comp], s.Driver
 		if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
 			Driver: &drv, Inputs: map[string]string{s.Input: s.Secret}, Label: "Room webhooks",
-			Component: &comp, SecretRead: all, CanAdmin: true,
+			Component: &comp, SecretRead: all, SecretBind: all, CanAdmin: true,
 		}, all); err != nil {
 			return 0, fmt.Errorf("devseed: create the webhook endpoint of %s: %w", s.Component, err)
 		}

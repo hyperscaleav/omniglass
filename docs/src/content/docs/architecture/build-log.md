@@ -12,7 +12,7 @@ the history behind it. Entries are append-only and quote the vocabulary of their
 retired terms appear here exactly as they shipped.
 
 The code is built one **vertical slice per PR**, each a thin cut through the whole stack rather than a
-horizontal layer. Slices are logged here as they land; a page's badge only flips once *all* of its
-capabilities ship, so an early slice can prove a seam without moving any page off `Design`.
+horizontal layer. Slices are logged here as they land; a rebuilt page's badge only flips once *all* of
+its capabilities ship, so an early slice can prove a seam without moving any page off `Design`.
 
 ::build-log
