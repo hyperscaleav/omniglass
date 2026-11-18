@@ -17,20 +17,20 @@ import (
 // systems (#1577): half of max payload, the headroom the next size step needs.
 const fleetWireCap = 512 * 1024
 
-// Every node of the 1,000-system corporate lab pulls its worklist at once,
+// Every outpost of the 1,000-system corporate lab pulls its worklist at once,
 // over the real bus and the bounded responder: each pull is answered, none
 // queues past its budget, and HQ's (over 800 components) is gzipped under half
 // of max payload (#1577).
-func TestAFleetOfNodesPullingAtOnceIsServedByTheBoundedResponder(t *testing.T) {
+func TestAFleetOfOutpostsPullingAtOnceIsServedByTheBoundedResponder(t *testing.T) {
 	if testing.Short() {
 		t.Skip("seeds the 1,000-system corporate lab")
 	}
-	gw, plan, hq, nodeOf := corporateFleet(t, 1000)
+	gw, plan, hq, outpostOf := corporateFleet(t, 1000)
 	ctx := context.Background()
 	all := scope.Set{All: true}
 	tokens := map[string]string{}
 	for _, s := range plan.Sites {
-		name, token := nodeOf(s.Name), "secret-"+s.Name
+		name, token := outpostOf(s.Name), "secret-"+s.Name
 		sum := sha256.Sum256([]byte(token))
 		if _, err := gw.SetEnrollmentToken(ctx, "", name, hex.EncodeToString(sum[:]), all); err != nil {
 			t.Fatal(err)
@@ -84,10 +84,10 @@ func TestAFleetOfNodesPullingAtOnceIsServedByTheBoundedResponder(t *testing.T) {
 	began := time.Now()
 	close(start)
 	wg.Wait()
-	t.Logf("%d nodes pulled at once with %d workers in %s", len(conns), srv.worklistWorkers, time.Since(began))
+	t.Logf("%d outposts pulled at once with %d workers in %s", len(conns), srv.worklistWorkers, time.Since(began))
 
 	for _, s := range plan.Sites {
-		name := nodeOf(s.Name)
+		name := outpostOf(s.Name)
 		p := got[name]
 		if p.err != nil {
 			t.Errorf("%s: %v", name, p.err)

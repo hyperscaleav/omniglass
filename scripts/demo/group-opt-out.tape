@@ -5,19 +5,19 @@
 # is, and opting back in restores her (#1341, #1354).
 
 Hide
-Type `demo_hush 'for u in kim lee; do omniglass principal create --username $u && omniglass principal grant create $u --role viewer --scope-kind all; done'`
+Type `demo_hush 'for u in kim lee; do omniglass user create --username $u && omniglass user grant create $u --role viewer --scope-kind all; done'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal-group create --name weekly-review && omniglass principal-group member create weekly-review --principal-id kim && omniglass principal-group member create weekly-review --principal-id lee'`
+Type `demo_hush 'omniglass user-group create --name weekly-review && omniglass user-group member create weekly-review --user-id kim && omniglass user-group member create weekly-review --user-id lee'`
 Enter
 Wait
-Type `demo_hush 'omniglass notification-target create --name review-inbox --kind principal_group --principal-group weekly-review --channels "[\"inbox\"]"'`
+Type `demo_hush 'omniglass notification-target create --name review-inbox --kind user_group --user-group weekly-review --channels "[\"inbox\"]"'`
 Enter
 Wait
-Type `demo_hush 'kim=$(omniglass principal impersonate kim --mode act_as | jq -r .token)'`
+Type `demo_hush 'kim=$(omniglass user impersonate kim --mode act_as | jq -r .token)'`
 Enter
 Wait
-Type `demo_hush 'lee=$(omniglass principal impersonate lee --mode act_as | jq -r .token)'`
+Type `demo_hush 'lee=$(omniglass user impersonate lee --mode act_as | jq -r .token)'`
 Enter
 Wait
 Type "clear"

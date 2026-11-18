@@ -36,11 +36,23 @@ table.column references (against the generated schema facts), plus the badge-fen
 coverage check and the docs-command-and-flag guard in `internal/cli`. The semantic
 drift no lint can see gets the periodic `/docs-audit` pass (#429).
 
+A worked example of the rule: the collection page's per-transport probe table (each transport's
+rung, its `endpoint.params` and the samples its probe lands) is rendered from the transport registry
+and the probe keys through `cmd/seedgen`, `seed.json` and `SeededSet`, and a test in `internal/outpost`
+drives each built transport's probe and fails when what it lands differs from what its entry
+declares. A new transport's row, such as snmp's, appears with its registry entry and no doc edit.
+
 ## What "the docs" means here
 
 - **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
-  documents, and the current decisions. Each official term is defined once in the
-  [glossary](/architecture/glossary/) and not redefined in the leaves.
+  documents, and the current decisions. Each official term is defined once and not redefined in
+  the leaves. A word an operator or an admin reads (an entity, a nav label, a verdict) is a row
+  in `internal/vocab/terms.yaml`: its word and plural, a one-sentence definition, its API
+  collection, schema and permission noun, its nav entry, and any word it retired. `make gen`
+  renders the [glossary](/reference/glossary/) and the entity descriptions in the OpenAPI spec
+  from it, and the guards fail a new collection, nav entry or verdict that names no row, or a
+  retired word back in console strings or docs prose. Internal architecture terms stay in the
+  frozen [architecture glossary](/architecture/glossary/).
 - **Guides** (`/guides/`) are how-to pages for someone *using* the product, split by
   audience: the **operator guide** (running the fleet from the console and the CLI), the
   **admin guide** (managing accounts, access, audit, and config), and **deployment**
@@ -59,9 +71,16 @@ states its one-line justification in the PR body.
 
 ## Status moves with the code
 
-The architecture pages are written in the present tense as the **target design**, so build status is
+:::note[The site is being rebuilt]
+The docs site is being rebuilt by audience, section by section, in the vocabulary's words
+([ADR-2087.2](/architecture/decisions/#adr-20872-the-docs-site-is-rebuilt-by-audience-the-old-pages-leave-as-their-section-lands)). The rebuilt pages carry the status badges. The pages that predate
+the rebuild carry none: each stays the reference for its capability, kept true when a slice falsifies it,
+until its section is rebuilt and the section's PR deletes it. Git is their history.
+:::
+
+The rebuilt pages are written in the present tense as the **target design**, so build status is
 carried *alongside* the prose, not woven into it, and keeping it current is part of docs-with-everything.
-A slice that advances a page updates three surfaces in the **same PR**:
+A slice that advances a rebuilt page updates three surfaces in the **same PR**:
 
 - the page's **status badge** moves to its new floor (`Design` to `Partial` to `Built`), which the live
   grid on [implementation status](/architecture/status/) reads directly, so the grid never lies;
@@ -170,7 +189,7 @@ screenshots:
 
 That frontmatter is the **single source**: `make docs-shots` reads it from every page, drives
 the real console (the same binary an operator runs, never a mock, served by a throwaway lab with
-no node collecting, so the pages hold still; the capture hides the lab's banner), and writes
+no outpost collecting, so the pages hold still; the capture hides the lab's banner), and writes
 `public/screenshots/<id>.png`; the directive renders the figure from the same entry. So the
 capture list and the embed cannot drift, a `#id` with no frontmatter entry (or no captured
 image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.
@@ -249,7 +268,7 @@ the only correct answer when the enclosing cell holds something the shot exists 
 
 **Standing masks** cover console chrome that shows a count of the seed's rows, and need no
 frontmatter entry: the capture applies them to every shot wherever the element renders
-(`STANDING_MASKS` in `web/e2e/shotmasklib.mjs`). Today that is the Catalog subrail's per-registry
+(`STANDING_MASKS` in `web/e2e/shotmasklib.mjs`). Today that is the Catalog subrail's per-catalog
 counts (`data-testid="catalog-entry-count"`). A count is the seed's, not the page's, so a release
 that adds a driver or a type moves a digit on every page under the Catalog shell; without the
 standing mask each such PR failed the gate on a UI it never touched (#1482). Add a new count of
@@ -280,6 +299,16 @@ a varying value adds its case there. Every capture logs what each mask resolved 
 (`mask 59x td 190x37 <- text=/…/`, `mask  1x box 184x16 over span 157 <- [data-testid=blade-since]`),
 so a mask that lands on the wrong element shows up in the capture output rather than in a raster
 nobody diffs by hand: a selector mask whose box is as wide as its text is the tell.
+
+Both renders' `page.screenshot` calls (the clean shot in `docs-shots.mjs` and the baseline in
+`shootBaseline`) go through `withCaptureRetry`, because Chromium can drop a capture under runner
+load (`Protocol error (Page.captureScreenshot): Unable to capture screenshot`, #1177). That error
+comes from the browser, not the page: Chromium has already forced the page to redraw and retried
+its copy of the compositor surface five times before reporting it, so waiting on the page (a load
+state, a `requestAnimationFrame`) cannot prevent it. The capture is retried once, and only on that
+exact error, logging the failing call and the page's state (URL, `readyState`, viewport) so a
+recurrence shows in the capture output. Any other error and a second drop fail the capture.
+Playwright's own `retries` stays off, since it would also hide a real assertion flake.
 
 ## Every PR demos its feature
 

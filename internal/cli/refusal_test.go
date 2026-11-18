@@ -26,7 +26,7 @@ import (
 // operator sees on stdout, not that a message exists somewhere in the response.
 //
 // The server is canned rather than the real handler, because what is under test
-// is the CLI's rendering and a real one would drag Postgres and a principal in
+// is the CLI's rendering and a real one would drag Postgres and a user in
 // for it. So the message is taken from the API's own sentinel rather than
 // retyped: a copy would go on passing while the API's wording drifted, and the
 // wording is the whole subject. The API side of the same promise, that the

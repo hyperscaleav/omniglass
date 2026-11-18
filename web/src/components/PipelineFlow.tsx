@@ -33,7 +33,7 @@ const END_TO_END_RULE =
   "The share lost anywhere on the path: 1 minus the product of every hop's survival (1 - loss), so two hops losing 1% each lose 1.99% end to end, not 2%.";
 const KIND_LABEL: Record<string, string> = { metric: "Metric", property: "Property", event: "Event", log: "Log" };
 const CLASS_TEXT: Record<string, string> = {
-  node: "every node's platform component",
+  outpost: "every outpost's platform component",
   server: "every server's platform component",
 };
 

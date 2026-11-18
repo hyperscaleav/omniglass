@@ -50,7 +50,7 @@ func TestStandardsAPI(t *testing.T) {
 	// the standard:read floor (*:read): one forked from a template here, since
 	// the boot seeds none.
 	c.do(ownerTok, http.MethodPost, "/standards:createFromTemplate", map[string]any{"template": "classroom"}, http.StatusCreated)
-	viewerTok := principalWithGrants(t, ctx, dsn, "standard-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "standard-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	var listed struct {
 		Standards []struct {
 			ID       string `json:"id"`
@@ -153,8 +153,8 @@ func TestStandardMapOnTheWire(t *testing.T) {
 	mapDecl := map[string]any{
 		"aspect": 1.6,
 		"positions": []map[string]any{
-			{"role": "room-mic", "position": 1, "x": 0.3, "y": 0.5},
-			{"role": "main-display", "position": 1, "x": 0.5, "y": 0.05},
+			{"slot": "room-mic", "position": 1, "x": 0.3, "y": 0.5},
+			{"slot": "main-display", "position": 1, "x": 0.5, "y": 0.05},
 		},
 	}
 	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": mapDecl}, http.StatusOK)
@@ -163,7 +163,7 @@ func TestStandardMapOnTheWire(t *testing.T) {
 		Map *struct {
 			Aspect    float64 `json:"aspect"`
 			Positions []struct {
-				Role string  `json:"role"`
+				Slot string  `json:"slot"`
 				X    float64 `json:"x"`
 			} `json:"positions"`
 		} `json:"map"`
@@ -176,7 +176,7 @@ func TestStandardMapOnTheWire(t *testing.T) {
 	}
 
 	// Out of bounds is a 422, not stored garbage.
-	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": map[string]any{"aspect": 1.6, "positions": []map[string]any{{"role": "r", "position": 1, "x": 1.2, "y": 0.5}}}}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": map[string]any{"aspect": 1.6, "positions": []map[string]any{{"slot": "r", "position": 1, "x": 1.2, "y": 0.5}}}}, http.StatusUnprocessableEntity)
 
 	// JSON null clears the declaration.
 	c.do(ownerTok, http.MethodPatch, "/standards/"+created.ID, map[string]any{"map": nil}, http.StatusOK)
@@ -262,6 +262,7 @@ func TestBucketedSeriesReadsOnTheWire(t *testing.T) {
 		t.Fatalf("insert: %v", err)
 	}
 	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "firmware-version", Value: "2.0.0", Source: "collection", TS: hour.Add(-30 * time.Hour)},
 		{OwnerKind: "component", OwnerID: "bucket-probe", Key: "firmware-version", Value: "2.1.4", Source: "collection", TS: hour.Add(-2*time.Hour + time.Minute)},
 	}); err != nil {
 		t.Fatalf("insert property: %v", err)
@@ -297,14 +298,21 @@ func TestBucketedSeriesReadsOnTheWire(t *testing.T) {
 	if empty := got.Buckets[719-1]; empty.Count != 0 || empty.Max != nil || empty.Avg != nil || empty.Last != nil {
 		t.Fatalf("empty bucket = %+v, want count 0 and null aggregates", empty)
 	}
+	for _, k := range []string{`"carried_in"`, `"held"`} {
+		if strings.Contains(string(body), k) {
+			t.Fatalf("a metric read carries %s, want metric reads unchanged", k)
+		}
+	}
 	if !strings.Contains(string(body), `"max":null`) {
 		t.Fatalf("an empty bucket's aggregates must be present and null on the wire, got %.300s", body)
 	}
 
 	var prop struct {
-		Buckets []struct {
+		CarriedIn *string `json:"carried_in"`
+		Buckets   []struct {
 			Count int     `json:"count"`
 			Last  *string `json:"last"`
+			Held  *string `json:"held"`
 		} `json:"buckets"`
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bucket-probe/properties/firmware-version/samples?hours=24&resolution=3600", nil, http.StatusOK), &prop); err != nil {
@@ -312,6 +320,31 @@ func TestBucketedSeriesReadsOnTheWire(t *testing.T) {
 	}
 	if len(prop.Buckets) != 24 || prop.Buckets[21].Count != 1 || prop.Buckets[21].Last == nil || *prop.Buckets[21].Last != "2.1.4" {
 		t.Fatalf("property buckets = %+v, want 24 with the change in the third from last", prop.Buckets)
+	}
+	// The value in force when the window opens (#1488): the 2.0.0 from before it
+	// is carried in and held to the change, whose bucket and the ones after hold
+	// 2.1.4; last stays the bucket's own rows.
+	if prop.CarriedIn == nil || *prop.CarriedIn != "2.0.0" {
+		t.Fatalf("carried_in = %v, want 2.0.0, the value in force when the 24h window opened", prop.CarriedIn)
+	}
+	if h := prop.Buckets[0]; h.Last != nil || h.Held == nil || *h.Held != "2.0.0" {
+		t.Fatalf("first bucket = %+v, want no last and 2.0.0 held", h)
+	}
+	if h := prop.Buckets[23]; h.Held == nil || *h.Held != "2.1.4" {
+		t.Fatalf("newest bucket held = %v, want 2.1.4 from the change before it", h.Held)
+	}
+	// The raw read carries the same value in; a window that holds the first row has none.
+	var rawProp struct {
+		CarriedIn *string `json:"carried_in"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/bucket-probe/properties/firmware-version/samples?hours=24", nil, http.StatusOK), &rawProp); err != nil {
+		t.Fatalf("read raw property: %v", err)
+	}
+	if rawProp.CarriedIn == nil || *rawProp.CarriedIn != "2.0.0" {
+		t.Fatalf("raw carried_in = %v, want 2.0.0", rawProp.CarriedIn)
+	}
+	if body := c.do(ownerTok, http.MethodGet, "/components/bucket-probe/properties/firmware-version/samples?hours=48", nil, http.StatusOK); strings.Contains(string(body), `"carried_in"`) {
+		t.Fatalf("a window holding the first row carries carried_in, want it absent: %.300s", body)
 	}
 
 	// No resolution: the raw body, key for key as before, no bucket fields.

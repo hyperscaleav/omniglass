@@ -1192,7 +1192,7 @@ func (d *Device) serveHTTP(w http.ResponseWriter, r *http.Request, face *faceObs
 	// that can quietly mask a missing label.
 	//
 	// X-Omniglass-Console-User is the one exception: it carries the
-	// human user the console is acting on behalf of, which no address
+	// person the console is acting on behalf of, which no address
 	// can reveal. A consumer can prefer "console:<user>" over the
 	// address-derived label when this header is present.
 	localAddr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), d.Port)

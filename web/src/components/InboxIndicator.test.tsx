@@ -7,9 +7,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { INBOX_COUNT_KEY, INBOX_PREFIX } from "../lib/inbox";
 
 // The top bar's bell (#1355): the unread count from the seeded cache, a link
-// to the inbox, and nothing at all for a principal without notification:read.
-const viewer: Me = { principal: { id: "u-1", kind: "human" }, human: { username: "ada" }, permissions: ["*:read", "notification:subscribe"], grants: [] };
-const noInbox: Me = { principal: { id: "u-2", kind: "human" }, human: { username: "bo" }, permissions: ["component:read"], grants: [] };
+// to the inbox, and nothing at all for a user without notification:read.
+const viewer: Me = { user: { id: "u-1", kind: "person" }, person: { username: "ada" }, permissions: ["*:read", "notification:subscribe"], grants: [] };
+const noInbox: Me = { user: { id: "u-2", kind: "person" }, person: { username: "bo" }, permissions: ["component:read"], grants: [] };
 
 function mount(me: Me, unread?: number) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });

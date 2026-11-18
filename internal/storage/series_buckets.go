@@ -25,7 +25,7 @@ import (
 // the owner, measured rows only (observed and calculated). Two instances are
 // two series, and a declared or intended row is a want, not a reading, so
 // neither may move a bucket's min, max, avg or last. Rows of one instance from
-// different sources or collector nodes stay one series: a node move or a task
+// different sources or collector outposts stay one series: an outpost move or a task
 // reassignment does not split what was measured.
 
 // MetricBucket is one regular bucket of a metric series. An empty bucket has
@@ -47,19 +47,39 @@ type MetricBuckets struct {
 }
 
 // PropertyBucket is one regular bucket of a property series: how many changes
-// it holds and the value in force at its end. Min, max and avg mean nothing to a
-// string; a step chart holds Last across the empty buckets after it.
+// it holds and the value its own changes end on. Min, max and avg mean nothing
+// to a string. Last is only the bucket's own rows (nil when it has none); Held
+// is the value in force at the bucket's end, Last else what was held before it
+// (#1488), so a step chart reads a flat stretch off Held.
 type PropertyBucket struct {
 	TS    time.Time
 	Count int64
 	Last  *string
+	Held  *string
 }
 
-// PropertyBuckets mirrors MetricBuckets over the property lane.
+// PropertyBuckets mirrors MetricBuckets over the property lane. CarriedIn is
+// the value in force when the grid opens (#1488): the newest measured row of
+// the instance before the first bucket, no older than the coverage floor, nil
+// when none. It is what the leading empty buckets hold.
 type PropertyBuckets struct {
 	Instance    string
 	CoveredFrom time.Time
+	CarriedIn   *string
 	Buckets     []PropertyBucket
+}
+
+// holdAcross fills each bucket's Held: its own Last when it has changes, else
+// the value held at the end of the bucket before it, the first falling back to
+// carriedIn. Pure, so the carry rule tests without a database.
+func holdAcross(buckets []PropertyBucket, carriedIn *string) {
+	held := carriedIn
+	for i := range buckets {
+		if buckets[i].Last != nil {
+			held = buckets[i].Last
+		}
+		buckets[i].Held = held
+	}
 }
 
 // bucketCount is how many buckets of resolution cover window: the window
@@ -250,8 +270,11 @@ func (p *PG) ListMetricBuckets(ctx context.Context, ownerKind, ownerRef, key str
 }
 
 // ListPropertyBuckets mirrors ListMetricBuckets over the property lane: a
-// bucket's change count and the value held at its end, over one instance's
-// measured changes.
+// bucket's change count, the value its own changes end on and the value held at
+// its end, over one instance's measured changes. It also returns the value in
+// force when the grid opens (CarriedIn, #1488), which the leading empty buckets
+// hold. With no instance named and none measured in the window, the one
+// instance that holds a value from before it is the series.
 func (p *PG) ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window, resolution time.Duration) (PropertyBuckets, error) {
 	var out PropertyBuckets
 	if err := checkBucketing(window, resolution); err != nil {
@@ -295,6 +318,20 @@ func (p *PG) ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key s
 	if err != nil {
 		return out, err
 	}
+	var carriedIn *string
+	carry := true
+	if instance == nil && len(measured) == 0 {
+		held, err := p.measuredPropertyInstances(ctx, col, bucketRetentionSQL, bucketLoSQL, args)
+		if err != nil {
+			return out, err
+		}
+		inst, carry = oneInstance(held)
+	}
+	if carry {
+		if carriedIn, err = p.propertyCarriedIn(ctx, col, bucketLoSQL, bucketRetentionSQL, "$6", append(args, inst)); err != nil {
+			return out, err
+		}
+	}
 	rows, err := p.pool.Query(ctx, fmt.Sprintf(`with
 		agg as (
 			select date_bin(make_interval(secs => $3), pr.ts, timestamptz 'epoch') as b, count(*) as n,
@@ -310,6 +347,7 @@ func (p *PG) ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key s
 	}
 	defer rows.Close()
 	out.Instance = inst
+	out.CarriedIn = carriedIn
 	out.Buckets = make([]PropertyBucket, 0, n)
 	for rows.Next() {
 		var b PropertyBucket
@@ -318,5 +356,116 @@ func (p *PG) ListPropertyBuckets(ctx context.Context, ownerKind, ownerRef, key s
 		}
 		out.Buckets = append(out.Buckets, b)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	holdAcross(out.Buckets, out.CarriedIn)
+	return out, nil
+}
+
+// bucketRetentionSQL is the retention horizon of a bucketed property read ($5 is
+// the effective retention in days): the oldest instant a carried-in value may
+// come from, the coverage floor below the grid.
+const bucketRetentionSQL = `(now() - make_interval(days => $5::int))`
+
+// measuredPropertyInstances lists the instances with a measured row in
+// [fromSQL, toSQL), by name. The bounds are SQL over the caller's bind
+// parameters, as the bucket grid's are.
+func (p *PG) measuredPropertyInstances(ctx context.Context, col, fromSQL, toSQL string, args []any) ([]string, error) {
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
+		select pr.instance from property pr
+		where pr.%s = $1::uuid and pr.property_type_id = $2::uuid
+		  and pr.provenance in `+measuredProvenance+`
+		  and pr.ts >= `+fromSQL+` and pr.ts < `+toSQL+`
+		group by pr.instance
+		order by pr.instance`, col), args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list held property instances: %w", err)
+	}
+	return scanInstances(rows)
+}
+
+// oneInstance is the instance when exactly one holds the series, and false
+// otherwise: a carried-in value is never guessed between two series.
+func oneInstance(instances []string) (string, bool) {
+	if len(instances) == 1 {
+		return instances[0], true
+	}
+	return "", false
+}
+
+// propertyCarriedIn is the value in force when a window opens at loSQL (#1488):
+// the newest measured row of one instance before it, no older than horizonSQL
+// (the retention floor), nil when there is none. instParam names the bind
+// parameter holding the instance; args carries $1 (the owner arc), $2 (the type)
+// and whatever the bounds read.
+func (p *PG) propertyCarriedIn(ctx context.Context, col, loSQL, horizonSQL, instParam string, args []any) (*string, error) {
+	var v *string
+	err := p.pool.QueryRow(ctx, fmt.Sprintf(`
+		select pr.value #>> '{}' from property pr
+		where pr.%s = $1::uuid and pr.property_type_id = $2::uuid
+		  and pr.instance = `+instParam+` and pr.provenance in `+measuredProvenance+`
+		  and pr.ts >= `+horizonSQL+` and pr.ts < `+loSQL+`
+		order by pr.ts desc, pr.id desc
+		limit 1`, col), args...).Scan(&v)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: read property carried-in: %w", err)
+	}
+	return v, nil
+}
+
+// PropertyCarriedIn is the raw property read's carried-in value (#1488): the
+// value in force when the window opens, the newest measured row of the instance
+// before now minus window, no older than the type's retention. instance nil
+// asks for the one instance with a measured row in the window, else the one
+// that holds a value from before it; with more than one the answer is nil, never
+// a pick between two series. A window of zero or less is unbounded and has no
+// opening.
+func (p *PG) PropertyCarriedIn(ctx context.Context, ownerKind, ownerRef, key string, instance *string, window time.Duration) (*string, error) {
+	if window <= 0 {
+		return nil, nil
+	}
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return nil, err
+	}
+	arc, err := p.ownerArcValue(ctx, p.pool, ownerKind, ownerRef)
+	if err != nil {
+		return nil, err
+	}
+	s, err := p.platformSettings(ctx, p.pool)
+	if err != nil {
+		return nil, err
+	}
+	typeID, days, err := p.bucketType(ctx, "property_type", key, s.Retention.PropertyDays)
+	if err != nil {
+		return nil, err
+	}
+	const (
+		lo      = `(now() - make_interval(secs => $3))`
+		horizon = `(now() - make_interval(days => $4::int))`
+	)
+	args := []any{arc, typeID, window.Seconds(), days}
+	var inst string
+	if instance != nil {
+		inst = *instance
+	} else {
+		var ok bool
+		inWindow, err := p.measuredPropertyInstances(ctx, col, lo, `timestamptz 'infinity'`, args[:3])
+		if err != nil {
+			return nil, err
+		}
+		if len(inWindow) == 0 {
+			if inWindow, err = p.measuredPropertyInstances(ctx, col, horizon, lo, args); err != nil {
+				return nil, err
+			}
+		}
+		if inst, ok = oneInstance(inWindow); !ok {
+			return nil, nil
+		}
+	}
+	return p.propertyCarriedIn(ctx, col, lo, horizon, "$5", append(args, inst))
 }

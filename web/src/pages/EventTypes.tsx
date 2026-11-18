@@ -18,7 +18,7 @@ import {
   deleteEventType,
 } from "../lib/event_types";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -147,7 +147,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "event_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeEventType }
         : undefined,
-    locked: () => registryLock(row(), me.data, "event_type"),
+    locked: () => catalogLock(row(), me.data, "event_type"),
   });
 
   return (

@@ -5,7 +5,7 @@ import "time"
 // Streak is a rule's pending action on one owner and instance: the action
 // its samples have pointed at, without a break, since Since. Since is the
 // server's clock when the streak began (the receipt of the sample that
-// started it), never a sample's own timestamp, so a node's clock skew
+// started it), never a sample's own timestamp, so an outpost's clock skew
 // neither waives nor stretches a sustain. Hold is no streak. Durable, so a
 // sustain survives a restart.
 type Streak struct {

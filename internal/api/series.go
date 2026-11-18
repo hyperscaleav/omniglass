@@ -49,7 +49,7 @@ type propertySeriesInput struct {
 	Hours      int    `query:"hours" minimum:"1" maximum:"720" doc:"The window in hours, counted back from now; 24 when unset"`
 	Limit      int    `query:"limit" minimum:"1" maximum:"2000" doc:"The row cap, newest kept; 500 when unset. Ignored when a resolution is set"`
 	Resolution int    `query:"resolution" minimum:"1" maximum:"2592000" doc:"The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused"`
-	Instance   string `query:"instance" doc:"The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution"`
+	Instance   string `query:"instance" doc:"The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it"`
 
 	instanceSet bool
 }
@@ -95,12 +95,13 @@ type propertySampleBody struct {
 }
 
 // propertyBucketBody is one regular bucket of a property series: min, max and
-// avg mean nothing to a string, so it carries the change count and the value in
-// force at the bucket's end. A chart holds last across the empty buckets after it.
+// avg mean nothing to a string, so it carries the change count, the value its own
+// changes end on (last) and the value in force at its end (held, #1488).
 type propertyBucketBody struct {
 	TS    time.Time `json:"ts" doc:"The bucket's start"`
 	Count int64     `json:"count" doc:"Changes in the bucket"`
-	Last  *string   `json:"last" required:"true" nullable:"true" doc:"The value in force at the bucket's end, from the newest change in it; null for a bucket with no change"`
+	Last  *string   `json:"last" required:"true" nullable:"true" doc:"The value the bucket's own changes end on, from the newest change in it; null for a bucket with no change"`
+	Held  *string   `json:"held" required:"true" nullable:"true" doc:"The value in force at the bucket's end: last, else the value held at the end of the bucket before it, else carried_in; null before any value is known (#1488)"`
 }
 
 type propertySeriesOutput struct {
@@ -113,6 +114,8 @@ type propertySeriesOutput struct {
 		Instance          *string              `json:"instance,omitempty" required:"false" doc:"The one instance the buckets aggregate, measured changes only (observed and calculated); present only on a bucketed read"`
 		CoveredFrom       *time.Time           `json:"covered_from,omitempty" required:"false" doc:"The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later"`
 		Buckets           []propertyBucketBody `json:"buckets,omitempty" required:"false" doc:"Every regular bucket of the window, oldest first"`
+		// The value held when the window opens (#1488), on a raw or a bucketed read.
+		CarriedIn *string `json:"carried_in,omitempty" required:"false" doc:"The value in force when the window opens: the newest measured row (observed or calculated) of the instance from before it, no older than the type's retention; absent when none. A step chart draws it from the window's left edge to the first change"`
 	}
 }
 
@@ -261,7 +264,7 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			Method:      http.MethodGet,
 			Path:        "/" + oc.kind + "s/{name}/properties/{property}/samples",
 			Summary:     "Read one property series' change history",
-			Description: "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by " + oc.resource + ":read; an out-of-scope owner is a non-disclosing 404.",
+			Description: "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by " + oc.resource + ":read; an out-of-scope owner is a non-disclosing 404.",
 		}, oc.resource, "read"), func(ctx context.Context, in *propertySeriesInput) (*propertySeriesOutput, error) {
 			id, display, err := oc.resolve(ctx, in.Name)
 			if err != nil {
@@ -284,14 +287,18 @@ func registerSeriesRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 				out.Body.CoveredFrom = &got.CoveredFrom
 				out.Body.Samples = []propertySampleBody{}
 				out.Body.Buckets = make([]propertyBucketBody, 0, n)
+				out.Body.CarriedIn = got.CarriedIn
 				for _, b := range got.Buckets {
-					out.Body.Buckets = append(out.Body.Buckets, propertyBucketBody{TS: b.TS, Count: b.Count, Last: b.Last})
+					out.Body.Buckets = append(out.Body.Buckets, propertyBucketBody{TS: b.TS, Count: b.Count, Last: b.Last, Held: b.Held})
 				}
 				return out, nil
 			}
 			rows, err := gw.ListPropertySeries(ctx, oc.kind, id, in.Property, seriesWindow(in.Hours), seriesLimit(in.Limit))
 			if err != nil {
 				return nil, huma.Error500InternalServerError("read property series")
+			}
+			if out.Body.CarriedIn, err = gw.PropertyCarriedIn(ctx, oc.kind, id, in.Property, askedInstance(in.instanceSet, in.Instance), seriesWindow(in.Hours)); err != nil {
+				return nil, huma.Error500InternalServerError("read property series carried-in value")
 			}
 			out.Body.Samples = make([]propertySampleBody, 0, len(rows))
 			for _, r := range rows {

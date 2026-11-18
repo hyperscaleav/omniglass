@@ -56,7 +56,7 @@ func TestAPushOnlyIntegrationPushesWhereItIsGranted(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	bootstrapOwnerTok(t, ctx, gw)
 
-	pusher := principalWithGrants(t, ctx, dsn, "pusher", []grant{{role: "push-only", scopeKind: "component", scopeID: ids["bar-1"]}})
+	pusher := userWithGrants(t, ctx, dsn, "pusher", []grant{{role: "push-only", scopeKind: "component", scopeID: ids["bar-1"]}})
 	push := func(owner string, want int) {
 		t.Helper()
 		c.do(pusher, http.MethodPost, "/telemetry:push", map[string]any{

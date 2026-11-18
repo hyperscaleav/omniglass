@@ -19,7 +19,7 @@ import { entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { useMe, canFleet, fleetView } from "../lib/auth";
-import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
+import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
 import { describeError, fmtTime, rel } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
 import { PROPERTIES_KEY, PROPERTY_DATA_TYPES, type PropertyDataType, type PropertyRow, createProperty, listProperties } from "../lib/properties";
@@ -58,10 +58,10 @@ import {
 } from "../lib/calc_rules";
 
 // Calc rules (Catalog > Actions > Calc rules, #999, #1018; epic #525): the
-// calc rule registry, a sibling of Rules and Severity in the catalog's Actions
-// group, as each registry there is its own page. A calc rule derives one
+// calc rule catalog, a sibling of Rules and Severity in the catalog's Actions
+// group, as each catalog there is its own page. A calc rule derives one
 // output key on each owner it selects (a component, or a system from its
-// role-bound members) by an expression over its inputs, each bound by an
+// slot-bound members) by an expression over its inputs, each bound by an
 // alias as the list of its current values; the server's tick computes it and
 // writes the result as a calculated sample. Each row reads its reduce (the
 // expression, as code) and its live counts (owners computed, pending, without
@@ -74,7 +74,7 @@ import {
 
 export const CALC_HINTS = {
   owner:
-    "What the rule derives a value on: each component it selects, or each system, reading the system's role-bound members (the components assigned to its roles). Fixed when the rule is created.",
+    "What the rule derives a value on: each component it selects, or each system, reading the system's slot-bound members (the components assigned to its slots). Fixed when the rule is created.",
   selector:
     "The owners the rule derives on: those whose type falls within a listed type (subtypes included), and those listed by name. Leave both empty for every owner of its kind.",
   inputs:
@@ -93,7 +93,7 @@ export const CALC_HINTS = {
     "A lowercase kebab name, e.g. busy-flag: the address an operator types and a link carries. Renaming it breaks bookmarks and external references; inside the platform nothing moves, and past samples keep the name they were written under.",
   binding:
     "A calc rule is its output's one writer: two writers would mix their values on an owner by whichever came last, so a key another enabled rule writes, or one a collection writes, is refused.",
-  noMembers: "This system has no role-bound members, so the rule writes nothing: the last value it wrote stays, unsupported, until a member returns.",
+  noMembers: "This system has no slot-bound members, so the rule writes nothing: the last value it wrote stays, unsupported, until a member returns.",
 } as const;
 
 const LIST_POLL_MS = 10_000;
@@ -136,7 +136,7 @@ function ReduceCell(p: { rule: CalcRule }): JSX.Element {
         </span>
       }
     >
-      <code class="truncate font-data text-[12px] [font-variant-ligatures:none]" title={p.rule.reduce.expr}>{p.rule.reduce.expr}</code>
+      <code class="truncate font-data text-[12px]" title={p.rule.reduce.expr}>{p.rule.reduce.expr}</code>
     </Show>
   );
 }
@@ -244,7 +244,7 @@ export default function CalcRules(): JSX.Element {
                 What a calc rule does
                 <InfoTip
                   label="calc rules"
-                  text="A calc rule derives a value from others: it reads named inputs on each component it selects, or on each system's role-bound members, folds them into one value, and writes it as a calculated sample of its output key, which event rules then judge like any other. It recomputes within about a second of an input changing. Live counts refresh every few seconds."
+                  text="A calc rule derives a value from others: it reads named inputs on each component it selects, or on each system's slot-bound members, folds them into one value, and writes it as a calculated sample of its output key, which event rules then judge like any other. It recomputes within about a second of an input changing. Live counts refresh every few seconds."
                 />
               </span>
             ),
@@ -467,7 +467,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
       const r = row();
       if (!r) return null;
       if (r.official) return OFFICIAL_LOCK;
-      return canUpdate() ? null : registryLock(r, fleetView(me.data), "rule");
+      return canUpdate() ? null : catalogLock(r, fleetView(me.data), "rule");
     },
   });
 
@@ -536,7 +536,7 @@ function CalcBladeBody(p: { name: string }): JSX.Element {
 
           <section class="flex flex-col gap-2">
             <Eyebrow label="Reduce" hint={CALC_HINTS.reduce} />
-            <code data-testid="calc-expr" class="break-all font-data text-[12px] text-base-content/80 [font-variant-ligatures:none]">{r().reduce.expr}</code>
+            <code data-testid="calc-expr" class="break-all font-data text-[12px] text-base-content/80">{r().reduce.expr}</code>
           </section>
 
           <section class="flex flex-col gap-2" aria-label="State">
@@ -938,7 +938,7 @@ export function CalcRuleForm(p: { mode: "create" | "edit"; rule?: CalcRule; onSa
                     aria-label={`Input ${i + 1} alias`}
                     aria-invalid={inputErr(i) ? "true" : undefined}
                     aria-describedby={inputErr(i) ? errId : undefined}
-                    class="input input-bordered w-full font-data text-[13px] [font-variant-ligatures:none]"
+                    class="input input-bordered w-full font-data text-[13px]"
                     classList={{ "input-error": !!inputErr(i) && !!x().key }}
                     placeholder="t"
                     spellcheck={false}

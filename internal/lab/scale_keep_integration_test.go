@@ -21,10 +21,11 @@ import (
 // SIGTERM (as a service manager stops it), keeps its two volumes; run again
 // the same way, it re-attaches them, keeps the fleet without reseeding (a
 // component added on the first run is still there, and the seed says it
-// kept the fleet), and its site nodes come up enrolled with the new run's
+// kept the fleet), and its site outposts come up enrolled with the new run's
 // tokens. It runs under a project of its own, so it never meets a person's
 // scale lab on the same daemon. OMNIGLASS_LAB_TEST_BINARY and
-// OMNIGLASS_LAB_TEST_IMAGE run another build than make's.
+// OMNIGLASS_LAB_TEST_IMAGE run another build than make's; by default the
+// binary runs the image keyed to its own build id (#1422).
 func TestIntegrationKeptScaleLabSurvivesAStop(t *testing.T) {
 	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
 		t.Skip("the kept scale lab runs through make test-lab (it needs the image make builds)")
@@ -40,7 +41,7 @@ func TestIntegrationKeptScaleLabSurvivesAStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	binary := envOr("OMNIGLASS_LAB_TEST_BINARY", "../../bin/omniglass")
-	image := envOr("OMNIGLASS_LAB_TEST_IMAGE", DevImage)
+	image := os.Getenv("OMNIGLASS_LAB_TEST_IMAGE")
 	project := fmt.Sprintf("omniglass-scale-it-%d", os.Getpid())
 	host, _ := os.Hostname()
 	t.Cleanup(func() {
@@ -58,8 +59,12 @@ func TestIntegrationKeptScaleLabSurvivesAStop(t *testing.T) {
 		t.Helper()
 		file := t.TempDir() + "/lab.env"
 		var out lockedBuffer
-		cmd := exec.Command(binary, "lab", "run", "--scenario", "corporate", "--systems", "3", "--keep",
-			"--project", project, "--port", "0", "--image", image, "--ready-file", file)
+		args := []string{"lab", "run", "--scenario", "corporate", "--systems", "3", "--keep",
+			"--project", project, "--port", "0", "--ready-file", file}
+		if image != "" {
+			args = append(args, "--image", image)
+		}
+		cmd := exec.Command(binary, args...)
 		cmd.Env = append(os.Environ(), "DOCKER_HOST="+daemon.Host)
 		cmd.Stdout, cmd.Stderr = &out, &out
 		if err := cmd.Start(); err != nil {
@@ -145,7 +150,7 @@ func TestIntegrationKeptScaleLabSurvivesAStop(t *testing.T) {
 		t.Errorf("the second run's seed did not keep the fleet:\n%s", second)
 	}
 	if !strings.Contains(second, "sites up") {
-		t.Errorf("the second run's site nodes did not come up:\n%s", second)
+		t.Errorf("the second run's site outposts did not come up:\n%s", second)
 	}
 }
 

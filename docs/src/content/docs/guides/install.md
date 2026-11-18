@@ -4,7 +4,7 @@ description: "Download a prebuilt Omniglass binary for your OS and architecture,
 ---
 
 Omniglass ships as a single self-contained binary with the operator console compiled in, so
-one file is the whole app: every run mode (`server`, `node run`, `migrate`, `bootstrap`, `token`)
+one file is the whole app: every run mode (`server`, `outpost run`, `migrate`, `bootstrap`, `token`)
 is the same binary with a different first argument. You can download that binary directly, or
 run the [container image](/guides/container-image/) instead.
 
@@ -48,45 +48,45 @@ xattr -d com.apple.quarantine omniglass
 
 ## Run it
 
-The binary is the server, the collection node, and the CLI in one. To stand up the API and
+The binary is the server, the collection outpost, and the CLI in one. To stand up the API and
 console you need Postgres and the same environment the image uses; see
 [Container image](/guides/container-image/#running-it) for the `OMNIGLASS_DSN` and
 `migrate`/`server`/`bootstrap`/`token` flow, which is identical for the binary. To drive a
 running server from the command line, see [the CLI](/guides/cli/).
 
 To try it first, with nothing to set up but Docker, run `omniglass lab run`: it brings up a working
-omniglass, its own Postgres and an edge node collecting from a simulated fleet, prints the console's
+omniglass, its own Postgres and an edge outpost collecting from a simulated fleet, prints the console's
 address and the login, and removes it all on Ctrl-C. The [lab guide](/guides/lab/) walks through it.
 
 ## Run a simulator
 
-The same binary simulates components. The simplest way is to let the node run it:
-`omniglass node run --simulate` runs the simulator in the node's own process, serving every component
-placed on that node whose product it has a profile for, each on its own loopback address
+The same binary simulates components. The simplest way is to let the outpost run it:
+`omniglass outpost run --simulate` runs the simulator in the outpost's own process, serving every component
+placed on that outpost whose product it has a profile for, each on its own loopback address
 ([simulation](/architecture/simulation/), and the operator's walk-through in
 [simulate a fleet](/guides/operator/simulation/)). One process means one network namespace, so the
-simulated components sit on the loopback the node collects from by construction, and one identity:
-the simulator uses the node's own name and token, with no second enrollment.
+simulated components sit on the loopback the outpost collects from by construction, and one identity:
+the simulator uses the outpost's own name and token, with no second enrollment.
 
 ```bash
-omniglass node run --name edge-hq --token "$NODE_TOKEN" --simulate
+omniglass outpost run --name edge-hq --token "$OUTPOST_TOKEN" --simulate
 ```
 
-`--impairments`, `--port-offset` and `--poll` are the simulator's flags, and the node refuses them
-without `--simulate`. A simulator crash stops the node with it, so run it under something that
+`--impairments`, `--port-offset` and `--poll` are the simulator's flags, and the outpost refuses them
+without `--simulate`. A simulator crash stops the outpost with it, so run it under something that
 restarts it (a container restart policy, as the [lab](/guides/lab/) does).
 
-To keep the simulator a process of its own beside a node, `omniglass sim run` does the same with the
-node's identity. It must share the node's loopback: the same host, or the same container or pod
-network namespace. With Docker, run it in the node container's namespace:
+To keep the simulator a process of its own beside an outpost, `omniglass sim run` does the same with the
+outpost's identity. It must share the outpost's loopback: the same host, or the same container or pod
+network namespace. With Docker, run it in the outpost container's namespace:
 
 ```bash
-docker run -d --name omniglass-sim --network container:omniglass-node \
-  -e OMNIGLASS_SERVER -e OMNIGLASS_NODE_NAME -e OMNIGLASS_NODE_TOKEN \
+docker run -d --name omniglass-sim --network container:omniglass-outpost \
+  -e OMNIGLASS_SERVER -e OMNIGLASS_OUTPOST_NAME -e OMNIGLASS_OUTPOST_TOKEN \
   ghcr.io/hyperscaleav/omniglass sim run
 ```
 
-A sidecar in the node's pod is the Helm chart's to offer ([#892](https://github.com/hyperscaleav/omniglass/issues/892)).
+A sidecar in the outpost's pod is the Helm chart's to offer ([#892](https://github.com/hyperscaleav/omniglass/issues/892)).
 Either way the simulator runs unprivileged, and each privilege it is given buys one thing:
 
 - **Ports below 1024** (SNMP 161, HTTP 80, SSH 22). In a container, Docker already lets any user bind
@@ -94,7 +94,7 @@ Either way the simulator runs unprivileged, and each privilege it is given buys 
   binary needs `sudo setcap cap_net_bind_service=+ep ./omniglass`. Without any of these, lift the ports
   with `--port-offset 10000` and aim the endpoints at the lifted ports
   (`omniglass seed-dev --sim-port-offset 10000` seeds the dev fleet that way).
-- **Ping.** The node's pinger is unprivileged: the kernel must let its group send ICMP echo through
+- **Ping.** The outpost's pinger is unprivileged: the kernel must let its group send ICMP echo through
   `net.ipv4.ping_group_range` (with Docker, `--sysctl net.ipv4.ping_group_range="0 65535"`). Keep the
   range inside the groups the container's user namespace maps: rootless Docker maps 65537 of them, and
   a wider range is refused, so the container never starts.
@@ -117,9 +117,12 @@ day, or the example fleet at enterprise size. The list, with what each one holds
 [CLI reference](/reference/cli/#omniglass-seed-dev).
 Every scenario except the fresh install is the example fleet plus a generated expansion of it, so a
 scenario never drifts from the fleet it grows from, and like the example fleet every one is
-idempotent. Pick one with `--scenario` for the lab (on its first run, or with `--fresh`), or
+idempotent. The degraded fleet's alarms fit the device class: an alarm template names the component
+types it applies to (the lamp-hours warning is for projectors and displays), so a microphone or a
+scheduler never reads "Lamp hours approaching end of life". Pick one with `--scenario` for the lab
+(on its first run, or with `--fresh`), or
 `STACK_SCENARIO` for the probe's lab (on a fresh install either is the server and its owner alone,
-and no node runs, since the node's simulated components come from the example fleet):
+and no outpost runs, since the outpost's simulated components come from the example fleet):
 
 ```bash
 omniglass lab run --fresh --scenario degraded
@@ -143,8 +146,8 @@ tiers, not four. Re-seeding creates none of them twice.
 
 From a checkout or a release binary, with nothing but Docker, `omniglass lab run` runs every piece of
 the above as containers on a private network of their own: Postgres, the server (seeded with the
-example fleet and its simulated components), and the node `edge-hq` running `node run --simulate
---impairments`, re-enrolled on every run. Only the node holds `NET_ADMIN` and the ping sysctl, and
+example fleet and its simulated components), and the outpost `edge-hq` running `outpost run --simulate
+--impairments`, re-enrolled on every run. Only the outpost holds `NET_ADMIN` and the ping sysctl, and
 they reach only its own container's namespace. In a container the simulator binds the real ports, so
 the fleet is seeded unlifted. It prints the console's address, on `127.0.0.1:8080` (sign in as
 `dev`/`dev`), and tears everything down on Ctrl-C, keeping the data for the next run. Breaking a

@@ -23,25 +23,44 @@ type fakeEngine struct {
 	networks   map[string]Resource
 	volumes    map[string]Resource
 	images     map[string]map[string]string
-	created    []string
-	seedExit   int
-	seedLog    string
-	published  string
-	nextID     int
-	host       HostResources
+	// imageIDs is the ID each reference resolves to; a reference with none
+	// resolves to "sha256:<ref>".
+	imageIDs map[string]string
+	// retag re-points a reference right after the first time it is
+	// resolved, as another checkout's make does to omniglass:dev.
+	retag map[string]retagTo
+	// ran is the image each service's container was created from.
+	ran       map[string]string
+	created   []string
+	seedExit  int
+	seedLog   string
+	published string
+	nextID    int
+	host      HostResources
+	// hostReads counts each read of the host's resources.
+	hostReads int
+	// cmds is each service's command as it was run.
+	cmds map[string][]string
 	// seedHangs makes the seed run until its context ends.
 	seedHangs bool
 }
 
+// retagTo is the image a reference is re-pointed to.
+type retagTo struct {
+	id     string
+	labels map[string]string
+}
+
 func newFakeEngine(published string) *fakeEngine {
 	return &fakeEngine{
+		imageIDs: map[string]string{}, retag: map[string]retagTo{}, ran: map[string]string{},
 		containers: map[string]Resource{}, states: map[string]ContainerState{},
 		networks: map[string]Resource{}, volumes: map[string]Resource{},
 		images: map[string]map[string]string{
-			DevImage:      {VersionLabel: "abc123"},
-			PostgresImage: {},
+			DevImageFor("abc123"): {VersionLabel: "abc123"},
+			PostgresImage:         {},
 		},
-		seedLog:   FormatSeedResult(SeedResult{Node: true, Summary: "the dev fleet, seeded on this lab's first run"}),
+		seedLog:   FormatSeedResult(SeedResult{Outpost: true, Summary: "the dev fleet, seeded on this lab's first run"}),
 		published: published,
 		host:      HostResources{MemBytes: 32 << 30, CPUs: 12},
 	}
@@ -60,11 +79,22 @@ func (f *fakeEngine) Ping(context.Context) (EngineInfo, error) {
 	return EngineInfo{APIVersion: "1.56"}, nil
 }
 func (f *fakeEngine) Resources(context.Context) (HostResources, error) {
+	f.hostReads++
 	return f.host, nil
 }
-func (f *fakeEngine) ImageLabels(_ context.Context, ref string) (map[string]string, bool, error) {
+func (f *fakeEngine) InspectImage(_ context.Context, ref string) (ImageInfo, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	l, ok := f.images[ref]
-	return l, ok, nil
+	id := f.imageIDs[ref]
+	if id == "" {
+		id = "sha256:" + ref
+	}
+	if to, moved := f.retag[ref]; moved {
+		delete(f.retag, ref)
+		f.imageIDs[ref], f.images[ref] = to.id, to.labels
+	}
+	return ImageInfo{ID: id, Labels: l}, ok, nil
 }
 func (f *fakeEngine) PullImage(_ context.Context, ref string) error {
 	f.images[ref] = map[string]string{}
@@ -120,6 +150,7 @@ func (f *fakeEngine) RunContainer(_ context.Context, svc Service, _ string) (str
 	f.nextID++
 	id := fmt.Sprintf("c%d", f.nextID)
 	f.containers[id] = Resource{ID: id, Name: svc.Container, Labels: svc.Labels}
+	f.ran[svc.Name] = svc.Image
 	st := ContainerState{Running: true, Status: "running", Published: map[int]string{}}
 	switch svc.Name {
 	case "db":
@@ -131,6 +162,10 @@ func (f *fakeEngine) RunContainer(_ context.Context, svc Service, _ string) (str
 	}
 	f.states[id] = st
 	f.created = append(f.created, "container "+svc.Name)
+	if f.cmds == nil {
+		f.cmds = map[string][]string{}
+	}
+	f.cmds[svc.Name] = svc.Cmd
 	return id, nil
 }
 func (f *fakeEngine) Inspect(_ context.Context, id string) (ContainerState, error) {
@@ -179,7 +214,7 @@ func fakeServer(t *testing.T) *httptest.Server {
 		http.SetCookie(w, &http.Cookie{Name: "og_session", Value: "s", Path: "/"})
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("GET /api/v1/nodes/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/v1/outposts/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
@@ -211,7 +246,9 @@ func testRunner(eng Engine, out *bytes.Buffer) *Runner {
 func testConfig() Config {
 	o := testOptions()
 	o.Owner = Owner{Host: "box", PID: 42, Start: "t42"}
-	return Config{Options: o, Image: SelectImage("abc123", ""), PlantedFaults: []string{"Panel SNMP"}}
+	choice, _ := SelectImage("abc123", "", "")
+	o.Image = choice.Ref
+	return Config{Options: o, Image: choice, PlantedFaults: []string{"Panel SNMP"}}
 }
 
 func TestRunBringsTheLabUpAndReportsTheConsole(t *testing.T) {
@@ -225,17 +262,84 @@ func TestRunBringsTheLabUpAndReportsTheConsole(t *testing.T) {
 	if lab.BaseURL != srv.URL || !strings.HasSuffix(lab.ConsoleURL, "/web") {
 		t.Fatalf("base %q console %q", lab.BaseURL, lab.ConsoleURL)
 	}
-	want := []string{"network omniglass-lab_default", "container db", "container seed", "container server", "container node"}
+	want := []string{"network omniglass-lab_default", "container db", "container seed", "container server", "container outpost"}
 	if strings.Join(eng.created, ",") != strings.Join(want, ",") {
 		t.Fatalf("created %v, want %v", eng.created, want)
 	}
 	if len(eng.containers) != 3 {
-		t.Fatalf("%d containers left running, want db, server and node (the seed is removed once it is done)", len(eng.containers))
+		t.Fatalf("%d containers left running, want db, server and outpost (the seed is removed once it is done)", len(eng.containers))
 	}
 	for _, line := range []string{"1 of 1 simulated endpoints up", "1 broken on purpose", "the login dev / dev works"} {
 		if !strings.Contains(out.String(), line) {
 			t.Errorf("status lacks %q:\n%s", line, out.String())
 		}
+	}
+}
+
+// Every container the run's image runs is created from the image ID that
+// preflight checked, not from the tag (#1422): another checkout's make
+// re-pointing omniglass:dev between the check and the create cannot put a
+// foreign build under the lab.
+func TestRunCreatesTheImageContainersFromTheCheckedImageID(t *testing.T) {
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	cfg := testConfig()
+	tag := cfg.Image.Ref
+	checked := "sha256:own-build"
+	eng.imageIDs[tag] = checked
+	// The tag moves to another build the moment preflight has read it.
+	eng.retag[tag] = retagTo{id: "sha256:foreign-build", labels: map[string]string{VersionLabel: "0ther"}}
+	var out bytes.Buffer
+	if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	for _, svc := range []string{"seed", "server", "outpost"} {
+		if got := eng.ran[svc]; got != checked {
+			t.Errorf("the %s container was created from %q, want the checked image ID %q", svc, got, checked)
+		}
+	}
+	if got := eng.ran["db"]; got != PostgresImage {
+		t.Errorf("the database ran %q, want %q", got, PostgresImage)
+	}
+}
+
+// A scale lab's outpost for every site is created from that same ID.
+func TestScaleRunCreatesEverySiteOutpostFromTheCheckedImageID(t *testing.T) {
+	srv := scaleServer(t, testSites, nil, nil)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	cfg := scaleConfig()
+	checked := "sha256:own-build"
+	eng.imageIDs[cfg.Image.Ref] = checked
+	eng.retag[cfg.Image.Ref] = retagTo{id: "sha256:foreign-build", labels: map[string]string{VersionLabel: "0ther"}}
+	var out bytes.Buffer
+	if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	for _, svc := range []string{"seed", "server", "edge-hq", "edge-branch-01"} {
+		if got := eng.ran[svc]; got != checked {
+			t.Errorf("the %s container was created from %q, want the checked image ID %q", svc, got, checked)
+		}
+	}
+}
+
+// A release image is pulled first; its containers are then created from the
+// ID the pull produced.
+func TestRunCreatesAPulledImageFromItsID(t *testing.T) {
+	srv := fakeServer(t)
+	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+	cfg := testConfig()
+	var err error
+	if cfg.Image, err = SelectImage("1.2.3", testDigest, ""); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Options.Image = cfg.Image.Ref
+	eng.imageIDs[cfg.Image.Ref] = "sha256:released"
+	var out bytes.Buffer
+	if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if got := eng.ran["server"]; got != "sha256:released" {
+		t.Fatalf("the server was created from %q, want the pulled image's ID", got)
 	}
 }
 
@@ -303,9 +407,9 @@ func TestPreflightFailuresCreateNothing(t *testing.T) {
 		"port taken": {func(_ *fakeEngine, r *Runner, _ *Config) {
 			r.PortFree = func(string, int) error { return &PreflightError{Cause: "port 8080 is taken"} }
 		}, "port 8080"},
-		"image missing": {func(e *fakeEngine, _ *Runner, _ *Config) { delete(e.images, DevImage) }, "run `make`"},
+		"image missing": {func(e *fakeEngine, _ *Runner, _ *Config) { delete(e.images, DevImageFor("abc123")) }, "run `make`"},
 		"image from another tree": {func(e *fakeEngine, _ *Runner, _ *Config) {
-			e.images[DevImage] = map[string]string{VersionLabel: "0ther"}
+			e.images[DevImageFor("abc123")] = map[string]string{VersionLabel: "0ther"}
 		}, "another tree"},
 		"a live lab already running": {func(e *fakeEngine, _ *Runner, c *Config) {
 			e.containers["old"] = Resource{ID: "old", Labels: map[string]string{
@@ -370,13 +474,13 @@ func TestFreshRemovesTheVolumesFirst(t *testing.T) {
 	}
 }
 
-// A node that never gets every endpoint up still yields a lab, saying what
+// An outpost that never gets every endpoint up still yields a lab, saying what
 // is pending, rather than taking it down.
 func TestRunSaysWhatIsPendingWhenCollectionIsSlow(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/healthz", func(w http.ResponseWriter, _ *http.Request) {})
 	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("GET /api/v1/nodes/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/v1/outposts/edge-hq/simulation", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"connected":true,"devices":[{"component_id":"c-1","status":"running"}]}`)
 	})
 	mux.HandleFunc("GET /api/v1/components/c-1/reachability", func(w http.ResponseWriter, _ *http.Request) {
@@ -414,7 +518,7 @@ func TestImageOverrideWarnsOnlyForAnotherBuild(t *testing.T) {
 			eng.images["stack:x"] = map[string]string{VersionLabel: tc.label}
 			var out bytes.Buffer
 			cfg := testConfig()
-			cfg.Image = SelectImage("abc123", "stack:x")
+			cfg.Image, _ = SelectImage("abc123", "", "stack:x")
 			cfg.Options.Image = "stack:x"
 			if _, err := testRunner(eng, &out).Run(context.Background(), cfg); err != nil {
 				t.Fatalf("%v\n%s", err, out.String())

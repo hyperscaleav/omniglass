@@ -28,9 +28,9 @@ to a chat channel**. Three pieces take part, each answering one question
 - a **notification type** says *what* (the subject and text, rendered over the alarm's facts).
 
 All three live in the console on **Catalog, under Actions**: **Notifications** (the types),
-**Action rules** and **Targets**, side by side. Targets are admin-only (`notification_target:*`): a
+**Action rules** and **Notification targets**, side by side. Targets are admin-only (`notification_target:*`): a
 target is a destination the server sends to, holding a credential, and its URL is often itself a
-credential, so the Targets entry is not shown to anyone else. Action rules ride `rule:*`: anyone who
+credential, so the Notification targets entry is not shown to anyone else. Action rules ride `rule:*`: anyone who
 reads rules sees them, and writing one takes an all-scope grant. Notification types are a catalog an
 operator writes (`notification_type:create,update`). Every step below is also a CLI command, shown
 beside it.
@@ -55,7 +55,7 @@ for a destination the list names; anything else is `https`, its certificate veri
 Store the signing key as a **platform** secret of the `hmac-key` type (or a `bearer-token`, for a
 receiver that expects `Authorization: Bearer`) on **Admin, Secrets**. Then, on **Catalog, under
 Actions: Targets**, choose **New target**: kind **Webhook**, a name, the URL, and the secret in
-**Signed with** (or none, to send unsigned). Binding a secret takes the right to reveal it.
+**Signed with** (or none, to send unsigned). Binding a secret takes the right to bind it (`secret:bind`).
 
 ::screenshot{#notification-target-new}
 
@@ -89,7 +89,7 @@ the same on every attempt, so a receiver can drop a redelivery.
 ## 3. Say when
 
 An action rule sends on an alarm's `raised`, `cleared`, or both, when its predicate holds. The
-predicate reads the alarm's facts (`component`, `place`, `severity`, `severity_rank`, `message`,
+predicate reads the alarm's facts (`component`, `location`, `severity`, `severity_rank`, `message`,
 `rule`, ...); `severity_rank >= 40` is high and above. On **Catalog, under Actions: Action rules**,
 choose **New action rule**: the transitions, the **When** (checked as you type, each fact it may name
 listed beneath with its type, a mistake pointed at by line and column; empty sends on every alarm),
@@ -122,23 +122,23 @@ The shipped types read well in most chat tools:
 
 To say something else, write your own on **Catalog, under Actions: Notifications** and name it on
 the rule. The page previews a type, or the draft you are editing, against a real component's most
-recent alarm through the same engine a delivery uses, beside every fact the templates could have
+recent alarm through the same engine a delivery uses, beside every fact the rules could have
 read; `omniglass notification-type preview <type> --component <component>` does the same.
 
 ## Tell people: a group's inbox, and email
 
-A target can name people instead of a URL: a `principal_group` target tells every member of a
-group, and a `principal` target one person, on the channels it names. `inbox` is the console inbox
+A target can name people instead of a URL: a `user_group` target tells every member of a
+group, and a `user` target one person, on the channels it names. `inbox` is the console inbox
 (the bell in the shell); `email` is each person's directory email, sent through the install's mail
-relay (below). Binding a group takes `principal_group:read:admin` and binding a person
-`principal:read:admin`, both admin's.
+relay (below). Binding a group takes `user_group:read:admin` and binding a person
+`user:read:admin`, both admin's.
 
-On the Targets page these are the **Group** and **Person** kinds, each with the channels it tells
+On the Notification targets page these are the **Group** and **Person** kinds, each with the channels it tells
 on; neither takes a test, since people are told only about alarms.
 
 ```bash
-omniglass notification-target create --name on-call-page --kind principal_group \
-  --principal-group on-call --channels '["inbox","email"]'
+omniglass notification-target create --name on-call-page --kind user_group \
+  --user-group on-call --channels '["inbox","email"]'
 omniglass action-rule create --name page-on-call --on '["raised"]' \
   --when 'severity_rank >= 50' --targets '["on-call-page"]'
 ```
@@ -161,7 +161,7 @@ omniglass notification-target test ops-mailbox
 
 Email goes through one relay, set in the `notification` settings namespace. Store its login as a
 **platform** secret of the `basic-auth` type, then point the settings at it (binding the secret takes
-the right to reveal it):
+`secret:bind` on it):
 
 ```bash
 omniglass secret create --name relay-login --owner-kind platform --secret-type basic-auth \
@@ -184,13 +184,13 @@ than a sentence: its target, a status pill, and the **action rule** that queued 
 ```
 notify  ops-chat  [sent]         action rule page-ops
 notify  ops-chat  [failed]       action rule page-ops   the receiver answered 503 (3 attempts)   [Retry]
-notify  ops-chat  [snoozed]      action rule page-ops   the condition is snoozed until 2026-10-29 14:30 UTC by root
+notify  ops-chat  [snoozed]      action rule page-ops   the alarm is snoozed until 2026-10-29 14:30 UTC by root
 notify  ops-chat  [on its way]   action rule page-ops
 ```
 
 **On its way** while it is queued, **sent** when the receiver answered 2xx, **failed** with the reason
-when it gave up, **snoozed** with the reason when the alarm's
-condition was [snoozed](/guides/operator/entities/#snoozing-silencing-a-noisy-condition-for-a-while)
+when it gave up, **snoozed** with the reason when the alarm
+was [snoozed](/guides/operator/entities/#snoozing-silencing-a-noisy-alarm-for-a-while)
 (a snoozed row is final: it is never sent or retried). The same pill, in the same words, marks each row
 of an action rule's or a target's recent notifications. The action rule is labelled, not a "by": the
 rule queued the message, and who snoozed the alarm is on the timeline's own **snoozed by** audit line.

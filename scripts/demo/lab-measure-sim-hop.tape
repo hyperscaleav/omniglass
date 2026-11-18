@@ -1,8 +1,8 @@
-# A lab run reads the sim hop: what the simulated endpoints answered against what reached the node
+# A lab run reads the sim hop: what the simulated endpoints answered against what reached the outpost
 #
-# The delivery table now opens with the sim hop (#1694): one row per protocol the nodes poll, read
+# The delivery table now opens with the sim hop (#1694): one row per protocol the outposts poll, read
 # from the closed loop's marks. In is every request the simulators settled, out the replies that
-# reached the node. It counts requests, not items, since a simulator cannot know which kinds an
+# reached the outpost. It counts requests, not items, since a simulator cannot know which kinds an
 # answer would carry. A healthy lab reads 0; a simulator that withholds or drops a reply reads it as
 # its own cause, and end to end composes the sim hop into every kind (ADR-1694).
 
@@ -22,7 +22,7 @@ Wait
 Type "grep -E '^(ready|measuring|torn down)' /tmp/lab-measure.err"
 Enter
 Wait
-Type "# The delivery table: a sim row per protocol first, then each kind across its schedule, node and ingest hops"
+Type "# The delivery table: a sim row per protocol first, then each kind across its schedule, outpost and ingest hops"
 Enter
 Wait
 Type "sed -n '/^delivery /,$p' /tmp/lab-measure.txt"

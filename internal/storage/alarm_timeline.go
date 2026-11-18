@@ -107,7 +107,7 @@ func (p *PG) AlarmTimeline(ctx context.Context, componentID, alarmID string, vie
 			union all
 			select n.created_at, 'notification', n.status, '', n.rule_name, '', n.subject, 2, 0,
 				n.id::text, n.transition, n.target_name, n.attempts, coalesce(n.last_error, ''),
-				n.channel, n.recipient_name is not null, coalesce(n.recipient_name, ''), coalesce(n.recipient_principal_id::text, '')
+				n.channel, n.recipient_name is not null, coalesce(n.recipient_name, ''), coalesce(n.recipient_user_id::text, '')
 			from notification n
 			where n.alarm_id = $1::uuid
 		) x order by at, rank, tiebreak, nid`, alarmID, alarmID)

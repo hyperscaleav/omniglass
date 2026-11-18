@@ -1,22 +1,13 @@
 name: goreleaser
 
-# Build the cross-platform release binaries. Two triggers, two jobs:
-#
-# - on a pushed `v*` tag (the `make release-apply` path, whose token cascades):
-#   build the matrix and attach the archives to the GitHub Release that
-#   semantic-release already cut. The CI-dispatch release path builds inline in
-#   release.yml instead, because its GITHUB_TOKEN tag push does not cascade here.
-#
-# - on a pull request that touches the release config: build the whole matrix as
-#   a snapshot (no tag, no publish) and upload the archives as workflow
-#   artifacts, so the release build is validated and downloadable before merge.
-#
-# Both jobs drive the same .goreleaser.yaml, so a green PR snapshot is real
-# evidence the tagged release will build.
+# Validate the cross-platform release build. On a pull request that touches the
+# release config, build the whole matrix as a snapshot (no tag, no publish) and
+# upload the archives as workflow artifacts, so the release build is validated
+# and downloadable before merge. Releases themselves are built only by
+# release.yml, which builds the image first and stamps its digest into each
+# binary (#1257); a pushed `v*` tag triggers nothing here.
 
 on:
-  push:
-    tags: ["v*"]
   pull_request:
     paths:
       - .goreleaser.yaml
@@ -25,49 +16,13 @@ on:
       - go.sum
       - cmd/omniglass/**
 
-# Least privilege by default; only the publishing job asks for write.
 permissions:
   contents: read
 
 jobs:
-  # Real release: build + attach binaries to the Release for the pushed tag.
-  binaries:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write  # upload the archives + checksums to the Release
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0  # full history + tags for GoReleaser
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Set up Node (for the embedded console build)
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-
-      - name: Install syft (SBOM generator)
-        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-
-      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
-        with:
-          version: "~> v2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Explicit tag so GoReleaser targets the pushed tag (and its Release)
-          # unambiguously, rather than inferring from git state.
-          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
-
   # PR validation: build the whole matrix as a snapshot (no tag, no publish) and
   # upload the archives so they can be downloaded and smoke-tested.
   snapshot:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -239,18 +239,18 @@ func TestSetPrimaryMemberMovesTheDefault(t *testing.T) {
 	}
 }
 
-// Staffing a role IS membership: an operator should never have to say it twice.
-func TestAssignRoleCreatesTheMembership(t *testing.T) {
+// Staffing a slot IS membership: an operator should never have to say it twice.
+func TestAssignSlotCreatesTheMembership(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
-	if _, err := f.gw.SetSystemRole(ctx, "", "system", "room-a", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "system", "room-a", storage.SystemSlotSpec{
 		Name: "mic", Label: "Mic", Quorum: 1, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "room-a", "mic", "mic-a", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.AssignSlot(ctx, "", "room-a", "mic", "mic-a", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	got, err := f.gw.ComponentMemberships(ctx, "mic-a", f.all)
@@ -258,33 +258,33 @@ func TestAssignRoleCreatesTheMembership(t *testing.T) {
 		t.Fatalf("memberships: %v", err)
 	}
 	if len(got) != 1 || got[0].SystemID != "room-a" {
-		t.Fatalf("memberships after assign = %+v, want one in room-a: staffing a role is membership", got)
+		t.Fatalf("memberships after assign = %+v, want one in room-a: staffing a slot is membership", got)
 	}
 }
 
-// A membership still holding a role assignment is load-bearing. Removing it would
-// leave the system staffed by a non-member, so it is refused until the role is
+// A membership still holding a slot assignment is load-bearing. Removing it would
+// leave the system staffed by a non-member, so it is refused until the slot is
 // given up, the same shape as every other occupied-delete in the gateway.
-func TestRemoveMemberRefusedWhileStaffingARole(t *testing.T) {
+func TestRemoveMemberRefusedWhileStaffingASlot(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
-	if _, err := f.gw.SetSystemRole(ctx, "", "system", "room-a", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "system", "room-a", storage.SystemSlotSpec{
 		Name: "mic", Label: "Mic", Quorum: 1, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "room-a", "mic", "mic-a", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.AssignSlot(ctx, "", "room-a", "mic", "mic-a", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all, f.all, f.all, f.all)
 	if !errors.Is(err, storage.ErrMemberOccupied) {
-		t.Fatalf("remove a member still staffing a role = %v, want ErrMemberOccupied", err)
+		t.Fatalf("remove a member still staffing a slot = %v, want ErrMemberOccupied", err)
 	}
 
-	// Given up the role, it leaves cleanly.
-	if err := f.gw.UnassignRole(ctx, "", "room-a", "mic", "mic-a", f.all, f.all, f.all, f.all); err != nil {
+	// Given up the slot, it leaves cleanly.
+	if err := f.gw.UnassignSlot(ctx, "", "room-a", "mic", "mic-a", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
 	if err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all, f.all, f.all, f.all); err != nil {
@@ -295,7 +295,7 @@ func TestRemoveMemberRefusedWhileStaffingARole(t *testing.T) {
 // A membership is a binding between two things and is meaningless once either is
 // gone, so it cascades from both ends. It deliberately does NOT make a component
 // undeletable: the guard that matters, refusing to delete a component that fills a
-// job, belongs to system_role_assignment, and duplicating it here would add a step to
+// job, belongs to system_slot_assignment, and duplicating it here would add a step to
 // every component removal while protecting nothing new.
 func TestMembershipCascadesFromBothEnds(t *testing.T) {
 	t.Parallel()
@@ -325,18 +325,18 @@ func TestMembershipCascadesFromBothEnds(t *testing.T) {
 		t.Fatalf("delete a component that only holds a membership: %v", err)
 	}
 
-	// Staffing a role is what makes it undeletable, and that is system_role_assignment's
+	// Staffing a slot is what makes it undeletable, and that is system_slot_assignment's
 	// guard, unchanged by this slice.
-	if _, err := f.gw.SetSystemRole(ctx, "", "system", "room-b", storage.SystemRoleSpec{
+	if _, err := f.gw.SetSystemSlot(ctx, "", "system", "room-b", storage.SystemSlotSpec{
 		Name: "mic", Label: "Mic", Quorum: 1, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "room-b", "mic", "dsp", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.AssignSlot(ctx, "", "room-b", "mic", "dsp", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	if err := f.gw.DeleteComponent(ctx, "", "dsp", f.all, f.all); !errors.Is(err, storage.ErrReferenced) {
-		t.Fatalf("delete a component staffing a role = %v, want ErrReferenced", err)
+		t.Fatalf("delete a component staffing a slot = %v, want ErrReferenced", err)
 	}
 }
 
@@ -386,8 +386,8 @@ func TestMembershipIsScoped(t *testing.T) {
 
 // A system's members read carries each member's own recorded verdict (#940),
 // the value a fleet view dot reads: a system's view polls its members' health
-// here rather than the whole fleet. A member nothing was ever recorded for
-// reads healthy.
+// here rather than the whole fleet. A member nothing has ever observed reads
+// unknown (#1454), not healthy: there is nothing to call it healthy on.
 func TestListMembersCarriesEachMembersOwnVerdict(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -408,8 +408,8 @@ func TestListMembersCarriesEachMembersOwnVerdict(t *testing.T) {
 	for _, m := range members {
 		got[m.ComponentID] = m.ComponentVerdict
 	}
-	if got["dsp"] != "outage" || got["mic-a"] != "healthy" {
-		t.Errorf("member verdicts = %v, want dsp outage (a high alarm) and mic-a healthy", got)
+	if got["dsp"] != "outage" || got["mic-a"] != "unknown" {
+		t.Errorf("member verdicts = %v, want dsp outage (a high alarm) and mic-a unknown (never observed)", got)
 	}
 }
 
