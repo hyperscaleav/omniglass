@@ -7,6 +7,24 @@ sidebar:
   badge:
     text: Partial
     variant: note
+screenshots:
+  - id: alarm-troubleshoot
+    path: /web/systems/auditorium
+    alt: "The auditorium DSP's blade: its Why strip holds the high alarm, No route to host on the control interface, with the bot button that asks omnibot to troubleshoot it."
+    # The auditorium is degraded on its DSP's high alarm; the alarm opens the
+    # DSP's blade, whose Why row carries the troubleshoot button.
+    steps:
+      - action: click
+        selector: "[data-testid=alarm-strip] button"
+      - action: wait
+        selector: "[data-testid=blade-why] button[aria-label*='with omnibot']"
+    # The blade's since line, and behind it the system's since line and its
+    # alarm strip (the row's age), all count from the capture's own clock.
+    mask:
+      - selector: "[data-testid=blade-since]"
+        width: 184
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - "[data-testid=alarm-strip]"
 ---
 
 An **alarm** says what is wrong with one component. **Health** is what that means for the systems the
@@ -128,6 +146,7 @@ evidence, and one next step, and changes nothing until you agree: any write it p
 button: there is nothing left to troubleshoot. It needs the `assistant:use` permission; without it the
 row has no button.
 
+::screenshot{#alarm-troubleshoot}
 
 ## Health on a system or location
 
