@@ -25,6 +25,7 @@ type workflowFile struct {
 	On   yaml.Node `yaml:"on"`
 	Jobs map[string]struct {
 		Name string `yaml:"name"`
+		If   string `yaml:"if"`
 	} `yaml:"jobs"`
 }
 
@@ -62,10 +63,13 @@ func jobCheckName(id, name string) string {
 
 // mergeGroupGaps reads workflows (file name to contents) and returns, sorted,
 // every "<file>: <check>" where a job reporting a required check sits in a
-// workflow with no merge_group trigger, and every "missing: <check>" for a
+// workflow with no merge_group trigger, every "<file>: <check> (if: ...)" where
+// the job's own condition names merge_group, and every "missing: <check>" for a
 // required check no workflow reports at all. A queue entry waits forever for
-// a required check that never reports on it, so either gap stalls the merge
-// queue.
+// a required check that never reports on it, and a required job its `if:`
+// skips there reads as passed without having run, so each gap breaks the
+// merge queue. The condition test is deliberately blunt: a required job has no
+// reason to mention merge_group in its `if:`, so any mention is flagged.
 func mergeGroupGaps(workflows map[string][]byte, required []string) ([]string, error) {
 	want := map[string]bool{}
 	for _, c := range required {
@@ -92,6 +96,9 @@ func mergeGroupGaps(workflows map[string][]byte, required []string) ([]string, e
 			reported[check] = true
 			if !mergeGroup {
 				gaps = append(gaps, file+": "+check)
+			}
+			if strings.Contains(job.If, "merge_group") {
+				gaps = append(gaps, file+": "+check+" (if: "+job.If+")")
 			}
 		}
 	}
@@ -131,12 +138,21 @@ func TestMergeGroupGapsFindsEveryWayTheQueueStalls(t *testing.T) {
 		"by-name.yml": []byte("on: [pull_request]\njobs:\n  title:\n    name: lint\n    runs-on: x\n"),
 		// Not a required check: no merge_group needed.
 		"other.yml": []byte("on: pull_request\njobs:\n  docs:\n    runs-on: x\n"),
+		// Runs in the queue, but its own condition skips it there.
+		"skipped.yml": []byte("on: [pull_request, merge_group]\njobs:\n  smoke-lab:\n    if: github.event_name != 'merge_group'\n    runs-on: x\n"),
+		// Not a required check: free to skip the queue.
+		"publish.yml": []byte("on: [pull_request, merge_group]\njobs:\n  push:\n    if: github.event_name != 'merge_group'\n    runs-on: x\n"),
 	}
-	got, err := mergeGroupGaps(workflows, []string{"e2e", "gen-drift", "lint", "test"})
+	got, err := mergeGroupGaps(workflows, []string{"e2e", "gen-drift", "lint", "smoke-lab", "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"by-id.yml: gen-drift", "by-name.yml: lint", "missing: e2e"}
+	want := []string{
+		"by-id.yml: gen-drift",
+		"by-name.yml: lint",
+		"missing: e2e",
+		"skipped.yml: smoke-lab (if: github.event_name != 'merge_group')",
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("mergeGroupGaps = %v, want %v", got, want)
 	}
@@ -169,7 +185,7 @@ func TestEveryRequiredCheckRunsInTheMergeQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(gaps) > 0 {
-		t.Fatalf("required checks that would never report in the merge queue (add `merge_group:` to the workflow, or fix requiredChecks):\n  %s",
+		t.Fatalf("required checks that would not run in the merge queue (add `merge_group:` to the workflow, drop merge_group from the job's `if:`, or fix requiredChecks):\n  %s",
 			strings.Join(gaps, "\n  "))
 	}
 }
