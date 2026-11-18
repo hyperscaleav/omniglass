@@ -317,7 +317,7 @@ export default function SystemZoom() {
 
   return (
     <BladesContext.Provider value={blades}>
-    <Page title={title()} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+    <Page title={title()} name={system()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
       {/* A create from a template lands here with ?from= (#1329). */}
       <TemplateNotice />
       <DetailGate

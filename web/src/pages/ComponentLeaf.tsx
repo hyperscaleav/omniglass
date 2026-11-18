@@ -240,7 +240,7 @@ export default function ComponentLeaf() {
 
   return (
     <BladesContext.Provider value={blades}>
-    <Page title={component() ? entityLabel(component()!) : "Component"} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+    <Page title={component() ? entityLabel(component()!) : "Component"} name={component()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
       {/* A create from a template lands here with ?from= (#1329). */}
       <TemplateNotice />
       <DetailGate

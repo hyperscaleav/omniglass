@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { addSubjects, alarmSubject, triageCall, clearTray, contextEntries, gathered, gatherer, handOverPage, isHandOverKey, pageSubject, removeSubject, stamped, subjectOf, tray } from "./handover";
+import { addSubjects, alarmSubject, triageCall, clearTray, contextEntries, gathered, gatherer, handOverPage, isHandOverKey, namePage, pageSubject, removeSubject, stamped, subjectOf, tray } from "./handover";
 
 // The context builder (#2122): what the person hands omnibot is references and
 // the page as a query, never what the console rendered and never a uuid.
@@ -15,6 +15,11 @@ describe("pageSubject", () => {
   it("drops an argument that is a uuid, and a route that holds one", () => {
     expect(pageSubject("/audit", `?actor=${UUID}&verb=create`)).toEqual({ kind: "page", ref: "/audit?verb=create" });
     expect(pageSubject(`/things/${UUID}`, "")).toBeUndefined();
+  });
+
+  it("names a detail page by its entity's name or address, in place of the uuid its route holds", () => {
+    expect(pageSubject(`/systems/${UUID}`, "?tab=health", "auditorium")).toEqual({ kind: "page", ref: "/systems/auditorium?tab=health" });
+    expect(pageSubject(`/systems/${UUID}`, "", UUID)).toBeUndefined();
   });
 });
 
@@ -101,6 +106,13 @@ describe("the hand-over key", () => {
     addSubjects([{ kind: "alarm", ref: "hq.a/offline" }]);
     handOverPage("/alarms", "");
     expect(tray()).toEqual([{ kind: "alarm", ref: "hq.a/offline" }]);
+  });
+
+  it("hands over a detail page by the name the page shows", () => {
+    namePage("hq.lobby.display-1");
+    handOverPage(`/components/${UUID}`, "");
+    namePage(undefined);
+    expect(tray()).toEqual([{ kind: "page", ref: "/components/hq.lobby.display-1" }]);
   });
 });
 

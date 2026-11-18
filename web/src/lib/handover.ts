@@ -20,12 +20,18 @@ const MAX_VALUE = 2000;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 // pageSubject is the page as a query: its route and the arguments that are not
-// a uuid. A route that holds a uuid is no subject.
+// a uuid. A detail page's route holds its entity's uuid, so it is named by the
+// entity's name or address instead (#759's name-shaped address); with no name
+// a route that holds a uuid is no subject.
 export function pageSubject(
   pathname: string,
   search: string,
+  name?: string,
 ): Subject | undefined {
-  if (UUID.test(pathname)) return undefined;
+  if (UUID.test(pathname)) {
+    if (!name || UUID.test(name)) return undefined;
+    pathname = pathname.replace(UUID, name);
+  }
   const params = new URLSearchParams(search);
   for (const [k, v] of [...params]) if (UUID.test(v)) params.delete(k, v);
   const q = params.toString();
@@ -191,11 +197,19 @@ export function isHandOverKey(
   );
 }
 
+const [pageName, setPageName] = createSignal<string | undefined>();
+
+// namePage is the name or address of the entity the page shows, set by the
+// Page primitive for a detail page, so ⌘J names the page as its address.
+export function namePage(name: string | undefined) {
+  setPageName(name);
+}
+
 // handOverPage puts the page in the tray when the person has gathered nothing
 // else: what they are looking at is the context.
 export function handOverPage(pathname: string, search: string) {
   if (subjects().length > 0) return;
-  const page = pageSubject(pathname, search);
+  const page = pageSubject(pathname, search, pageName());
   if (page) addSubjects([page]);
 }
 
