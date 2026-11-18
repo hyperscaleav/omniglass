@@ -157,6 +157,29 @@ omniglass notification-target create --name ops-mailbox --kind email --addresses
 omniglass notification-target test ops-mailbox
 ```
 
+### Tell whoever holds a role
+
+A `role` target tells everyone holding a role, directly or through a user group's grant, read from the
+grants at every alarm: grant someone `admin` and the next alarm tells them, with no group to keep in
+step. Binding one takes `role:read:admin` and `user:read:admin`. The Notification targets page lists,
+shows and edits a role target; its create form does not offer the kind yet (#2017), so make one with
+the CLI:
+
+```bash
+omniglass notification-target create --name site-admins --kind role --role admin --channels '["inbox"]'
+```
+
+**Omniglass's own alarms already reach somebody.** A fresh install ships the `platform-alarms-to-admins`
+rule (`when: platform`, true on a server's or an outpost's own alarms) sending to two role targets,
+`platform-admins` and `platform-owners` (owner does not inherit admin, and the first user is an owner),
+on the inbox. They are marked **official**: their role and channels, and the rule's edges and `when`,
+are put back on every start and read-only, and none of them can be deleted. Their **Disable** is yours
+and survives a restart, as do a target's label and any target you add to the rule:
+
+```bash
+omniglass action-rule update platform-alarms-to-admins --targets '["platform-admins","platform-owners","ops-mailbox"]'
+```
+
 ### The mail relay
 
 Email goes through one relay, set in the `notification` settings namespace. Store its login as a

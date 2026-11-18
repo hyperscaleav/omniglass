@@ -60,13 +60,15 @@ import {
 // the caller's all-scope permissions (canFleet).
 
 export const TARGET_HINTS = {
-  kind: "Webhook posts a signed JSON envelope to a URL (a chat or paging tool). Email sends to fixed addresses through the install's mail relay. User group tells every member of a user group, read at each alarm; Person tells one person. A person is told only about alarms on components they can read.",
+  kind: "Webhook posts a signed JSON envelope to a URL (a chat or paging tool). Email sends to fixed addresses through the install's mail relay. User group tells every member of a user group, read at each alarm; Person tells one person; Role tells everyone holding a role. A person is told only about alarms on components they can read.",
   url: "Masked to its scheme and host on every read, since a chat webhook's URL is often itself a credential. Reveal shows it whole and is audited. A private address is refused until Settings > notification > egress_allow names it.",
   urlEdit: "Leave blank to keep the stored URL. A new one is judged against the egress allow list as it is saved.",
   secret: "A platform hmac-key signs each body (X-Omniglass-Signature); a bearer-token is presented as Authorization: Bearer. None sends unsigned. Binding one takes the right to reveal it.",
   addresses: "The mailbox addresses it sends to, separated by commas or new lines, through the install's mail relay.",
   group: "Every person in the user group, read at each alarm transition: add someone to the group and they are told next time.",
   person: "The one person it tells.",
+  role: "Every person holding the role, directly or through a user group's grant, read at each alarm transition: grant it and they are told next time.",
+  official: "Ships with Omniglass, which puts its role and channels back on every start, so those are read-only and it cannot be deleted. Its label and the enabled switch are yours, and a disable survives a restart.",
   channels: "Inbox puts an entry in each person's console inbox (the bell in the top bar). Email sends to each person's directory email.",
   enabled: "A disabled target is skipped: a rule sending to it queues nothing for it. It can still be tested.",
   test: "Sends one synthetic message (transition test, about no alarm) exactly as a delivery would be sent, and shows what the receiver answered. It records nothing but its audit row.",
@@ -238,13 +240,15 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
     },
     secondary: () => {
       const t = row();
-      if (!t || !canDelete()) return [];
+      // A shipped target is never deleted: the seed would put it back.
+      if (!t || t.official || !canDelete()) return [];
       return [{ label: "Delete", icon: <Trash size={15} />, tone: "danger", onClick: () => void remove(t) }];
     },
     locked: () => {
       const t = row();
       if (!t || canUpdate()) return null;
-      // A target carries no official flag: judged on the permission arm alone.
+      // Judged on the permission arm alone: an official target's enabled
+      // switch and label are the operator's, so official is no lock here.
       return catalogLock({ official: false }, fleetView(me.data), "notification_target");
     },
   });
@@ -267,6 +271,9 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
             <KVStacked bind="name" value={<span class="font-data">{t().name}</span>} />
             <KVStacked label="Kind" hint={TARGET_HINTS.kind} value={<span data-testid="target-kind">{KIND_WORDS[t().kind]}</span>} />
             <KVStacked label="Status" hint={TARGET_HINTS.enabled} value={statusPill(t().enabled)} />
+            <Show when={t().official}>
+              <KVStacked label="Origin" hint={TARGET_HINTS.official} value={<span class="badge badge-ghost badge-sm" data-testid="target-official">official</span>} />
+            </Show>
             <Show when={t().kind === "webhook"}>
               <KVStacked
                 label="Signed with"
@@ -299,6 +306,12 @@ function TargetBladeBody(p: { name: string }): JSX.Element {
                     hint={t().kind === "user" ? TARGET_HINTS.person : TARGET_HINTS.group}
                     value={<span class="font-data">{(t().kind === "user" ? t().user : t().user_group) || "withheld"}</span>}
                   />
+                  <KVStacked label="Channels" hint={TARGET_HINTS.channels} value={<ChannelPills channels={t().channels} />} />
+                </div>
+              </Match>
+              <Match when={t().kind === "role"}>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                  <KVStacked label="Role" hint={TARGET_HINTS.role} value={<span class="font-data" data-testid="target-role">{t().role}</span>} />
                   <KVStacked label="Channels" hint={TARGET_HINTS.channels} value={<ChannelPills channels={t().channels} />} />
                 </div>
               </Match>
@@ -608,6 +621,12 @@ export function TargetForm(p: { mode: "create" | "edit"; target?: NotificationTa
             </div>
           </Show>
           <ChannelBoxes />
+        </Match>
+        <Match when={kind() === "role"}>
+          <KVStacked label="Role" hint={TARGET_HINTS.role} mono value={p.target!.role} />
+          <Show when={!p.target!.official} fallback={<KVStacked label="Tell them by" hint={TARGET_HINTS.official} value={<ChannelPills channels={p.target!.channels} />} />}>
+            <ChannelBoxes />
+          </Show>
         </Match>
       </Switch>
 
