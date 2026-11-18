@@ -1,5 +1,6 @@
 import { api, sendRaw } from "../api/client";
 import { describeError } from "./format";
+import type { ContextEntry } from "./handover";
 
 // The omnibot panel's data layer (#1167). A run is the server's: the console
 // posts a prompt (or the answer to an ask) to a conversation's :run and reads
@@ -23,7 +24,7 @@ export type Step = {
   decision?: "approved" | "declined";
 };
 
-export type Item = { kind: "user"; text: string } | { kind: "text"; id: string; text: string } | Step;
+export type Item = { kind: "user"; text: string; context?: ContextEntry[] } | { kind: "text"; id: string; text: string } | Step;
 
 // The call a run paused on, waiting for the person.
 export type Ask = {
@@ -49,9 +50,11 @@ export type RunState = {
 
 export const initialRun: RunState = { items: [], status: "idle" };
 
-// ask adds the person's prompt and starts working on it.
-export function ask(s: RunState, text: string): RunState {
-  return { items: [...s.items, { kind: "user", text }], status: "working" };
+// ask adds the person's prompt, and what they handed over with it, and starts
+// working on it.
+export function ask(s: RunState, text: string, context?: ContextEntry[]): RunState {
+  const item: Item = context?.length ? { kind: "user", text, context } : { kind: "user", text };
+  return { items: [...s.items, item], status: "working" };
 }
 
 // answer records the person's answer to the waiting call and starts the
@@ -166,7 +169,7 @@ export async function* readEvents(stream: ReadableStream<Uint8Array>): AsyncGene
 // impersonation session.
 export class RunRefused extends Error {}
 
-export type RunInput = { prompt: string } | { resume: { id: string; approved: boolean } };
+export type RunInput = { prompt: string; context?: ContextEntry[] } | { resume: { id: string; approved: boolean } };
 
 // runOmnibot runs omnibot on the named conversation and hands each event to
 // onEvent as it arrives. A run the server refuses to start throws: RunRefused
@@ -177,7 +180,7 @@ export async function runOmnibot(name: string, input: RunInput, onEvent: (ev: Ag
   // console reached over plain http would fail before it sent.
   const body =
     "prompt" in input
-      ? { messages: [{ role: "user", content: input.prompt }] }
+      ? { messages: [{ role: "user", content: input.prompt }], ...(input.context?.length ? { context: input.context } : {}) }
       : {
           messages: [],
           resume: [

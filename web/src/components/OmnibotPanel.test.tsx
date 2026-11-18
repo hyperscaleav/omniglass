@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import OmnibotPanel from "./OmnibotPanel";
 import { uuidFor } from "../lib/testids";
+import { addSubjects, clearTray, tray } from "../lib/handover";
 
 // The omnibot panel (#1167): a prompt starts a conversation and runs it,
 // omnibot's text and each tool call stream in, a call the person's policy
@@ -49,6 +50,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  clearTray();
   vi.restoreAllMocks();
 });
 
@@ -210,5 +212,44 @@ describe("the omnibot panel", () => {
     send((screen.getByLabelText("Ask omnibot") as HTMLTextAreaElement).value);
     await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
     expect(JSON.stringify(calls.filter((c) => c.url.includes(":run")))).not.toContain("s3cret-value");
+  });
+
+  it("hands over what the person gathered with the prompt, and empties the tray", async () => {
+    addSubjects([
+      { kind: "page", ref: "/alarms?state=active" },
+      { kind: "alarm", ref: "hq.lobby.display-1/offline" },
+    ]);
+    open();
+    const chips = within(screen.getByTestId("omnibot-tray"));
+    expect(chips.getByText("hq.lobby.display-1/offline")).toBeTruthy();
+    send("why is this down?");
+    await screen.findByTestId("omnibot-ask");
+    const run = calls.find((c) => c.url.includes(":run"))!;
+    expect(run.body.context).toEqual([
+      { description: "page", value: "/alarms?state=active" },
+      { description: "alarm", value: "hq.lobby.display-1/offline" },
+    ]);
+    expect(tray()).toEqual([]);
+    expect(screen.queryByTestId("omnibot-tray")).toBeNull();
+    expect(within(screen.getByTestId("omnibot-handed")).getByText("hq.lobby.display-1/offline")).toBeTruthy();
+  });
+
+  it("leaves out a subject the person removed from the tray", async () => {
+    addSubjects([
+      { kind: "page", ref: "/alarms" },
+      { kind: "system", ref: "hq.room-1" },
+    ]);
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Remove page /alarms" }));
+    send("what is in this room?");
+    await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
+    expect(calls.find((c) => c.url.includes(":run"))!.body.context).toEqual([{ description: "system", value: "hq.room-1" }]);
+  });
+
+  it("sends no context when nothing was handed over", async () => {
+    open();
+    send("hello");
+    await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
+    expect(calls.find((c) => c.url.includes(":run"))!.body.context).toBeUndefined();
   });
 });

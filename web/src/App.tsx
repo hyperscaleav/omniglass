@@ -1,5 +1,6 @@
 import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
+import { handOverPage, isHandOverKey } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
@@ -46,11 +47,16 @@ const App: ParentComponent = (props) => {
   });
   createEffect(() => localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"));
 
-  // Global ⌘K / Ctrl-K toggles the command palette.
+  // Global ⌘K / Ctrl-K toggles the command palette; ⌘J / Ctrl-J hands omnibot
+  // the page (#2122) and opens it.
   const onKey = (e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();
       setPaletteOpen((o) => !o);
+    } else if (mayAsk() && isHandOverKey(e)) {
+      e.preventDefault();
+      handOverPage(location.pathname, location.search);
+      openOmnibot();
     }
   };
   window.addEventListener("keydown", onKey);

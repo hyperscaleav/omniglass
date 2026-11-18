@@ -3,7 +3,7 @@ import Button from "./Button";
 import Drawer from "./Drawer";
 import OmnibotStep, { StepArgs } from "./OmnibotStep";
 import CreateSecretForm from "./CreateSecretForm";
-import { Bot, Key, Plus } from "./icons";
+import { Bot, Key, Plus, X } from "./icons";
 import {
   answer,
   ask,
@@ -18,6 +18,7 @@ import {
   type RunState,
 } from "../lib/assistant";
 import { describeError } from "../lib/format";
+import { clearTray, contextEntries, removeSubject, tray, type Subject } from "../lib/handover";
 
 // OmnibotPanel is omnibot in the console (#1167): a drawer over one of the
 // person's conversations, run on the server (#2121). A prompt streams back as
@@ -27,6 +28,30 @@ import { describeError } from "../lib/format";
 // audited as its own, and it never sees a secret's value. The credential
 // button creates a secret through the secrets route and puts only its name in
 // the prompt, so a credential the person types never reaches the model.
+// What the person gathered from the console (#2122) waits in a tray above the
+// composer and goes with the next prompt as references, never as what the
+// console rendered.
+
+// SubjectChip is one handed-over subject: its kind and its name, address or
+// page, with a remove button while it waits in the tray.
+function SubjectChip(props: { subject: Subject; onRemove?: () => void }) {
+  return (
+    <span class="badge badge-sm gap-1 max-w-full">
+      <span class="text-base-content/60">{props.subject.kind}</span>
+      <span class="font-data truncate">{props.subject.ref}</span>
+      <Show when={props.onRemove}>
+        <button
+          type="button"
+          class="cursor-pointer"
+          aria-label={`Remove ${props.subject.kind} ${props.subject.ref}`}
+          onClick={() => props.onRemove?.()}
+        >
+          <X size={12} />
+        </button>
+      </Show>
+    </span>
+  );
+}
 
 export default function OmnibotPanel(props: { open: boolean; onClose: () => void; prompt?: string }) {
   const [state, setState] = createSignal<RunState>(initialRun);
@@ -72,9 +97,11 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   function send() {
     const text = draft().trim();
     if (!text || busy()) return;
+    const context = contextEntries(tray());
     setDraft("");
-    setState((s) => ask(s, text));
-    void run({ prompt: text });
+    clearTray();
+    setState((s) => ask(s, text, context));
+    void run({ prompt: text, context });
   }
 
   function decide(approved: boolean) {
@@ -104,6 +131,12 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
         send();
       }}
     >
+      <Show when={tray().length > 0}>
+        <div data-testid="omnibot-tray" class="flex flex-wrap items-center gap-1.5" aria-label="Handed to omnibot with your next prompt">
+          <span class="text-xs text-base-content/60">With your prompt</span>
+          <For each={tray()}>{(s) => <SubjectChip subject={s} onRemove={() => removeSubject(s)} />}</For>
+        </div>
+      </Show>
       <textarea
         ref={composer}
         aria-label="Ask omnibot"
@@ -168,7 +201,18 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
             {(item) => (
               <Switch>
                 <Match when={item.kind === "user" && item}>
-                  {(u) => <div class="self-end max-w-[85%] rounded-box bg-primary/10 px-3 py-2 text-sm whitespace-pre-wrap">{u().text}</div>}
+                  {(u) => (
+                    <div class="self-end flex max-w-[85%] flex-col items-end gap-1">
+                      <Show when={u().context}>
+                        {(c) => (
+                          <div data-testid="omnibot-handed" class="flex flex-wrap justify-end gap-1">
+                            <For each={c()}>{(e) => <SubjectChip subject={{ kind: e.description, ref: e.value }} />}</For>
+                          </div>
+                        )}
+                      </Show>
+                      <div class="rounded-box bg-primary/10 px-3 py-2 text-sm whitespace-pre-wrap">{u().text}</div>
+                    </div>
+                  )}
                 </Match>
                 <Match when={item.kind === "text" && item}>
                   {(t) => <div class="text-sm whitespace-pre-wrap">{t().text}</div>}
