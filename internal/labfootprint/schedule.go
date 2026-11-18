@@ -12,21 +12,21 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// The schedule hop's read (#1693): each node's dispatcher counts, every
+// The schedule hop's read (#1693): each outpost's dispatcher counts, every
 // report window, the runs that fell due and the runs it made, per kind the
 // run produces, on its own platform component under the instance
 // schedule/{kind}. The read sums them over the measured window. Its in and
 // out are runs, not items: a run is one due whatever it emits.
 
 // ScheduleCount is one kind's schedule hop over the window: the runs due and
-// the runs made, summed across the nodes.
+// the runs made, summed across the outposts.
 type ScheduleCount struct {
 	Kind delivery.Kind
 	Due  uint64
 	Made uint64
 }
 
-// ScheduleQuery sums every node's schedule hop counts reported in (from, to],
+// ScheduleQuery sums every outpost's schedule hop counts reported in (from, to],
 // one `instance|due|made` a line.
 func ScheduleQuery(from, to time.Time) string {
 	return fmt.Sprintf(`select concat_ws('|', s.instance,
@@ -34,7 +34,7 @@ func ScheduleQuery(from, to time.Time) string {
 		from metric m
 		join metric_series s on s.id = m.series_id join metric_type mt on mt.id = s.metric_type_id
 		where mt.name in ('%[1]s', '%[2]s') and s.instance like 'schedule/%%'
-			and s.component_id in (select platform_component_id from node)
+			and s.component_id in (select platform_component_id from outpost)
 			and m.ts > to_timestamp(%[3]s) and m.ts <= to_timestamp(%[4]s)
 		group by s.instance order by s.instance`,
 		writerclass.DeliveryInCount, writerclass.DeliveryOutCount, epoch(from), epoch(to))
@@ -85,7 +85,7 @@ func ScheduleRowsOf(counts []ScheduleCount) []DeliveryRow {
 			continue
 		}
 		made := min(counts[i].Made, counts[i].Due)
-		row := DeliveryRow{Lane: LaneNode, Hop: delivery.Schedule, Kind: k, In: counts[i].Due, Out: made,
+		row := DeliveryRow{Lane: LaneOutpost, Hop: delivery.Schedule, Kind: k, In: counts[i].Due, Out: made,
 			Outcomes: map[delivery.Outcome]uint64{delivery.Made: made, delivery.Skipped: counts[i].Due - made}}
 		if l, ok := delivery.Loss(row.In, row.Out); ok {
 			row.Loss = &l
@@ -97,13 +97,13 @@ func ScheduleRowsOf(counts []ScheduleCount) []DeliveryRow {
 
 // WithSchedule is rows with each kind's schedule row ahead of that kind's
 // other hops, as an item crosses them: lane order (#1696), then kind order,
-// then hop order. The schedule rows are the node lane's.
+// then hop order. The schedule rows are the outpost lane's.
 func WithSchedule(schedule, rows []DeliveryRow) []DeliveryRow {
 	if len(schedule) == 0 {
 		return rows
 	}
 	var out []DeliveryRow
-	for _, lane := range []DeliveryLane{LaneNode, LanePush} {
+	for _, lane := range []DeliveryLane{LaneOutpost, LanePush} {
 		for _, k := range delivery.Kinds {
 			for _, set := range [][]DeliveryRow{schedule, rows} {
 				for _, r := range set {

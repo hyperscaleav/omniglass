@@ -139,8 +139,8 @@ func TestRenderRequestKeepsRetries(t *testing.T) {
 }
 
 // One parse of a listen port for every reader (#1037, ported from #1105):
-// the write path and the node accept the same set, so a value the write
-// accepts is a port the node binds, and unset reads the same on both.
+// the write path and the outpost accept the same set, so a value the write
+// accepts is a port the outpost binds, and unset reads the same on both.
 func TestParseListenPortIsTheOneReading(t *testing.T) {
 	for _, tc := range []struct {
 		raw  string

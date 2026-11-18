@@ -8,25 +8,25 @@
 # it (#1341, #1352).
 
 Hide
-Type `demo_hush 'omniglass principal create --username dana --email dana@example.com'`
+Type `demo_hush 'omniglass user create --username dana --email dana@example.com'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal grant create dana --role viewer --scope-kind all'`
+Type `demo_hush 'omniglass user grant create dana --role viewer --scope-kind all'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal create --username eli --email eli@example.com'`
+Type `demo_hush 'omniglass user create --username eli --email eli@example.com'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal grant create eli --role viewer --scope-kind component --scope-id panel-2'`
+Type `demo_hush 'omniglass user grant create eli --role viewer --scope-kind component --scope-id panel-2'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal-group create --name on-call'`
+Type `demo_hush 'omniglass user-group create --name on-call'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal-group member create on-call --principal-id dana'`
+Type `demo_hush 'omniglass user-group member create on-call --user-id dana'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal-group member create on-call --principal-id eli'`
+Type `demo_hush 'omniglass user-group member create on-call --user-id eli'`
 Enter
 Wait
 Type "clear"
@@ -37,13 +37,13 @@ Show
 Type "# The on-call group: dana reads the whole fleet, eli reads Touch Panel 2 alone"
 Enter
 Wait
-Type `for u in dana eli; do omniglass principal get "$u" | jq -c '{user: .human.username, grants: [.grants[] | {role, scope_kind}]}'; done`
+Type `for u in dana eli; do omniglass user get "$u" | jq -c '{user: .person.username, grants: [.grants[] | {role, scope_kind}]}'; done`
 Enter
 Wait
 Type "# The group becomes a notification target in the console inbox, paged on any alarm raised by hand, high or worse"
 Enter
 Wait
-Type `omniglass notification-target create --name on-call-page --kind principal_group --principal-group on-call --channels '["inbox"]' | jq -c '{name, kind, principal_group, channels}'`
+Type `omniglass notification-target create --name on-call-page --kind user_group --user-group on-call --channels '["inbox"]' | jq -c '{name, kind, user_group, channels}'`
 Enter
 Wait
 Type `omniglass action-rule create --name page-on-call --on '["raised"]' --when 'severity_rank >= 40 && rule == ""' --targets '["on-call-page"]' | jq -c '{name, on, when, targets}'`
@@ -63,10 +63,10 @@ Enter
 Wait
 
 Hide
-Type `demo_hush 'dana=$(omniglass principal impersonate dana --mode act_as | jq -r .token)'`
+Type `demo_hush 'dana=$(omniglass user impersonate dana --mode act_as | jq -r .token)'`
 Enter
 Wait
-Type `demo_hush 'eli=$(omniglass principal impersonate eli --mode act_as | jq -r .token)'`
+Type `demo_hush 'eli=$(omniglass user impersonate eli --mode act_as | jq -r .token)'`
 Enter
 Wait
 Type "clear"
@@ -96,17 +96,17 @@ Hide
 Type "clear"
 Enter
 Wait
-Type `demo_hush 'grant=$(omniglass principal get eli | jq -r ".grants[0].id")'`
+Type `demo_hush 'grant=$(omniglass user get eli | jq -r ".grants[0].id")'`
 Enter
 Wait
 Show
 Type "# eli is moved from Touch Panel 2 to the video bar: the entry about the panel is gone at once"
 Enter
 Wait
-Type `omniglass principal grant create eli --role viewer --scope-kind component --scope-id "$bar" | jq -c '{role, scope_kind}'`
+Type `omniglass user grant create eli --role viewer --scope-kind component --scope-id "$bar" | jq -c '{role, scope_kind}'`
 Enter
 Wait
-Type `omniglass principal grant delete eli "$grant"`
+Type `omniglass user grant delete eli "$grant"`
 Enter
 Wait
 Type `OMNIGLASS_TOKEN=$eli omniglass auth me notification list | jq -c '{unread, entries: [.notifications[] | {component}]}'`
@@ -115,6 +115,6 @@ Wait
 Type "# The group cannot be deleted while a target notifies it; the refusal names the target"
 Enter
 Wait
-Type `omniglass principal-group delete on-call 2>/dev/null | jq -r .detail || true`
+Type `omniglass user-group delete on-call 2>/dev/null | jq -r .detail || true`
 Enter
 Wait

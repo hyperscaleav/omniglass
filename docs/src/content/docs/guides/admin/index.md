@@ -5,14 +5,14 @@ description: "Administering an Omniglass platform: the people who can sign in, t
 
 This is the how-to for **administering the platform**, the standing job of deciding who may
 sign in, what each account can see and do, and the config and credentials the fleet runs on.
-It is a different job from **operating** the fleet (running the inventory, reading the data),
+It is a different job from **operating** the fleet (running its locations, systems and components, reading the data),
 which is the [operator guide](/guides/operator/), and from **standing the platform up**, which
 is [deployment](/guides/deployment/).
 
 The dividing line is the [two authorization layers](/architecture/identity-access/), both
 enforced in the app on every request: a `<resource>:<action>` **permission** checked on every
 route, and an ABAC **scope** injected by the Storage Gateway on every applicable query. An
-administrator is simply a principal whose grants carry the admin-tier permissions (`principal:*`,
+administrator is simply a user whose grants carry the admin-tier permissions (`user:*`,
 `role:read:admin`, `audit:read:admin`, `secret:*`, and so on); the surfaces below render and refuse exactly
 along those grants, so what an administrator sees is what they are allowed to change.
 
@@ -21,17 +21,17 @@ along those grants, so what an administrator sees is what they are allowed to ch
 Every task on these pages has two front doors, and they call the same API with the same checks:
 
 - **The console.** The **Admin** area of the [web console](/guides/operator/) holds Users,
-  Roles, Groups, Settings, and Audit. Secrets and Variables have moved to the **Values**
+  Roles, User groups, Settings, and Audit. Secrets and Variables have moved to the **Values**
   group. A tab you have no read grant for is hidden and its route refused, so the console never
   paints a page you cannot use.
 - **The CLI.** The same surfaces are generated commands on the [`omniglass` CLI](/guides/cli/)
-  (`principal`, `principal-group`, `secret`, `variable`, and the rest, all in the [CLI
+  (`user`, `user-group`, `secret`, `variable`, and the rest, all in the [CLI
   reference](/reference/cli/)), plus the trusted direct-database lane (`bootstrap`, `token`,
   `set-password`) that mints the very first owner before any server is running.
 
 ## In this guide
 
-- **[Manage users](/guides/admin/users/)** is the principal directory: creating a human,
+- **[Manage users](/guides/admin/users/)** is the user directory: creating a person,
   editing and renaming, the disable-archive-purge lifecycle, admin password reset, and profile
   pictures.
 - **[Roles, groups, and grants](/guides/admin/access/)** is giving a user access: the built-in
@@ -49,7 +49,7 @@ Every task on these pages has two front doors, and they call the same API with t
   typed values and **[metrics](/guides/admin/metrics/)** for the numeric quantities, with their
   units and precision.
 - **[Rules and severity](/guides/admin/rules/)** is where alarms come from when nobody raises them:
-  writing an event rule (what it reads, when it fires and clears, how long a condition must hold),
+  writing an event rule (what it reads, when it fires and clears, how long its criteria must hold),
   watching its live state, and the ranked severity levels its alarms are raised at, which you can
   add to, rename, recolor and re-rank on the console.
 - **[Calc rules](/guides/admin/calc-rules/)** derive a value from others, on each component or on each
@@ -59,11 +59,11 @@ Every task on these pages has two front doors, and they call the same API with t
   **[location types](/guides/admin/location-types/)** for locations, **[standards](/guides/admin/standards/)** for
   systems, and **[products](/guides/admin/products/)** for components, with
   **[vendors](/guides/admin/vendors/)** and **[drivers](/guides/admin/drivers/)** the reference
-  registries a product ties together. Beside standards sit the two coarse genus registries the
+  catalogs a product ties together. Beside standards sit the two type catalogs the
   console calls **Types**: the
   [component type](/architecture/core-entities/#catalog-reference-data-component_type) tree above
   products, and the [system type](/architecture/core-entities/#catalog-reference-data-system_type)
-  tree that says what kind of space a system is.
+  tree that says what a system is for.
 - **[Notifications](/guides/admin/notifications/)** is sending an alarm to a chat channel: a
   webhook target, the action rule that sends to it, the message it carries, and how a delivery
   reads on the alarm's timeline, all on the console's **Catalog, under Actions**.
@@ -75,28 +75,29 @@ time, every hour (every minute while it is catching up). The windows are the **r
 on **Admin > Settings**, each from 1 to 36,500 days:
 
 - `metric_days`, 14 by default: how long a metric sample (a reading such as a round-trip time) is
-  kept.
+  kept, at least. Samples are stored by UTC day and usually removed a whole day at a time, so a
+  sample can stay up to a day past the window, until its day goes.
 - `property_days`, 90 by default: how long a property transition (a change such as a power state
   going from on to off) is kept.
 - `trend_days`, 730 by default: how long the hourly trends of each metric (count, minimum, maximum,
   sum, first and last value of every hour) are kept, counted from the hour, like `metric_days`. It is
   a window of its own: set it below `metric_days` and an hour's trend goes before its samples do.
-- Log lines, from your components and from your nodes, by severity:
+- Log lines, from your components and from your outposts, by severity:
   - `log_debug_days`, 3 by default;
   - `log_info_days`, 14 by default, which also covers notice and a line with no severity;
   - `log_warning_days`, 30 by default;
   - `log_error_days`, 90 by default, which also covers critical, alert and emergency.
-- Your nodes' own logs, if you want them kept for a different window than your components' lines:
-  `node_log_debug_days`, `node_log_info_days`, `node_log_warning_days` and `node_log_error_days`.
-  Each reads **not set** until you set it, and while it is not set a node's lines of that severity
-  follow the shared window above. Restore one to go back to the shared window. Drop a node's debug
-  chatter after a day while keeping a component's for three, say, or keep a node's for a month
-  while chasing a node problem. Over the API it is a merge patch, where a `null` restores the
+- Your outposts' own logs, if you want them kept for a different window than your components' lines:
+  `outpost_log_debug_days`, `outpost_log_info_days`, `outpost_log_warning_days` and `outpost_log_error_days`.
+  Each reads **not set** until you set it, and while it is not set an outpost's lines of that severity
+  follow the shared window above. Restore one to go back to the shared window. Drop an outpost's debug
+  chatter after a day while keeping a component's for three, say, or keep an outpost's for a month
+  while chasing an outpost problem. Over the API it is a merge patch, where a `null` restores the
   shared window (the CLI's `setting update` cannot send a body yet, #1333):
 
   ```sh
   curl -X PATCH "$OMNIGLASS_SERVER/api/v1/settings/retention" -H "Authorization: Bearer $OMNIGLASS_TOKEN" \
-    -H 'Content-Type: application/merge-patch+json' -d '{"node_log_debug_days": 1}'
+    -H 'Content-Type: application/merge-patch+json' -d '{"outpost_log_debug_days": 1}'
   ```
 
 Three things are never removed, however old:
@@ -128,7 +129,7 @@ its window and none past it, so a series no longer measured shows no reading wit
 Every endpoint reports on its own collection once a **report window**. This is built-in data: every
 endpoint gets it, whatever its driver, with nothing to set up
 ([built-in and collected data](/guides/admin/drivers/#built-in-and-collected-data)):
-- how long its polls took, how much CPU they cost the node, and how many failed;
+- how long its polls took, how much CPU they cost the outpost, and how many failed;
 - how many pushed messages its listeners claimed, and how many they did not;
 - for a webhook endpoint, how many posts the server accepted and refused.
 
@@ -136,11 +137,11 @@ These show beside the device's own values on the component's page (`poll-duratio
 `push-message-count`, `webhook-post-count` and the rest), so a device that pushes and is never polled
 still has telemetry. The window is the **collection** setting `report_seconds` on
 **Admin > Settings**: 60 by default, from 10 to 3,600. A shorter window shows a stall sooner and costs
-more rows; each endpoint lands a few rows per window, however fast its driver polls. A change reaches
-every node on its next worklist pull. See
+more rows; each endpoint lands a few rows per window, however fast its driver polls. A change nudges
+every outpost to pull its worklist at once, so it is in force within a second. See
 [collection telemetry](/architecture/collection/#collection-telemetry-every-endpoints-account-of-itself)
 for what each count means.
 
 The model behind all of this is [identity and access](/architecture/identity-access/) and
-[config and credentials](/architecture/variables/); those pages say how it is built, these say
+[variables, secrets, and declared values](/architecture/variables/); those pages say how it is built, these say
 how to run it.

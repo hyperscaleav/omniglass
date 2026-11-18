@@ -1,7 +1,7 @@
 // Package logline holds the facts every writer of a component's log line
 // shares (#1145): the canonical severity (RFC 5424's eight levels, one alias
 // table for every spelling a component or a library uses), and the caps on a
-// line's message and attributes. Pure, no I/O: the node's interpreter, the
+// line's message and attributes. Pure, no I/O: the outpost's interpreter, the
 // push lane and the ingest consumer all call it, so a line reads the same
 // whichever path brought it.
 package logline

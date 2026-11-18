@@ -10,12 +10,12 @@ import (
 	"time"
 )
 
-// SiteState is how far one site of a scale lab has come: whether its node's
+// SiteState is how far one site of a scale lab has come: whether its outpost's
 // simulator has connected, how many of its components the simulator lists of
 // those the plan gives the site, and how many of them are up (running, with
-// every endpoint the node dials reading up but the planted faults).
+// every endpoint the outpost dials reading up but the planted faults).
 type SiteState struct {
-	Node      string
+	Outpost   string
 	Connected bool
 	Want      int
 	Listed    int
@@ -33,29 +33,29 @@ func (s SiteState) Ready() bool {
 // reachConcurrency bounds the reachability reads one poll makes at once.
 const reachConcurrency = 16
 
-// readSites reads every site's node simulator, and the reachability of each
+// readSites reads every site's outpost simulator, and the reachability of each
 // running component not already up; up latches the components seen up, so a
 // poll reads only what is still coming up.
-func readSites(ctx context.Context, c *http.Client, base string, nodes []SiteNode, planted map[string]bool, up map[string]bool) ([]SiteState, error) {
+func readSites(ctx context.Context, c *http.Client, base string, outposts []SiteOutpost, planted map[string]bool, up map[string]bool) ([]SiteState, error) {
 	type device struct {
 		ComponentID string `json:"component_id"`
 		Component   string `json:"component"`
 		Address     string `json:"address"`
 		Status      string `json:"status"`
 	}
-	sims := make([][]device, len(nodes))
-	states := make([]SiteState, len(nodes))
+	sims := make([][]device, len(outposts))
+	states := make([]SiteState, len(outposts))
 	var check []string
-	for i, n := range nodes {
+	for i, n := range outposts {
 		var sim struct {
 			Connected bool     `json:"connected"`
 			Devices   []device `json:"devices"`
 		}
-		if err := getJSON(ctx, c, base+"/api/v1/nodes/"+n.Name+"/simulation", &sim); err != nil {
+		if err := getJSON(ctx, c, base+"/api/v1/outposts/"+n.Name+"/simulation", &sim); err != nil {
 			return nil, err
 		}
 		sims[i] = sim.Devices
-		states[i] = SiteState{Node: n.Name, Connected: sim.Connected, Want: n.Components, Listed: len(sim.Devices)}
+		states[i] = SiteState{Outpost: n.Name, Connected: sim.Connected, Want: n.Components, Listed: len(sim.Devices)}
 		for _, d := range sim.Devices {
 			if !up[d.ComponentID] && d.Status == "running" && sim.Connected {
 				check = append(check, d.ComponentID)
@@ -125,7 +125,7 @@ func FormatSitesNotUp(states []SiteState) string {
 		if s.Ready() {
 			continue
 		}
-		fmt.Fprintf(&b, "\n  %s: ", s.Node)
+		fmt.Fprintf(&b, "\n  %s: ", s.Outpost)
 		switch {
 		case !s.Connected:
 			fmt.Fprintf(&b, "its simulator has not connected (0 of %d components up)", s.Want)
@@ -150,7 +150,7 @@ func FormatSitesNotUp(states []SiteState) string {
 	return b.String()
 }
 
-// waitSites waits until every site's node simulates all of the site's
+// waitSites waits until every site's outpost simulates all of the site's
 // components and each of them is up, printing progress as it moves. Past
 // the wait it names what is not up.
 func (r *Runner) waitSites(ctx context.Context, lab *Lab, c *http.Client, cfg Config) error {
@@ -159,19 +159,19 @@ func (r *Runner) waitSites(ctx context.Context, lab *Lab, c *http.Client, cfg Co
 		planted[l] = true
 	}
 	up := map[string]bool{}
-	last := make([]SiteState, len(cfg.SiteNodes))
-	for i, n := range cfg.SiteNodes {
-		last[i] = SiteState{Node: n.Name, Want: n.Components}
+	last := make([]SiteState, len(cfg.SiteOutposts))
+	for i, n := range cfg.SiteOutposts {
+		last[i] = SiteState{Outpost: n.Name, Want: n.Components}
 	}
 	var lastLine string
-	err := r.waitFor(ctx, "every site's node to collect from its components", func() (bool, error) {
-		for _, n := range cfg.SiteNodes {
+	err := r.waitFor(ctx, "every site's outpost to collect from its components", func() (bool, error) {
+		for _, n := range cfg.SiteOutposts {
 			id := lab.ID(n.Name)
 			if st, err := r.Engine.Inspect(ctx, id); err == nil && !st.Running && !st.Restarting {
 				return false, r.stopped(ctx, n.Name, id, st)
 			}
 		}
-		states, err := readSites(ctx, c, lab.BaseURL, cfg.SiteNodes, planted, up)
+		states, err := readSites(ctx, c, lab.BaseURL, cfg.SiteOutposts, planted, up)
 		if err != nil {
 			return false, nil
 		}

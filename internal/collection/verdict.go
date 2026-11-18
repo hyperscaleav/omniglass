@@ -9,7 +9,7 @@ import (
 // The interface reachability verdict: a built-in STATE sample, the AND of the
 // raw probe results (tcp-open, icmp-reachable). endpoint-reachable is gated
 // per interface and its value domain is up/down; availability is time_in_state
-// over it. The node computes it and emits it as a state sample; the ingest
+// over it. The outpost computes it and emits it as a state sample; the ingest
 // consumer routes it to state by its property_type lane membership.
 const (
 	// SignalEndpointReachable is the seeded state key the verdict lands under.

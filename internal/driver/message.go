@@ -152,13 +152,13 @@ func validateListenerMatch(what string, m Match, transport string, stream *Reque
 // event's data is a line or a few, a JSON document or text.
 var streamFormats = []string{FormatJSON, FormatText}
 
-// streamHeaders are the headers the node sets on a stream request itself:
+// streamHeaders are the headers the outpost sets on a stream request itself:
 // the media type it asks for and the id it resumes from.
 var streamHeaders = []string{"accept", "last-event-id", "cache-control"}
 
-// validateStream refuses a session stream no node could hold: a GET with a
+// validateStream refuses a session stream no outpost could hold: a GET with a
 // path and no body, read as json or text, setting none of the headers the
-// node sends itself, and claimed by at least one listener.
+// outpost sends itself, and claimed by at least one listener.
 func (s *Spec) validateStream() error {
 	st := s.Session.Stream
 	if st == nil {
@@ -190,7 +190,7 @@ func validateStreamShape(st *Request) error {
 	}
 	for h := range st.Headers {
 		if slices.Contains(streamHeaders, strings.ToLower(h)) {
-			return fmt.Errorf("driver: session.stream may not set the %s header, which the node sends itself", h)
+			return fmt.Errorf("driver: session.stream may not set the %s header, which the outpost sends itself", h)
 		}
 	}
 	return nil

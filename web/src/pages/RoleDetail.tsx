@@ -3,7 +3,7 @@ import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import KVStacked from "../components/KVStacked";
 import { type BladeDef } from "../lib/blades";
-import { type Role, ROLES_KEY, listRoles } from "../lib/principals";
+import { type Role, ROLES_KEY, listRoles } from "../lib/users";
 
 // RoleDetail is a role's blade body: read-only this slice (custom-role editing is a
 // later slice). It teaches the RBAC model against the real role by showing its NET

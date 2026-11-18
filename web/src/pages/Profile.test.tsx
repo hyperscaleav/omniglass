@@ -7,15 +7,15 @@ import { ME_KEY, type Me } from "../lib/auth";
 
 // The Profile page is the signed-in operator's own account surface. Its avatar
 // section renders the current picture (fetched as base64 and wrapped in a data
-// URL) when the principal has one, or the initials placeholder when it does not,
+// URL) when the user has one, or the initials placeholder when it does not,
 // with Upload and Remove controls. Data is seeded into the query cache and the
 // avatar endpoints are stubbed on fetch, so no server is needed.
 const jpegB64 = "/9j/4AAQSkZJRg==";
 
 function meWith(hasAvatar: boolean): Me {
   return {
-    principal: { id: "u-me", kind: "human" },
-    human: { username: "ada", label: "Ada Lovelace", has_avatar: hasAvatar },
+    user: { id: "u-me", kind: "person" },
+    person: { username: "ada", label: "Ada Lovelace", has_avatar: hasAvatar },
     permissions: [">"],
     grants: [],
   };
@@ -36,7 +36,7 @@ function mount(hasAvatar: boolean) {
 describe("Profile avatar", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders the profile picture as an image when the principal has one", async () => {
+  it("renders the profile picture as an image when the user has one", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : (input as Request).url;
       if (url.includes("/auth/me/avatar")) {
@@ -53,7 +53,7 @@ describe("Profile avatar", () => {
     expect(img.src).toContain(jpegB64);
   });
 
-  it("renders the initials placeholder when the principal has no picture", async () => {
+  it("renders the initials placeholder when the user has no picture", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
       async () => new Response(JSON.stringify(meWith(false)), { status: 200, headers: { "Content-Type": "application/json" } }),
     );

@@ -10,13 +10,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Snooze (#1318, ADR-1318): a fact about an alarm's CONDITION, the
-// (component, dedup_key) identity of ADR-0075, set from any alarm of that
-// condition and lasting until a deadline. Not a fact about one alarm row: a
+// Snooze (#1318, ADR-1318): a fact about an ALARM, by the
+// (component, dedup_key) identity of ADR-0075, set from any row of that
+// alarm and lasting until a deadline. Not a fact about one alarm row: a
 // row has only two edges, and by the time an operator sees a raised alarm its
 // raise has gone out, so a snooze on that row could only ever hold back its
-// clear. A flapping condition opens a new row on every re-raise, and the
-// snooze on the condition covers each of them until the deadline.
+// clear. A flapping alarm opens a new row on every re-raise, and the
+// snooze on the alarm covers each of them until the deadline.
 //
 // A snooze governs notifications and nothing else: it does not acknowledge,
 // does not recompute health, and is not ended by a clear.
@@ -33,7 +33,7 @@ var ErrSnoozeDuration = errors.New("storage: a snooze lasts from 1m to 7d (168h)
 
 // snoozeTarget resolves the alarm a snooze verb was called on, inside the
 // verb's transaction: its component (by the name or id the route already
-// resolved in scope) and its condition. Every miss (a malformed id, an
+// resolved in scope) and its dedup key. Every miss (a malformed id, an
 // unknown component, an id on another component) is ErrAlarmNotFound, as an
 // acknowledgement's is.
 func snoozeTarget(ctx context.Context, tx pgx.Tx, componentName, alarmID string) (*Component, string, error) {
@@ -54,9 +54,9 @@ func snoozeTarget(ctx context.Context, tx pgx.Tx, componentName, alarmID string)
 	if err != nil {
 		return nil, "", fmt.Errorf("storage: read alarm %s: %w", alarmID, err)
 	}
-	// Every write to one condition's snooze serializes here, held to the end
-	// of the transaction: a row lock cannot, since the first snooze of a
-	// condition has no row to lock, and two of them would both audit an empty
+	// Every write to one alarm's snooze serializes here, held to the end
+	// of the transaction: a row lock cannot, since the first snooze of an
+	// alarm has no row to lock, and two of them would both audit an empty
 	// before.
 	if err := lockAdvisory(ctx, tx, snoozeLockKey(component.ID, key)); err != nil {
 		return nil, "", err
@@ -64,7 +64,7 @@ func snoozeTarget(ctx context.Context, tx pgx.Tx, componentName, alarmID string)
 	return component, key, nil
 }
 
-// snoozeLockKey names one condition's snooze for the advisory lock.
+// snoozeLockKey names one alarm's snooze for the advisory lock.
 func snoozeLockKey(componentID, dedupKey string) string {
 	return "alarm-snooze:" + componentID + "/" + dedupKey
 }
@@ -79,10 +79,10 @@ func readAlarmTx(ctx context.Context, q querier, componentID, alarmID string) (*
 	return a, nil
 }
 
-// SnoozeAlarm snoozes the condition of the alarm it is called on for d from
+// SnoozeAlarm snoozes the alarm it is called on for d from
 // now, setting the deadline or replacing it (shorter or longer), and audits
 // the call on that alarm with the deadline before (null when none was in
-// force) and after. It queues nothing: a snooze is an operator act, not a condition
+// force) and after. It queues nothing: a snooze is an operator act, not an alarm
 // edge. A d outside [SnoozeMin, SnoozeMax] is ErrSnoozeDuration.
 func (p *PG) SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string, d time.Duration) (*Alarm, error) {
 	if d < SnoozeMin || d > SnoozeMax {
@@ -100,8 +100,8 @@ func (p *PG) SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID st
 	if err := endExpiredTx(ctx, p, tx, component, key); err != nil {
 		return nil, err
 	}
-	// The deadline in force before, read under the condition's lock so two
-	// snoozes of one condition audit a true before each.
+	// The deadline in force before, read under the alarm's snooze lock so two
+	// snoozes of one alarm audit a true before each.
 	var before *time.Time
 	err = tx.QueryRow(ctx, `select snoozed_until from alarm_snooze
 		where component_id = $1::uuid and dedup_key = $2 for update`, component.ID, key).Scan(&before)
@@ -116,7 +116,7 @@ func (p *PG) SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID st
 		returning snoozed_until`, component.ID, key, d.Seconds(), actorID).Scan(&until); err != nil {
 		return nil, fmt.Errorf("storage: snooze alarm %s: %w", alarmID, err)
 	}
-	// The before image always names the deadline, null when the condition was
+	// The before image always names the deadline, null when the alarm was
 	// not snoozed: an alarm's audit rows outlive it (#1339), so each says what
 	// it changed on its own.
 	old := map[string]any{"snoozed_until": before}
@@ -134,10 +134,10 @@ func (p *PG) SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID st
 	return a, nil
 }
 
-// UnsnoozeAlarm ends the snooze on the condition of the alarm it is called
-// on, early, audited on that alarm as unsnooze naming the caller, and tells
-// people again about the condition if it is still raised, exactly as the
-// deadline passing would (endSnoozeTx). A condition
+// UnsnoozeAlarm ends the snooze on the alarm it is called on,
+// early, audited on that alarm as unsnooze naming the caller, and tells
+// people again about the alarm if it is still raised, exactly as the
+// deadline passing would (endSnoozeTx). An alarm
 // that is not snoozed is not an error: nothing changed, so nothing is
 // written, and the alarm is returned as it reads.
 func (p *PG) UnsnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error) {
@@ -180,30 +180,30 @@ func (p *PG) UnsnoozeAlarm(ctx context.Context, actorID, componentName, alarmID 
 }
 
 // SnoozeReason is the reason a suppressed row carries (#1318): when the
-// snooze on its condition ends and who set it. The deadline is written in
+// snooze on its alarm ends and who set it. The deadline is written in
 // UTC, the one zone every reader of the row shares.
 func SnoozeReason(until time.Time, by string) string {
-	r := "the condition is snoozed until " + until.UTC().Format("2006-01-02 15:04 UTC")
+	r := "the alarm is snoozed until " + until.UTC().Format("2006-01-02 15:04 UTC")
 	if by != "" {
 		r += " by " + by
 	}
 	return r
 }
 
-// conditionSnooze reads the snooze in force on an alarm's condition, by the
+// alarmSnooze reads the snooze in force on an alarm, by the
 // alarm's id, as the reason a row about it is suppressed: "" when the
-// condition is not snoozed. Two primary-key lookups (the alarm, then its
-// condition's snooze), so the queue seam and the tick can afford it on every
+// alarm is not snoozed. Two primary-key lookups (the alarm, then its
+// dedup key's snooze), so the queue seam and the tick can afford it on every
 // transition and every row.
 //
-// With lock (the queue seam) it first takes the condition's snooze lock SHARED, to the end of the
+// With lock (the queue seam) it first takes the alarm's snooze lock SHARED, to the end of the
 // caller's transaction, against the verbs' exclusive hold: a snooze cannot
 // commit between this read and the commit of the rows it judged (an inbox
 // row is delivered by that commit, so no later check could catch it), and a
-// transition of the condition waits for a snooze in flight. Shared, so
+// transition of the alarm waits for a snooze in flight. Shared, so
 // transitions never wait on each other. The verbs take nothing before the
 // lock and the sweep only tries it, so no order of the three can deadlock.
-func conditionSnooze(ctx context.Context, q txQuerier, alarmID string, lock bool) (string, error) {
+func alarmSnooze(ctx context.Context, q txQuerier, alarmID string, lock bool) (string, error) {
 	var componentID, key string
 	err := q.QueryRow(ctx, `select component_id::text, dedup_key from alarm where id = $1::uuid`, alarmID).Scan(&componentID, &key)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -218,23 +218,23 @@ func conditionSnooze(ctx context.Context, q txQuerier, alarmID string, lock bool
 		}
 	}
 	var until time.Time
-	var username, serviceName, nodeName *string
-	err = q.QueryRow(ctx, `select s.snoozed_until, `+principalIdentCols("s.snoozed_by")+`
+	var username, serviceName, outpostName *string
+	err = q.QueryRow(ctx, `select s.snoozed_until, `+userIdentCols("s.snoozed_by")+`
 		from alarm_snooze s where s.component_id = $1::uuid and s.dedup_key = $2 and s.snoozed_until > now()`,
-		componentID, key).Scan(&until, &username, &serviceName, &nodeName)
+		componentID, key).Scan(&until, &username, &serviceName, &outpostName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
 	if err != nil {
 		return "", fmt.Errorf("storage: read the snooze on alarm %s: %w", alarmID, err)
 	}
-	return SnoozeReason(until, principalIdent(username, serviceName, nodeName)), nil
+	return SnoozeReason(until, userIdent(username, serviceName, outpostName)), nil
 }
 
 // endSnoozeTx is what the end of a snooze does, by hand or at the deadline,
 // in the transaction that deleted its row (#1318, ADR-1318): audit the end
-// on auditAlarmID (the alarm :unsnooze named, or the condition's latest alarm
-// for the sweep), then, if an alarm of the condition is still open, announce
+// on auditAlarmID (the alarm :unsnooze named, or the dedup key's latest row
+// for the sweep), then, if an alarm of that dedup key is still open, announce
 // it again as a raised transition through the one queue seam, judged against
 // the rules and memberships as they stand now. The audit row goes first, so
 // at one instant the timeline reads the end before the rows it caused. It is
@@ -254,15 +254,15 @@ func endSnoozeTx(ctx context.Context, p *PG, tx pgx.Tx, actorID, verb, auditAlar
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("storage: read the open alarm of a snoozed condition: %w", err)
+		return fmt.Errorf("storage: read the open row of a snoozed alarm: %w", err)
 	}
 	return p.queueNotificationsTx(ctx, tx, component.ID, open, TransitionRaised)
 }
 
-// endExpiredTx ends the condition's snooze if it is past its deadline, as
+// endExpiredTx ends the alarm's snooze if it is past its deadline, as
 // the sweep does: deleted, snooze-end audited from the platform on the
-// condition's latest alarm, and a still-raised condition announced again. A
-// verb calls it first under the condition's lock, so a snooze whose deadline
+// dedup key's latest row, and a still-raised alarm announced again. A
+// verb calls it first under the alarm's snooze lock, so a snooze whose deadline
 // passed is never swallowed by a later act (an unsnooze or a re-snooze in
 // the moments before the sweep reaches it) without the announcement it owes.
 func endExpiredTx(ctx context.Context, p *PG, tx pgx.Tx, component *Component, key string) error {
@@ -279,7 +279,7 @@ func endExpiredTx(ctx context.Context, p *PG, tx pgx.Tx, component *Component, k
 	err = tx.QueryRow(ctx, `select id::text from alarm where component_id = $1::uuid and dedup_key = $2
 		order by raised_at desc, id desc limit 1`, component.ID, key).Scan(&latest)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("storage: read a snoozed condition's latest alarm: %w", err)
+		return fmt.Errorf("storage: read a snoozed alarm's latest row: %w", err)
 	}
 	return endSnoozeTx(ctx, p, tx, "", "snooze-end", latest, component, key, until)
 }
@@ -289,9 +289,9 @@ func endExpiredTx(ctx context.Context, p *PG, tx pgx.Tx, component *Component, k
 // snoozes past their deadline, each in its own transaction, taken FOR UPDATE
 // SKIP LOCKED (a snooze another replica holds is skipped, not waited on) and
 // deleted in the same transaction that audits snooze-end from the platform on
-// the condition's latest alarm and announces a still-raised condition again.
+// the dedup key's latest row and announces a still-raised alarm again.
 // Two replicas therefore never end one snooze twice, and a restart loses
-// nothing. A condition whose lock is held (a verb or a transition of it in
+// nothing. An alarm whose snooze lock is held (a verb or a transition of it in
 // flight) is skipped for the rest of the pass, so it never holds up the
 // others. It reports how many it ended.
 func (p *PG) EndExpiredSnoozes(ctx context.Context, max int) (int, error) {
@@ -315,7 +315,7 @@ func (p *PG) EndExpiredSnoozes(ctx context.Context, max int) (int, error) {
 }
 
 // endNextExpiredSnooze ends the oldest expired snooze not in skip. It
-// reports whether it ended one, or the condition (its lock key) it found
+// reports whether it ended one, or the alarm (its lock key) it found
 // held and left for a later tick.
 func (p *PG) endNextExpiredSnooze(ctx context.Context, skip []string) (bool, string, error) {
 	tx, err := p.pool.Begin(ctx)
@@ -336,10 +336,10 @@ func (p *PG) endNextExpiredSnooze(ctx context.Context, skip []string) (bool, str
 	if err != nil {
 		return false, "", fmt.Errorf("storage: take an expired snooze: %w", err)
 	}
-	// The condition's lock, tried and never waited on: a verb holding it may
+	// The alarm's snooze lock, tried and never waited on: a verb holding it may
 	// be waiting on the row lock just taken, so waiting here could deadlock.
-	// A held lock means a verb or a transition of this condition is in
-	// flight; the condition is skipped for this pass and the next tick sees
+	// A held lock means a verb or a transition of this alarm is in
+	// flight; the alarm is skipped for this pass and the next tick sees
 	// what it left.
 	lockKey := snoozeLockKey(c.ID, key)
 	var locked bool

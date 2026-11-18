@@ -17,7 +17,7 @@ import (
 )
 
 // TestSimImpairment proves an impairment is a persisted, audited fact about
-// a simulated component that reaches its node's simulator: set, read,
+// a simulated component that reaches its outpost's simulator: set, read,
 // carried on the device list, refused when the network could not apply it,
 // and cleared back to a healthy device.
 func TestSimImpairment(t *testing.T) {
@@ -36,14 +36,14 @@ func TestSimImpairment(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
-	comp, node := "dsp", "edge"
-	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Node: &node,
+	comp, outpost := "dsp", "edge"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: &comp, Outpost: &outpost,
 		Params: []byte(`{"target":"127.60.0.5:1710"}`)}, all); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestSimImpairment(t *testing.T) {
 	if got, err := gw.GetSimImpairment(ctx, id); err != nil || got != want {
 		t.Fatalf("read back %+v (%v), want %+v", got, err, want)
 	}
-	devs, err := gw.NodeSimDevices(ctx, "edge", all)
+	devs, err := gw.OutpostSimDevices(ctx, "edge", all)
 	if err != nil || len(devs) != 1 || devs[0].Impairment == nil || *devs[0].Impairment != want {
 		t.Fatalf("device list = %+v (%v), want the impairment carried", devs, err)
 	}
@@ -88,7 +88,7 @@ func TestSimImpairment(t *testing.T) {
 	if _, err := gw.SetSimImpairment(ctx, "", id, impair.Impairment{LossPct: 0.004}); err != nil {
 		t.Fatal(err)
 	}
-	if devs, _ := gw.NodeSimDevices(ctx, "edge", all); devs[0].Impairment != nil {
+	if devs, _ := gw.OutpostSimDevices(ctx, "edge", all); devs[0].Impairment != nil {
 		t.Fatalf("a cleared device still carries %+v", devs[0].Impairment)
 	}
 	var audits int

@@ -220,7 +220,7 @@ describe("CreateIdentity", () => {
   });
 
   it("never rewrites the name from the label", () => {
-    // The coupling lib/entities.ts's createIdentity owns for the registry
+    // The coupling lib/entities.ts's createIdentity owns for the catalog
     // pages, which is exactly wrong here: a blank name is the request to
     // GENERATE one, so filling it from a typed label would claim the pen on the
     // operator's behalf the moment they typed a word.

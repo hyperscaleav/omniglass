@@ -37,15 +37,15 @@ func StandardSpec(t *Template, opt StandardOptions) (storage.StandardFromTemplat
 		Parent:   orDefault(opt.Parent, s.Parent),
 	}
 	for _, c := range s.Choices {
-		spec := storage.RoleChoiceSpec{Name: c.Name, Label: c.Label}
+		spec := storage.SlotChoiceSpec{Name: c.Name, Label: c.Label}
 		for _, a := range c.Alternates {
 			spec.Alternates = append(spec.Alternates, storage.AlternateSpec{Name: a.Name, Label: a.Label})
 		}
 		f.Choices = append(f.Choices, spec)
 	}
-	for _, r := range s.Roles {
-		f.Roles = append(f.Roles, storage.TemplateRole{
-			SystemRoleSpec: storage.SystemRoleSpec{
+	for _, r := range s.Slots {
+		f.Slots = append(f.Slots, storage.TemplateSlot{
+			SystemSlotSpec: storage.SystemSlotSpec{
 				Name: r.Name, Label: r.Label, Quorum: r.Quorum, Capacity: r.Capacity, Impact: r.Impact,
 				AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts,
 			},

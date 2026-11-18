@@ -1,5 +1,5 @@
 // The command line of walkthroughpr.mjs (#925, #1132, #1180), run by the
-// run:demo workflow on the runner's node (no dependencies, no build step). A
+// run:demo workflow on the runner's outpost (no dependencies, no build step). A
 // demo id names a tape (scripts/demo/<id>.tape, a terminal demo) or a
 // walkthrough script (web/e2e/walkthroughs/<id>.yaml), never both:
 //

@@ -1,18 +1,19 @@
-# The system_type taxonomy: the coarse registry that says what KIND OF SPACE a
-# system is (ADR-0096). It is the system-side counterpart of component_type, and
-# it is not `standard`: a standard is the blueprint a system is built to, and one
-# fleet can hold ten signage standards and six classroom standards under a
-# single coarse type here. Official (ON CONFLICT DO UPDATE, authoritative),
-# like component_types.yaml and unlike location_types.yaml's seed-if-absent
-# example content.
+# The system_type taxonomy: the catalog that says what a system is FOR, such
+# as meeting, teaching or signage (ADR-0096, ADR-2034), never the space it sits
+# in: space is the location's word. It is the system-side counterpart of
+# component_type, and it is not `standard`: a standard is the contract a
+# system is built to, and one fleet can hold ten signage standards and six
+# teaching standards under a single type here. Official (ON CONFLICT DO
+# UPDATE, authoritative), like component_types.yaml and unlike
+# location_types.yaml's seed-if-absent example content.
 #
-# Litmus test for a node: an operator would say "this is a <node>" about a whole
-# room or surface, and would expect every one of them to be named and labelled
-# the same way. That is what stem and abbrev are for. stem is the prefix a
-# generated system name is built from ("boardroom-2"); abbrev is the compact
-# form a label render uses ("br"). Both inherit down the tree and are overridden
-# at the node that needs its own, so `board` states both while leaving icon to
-# come from `room`.
+# Litmus test for a type: an operator would say "this system is for <type>",
+# and would expect every one of them to be named and labelled the same way.
+# That is what stem and abbrev are for. stem is the prefix a generated system
+# name is built from ("boardroom-2"); abbrev is the compact form a label render
+# uses ("br"). Both inherit down the tree and are overridden at the type that
+# needs its own, so `board` states both while leaving icon to come from
+# `collaboration`.
 #
 # Order matters: a child's parent_id must name an id that appears earlier in
 # this list.
@@ -22,40 +23,40 @@ system_types:
     stem: av
     abbrev: av
     icon: layers
-  - id: room
-    label: Room
+  - id: collaboration
+    label: Collaboration
     parent_id: av
-    stem: room
-    abbrev: rm
+    stem: collaboration
+    abbrev: collab
     icon: door-open
   - id: board
-    label: Boardroom
-    parent_id: room
+    label: Board Meeting
+    parent_id: collaboration
     stem: boardroom
     abbrev: br
   - id: class
-    label: Classroom
-    parent_id: room
+    label: Teaching
+    parent_id: collaboration
     stem: classroom
     abbrev: cls
   - id: meeting
-    label: Meeting Room
-    parent_id: room
+    label: Meeting
+    parent_id: collaboration
     stem: meeting
     abbrev: mtg
   - id: training
-    label: Training Room
-    parent_id: room
+    label: Training
+    parent_id: collaboration
     stem: training
     abbrev: trn
   - id: conference
-    label: Conference Room
-    parent_id: room
+    label: Conference
+    parent_id: collaboration
     stem: conference
     abbrev: conf
   - id: huddle
-    label: Huddle Room
-    parent_id: room
+    label: Huddle
+    parent_id: collaboration
     stem: huddle
     abbrev: hud
   - id: auditorium
@@ -83,7 +84,7 @@ system_types:
     icon: touchpad
   # The platform: the reserved type of the one system the boot seed creates to
   # hold Omniglass's own parts (#1094). Outside the av tree on purpose: it is
-  # not a kind of space an operator builds, and the Gateway refuses giving it
+  # not a use an operator builds a system for, and the Gateway refuses giving it
   # to any other system.
   - id: platform
     label: Platform

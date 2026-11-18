@@ -125,7 +125,7 @@ func registerStandardMetricRoutes(api huma.API, a *authenticator, gw storage.Gat
 // mapStandardMetricErr translates the contract storage sentinels into HTTP
 // status, mirroring the product metric contract: a metric the catalog does not
 // know is a 422 (the request names a metric that does not exist), everything
-// else falls through to the shared type-registry mapping, where the standard is
+// else falls through to the shared type-catalog mapping, where the standard is
 // the type: not-found 404, official read-only 422.
 func mapStandardMetricErr(err error) error {
 	if errors.Is(err, storage.ErrMetricTypeNotFound) {

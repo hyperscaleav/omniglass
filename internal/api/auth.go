@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -22,7 +23,7 @@ import (
 type ctxKey int
 
 const (
-	principalCtxKey ctxKey = iota
+	userCtxKey ctxKey = iota
 	permsCtxKey
 	// impModeCtxKey carries "view_as" / "act_as" when the request is impersonated,
 	// and impSessionCtxKey the session id (so the caller can end it). The real
@@ -50,7 +51,8 @@ func sessionHashFrom(ctx context.Context) ([]byte, bool) {
 }
 
 // clientMeta is the request's User-Agent and client IP, for stamping a new credential.
-type clientMeta struct{ userAgent, clientIP string }
+// origin is the scheme and host the caller reached the server at.
+type clientMeta struct{ userAgent, clientIP, origin string }
 
 // clientMetaFrom returns the captured User-Agent and client IP, empty when none.
 func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
@@ -60,6 +62,12 @@ func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
 	return "", ""
 }
 
+// originFrom returns the captured origin (scheme and host), empty when none.
+func originFrom(ctx context.Context) string {
+	m, _ := ctx.Value(clientMetaCtxKey).(clientMeta)
+	return m.origin
+}
+
 // captureClientMeta stashes the request's User-Agent and client IP in the context so
 // handlers can stamp a new credential with the device and address that created it. Runs
 // on every API request, before Huma, so both the public login and the authn-only token
@@ -67,7 +75,7 @@ func clientMetaFrom(ctx context.Context) (userAgent, clientIP string) {
 func captureClientMeta(trust clientaddr.Trust) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			m := clientMeta{userAgent: r.UserAgent(), clientIP: clientIP(r, trust)}
+			m := clientMeta{userAgent: r.UserAgent(), clientIP: clientIP(r, trust), origin: requestOrigin(r, trust)}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), clientMetaCtxKey, m)))
 		})
 	}
@@ -85,8 +93,8 @@ func clientIP(r *http.Request, trust clientaddr.Trust) string {
 	return addr.String()
 }
 
-func principalFrom(ctx context.Context) (*storage.Principal, bool) {
-	pr, ok := ctx.Value(principalCtxKey).(*storage.Principal)
+func userFrom(ctx context.Context) (*storage.User, bool) {
+	pr, ok := ctx.Value(userCtxKey).(*storage.User)
 	return pr, ok
 }
 
@@ -102,7 +110,7 @@ func impersonationMode(ctx context.Context) string {
 	return m
 }
 
-// authenticator resolves bearer tokens to principals and lazily caches the role
+// authenticator resolves bearer tokens to users and lazily caches the role
 // index. The index is loaded once; CDC-driven invalidation is a later slice
 // (this slice's roles change only at boot).
 type authenticator struct {
@@ -117,6 +125,11 @@ type authenticator struct {
 	once   sync.Once
 	index  rbac.RoleIndex
 	idxErr error
+
+	// ops is every registered operation by ID, built on first use (after
+	// registration), for the agent policy's per-tool layer (#2088).
+	opsOnce sync.Once
+	ops     map[string]*huma.Operation
 
 	// perms is the set of every capability the route surface declares through
 	// gated(), keyed by the ":"-joined token string ("location:read",
@@ -146,7 +159,7 @@ func (a *authenticator) roleIndex(ctx context.Context) (rbac.RoleIndex, error) {
 }
 
 // authn is Huma operation middleware: resolve the bearer token, attach the
-// principal and its flattened permission set to the context, or 401. It is the
+// user and its flattened permission set to the context, or 401. It is the
 // capability fast-reject's prerequisite, not the authorization itself.
 func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	// A human session arrives as the httpOnly cookie; a service or the CLI sends an
@@ -164,7 +177,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 		_ = huma.WriteErr(a.api, ctx, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
-	var pr *storage.Principal
+	var pr *storage.User
 	var realActorID, impMode, impSession string
 	var sessHash []byte
 	for _, tok := range candidates {
@@ -180,7 +193,7 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 			return
 		}
 		// Bearer miss: try the impersonation-session fallback for the same token. It
-		// resolves to the TARGET principal, carrying the real actor and the mode.
+		// resolves to the TARGET user, carrying the real actor and the mode.
 		ip, ra, mode, sid, ierr := a.gw.AuthenticateImpersonation(ctx.Context(), h)
 		if ierr == nil {
 			pr, realActorID, impMode, impSession = ip, ra, mode, sid
@@ -205,13 +218,40 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	for _, g := range pr.Grants {
 		roleIDs = append(roleIDs, g.Role)
 	}
-	c := huma.WithValue(ctx, principalCtxKey, pr)
-	c = huma.WithValue(c, permsCtxKey, idx.Flatten(roleIDs))
+	opID := ctx.Operation().OperationID
+	channel := requestChannel(pr.Agent, storage.AuditChannelOf(ctx.Context()))
+	c := huma.WithValue(ctx, userCtxKey, pr)
+	if channel != storage.AuditChannelOf(ctx.Context()) {
+		c = huma.WithContext(c, storage.ReplaceAuditChannel(c.Context(), channel))
+	}
+	if pr.Agent != nil {
+		// An agent token (#1179): the user is the person who minted it, the
+		// agent acts on their behalf. It is accepted only on the channels it was
+		// minted for (reading who it is stays open, so the MCP server's bearer
+		// probe answers), never reaches the self-service lanes that would let it
+		// outlive or out-reach its bounds, and marks every row it writes.
+		if !agentChannelAccepted(pr.Agent.Channels, channel) && opID != "get-auth-me" {
+			_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "this agent token is not accepted on this channel")
+			return
+		}
+		if agentRefusedOps[opID] {
+			_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "an agent token cannot do this; its person must")
+			return
+		}
+		c = huma.WithContext(c, storage.WithAgent(c.Context(), pr.Agent.Name))
+	}
+	// The install's agent policy (#2063): a request under the agent ceiling is
+	// refused an operation whose class is set to never, here in authn so a REST
+	// call with an agent token and a tool call over MCP are refused alike.
+	if agentCeiling(pr, channel) && !a.enforceAgentPolicy(ctx, c.Context(), pr.ID, roleIDs) {
+		return
+	}
+	c = huma.WithValue(c, permsCtxKey, constrainPerms(idx.Flatten(roleIDs), idx, pr.Agent, agentCeiling(pr, channel)))
 	c = huma.WithValue(c, sessionHashCtxKey, sessHash)
 	if impMode != "" {
 		// Impersonated request: mark the mode and session, and set the real actor so
 		// every audited mutation records who is really acting, never just the
-		// impersonated principal.
+		// impersonated user.
 		c = huma.WithValue(c, impModeCtxKey, impMode)
 		c = huma.WithValue(c, impSessionCtxKey, impSession)
 		c = huma.WithValue(c, storage.RealActorContextKey, realActorID)
@@ -222,16 +262,16 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	// reliable mutation signal; only ending the session (stop-impersonation) is
 	// exempt. This is the single choke point a new mutating route cannot forget.
 	if impMode == "view_as" && ctx.Method() != http.MethodGet && ctx.Method() != http.MethodHead && ctx.Operation().OperationID != "stop-impersonation" {
-		_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "read-only while viewing as another principal")
+		_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "read-only while viewing as another user")
 		return
 	}
-	// A principal an admin has flagged for a forced password change is gated to the
+	// A user an admin has flagged for a forced password change is gated to the
 	// change-password lane on EVERY route until they change it: only reading their own
-	// principal (so the console can see the flag and render the forced form) and the
+	// user (so the console can see the flag and render the forced form) and the
 	// change itself are allowed. Enforced here in authn (the single choke point) so no
 	// route, read or write, can forget it. Not applied while impersonating (the real
 	// actor, not the flagged target, is driving). Logout is public and never reaches here.
-	if impMode == "" && pr.Human != nil && pr.Human.MustChangePassword &&
+	if impMode == "" && pr.Person != nil && pr.Person.MustChangePassword &&
 		ctx.Operation().OperationID != "get-auth-me" && ctx.Operation().OperationID != "change-auth-me-password" {
 		_ = huma.WriteErr(a.api, ctx, http.StatusForbidden, "password change required")
 		return
@@ -239,8 +279,99 @@ func (a *authenticator) authn(ctx huma.Context, next func(huma.Context)) {
 	next(c)
 }
 
+// agentCeilingActions are the actions an agent user never holds, whatever
+// its roles (#1179): each puts a credential's plaintext in the caller's hands,
+// and an agent's hands are a model's context. reveal (and the copy gated by it)
+// returns a secret's plaintext; enroll mints an outpost's enrollment token, itself
+// a credential. Everything else the person may do, their agent may do (#2047):
+// secret:bind hands a credential to a target without showing it, so an agent
+// binds what its person may bind, audited as the agent's and approved on the
+// client, and drives a device without ever learning what reaches it.
+var agentCeilingActions = []string{"reveal", "enroll"}
+
+// ceilingChannels are the channels whose every request is an agent's, whatever
+// the credential: a tool call on the MCP server is made by the model the person
+// connected, so it is held to the agent ceiling even on a personal token.
+var ceilingChannels = map[storage.AuditChannel]bool{storage.AuditChannelMCP: true, storage.AuditChannelOmnibot: true}
+
+// agentRefusedOps are the self-service lanes an agent token is refused on: it
+// cannot mint a token (one that would outlive or out-reach it), change its
+// person's password, or impersonate (a session whose grants are another
+// user's, not bounded by the agent's own).
+var agentRefusedOps = map[string]bool{
+	"create-auth-me-token":    true,
+	"change-auth-me-password": true,
+	"impersonate-user":        true,
+	"authorize-oauth-client":  true,
+}
+
+// agentCeiling reports whether a request is held to the agent ceiling: it
+// authenticated with an agent token, or it arrived through an agent channel.
+func agentCeiling(pr *storage.User, channel storage.AuditChannel) bool {
+	return pr.Agent != nil || ceilingChannels[channel]
+}
+
+// agentChannelAPI is the channel name an agent token's allowlist uses for a
+// direct API call, which carries no audit channel.
+const agentChannelAPI = "api"
+
+// agentChannelOmnibot is the channel an omnibot agent token is minted for:
+// alone, never alongside another (#1166).
+const agentChannelOmnibot = string(storage.AuditChannelOmnibot)
+
+// requestChannel settles the channel a request arrived through. An MCP tool
+// call made with an agent token minted for the omnibot channel alone is
+// omnibot's; every other request keeps the channel its transport set. The
+// credential decides, so no client obtains the channel by declaring a name.
+func requestChannel(agent *storage.AgentCredential, channel storage.AuditChannel) storage.AuditChannel {
+	if channel == storage.AuditChannelMCP && agent != nil && len(agent.Channels) == 1 && agent.Channels[0] == agentChannelOmnibot {
+		return storage.AuditChannelOmnibot
+	}
+	return channel
+}
+
+// agentChannelAccepted reports whether an agent token minted for the listed
+// channels is accepted on the request's channel. No list accepts any channel.
+func agentChannelAccepted(allowed []string, channel storage.AuditChannel) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	name := string(channel)
+	if name == "" {
+		name = agentChannelAPI
+	}
+	for _, a := range allowed {
+		if a == name {
+			return true
+		}
+	}
+	return false
+}
+
+// constrainPerms bounds a user's flattened permissions for the request:
+// an agent token narrowed to roles holds only what those roles AND its person
+// hold, and a request under the agent ceiling never holds reveal or use. The
+// person's own grants are reloaded on every request, so the intersection is
+// re-checked each time: a grant the person loses, the agent loses with it.
+func constrainPerms(perms rbac.Set, idx rbac.RoleIndex, agent *storage.AgentCredential, ceiling bool) rbac.Set {
+	if agent != nil && len(agent.Roles) > 0 {
+		perms = idx.Flatten(agent.Roles).Within(perms)
+	}
+	if ceiling {
+		perms = perms.Without(agentCeilingActions...)
+	}
+	return perms
+}
+
+// constrained reports whether the request's permissions are bounded by an agent
+// token or the agent ceiling, so scopeFor gates the scope on them too.
+func constrained(ctx context.Context) bool {
+	pr, ok := userFrom(ctx)
+	return ok && agentCeiling(pr, storage.AuditChannelOf(ctx))
+}
+
 // require is Huma operation middleware enforcing a capability. It runs after
-// authn; a principal whose flattened permissions do not allow the required
+// authn; a user whose flattened permissions do not allow the required
 // permission is 403. The permission is given as its tokens, so a normal route
 // declares require("location", "read") and an admin-sensitive one declares the
 // third token, require("audit", "read", "admin"). Scope (which entities) is the
@@ -263,10 +394,10 @@ func (a *authenticator) require(tokens ...string) func(huma.Context, func(huma.C
 // three things set together so they can never drift: the authn+require middleware
 // stack (unchanged enforcement), the "x-omniglass-permission" OpenAPI extension so
 // the required permission is published per-operation in the generated spec, and a
-// record in the permission registry (a.perms) so the read side can report the full
+// record in the permission catalog (a.perms) so the read side can report the full
 // universe. Every gated route MUST register through gated(...); the authn-only
 // self-scoped routes and the public routes do not, so they carry no stamp and no
-// registry entry (the invariant the spec-contract test asserts).
+// catalog entry (the invariant the spec-contract test asserts).
 func (a *authenticator) gated(op huma.Operation, tokens ...string) huma.Operation {
 	perm := strings.Join(tokens, ":")
 	if a.perms != nil {
@@ -288,7 +419,7 @@ const platformTier = "platform"
 // platformGated declares the SECOND permission a route needs when its write lands
 // at the platform tier, the least-specific level of the cascade. The route keeps
 // its own resource gate (gated(...) is what enforces admission); this adds
-// platform:<action> to the permission registry and publishes it on the operation
+// platform:<action> to the permission catalog and publishes it on the operation
 // as "x-omniglass-platform-permission", so the tier gate the handler enforces
 // through requirePlatform / canPlatform is in the universe the roles view reports
 // and in the spec, exactly like a primary gate. Wrap gated: platformGated(a.gated(op,
@@ -305,7 +436,7 @@ func (a *authenticator) platformGated(op huma.Operation, action string) huma.Ope
 	return op
 }
 
-// allows reports whether the request principal's flattened permissions allow a
+// allows reports whether the request user's flattened permissions allow a
 // permission, given as its tokens. It is the in-handler form of the same check
 // require(...) runs as middleware, for a SECOND permission a route enforces only
 // on some requests: the middleware cannot see the body, so a gate that depends on
@@ -340,10 +471,10 @@ func (a *authenticator) requirePlatform(ctx context.Context, action string) erro
 // conditionalGated declares a SECOND permission a route enforces because of a
 // reference the request carries, the way platformGated declares the one a
 // platform-tier write enforces: a component create naming a system (ADR-0107),
-// or a membership or role-assignment route naming a component in its path, which
+// or a membership or slot-assignment route naming a component in its path, which
 // always carries one (ADR-0510). The route keeps its own gate (gated(...) is
 // what admits the request at all); this adds the conditional permission to the
-// registry so the roles view can report it, and publishes it on the operation as
+// catalog so the roles view can report it, and publishes it on the operation as
 // "x-omniglass-conditional-permission" so the spec stays a faithful map of what
 // the route enforces rather than only of what it always enforces. The handler
 // runs the check itself through allows(...), because the middleware cannot see
@@ -373,14 +504,21 @@ func (a *authenticator) registeredPerms() []string {
 }
 
 // scopeFor resolves visible_set(P, action) for a resource from the request
-// principal's grants and the cached role index. It is the API's half of the ABAC
+// user's grants and the cached role index. It is the API's half of the ABAC
 // model: the gateway requires a resolved scope on every query, and this is where
 // the handler composes it (cheap: cached grants plus the role map). An
 // unauthenticated context or an index failure resolves to the empty scope, which
 // admits nothing.
 func (a *authenticator) scopeFor(ctx context.Context, resource, action string) scope.Set {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
+		return scope.Set{}
+	}
+	// An agent or a request under the agent ceiling (#1179) reaches only what
+	// its bounded permissions allow: a reveal resolves to the empty scope, and
+	// so does any action the agent's roles do not name, whatever its person may.
+	// Within an allowed action the scope is the person's.
+	if constrained(ctx) && !a.allows(ctx, resource, action) {
 		return scope.Set{}
 	}
 	idx, err := a.roleIndex(ctx)
@@ -458,7 +596,7 @@ type authStatusOutput struct {
 }
 
 func (a *authenticator) statusHandler(ctx context.Context, _ *struct{}) (*authStatusOutput, error) {
-	exists, err := a.gw.AnyHuman(ctx)
+	exists, err := a.gw.AnyPerson(ctx)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("status")
 	}
@@ -477,7 +615,7 @@ type loginInput struct {
 }
 
 // sessionOutput sets (or clears) the session cookie. No body: the SPA reads the
-// principal from /auth/me after a successful login.
+// user from /auth/me after a successful login.
 type sessionOutput struct {
 	SetCookie http.Cookie `header:"Set-Cookie"`
 }
@@ -490,8 +628,8 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 	switch {
 	case errors.Is(err, storage.ErrBadCredentials):
 		// A wrong password on a REAL account is audited (attributed to that
-		// principal), a brute-force signal; an unknown username returns a nil
-		// principal and is not audited, so scanning cannot flood the log. Best
+		// user), a brute-force signal; an unknown username returns a nil
+		// user and is not audited, so scanning cannot flood the log. Best
 		// effort: the login already failed, so an audit error does not change it.
 		if pr != nil {
 			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "login_failed")
@@ -500,7 +638,7 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 	case errors.Is(err, storage.ErrAccountLocked):
 		// Too many failed attempts: the account is in its lockout window. Return the
 		// SAME generic 401 as a bad credential so the lock is not an enumeration
-		// oracle; only the audit (attributed to the locked principal) records it.
+		// oracle; only the audit (attributed to the locked user) records it.
 		if pr != nil {
 			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "login_locked")
 		}
@@ -509,7 +647,7 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 		// The password was correct but the account is disabled. A distinct 403 (not
 		// the generic 401) so the sign-in screen can explain it; only reachable with
 		// the right password, so it discloses nothing to an attacker without it. The
-		// denied attempt is audited (attributed to the disabled principal).
+		// denied attempt is audited (attributed to the disabled user).
 		if pr != nil {
 			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "login_denied")
 		}
@@ -524,7 +662,7 @@ func (a *authenticator) loginHandler(ctx context.Context, in *loginInput) (*sess
 	expiresAt := time.Now().Add(sessionCookieLifetime)
 	ua, ip := clientMetaFrom(ctx)
 	if _, err := a.gw.IssueBearerCredential(ctx, storage.BearerIssue{
-		Username: pr.Human.Username, SecretHash: hash, Prefix: prefix, Purpose: "session",
+		Username: pr.Person.Username, SecretHash: hash, Prefix: prefix, Purpose: "session",
 		ExpiresAt: &expiresAt, UserAgent: ua, ClientIP: ip,
 	}); err != nil {
 		return nil, huma.Error500InternalServerError("login failed")
@@ -546,7 +684,7 @@ type logoutInput struct {
 func (a *authenticator) logoutHandler(ctx context.Context, in *logoutInput) (*sessionOutput, error) {
 	if tok, ok := sessionCookieToken(in.Cookie); ok {
 		hash := auth.HashToken(tok)
-		// Resolve the principal before revoking so the logout is attributed; a
+		// Resolve the user before revoking so the logout is attributed; a
 		// best-effort audit (logout must clear the cookie regardless).
 		if pr, err := a.gw.AuthenticateBearer(ctx, hash); err == nil {
 			_ = a.gw.WriteAuthEvent(ctx, pr.ID, "logout")
@@ -556,73 +694,75 @@ func (a *authenticator) logoutHandler(ctx context.Context, in *logoutInput) (*se
 	return &sessionOutput{SetCookie: a.clearedCookie()}, nil
 }
 
-// meOutput is the body of GET /api/v1/auth/me: the resolved principal, its
+// meOutput is the body of GET /api/v1/auth/me: the resolved user, its
 // flattened permissions (a UI hint and the fast-reject set), and its grants.
 type meOutput struct {
 	Body struct {
-		Principal struct {
+		User struct {
 			ID   string `json:"id"`
 			Kind string `json:"kind"`
-		} `json:"principal"`
-		Human       *humanBody `json:"human,omitempty"`
-		Service     *svcBody   `json:"service,omitempty"`
-		Permissions []string   `json:"permissions"`
+		} `json:"user"`
+		Person      *personBody  `json:"person,omitempty"`
+		Machine     *machineBody `json:"machine,omitempty"`
+		Permissions []string     `json:"permissions"`
 		// FleetPermissions narrows Permissions to the grants over the whole
 		// fleet: what the caller may write to fleet-wide config (an event rule,
 		// whose selector reaches every component), which a grant bounded to a
-		// place or system never reaches.
-		FleetPermissions []string    `json:"fleet_permissions" doc:"The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority."`
+		// location or system never reaches.
+		FleetPermissions []string    `json:"fleet_permissions" doc:"The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a location or system does not reach it. A UI hint; the server is the authority."`
 		Grants           []grantBody `json:"grants"`
+		Agent            string      `json:"agent,omitempty" doc:"Set when the request authenticated with an agent token: the agent acting on this user's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling."`
 	}
 }
 
-type humanBody struct {
+type personBody struct {
 	Username           string `json:"username"`
 	Email              string `json:"email,omitempty"`
 	Label              string `json:"label,omitempty"`
 	MustChangePassword bool   `json:"must_change_password,omitempty" doc:"True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears."`
-	HasAvatar          bool   `json:"has_avatar,omitempty" doc:"True when the principal has a profile picture; fetch it from the avatar endpoint."`
+	HasAvatar          bool   `json:"has_avatar,omitempty" doc:"True when the user has a profile picture; fetch it from the avatar endpoint."`
 }
 
-// svcBody is a service principal's profile on the wire. `name` is its
-// identifier, the username analogue for kind=service and unique like one
+// machineBody is a machine user's profile on the wire. `name` is its
+// identifier, the username analogue for kind=machine and unique like one
 // (#563); it was called `label` for as long as the column was, three lines from
-// the human body's label, which made two different concepts read as one.
-type svcBody struct {
-	Name string `json:"name" doc:"The service account's identifier, unique across service principals"`
+// the person body's label, which made two different concepts read as one.
+type machineBody struct {
+	Name string `json:"name" doc:"The machine user's identifier, unique across machine users"`
 }
 
 type grantBody struct {
-	ID        string `json:"id,omitempty"`
-	Role      string `json:"role"`
-	ScopeKind string `json:"scope_kind"`
-	ScopeID   string `json:"scope_id,omitempty"`
-	ScopeOp   string `json:"scope_op,omitempty" enum:"subtree,subtree_excl_root,self" doc:"How the scope root matches the tree: subtree (root + descendants), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Empty means subtree. Moot for the all scope."`
-	GroupID   string `json:"group_id,omitempty" doc:"Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal."`
-	GroupName string `json:"group_name,omitempty" doc:"The source group's label, present when the grant is inherited."`
+	ID         string `json:"id,omitempty"`
+	Role       string `json:"role"`
+	ScopeKind  string `json:"scope_kind"`
+	ScopeID    string `json:"scope_id,omitempty"`
+	ScopeOp    string `json:"scope_op,omitempty" enum:"subtree,subtree_excl_root,self" doc:"How the scope root matches the tree: subtree (root + descendants), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Empty means subtree. Moot for the all scope."`
+	GroupID    string `json:"group_id,omitempty" doc:"Set when this grant is inherited from a group the user belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the user."`
+	Group      string `json:"group,omitempty" doc:"The source group's name, the identifier /user-groups/{group} takes; present when the grant is inherited."`
+	GroupLabel string `json:"group_label,omitempty" doc:"The source group's friendly label, present when the grant is inherited and the group has one."`
 }
 
 func (a *authenticator) meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
 	perms, _ := permsFrom(ctx)
 
 	out := &meOutput{}
-	out.Body.Principal.ID = pr.ID
-	out.Body.Principal.Kind = pr.Kind
-	if pr.Human != nil {
-		out.Body.Human = &humanBody{
-			Username:           pr.Human.Username,
-			Email:              pr.Human.Email,
-			Label:              pr.Human.Label,
-			MustChangePassword: pr.Human.MustChangePassword,
-			HasAvatar:          pr.Human.HasAvatar,
+	out.Body.User.ID = pr.ID
+	out.Body.User.Kind = pr.Kind
+	if pr.Person != nil {
+		out.Body.Person = &personBody{
+			Username:           pr.Person.Username,
+			Email:              pr.Person.Email,
+			Label:              pr.Person.Label,
+			MustChangePassword: pr.Person.MustChangePassword,
+			HasAvatar:          pr.Person.HasAvatar,
 		}
 	}
-	if pr.Service != nil {
-		out.Body.Service = &svcBody{Name: pr.Service.Name}
+	if pr.Machine != nil {
+		out.Body.Machine = &machineBody{Name: pr.Machine.Name}
 	}
 	out.Body.Permissions = perms.Strings()
 	idx, err := a.roleIndex(ctx)
@@ -635,7 +775,10 @@ func (a *authenticator) meHandler(ctx context.Context, _ *struct{}) (*meOutput, 
 			fleetRoles = append(fleetRoles, g.Role)
 		}
 	}
-	out.Body.FleetPermissions = idx.Flatten(fleetRoles).Strings()
+	out.Body.FleetPermissions = constrainPerms(idx.Flatten(fleetRoles), idx, pr.Agent, agentCeiling(pr, storage.AuditChannelOf(ctx))).Strings()
+	if pr.Agent != nil {
+		out.Body.Agent = pr.Agent.Name
+	}
 	out.Body.Grants = make([]grantBody, 0, len(pr.Grants))
 	for i := range pr.Grants {
 		out.Body.Grants = append(out.Body.Grants, toGrantBody(&pr.Grants[i]))
@@ -655,29 +798,29 @@ type updateMeInput struct {
 
 // profileOutput is the updated human profile returned by PATCH /auth/me.
 type profileOutput struct {
-	Body humanBody
+	Body personBody
 }
 
 // updateMeHandler updates the caller's own profile. Self-scoped: it edits the
-// principal resolved from the session, never another. Authentication is the only
+// user resolved from the session, never another. Authentication is the only
 // gate (in the ungated allow-list, like GET /auth/me). Email is deliberately not
 // self-editable here; only the label moves.
 func (a *authenticator) updateMeHandler(ctx context.Context, in *updateMeInput) (*profileOutput, error) {
-	pr, ok := principalFrom(ctx)
-	if !ok || pr.Human == nil {
+	pr, ok := userFrom(ctx)
+	if !ok || pr.Person == nil {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	patch := storage.HumanProfilePatch{Label: in.Body.Label}
-	if err := a.gw.UpdateHumanProfile(ctx, pr.ID, patch); err != nil {
+	patch := storage.PersonProfilePatch{Label: in.Body.Label}
+	if err := a.gw.UpdatePersonProfile(ctx, pr.ID, patch); err != nil {
 		return nil, huma.Error500InternalServerError("update profile")
 	}
 	// Return the merged result: exactly what was written (the session profile plus
 	// the applied field), so the client need not re-read.
-	h := *pr.Human
+	h := *pr.Person
 	if in.Body.Label != nil {
 		h.Label = *in.Body.Label
 	}
-	return &profileOutput{Body: humanBody{Username: h.Username, Email: h.Email, Label: h.Label}}, nil
+	return &profileOutput{Body: personBody{Username: h.Username, Email: h.Email, Label: h.Label}}, nil
 }
 
 // changePasswordInput is the body of POST /api/v1/auth/me:changePassword. The new
@@ -695,24 +838,24 @@ type changePasswordInput struct {
 // the password signs out the caller's OTHER sessions and tokens (every bearer except
 // the one making this request), so a changed password takes effect everywhere at once.
 func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePasswordInput) (*struct{}, error) {
-	pr, ok := principalFrom(ctx)
-	if !ok || pr.Human == nil {
+	pr, ok := userFrom(ctx)
+	if !ok || pr.Person == nil {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	if _, err := a.gw.AuthenticatePassword(ctx, pr.Human.Username, in.Body.CurrentPassword); err != nil {
+	if _, err := a.gw.AuthenticatePassword(ctx, pr.Person.Username, in.Body.CurrentPassword); err != nil {
 		if errors.Is(err, storage.ErrBadCredentials) {
 			return nil, huma.Error403Forbidden("current password is incorrect")
 		}
 		return nil, huma.Error500InternalServerError("change password")
 	}
-	if err := mapPasswordErr(auth.ValidatePassword(in.Body.NewPassword, pr.Human.Username)); err != nil {
+	if err := mapPasswordErr(auth.ValidatePassword(in.Body.NewPassword, pr.Person.Username)); err != nil {
 		return nil, err
 	}
 	encoded, err := auth.HashPassword(in.Body.NewPassword)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("change password")
 	}
-	if _, err := a.gw.SetPassword(ctx, pr.Human.Username, encoded); err != nil {
+	if _, err := a.gw.SetPassword(ctx, pr.Person.Username, encoded); err != nil {
 		return nil, huma.Error500InternalServerError("change password")
 	}
 	// Force logout of the caller's other SESSIONS, keeping the current one so the change
@@ -735,16 +878,20 @@ func (a *authenticator) changePasswordHandler(ctx context.Context, in *changePas
 // whether expires_at is set. Current marks the credential that authenticated this very
 // request, so the console can mark it and read its revoke as a sign-out.
 type sessionBody struct {
-	ID          string  `json:"id"`
-	Kind        string  `json:"kind" enum:"session,token" doc:"session for a web login, token for a CLI/API credential (omniglass token)"`
-	Prefix      string  `json:"prefix" doc:"The non-secret ogp locator, so a credential is recognizable without exposing the token"`
-	Description string  `json:"description,omitempty" doc:"What a token is for (a token carries a description; a session does not)"`
-	UserAgent   string  `json:"user_agent,omitempty" doc:"The User-Agent that created the credential, so the console can show a device label"`
-	ClientIP    string  `json:"client_ip,omitempty" doc:"The IP address the credential was created from"`
-	CreatedAt   string  `json:"created_at" doc:"When the credential was issued (RFC 3339)"`
-	LastUsedAt  *string `json:"last_used_at,omitempty" doc:"When the credential last authenticated a request (RFC 3339), throttled to the minute"`
-	ExpiresAt   *string `json:"expires_at,omitempty" doc:"When the credential expires (RFC 3339); every credential is now time-bounded"`
-	Current     bool    `json:"current" doc:"True for the credential that authenticated this request; revoking it signs out the current session"`
+	ID            string   `json:"id"`
+	Kind          string   `json:"kind" enum:"session,token" doc:"session for a web login, token for a CLI/API credential (omniglass token)"`
+	Prefix        string   `json:"prefix" doc:"The non-secret ogp locator, so a credential is recognizable without exposing the token"`
+	Description   string   `json:"description,omitempty" doc:"What a token is for (a token carries a description; a session does not)"`
+	UserAgent     string   `json:"user_agent,omitempty" doc:"The User-Agent that created the credential, so the console can show a device label"`
+	ClientIP      string   `json:"client_ip,omitempty" doc:"The IP address the credential was created from"`
+	CreatedAt     string   `json:"created_at" doc:"When the credential was issued (RFC 3339)"`
+	LastUsedAt    *string  `json:"last_used_at,omitempty" doc:"When the credential last authenticated a request (RFC 3339), throttled to the minute"`
+	ExpiresAt     *string  `json:"expires_at,omitempty" doc:"When the credential expires (RFC 3339); every credential is now time-bounded"`
+	Current       bool     `json:"current" doc:"True for the credential that authenticated this request; revoking it signs out the current session"`
+	Agent         string   `json:"agent,omitempty" doc:"Set on an agent token: the agent acting on the person's behalf"`
+	AgentRoles    []string `json:"agent_roles,omitempty" doc:"An agent token's own roles, intersected with its person's on every request"`
+	AgentChannels []string `json:"agent_channels,omitempty" doc:"The channels an agent token is accepted on"`
+	OAuthClient   string   `json:"oauth_client,omitempty" doc:"Set on a token an OAuth client signed in for: the client's registered name"`
 }
 
 // listMeSessionsOutput is the body of GET /api/v1/auth/me/sessions.
@@ -758,7 +905,7 @@ type listMeSessionsOutput struct {
 // newest first, never leaking the secret. The kind is the stored purpose (a web-login
 // "session" or a CLI/API "token"); both now carry an expiry, so a legacy row with no
 // purpose falls back to its expiry shape. Shared by the self-service list and the admin
-// per-principal list, so both expose the same shape.
+// per-user list, so both expose the same shape.
 func toSessionBodies(creds []storage.BearerCredential) []sessionBody {
 	out := make([]sessionBody, 0, len(creds))
 	for _, c := range creds {
@@ -772,14 +919,18 @@ func toSessionBodies(creds []storage.BearerCredential) []sessionBody {
 			}
 		}
 		s := sessionBody{
-			ID:          c.ID,
-			Kind:        kind,
-			Prefix:      c.Prefix,
-			Description: c.Description,
-			UserAgent:   c.UserAgent,
-			ClientIP:    c.ClientIP,
-			CreatedAt:   c.CreatedAt.Format(time.RFC3339),
-			Current:     c.Current,
+			ID:            c.ID,
+			Kind:          kind,
+			Prefix:        c.Prefix,
+			Description:   c.Description,
+			UserAgent:     c.UserAgent,
+			ClientIP:      c.ClientIP,
+			CreatedAt:     c.CreatedAt.Format(time.RFC3339),
+			Current:       c.Current,
+			Agent:         c.Agent,
+			AgentRoles:    c.AgentRoles,
+			AgentChannels: c.AgentChannels,
+			OAuthClient:   c.OAuthClient,
 		}
 		if c.LastUsedAt != nil {
 			lu := c.LastUsedAt.Format(time.RFC3339)
@@ -796,10 +947,10 @@ func toSessionBodies(creds []storage.BearerCredential) []sessionBody {
 
 // listMeSessionsHandler returns the caller's own active bearer credentials (login
 // sessions and API tokens) with their non-secret metadata, newest first. Self-scoped
-// and authn-only: it lists only the principal resolved from the request, never
+// and authn-only: it lists only the user resolved from the request, never
 // another. The current credential is flagged so the console can mark it.
 func (a *authenticator) listMeSessionsHandler(ctx context.Context, _ *struct{}) (*listMeSessionsOutput, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
@@ -819,12 +970,12 @@ type revokeMeSessionInput struct {
 }
 
 // revokeMeSessionHandler revokes one of the caller's own bearer credentials by id.
-// Self-scoped and authn-only: the revoke is bounded to the caller's principal, so a
+// Self-scoped and authn-only: the revoke is bounded to the caller's user, so a
 // credential id that is not theirs (or does not exist) is a non-disclosing 404, never
-// a cross-principal revoke. Revoking the current credential is permitted (it is a
+// a cross-user revoke. Revoking the current credential is permitted (it is a
 // logout of this session).
 func (a *authenticator) revokeMeSessionHandler(ctx context.Context, in *revokeMeSessionInput) (*struct{}, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
@@ -858,7 +1009,7 @@ type revokeAllMeSessionsOutput struct {
 // authenticated this request (whatever its purpose), so a user ending all their sessions
 // or tokens is never signed out of the one they are on. Tokens and sessions never cross.
 func (a *authenticator) revokeAllMeSessionsHandler(ctx context.Context, in *revokeAllMeSessionsInput) (*revokeAllMeSessionsOutput, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
@@ -880,32 +1031,84 @@ func (a *authenticator) revokeAllMeSessionsHandler(ctx context.Context, in *revo
 // optional (default 90 days, hard-capped at 365 by validation).
 type createMeTokenInput struct {
 	Body struct {
-		Description string `json:"description" minLength:"1" maxLength:"200" doc:"What the token is for (required)"`
-		TTLDays     int    `json:"ttl_days,omitempty" minimum:"1" maximum:"365" doc:"Days until the token expires (default 90, maximum 365)"`
+		Description string   `json:"description" minLength:"1" maxLength:"200" doc:"What the token is for (required)"`
+		TTLDays     int      `json:"ttl_days,omitempty" minimum:"1" maximum:"365" doc:"Days until the token expires (default 90, maximum 365; required for an agent token)"`
+		Agent       string   `json:"agent,omitempty" maxLength:"100" pattern:"^[A-Za-z0-9][A-Za-z0-9 ._-]*$" doc:"Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate."`
+		Roles       []string `json:"roles,omitempty" maxItems:"20" doc:"An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling."`
+		Channels    []string `json:"channels,omitempty" maxItems:"3" uniqueItems:"true" enum:"api,mcp,omnibot" doc:"The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp."`
 	}
 }
 
 // createMeTokenOutput returns the newly minted token ONCE, plus its non-secret metadata.
 type createMeTokenOutput struct {
 	Body struct {
-		Token       string `json:"token" doc:"The bearer token, shown once. Store it now: it cannot be retrieved again."`
-		Prefix      string `json:"prefix" doc:"The non-secret ogp locator for the new token"`
-		Description string `json:"description" doc:"What the token is for"`
-		ExpiresAt   string `json:"expires_at" doc:"When the token expires (RFC 3339)"`
+		Token       string   `json:"token" doc:"The bearer token, shown once. Store it now: it cannot be retrieved again."`
+		Prefix      string   `json:"prefix" doc:"The non-secret ogp locator for the new token"`
+		Description string   `json:"description" doc:"What the token is for"`
+		ExpiresAt   string   `json:"expires_at" doc:"When the token expires (RFC 3339)"`
+		Agent       string   `json:"agent,omitempty" doc:"The agent the token was minted for, when it is an agent token"`
+		Roles       []string `json:"roles,omitempty" doc:"The agent token's own roles, when narrowed"`
+		Channels    []string `json:"channels,omitempty" doc:"The channels the agent token is accepted on, when restricted"`
 	}
 }
 
+// validateAgentMint checks an agent token's request before it is minted
+// (#1179): expiry is explicit, roles and channels belong to an agent token only,
+// and every role is one that exists and the minting caller covers, so the
+// token's own roles never name more than its person could grant.
+func (a *authenticator) validateAgentMint(ctx context.Context, in *createMeTokenInput) error {
+	b := in.Body
+	if b.Agent == "" {
+		if len(b.Roles) > 0 || len(b.Channels) > 0 {
+			return huma.Error422UnprocessableEntity("roles and channels bound an agent token; name the agent")
+		}
+		return nil
+	}
+	if b.TTLDays == 0 {
+		return huma.Error422UnprocessableEntity("an agent token needs an explicit ttl_days")
+	}
+	if len(b.Channels) > 1 && slices.Contains(b.Channels, agentChannelOmnibot) {
+		return huma.Error422UnprocessableEntity("an omnibot token is minted for the omnibot channel alone")
+	}
+	if slices.Contains(b.Channels, agentChannelOmnibot) && b.Agent != agentChannelOmnibot {
+		return huma.Error422UnprocessableEntity("the omnibot channel is minted for the omnibot agent alone")
+	}
+	if b.Agent == agentChannelOmnibot && b.TTLDays > 1 {
+		return huma.Error422UnprocessableEntity("an omnibot token lasts one day at most")
+	}
+	if len(b.Roles) == 0 {
+		return nil
+	}
+	idx, err := a.roleIndex(ctx)
+	if err != nil {
+		return huma.Error500InternalServerError("create token")
+	}
+	perms, _ := permsFrom(ctx)
+	for _, r := range b.Roles {
+		if _, ok := idx[r]; !ok {
+			return huma.Error422UnprocessableEntity("unknown role: " + r)
+		}
+		if !perms.Covers(idx.Flatten([]string{r})) {
+			return huma.Error403Forbidden("the agent's role " + r + " grants a capability you do not hold")
+		}
+	}
+	return nil
+}
+
 // createMeTokenHandler mints an API token for the caller and returns its secret once.
-// Authn-only and self-scoped: it always issues for the principal resolved from the
+// Authn-only and self-scoped: it always issues for the user resolved from the
 // session, never another. The token is a bounded 'token' credential stamped with the
 // caller's description and the device/address that created it.
 func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTokenInput) (*createMeTokenOutput, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	if pr.Human == nil {
-		return nil, huma.Error422UnprocessableEntity("only human principals can mint API tokens")
+	if pr.Person == nil {
+		return nil, huma.Error422UnprocessableEntity("only people can mint API tokens")
+	}
+	if err := a.validateAgentMint(ctx, in); err != nil {
+		return nil, err
 	}
 	ttl := auth.DefaultTokenLifetime
 	if in.Body.TTLDays > 0 {
@@ -918,8 +1121,9 @@ func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTo
 	expiresAt := time.Now().Add(ttl)
 	ua, ip := clientMetaFrom(ctx)
 	issued, err := a.gw.IssueBearerCredential(ctx, storage.BearerIssue{
-		ActorID: actorID(ctx), Username: pr.Human.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
+		ActorID: actorID(ctx), Username: pr.Person.Username, SecretHash: hash, Prefix: prefix, Purpose: "token",
 		ExpiresAt: &expiresAt, Description: in.Body.Description, UserAgent: ua, ClientIP: ip,
+		Agent: in.Body.Agent, AgentRoles: in.Body.Roles, AgentChannels: in.Body.Channels,
 	})
 	if err != nil || !issued {
 		return nil, huma.Error500InternalServerError("create token")
@@ -929,6 +1133,9 @@ func (a *authenticator) createMeTokenHandler(ctx context.Context, in *createMeTo
 	out.Body.Prefix = prefix
 	out.Body.Description = in.Body.Description
 	out.Body.ExpiresAt = expiresAt.Format(time.RFC3339)
+	out.Body.Agent = in.Body.Agent
+	out.Body.Roles = in.Body.Roles
+	out.Body.Channels = in.Body.Channels
 	return out, nil
 }
 
@@ -941,15 +1148,15 @@ type setAvatarMeInput struct {
 }
 
 // setMeAvatarHandler sets the caller's own profile picture. Self-scoped and
-// authn-only: it writes the principal resolved from the session, never another. A
+// authn-only: it writes the user resolved from the session, never another. A
 // bad or oversize image is a 422 (from normalizeAvatar).
 func (a *authenticator) setMeAvatarHandler(ctx context.Context, in *setAvatarMeInput) (*struct{}, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	if pr.Human == nil {
-		return nil, huma.Error422UnprocessableEntity("only human principals have a profile picture")
+	if pr.Person == nil {
+		return nil, huma.Error422UnprocessableEntity("only people have a profile picture")
 	}
 	b64, err := normalizeAvatar(in.Body.ImageBase64)
 	if err != nil {
@@ -964,12 +1171,12 @@ func (a *authenticator) setMeAvatarHandler(ctx context.Context, in *setAvatarMeI
 // removeMeAvatarHandler clears the caller's own profile picture. Self-scoped and
 // authn-only; clearing an absent picture is a no-op.
 func (a *authenticator) removeMeAvatarHandler(ctx context.Context, _ *struct{}) (*struct{}, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	if pr.Human == nil {
-		return nil, huma.Error422UnprocessableEntity("only human principals have a profile picture")
+	if pr.Person == nil {
+		return nil, huma.Error422UnprocessableEntity("only people have a profile picture")
 	}
 	if err := a.gw.ClearOwnAvatar(ctx, pr.ID); err != nil {
 		return nil, huma.Error500InternalServerError("remove avatar")
@@ -978,17 +1185,17 @@ func (a *authenticator) removeMeAvatarHandler(ctx context.Context, _ *struct{}) 
 }
 
 // meAvatarHandler returns the caller's own profile picture as base64. Self-scoped
-// and authn-only: it reads the principal resolved from the session, never another.
+// and authn-only: it reads the user resolved from the session, never another.
 // No picture is a 404 (not an empty 200).
 func (a *authenticator) meAvatarHandler(ctx context.Context, _ *struct{}) (*avatarOutput, error) {
-	pr, ok := principalFrom(ctx)
+	pr, ok := userFrom(ctx)
 	if !ok {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	if pr.Human == nil {
-		return nil, huma.Error422UnprocessableEntity("only human principals have a profile picture")
+	if pr.Person == nil {
+		return nil, huma.Error422UnprocessableEntity("only people have a profile picture")
 	}
-	b64, has, err := a.gw.GetHumanAvatar(ctx, pr.ID)
+	b64, has, err := a.gw.GetPersonAvatar(ctx, pr.ID)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("get avatar")
 	}

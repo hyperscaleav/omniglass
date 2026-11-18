@@ -23,7 +23,7 @@ type metricTypeBody struct {
 	Official      bool            `json:"official"`
 	RetentionDays *int            `json:"retention_days,omitempty" required:"false" doc:"The type's own retention window in days, overriding its lane's; absent when the lane's applies (#417)"`
 	WrittenBy     *calcWriterBody `json:"written_by,omitempty" required:"false" doc:"The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled)"`
-	WriterClass   string          `json:"writer_class" enum:"node-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
+	WriterClass   string          `json:"writer_class" enum:"outpost-probe,platform,calc,collected" doc:"Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 // calcWriterBody names the calc rule that writes a key (#1019).

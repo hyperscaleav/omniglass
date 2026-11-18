@@ -1,7 +1,7 @@
 import { type JSX } from "solid-js";
 import { EMPTY_VALUE } from "./BladeField";
 
-// InheritedCell is a type registry LIST cell for a fact that INHERITS: the stem,
+// InheritedCell is a type catalog LIST cell for a fact that INHERITS: the stem,
 // abbrev and icon a component_type or system_type takes from the nearest
 // ancestor that states one when it states none of its own.
 //
@@ -9,7 +9,7 @@ import { EMPTY_VALUE } from "./BladeField";
 // clicks apart (#743). #716 and #742 made the blade show what a row inherits;
 // the Stem and Abbrev cells went on printing an em dash on exactly those rows,
 // so the console asserted a value was absent while its own detail view showed
-// it. Nothing is fetched for this: `inherited_*` already rides the registry
+// it. Nothing is fetched for this: `inherited_*` already rides the catalog
 // listing, which is also the blade's read, so both surfaces render one row from
 // one query.
 //
@@ -21,7 +21,7 @@ import { EMPTY_VALUE } from "./BladeField";
 // and is now the house rule for a table rather than the odd column out.
 //
 // What is left is one fallback chain and one treatment, in one place instead of
-// at six cells across two registries: the row's own value, else what the server
+// at six cells across two catalogs: the row's own value, else what the server
 // resolved for it, else the em dash. The em dash keeps its one meaning, nothing
 // here and nothing above, because deleting it outright would be this defect
 // pointed the other way, a cell asserting a value that does not exist.

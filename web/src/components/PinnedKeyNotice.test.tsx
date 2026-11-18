@@ -28,7 +28,7 @@ const hostKeyRejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   endpoint: "ssh",
   label: "Panel SSH",
   transport: "ssh",
-  node: "edge-hq",
+  outpost: "edge-hq",
   last_seen: ago(2_000),
   verdict: { value: "up", ts: ago(60_000) },
   responsive: { value: "up", ts: ago(60_000) },
@@ -40,8 +40,8 @@ const hostKeyRejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   ...over,
 });
 
-const operator: Me = { principal: { id: "p1", kind: "human" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
-const viewer: Me = { principal: { id: "p2", kind: "human" }, permissions: ["*:read"], grants: [] };
+const operator: Me = { user: { id: "p1", kind: "person" }, permissions: ["*:read", "endpoint:update", "endpoint:retry"], grants: [] };
+const viewer: Me = { user: { id: "p2", kind: "person" }, permissions: ["*:read"], grants: [] };
 
 const ok = () =>
   new Response(JSON.stringify({ id: epId, name: "ssh", transport: "ssh" }), { status: 200, headers: { "Content-Type": "application/json" } });

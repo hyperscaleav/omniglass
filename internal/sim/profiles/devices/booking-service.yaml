@@ -4,11 +4,11 @@
 # An outside actor, not a device on the network: a scheduling platform
 # that reports the bookings of the places it manages by pushing them to
 # Omniglass, as a first-party integration does. It has no interface to
-# poll. Its push face holds a bearer token for a principal granted
+# poll. Its push face holds a bearer token for a user granted
 # telemetry:push alone on the systems it books, reads those systems off
 # its own grant (GET /auth/me), and posts each one's batch through
 # POST /telemetry:push every 30 seconds. A scenario declares it as a
-# pusher; the lab seeds its principal and mints its token per run.
+# pusher; the lab seeds its user and mints its token per run.
 #
 # Pushed datapoints (per system it is granted):
 #   booking-count  (metric)   , meetings left in the day, the one running included
@@ -24,7 +24,7 @@ device_type: cloud-service
 slug_prefix: booking
 
 doc:
-  summary: "Room-booking platform's integration: pushes each booked place's day through /telemetry:push"
+  summary: "Room-booking platform's integration: pushes each booked location's day through /telemetry:push"
   description: |
     A scheduling platform's first-party integration. It pushes each
     system it is granted its booking count (meetings left today) and

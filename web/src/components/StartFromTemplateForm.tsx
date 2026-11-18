@@ -11,7 +11,7 @@ import { byLabel, entityLabel } from "../lib/entities";
 import { nameStemError } from "../lib/validate";
 import { type TreeNode } from "../lib/treeselect";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
-import { NODES_KEY, listNodes } from "../lib/nodes";
+import { OUTPOSTS_KEY, listOutposts } from "../lib/outposts";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { COMPONENTS_KEY } from "../lib/components";
@@ -22,7 +22,7 @@ import { FLEET_VIEW_KEY } from "../lib/fleet";
 import {
   type ComponentDraft,
   type StandardDraft,
-  type PlacesDraft,
+  type LocationsDraft,
   type SystemDraft,
   type Template,
   componentBody,
@@ -33,16 +33,16 @@ import {
   standardBody,
   landingHref,
   missingNeeds,
-  needsNode,
+  needsOutpost,
   permText,
-  placeRef,
-  placeValue,
-  placesBody,
+  locationRef,
+  locationValue,
+  locationsBody,
   startNeeds,
   systemBody,
-  systemRoleSlots,
+  systemSlotFills,
 } from "../lib/templates";
-import { standardRoles, standardRolesKey } from "../lib/system_roles";
+import { standardSlots, standardSlotsKey } from "../lib/system_slots";
 
 // StartFromTemplateForm (#1329): the "Start from this template" form a Drawer
 // hosts, one per kind, each posting to its own route: a standard template
@@ -51,9 +51,9 @@ import { standardRoles, standardRolesKey } from "../lib/system_roles";
 // lands is ordinary rows the operator owns; a refusal shows the API's own
 // detail, and nothing lands. A success hands back the created row's address
 // with the template's name riding along as ?from=, so the row's page can say it
-// is now the operator's. `place` is the default target a create flow carried in.
+// is now the operator's. `location` is the default target a create flow carried in.
 
-export type StartFormProps = { template: Template; all: Template[]; place?: string; onDone: (href: string) => void };
+export type StartFormProps = { template: Template; all: Template[]; location?: string; onDone: (href: string) => void };
 
 export default function StartFromTemplateForm(props: StartFormProps): JSX.Element {
   return (
@@ -61,7 +61,7 @@ export default function StartFromTemplateForm(props: StartFormProps): JSX.Elemen
       <Match when={props.template.kind === "standard_template"}><StandardForm {...props} /></Match>
       <Match when={props.template.kind === "component_template"}><ComponentForm {...props} /></Match>
       <Match when={props.template.kind === "system_template"}><SystemForm {...props} /></Match>
-      <Match when={props.template.kind === "place_template"}><PlacesForm {...props} /></Match>
+      <Match when={props.template.kind === "location_template"}><LocationsForm {...props} /></Match>
     </Switch>
   );
 }
@@ -92,36 +92,36 @@ function useSubmit(run: () => Promise<string>, onDone: (href: string) => void) {
   return { busy, err, submit };
 }
 
-// The place picker's state: offered by dotted path (lib/templates placeValue),
+// The location picker's state: offered by dotted path (lib/templates locationValue),
 // defaulting to the place a create flow carried until the operator picks.
-function usePlace(carried?: string) {
+function useCarriedLocation(carried?: string) {
   const me = useMe();
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: can(me.data, "location", "read") }));
-  const items = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: placeValue(l), label: entityLabel(l), parentId: l.parent_id })));
+  const items = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: locationValue(l), label: entityLabel(l), parentId: l.parent_id })));
   const [chosen, setChosen] = createSignal<string | null>(null);
-  const value = () => chosen() ?? placeRef(locations.data ?? [], carried);
+  const value = () => chosen() ?? locationRef(locations.data ?? [], carried);
   return { items, value, set: (v: string) => setChosen(v) };
 }
 
 // The standards the fleet holds, by name: what decides whether a start creates
-// one from its template (and so needs standard:create) and whose roles a system is staffed to.
+// one from its template (and so needs standard:create) and whose slots a system is staffed to.
 export function useHeldStandards() {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const byName = (name: string) => (standards.data ?? []).find((s) => s.name === name);
   return { standards, byName, held: (name: string) => !!byName(name) };
 }
 
-// The roles of the fleet's own standard of that name, when it holds one: a
+// The slots of the fleet's own standard of that name, when it holds one: a
 // system is staffed to those, not to the template's copy. Undefined while it
 // is not held (the plan creates it from the template's) or not yet read.
-export function useHeldRoles(byName: (name: string) => { id: string } | undefined, name: () => string) {
+export function useHeldSlots(byName: (name: string) => { id: string } | undefined, name: () => string) {
   const held = () => byName(name());
-  const roles = useQuery(() => ({
-    queryKey: standardRolesKey(held()?.id ?? ""),
-    queryFn: () => standardRoles(held()!.id),
+  const slots = useQuery(() => ({
+    queryKey: standardSlotsKey(held()?.id ?? ""),
+    queryFn: () => standardSlots(held()!.id),
     enabled: !!held(),
   }));
-  return () => (held() ? roles.data : undefined);
+  return () => (held() ? slots.data : undefined);
 }
 
 // What the form still lacks to start, given its own choices; an alert names
@@ -150,17 +150,17 @@ function extras(made: { standards_created?: string[] | null; to_attach?: string[
   return out;
 }
 
-function NodeSelect(props: { value: string; onChange: (v: string) => void; needed: boolean }): JSX.Element {
+function OutpostSelect(props: { value: string; onChange: (v: string) => void; needed: boolean }): JSX.Element {
   const me = useMe();
-  const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: listNodes, enabled: can(me.data, "node", "read") }));
+  const outposts = useQuery(() => ({ queryKey: OUTPOSTS_KEY, queryFn: listOutposts, enabled: can(me.data, "outpost", "read") }));
   // byLabel stays here (#757): ListNodes serves `order by name`, so the label
   // order the picker reads is composed client-side.
-  const sorted = createMemo(() => [...(nodes.data ?? [])].sort(byLabel));
+  const sorted = createMemo(() => [...(outposts.data ?? [])].sort(byLabel));
   return (
     <FieldRow
-      label="Node"
-      info="The node an attached endpoint is placed on, so its collection reaches the component. Needed only when you give an address."
-      hint={props.needed ? "An address needs a node to place its endpoint on." : undefined}
+      label="Outpost"
+      info="The outpost an attached endpoint is placed on, so its collection reaches the component. Needed only when you give an address."
+      hint={props.needed ? "An address needs an outpost to place its endpoint on." : undefined}
     >
       <select class="select select-bordered w-full" classList={{ "select-error": props.needed }} value={props.value} onChange={(e) => props.onChange(e.currentTarget.value)}>
         <option value="">None</option>
@@ -232,12 +232,12 @@ function StandardForm(props: StartFormProps): JSX.Element {
 function ComponentForm(props: StartFormProps): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
-  const place = usePlace(props.place);
+  const location = useCarriedLocation(props.location);
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: can(me.data, "product", "read") }));
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers, enabled: can(me.data, "driver", "read") }));
   const secrets = useQuery(() => ({ queryKey: SECRETS_KEY, queryFn: listSecrets, enabled: can(me.data, "secret", "read") }));
-  const [d, setD] = createSignal<Omit<ComponentDraft, "place">>({ name: "", label: "", node: "", address: "", secrets: {} });
-  const set = <K extends keyof Omit<ComponentDraft, "place">>(k: K, v: ComponentDraft[K]) => setD({ ...d(), [k]: v });
+  const [d, setD] = createSignal<Omit<ComponentDraft, "location">>({ name: "", label: "", outpost: "", address: "", secrets: {} });
+  const set = <K extends keyof Omit<ComponentDraft, "location">>(k: K, v: ComponentDraft[K]) => setD({ ...d(), [k]: v });
   // The secret inputs the template's driver declares, for the secret names you give.
   const secretInputs = createMemo(() => {
     const c = props.template.component;
@@ -250,9 +250,9 @@ function ComponentForm(props: StartFormProps): JSX.Element {
   // Attaching writes an endpoint; without endpoint:create the component lands unattached.
   const mayAttach = () => can(me.data, "endpoint", "create");
   const missing = useMissing(props, held, () => ({ address: !!d().address.trim() }));
-  const noNode = () => needsNode(d());
+  const noOutpost = () => needsOutpost(d());
   const { busy, err, submit } = useSubmit(async () => {
-    const made = await createComponentFromTemplate(componentBody(props.template.name, { ...d(), place: place.value() }));
+    const made = await createComponentFromTemplate(componentBody(props.template.name, { ...d(), location: location.value() }));
     await Promise.all([qc.invalidateQueries({ queryKey: COMPONENTS_KEY }), qc.invalidateQueries({ queryKey: FLEET_VIEW_KEY })]);
     return landingHref(`/components/${encodeURIComponent(made.component_id)}`, props.template.name, made.attached ? {} : { unattached: "1" });
   }, props.onDone);
@@ -261,19 +261,19 @@ function ComponentForm(props: StartFormProps): JSX.Element {
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => missing().length > 0 || noNode() || !!nameStemError(d().name.trim()),
+    disabled: () => missing().length > 0 || noOutpost() || !!nameStemError(d().name.trim()),
   });
   return (
     <form class="flex flex-col gap-4" data-testid="start-form-component" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <ErrorAlert err={err()} />
       <MissingAlert missing={missing()} />
-      <FieldRow label="Place" info="Where the component sits. Optional.">
-        <TreeSelect items={place.items()} value={place.value()} onChange={place.set} rootLabel="None" />
+      <FieldRow label="Location" info="Where the component sits. Optional.">
+        <TreeSelect items={location.items()} value={location.value()} onChange={location.set} rootLabel="None" />
       </FieldRow>
       <NameField value={d().name} onInput={(v) => set("name", v)} placeholder="minted from its type" info="Optional. Empty mints one from its type, as any component's name is." />
       <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={props.template.label} />
       <Show when={mayAttach()} fallback={<NoAttach />}>
-      <NodeSelect value={d().node} onChange={(v) => set("node", v)} needed={noNode()} />
+      <OutpostSelect value={d().outpost} onChange={(v) => set("outpost", v)} needed={noOutpost()} />
       <FieldRow label="Address" info="The host its driver reaches it at. Given, the endpoint attaches with the template's preset under it; empty, the component lands unattached and you attach it later.">
         <input class="input input-bordered w-full font-data" autocomplete="off" placeholder="10.0.0.20" value={d().address} onInput={(e) => set("address", e.currentTarget.value)} />
       </FieldRow>
@@ -309,27 +309,27 @@ function NoAttach(): JSX.Element {
 function SystemForm(props: StartFormProps): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
-  const place = usePlace(props.place);
+  const location = useCarriedLocation(props.location);
   const { standards, held, byName } = useHeldStandards();
-  const [d, setD] = createSignal<Omit<SystemDraft, "place">>({ name: "", label: "", standard: "", node: "", addresses: {} });
+  const [d, setD] = createSignal<Omit<SystemDraft, "location">>({ name: "", label: "", standard: "", outpost: "", addresses: {} });
   // The standard the plan builds to: the form's choice, else the template's. When
-  // the fleet holds it the slots are its roles, else the template's it creates.
+  // the fleet holds it the slots are its slots, else the template's it creates.
   const planStandard = () => d().standard || props.template.system?.standard || "";
-  const heldRoles = useHeldRoles(byName, planStandard);
-  const slots = createMemo(() => systemRoleSlots(props.template, props.all, heldRoles()));
+  const heldSlots = useHeldSlots(byName, planStandard);
+  const slots = createMemo(() => systemSlotFills(props.template, props.all, heldSlots()));
   const mayAttach = () => can(me.data, "endpoint", "create");
   const anyAddress = () => Object.values(d().addresses).some((l) => l.some((a) => !!a.trim()));
   const missing = useMissing(props, held, () => ({ standard: d().standard, address: anyAddress() }));
-  const set = <K extends keyof Omit<SystemDraft, "place">>(k: K, v: SystemDraft[K]) => setD({ ...d(), [k]: v });
-  const setAddress = (role: string, i: number, count: number, v: string) => {
-    const list = [...(d().addresses[role] ?? Array.from({ length: count }, () => ""))];
+  const set = <K extends keyof Omit<SystemDraft, "location">>(k: K, v: SystemDraft[K]) => setD({ ...d(), [k]: v });
+  const setAddress = (slot: string, i: number, count: number, v: string) => {
+    const list = [...(d().addresses[slot] ?? Array.from({ length: count }, () => ""))];
     list[i] = v;
-    set("addresses", { ...d().addresses, [role]: list });
+    set("addresses", { ...d().addresses, [slot]: list });
   };
   const options = createMemo(() => standards.data ?? []);
-  const noNode = () => needsNode(d());
+  const noOutpost = () => needsOutpost(d());
   const { busy, err, submit } = useSubmit(async () => {
-    const made = await createSystemFromTemplate(systemBody(props.template.name, { ...d(), place: place.value() }));
+    const made = await createSystemFromTemplate(systemBody(props.template.name, { ...d(), location: location.value() }));
     await Promise.all([
       qc.invalidateQueries({ queryKey: SYSTEMS_KEY }),
       qc.invalidateQueries({ queryKey: COMPONENTS_KEY }),
@@ -343,14 +343,14 @@ function SystemForm(props: StartFormProps): JSX.Element {
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => missing().length > 0 || noNode() || !!nameStemError(d().name.trim()),
+    disabled: () => missing().length > 0 || noOutpost() || !!nameStemError(d().name.trim()),
   });
   return (
     <form class="flex flex-col gap-4" data-testid="start-form-system" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <ErrorAlert err={err()} />
       <MissingAlert missing={missing()} />
-      <FieldRow label="Place" info="Where the system and its components sit. Optional.">
-        <TreeSelect items={place.items()} value={place.value()} onChange={place.set} rootLabel="None" />
+      <FieldRow label="Location" info="Where the system and its components sit. Optional.">
+        <TreeSelect items={location.items()} value={location.value()} onChange={location.set} rootLabel="None" />
       </FieldRow>
       <NameField value={d().name} onInput={(v) => set("name", v)} placeholder="minted from its type" info="Optional. Empty mints one from its system type." />
       <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={props.template.label} />
@@ -361,9 +361,9 @@ function SystemForm(props: StartFormProps): JSX.Element {
         </select>
       </FieldRow>
       <Show when={mayAttach()} fallback={<NoAttach />}>
-      <NodeSelect value={d().node} onChange={(v) => set("node", v)} needed={noNode()} />
+      <OutpostSelect value={d().outpost} onChange={(v) => set("outpost", v)} needed={noOutpost()} />
       <section class="flex flex-col gap-2">
-        <Eyebrow label="Addresses" hint="One per component, by role, as many as the standard it is built to asks for (yours of that name when you hold one). A component given an address lands attached through its driver with the template's preset; the rest land unattached and are yours to attach later." />
+        <Eyebrow label="Addresses" hint="One per component, by slot, as many as the standard it is built to asks for (yours of that name when you hold one). A component given an address lands attached through its driver with the template's preset; the rest land unattached and are yours to attach later." />
         <For each={slots()}>
           {(s) => (
             <Index each={Array.from({ length: s.count })}>
@@ -373,8 +373,8 @@ function SystemForm(props: StartFormProps): JSX.Element {
                     class="input input-bordered input-sm w-full font-data"
                     autocomplete="off"
                     placeholder="unattached"
-                    value={(d().addresses[s.role] ?? [])[i] ?? ""}
-                    onInput={(e) => setAddress(s.role, i, s.count, e.currentTarget.value)}
+                    value={(d().addresses[s.slot] ?? [])[i] ?? ""}
+                    onInput={(e) => setAddress(s.slot, i, s.count, e.currentTarget.value)}
                   />
                 </FieldRow>
               )}
@@ -387,17 +387,17 @@ function SystemForm(props: StartFormProps): JSX.Element {
   );
 }
 
-// --- places ----------------------------------------------------------------------
+// --- locations ----------------------------------------------------------------------
 
-function PlacesForm(props: StartFormProps): JSX.Element {
+function LocationsForm(props: StartFormProps): JSX.Element {
   const qc = useQueryClient();
-  const parent = usePlace(props.place);
+  const parent = useCarriedLocation(props.location);
   const { held } = useHeldStandards();
   const missing = useMissing(props, held, () => ({}));
-  const [d, setD] = createSignal<Omit<PlacesDraft, "parent">>({ name: "", label: "" });
-  const set = (k: keyof Omit<PlacesDraft, "parent">, v: string) => setD({ ...d(), [k]: v });
+  const [d, setD] = createSignal<Omit<LocationsDraft, "parent">>({ name: "", label: "" });
+  const set = (k: keyof Omit<LocationsDraft, "parent">, v: string) => setD({ ...d(), [k]: v });
   const { busy, err, submit } = useSubmit(async () => {
-    const made = await createLocationsFromTemplate(placesBody(props.template.name, { ...d(), parent: parent.value() }));
+    const made = await createLocationsFromTemplate(locationsBody(props.template.name, { ...d(), parent: parent.value() }));
     await Promise.all([
       qc.invalidateQueries({ queryKey: LOCATIONS_KEY }),
       qc.invalidateQueries({ queryKey: SYSTEMS_KEY }),
@@ -405,25 +405,25 @@ function PlacesForm(props: StartFormProps): JSX.Element {
       qc.invalidateQueries({ queryKey: STANDARDS_KEY }),
       qc.invalidateQueries({ queryKey: FLEET_VIEW_KEY }),
     ]);
-    const root = (made.places ?? [])[0];
+    const root = (made.locations ?? [])[0];
     return landingHref(`/locations/${encodeURIComponent(root?.location_id ?? "")}`, props.template.name, extras(made));
   }, props.onDone);
   useFormActions().bind({
-    submitLabel: "Start places",
+    submitLabel: "Start locations",
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
     disabled: () => missing().length > 0 || !!nameStemError(d().name.trim()),
   });
   return (
-    <form class="flex flex-col gap-4" data-testid="start-form-place" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <form class="flex flex-col gap-4" data-testid="start-form-location" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <ErrorAlert err={err()} />
       <MissingAlert missing={missing()} />
-      <FieldRow label="Parent place" info="The place the subtree sits under. Each place's type has to be allowed under its parent's; None makes the root a new top.">
+      <FieldRow label="Parent location" info="The place the subtree sits under. Each location's type has to be allowed under its parent's; None makes the root a new top.">
         <TreeSelect items={parent.items()} value={parent.value()} onChange={parent.set} rootLabel="None (a new top)" />
       </FieldRow>
-      <NameField value={d().name} onInput={(v) => set("name", v)} placeholder={props.template.place?.name || "minted from its type"} info="The root place's name. Empty takes the template's, else its type's name rule mints one." />
-      <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={entityLabel({ name: entityLabel(props.template), label: props.template.place?.label })} />
+      <NameField value={d().name} onInput={(v) => set("name", v)} placeholder={props.template.location?.name || "minted from its type"} info="The root location's name. Empty takes the template's, else its type's name rule mints one." />
+      <LabelField value={d().label} onInput={(v) => set("label", v)} placeholder={entityLabel({ name: entityLabel(props.template), label: props.template.location?.label })} />
     </form>
   );
 }

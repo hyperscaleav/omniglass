@@ -3,7 +3,7 @@ import { createSignal, onCleanup, type Accessor } from "solid-js";
 // createClock is a ticking now (#934): the current time, re-read every
 // `every` milliseconds for the life of the owning component. An age read
 // against it moves with time itself, not with the data: a poll that returns
-// the same answer changes nothing a query can see, and a node that has died
+// the same answer changes nothing a query can see, and an outpost that has died
 // leaves its last answer standing, so only the clock can say it is old.
 export function createClock(every: number): Accessor<number> {
   const [now, setNow] = createSignal(Date.now());

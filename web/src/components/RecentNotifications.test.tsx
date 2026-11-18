@@ -34,7 +34,7 @@ function mount(rows: Notification[]) {
 
 describe("RecentNotifications", () => {
   it("reads a notification a snooze suppressed as snoozed, in the shared neutral pill", async () => {
-    mount([{ ...base, last_error: "the condition is snoozed until 2026-10-29 14:30 UTC by root" }]);
+    mount([{ ...base, last_error: "the alarm is snoozed until 2026-10-29 14:30 UTC by root" }]);
     const row = await screen.findByTestId("recent-notification");
     expect(row.getAttribute("data-status")).toBe("suppressed");
     const pill = row.querySelector("[data-testid=notification-status]") as HTMLElement;
@@ -44,7 +44,7 @@ describe("RecentNotifications", () => {
     expect(row.textContent).not.toContain("failed");
     expect(row.textContent).not.toContain("held back");
     const why = await screen.findByTestId("recent-notification-error");
-    expect(why.textContent).toBe("the condition is snoozed until 2026-10-29 14:30 UTC by root");
+    expect(why.textContent).toBe("the alarm is snoozed until 2026-10-29 14:30 UTC by root");
     expect(why.classList.contains("text-error")).toBe(false);
   });
 
