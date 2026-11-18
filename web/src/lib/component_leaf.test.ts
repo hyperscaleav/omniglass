@@ -1,28 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows } from "./component_leaf";
+import { collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "./component_leaf";
 import type { FleetView } from "./fleet";
-import type { Node } from "./nodes";
+import type { Outpost } from "./outposts";
 import type { ReachEndpoint } from "./reachability";
 import { uuidFor } from "./testids";
 import { SEEDED_LEVELS } from "./testseverity";
 
 // The component leaf's derivations (#637). The collection card's one job is
-// the distinction the issue states plainly: a healthy node with a stale
-// sample means the component or the path, not collection, which is why nodes do
+// the distinction the issue states plainly: a healthy outpost with a stale
+// sample means the component or the path, not collection, which is why outposts do
 // not need a zoom of their own.
 
 const now = Date.parse("2026-08-15T12:00:00Z");
 const iso = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOString();
 
-const iface = (verdict: { value: string; ts: string } | null, node?: string): ReachEndpoint =>
-  ({ endpoint: "ssh", transport: "ssh", node, verdict, layers: [], history: [] }) as unknown as ReachEndpoint;
+const iface = (verdict: { value: string; ts: string } | null, outpost?: string): ReachEndpoint =>
+  ({ endpoint: "ssh", transport: "ssh", outpost, verdict, layers: [], history: [] }) as unknown as ReachEndpoint;
 
-const node = (heartbeatSecondsAgo: number | null): Node =>
-  ({ name: "edge-1", enrolled: true, last_heartbeat_at: heartbeatSecondsAgo === null ? undefined : iso(heartbeatSecondsAgo), tags: {} }) as Node;
+const outpost = (heartbeatSecondsAgo: number | null): Outpost =>
+  ({ name: "edge-1", enrolled: true, last_heartbeat_at: heartbeatSecondsAgo === null ? undefined : iso(heartbeatSecondsAgo), tags: {} }) as Outpost;
 
 describe("collectionState", () => {
-  // A push endpoint (#1024) is never down for silence: no node collects it,
-  // so neither a missing node nor an old last heard reads as offline or stale.
+  // A push endpoint (#1024) is never down for silence: no outpost collects it,
+  // so neither a missing outpost nor an old last heard reads as offline or stale.
   it("a push endpoint listens, however long it has been silent", () => {
     const hook = { endpoint: "webhook", transport: "webhook", verdict: null, layers: [], history: [], last_seen: iso(86_400),
       webhook: { path: "/webhooks/x", scheme: "hmac", signed: true } } as unknown as ReachEndpoint;
@@ -30,22 +30,22 @@ describe("collectionState", () => {
     expect(collectionState({ ...hook, last_seen: undefined }, undefined, now).kind).toBe("listening");
   });
 
-  it("a fresh up verdict under a live node is collecting", () => {
-    expect(collectionState(iface({ value: "up", ts: iso(10) }, "edge-1"), node(5), now).kind).toBe("collecting");
+  it("a fresh up verdict under a live outpost is collecting", () => {
+    expect(collectionState(iface({ value: "up", ts: iso(10) }, "edge-1"), outpost(5), now).kind).toBe("collecting");
   });
 
-  it("a stale sample under a LIVE node blames the component or the path, never collection", () => {
-    const s = collectionState(iface({ value: "up", ts: iso(600) }, "edge-1"), node(5), now);
+  it("a stale sample under a LIVE outpost blames the component or the path, never collection", () => {
+    const s = collectionState(iface({ value: "up", ts: iso(600) }, "edge-1"), outpost(5), now);
     expect(s.kind).toBe("component-or-path");
   });
 
-  it("a stale sample under a dead node blames the node", () => {
-    const s = collectionState(iface({ value: "up", ts: iso(600) }, "edge-1"), node(600), now);
-    expect(s.kind).toBe("node-offline");
+  it("a stale sample under a dead outpost blames the outpost", () => {
+    const s = collectionState(iface({ value: "up", ts: iso(600) }, "edge-1"), outpost(600), now);
+    expect(s.kind).toBe("outpost-offline");
   });
 
   it("a fresh down verdict is the component answering badly, not a collection fault", () => {
-    expect(collectionState(iface({ value: "down", ts: iso(10) }, "edge-1"), node(5), now).kind).toBe("down");
+    expect(collectionState(iface({ value: "down", ts: iso(10) }, "edge-1"), outpost(5), now).kind).toBe("down");
   });
 
   // An endpoint still answering reads collecting however long ago it last
@@ -53,23 +53,35 @@ describe("collectionState", () => {
   // not (#931).
   it("an old transition with a fresh last_seen is collecting", () => {
     const e = { ...iface({ value: "up", ts: iso(1260) }, "edge-1"), last_seen: iso(5) } as ReachEndpoint;
-    expect(collectionState(e, node(5), now).kind).toBe("collecting");
+    expect(collectionState(e, outpost(5), now).kind).toBe("collecting");
   });
 
   // A driver endpoint never gets a reachability verdict; the batches its
   // task delivers (uptime, say) are what say it is collecting (#933).
   it("a driver endpoint with a fresh sample and no verdict is collecting", () => {
     const e = { ...iface(null, "edge-1"), last_seen: iso(5) } as ReachEndpoint;
-    expect(collectionState(e, node(5), now).kind).toBe("collecting");
+    expect(collectionState(e, outpost(5), now).kind).toBe("collecting");
   });
 
   it("a driver endpoint whose samples stopped blames the component or the path", () => {
     const e = { ...iface(null, "edge-1"), last_seen: iso(600) } as ReachEndpoint;
-    expect(collectionState(e, node(5), now).kind).toBe("component-or-path");
+    expect(collectionState(e, outpost(5), now).kind).toBe("component-or-path");
   });
 
   it("no verdict yet is unknown", () => {
-    expect(collectionState(iface(null, "edge-1"), node(5), now).kind).toBe("unknown");
+    expect(collectionState(iface(null, "edge-1"), outpost(5), now).kind).toBe("unknown");
+  });
+
+  // #1454: no outpost at all is not an offline outpost. An endpoint nothing collects
+  // has no outpost to be down; "outpost offline" there blames hardware that does not
+  // exist, and the fix is enrolling one, not waiting for it.
+  it("no outpost is its own state, never outpost-offline", () => {
+    expect(collectionState(iface(null), undefined, now).kind).toBe("no-outpost");
+    expect(collectionState({ ...iface(null), last_seen: iso(600) } as ReachEndpoint, undefined, now).kind).toBe("no-outpost");
+  });
+  it("an outpost that exists and is not up is still outpost-offline", () => {
+    expect(collectionState(iface(null, "edge-1"), outpost(600), now).kind).toBe("outpost-offline");
+    expect(collectionState(iface(null, "edge-1"), outpost(null), now).kind).toBe("outpost-offline");
   });
 
   // A held session (#1059): the probes keep delivering while it is refused or
@@ -78,13 +90,13 @@ describe("collectionState", () => {
   const held = (state: "up" | "down" | "rejected") =>
     ({ ...iface({ value: "up", ts: iso(10) }, "edge-1"), last_seen: iso(3), session: { state, ts: iso(30) } }) as ReachEndpoint;
   it("a rejected session stops collection, however fresh the probes", () => {
-    expect(collectionState(held("rejected"), node(5), now).kind).toBe("rejected");
+    expect(collectionState(held("rejected"), outpost(5), now).kind).toBe("rejected");
   });
   it("a down session fails collection, however fresh the probes", () => {
-    expect(collectionState(held("down"), node(5), now).kind).toBe("session-down");
+    expect(collectionState(held("down"), outpost(5), now).kind).toBe("session-down");
   });
   it("an up session collects", () => {
-    expect(collectionState(held("up"), node(5), now).kind).toBe("collecting");
+    expect(collectionState(held("up"), outpost(5), now).kind).toBe("collecting");
   });
 
   // #1110: a gate the reachability probe set, on an endpoint holding no
@@ -106,24 +118,24 @@ describe("collectionState", () => {
     ["https", "authenticated"],
     ["https", "responsive"],
   ] as const)("a %s probe's gate at the %s rung stops collection", (transport, rung) => {
-    expect(collectionState(gated(transport, rung), node(5), now).kind).toBe("rejected");
+    expect(collectionState(gated(transport, rung), outpost(5), now).kind).toBe("rejected");
   });
   it("an ssh probe's refused credential holds no poll: the verdict still reads", () => {
-    expect(collectionState(gated("ssh", "authenticated"), node(5), now).kind).toBe("down");
+    expect(collectionState(gated("ssh", "authenticated"), outpost(5), now).kind).toBe("down");
   });
-  // The node holds a stateless poll only where no session is held: a held
+  // The outpost holds a stateless poll only where no session is held: a held
   // session's polls ride it, so a probe's gate beside an up session (a tls
   // certificate that expired under a long-lived connection) stops nothing,
   // and beside a down one the polls are tried and failing.
   it("a probe's gate beside a held session leaves its polls to the session", () => {
     const up = { ...gated("tls", "responsive"), verdict: { value: "up", ts: iso(10) }, session: { state: "up", ts: iso(30) } } as ReachEndpoint;
-    expect(collectionState(up, node(5), now).kind).toBe("collecting");
+    expect(collectionState(up, outpost(5), now).kind).toBe("collecting");
     const down = { ...gated("tls", "responsive"), session: { state: "down", ts: iso(30) } } as ReachEndpoint;
-    expect(collectionState(down, node(5), now).kind).toBe("session-down");
+    expect(collectionState(down, outpost(5), now).kind).toBe("session-down");
   });
-  it("a node that stopped heartbeating still reads offline, whatever the session last said", () => {
+  it("an outpost that stopped heartbeating still reads offline, whatever the session last said", () => {
     const e = { ...held("rejected"), last_seen: iso(600) } as ReachEndpoint;
-    expect(collectionState(e, node(600), now).kind).toBe("node-offline");
+    expect(collectionState(e, outpost(600), now).kind).toBe("outpost-offline");
   });
 });
 
@@ -244,6 +256,32 @@ describe("the leaf's dispatch facts (#786)", () => {
       instances: [{ instance: "tcp", value: 4.8, ts: "2026-10-28T10:00:02Z", endpoint: true }, { instance: "http", value: 2.2, ts: "2026-10-28T10:00:01Z", endpoint: true }],
     });
     expect(rows[1]).toEqual({ name: "tcp-connect-time", label: "tcp-connect-time", value: 1, sampled: true });
+  });
+
+  // #1550: the read carries the metric type's unit and the row passes it on,
+  // so a bare number never reaches the card without it.
+  it("vitalRows carries a metric's unit, and none when the type names none", () => {
+    const rows = vitalRows([
+      { metric_type_name: "uptime", label: "Uptime", data_type: "float", unit: "s", value: 306, is_sampled: true, from_contract: false, required: false },
+      { metric_type_name: "poll-count", data_type: "int", value: 4, is_sampled: true, from_contract: false, required: false },
+    ] as never);
+    expect(rows[0].unit).toBe("s");
+    expect(rows[1]).toEqual({ name: "poll-count", label: "poll-count", value: 4, sampled: true });
+  });
+
+  it("vitalValueText rounds a float to a sane precision, keeping a whole number whole", () => {
+    expect(vitalValueText(0.1527895)).toBe("0.15");
+    expect(vitalValueText(306)).toBe("306");
+    expect(vitalValueText(6.1)).toBe("6.1");
+    expect(vitalValueText(1200.567)).toBe("1200.57");
+    expect(vitalValueText(-2.499)).toBe("-2.5");
+    expect(vitalValueText(0)).toBe("0");
+    // A small value keeps its significant digits rather than rounding to 0.
+    expect(vitalValueText(0.00041234)).toBe("0.00041");
+    // Not a finite number: shown as it came.
+    expect(vitalValueText("up")).toBe("up");
+    expect(vitalValueText(NaN)).toBe("NaN");
+    expect(vitalValueText(1e21)).toBe("1e+21");
   });
 
   it("spreadSummary names the instance shown and counts endpoints, or instances when one is no endpoint", () => {

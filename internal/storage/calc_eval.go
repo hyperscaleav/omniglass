@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/hyperscaleav/omniglass/internal/key"
 	"github.com/hyperscaleav/omniglass/internal/rules"
 )
 
@@ -90,13 +91,22 @@ func calcProbeArgs(keys []string) (lanes, names []string) {
 // reads one of the keys a write's samples carried on an owner its selector
 // picks, except the rule that produced the write. One indexed probe finds
 // the rules; when none reads the keys the write pays nothing more. A mark
-// already present keeps its marked_at (coalescing) but is updated, not
-// skipped: the update locks the row until this write commits, so a drain
-// (SKIP LOCKED) cannot serve it from the values before this write and drop
-// the change. The marks are inserted in (rule, owner) order.
+// already present keeps its marked_at (coalescing) but goes through the
+// conflict's update, not do nothing: the update locks the row until this
+// write commits, so a drain (SKIP LOCKED) cannot serve it from the values
+// before this write and drop the change. Its guard is false (the update
+// would change nothing), and Postgres locks a conflicting row before it
+// judges the guard, so the lock holds and no tuple is written (#1928). The
+// marks are inserted in (rule, owner) order. A landing batch
+// that already marked these samples for every lane (lockGroups) holds the
+// marks' rows for the rest of its transaction, so a lane's mark is skipped
+// rather than probed and upserted again (#1928).
 func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, exceptRule string) error {
 	keys := marks.allKeys()
 	if len(keys) == 0 {
+		return nil
+	}
+	if b, ok := tx.(*batchTx); ok && b.heldMarks(marks, exceptRule) {
 		return nil
 	}
 	lanes, names := calcProbeArgs(keys)
@@ -184,7 +194,7 @@ func (p *PG) markCalcPending(ctx context.Context, tx pgx.Tx, marks *calcMarks, e
 	}
 	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
 		select r, 'component', c from unnest($1::uuid[], $2::uuid[]) as m(r, c) order by r, c
-		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, ruleIDs, compIDs); err != nil {
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at where false`, ruleIDs, compIDs); err != nil {
 		return fmt.Errorf("storage: mark calc rules pending: %w", err)
 	}
 	return nil
@@ -439,7 +449,7 @@ type calcOutcome struct {
 	missing []string
 	stale   []staleInstance
 	skipped []skippedMember
-	// noMembers is a system with no role-bound member.
+	// noMembers is a system with no slot-bound member.
 	noMembers bool
 	err       string
 	// windowDue is when the soonest windowed input's oldest sample leaves its
@@ -474,7 +484,12 @@ func (p *PG) computeCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcO
 		return err
 	}
 	if out.value != nil && out.err == "" && len(out.missing) == 0 {
-		if err := p.writeCalcOutput(ctx, tx, r, owner, out.value); err != nil {
+		err := p.writeCalcOutput(ctx, tx, r, owner, out.value)
+		var refused *calcOutputRefusal
+		if errors.As(err, &refused) {
+			// A rule outcome: nothing was written, and a retry cannot succeed.
+			out.value, out.err = nil, refused.Error()
+		} else if err != nil {
 			return err
 		}
 	}
@@ -482,13 +497,13 @@ func (p *PG) computeCalc(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcO
 }
 
 // calcMember is a component an input is read from: the owner itself for a
-// component rule, each role-bound member for a system rule.
+// component rule, each slot-bound member for a system rule.
 type calcMember struct {
 	id, name string
 }
 
 // calcPlan is a rule's reduce ready to run: its inputs typed from the
-// registries and its program, read and compiled once per computation (or
+// catalogs and its program, read and compiled once per computation (or
 // once per preview).
 type calcPlan struct {
 	typed []rules.TypedInput
@@ -606,22 +621,22 @@ func (p *PG) reduceWith(ctx context.Context, tx pgx.Tx, r CalcRule, owner calcOw
 	return out, nil
 }
 
-// roleOfSystemSQL is the predicate that a system_role row (alias r) is one
-// of a system's roles (alias s): declared on the system, or inherited from
-// its standard. The one statement of the fact the health rollup's role
-// resolution (resolveHealthRoles), a system rule's members and its marking
+// slotOfSystemSQL is the predicate that a system_slot row (alias r) is one
+// of a system's slots (alias s): declared on the system, or inherited from
+// its standard. The one statement of the fact the health rollup's slot
+// resolution (resolveHealthSlots), a system rule's members and its marking
 // all read.
-func roleOfSystemSQL(r, s string) string {
+func slotOfSystemSQL(r, s string) string {
 	return fmt.Sprintf(`((%[1]s.owner_kind = 'standard' and %[1]s.standard_id = %[2]s.standard_id)
 		or (%[1]s.owner_kind = 'system' and %[1]s.system_id = %[2]s.id))`, r, s)
 }
 
-// systemMembers is a system's role-bound members: the components assigned
-// to one of its roles, the set the health rollup resolves, by id order.
+// systemMembers is a system's slot-bound members: the components assigned
+// to one of its slots, the set the health rollup resolves, by id order.
 func systemMembers(ctx context.Context, tx pgx.Tx, systemID string) ([]calcMember, error) {
 	rows, err := tx.Query(ctx, `select distinct c.id::text, c.name from system s
-		join system_role_assignment ra on ra.system_id = s.id
-		join system_role r on r.id = ra.role_id and `+roleOfSystemSQL("r", "s")+`
+		join system_slot_assignment ra on ra.system_id = s.id
+		join system_slot r on r.id = ra.slot_id and `+slotOfSystemSQL("r", "s")+`
 		join component c on c.id = ra.component_id
 		where s.id = $1::uuid order by 1`, systemID)
 	if err != nil {
@@ -662,7 +677,9 @@ func calcSeries(lane rules.Lane) (table, typeCol, value string) {
 // and type, then instance, so the read touches every in-window sample of the
 // key before it keeps the newest: its cost is the window's volume, bounded by
 // rules.MaxCalcWindow. The window is in the samples' own time (ts) against
-// the server's now.
+// the server's now. ts leads the order, not id (#712): the lane is observed
+// and calculated, whose ts a caller supplies, so insertion order is not their
+// order.
 func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput) (samples []any, due *time.Time, err error) {
 	table, typeCol, value := calcSeries(in.Lane)
 	sql := fmt.Sprintf(`select instance, %[3]s, ts from %[1]s
@@ -727,7 +744,11 @@ func readCalcWindow(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Ty
 // sample is older than CalcStaleAfter left out and returned as stale. own is
 // the aggregate instance's newest value (nil when there is none), the value
 // a system member's record carries. Instances are walked one index probe at
-// a time (the series index leads with owner, type and instance). With
+// a time (the series index leads with owner, type and instance). Each newest
+// row is by `ts desc, id desc` and must stay so (#712): observed and
+// calculated rows carry a caller-supplied ts, and a late-arriving older sample
+// must not become current by being written last. Only the declared and intended lanes order
+// by insertion (seriesOrderSQL). With
 // aggregateOnly it reads the aggregate instance alone, as own (an output's
 // current value).
 func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.TypedInput, aggregateOnly bool) (values []any, own any, stale []staleInstance, err error) {
@@ -751,7 +772,7 @@ func readCalcInput(ctx context.Context, tx pgx.Tx, owner calcOwner, in rules.Typ
 	}
 	if in.Lane == rules.LaneMetric {
 		// Each instance's newest observed or calculated sample, across the
-		// instance's series (one per provenance, source and collecting node).
+		// instance's series (one per provenance, source and collecting outpost).
 		only := ""
 		if aggregateOnly {
 			only = `and s.instance = ''`
@@ -868,8 +889,46 @@ func (p *PG) writeCalcOutput(ctx context.Context, tx pgx.Tx, r CalcRule, owner c
 		return p.writeMetricSamples(ctx, tx, w, []MetricSampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
 			Value: f, Source: calcSource, TS: ts}})
 	}
+	if err := checkCalcPropertyValue(ctx, tx, r, v); err != nil {
+		return err
+	}
 	return p.writePropertySamples(ctx, tx, w, []PropertySampleWrite{{OwnerKind: owner.kind, OwnerID: owner.id, Key: r.OutputKey,
 		Value: rules.FormatCalcValue(v), Source: calcSource, TS: ts}}, false)
+}
+
+// calcOutputRefusal is a property output's value the property cannot hold: a
+// rule's outcome (recorded in its state), not a database fault, so it is not
+// retried.
+type calcOutputRefusal struct{ msg string }
+
+func (e *calcOutputRefusal) Error() string { return e.msg }
+
+// checkCalcPropertyValue holds a property output to the check ingest applies
+// (key.ValidateValue against the property's data type and validation), read
+// by the id the rule holds the output by. A refusal names the output key and
+// the validator's reason.
+func checkCalcPropertyValue(ctx context.Context, tx pgx.Tx, r CalcRule, v any) error {
+	var dataType string
+	var validation []byte
+	if err := tx.QueryRow(ctx, `select data_type, validation from property_type where id = $1::uuid`, r.outputID).Scan(&dataType, &validation); err != nil {
+		return fmt.Errorf("storage: calc output %s data type: %w", r.OutputKey, err)
+	}
+	// A json property holds the document the formatted text spells, as ingest
+	// validates it; string and bool hold the value itself.
+	var raw json.RawMessage
+	var err error
+	if dataType == "json" {
+		raw = json.RawMessage(rules.FormatCalcValue(v))
+	} else {
+		raw, err = json.Marshal(v)
+	}
+	if err == nil {
+		err = key.ValidateValue(dataType, raw, validation)
+	}
+	if err != nil {
+		return &calcOutputRefusal{msg: fmt.Sprintf("output %s refused %s: %v", r.OutputKey, rules.FormatCalcValue(v), err)}
+	}
+	return nil
 }
 
 // calcOutputRefresh is how old a metric calc output's newest row may grow
@@ -1000,7 +1059,7 @@ func systemSelectedSQL(r, s string) string {
 }
 
 // calcProbeSQL finds the enabled rules (either owner kind) reading any of a
-// write's keys (lane:name, resolved to their ids in the registries), except
+// write's keys (lane:name, resolved to their ids in the catalogs), except
 // the write's own rule, with each rule's input keys as lane:name: an index
 // probe of calc_rule_input by key id (TestCalcProbeUsesTheInputIndexes), so
 // a write no rule reads pays for nothing more.
@@ -1017,7 +1076,7 @@ const calcProbeSQL = `with k(lane, name) as (select * from unnest($1::text[], $2
 	where r.enabled and r.id::text <> $3 order by r.id`
 
 // markSystemRulesBySamples marks, for the system rules a write's keys
-// reach, every selected system that a sampled component is a role-bound
+// reach, every selected system that a sampled component is a slot-bound
 // member of and whose rule reads a key that component's samples carried.
 // One statement, the marks in (rule, system) order.
 func markSystemRulesBySamples(ctx context.Context, tx pgx.Tx, ruleIDs []string, marks *calcMarks) error {
@@ -1039,9 +1098,9 @@ func markSystemRulesBySamples(ctx context.Context, tx pgx.Tx, ruleIDs []string, 
 			left join property_type ipt on ipt.id = i.property_type_id
 			left join metric_type imt on imt.id = i.metric_type_id
 			join samples x on x.lane = i.lane and x.key = coalesce(ipt.name, imt.name)
-			join system_role_assignment ra on ra.component_id = x.component_id
+			join system_slot_assignment ra on ra.component_id = x.component_id
 			join system s on s.id = ra.system_id
-			join system_role sr on sr.id = ra.role_id and `+roleOfSystemSQL("sr", "s")+`
+			join system_slot sr on sr.id = ra.slot_id and `+slotOfSystemSQL("sr", "s")+`
 			where r.id = any($1::uuid[]) and `+systemSelectedSQL("r", "s")+`
 		)
 		insert into calc_pending (rule_id, owner_kind, system_id)
@@ -1053,8 +1112,8 @@ func markSystemRulesBySamples(ctx context.Context, tx pgx.Tx, ruleIDs []string, 
 }
 
 // markSystemCalcRules brings the system rules in line with a write that
-// changed which components are a system's role-bound members, or which rules
-// select it (a role assigned or unassigned, a role declared or withdrawn, a
+// changed which components are a system's slot-bound members, or which rules
+// select it (a slot assigned or unassigned, a slot declared or withdrawn, a
 // system created, retyped or re-standarded): every enabled system rule
 // selecting one of the systems is marked on it, and a rule that no longer
 // selects one drops its state and mark there. Called before the write's
@@ -1091,14 +1150,12 @@ func markSystemCalcRules(ctx context.Context, tx pgx.Tx, systemIDs ...string) er
 // markComponentCalcRules is markSystemCalcRules for a component whose
 // product changed, and with it the type its rules select by (#1015): every
 // enabled component rule selecting it is marked there when it holds a value
-// of one of the rule's inputs (the condition a written rule marks by, so a
+// of one of the rule's inputs (the criterion a written rule marks by, so a
 // rule it came into computes over the values already stored), and a rule
 // that no longer selects it drops its mark and state there. Selection is the
 // event rules' component matcher, the one the serve rechecks by.
 func (p *PG) markComponentCalcRules(ctx context.Context, tx pgx.Tx, componentID string) error {
-	rows, err := tx.Query(ctx, `select r.id::text, r.selector, exists (select 1 from calc_rule_input i where i.rule_id = r.id and (
-			`+metricHeldSQL("$1::uuid", "i.metric_type_id")+`
-			or exists (select 1 from property x where x.component_id = $1::uuid and x.property_type_id = i.property_type_id)))
+	rows, err := tx.Query(ctx, `select r.id::text, r.selector, `+calcInputHeldSQL("r.id", "$1::uuid")+`
 		from calc_rule r where r.enabled and r.owner_kind = 'component' order by r.id`, componentID)
 	if err != nil {
 		return fmt.Errorf("storage: find component calc rules: %w", err)
@@ -1164,6 +1221,36 @@ func (p *PG) markComponentCalcRules(ctx context.Context, tx pgx.Tx, componentID 
 	if _, err := tx.Exec(ctx, `delete from calc_rule_state where component_id = $2::uuid and rule_id = any($1::uuid[])`,
 		dropped, componentID); err != nil {
 		return fmt.Errorf("storage: drop deselected component calc state: %w", err)
+	}
+	return nil
+}
+
+// calcInputHeldSQL is the predicate that a component holds a stored value of
+// one of a calc rule's inputs, the criterion a rule marks a component by:
+// rule and component are SQL expressions for their ids.
+func calcInputHeldSQL(rule, component string) string {
+	return `exists (select 1 from calc_rule_input i where i.rule_id = ` + rule + ` and (
+			` + metricHeldSQL(component, "i.metric_type_id") + `
+			or exists (select 1 from property x where x.component_id = ` + component + ` and x.property_type_id = i.property_type_id)))`
+}
+
+// markProductCalcRules is markComponentCalcRules for every component of a
+// product whose component_type changed (#1030), in one statement: every
+// enabled component rule that selects by type is marked on each of the
+// product's components holding a value of one of its inputs or a state row
+// of its own. Selection is not judged here: the serve rechecks it, computing
+// a rule the component came into and dropping the state of one it left, so a
+// product with thousands of components is one round trip.
+func markProductCalcRules(ctx context.Context, tx pgx.Tx, productID string) error {
+	if _, err := tx.Exec(ctx, `insert into calc_pending (rule_id, owner_kind, component_id)
+		select r.id, 'component', c.id from calc_rule r join component c on c.product_id = $1::uuid
+		where r.enabled and r.owner_kind = 'component'
+			and jsonb_array_length(coalesce(r.selector->'component_types', '[]'::jsonb)) > 0
+			and (`+calcInputHeldSQL("r.id", "c.id")+`
+				or exists (select 1 from calc_rule_state st where st.rule_id = r.id and st.component_id = c.id))
+		order by r.id, c.id
+		on conflict on constraint calc_pending_key do update set marked_at = calc_pending.marked_at`, productID); err != nil {
+		return fmt.Errorf("storage: mark product calc rules: %w", err)
 	}
 	return nil
 }

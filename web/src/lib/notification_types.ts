@@ -1,14 +1,14 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { NotificationTypeBody, PreviewNotificationTypeOutputBody } from "../api/api.gen";
 
 // The notification types data layer (#618): thin typed wrappers over the
 // /notification-types surface. A notification type says WHAT a message about an
-// alarm says, as two templates (a one-line subject and a body text) rendered
+// alarm says, as two rules (a one-line subject and a body text) rendered
 // through the same sandbox a label rule runs in, over the alarm facts. Official
 // types ship with Omniglass and are read-only.
 
-export type NotificationTypeRow = components["schemas"]["NotificationTypeBody"];
-export type NotificationPreview = components["schemas"]["PreviewNotificationTypeOutputBody"];
+export type NotificationTypeRow = NotificationTypeBody;
+export type NotificationPreview = PreviewNotificationTypeOutputBody;
 
 export const NOTIFICATION_TYPES_KEY = ["notification_types"] as const;
 
@@ -50,7 +50,7 @@ export async function deleteNotificationType(name: string): Promise<void> {
 }
 
 // A preview names a component and, optionally, the edge to render for; the
-// alarm is the component's most recently raised one. Drafts of either template
+// alarm is the component's most recently raised one. Drafts of either rule
 // render instead of the stored ones, so an editor previews before it saves.
 export type PreviewRequest = {
   component: string;

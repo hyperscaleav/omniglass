@@ -56,7 +56,7 @@ Wait
 Type "# A booking service pushes the boardroom system's bookings through POST /telemetry:push"
 Enter
 Wait
-Type `omniglass principal list | jq -c '.principals[] | select(.service.name == "sim-booking-service") | {service: .service.name, grants: [.grants[] | {role, scope_kind, scope_op}]}'`
+Type `omniglass user list | jq -c '.users[] | select(.machine.name == "sim-booking-service") | {service: .machine.name, grants: [.grants[] | {role, scope_kind, scope_op}]}'`
 Enter
 Wait
 Type `sys='hq.west.level-2.boardroom-a.$sys.boardroom'`

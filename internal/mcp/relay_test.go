@@ -18,8 +18,8 @@ import (
 const goodToken = "ogp_0000aaaa_relaytesttokenvalue"
 
 // fakeAPI stands in for the omniglass API behind /mcp: it accepts one token on
-// GET /auth/me (the endpoint's admission check) and records every request a
-// tool dispatches, answering it with a fixed body. It is the dependency behind
+// GET /auth/me (the endpoint's admission check), answers the agent policy a
+// tool listing reads, and records every request a tool dispatches, answering it with a fixed body. It is the dependency behind
 // the system under test (the MCP endpoint and the relay), not that system.
 type fakeAPI struct {
 	mu   sync.Mutex
@@ -32,7 +32,11 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/api/v1/auth/me" {
-		_, _ = io.WriteString(w, `{"principal":{"id":"p"}}`)
+		_, _ = io.WriteString(w, `{"user":{"id":"p"}}`)
+		return
+	}
+	if r.URL.Path == "/api/v1/auth/me/agent-policy" {
+		_, _ = io.WriteString(w, `{"applies":true,"classes":[{"class":"read","policy":"always"}]}`)
 		return
 	}
 	f.mu.Lock()

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import fixture from "./label_order.fixture.json";
 import { byLabel, createIdentity, deriveName, entityLabel, hasLabel, labelIsName } from "./entities";
 import { createPen } from "./namegen";
 import { seedLabelPen } from "../components/LabelPenField";
@@ -62,7 +63,7 @@ describe("labelIsName", () => {
 // The string comparison survives as the second half of a conjunction rather than
 // being replaced: a row can hold the pen and still read as its own name (a rule
 // that renders nothing stores NULL and KEEPS the pen, ADR-0098), and an entity
-// with no pen at all (every catalog registry row: a product, a vendor, a role)
+// with no pen at all (every catalog row: a product, a vendor, a role)
 // is unchanged by this slice.
 describe("hasLabel", () => {
   it("is true only when the label says something the name does not", () => {
@@ -86,7 +87,7 @@ describe("hasLabel", () => {
     expect(hasLabel({ name: "display-1", label: "Display 1", label_generated: false })).toBe(true);
   });
 
-  // A registry row carries no pen at all, so undefined must read as "the operator
+  // A catalog row carries no pen at all, so undefined must read as "the operator
   // owns it": every catalog page would otherwise lose its identifier line.
   it("treats an absent pen as operator-owned", () => {
     expect(hasLabel({ name: "shure-mxa920", label: "Shure MXA920" })).toBe(true);
@@ -220,7 +221,7 @@ describe("createIdentity", () => {
   });
 });
 
-// The console re-sorts every registry list client-side, so the ordering rule
+// The console re-sorts every catalog list client-side, so the ordering rule
 // lives in two places and has to say the same thing in both. The SQL half is
 // `order by nullif(label, '') nulls last, name` (#613); this is its twin.
 //
@@ -262,5 +263,15 @@ describe("byLabel", () => {
     const got = [...ws].sort(byLabel).map((r) => r.name);
     expect(got[0]).toBe("labelled");
     expect(got.slice(1).sort()).toEqual(["absent", "spaces"]);
+  });
+});
+
+// The agreement test (#757). internal/storage/label_order_test.go runs the same
+// fixture through the real SQL query and asserts the same `order`, so this is
+// the twin that keeps the two halves of the rule from drifting.
+describe("byLabel against the committed SQL sequence", () => {
+  it("orders the shared fixture exactly as the SQL rule does", () => {
+    const got = [...fixture.rows].sort(byLabel).map((r) => r.name);
+    expect(got).toEqual(fixture.order);
   });
 });

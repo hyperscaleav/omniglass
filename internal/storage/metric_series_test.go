@@ -240,8 +240,19 @@ func TestDropMetricPartitionsHonorsEveryWindow(t *testing.T) {
 	if dropped, err := f.gw.DropMetricPartitions(f.ctx, today.AddDate(0, 0, -14)); err != nil || len(dropped) != 0 {
 		t.Fatalf("with a type kept a year holding a sample in %s, dropped %v (%v), want nothing", dayName(long), dropped, err)
 	}
-	if v := f.values("metric", "component"); strings.Join(v, ",") != "observed:2,observed:3" {
-		t.Fatalf("rows %v, want the held day's two", v)
+	if v := f.values("metric", "component"); strings.Join(v, ",") != "observed:2" {
+		t.Fatalf("rows %v, want the held day's prune-rtt row", v)
+	}
+	yearRows := func() int {
+		var n int
+		if err := f.conn.QueryRow(f.ctx, `select count(*) from metric m join metric_series s on s.id = m.series_id
+			where s.metric_type_id = (select id from metric_type where name = 'rt-year')`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if n := yearRows(); n != 1 {
+		t.Fatalf("rt-year rows %d, want the one that holds its day", n)
 	}
 	if _, err := f.gw.SetMetricTypeRetention(f.ctx, "", "rt-year", nil); err != nil {
 		t.Fatal(err)
@@ -253,8 +264,8 @@ func TestDropMetricPartitionsHonorsEveryWindow(t *testing.T) {
 	if strings.Contains(strings.Join(partitionsOf(t, f.conn, "metric"), ","), dayName(long)) {
 		t.Fatalf("%s still attached after its drop", dayName(long))
 	}
-	if v := f.values("metric", "component"); len(v) != 0 {
-		t.Fatalf("rows of a dropped day still read: %v", v)
+	if v := f.values("metric", "component"); len(v) != 0 || yearRows() != 0 {
+		t.Fatalf("rows of a dropped day still read: %v, rt-year %d", v, yearRows())
 	}
 }
 
@@ -297,42 +308,43 @@ func TestMetricNewestReadsTheNewestDayFirst(t *testing.T) {
 	}
 }
 
-// TestACollectingNodeStartsItsOwnSeries: a node's samples record the node that
+// TestACollectingOutpostStartsItsOwnSeries: an outpost's samples record the outpost that
 // collected them on their series, so the same key, owner and instance
-// collected by another node is a series of its own; every read of the key
+// collected by another outpost is a series of its own; every read of the key
 // merges them, reading the newest of either.
-func TestACollectingNodeStartsItsOwnSeries(t *testing.T) {
+func TestACollectingOutpostStartsItsOwnSeries(t *testing.T) {
 	t.Parallel()
 	f := newWriterFixture(t)
 	comp, err := f.gw.GetComponent(f.ctx, "disp-1", scope.Set{All: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var nodeA string
-	if err := f.conn.QueryRow(f.ctx, `select principal_id::text from node where name = 'node-a'`).Scan(&nodeA); err != nil {
+	var outpostA string
+	if err := f.conn.QueryRow(f.ctx, `select user_id::text from outpost where name = 'outpost-a'`).Scan(&outpostA); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	for i, node := range []string{nodeA, "00000000-0000-7000-8000-000000000001"} {
-		w := storage.NodeWriter(comp.ID, "ssh")
-		w.Node = node
+	for i, outpost := range []string{outpostA, "00000000-0000-7000-8000-000000000001"} {
+		w := storage.OutpostWriter(comp.ID, "ssh")
+		w.Outpost = outpost
 		if err := f.gw.InsertMetricSamples(f.ctx, w, []storage.MetricSampleWrite{
 			{OwnerKind: "component", OwnerID: comp.ID, Key: "tcp-connect-time", Instance: "ssh", Value: float64(10 + i), TS: now.Add(time.Duration(i) * time.Second)}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if n := f.count(t, `select count(*) from metric_series s join metric_type t on t.id = s.metric_type_id
-		where t.name = 'tcp-connect-time' and s.collector_node_id is not null`); n != 2 {
-		t.Fatalf("%d collected series, want one per collecting node", n)
+		where t.name = 'tcp-connect-time' and s.collector_outpost_id is not null`); n != 2 {
+		t.Fatalf("%d collected series, want one per collecting outpost", n)
 	}
 	if m, err := f.gw.LatestMetricInstance(f.ctx, "disp-1", "tcp-connect-time", "ssh"); err != nil || m == nil || m.Value != 11 {
-		t.Fatalf("the latest across both nodes' series = %+v (%v), want the newer 11", m, err)
+		t.Fatalf("the latest across both outposts' series = %+v (%v), want the newer 11", m, err)
 	}
 }
 
 // TestADeletedOwnersSamplesReadAsNothing: deleting an owner removes its series
 // in the delete's transaction and leaves its samples, which no read can reach
-// (every read joins the series), for retention to remove.
+// (every read joins the series), for retention to remove: a day no longer type
+// holds goes with the drop, not the lane's prune (#1957).
 func TestADeletedOwnersSamplesReadAsNothing(t *testing.T) {
 	t.Parallel()
 	f := newPruneFixture(t)
@@ -351,8 +363,18 @@ func TestADeletedOwnersSamplesReadAsNothing(t *testing.T) {
 	if series != 0 || hidden != 0 || orphans != 2 {
 		t.Fatalf("after the delete: %d series, %d readable samples, %d stored; want 0, 0 and the 2 left for retention", series, hidden, orphans)
 	}
-	if n := f.prune("metric", now.Add(-24*time.Hour), 100); n != 1 {
-		t.Fatalf("the lane prune took %d orphaned samples past the window, want 1", n)
+	cutoff := now.Add(-24 * time.Hour)
+	if n := f.prune("metric", cutoff, 100); n != 0 {
+		t.Fatalf("the lane prune took %d orphaned samples from a droppable day, want it left to the drop", n)
+	}
+	if _, err := f.gw.DropMetricPartitions(f.ctx, cutoff); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.conn.QueryRow(f.ctx, `select count(*) from metric`).Scan(&orphans); err != nil {
+		t.Fatal(err)
+	}
+	if orphans != 1 {
+		t.Fatalf("after the drop %d orphaned samples stored, want the 1 inside the window", orphans)
 	}
 }
 

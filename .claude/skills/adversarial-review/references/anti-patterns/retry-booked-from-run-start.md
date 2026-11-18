@@ -8,5 +8,5 @@
   until the doubled backoff outgrows the timeout. Under the old heartbeat ticker the next tick hid
   it; a timer that wakes at the earliest due exposes it.
 - **Fix:** book a retry from the clock read after the attempt ends (`runPoll` in
-  `internal/node/probe.go`), pinned by a getter that moves the fake clock by its timeout:
-  `TestAFailedPollRetriesABackoffAfterItsRunEnded` in `internal/node/scheduler_race_test.go`.
+  `internal/outpost/probe.go`), pinned by a getter that moves the fake clock by its timeout:
+  `TestAFailedPollRetriesABackoffAfterItsRunEnded` in `internal/outpost/scheduler_race_test.go`.

@@ -8,7 +8,7 @@ export function rel(iso: string, now: number = Date.now()): string {
   return fut ? `in ${f}` : `${f} ago`;
 }
 
-// describeError pulls a human message out of a thrown API error: openapi-fetch
+// describeError pulls a human message out of a thrown API error: the client
 // surfaces the parsed Huma problem body ({ title, detail, status }), so String()
 // on it would yield "[object Object]". Falls back to a generic line.
 //

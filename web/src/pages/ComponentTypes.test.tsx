@@ -6,9 +6,10 @@ import ComponentTypes from "./ComponentTypes";
 import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 
-// Component Types (Catalog > Components: Types): the device-class genus
-// registry (ADR-0085, partially reversing ADR-0047), on the same
+// Component Types (Catalog > Components: Types): the device-class type
+// catalog (ADR-0085, partially reversing ADR-0047), on the same
 // official/custom FlatList pattern as Location Types, but tree-shaped
 // (parent_id) rather than flat: a subtype (interactive-display) grafts under
 // a root (display), and every identity fact (stem, icon, abbrev) inherits
@@ -50,8 +51,8 @@ const seed: ComponentType[] = [
   { id: uuidFor("ct-projector"), name: "projector", label: "House Projector", official: true, forked: true, stem: "projector", abbrev: "proj", icon: "projector", default_tags: [] },
 ];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
@@ -208,8 +209,7 @@ describe("ComponentTypes page", () => {
   it("offers the seeded tree, with Root, in the create form's Parent picker", async () => {
     mount();
     fireEvent.click(screen.getByText("New component type"));
-    const parentSelect = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    const labels = Array.from(parentSelect.options).map((o) => o.textContent?.trim());
+    const labels = await treeOptions(await screen.findByLabelText("Parent"));
     expect(labels[0]).toMatch(/root/i);
     expect(labels).toContain("Display");
     expect(labels).toContain("Microphone");
@@ -237,7 +237,7 @@ describe("ComponentTypes page", () => {
     mount();
     fireEvent.click(screen.getByText("New component type"));
     fireEvent.input(await screen.findByPlaceholderText("Wireless Microphone"), { target: { value: "Boundary Mic" } });
-    fireEvent.change(screen.getByLabelText("Parent"), { target: { value: "mic" } });
+    await pickTree(screen.getByLabelText("Parent"), "Microphone");
     fireEvent.click(screen.getByRole("button", { name: /create component type/i }));
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toMatchObject({ name: "boundary-mic", label: "Boundary Mic", parent_id: "mic" });
@@ -265,7 +265,7 @@ describe("ComponentTypes page", () => {
     const form = screen.getByPlaceholderText("wireless-mic").closest("form") as HTMLElement;
     expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     expect(within(form).getByText("The auto-generated component name's prefix. Leave blank to inherit the parent's; required on a root.")).toBeTruthy();
-    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
+    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level type and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
     expect(within(form).getByText("The compact hostname-render form (fp, cam, dsp). Leave blank to inherit.")).toBeTruthy();
     expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
   });

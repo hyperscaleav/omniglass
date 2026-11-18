@@ -7,7 +7,7 @@ import { Plus, RotateCcw } from "./icons";
 import { useFormActions } from "../lib/formactions";
 import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { byLabel, entityLabel } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { COMPONENTS_KEY } from "../lib/components";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
@@ -22,26 +22,26 @@ import {
   validateAddSystem,
   type AddSimSystemResult,
   type AddSystemDraft,
-  type SimRoleFill,
+  type SimSlotFill,
   type SimSystemPlan,
 } from "../lib/simulation";
 
 // AddSimSystemForm (#913): the add-simulated-system form the Drawer hosts. The
 // operator picks where it is served, the standard it is built to, its type, and
 // optionally where it sits and its name; the server staffs each of the
-// standard's roles with a simulated product and creates the system and every
+// standard's slots with a simulated product and creates the system and every
 // component in one transaction. Choosing a standard reads the plan first, so
-// the operator sees what the system will hold, and which roles it will be
+// the operator sees what the system will hold, and which slots it will be
 // short, before anything is created.
-export default function AddSimSystemForm(props: { nodes: string[]; close: () => void; onAdded: (r: AddSimSystemResult) => void }) {
+export default function AddSimSystemForm(props: { outposts: string[]; close: () => void; onAdded: (r: AddSimSystemResult) => void }) {
   const qc = useQueryClient();
   const me = useMe();
-  const canPlace = () => can(me.data, "location", "read");
+  const canReadLocations = () => can(me.data, "location", "read");
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const types = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes }));
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canPlace() }));
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations, enabled: canReadLocations() }));
   const [draft, setDraft] = createSignal<AddSystemDraft>({
-    node: props.nodes.length === 1 ? props.nodes[0] : "",
+    outpost: props.outposts.length === 1 ? props.outposts[0] : "",
     standard: "",
     system_type: "",
     name: "",
@@ -64,8 +64,8 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
   };
   // Nothing to create until the plan has answered with at least one component.
   const planReady = () => !!draft().standard && !!plan.data && plan.data.standard === draft().standard && plan.data.components > 0;
-  const sortedStandards = createMemo(() => [...(standards.data ?? [])].sort(byLabel));
-  const sortedTypes = createMemo(() => [...(types.data ?? [])].sort(byLabel));
+  const standardOptions = createMemo(() => standards.data ?? []);
+  const typeOptions = createMemo(() => types.data ?? []);
 
   useFormActions().bind({
     submitLabel: "Add system",
@@ -78,7 +78,7 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
 
   async function submit() {
     if (Object.keys(errors()).length) {
-      setTouched({ node: true, standard: true, system_type: true, name: true, location: true });
+      setTouched({ outpost: true, standard: true, system_type: true, name: true, location: true });
       return;
     }
     if (!planReady()) return;
@@ -86,7 +86,7 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
     setErr(null);
     const d = draft();
     try {
-      const r = await addSimSystem(d.node, addSystemBody(d));
+      const r = await addSimSystem(d.outpost, addSystemBody(d));
       await Promise.all([
         qc.invalidateQueries({ queryKey: SIMULATION_KEY, exact: true }),
         qc.invalidateQueries({ queryKey: COMPONENTS_KEY }),
@@ -105,21 +105,21 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm" data-testid="add-system-error"><span>{err()}</span></div>
       </Show>
-      <FieldRow label="Node" info="The node whose simulator serves the system's components. Their endpoints are placed on this node, so this node's collection polls them." hint={shown("node")}>
-        <select class="select select-bordered w-full font-data" aria-required="true" value={draft().node} onChange={(e) => set("node", e.currentTarget.value)} disabled={busy()}>
-          <option value="" disabled>Choose a node...</option>
-          <For each={props.nodes}>{(n) => <option value={n}>{n}</option>}</For>
+      <FieldRow label="Outpost" info="The outpost whose simulator serves the system's components. Their endpoints are placed on this outpost, so this outpost's collection polls them." hint={shown("outpost")}>
+        <select class="select select-bordered w-full font-data" aria-required="true" value={draft().outpost} onChange={(e) => set("outpost", e.currentTarget.value)} disabled={busy()}>
+          <option value="" disabled>Choose an outpost...</option>
+          <For each={props.outposts}>{(n) => <option value={n}>{n}</option>}</For>
         </select>
       </FieldRow>
       <LoadError what="the standards" query={standards} testid="standards-error" />
       <FieldRow
         label="Standard"
-        info="The blueprint the system is built to. Its roles say which components a system of this standard holds and how many; each role is staffed with the first simulated product that fits it, and where the standard offers a choice, one alternate is taken."
+        info="The contract the system is built to. Its slots say which components a system of this standard holds and how many; each slot is staffed with the first simulated product that fits it, and where the standard offers a choice, one alternate is taken."
         hint={shown("standard") ?? (standards.data?.length === 0 ? "No standards yet: define one under Catalog, Standards." : undefined)}
       >
         <select class="select select-bordered w-full" aria-required="true" value={draft().standard} onChange={(e) => set("standard", e.currentTarget.value)} disabled={busy() || standards.isPending}>
           <option value="" disabled>{standards.isPending ? "Loading standards..." : "Choose a standard..."}</option>
-          <For each={sortedStandards()}>{(s) => <option value={s.name}>{entityLabel(s)}</option>}</For>
+          <For each={standardOptions()}>{(s) => <option value={s.name}>{entityLabel(s)}</option>}</For>
         </select>
       </FieldRow>
       <Show when={draft().standard}>
@@ -139,11 +139,11 @@ export default function AddSimSystemForm(props: { nodes: string[]; close: () => 
       >
         <select class="select select-bordered w-full" aria-required="true" value={draft().system_type} onChange={(e) => set("system_type", e.currentTarget.value)} disabled={busy() || types.isPending}>
           <option value="" disabled>{types.isPending ? "Loading types..." : "Choose a type..."}</option>
-          <For each={sortedTypes()}>{(t) => <option value={t.name}>{entityLabel(t)}</option>}</For>
+          <For each={typeOptions()}>{(t) => <option value={t.name}>{entityLabel(t)}</option>}</For>
         </select>
       </FieldRow>
-      <Show when={canPlace()}>
-        <LoadError what="the places" query={locations} testid="locations-error" />
+      <Show when={canReadLocations()}>
+        <LoadError what="the locations" query={locations} testid="locations-error" />
         <FieldRow label="Location" info="Where the system and its components sit. Optional: an unplaced system is still served and collected.">
           <select class="select select-bordered w-full" value={draft().location} onChange={(e) => set("location", e.currentTarget.value)} disabled={busy()}>
             <option value="">(unplaced)</option>
@@ -181,7 +181,7 @@ function LoadError(props: { what: string; query: UseQueryResult<unknown>; testid
   );
 }
 
-// PlanPreview: what the chosen standard's system will hold, role by role, read
+// PlanPreview: what the chosen standard's system will hold, slot by slot, read
 // from the plan before anything is created.
 function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unknown; retrying: boolean; onRetry: () => void }): JSX.Element {
   const short = () => planShortfall(props.plan);
@@ -190,13 +190,13 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
       <div class="flex items-center gap-3 border-b border-base-300 px-3 py-2">
         <Eyebrow
           label="Plan"
-          hint="What the system will hold: each of the standard's roles, the simulated product it gets and how many. A short role is one no simulated product fits; the system is created without it and reads as short of quorum, the same gap a real system missing a component shows."
+          hint="What the system will hold: each of the standard's slots, the simulated product it gets and how many. A short slot is one no simulated product fits; the system is created without it and reads as short of quorum, the same gap a real system missing a component shows."
         />
         <Show when={props.plan}>
           {(p) => (
             <span class="ml-auto flex items-center gap-2 text-xs">
-              <Show when={short().roles.length > 0}>
-                <span class={PILL_WARN} data-testid="plan-short-count">{short().roles.length} short</span>
+              <Show when={short().slots.length > 0}>
+                <span class={PILL_WARN} data-testid="plan-short-count">{short().slots.length} short</span>
               </Show>
               <span class="font-data tnum font-semibold" data-testid="plan-total">{p().components}</span>
               <span class="text-base-content/60">{p().components === 1 ? "component" : "components"}</span>
@@ -220,10 +220,10 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
           <>
             <Show when={p().components === 0}>
               <div role="alert" class="alert alert-warning alert-soft m-3 text-sm" data-testid="plan-empty">
-                <span>Nothing in this standard can be simulated: no role has a simulated product that fits it.</span>
+                <span>Nothing in this standard can be simulated: no slot has a simulated product that fits it.</span>
               </div>
             </Show>
-            <table class="table table-fixed table-sm" data-testid="plan-roles" aria-label="Plan: each role, its simulated product and count">
+            <table class="table table-fixed table-sm" data-testid="plan-slots" aria-label="Plan: each slot, its simulated product and count">
               <colgroup>
                 <col style={{ width: "38%" }} />
                 <col />
@@ -231,13 +231,13 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
               </colgroup>
               <thead>
                 <tr>
-                  <th>Role</th>
+                  <th>Slot</th>
                   <th>Product</th>
                   <th class="text-right">Count</th>
                 </tr>
               </thead>
               <tbody>
-                <For each={p().roles ?? []}>{(r) => <PlanRow role={r} />}</For>
+                <For each={p().slots ?? []}>{(r) => <PlanRow slot={r} />}</For>
               </tbody>
             </table>
           </>
@@ -247,14 +247,14 @@ function PlanPreview(props: { plan?: SimSystemPlan; pending: boolean; error: unk
   );
 }
 
-function PlanRow(props: { role: SimRoleFill }) {
-  const r = () => props.role;
+function PlanRow(props: { slot: SimSlotFill }) {
+  const r = () => props.slot;
   const isShort = () => !r().product || (r().missing ?? 0) > 0;
   return (
-    <tr data-testid="plan-role" data-role={r().role} data-short={isShort() ? "true" : undefined}>
+    <tr data-testid="plan-slot" data-slot={r().slot} data-short={isShort() ? "true" : undefined}>
       <td>
         <span class="flex min-w-0 flex-col">
-          <span class="truncate font-data text-xs" title={r().role}>{r().role}</span>
+          <span class="truncate font-data text-xs" title={r().slot}>{r().slot}</span>
           <Show when={r().alternate}>
             <span class="truncate font-data text-[11px] text-base-content/50" title={`Alternate taken: ${r().alternate}`}>{r().alternate}</span>
           </Show>

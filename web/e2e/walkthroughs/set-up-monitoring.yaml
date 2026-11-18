@@ -1,27 +1,29 @@
 # Set up monitoring (#927): give a component nothing collects from yet the
-# SNMP driver and a reachability probe, collected by the node edge-hq, and
+# SNMP driver and a reachability probe, collected by the outpost edge-hq, and
 # watch reachability and samples arrive from the simulated component. Its
-# setup places the component (bay-2-display, a Boreal Edge 55 in Bay 2) with
-# no endpoint, off camera (#1197); fix-an-endpoint-in-place stages the same
-# scene. Enrolling a node is not shown: its second half runs on the node's
-# host (omniglass node run with the one-time token), out of the console's
+# setup places the component (bay-2-confidence-display, a Boreal Edge 55 in
+# Bay 2) with no endpoint, off camera (#1197). It is its own component, not
+# fix-an-endpoint-in-place's bay-2-display: the probe replays every
+# walkthrough on one stack, so a shared one would already hold that
+# walkthrough's SNMP endpoint (#1404). Enrolling an outpost is not shown: its second half runs on the outpost's
+# host (omniglass outpost run with the one-time token), out of the console's
 # reach; the lab enrolls edge-hq that way. Unplugging a component and
 # watching the rule's alarm open is watch-a-rule-raise-an-alarm.
 # The component view refreshes on its own (#934), so the walkthrough stays on
 # the page: it turns to Overview and waits for the first samples to land
-# there, which takes the node's next 2s check-in (the lab's cadence,
+# there, which takes the outpost's next 2s check-in (the lab's cadence,
 # internal/lab), when it pulls the new tasks, and the next probe and poll.
 # Recorded on the 2s check-in, it runs 48 to 51s.
 title: Set up monitoring on a component
-description: Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.
+description: Attach the SNMP driver and add a reachability probe to a component, both collected by an edge outpost, and watch reachability and samples arrive.
 setup:
   - post: /components
-    body: { name: bay-2-display, label: Bay 2 Display, product: boreal-edge-55, location: bay-2 }
+    body: { name: bay-2-confidence-display, label: Bay 2 Display, product: boreal-edge-55, location: bay-2 }
 steps:
-  - goto: /components/bay-2-display?tab=configure
+  - goto: /components/bay-2-confidence-display?tab=configure
     caption: A display mounted in Bay 2. Endpoints are how it is reached, and it has none yet, so nothing collects from it.
   - click: { role: button, name: Add endpoint }
-    caption: Add an endpoint, the way a node reaches the display.
+    caption: Add an endpoint, the way an outpost reaches the display.
   - click: { role: tab, name: Attach a driver }
     caption: A driver knows how to talk to a product, and what to read from it.
   - select: { target: '#new-iface-driver', value: snmp-generic }
@@ -30,16 +32,16 @@ steps:
     caption: You supply only its inputs. The host is the display's address.
   - type: { target: '#new-iface-input-community', text: sim-community }
     caption: The community is a secret's name, never its value.
-  - select: { target: '#new-iface-node', value: edge-hq }
-    caption: The node edge-hq sits on the display's network, so it collects it.
+  - select: { target: '#new-iface-outpost', value: edge-hq }
+    caption: The outpost edge-hq sits on the display's network, so it collects it.
   - click: { role: button, name: Attach driver }
     caption: Attach it. The driver derived the endpoint, its SNMP transport and its target.
   - press: Escape
-    caption: "Close it. Next, a probe for one question: can the node reach it?"
+    caption: "Close it. Next, a probe for one question: can the outpost reach it?"
   - click: { role: button, name: Add endpoint }
     caption: A second endpoint, a bare probe this time.
-  - select: { target: '#new-iface-node', value: edge-hq }
-    caption: The same node runs it.
+  - select: { target: '#new-iface-outpost', value: edge-hq }
+    caption: The same outpost runs it.
   - type: { target: '#new-iface-target', text: 127.60.9.9 }
     caption: An ICMP probe pings the display's address.
   - click: { role: button, name: Create endpoint }

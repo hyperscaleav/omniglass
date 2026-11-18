@@ -55,7 +55,7 @@ func (p *PG) UpsertRole(ctx context.Context, r Role) error {
 	return nil
 }
 
-// OwnerSpec describes the first owner to bootstrap: the human identity plus the
+// OwnerSpec describes the first owner to bootstrap: the person plus the
 // hashed bearer credential to install. The cleartext token never reaches the
 // gateway; the caller generates it, hashes it, and shows it once.
 type OwnerSpec struct {
@@ -84,7 +84,7 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 
 	var existing string
 	switch lookupErr := tx.QueryRow(ctx,
-		`select principal_id from human where username = $1`, spec.Username).Scan(&existing); {
+		`select user_id from person where username = $1`, spec.Username).Scan(&existing); {
 	case lookupErr == nil:
 		return false, nil // already bootstrapped; a no-op that mints no token
 	case errors.Is(lookupErr, pgx.ErrNoRows):
@@ -95,35 +95,35 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 
 	var pid string
 	if err := tx.QueryRow(ctx,
-		`insert into principal (kind) values ('human') returning id`).Scan(&pid); err != nil {
-		return false, fmt.Errorf("storage: bootstrap principal: %w", err)
+		`insert into users (kind) values ('person') returning id`).Scan(&pid); err != nil {
+		return false, fmt.Errorf("storage: bootstrap user: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into human (principal_id, username, email, label) values ($1, $2, $3, $4)`,
+		`insert into person (user_id, username, email, label) values ($1, $2, $3, $4)`,
 		pid, spec.Username, nullize(spec.Email), labelOrNull(spec.Label)); err != nil {
 		return false, fmt.Errorf("storage: bootstrap human: %w", err)
 	}
 	var credID string
 	if err := tx.QueryRow(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description) values ($1, 'bearer', $2, $3, 'token', $4, 'bootstrap token') returning id`,
+		`insert into credential (user_id, kind, secret_hash, prefix, purpose, expires_at, description) values ($1, 'bearer', $2, $3, 'token', $4, 'bootstrap token') returning id`,
 		pid, spec.SecretHash, spec.Prefix, spec.ExpiresAt).Scan(&credID); err != nil {
 		return false, fmt.Errorf("storage: bootstrap credential: %w", err)
 	}
 	// Every token's minting is audited (#1162); the bootstrap is the trusted lane,
 	// so its row carries no actor.
-	img := credentialAuditImage{PrincipalID: pid, Prefix: spec.Prefix, Purpose: credentialPurposeToken, Description: "bootstrap token", ExpiresAt: spec.ExpiresAt}
+	img := credentialAuditImage{UserID: pid, Prefix: spec.Prefix, Purpose: credentialPurposeToken, Description: "bootstrap token", ExpiresAt: spec.ExpiresAt}
 	if err := writeAuditRes(ctx, tx, "", "create", "credential", credID, nil, img); err != nil {
 		return false, err
 	}
 	if spec.PasswordHash != "" {
 		if _, err := tx.Exec(ctx,
-			`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'password', $2, '')`,
+			`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'password', $2, '')`,
 			pid, []byte(spec.PasswordHash)); err != nil {
 			return false, fmt.Errorf("storage: bootstrap password: %w", err)
 		}
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind) values ($1, (select id from role where namespace = 'og' and name = 'owner'), 'all')`,
+		`insert into user_grant (user_id, role_id, scope_kind) values ($1, (select id from role where namespace = 'og' and name = 'owner'), 'all')`,
 		pid); err != nil {
 		return false, fmt.Errorf("storage: bootstrap grant: %w", err)
 	}
@@ -134,7 +134,7 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 }
 
 // IssueBearerCredential mints an additional bearer credential for an existing
-// principal addressed by its human username, returning false if no such
+// user addressed by its username, returning false if no such
 // username exists. The caller generates and hashes the token and shows the
 // cleartext once; this is the same trusted direct-DB lane as BootstrapOwner
 // (token reissue, break-glass, and the dev login). purpose is 'session' (a
@@ -148,7 +148,7 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 // ClientIP record the device and address that created it, empty when unknown (a CLI).
 type BearerIssue struct {
 	// ActorID is who is minting the credential, recorded as the audit row's actor
-	// when a token is issued (#1162): the principal itself for self-service, empty
+	// when a token is issued (#1162): the user itself for self-service, empty
 	// for the trusted lane (the direct-database CLI), which has no API actor.
 	ActorID     string
 	Username    string
@@ -159,11 +159,19 @@ type BearerIssue struct {
 	Description string
 	UserAgent   string
 	ClientIP    string
+	// Agent, when set, makes the token an agent token (#1179): the name of the
+	// agent it is for. AgentRoles narrows the agent to these roles (intersected
+	// with the minting person's capability on every request; nil leaves it at the
+	// person's own); AgentChannels lists the entry points it is accepted on (nil:
+	// any). The API validates all three; this lane stores what it is given.
+	Agent         string
+	AgentRoles    []string
+	AgentChannels []string
 }
 
 func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool, error) {
 	var pid string
-	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, spec.Username).Scan(&pid)
+	err := p.pool.QueryRow(ctx, `select user_id from person where username = $1`, spec.Username).Scan(&pid)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return false, nil
@@ -177,16 +185,18 @@ func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool,
 	defer func() { _ = tx.Rollback(ctx) }()
 	var credID string
 	if err := tx.QueryRow(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip)
-			values ($1, 'bearer', $2, $3, $4, $5, nullif($6,''), nullif($7,''), nullif($8,''))
+		`insert into credential (user_id, kind, secret_hash, prefix, purpose, expires_at, description, user_agent, client_ip, agent, agent_roles, agent_channels)
+			values ($1, 'bearer', $2, $3, $4, $5, nullif($6,''), nullif($7,''), nullif($8,''), nullif($9,''), $10, $11)
 			returning id`,
-		pid, spec.SecretHash, spec.Prefix, spec.Purpose, spec.ExpiresAt, spec.Description, spec.UserAgent, spec.ClientIP).Scan(&credID); err != nil {
+		pid, spec.SecretHash, spec.Prefix, spec.Purpose, spec.ExpiresAt, spec.Description, spec.UserAgent, spec.ClientIP,
+		spec.Agent, emptySliceNil(spec.AgentRoles), emptySliceNil(spec.AgentChannels)).Scan(&credID); err != nil {
 		return false, fmt.Errorf("storage: issue credential: %w", err)
 	}
 	// A token is how an agent or a script is given access, so its minting is
 	// audited (#1162). A web-login session is the auth lane's (login, logout).
 	if spec.Purpose == credentialPurposeToken {
-		img := credentialAuditImage{PrincipalID: pid, Prefix: spec.Prefix, Purpose: spec.Purpose, Description: spec.Description, ExpiresAt: spec.ExpiresAt}
+		img := credentialAuditImage{UserID: pid, Prefix: spec.Prefix, Purpose: spec.Purpose, Description: spec.Description, ExpiresAt: spec.ExpiresAt,
+			Agent: spec.Agent, AgentRoles: emptySliceNil(spec.AgentRoles), AgentChannels: emptySliceNil(spec.AgentChannels)}
 		if err := writeAuditRes(ctx, tx, spec.ActorID, "create", "credential", credID, nil, img); err != nil {
 			return false, err
 		}
@@ -205,11 +215,25 @@ const credentialPurposeToken = "token"
 // The secret hash never reaches the trail; the prefix is the non-secret locator
 // the session list shows, so a reader can tell which token a row is about.
 type credentialAuditImage struct {
-	PrincipalID string     `json:"principal_id"`
+	UserID      string     `json:"user_id"`
 	Prefix      string     `json:"prefix"`
 	Purpose     string     `json:"purpose"`
 	Description string     `json:"description,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	// Agent, AgentRoles and AgentChannels describe an agent token (#1179), so
+	// the trail says which agent a token was minted for and how far it reaches.
+	Agent         string   `json:"agent,omitempty"`
+	AgentRoles    []string `json:"agent_roles,omitempty"`
+	AgentChannels []string `json:"agent_channels,omitempty"`
+}
+
+// emptySliceNil maps an empty slice to nil, so an optional text[] column stays
+// null rather than holding an empty array.
+func emptySliceNil(v []string) []string {
+	if len(v) == 0 {
+		return nil
+	}
+	return v
 }
 
 // revokedCredential is one deleted credential's identity and metadata, read
@@ -240,8 +264,9 @@ func scanRevoked(rows pgx.Rows) ([]revokedCredential, error) {
 	var out []revokedCredential
 	for rows.Next() {
 		var r revokedCredential
-		var purpose, description *string
-		if err := rows.Scan(&r.id, &r.img.PrincipalID, &r.img.Prefix, &purpose, &description, &r.img.ExpiresAt); err != nil {
+		var purpose, description, agent *string
+		if err := rows.Scan(&r.id, &r.img.UserID, &r.img.Prefix, &purpose, &description, &r.img.ExpiresAt,
+			&agent, &r.img.AgentRoles, &r.img.AgentChannels); err != nil {
 			return nil, fmt.Errorf("storage: scan revoked credential: %w", err)
 		}
 		if purpose != nil {
@@ -250,13 +275,16 @@ func scanRevoked(rows pgx.Rows) ([]revokedCredential, error) {
 		if description != nil {
 			r.img.Description = *description
 		}
+		if agent != nil {
+			r.img.Agent = *agent
+		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
 }
 
 // revokedCols is what a revoke's delete returns for its audit rows.
-const revokedCols = `returning id, principal_id, prefix, purpose, description, expires_at`
+const revokedCols = `returning id, user_id, prefix, purpose, description, expires_at, agent, agent_roles, agent_channels`
 
 // nullize maps an empty string to a SQL NULL so optional text columns stay null
 // rather than empty.
@@ -277,47 +305,62 @@ func nullize(s string) any {
 // matches the presented token hash. The authn middleware maps it to 401.
 var ErrCredentialNotFound = errors.New("storage: credential not found")
 
-// Principal is an authenticated identity with its kind profile and grants.
-type Principal struct {
+// User is an authenticated identity with its kind profile and grants.
+type User struct {
 	ID     string
 	Kind   string
 	Active bool
-	// ArchivedAt marks a soft delete (the principal lifecycle, issue #143): a
+	// ArchivedAt marks a soft delete (the user lifecycle, issue #143): a
 	// non-nil value means the account is archived (hidden, cannot authenticate,
 	// reversible until purged). Nil means live. Distinct from Active, which is the
 	// reversible disable (suspend) toggle.
 	ArchivedAt *time.Time
-	Human      *HumanProfile
-	Service    *ServiceProfile
-	Node       *NodeProfile
+	Person     *PersonProfile
+	Machine    *MachineProfile
+	Outpost    *OutpostProfile
 	Grants     []Grant
-	// Groups are the principal groups this principal belongs to (id + label), so the
+	// Agent is set when the request authenticated with an agent token (#1179):
+	// the user is the person who minted it, and the agent acts on their
+	// behalf, inside the bounds this names. Nil for any other credential.
+	Agent *AgentCredential
+	// Groups are the user groups this user belongs to (id + label), so the
 	// admin directory can show membership without a per-row fetch. The grants those
 	// groups confer already ride Grants (tagged with GroupID); this names them.
-	Groups []PrincipalGroupRef
+	Groups []UserGroupRef
 }
 
-// PrincipalGroupRef is a lightweight reference to a group a principal belongs to.
-type PrincipalGroupRef struct{ ID, Name string }
+// AgentCredential is the agent half of an agent token (#1179): which agent it
+// is, the roles it is narrowed to (nil: its person's own), and the entry points
+// it is accepted on (nil: any). It never widens the person: the API intersects
+// the roles with the person's capability on every request.
+type AgentCredential struct {
+	CredentialID string
+	Name         string
+	Roles        []string
+	Channels     []string
+}
 
-// HumanProfile, ServiceProfile, and NodeProfile carry the kind-specific
-// attributes. Each kind's identifier is its own column: a human's username, a
-// service account's name, a node's name (the fleet address).
-type HumanProfile struct {
+// UserGroupRef is a lightweight reference to a group a user belongs to.
+type UserGroupRef struct{ ID, Name string }
+
+// PersonProfile, ServiceProfile, and OutpostProfile carry the kind-specific
+// attributes. Each kind's identifier is its own column: a person's username, a
+// machine user's name, an outpost's name (the fleet address).
+type PersonProfile struct {
 	Username, Email, Label string
 	// MustChangePassword is set by an admin reset and cleared by the user's own
 	// change-password; while true the account is gated to the change-password lane.
 	MustChangePassword bool
 	// HasAvatar is true when the avatar column is non-null. The avatar bytes are
 	// NOT loaded here (this struct is filled on every authenticated request);
-	// fetch them with GetHumanAvatar.
+	// fetch them with GetPersonAvatar.
 	HasAvatar       bool
 	AvatarUpdatedAt *time.Time
 }
-type ServiceProfile struct{ Name string }
-type NodeProfile struct{ Name string }
+type MachineProfile struct{ Name string }
+type OutpostProfile struct{ Name string }
 
-// Grant is one (role x scope) pairing on a principal, addressable by its id (so
+// Grant is one (role x scope) pairing on a user, addressable by its id (so
 // the admin surface can revoke a specific one).
 type Grant struct {
 	ID        string
@@ -325,14 +368,16 @@ type Grant struct {
 	ScopeKind string
 	ScopeID   *string
 	ScopeOp   string // how ScopeID matches the tree: subtree, subtree_excl_root, or self
-	// GroupID is set when this grant is inherited from a group the principal
+	// GroupID is set when this grant is inherited from a group the user
 	// belongs to (nil for a direct grant), so a caller can show inherited access
-	// distinctly from direct. A principal's effective grants are its direct grants
+	// distinctly from direct. A user's effective grants are its direct grants
 	// unioned with its groups' grants; both flatten and scope-resolve the same way.
 	GroupID *string
-	// GroupName is the source group's label (label or name), set alongside
-	// GroupID, so a caller can name where an inherited grant comes from.
-	GroupName *string
+	// GroupName is the source group's name (the identifier a client can type
+	// back), set alongside GroupID, so a caller can name where an inherited grant
+	// comes from. GroupLabel is its friendly string, nil when the group has none.
+	GroupName  *string
+	GroupLabel *string
 }
 
 // ErrBadCredentials is returned by AuthenticatePassword when the username is
@@ -341,7 +386,7 @@ type Grant struct {
 var ErrBadCredentials = errors.New("storage: bad credentials")
 
 // ErrAccountDisabled is returned by AuthenticatePassword when the password is
-// CORRECT but the principal is disabled. It is a success-of-password signal, not a
+// CORRECT but the user is disabled. It is a success-of-password signal, not a
 // peer of ErrBadCredentials: it is reachable only after the password verifies, so
 // a wrong password against a disabled account is still ErrBadCredentials and the
 // endpoint cannot be used to enumerate accounts or their state.
@@ -372,25 +417,25 @@ func mustDummyHash() string {
 	return h
 }
 
-// ResolvePrincipalRef maps a principal reference to the principal id. A value that
-// is a uuid is returned as-is (any principal kind, and an unknown uuid still
+// ResolveUserRef maps a user reference to the user id. A value that
+// is a uuid is returned as-is (any user kind, and an unknown uuid still
 // resolves here so the caller's own not-found handling applies unchanged).
-// Otherwise it is a human's username or a service account's name (#1133); an
-// unknown one is ErrPrincipalNotFound, and one that is both a username and a
-// service name is refused as naming no one principal (principalIDByRef). This
-// backs addressing a principal by name on the API and CLI.
-func (p *PG) ResolvePrincipalRef(ctx context.Context, ref string) (string, error) {
-	return principalIDByRef(ctx, p.pool, ref)
+// Otherwise it is a person's username or a machine user's name (#1133); an
+// unknown one is ErrUserNotFound, and one that is both a username and a
+// service name is refused as naming no one user (userIDByRef). This
+// backs addressing a user by name on the API and CLI.
+func (p *PG) ResolveUserRef(ctx context.Context, ref string) (string, error) {
+	return userIDByRef(ctx, p.pool, ref)
 }
 
-// ResolveUsername maps a human's username to its principal id, matching the
-// human table alone; an unknown username is ErrPrincipalNotFound.
+// ResolveUsername maps a person's username to its user id, matching the
+// human table alone; an unknown username is ErrUserNotFound.
 func (p *PG) ResolveUsername(ctx context.Context, username string) (string, error) {
 	var id string
-	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&id)
+	err := p.pool.QueryRow(ctx, `select user_id from person where username = $1`, username).Scan(&id)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return "", ErrPrincipalNotFound
+		return "", ErrUserNotFound
 	case err != nil:
 		return "", fmt.Errorf("storage: resolve username %q: %w", username, err)
 	}
@@ -398,17 +443,20 @@ func (p *PG) ResolveUsername(ctx context.Context, username string) (string, erro
 }
 
 // AuthenticateBearer resolves a bearer credential by its sha256 hash to the
-// principal, its kind profile, and its grants. ErrCredentialNotFound if none, which
+// user, its kind profile, and its grants. ErrCredentialNotFound if none, which
 // includes a credential whose expiry has passed (an expired session is treated as
 // absent, so it authenticates nothing).
-func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error) {
-	var pr Principal
+func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*User, error) {
+	var pr User
+	var credID string
+	var agent *string
+	var agentRoles, agentChannels []string
 	err := p.pool.QueryRow(ctx, `
-		select pr.id, pr.kind
+		select pr.id, pr.kind, c.id, c.agent, c.agent_roles, c.agent_channels
 		from credential c
-		join principal pr on pr.id = c.principal_id
+		join users pr on pr.id = c.user_id
 		where c.kind = 'bearer' and c.secret_hash = $1 and pr.active
-			and (c.expires_at is null or c.expires_at > now())`, hash).Scan(&pr.ID, &pr.Kind)
+			and (c.expires_at is null or c.expires_at > now())`, hash).Scan(&pr.ID, &pr.Kind, &credID, &agent, &agentRoles, &agentChannels)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return nil, ErrCredentialNotFound
@@ -421,17 +469,20 @@ func (p *PG) AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, e
 	_, _ = p.pool.Exec(ctx,
 		`update credential set last_used_at = now()
 			where secret_hash = $1 and (last_used_at is null or last_used_at < now() - interval '1 minute')`, hash)
-	if err := p.loadPrincipal(ctx, &pr); err != nil {
+	if err := p.loadUser(ctx, &pr); err != nil {
 		return nil, err
+	}
+	if agent != nil {
+		pr.Agent = &AgentCredential{CredentialID: credID, Name: *agent, Roles: agentRoles, Channels: agentChannels}
 	}
 	return &pr, nil
 }
 
 // AuthenticatePassword verifies a human's password against their argon2id
-// credential and resolves the principal, its profile, and its grants.
+// credential and resolves the user, its profile, and its grants.
 // ErrBadCredentials for an unknown user, no password set, or a wrong password.
-func (p *PG) AuthenticatePassword(ctx context.Context, username, password string) (*Principal, error) {
-	pr := Principal{Kind: "human"}
+func (p *PG) AuthenticatePassword(ctx context.Context, username, password string) (*User, error) {
+	pr := User{Kind: "person"}
 	var encoded []byte
 	var active bool
 	var failedCount int
@@ -440,10 +491,10 @@ func (p *PG) AuthenticatePassword(ctx context.Context, username, password string
 	// so their real hash is compared, and the active flag must not steer control
 	// flow before the password compare (that would leak account state by timing).
 	err := p.pool.QueryRow(ctx, `
-		select h.principal_id, c.secret_hash, pr.active, h.failed_login_count, h.locked_until
-		from human h
-		join principal pr on pr.id = h.principal_id
-		join credential c on c.principal_id = h.principal_id and c.kind = 'password'
+		select h.user_id, c.secret_hash, pr.active, h.failed_login_count, h.locked_until
+		from person h
+		join users pr on pr.id = h.user_id
+		join credential c on c.user_id = h.user_id and c.kind = 'password'
 		where h.username = $1`, username).Scan(&pr.ID, &encoded, &active, &failedCount, &lockedUntil)
 	found := true
 	switch {
@@ -474,32 +525,32 @@ func (p *PG) AuthenticatePassword(ctx context.Context, username, password string
 		// is still refused until the window passes), decided after the verify so it is
 		// not a faster path. Do not extend the lock or bump the counter here; just
 		// deny. The handler audits it and returns the same generic 401 as a miss.
-		return &Principal{ID: pr.ID, Kind: pr.Kind}, ErrAccountLocked
+		return &User{ID: pr.ID, Kind: pr.Kind}, ErrAccountLocked
 	}
 	if !ok {
 		// A real account, wrong password: bump the consecutive-failure counter and,
 		// on the threshold-th miss, lock the account. Best effort (the attempt has
 		// already failed; a counter write error must not change the response). Return
-		// the principal id (server-side only, the client error is unchanged) so the
+		// the user id (server-side only, the client error is unchanged) so the
 		// handler can audit the failed attempt, a security signal worth recording.
 		d := nextLockout(failedCount, now)
 		_, _ = p.pool.Exec(ctx,
-			`update human set failed_login_count = $2, locked_until = $3 where principal_id = $1`,
+			`update person set failed_login_count = $2, locked_until = $3 where user_id = $1`,
 			pr.ID, d.count, d.lockedUntil)
-		return &Principal{ID: pr.ID, Kind: pr.Kind}, ErrBadCredentials
+		return &User{ID: pr.ID, Kind: pr.Kind}, ErrBadCredentials
 	}
 	// Correct password: clear any accumulated failures (best effort) so a run of
 	// wrong guesses that ended in the right password does not carry toward a lock.
 	if failedCount != 0 || lockedUntil != nil {
 		_, _ = p.pool.Exec(ctx,
-			`update human set failed_login_count = 0, locked_until = null where principal_id = $1`, pr.ID)
+			`update person set failed_login_count = 0, locked_until = null where user_id = $1`, pr.ID)
 	}
 	if !active {
 		// Correct password against a disabled account: a distinct, disclosable
 		// signal, reachable only with the right password (not an enumeration oracle).
-		return &Principal{ID: pr.ID, Kind: pr.Kind}, ErrAccountDisabled
+		return &User{ID: pr.ID, Kind: pr.Kind}, ErrAccountDisabled
 	}
-	if err := p.loadPrincipal(ctx, &pr); err != nil {
+	if err := p.loadUser(ctx, &pr); err != nil {
 		return nil, err
 	}
 	return &pr, nil
@@ -510,7 +561,7 @@ func (p *PG) AuthenticatePassword(ctx context.Context, username, password string
 // hash; cleartext never reaches storage.
 func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, error) {
 	var pid string
-	err := p.pool.QueryRow(ctx, `select principal_id from human where username = $1`, username).Scan(&pid)
+	err := p.pool.QueryRow(ctx, `select user_id from person where username = $1`, username).Scan(&pid)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return false, nil
@@ -523,9 +574,9 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
-		insert into credential (principal_id, kind, secret_hash, prefix)
+		insert into credential (user_id, kind, secret_hash, prefix)
 		values ($1, 'password', $2, '')
-		on conflict (principal_id) where kind = 'password'
+		on conflict (user_id) where kind = 'password'
 			do update set secret_hash = excluded.secret_hash`,
 		pid, []byte(encoded)); err != nil {
 		return false, fmt.Errorf("storage: set password: %w", err)
@@ -536,7 +587,7 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	// otherwise only expired lazily at the next login, so a rotation is the immediate
 	// intervention.
 	if _, err := tx.Exec(ctx,
-		`update human set must_change_password = false, failed_login_count = 0, locked_until = null where principal_id = $1`,
+		`update person set must_change_password = false, failed_login_count = 0, locked_until = null where user_id = $1`,
 		pid); err != nil {
 		return false, fmt.Errorf("storage: clear must-change: %w", err)
 	}
@@ -551,17 +602,17 @@ func (p *PG) SetPassword(ctx context.Context, username, encoded string) (bool, e
 	return true, nil
 }
 
-// SetPrincipalPassword resets a human principal's password by id, on behalf of an
-// admin. Requires an all-scope grant (principals are not scope-tree scoped). Unlike
+// SetUserPassword resets a person's password by id, on behalf of an
+// admin. Requires an all-scope grant (users are not scope-tree scoped). Unlike
 // SetPassword (self-service, keyed on username, audited as the target), this audits
 // the acting admin as the actor and does not require the target's current password.
-// The target must be a human; an unknown id is ErrPrincipalNotFound. A reset also
+// The target must be a human; an unknown id is ErrUserNotFound. A reset also
 // revokes every one of the target's bearer credentials (all sessions and tokens) in
 // the same transaction, so the reset takes effect immediately: any live session is
 // signed out and must re-authenticate with the new password.
-func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, principalID, encoded string, action scope.Set) error {
+func (p *PG) SetUserPassword(ctx context.Context, actorID, userID, encoded string, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -571,28 +622,28 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, principalID, enc
 
 	// Only a human holds a password credential; an unknown id (or a service) is not found.
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select 1 from human where principal_id = $1`, principalID).Scan(new(int)); err != nil {
+	if err := tx.QueryRow(ctx, `select 1 from person where user_id = $1`, userID).Scan(new(int)); err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
-			return ErrPrincipalNotFound
+			return ErrUserNotFound
 		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
-			return ErrPrincipalNotFound
+			return ErrUserNotFound
 		default:
 			return fmt.Errorf("storage: reset password lookup: %w", err)
 		}
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into credential (principal_id, kind, secret_hash, prefix)
+		insert into credential (user_id, kind, secret_hash, prefix)
 		values ($1, 'password', $2, '')
-		on conflict (principal_id) where kind = 'password'
+		on conflict (user_id) where kind = 'password'
 			do update set secret_hash = excluded.secret_hash`,
-		principalID, []byte(encoded)); err != nil {
+		userID, []byte(encoded)); err != nil {
 		return fmt.Errorf("storage: reset password: %w", err)
 	}
 	// Force logout: drop every SESSION for the target so a reset immediately signs it
 	// out everywhere. API tokens are left intact: a token is its own bearer secret, not
 	// tied to the password, and has its own revoke surface (issue #194).
-	if _, err := tx.Exec(ctx, `delete from credential where principal_id = $1 and kind = 'bearer' and purpose = 'session'`, principalID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from credential where user_id = $1 and kind = 'bearer' and purpose = 'session'`, userID); err != nil {
 		return fmt.Errorf("storage: revoke sessions on reset: %w", err)
 	}
 	// Force a change on next login: the admin knows the value they just set, so the
@@ -602,11 +653,11 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, principalID, enc
 	// expired lazily at the next login, so it would keep the account out for the rest
 	// of the window even with the new secret.
 	if _, err := tx.Exec(ctx,
-		`update human set must_change_password = true, failed_login_count = 0, locked_until = null where principal_id = $1`,
-		principalID); err != nil {
+		`update person set must_change_password = true, failed_login_count = 0, locked_until = null where user_id = $1`,
+		userID); err != nil {
 		return fmt.Errorf("storage: flag must-change on reset: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", principalID, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "reset_password", "credential", userID, nil, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -618,54 +669,54 @@ func (p *PG) SetPrincipalPassword(ctx context.Context, actorID, principalID, enc
 // setAvatarTx writes (or clears, when b64 == "") a human's avatar within tx and
 // audits the change against actorID. It does not commit. avatar_updated_at is
 // server-clocked to now() on write and null on clear.
-func setAvatarTx(ctx context.Context, tx pgx.Tx, actorID, principalID, b64 string) error {
+func setAvatarTx(ctx context.Context, tx pgx.Tx, actorID, userID, b64 string) error {
 	verb := "clear_avatar"
 	var val any
 	if b64 != "" {
 		val, verb = b64, "set_avatar"
 	}
 	if _, err := tx.Exec(ctx,
-		`update human set avatar = $2, avatar_updated_at = case when $3 then now() else null end
-		 where principal_id = $1`,
-		principalID, val, b64 != ""); err != nil {
+		`update person set avatar = $2, avatar_updated_at = case when $3 then now() else null end
+		 where user_id = $1`,
+		userID, val, b64 != ""); err != nil {
 		return fmt.Errorf("storage: write avatar: %w", err)
 	}
-	return writeAuditRes(ctx, tx, actorID, verb, "principal", principalID, nil, nil)
+	return writeAuditRes(ctx, tx, actorID, verb, "user", userID, nil, nil)
 }
 
 // SetOwnAvatar sets the caller's own profile picture (a normalized base64 JPEG),
 // audited as the caller. No capability is required.
-func (p *PG) SetOwnAvatar(ctx context.Context, principalID, jpegB64 string) error {
-	return p.avatarTxn(ctx, principalID, principalID, jpegB64)
+func (p *PG) SetOwnAvatar(ctx context.Context, userID, jpegB64 string) error {
+	return p.avatarTxn(ctx, userID, userID, jpegB64)
 }
 
 // ClearOwnAvatar removes the caller's own profile picture, audited as the caller.
-func (p *PG) ClearOwnAvatar(ctx context.Context, principalID string) error {
-	return p.avatarTxn(ctx, principalID, principalID, "")
+func (p *PG) ClearOwnAvatar(ctx context.Context, userID string) error {
+	return p.avatarTxn(ctx, userID, userID, "")
 }
 
-// SetPrincipalAvatar sets another principal's profile picture on behalf of an
+// SetUserAvatar sets another user's profile picture on behalf of an
 // admin, audited as the actor. Requires an all-scope grant; an unknown id is
-// ErrPrincipalNotFound.
-func (p *PG) SetPrincipalAvatar(ctx context.Context, actorID, id, jpegB64 string, action scope.Set) error {
+// ErrUserNotFound.
+func (p *PG) SetUserAvatar(ctx context.Context, actorID, id, jpegB64 string, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	return p.avatarTxn(ctx, actorID, id, jpegB64)
 }
 
-// ClearPrincipalAvatar removes another principal's profile picture on behalf of
+// ClearUserAvatar removes another user's profile picture on behalf of
 // an admin, audited as the actor. Requires an all-scope grant; an unknown id is
-// ErrPrincipalNotFound.
-func (p *PG) ClearPrincipalAvatar(ctx context.Context, actorID, id string, action scope.Set) error {
+// ErrUserNotFound.
+func (p *PG) ClearUserAvatar(ctx context.Context, actorID, id string, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	return p.avatarTxn(ctx, actorID, id, "")
 }
 
 // avatarTxn confirms the target human exists, then writes (or clears) its avatar
-// and commits. An unknown id (or a service principal) is ErrPrincipalNotFound.
+// and commits. An unknown id (or a service user) is ErrUserNotFound.
 func (p *PG) avatarTxn(ctx context.Context, actorID, id, b64 string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -673,13 +724,13 @@ func (p *PG) avatarTxn(ctx context.Context, actorID, id, b64 string) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var exists int
-	if err := tx.QueryRow(ctx, `select 1 from human where principal_id = $1`, id).Scan(&exists); err != nil {
+	if err := tx.QueryRow(ctx, `select 1 from person where user_id = $1`, id).Scan(&exists); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrPrincipalNotFound
+			return ErrUserNotFound
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "22P02" {
-			return ErrPrincipalNotFound
+			return ErrUserNotFound
 		}
 		return fmt.Errorf("storage: avatar lookup: %w", err)
 	}
@@ -692,18 +743,18 @@ func (p *PG) avatarTxn(ctx context.Context, actorID, id, b64 string) error {
 	return nil
 }
 
-// GetHumanAvatar returns a human's profile picture as a base64 JPEG. The bool is
+// GetPersonAvatar returns a human's profile picture as a base64 JPEG. The bool is
 // false (with no error) when the human has no picture; an unknown id is
-// ErrPrincipalNotFound.
-func (p *PG) GetHumanAvatar(ctx context.Context, id string) (string, bool, error) {
+// ErrUserNotFound.
+func (p *PG) GetPersonAvatar(ctx context.Context, id string) (string, bool, error) {
 	var b64 *string
-	if err := p.pool.QueryRow(ctx, `select avatar from human where principal_id = $1`, id).Scan(&b64); err != nil {
+	if err := p.pool.QueryRow(ctx, `select avatar from person where user_id = $1`, id).Scan(&b64); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", false, ErrPrincipalNotFound
+			return "", false, ErrUserNotFound
 		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "22P02" {
-			return "", false, ErrPrincipalNotFound
+			return "", false, ErrUserNotFound
 		}
 		return "", false, fmt.Errorf("storage: get avatar: %w", err)
 	}
@@ -713,30 +764,30 @@ func (p *PG) GetHumanAvatar(ctx context.Context, id string) (string, bool, error
 	return *b64, true, nil
 }
 
-// GetPrincipalAvatar is the admin read of another principal's profile picture. It
+// GetUserAvatar is the admin read of another user's profile picture. It
 // applies the directory's all-scope invariant (a non-all scope is
-// ErrPrincipalForbidden, mirroring the admin write methods), then delegates to
-// GetHumanAvatar.
-func (p *PG) GetPrincipalAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error) {
+// ErrUserForbidden, mirroring the admin write methods), then delegates to
+// GetPersonAvatar.
+func (p *PG) GetUserAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error) {
 	if !action.All {
-		return "", false, ErrPrincipalForbidden
+		return "", false, ErrUserForbidden
 	}
-	return p.GetHumanAvatar(ctx, id)
+	return p.GetPersonAvatar(ctx, id)
 }
 
-// HumanProfilePatch carries the editable self-profile fields. A nil pointer
+// PersonProfilePatch carries the editable self-profile fields. A nil pointer
 // leaves the column unchanged; a non-nil pointer sets it, with an empty string
 // clearing the nullable column to NULL.
-type HumanProfilePatch struct {
+type PersonProfilePatch struct {
 	Label *string
 	Email *string
 }
 
-// UpdateHumanProfile applies a partial update to a human's own profile, addressed
-// by principal id (the authenticated session's own id). Absent fields are left
+// UpdatePersonProfile applies a partial update to a human's own profile, addressed
+// by user id (the authenticated session's own id). Absent fields are left
 // as-is; a provided empty string clears the column. The row exists by
-// construction (the caller is that principal), so a no-match is not signalled.
-func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error {
+// construction (the caller is that user), so a no-match is not signalled.
+func (p *PG) UpdatePersonProfile(ctx context.Context, userID string, patch PersonProfilePatch) error {
 	setDisplay, display := patch.Label != nil, any(nil)
 	if patch.Label != nil {
 		display = labelOrNull(*patch.Label)
@@ -747,16 +798,16 @@ func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch H
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin update human profile: %w", err)
+		return fmt.Errorf("storage: begin update person profile: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
-		update human set
+		update person set
 			label = case when $2 then $3 else label end,
 			email        = case when $4 then $5 else email end
-		where principal_id = $1`,
-		principalID, setDisplay, display, setEmail, email); err != nil {
-		return fmt.Errorf("storage: update human profile: %w", err)
+		where user_id = $1`,
+		userID, setDisplay, display, setEmail, email); err != nil {
+		return fmt.Errorf("storage: update person profile: %w", err)
 	}
 	// Audit the self-profile change so an impersonated (act-as) edit records the
 	// real actor, and every profile edit leaves a trail. Log the changed fields.
@@ -767,20 +818,20 @@ func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch H
 	if patch.Email != nil {
 		summary["email"] = *patch.Email
 	}
-	if err := writeAuditRes(ctx, tx, principalID, "update", "principal", principalID, nil, summary); err != nil {
+	if err := writeAuditRes(ctx, tx, userID, "update", "user", userID, nil, summary); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("storage: commit update human profile: %w", err)
+		return fmt.Errorf("storage: commit update person profile: %w", err)
 	}
 	return nil
 }
 
-// AnyHuman reports whether any human principal exists, so the login screen hides
+// AnyPerson reports whether any person exists, so the login screen hides
 // the bootstrap hint once the system has an owner.
-func (p *PG) AnyHuman(ctx context.Context) (bool, error) {
+func (p *PG) AnyPerson(ctx context.Context) (bool, error) {
 	var exists bool
-	if err := p.pool.QueryRow(ctx, `select exists(select 1 from human)`).Scan(&exists); err != nil {
+	if err := p.pool.QueryRow(ctx, `select exists(select 1 from person)`).Scan(&exists); err != nil {
 		return false, fmt.Errorf("storage: any human: %w", err)
 	}
 	return exists, nil
@@ -802,10 +853,10 @@ func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
 	if err != nil {
 		return fmt.Errorf("storage: revoke bearer: %w", err)
 	}
-	// A token presented as the session and logged out is ended by the principal it
+	// A token presented as the session and logged out is ended by the user it
 	// belonged to (#1162).
 	for _, r := range revoked {
-		if err := auditRevokedTokens(ctx, tx, r.img.PrincipalID, []revokedCredential{r}); err != nil {
+		if err := auditRevokedTokens(ctx, tx, r.img.UserID, []revokedCredential{r}); err != nil {
 			return err
 		}
 	}
@@ -815,7 +866,7 @@ func (p *PG) RevokeBearer(ctx context.Context, hash []byte) error {
 	return nil
 }
 
-// BearerCredential is one of a principal's live bearer credentials (a login
+// BearerCredential is one of a user's live bearer credentials (a login
 // session or an API token), carrying only its non-secret metadata. The secret hash
 // is never returned: this is the shape the self-service session list exposes.
 // Purpose is 'session' (a web login) or 'token' (a CLI/API credential), the
@@ -833,23 +884,40 @@ type BearerCredential struct {
 	LastUsedAt  *time.Time
 	ExpiresAt   *time.Time
 	Current     bool
+	// Agent, AgentRoles and AgentChannels are an agent token's bounds (#1179);
+	// empty for a session or a personal token.
+	Agent         string
+	AgentRoles    []string
+	AgentChannels []string
+	// OAuthClient is the name of the OAuth client a token was issued to by
+	// sign-in (#2048); empty for any other credential.
+	OAuthClient string
 }
 
-// ListBearerCredentials returns the principal's own LIVE bearer credentials, newest
+// ListBearerCredentials returns the user's own LIVE bearer credentials, newest
 // first, with their id, prefix, purpose, created_at, and expires_at. The raw
 // secret_hash is never returned: currentHash (the sha256 of the token that
 // authenticated this request) is only compared in SQL to compute the Current flag,
 // so the hash bytes never leave the database. Only live credentials are returned (an
 // unexpired or legacy-null expires_at), mirroring AuthenticateBearer's own filter, so
-// a signed-in user never sees a dead row that would authenticate nothing. Backs the
+// a signed-in user never sees a dead row that would authenticate nothing. An OAuth
+// client whose access token lapsed but whose refresh token is live is listed, with
+// the refresh token's expiry, since it can still renew itself (#2073). Backs the
 // self-service session list (issue #172).
-func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error) {
+func (p *PG) ListBearerCredentials(ctx context.Context, userID string, currentHash []byte) ([]BearerCredential, error) {
 	rows, err := p.pool.Query(ctx, `
-		select id, prefix, coalesce(purpose, ''), coalesce(description, ''), coalesce(user_agent, ''), coalesce(client_ip, ''),
-			created_at, last_used_at, expires_at, coalesce(secret_hash = $2, false) as current
-		from credential
-		where principal_id = $1 and kind = 'bearer' and (expires_at is null or expires_at > now())
-		order by created_at desc`, principalID, currentHash)
+		select c.id, c.prefix, coalesce(c.purpose, ''), coalesce(c.description, ''), coalesce(c.user_agent, ''), coalesce(c.client_ip, ''),
+			c.created_at, c.last_used_at, coalesce(r.expires_at, c.expires_at), coalesce(c.secret_hash = $2, false) as current,
+			coalesce(c.agent, ''), c.agent_roles, c.agent_channels, coalesce(o.client_name, '')
+		from credential c
+		left join oauth_client o on o.id = c.oauth_client_id
+		left join lateral (
+			select max(expires_at) as expires_at from oauth_refresh
+			where credential_id = c.id and spent_at is null and expires_at > now()
+		) r on true
+		where c.user_id = $1 and c.kind = 'bearer'
+			and (c.expires_at is null or c.expires_at > now() or r.expires_at is not null)
+		order by c.created_at desc`, userID, currentHash)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list bearer credentials: %w", err)
 	}
@@ -858,7 +926,7 @@ func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, curr
 	for rows.Next() {
 		var c BearerCredential
 		if err := rows.Scan(&c.ID, &c.Prefix, &c.Purpose, &c.Description, &c.UserAgent, &c.ClientIP,
-			&c.CreatedAt, &c.LastUsedAt, &c.ExpiresAt, &c.Current); err != nil {
+			&c.CreatedAt, &c.LastUsedAt, &c.ExpiresAt, &c.Current, &c.Agent, &c.AgentRoles, &c.AgentChannels, &c.OAuthClient); err != nil {
 			return nil, fmt.Errorf("storage: scan bearer credential: %w", err)
 		}
 		out = append(out, c)
@@ -867,19 +935,19 @@ func (p *PG) ListBearerCredentials(ctx context.Context, principalID string, curr
 }
 
 // RevokeBearerByID deletes one bearer credential by id, scoped to the owning
-// principal so a caller can only revoke their own (a session or token belonging to
-// another principal is untouched). Returns false when nothing matched: a wrong or
-// already-revoked id, a credential owned by a different principal, or a malformed id
+// user so a caller can only revoke their own (a session or token belonging to
+// another user is untouched). Returns false when nothing matched: a wrong or
+// already-revoked id, a credential owned by a different user, or a malformed id
 // (which the API maps to a 404, never a 500). This backs self-service revoke (#172).
-func (p *PG) RevokeBearerByID(ctx context.Context, actorID, principalID, credentialID string) (bool, error) {
+func (p *PG) RevokeBearerByID(ctx context.Context, actorID, userID, credentialID string) (bool, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("storage: begin revoke bearer by id: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	rows, err := tx.Query(ctx,
-		`delete from credential where id = $1 and principal_id = $2 and kind = 'bearer' `+revokedCols,
-		credentialID, principalID)
+		`delete from credential where id = $1 and user_id = $2 and kind = 'bearer' `+revokedCols,
+		credentialID, userID)
 	var revoked []revokedCredential
 	if err == nil {
 		revoked, err = scanRevoked(rows)
@@ -887,7 +955,7 @@ func (p *PG) RevokeBearerByID(ctx context.Context, actorID, principalID, credent
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "22P02" {
-			// A malformed uuid (id or principal id) matches no row: not found, not a 500.
+			// A malformed uuid (id or user id) matches no row: not found, not a 500.
 			return false, nil
 		}
 		return false, fmt.Errorf("storage: revoke bearer by id: %w", err)
@@ -902,18 +970,18 @@ func (p *PG) RevokeBearerByID(ctx context.Context, actorID, principalID, credent
 }
 
 // RevokeBearersByPurpose deletes every bearer credential of one purpose ('session'
-// or 'token') for a principal, scoped to the owning principal, and returns the count.
+// or 'token') for a user, scoped to the owning user, and returns the count.
 // Purpose is the authoritative discriminator (both kinds carry an expiry now), so a
 // caller ending all sessions never touches a token, and vice versa.
-func (p *PG) RevokeBearersByPurpose(ctx context.Context, actorID, principalID, purpose string) (int, error) {
-	return p.RevokeBearersByPurposeExcept(ctx, actorID, principalID, purpose, nil)
+func (p *PG) RevokeBearersByPurpose(ctx context.Context, actorID, userID, purpose string) (int, error) {
+	return p.RevokeBearersByPurposeExcept(ctx, actorID, userID, purpose, nil)
 }
 
 // RevokeBearersByPurposeExcept deletes bearers of one purpose except any whose
-// secret_hash is in keep, scoped to the principal, returning the count. An empty keep
+// secret_hash is in keep, scoped to the user, returning the count. An empty keep
 // deletes all of the purpose (the plain bulk revoke); a non-empty keep preserves the
 // caller's current session while ending its others, tokens untouched.
-func (p *PG) RevokeBearersByPurposeExcept(ctx context.Context, actorID, principalID, purpose string, keep [][]byte) (int, error) {
+func (p *PG) RevokeBearersByPurposeExcept(ctx context.Context, actorID, userID, purpose string, keep [][]byte) (int, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("storage: begin revoke bearers by purpose: %w", err)
@@ -922,12 +990,12 @@ func (p *PG) RevokeBearersByPurposeExcept(ctx context.Context, actorID, principa
 	var rows pgx.Rows
 	if len(keep) == 0 {
 		rows, err = tx.Query(ctx,
-			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2 `+revokedCols,
-			principalID, purpose)
+			`delete from credential where user_id = $1 and kind = 'bearer' and purpose = $2 `+revokedCols,
+			userID, purpose)
 	} else {
 		rows, err = tx.Query(ctx,
-			`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2 and secret_hash <> all($3::bytea[]) `+revokedCols,
-			principalID, purpose, keep)
+			`delete from credential where user_id = $1 and kind = 'bearer' and purpose = $2 and secret_hash <> all($3::bytea[]) `+revokedCols,
+			userID, purpose, keep)
 	}
 	var revoked []revokedCredential
 	if err == nil {
@@ -945,51 +1013,51 @@ func (p *PG) RevokeBearersByPurposeExcept(ctx context.Context, actorID, principa
 	return len(revoked), nil
 }
 
-// ErrPrincipalForbidden is returned by the principal directory methods when the
-// caller's resolved scope is not all-scope. A principal is not a scope-tree
-// entity, so a location or system grant confers no principal access; only an
+// ErrUserForbidden is returned by the user directory methods when the
+// caller's resolved scope is not all-scope. A user is not a scope-tree
+// entity, so a location or system grant confers no user access; only an
 // all-scope grant does. The API maps it to 403.
-var ErrPrincipalForbidden = errors.New("storage: principal access requires an all-scope grant")
+var ErrUserForbidden = errors.New("storage: user access requires an all-scope grant")
 
-// ErrNotArchived is returned by PurgePrincipal when the target has not been
+// ErrNotArchived is returned by PurgeUser when the target has not been
 // archived first (the hard gate between the soft and hard delete).
-var ErrNotArchived = errors.New("storage: principal must be archived before purge")
+var ErrNotArchived = errors.New("storage: user must be archived before purge")
 
-// ErrPrincipalNotFound is returned by GetPrincipal when no principal has the id.
+// ErrUserNotFound is returned by GetUser when no user has the id.
 // The API maps it to 404.
-var ErrPrincipalNotFound = errors.New("storage: principal not found")
+var ErrUserNotFound = errors.New("storage: user not found")
 
-// ErrUsernameTaken is returned by CreateHumanPrincipal when the username already
+// ErrUsernameTaken is returned by CreatePerson when the username already
 // exists. The API maps it to 409.
 var ErrUsernameTaken = errors.New("storage: username already exists")
 
-// HumanSpec is the admin create-a-human input. PasswordHash, when set, installs a
+// PersonSpec is the admin create-a-human input. PasswordHash, when set, installs a
 // password credential (PHC-encoded argon2id); cleartext never reaches storage.
-type HumanSpec struct {
+type PersonSpec struct {
 	Username     string
 	Email        string
 	Label        string
 	PasswordHash string
 }
 
-// ListPrincipals returns every principal, humans before nodes, each kind in
+// ListUsers returns every user, people before machine users, each kind in
 // creation order. Kind leads so the directory groups people apart from machine
 // identities; within a kind, seq (the DB-assigned identity) is the order,
 // because clock-derived keys (created_at, uuidv7 ids) invert across
 // transactions when the wall clock steps mid-run and flapped the
 // zero-tolerance screenshot gate (#780).
-// Reads require an all-scope grant (a principal is not scope-tree scoped),
-// so a non-all read scope is ErrPrincipalForbidden rather than a silent empty
-// list. Archived (soft-deleted) principals are excluded unless
+// Reads require an all-scope grant (a user is not scope-tree scoped),
+// so a non-all read scope is ErrUserForbidden rather than a silent empty
+// list. Archived (soft-deleted) users are excluded unless
 // includeArchived is set (the directory's "show archived" view, so a hidden
 // account can be restored or purged). Credentials are never loaded.
-func (p *PG) ListPrincipals(ctx context.Context, read scope.Set, includeArchived bool) ([]Principal, error) {
+func (p *PG) ListUsers(ctx context.Context, read scope.Set, includeArchived bool) ([]User, error) {
 	if !read.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
-	rows, err := p.pool.Query(ctx, `select id, kind, active, archived_at from principal where ($1 or archived_at is null) order by kind, seq`, includeArchived)
+	rows, err := p.pool.Query(ctx, `select id, kind, active, archived_at from users where ($1 or archived_at is null) order by kind <> 'person', seq`, includeArchived)
 	if err != nil {
-		return nil, fmt.Errorf("storage: list principals: %w", err)
+		return nil, fmt.Errorf("storage: list users: %w", err)
 	}
 	type base struct {
 		id, kind   string
@@ -1001,150 +1069,150 @@ func (p *PG) ListPrincipals(ctx context.Context, read scope.Set, includeArchived
 		var b base
 		if err := rows.Scan(&b.id, &b.kind, &b.active, &b.archivedAt); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("storage: scan principal: %w", err)
+			return nil, fmt.Errorf("storage: scan user: %w", err)
 		}
 		bases = append(bases, b)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: list principals: %w", err)
+		return nil, fmt.Errorf("storage: list users: %w", err)
 	}
-	// loadPrincipals runs its own queries, so the row cursor is drained first. It
-	// is the batched counterpart of loadPrincipal (#671): three statements for the
+	// loadUsers runs its own queries, so the row cursor is drained first. It
+	// is the batched counterpart of loadUser (#671): three statements for the
 	// whole page rather than three per row, which is what keeps the admin
-	// directory readable at organisation scale. loadPrincipal stays the single-row
+	// directory readable at organisation scale. loadUser stays the single-row
 	// path and the oracle the batch is measured against.
-	out := make([]Principal, 0, len(bases))
+	out := make([]User, 0, len(bases))
 	for _, b := range bases {
-		out = append(out, Principal{ID: b.id, Kind: b.kind, Active: b.active, ArchivedAt: b.archivedAt})
+		out = append(out, User{ID: b.id, Kind: b.kind, Active: b.active, ArchivedAt: b.archivedAt})
 	}
-	if err := p.loadPrincipals(ctx, out); err != nil {
+	if err := p.loadUsers(ctx, out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// GetPrincipal resolves one principal by id, with its profile and grants. Reads
-// require an all-scope grant; an unknown id is ErrPrincipalNotFound.
-func (p *PG) GetPrincipal(ctx context.Context, id string, read scope.Set) (*Principal, error) {
+// GetUser resolves one user by id, with its profile and grants. Reads
+// require an all-scope grant; an unknown id is ErrUserNotFound.
+func (p *PG) GetUser(ctx context.Context, id string, read scope.Set) (*User, error) {
 	if !read.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
-	pr := Principal{ID: id}
-	err := p.pool.QueryRow(ctx, `select id, kind, active, archived_at from principal where id = $1`, id).Scan(&pr.ID, &pr.Kind, &pr.Active, &pr.ArchivedAt)
+	pr := User{ID: id}
+	err := p.pool.QueryRow(ctx, `select id, kind, active, archived_at from users where id = $1`, id).Scan(&pr.ID, &pr.Kind, &pr.Active, &pr.ArchivedAt)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return nil, ErrPrincipalNotFound
+		return nil, ErrUserNotFound
 	case errors.As(err, &pgErr) && pgErr.Code == "22P02":
-		// A malformed id (invalid uuid text) identifies no principal: a clean 404,
+		// A malformed id (invalid uuid text) identifies no user: a clean 404,
 		// not a 500.
-		return nil, ErrPrincipalNotFound
+		return nil, ErrUserNotFound
 	case err != nil:
-		return nil, fmt.Errorf("storage: get principal: %w", err)
+		return nil, fmt.Errorf("storage: get user: %w", err)
 	}
-	if err := p.loadPrincipal(ctx, &pr); err != nil {
+	if err := p.loadUser(ctx, &pr); err != nil {
 		return nil, err
 	}
 	return &pr, nil
 }
 
-// CreateHumanPrincipal creates a human principal (and, when a password hash is
+// CreatePerson creates a person (and, when a password hash is
 // given, its password credential) in one audited transaction. Creates require an
-// all-scope grant; a duplicate username is ErrUsernameTaken. The new principal
+// all-scope grant; a duplicate username is ErrUsernameTaken. The new user
 // holds no grants (role assignment is a later admin surface).
-func (p *PG) CreateHumanPrincipal(ctx context.Context, actorID string, spec HumanSpec, create scope.Set) (*Principal, error) {
+func (p *PG) CreatePerson(ctx context.Context, actorID string, spec PersonSpec, create scope.Set) (*User, error) {
 	if !create.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage: begin create principal: %w", err)
+		return nil, fmt.Errorf("storage: begin create user: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var pid string
-	if err := tx.QueryRow(ctx, `insert into principal (kind) values ('human') returning id`).Scan(&pid); err != nil {
-		return nil, fmt.Errorf("storage: create principal: %w", err)
+	if err := tx.QueryRow(ctx, `insert into users (kind) values ('person') returning id`).Scan(&pid); err != nil {
+		return nil, fmt.Errorf("storage: create user: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into human (principal_id, username, email, label) values ($1, $2, $3, $4)`,
+		`insert into person (user_id, username, email, label) values ($1, $2, $3, $4)`,
 		pid, spec.Username, nullize(spec.Email), labelOrNull(spec.Label)); err != nil {
-		return nil, mapPrincipalWriteErr(err)
+		return nil, mapUserWriteErr(err)
 	}
 	if spec.PasswordHash != "" {
 		if _, err := tx.Exec(ctx,
-			`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'password', $2, '')`,
+			`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'password', $2, '')`,
 			pid, []byte(spec.PasswordHash)); err != nil {
 			return nil, fmt.Errorf("storage: create password: %w", err)
 		}
 	}
-	summary := map[string]any{"username": spec.Username, "kind": "human"}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "principal", pid, nil, summary); err != nil {
+	summary := map[string]any{"username": spec.Username, "kind": "person"}
+	if err := writeAuditRes(ctx, tx, actorID, "create", "user", pid, nil, summary); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit create principal: %w", err)
+		return nil, fmt.Errorf("storage: commit create user: %w", err)
 	}
 
-	pr := Principal{ID: pid, Kind: "human"}
-	if err := p.loadPrincipal(ctx, &pr); err != nil {
+	pr := User{ID: pid, Kind: "person"}
+	if err := p.loadUser(ctx, &pr); err != nil {
 		return nil, err
 	}
 	return &pr, nil
 }
 
-// ErrPrincipalNotHuman is returned when an admin profile update targets a
-// non-human principal (only humans have username / email / label). The API
+// ErrUserNotPerson is returned when an admin profile update targets a
+// machine user (only people have username / email / label). The API
 // maps it to 422.
-var ErrPrincipalNotHuman = errors.New("storage: principal is not a human")
+var ErrUserNotPerson = errors.New("storage: user is not a human")
 
-// AdminHumanPatch carries the admin-editable fields of a human principal. A nil
+// AdminPersonPatch carries the admin-editable fields of a person. A nil
 // pointer leaves the field unchanged; a provided empty string clears the nullable
 // label or email. Username is not nullable: a provided empty string is a
 // request fault the API rejects before the gateway.
-type AdminHumanPatch struct {
+type AdminPersonPatch struct {
 	Label    *string
 	Email    *string
 	Username *string
 }
 
-// UpdatePrincipalHuman applies an admin profile update to a human principal by id,
+// UpdatePerson applies an admin profile update to a person by id,
 // in one audited transaction. Requires an all-scope grant. A non-human target is
-// ErrPrincipalNotHuman, an unknown id ErrPrincipalNotFound, a username clash
+// ErrUserNotPerson, an unknown id ErrUserNotFound, a username clash
 // ErrUsernameTaken. Renaming is safe: nothing keys on the username (credentials
-// and grants reference the principal id), so a rename follows the identity.
-func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, principalID string, patch AdminHumanPatch, action scope.Set) (*Principal, error) {
+// and grants reference the user id), so a rename follows the identity.
+func (p *PG) UpdatePerson(ctx context.Context, actorID, userID string, patch AdminPersonPatch, action scope.Set) (*User, error) {
 	if !action.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage: begin update principal: %w", err)
+		return nil, fmt.Errorf("storage: begin update user: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var kind string
-	err = tx.QueryRow(ctx, `select kind from principal where id = $1`, principalID).Scan(&kind)
+	err = tx.QueryRow(ctx, `select kind from users where id = $1`, userID).Scan(&kind)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return nil, ErrPrincipalNotFound
+		return nil, ErrUserNotFound
 	case errors.As(err, &pgErr) && pgErr.Code == "22P02":
-		return nil, ErrPrincipalNotFound
+		return nil, ErrUserNotFound
 	case err != nil:
-		return nil, fmt.Errorf("storage: update principal lookup: %w", err)
+		return nil, fmt.Errorf("storage: update users lookup: %w", err)
 	}
-	if kind != "human" {
-		return nil, ErrPrincipalNotHuman
+	if kind != "person" {
+		return nil, ErrUserNotPerson
 	}
 
 	// The audit "before" is the current human row.
-	var before HumanProfile
+	var before PersonProfile
 	if err := tx.QueryRow(ctx,
-		`select username, coalesce(email, ''), coalesce(label, '') from human where principal_id = $1`,
-		principalID).Scan(&before.Username, &before.Email, &before.Label); err != nil {
-		return nil, fmt.Errorf("storage: update principal before: %w", err)
+		`select username, coalesce(email, ''), coalesce(label, '') from person where user_id = $1`,
+		userID).Scan(&before.Username, &before.Email, &before.Label); err != nil {
+		return nil, fmt.Errorf("storage: update users before: %w", err)
 	}
 
 	setDisplay, display := patch.Label != nil, any(nil)
@@ -1161,13 +1229,13 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, principalID stri
 		username = *patch.Username
 	}
 	if _, err := tx.Exec(ctx, `
-		update human set
+		update person set
 			label = case when $2 then $3 else label end,
 			email        = case when $4 then $5 else email end,
 			username     = case when $6 then $7 else username end
-		where principal_id = $1`,
-		principalID, setDisplay, display, setEmail, email, setUsername, username); err != nil {
-		return nil, mapPrincipalWriteErr(err)
+		where user_id = $1`,
+		userID, setDisplay, display, setEmail, email, setUsername, username); err != nil {
+		return nil, mapUserWriteErr(err)
 	}
 
 	after := before
@@ -1180,15 +1248,15 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, principalID stri
 	if patch.Username != nil {
 		after.Username = *patch.Username
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "principal", principalID, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "user", userID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit update principal: %w", err)
+		return nil, fmt.Errorf("storage: commit update user: %w", err)
 	}
 
-	pr := Principal{ID: principalID, Kind: "human"}
-	if err := p.loadPrincipal(ctx, &pr); err != nil {
+	pr := User{ID: userID, Kind: "person"}
+	if err := p.loadUser(ctx, &pr); err != nil {
 		return nil, err
 	}
 	return &pr, nil
@@ -1204,7 +1272,7 @@ var (
 	ErrBadScope      = errors.New("storage: invalid scope for a grant")
 )
 
-// GrantSpec is a role x scope to assign to a principal. ScopeID is empty for the
+// GrantSpec is a role x scope to assign to a user. ScopeID is empty for the
 // "all" scope; for any other kind it names the scope root.
 type GrantSpec struct {
 	Role      string
@@ -1213,13 +1281,13 @@ type GrantSpec struct {
 	ScopeOp   string // subtree (default), subtree_excl_root, or self; empty means subtree
 }
 
-// CreateGrant assigns a role x scope to a principal, audited. Requires an
+// CreateGrant assigns a role x scope to a user, audited. Requires an
 // all-scope grant. A non-all scope with no scope id is ErrBadScope; an unknown
-// role ErrUnknownRole; an unknown principal ErrPrincipalNotFound; a duplicate
+// role ErrUnknownRole; an unknown user ErrUserNotFound; a duplicate
 // ErrGrantExists.
-func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec GrantSpec, action scope.Set) (*Grant, error) {
+func (p *PG) CreateGrant(ctx context.Context, actorID, userID string, spec GrantSpec, action scope.Set) (*Grant, error) {
 	if !action.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
 	if spec.ScopeOp == "" {
 		spec.ScopeOp = scope.OpSubtree // the default: root + descendants
@@ -1252,8 +1320,8 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 
 	var gid string
 	err = tx.QueryRow(ctx,
-		`insert into principal_grant (principal_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from `+refRows("role", spec.Role)+` role where `+registryRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
-		principalID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ScopeOp).Scan(&gid)
+		`insert into user_grant (user_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from `+refRows("role", spec.Role)+` role where `+catalogRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
+		userID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ScopeOp).Scan(&gid)
 	if err != nil {
 		return nil, mapGrantWriteErr(err)
 	}
@@ -1261,7 +1329,7 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 	if spec.ScopeID != "" {
 		g.ScopeID = &spec.ScopeID
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "principal_grant", gid, nil, g); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "user_grant", gid, nil, g); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1270,13 +1338,13 @@ func (p *PG) CreateGrant(ctx context.Context, actorID, principalID string, spec 
 	return &g, nil
 }
 
-// RevokeGrant deletes one grant from a principal, audited. Requires an all-scope
-// grant. An unknown grant (for that principal) is ErrGrantNotFound. Revoking the
+// RevokeGrant deletes one grant from a user, audited. Requires an all-scope
+// grant. An unknown grant (for that user) is ErrGrantNotFound. Revoking the
 // last owner grant is refused by the deferred owner-invariant trigger, surfaced at
 // COMMIT as ErrLastOwner.
-func (p *PG) RevokeGrant(ctx context.Context, actorID, principalID, grantID string, action scope.Set) error {
+func (p *PG) RevokeGrant(ctx context.Context, actorID, userID, grantID string, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -1286,8 +1354,8 @@ func (p *PG) RevokeGrant(ctx context.Context, actorID, principalID, grantID stri
 
 	var g Grant
 	err = tx.QueryRow(ctx,
-		`select id, (select name from role where id = principal_grant.role_id), scope_kind, scope_id, scope_op from principal_grant where id = $1 and principal_id = $2`,
-		grantID, principalID).Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp)
+		`select id, (select name from role where id = user_grant.role_id), scope_kind, scope_id, scope_op from user_grant where id = $1 and user_id = $2`,
+		grantID, userID).Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -1297,10 +1365,10 @@ func (p *PG) RevokeGrant(ctx context.Context, actorID, principalID, grantID stri
 	case err != nil:
 		return fmt.Errorf("storage: revoke grant lookup: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `delete from principal_grant where id = $1`, grantID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from user_grant where id = $1`, grantID); err != nil {
 		return fmt.Errorf("storage: revoke grant: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "principal_grant", grantID, g, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "user_grant", grantID, g, nil); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1313,12 +1381,12 @@ func (p *PG) RevokeGrant(ctx context.Context, actorID, principalID, grantID stri
 	return nil
 }
 
-// SetPrincipalActive enables or disables a principal (soft), audited. Requires an
+// SetUserActive enables or disables a user (soft), audited. Requires an
 // all-scope grant. Disabling the last active owner is refused (ErrLastOwner); a
-// disabled principal cannot authenticate, and enabling restores access.
-func (p *PG) SetPrincipalActive(ctx context.Context, actorID, principalID string, active bool, action scope.Set) error {
+// disabled user cannot authenticate, and enabling restores access.
+func (p *PG) SetUserActive(ctx context.Context, actorID, userID string, active bool, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -1328,21 +1396,21 @@ func (p *PG) SetPrincipalActive(ctx context.Context, actorID, principalID string
 
 	var kind string
 	var wasActive bool
-	err = tx.QueryRow(ctx, `select kind, active from principal where id = $1`, principalID).Scan(&kind, &wasActive)
+	err = tx.QueryRow(ctx, `select kind, active from users where id = $1`, userID).Scan(&kind, &wasActive)
 	var pgErr *pgconn.PgError
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		return ErrPrincipalNotFound
+		return ErrUserNotFound
 	case errors.As(err, &pgErr) && pgErr.Code == "22P02":
-		return ErrPrincipalNotFound
+		return ErrUserNotFound
 	case err != nil:
 		return fmt.Errorf("storage: set active lookup: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `update principal set active = $2 where id = $1`, principalID, active); err != nil {
+	if _, err := tx.Exec(ctx, `update users set active = $2 where id = $1`, userID, active); err != nil {
 		return fmt.Errorf("storage: set active: %w", err)
 	}
 	if !active {
-		// Refuse if disabling this principal leaves no active owner@all grant (the
+		// Refuse if disabling this user leaves no active owner@all grant (the
 		// owner invariant for the active flag, mirroring the grant trigger).
 		remains, err := activeOwnerRemains(ctx, tx)
 		if err != nil {
@@ -1356,7 +1424,7 @@ func (p *PG) SetPrincipalActive(ctx context.Context, actorID, principalID string
 	if !active {
 		verb = "disable"
 	}
-	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", principalID,
+	if err := writeAuditRes(ctx, tx, actorID, verb, "user", userID,
 		map[string]any{"active": wasActive}, map[string]any{"active": active}); err != nil {
 		return err
 	}
@@ -1369,37 +1437,37 @@ func (p *PG) SetPrincipalActive(ctx context.Context, actorID, principalID string
 // activeOwnerRemains reports whether at least one active owner@all grant still
 // exists within the transaction: the invariant that guards disabling or
 // archiving the last owner (mirroring the deferred grant trigger, but for the
-// principal's active flag rather than the grant's existence).
+// user's active flag rather than the grant's existence).
 func activeOwnerRemains(ctx context.Context, tx pgx.Tx) (bool, error) {
 	var ok bool
 	err := tx.QueryRow(ctx, `
 		select exists(
-			select 1 from principal_grant g
-			join principal pr on pr.id = g.principal_id
+			select 1 from user_grant g
+			join users pr on pr.id = g.user_id
 			where g.role_id = (select id from role where namespace = 'og' and name = 'owner') and g.scope_kind = 'all' and pr.active
 		)`).Scan(&ok)
 	return ok, err
 }
 
-// ArchivePrincipal soft-deletes a principal (the lifecycle, issue #143): it sets
+// ArchiveUser soft-deletes a user (the lifecycle, issue #143): it sets
 // archived_at and forces the account inactive, so it is hidden from the
-// directory and cannot authenticate, reversibly (RestorePrincipal restores it)
-// until PurgePrincipal hard-deletes it. Requires an all-scope grant; archiving
+// directory and cannot authenticate, reversibly (RestoreUser restores it)
+// until PurgeUser hard-deletes it. Requires an all-scope grant; archiving
 // the last active owner is refused (ErrLastOwner).
-func (p *PG) ArchivePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
+func (p *PG) ArchiveUser(ctx context.Context, actorID, id string, action scope.Set) error {
 	return p.setArchived(ctx, actorID, id, true, action)
 }
 
-// RestorePrincipal reverses an archive: it clears archived_at and
+// RestoreUser reverses an archive: it clears archived_at and
 // restores the active flag, so the account is live and can authenticate again.
 // Requires an all-scope grant.
-func (p *PG) RestorePrincipal(ctx context.Context, actorID, id string, action scope.Set) error {
+func (p *PG) RestoreUser(ctx context.Context, actorID, id string, action scope.Set) error {
 	return p.setArchived(ctx, actorID, id, false, action)
 }
 
-func (p *PG) setArchived(ctx context.Context, actorID, principalID string, archive bool, action scope.Set) error {
+func (p *PG) setArchived(ctx context.Context, actorID, userID string, archive bool, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -1408,19 +1476,19 @@ func (p *PG) setArchived(ctx context.Context, actorID, principalID string, archi
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select 1 from principal where id = $1`, principalID).Scan(new(int)); err != nil {
+	if err := tx.QueryRow(ctx, `select 1 from users where id = $1`, userID).Scan(new(int)); err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
-			return ErrPrincipalNotFound
+			return ErrUserNotFound
 		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
-			return ErrPrincipalNotFound
+			return ErrUserNotFound
 		default:
 			return fmt.Errorf("storage: archive lookup: %w", err)
 		}
 	}
 
 	if archive {
-		if _, err := tx.Exec(ctx, `update principal set archived_at = now(), active = false where id = $1`, principalID); err != nil {
+		if _, err := tx.Exec(ctx, `update users set archived_at = now(), active = false where id = $1`, userID); err != nil {
 			return fmt.Errorf("storage: archive: %w", err)
 		}
 		remains, err := activeOwnerRemains(ctx, tx)
@@ -1430,7 +1498,7 @@ func (p *PG) setArchived(ctx context.Context, actorID, principalID string, archi
 		if !remains {
 			return ErrLastOwner // rolls back the archive
 		}
-	} else if _, err := tx.Exec(ctx, `update principal set archived_at = null, active = true where id = $1`, principalID); err != nil {
+	} else if _, err := tx.Exec(ctx, `update users set archived_at = null, active = true where id = $1`, userID); err != nil {
 		return fmt.Errorf("storage: restore: %w", err)
 	}
 
@@ -1438,7 +1506,7 @@ func (p *PG) setArchived(ctx context.Context, actorID, principalID string, archi
 	if archive {
 		verb = "archive"
 	}
-	if err := writeAuditRes(ctx, tx, actorID, verb, "principal", principalID, nil, map[string]any{"archived": archive}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, verb, "user", userID, nil, map[string]any{"archived": archive}); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1447,16 +1515,16 @@ func (p *PG) setArchived(ctx context.Context, actorID, principalID string, archi
 	return nil
 }
 
-// PurgePrincipal hard-deletes a principal (issue #143), gated on prior archival
+// PurgeUser hard-deletes a user (issue #143), gated on prior archival
 // (ErrNotArchived otherwise, the hard gate between the soft and hard delete).
-// The delete cascades the principal's owned rows (profile, credentials, grants,
+// The delete cascades the user's owned rows (profile, credentials, grants,
 // group memberships, impersonation sessions); the audit trail survives, because the
 // audit foreign keys are ON DELETE SET NULL and every row keeps a denormalized
 // actor label. Requires an all-scope grant; refused (ErrLastOwner) if it would
 // remove the last owner grant.
-func (p *PG) PurgePrincipal(ctx context.Context, actorID, principalID string, action scope.Set) error {
+func (p *PG) PurgeUser(ctx context.Context, actorID, userID string, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -1466,12 +1534,12 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, principalID string, ac
 
 	var archivedAt *time.Time
 	var pgErr *pgconn.PgError
-	if err := tx.QueryRow(ctx, `select archived_at from principal where id = $1`, principalID).Scan(&archivedAt); err != nil {
+	if err := tx.QueryRow(ctx, `select archived_at from users where id = $1`, userID).Scan(&archivedAt); err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
-			return ErrPrincipalNotFound
+			return ErrUserNotFound
 		case errors.As(err, &pgErr) && pgErr.Code == "22P02":
-			return ErrPrincipalNotFound
+			return ErrUserNotFound
 		default:
 			return fmt.Errorf("storage: purge lookup: %w", err)
 		}
@@ -1480,21 +1548,21 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, principalID string, ac
 		return ErrNotArchived
 	}
 	// A notification target that notifies this person holds them (#1341).
-	if err := boundTarget(ctx, tx, "principal_id", principalID, "principal"); err != nil {
+	if err := boundTarget(ctx, tx, "user_id", userID, "user"); err != nil {
 		return err
 	}
 	// Audit the purge before the row is gone; the actor is the purger (unaffected by
 	// the delete), and the resource id is a plain text value, not a foreign key.
-	if err := writeAuditRes(ctx, tx, actorID, "purge", "principal", principalID, nil, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "purge", "user", userID, nil, nil); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from principal where id = $1`, principalID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from users where id = $1`, userID); err != nil {
 		if isForeignKeyViolation(err) {
-			if berr := boundTarget(ctx, p.pool, "principal_id", principalID, "principal"); berr != nil {
+			if berr := boundTarget(ctx, p.pool, "user_id", userID, "user"); berr != nil {
 				return berr
 			}
 		}
-		return fmt.Errorf("storage: purge principal: %w", err)
+		return fmt.Errorf("storage: purge user: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		// The deferred owner trigger raises OG001 at COMMIT if the cascade removed
@@ -1507,7 +1575,7 @@ func (p *PG) PurgePrincipal(ctx context.Context, actorID, principalID string, ac
 	return nil
 }
 
-// mapGrantWriteErr translates the principal_grant constraint violations into the
+// mapGrantWriteErr translates the user_grant constraint violations into the
 // grant sentinels the API reports.
 func mapGrantWriteErr(err error) error {
 	var pgErr *pgconn.PgError
@@ -1518,71 +1586,73 @@ func mapGrantWriteErr(err error) error {
 		case "23502": // not_null_violation (spec.Role resolved to no role)
 			return ErrUnknownRole
 		case "23503": // foreign_key_violation
-			if pgErr.ConstraintName == "principal_grant_role_id_fkey" {
+			if pgErr.ConstraintName == "user_grant_role_id_fkey" {
 				return ErrUnknownRole
 			}
-			return ErrPrincipalNotFound
+			return ErrUserNotFound
 		case "23514": // check_violation (scope_kind)
 			return ErrBadScope
-		case "22P02": // invalid uuid (principal id)
-			return ErrPrincipalNotFound
+		case "22P02": // invalid uuid (user id)
+			return ErrUserNotFound
 		}
 	}
 	return fmt.Errorf("storage: create grant: %w", err)
 }
 
-// mapPrincipalWriteErr translates the human.username unique violation into
+// mapUserWriteErr translates the human.username unique violation into
 // ErrUsernameTaken (the API's 409); other errors pass through wrapped.
-func mapPrincipalWriteErr(err error) error {
+func mapUserWriteErr(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return ErrUsernameTaken
 	}
-	return fmt.Errorf("storage: create human: %w", err)
+	return fmt.Errorf("storage: create person: %w", err)
 }
 
-// loadPrincipal fills a principal's kind profile (human or service) and its
-// grants, given its id and kind already set.
-func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
+// loadUser fills a user's kind profile and its grants, given its id and kind
+// already set. A machine user's profile is its machine row, or its outpost row
+// when the machine is an outpost's.
+func (p *PG) loadUser(ctx context.Context, pr *User) error {
 	switch pr.Kind {
-	case "human":
-		var h HumanProfile
+	case "person":
+		var h PersonProfile
 		if err := p.pool.QueryRow(ctx,
 			`select username, coalesce(email, ''), coalesce(label, ''), must_change_password,
 			        avatar is not null, avatar_updated_at
-			 from human where principal_id = $1`,
+			 from person where user_id = $1`,
 			pr.ID).Scan(&h.Username, &h.Email, &h.Label, &h.MustChangePassword,
 			&h.HasAvatar, &h.AvatarUpdatedAt); err != nil {
-			return fmt.Errorf("storage: load human: %w", err)
+			return fmt.Errorf("storage: load person: %w", err)
 		}
-		pr.Human = &h
-	case "service":
-		var s ServiceProfile
+		pr.Person = &h
+	case "machine":
+		var name string
+		var outpost bool
 		if err := p.pool.QueryRow(ctx,
-			`select name from service where principal_id = $1`, pr.ID).Scan(&s.Name); err != nil {
-			return fmt.Errorf("storage: load service: %w", err)
+			`select name, false from machine where user_id = $1
+			  union all
+			 select name, true from outpost where user_id = $1
+			  limit 1`, pr.ID).Scan(&name, &outpost); err != nil {
+			return fmt.Errorf("storage: load machine: %w", err)
 		}
-		pr.Service = &s
-	case "node":
-		var n NodeProfile
-		if err := p.pool.QueryRow(ctx,
-			`select name from node where principal_id = $1`, pr.ID).Scan(&n.Name); err != nil {
-			return fmt.Errorf("storage: load node: %w", err)
+		if outpost {
+			pr.Outpost = &OutpostProfile{Name: name}
+		} else {
+			pr.Machine = &MachineProfile{Name: name}
 		}
-		pr.Node = &n
 	}
 
-	// A principal's effective grants are its direct grants unioned with the grants
+	// A user's effective grants are its direct grants unioned with the grants
 	// of every group it belongs to. This is the one seam group access rides: the
 	// permission flatten (roleIDs) and the gateway's per-action scope resolution
 	// both read pr.Grants, so a member inherits a group's role and scope here and
 	// nowhere else. group_id tags an inherited grant so callers can tell it apart.
 	rows, err := p.pool.Query(ctx,
-		`select g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op, g.group_id, coalesce(pg.label, pg.name)
-		   from principal_grant g
-		   left join principal_group pg on pg.id = g.group_id
-		  where g.principal_id = $1
-		     or g.group_id in (select group_id from principal_group_member where principal_id = $1)
+		`select g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op, g.group_id, pg.name, pg.label
+		   from user_grant g
+		   left join user_group pg on pg.id = g.group_id
+		  where g.user_id = $1
+		     or g.group_id in (select group_id from user_group_member where user_id = $1)
 		  order by g.group_id nulls first, g.created_at`, pr.ID)
 	if err != nil {
 		return fmt.Errorf("storage: load grants: %w", err)
@@ -1590,7 +1660,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	defer rows.Close()
 	for rows.Next() {
 		var g Grant
-		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID, &g.GroupName); err != nil {
+		if err := rows.Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp, &g.GroupID, &g.GroupName, &g.GroupLabel); err != nil {
 			return fmt.Errorf("storage: scan grant: %w", err)
 		}
 		pr.Grants = append(pr.Grants, g)
@@ -1599,18 +1669,18 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 		return fmt.Errorf("storage: grants: %w", err)
 	}
 
-	// The principal's group memberships (id + label), so the admin directory can
-	// show where a principal's inherited access comes from.
+	// The user's group memberships (id + label), so the admin directory can
+	// show where a user's inherited access comes from.
 	grows, err := p.pool.Query(ctx,
 		`select g.id, coalesce(g.label, g.name)
-		   from principal_group_member m join principal_group g on g.id = m.group_id
-		  where m.principal_id = $1 order by g.name`, pr.ID)
+		   from user_group_member m join user_group g on g.id = m.group_id
+		  where m.user_id = $1 order by g.name`, pr.ID)
 	if err != nil {
 		return fmt.Errorf("storage: load groups: %w", err)
 	}
 	defer grows.Close()
 	for grows.Next() {
-		var ref PrincipalGroupRef
+		var ref UserGroupRef
 		if err := grows.Scan(&ref.ID, &ref.Name); err != nil {
 			return fmt.Errorf("storage: scan group ref: %w", err)
 		}
@@ -1660,30 +1730,30 @@ func RolesInEffect(roles []Role) []Role {
 	return out
 }
 
-// EnsureServicePrincipal finds the service principal of that name, or creates
+// EnsureMachine finds the service user of that name, or creates
 // it (audited), returning its id. The trusted lane's (#1370: the lab seed's
 // simulated pusher); no route creates a service this way.
-func (p *PG) EnsureServicePrincipal(ctx context.Context, actorID, name string) (string, error) {
+func (p *PG) EnsureMachine(ctx context.Context, actorID, name string) (string, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return "", fmt.Errorf("storage: begin ensure service: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var pid string
-	err = tx.QueryRow(ctx, `select principal_id from service where name = $1`, name).Scan(&pid)
+	err = tx.QueryRow(ctx, `select user_id from machine where name = $1`, name).Scan(&pid)
 	if err == nil {
 		return pid, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return "", fmt.Errorf("storage: find service %q: %w", name, err)
 	}
-	if err := tx.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		return "", fmt.Errorf("storage: create service principal: %w", err)
+	if err := tx.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		return "", fmt.Errorf("storage: create service user: %w", err)
 	}
-	if _, err := tx.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, name); err != nil {
+	if _, err := tx.Exec(ctx, `insert into machine (user_id, name) values ($1, $2)`, pid, name); err != nil {
 		return "", fmt.Errorf("storage: create service %q: %w", name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "principal", pid, nil, map[string]string{"kind": "service", "name": name}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "user", pid, nil, map[string]string{"kind": "machine", "name": name}); err != nil {
 		return "", err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1692,19 +1762,19 @@ func (p *PG) EnsureServicePrincipal(ctx context.Context, actorID, name string) (
 	return pid, nil
 }
 
-// SetServiceToken makes one token the service's only one, by its hash and
+// SetMachineToken makes one token the service's only one, by its hash and
 // non-secret prefix: every token it held before is revoked, audited, in the
 // same transaction. False when no service has the name. The trusted lane's
 // (#1370): the lab mints its simulated pusher a token on every run, as it
-// does its node's.
-func (p *PG) SetServiceToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error) {
+// does its outpost's.
+func (p *PG) SetMachineToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("storage: begin set service token: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var pid string
-	err = tx.QueryRow(ctx, `select principal_id from service where name = $1`, name).Scan(&pid)
+	err = tx.QueryRow(ctx, `select user_id from machine where name = $1`, name).Scan(&pid)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -1712,7 +1782,7 @@ func (p *PG) SetServiceToken(ctx context.Context, actorID, name string, hash []b
 		return false, fmt.Errorf("storage: find service %q: %w", name, err)
 	}
 	rows, err := tx.Query(ctx,
-		`delete from credential where principal_id = $1 and kind = 'bearer' and purpose = $2 `+revokedCols,
+		`delete from credential where user_id = $1 and kind = 'bearer' and purpose = $2 `+revokedCols,
 		pid, credentialPurposeToken)
 	var revoked []revokedCredential
 	if err == nil {
@@ -1726,12 +1796,12 @@ func (p *PG) SetServiceToken(ctx context.Context, actorID, name string, hash []b
 	}
 	var credID string
 	if err := tx.QueryRow(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix, purpose, description)
+		`insert into credential (user_id, kind, secret_hash, prefix, purpose, description)
 			values ($1, 'bearer', $2, $3, $4, 'minted by the lab for this run') returning id`,
 		pid, hash, prefix, credentialPurposeToken).Scan(&credID); err != nil {
 		return false, fmt.Errorf("storage: set service token: %w", err)
 	}
-	img := credentialAuditImage{PrincipalID: pid, Prefix: prefix, Purpose: credentialPurposeToken, Description: "minted by the lab for this run"}
+	img := credentialAuditImage{UserID: pid, Prefix: prefix, Purpose: credentialPurposeToken, Description: "minted by the lab for this run"}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "credential", credID, nil, img); err != nil {
 		return false, err
 	}

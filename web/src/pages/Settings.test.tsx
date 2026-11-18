@@ -14,12 +14,12 @@ import { settingKeys } from "../lib/settingsValidation";
 // stack; an Edit toggle swaps in the controls with inline save and restore. Data
 // is seeded into the query cache so no server is needed; `>` grants settings:update
 // so every write affordance is present.
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
-function mount(read: SettingsRead, principal: Me = me) {
+function mount(read: SettingsRead, user: Me = me) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...SETTINGS_KEY], read);
-  qc.setQueryData([...ME_KEY], principal);
+  qc.setQueryData([...ME_KEY], user);
   return render(() => (
     <QueryClientProvider client={qc}>
       <Router>
@@ -115,7 +115,7 @@ describe("Settings page", () => {
     // The card lists every declared key, sorted: default_landing, then theme.
     fireEvent.click((await screen.findAllByLabelText("Show resolution"))[1]);
     expect(await screen.findByText("Layer stack")).toBeTruthy();
-    expect(screen.getByText("Console override (platform)")).toBeTruthy();
+    expect(screen.getByText("Console binding (platform)")).toBeTruthy();
   });
 
   // A list-valued setting (the acronym dictionary, #684) is the first setting
@@ -196,8 +196,8 @@ describe("Settings page", () => {
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
   });
 
-  it("hides every write affordance for a principal without settings:update", async () => {
-    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "vi" }, permissions: ["ui:read"], grants: [] };
+  it("hides every write affordance for a user without settings:update", async () => {
+    const viewer: Me = { user: { id: "u-v", kind: "person" }, person: { username: "vi" }, permissions: ["ui:read"], grants: [] };
     mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "platform" }, locks: {} }, viewer);
     expect(await screen.findByText("theme")).toBeTruthy();
     expect(screen.queryByText("Restore all defaults")).toBeNull();
@@ -210,7 +210,7 @@ describe("Settings page", () => {
   // platform:update on top of settings:update. The console gates on both, and says
   // which half is missing rather than letting the operator earn a 403 on Save.
   it("hides the write affordances and names the missing capability without platform:update", async () => {
-    const settingsOnly: Me = { principal: { id: "u-s", kind: "human" }, human: { username: "sam" }, permissions: ["settings:read,update"], grants: [] };
+    const settingsOnly: Me = { user: { id: "u-s", kind: "person" }, person: { username: "sam" }, permissions: ["settings:read,update"], grants: [] };
     mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "platform" }, locks: {} }, settingsOnly);
     expect(await screen.findByText("theme")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();
@@ -219,7 +219,7 @@ describe("Settings page", () => {
   });
 
   it("keeps the write affordances when settings:update is paired with platform:update", async () => {
-    const both: Me = { principal: { id: "u-a", kind: "human" }, human: { username: "ada" }, permissions: ["settings:read,update", "platform:update"], grants: [] };
+    const both: Me = { user: { id: "u-a", kind: "person" }, person: { username: "ada" }, permissions: ["settings:read,update", "platform:update"], grants: [] };
     mount(defaultRead, both);
     expect(await screen.findByRole("button", { name: /edit/i })).toBeTruthy();
     expect(screen.getByText("Restore all defaults")).toBeTruthy();
@@ -227,7 +227,7 @@ describe("Settings page", () => {
     expect(screen.queryByText(/platform:update/)).toBeNull();
   });
   it("lists a declared key the cascade leaves unset, as not set, and saves it", async () => {
-    // A node log window (#1350) has no declared default, so the effective
+    // An outpost log window (#1350) has no declared default, so the effective
     // document leaves it out; the page still offers it from the generated
     // schema, or an admin could never set it from the console.
     const calls: { url: string; body: unknown }[] = [];
@@ -242,10 +242,10 @@ describe("Settings page", () => {
       locks: {},
     };
     mount(retentionRead);
-    expect(await screen.findByText("node_log_debug_days")).toBeTruthy();
+    expect(await screen.findByText("outpost_log_debug_days")).toBeTruthy();
     expect(screen.getAllByText("not set").length).toBeGreaterThan(0);
     enterEdit();
-    const input = screen.getByRole("textbox", { name: "node_log_debug_days" }) as HTMLInputElement;
+    const input = screen.getByRole("textbox", { name: "outpost_log_debug_days" }) as HTMLInputElement;
     expect(input.value).toBe("");
     // A blank optional row is not set, not invalid: no error until it is typed in.
     expect(screen.queryByText(/whole number/i)).toBeNull();
@@ -253,13 +253,13 @@ describe("Settings page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Save" }));
     await waitFor(() => expect(calls.length).toBe(1));
     expect(calls[0].url).toContain("/settings/retention");
-    expect(calls[0].body).toEqual({ node_log_debug_days: 1 });
+    expect(calls[0].body).toEqual({ outpost_log_debug_days: 1 });
   });
 
   it("teaches an unset key's resolution: no level holds it, and what it follows", async () => {
     mount({ values: { retention: { log_debug_days: 3 } }, sources: { "retention.log_debug_days": "default" }, locks: {} });
-    await screen.findByText("node_log_debug_days");
-    const row = settingKeys("retention", { log_debug_days: 3 }).indexOf("node_log_debug_days");
+    await screen.findByText("outpost_log_debug_days");
+    const row = settingKeys("retention", { log_debug_days: 3 }).indexOf("outpost_log_debug_days");
     fireEvent.click(screen.getAllByLabelText("Show resolution")[row]);
     expect(await screen.findByText(/Not set at any level/)).toBeTruthy();
     expect(screen.getByText(/unset follows log_debug_days/)).toBeTruthy();

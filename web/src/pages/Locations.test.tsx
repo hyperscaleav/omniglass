@@ -9,6 +9,7 @@ import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_propert
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { pickTree } from "../components/TreeSelect.testkit";
 
 // The Locations route in the create-as-route model (the list is Explore's outline, #861): New routes
 // to /locations/create (a draft accordion), Save hands off to /locations/<name> in
@@ -17,11 +18,11 @@ import { uuidFor } from "../lib/testids";
 // location type's declared-property contract against the location's own values.
 // Data is seeded into the query cache so no server is needed; `>` grants every
 // permission.
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 const hq: Location = { id: uuidFor("l-hq"), name: "hq", label: "HQ", location_type: "campus", effective_tags: {} };
 const lab: Location = { id: uuidFor("l-lab"), name: "lab", label: "Lab", location_type: "campus", effective_tags: {} };
 const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", label: "HQ B1", location_type: "building", parent: "hq", parent_id: hq.id, effective_tags: {} };
-// Registry rows carry a uuid id and the name in name (ADR-0062); the
+// Catalog rows carry a uuid id and the name in name (ADR-0062); the
 // server stores and compares the handle everywhere a location references its
 // type, so a fixture with the handle in the id slot would hide a uuid-vs-name
 // join bug (that is how #466 shipped).
@@ -43,11 +44,11 @@ const hqProperties: EffectiveProperty[] = [
   { property_type_name: "site.note", property_type_id: "site.note-id", label: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
-function mount(path: string, extraLocations: Location[] = [], meOverride: Me = me, registry: LocationType[] = types, base: Location[] = [hq, lab, hqB1]) {
+function mount(path: string, extraLocations: Location[] = [], meOverride: Me = me, catalog: LocationType[] = types, base: Location[] = [hq, lab, hqB1]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   const all = [...base, ...extraLocations];
   qc.setQueryData([...LOCATIONS_KEY], all);
-  qc.setQueryData([...LOCATION_TYPES_KEY], registry);
+  qc.setQueryData([...LOCATION_TYPES_KEY], catalog);
   qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...TAGS_KEY], []);
   // Keyed by uuid (#627 review finding 1): the detail page's panels now
@@ -125,7 +126,7 @@ describe("Locations create-as-route", () => {
     expect(screen.getByText(/Available once the location is created/)).toBeTruthy();
   });
 
-  it("leads back to Explore, where every place is listed now (#861)", async () => {
+  it("leads back to Explore, where every location is listed now (#861)", async () => {
     mount("/locations/create");
     fireEvent.click(await screen.findByRole("button", { name: /Explore/ }));
     expect(await screen.findByTestId("explore-page")).toBeTruthy();
@@ -250,8 +251,8 @@ describe("Locations create identity", () => {
     await waitFor(() => expect(key.value).toBe("room"));
     expect(screen.getByText(/Unique at the fleet root/)).toBeTruthy();
 
-    const parentSelect = screen.getByText("Root (no parent)").closest("select") as HTMLSelectElement;
-    fireEvent.change(parentSelect, { target: { value: hqB1.id } });
+    const parentSelect = screen.getByText("Root (no parent)").closest("button") as HTMLElement;
+    await pickTree(parentSelect, "HQ B1");
     await waitFor(() => expect(screen.getByText(/Unique under HQ \/ HQ B1/)).toBeTruthy());
     // Context only: the path never lands in the field the operator types into,
     // which still holds the name the route drafted.

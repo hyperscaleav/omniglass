@@ -5,6 +5,7 @@ import ReachabilityPanel from "./ReachabilityPanel";
 import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
 import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { uuidFor } from "../lib/testids";
+import { Router, Route } from "@solidjs/router";
 
 // The panel is read-only and derives verdict/strip/reason client-side from the
 // real API fields. Data is seeded into the query cache so no server is needed.
@@ -18,7 +19,7 @@ const seed: Reachability = {
       endpoint: "disp-1-tcp",
       transport: "tcp",
       address: "10.20.4.11:5000",
-      node: "node-a",
+      outpost: "outpost-a",
       verdict: { value: "up", ts: nowIso },
       layers: [
         { layer: "ping", check: "icmp-reachable", value: "up", detail: "12.0 ms", ts: nowIso },
@@ -30,7 +31,7 @@ const seed: Reachability = {
       endpoint: "disp-1-icmp",
       transport: "icmp",
       address: "10.20.4.11",
-      node: "node-a",
+      outpost: "outpost-a",
       verdict: { value: "down", ts: nowIso },
       layers: [
         { layer: "ping", check: "icmp-reachable", value: "up", ts: nowIso },
@@ -62,7 +63,7 @@ describe("ReachabilityPanel", () => {
     const { getByText, queryByText } = mount({
       component: "disp-2",
       endpoints: [{
-        endpoint: "disp-2-tcp", transport: "tcp", node: "node-a",
+        endpoint: "disp-2-tcp", transport: "tcp", outpost: "outpost-a",
         verdict: { value: "up", ts: old },
         last_seen: ago(5_000),
         layers: [{ layer: "port", check: "tcp-open", value: "open", ts: ago(5_000) }],
@@ -179,8 +180,8 @@ describe("ReachabilityPanel identity", () => {
   const twoOfAKind: Reachability = {
     component: "codec-1",
     endpoints: [
-      { endpoint: "ssh", label: "Control processor", transport: "ssh", address: "10.0.0.9:22", node: "node-a", verdict: null, layers: [], history: [] },
-      { endpoint: "ssh", transport: "ssh", address: "10.0.0.10:22", node: "node-a", verdict: null, layers: [], history: [] },
+      { endpoint: "ssh", label: "Control processor", transport: "ssh", address: "10.0.0.9:22", outpost: "outpost-a", verdict: null, layers: [], history: [] },
+      { endpoint: "ssh", transport: "ssh", address: "10.0.0.10:22", outpost: "outpost-a", verdict: null, layers: [], history: [] },
     ],
   };
 
@@ -225,7 +226,7 @@ describe("the layer-7 rungs", () => {
       const t0 = new Date().toISOString();
       const { getByText, queryByText } = mount({
         component: "disp-3",
-        endpoints: [{ endpoint: "disp-3-tcp", transport: "tcp", node: "node-a", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }],
+        endpoints: [{ endpoint: "disp-3-tcp", transport: "tcp", outpost: "outpost-a", verdict: { value: "up", ts: t0 }, last_seen: t0, layers: [], history: [] }],
       } as unknown as Reachability);
       expect(getByText("responding")).toBeTruthy();
       await vi.advanceTimersByTimeAsync(200_000);
@@ -239,10 +240,10 @@ describe("the layer-7 rungs", () => {
 
 // A held session on the Endpoints panel (#1059): the pill on the row, and for
 // a rejected or down session the reason beneath it without expanding, since a
-// session the node will not leave on its own is the row's whole story.
+// session the outpost will not leave on its own is the row's whole story.
 describe("a held session on the row", () => {
   const telnetRow = (state: "up" | "rejected", lastSeen = new Date().toISOString()) => ({
-    id: uuidFor("if-telnet"), endpoint: "telnet", transport: "telnet", node: "node-a", last_seen: lastSeen,
+    id: uuidFor("if-telnet"), endpoint: "telnet", transport: "telnet", outpost: "outpost-a", last_seen: lastSeen,
     verdict: { value: "up", ts: lastSeen }, responsive: { value: "up", ts: lastSeen },
     ...(state === "rejected"
       ? { authenticated: { value: "no", ts: lastSeen }, session: { state, ts: lastSeen, reason: "auth: auth rejected" }, rejection: { rung: "authenticated" as const, class: "auth", ts: "2026-10-23T11:58:00.000Z" } }
@@ -292,7 +293,7 @@ describe("a held session on the row", () => {
 // gate carries no notice and no empty slot.
 describe("a probe's gate on the row, no session held", () => {
   const snmpRow = (gated: boolean) => ({
-    id: uuidFor("if-snmp"), endpoint: "snmp", label: "Panel SNMP", transport: "snmp", address: "127.60.0.9:10161", node: "node-a", last_seen: nowIso,
+    id: uuidFor("if-snmp"), endpoint: "snmp", label: "Panel SNMP", transport: "snmp", address: "127.60.0.9:10161", outpost: "outpost-a", last_seen: nowIso,
     verdict: { value: gated ? "down" : "up", ts: nowIso }, responsive: { value: gated ? "down" : "up", ts: nowIso },
     ...(gated
       ? { authenticated: { value: "no", ts: nowIso }, rejection: { rung: "authenticated" as const, class: "auth", ts: nowIso, reason: "auth: the agent answered authorizationError for the community" } }
@@ -326,7 +327,7 @@ describe("a tls endpoint", () => {
     label: "Panel over TLS",
     transport: "tls",
     address: "127.60.0.9:51326",
-    node: "node-a",
+    outpost: "outpost-a",
     last_seen: nowIso,
     verdict: { value: "up", ts: nowIso },
     responsive: { value: "up", ts: nowIso },
@@ -404,7 +405,7 @@ describe("a udp endpoint", () => {
     label: "Panel over UDP",
     transport: "udp",
     address: "127.60.0.9:51327",
-    node: "node-a",
+    outpost: "outpost-a",
     last_seen: nowIso,
     verdict: { value: answered ? "up" : "down", ts: nowIso },
     responsive: { value: answered ? "up" : "down", ts: nowIso },
@@ -462,5 +463,48 @@ describe("a udp endpoint", () => {
     const { getByText, queryByTestId } = mount();
     fireEvent.click(getByText("disp-1-tcp"));
     expect(queryByTestId("request-rung")).toBeNull();
+  });
+});
+
+// An endpoint with a null verdict says why (#981): beneath the row, without
+// expanding it, with a link to where the operator fixes it. The panel sits in
+// the app's router, so these mount inside one for the link.
+describe("ReachabilityPanel pending reason", () => {
+  function mountPending(endpoint: Reachability["endpoints"][number]) {
+    const data: Reachability = { component: "panel-1", endpoints: [endpoint] };
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...REACHABILITY_KEY(data.component)], data);
+    return render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="*" component={() => <ReachabilityPanel name={data.component} />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+  }
+
+  it("explains an endpoint with no outpost and links to the Outposts page", () => {
+    const { getByTestId } = mountPending({
+      endpoint: "panel-1-icmp", transport: "icmp", verdict: null, pending: "no-outpost", layers: [], history: [],
+    });
+    const notice = getByTestId("endpoint-pending-notice");
+    expect(notice.textContent).toMatch(/no outpost is assigned/i);
+    expect(notice.querySelector("a")?.getAttribute("href")).toMatch(/\/outposts$/);
+  });
+
+  it("names the outpost an endpoint awaits its first probe from, linking its blade", () => {
+    const { getByTestId } = mountPending({
+      endpoint: "panel-1-icmp", transport: "icmp", outpost: "edge-1", verdict: null, pending: "awaiting-probe", layers: [], history: [],
+    });
+    const notice = getByTestId("endpoint-pending-notice");
+    expect(notice.textContent).toContain("edge-1");
+    expect(notice.querySelector("a")?.getAttribute("href")).toMatch(/\/outposts\?n=edge-1$/);
+  });
+
+  it("shows no reason once the endpoint has a verdict", () => {
+    const { queryByTestId } = mountPending({
+      endpoint: "panel-1-icmp", transport: "icmp", outpost: "edge-1", verdict: { value: "up", ts: nowIso }, layers: [], history: [],
+    });
+    expect(queryByTestId("endpoint-pending-notice")).toBeNull();
   });
 });

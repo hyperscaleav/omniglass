@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components, operations } from "../api/schema.gen";
+import type { ListComponentLogsParams, LogBody } from "../api/api.gen";
 
 // The logs data layer: a thin typed wrapper over the generated client for a
 // component's recent raw log lines (ADR-0066, the ingest lane, distinct from the
@@ -10,12 +10,12 @@ import type { components, operations } from "../api/schema.gen";
 // generated client and unit-testable against a mocked fetch. The row type is the
 // generated LogBody, never hand-typed.
 
-export type ComponentLog = components["schemas"]["LogBody"];
+export type ComponentLog = LogBody;
 export type ComponentLogs = { component: string; logs: ComponentLog[]; sources?: string[] };
 
 // LogSeverity is the canonical set the API's severity filter takes, from the
 // generated operation, so the console cannot offer a word the gateway refuses.
-export type LogSeverity = NonNullable<NonNullable<operations["list-component-logs"]["parameters"]["query"]>["severity"]>;
+export type LogSeverity = NonNullable<ListComponentLogsParams["severity"]>;
 
 // LOG_SEVERITIES is RFC 5424's eight levels, most severe first. The list is
 // written once here for the picker; the type below fails the typecheck if the
@@ -48,22 +48,22 @@ export async function getLogs(name: string, f: LogFilter = NO_FILTER): Promise<C
   return { component: data?.component ?? name, logs: (data?.logs ?? []) as ComponentLog[], sources: data?.sources ?? [] };
 }
 
-// A node's own self-logs (ADR-0066): the same raw log line, owner-bound to the
-// node instead of a component. The node's operational story (connected, worklist
+// An outpost's own self-logs (ADR-0066): the same raw log line, owner-bound to the
+// outpost instead of a component. The outpost's operational story (connected, worklist
 // pulled, a task skipped) shipped back over the telemetry lane.
-export type NodeLogs = { node: string; logs: ComponentLog[] };
+export type OutpostLogs = { outpost: string; logs: ComponentLog[] };
 
-export const NODE_LOGS_KEY = (name: string) => ["node-logs", name] as const;
+export const OUTPOST_LOGS_KEY = (name: string) => ["outpost-logs", name] as const;
 
-export async function getNodeLogs(name: string): Promise<NodeLogs> {
-  const { data, error } = await api.GET("/nodes/{name}/logs", { params: { path: { name } } });
+export async function getOutpostLogs(name: string): Promise<OutpostLogs> {
+  const { data, error } = await api.GET("/outposts/{name}/logs", { params: { path: { name } } });
   if (error) throw error;
-  return { node: data?.node ?? name, logs: (data?.logs ?? []) as ComponentLog[] };
+  return { outpost: data?.outpost ?? name, logs: (data?.logs ?? []) as ComponentLog[] };
 }
 
 // severityVariant maps a severity onto a daisyUI badge variant, so an error or a
 // warning line reads at a glance: the canonical RFC 5424 words a component's line
-// carries (#1145), and the short and slog spellings a node's self-logs use.
+// carries (#1145), and the short and slog spellings an outpost's self-logs use.
 // Anything else stays neutral.
 export function severityVariant(severity: string | undefined): string {
   switch ((severity ?? "").toLowerCase()) {

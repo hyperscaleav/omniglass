@@ -186,3 +186,21 @@ func TestRunSamplesStopsAfterTheSampleInFlight(t *testing.T) {
 		t.Fatalf("stopped during sample 2: %d lines, want 2 measured:\n%s", len(lines), out.String())
 	}
 }
+
+// A schedule runs each sample in order and stops on the first error each
+// returns, with that error, so a write that fails ends the run.
+func TestSampleScheduleStopsOnAnError(t *testing.T) {
+	var seen []int
+	boom := errors.New("disk full")
+	s := SampleSchedule{Every: time.Hour, Samples: 5, wait: func(ctx context.Context, d time.Duration) error { return ctx.Err() }}
+	err := s.Run(context.Background(), func(ctx context.Context, seq int) error {
+		seen = append(seen, seq)
+		if seq == 2 {
+			return boom
+		}
+		return nil
+	})
+	if !errors.Is(err, boom) || !reflect.DeepEqual(seen, []int{1, 2}) {
+		t.Errorf("run = %v after samples %v, want the write error after 1 and 2", err, seen)
+	}
+}

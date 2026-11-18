@@ -2,7 +2,7 @@ import { For, Show, createSignal, onMount, type JSX } from "solid-js";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import Button from "../components/Button";
 import KVStacked from "../components/KVStacked";
-import { type AuditEvent, AUDIT_PAGE, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel } from "../lib/audit";
+import { type AuditEvent, AUDIT_PAGE, AUDIT_LOADING_ROWS, auditFilterKeys, listAuditLog, actorLabel, accountableLabel, resourceLabel, channelOf } from "../lib/audit";
 import { diffFields, type DiffRow } from "../lib/auditdiff";
 
 // Audit: the read-only audit trail, now a config over the shared FlatList (the flat
@@ -22,11 +22,31 @@ const VERB_FAMILY: Record<string, string> = {
   create: "badge-success", enroll: "badge-success", issue: "badge-success", restore: "badge-success", enable: "badge-success",
   update: "badge-warning", set: "badge-warning", unset: "badge-warning", archive: "badge-warning", disable: "badge-warning",
   change_password: "badge-warning", reset_password: "badge-warning", clear_avatar: "badge-warning",
-  login_denied: "badge-warning", reveal: "badge-warning", copy: "badge-warning",
+  login_denied: "badge-warning", reveal: "badge-warning", copy: "badge-warning", agent_refused: "badge-warning",
   login: "badge-info", logout: "badge-info",
   impersonate: "badge-primary",
 };
 const verbClass = (verb: string): string => `badge-soft ${VERB_FAMILY[verb] ?? "badge-ghost"}`;
+
+// A channel pill names how a row arrived, in the same soft treatment as the
+// verbs. A direct write (no channel) takes no pill: the column marks only the
+// rows that came through something other than a plain API call.
+const CHANNEL_FAMILY: Record<string, string> = { mcp: "badge-secondary", omnibot: "badge-accent" };
+const channelClass = (channel: string): string => `badge-soft ${CHANNEL_FAMILY[channel] ?? "badge-ghost"}`;
+
+// What a channel proves and what it does not, taught where it is read.
+const CHANNEL_HINT =
+  "How the call reached the server: mcp is a tool call on the MCP server, direct a plain API call. " +
+  "The server stamps it, so no caller can claim one. It says how the call arrived, not what held the token: " +
+  "an agent token names its agent, but a script holding a person's token still reads as direct.";
+
+// The agent tag rides beside the person it acted for, the way "as bob" rides
+// beside an impersonator: the person is accountable, the agent is who acted.
+const AgentTag = (p: { agent?: string }) => (
+  <Show when={p.agent}>
+    <span class="badge badge-soft badge-secondary badge-xs whitespace-nowrap" title="The agent that acted on this person's behalf, from its agent token">agent {p.agent}</span>
+  </Show>
+);
 
 const when = (ts: string): string => {
   const d = new Date(ts);
@@ -39,15 +59,28 @@ const columns: FlatColumn<AuditEvent>[] = [
   { key: "when", label: "When", width: "190px", cell: (e) => <span class="whitespace-nowrap tnum text-xs text-base-content/60">{when(e.ts)}</span> },
   {
     key: "who", label: "Who", cell: (e) => (
-      <span class="text-sm">
+      <span class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
         <span class="font-data">{accountableLabel(e)}</span>
         <Show when={e.real_actor}>
-          <span class="ml-1.5 badge badge-soft badge-warning badge-xs" title="Acted while impersonating this principal">as {actorLabel(e)}</span>
+          <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap" title="Acted while impersonating this user">as {actorLabel(e)}</span>
         </Show>
+        <AgentTag agent={e.agent} />
       </span>
     ),
   },
-  { key: "action", label: "Action", width: "150px", cell: (e) => <span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span> },
+  {
+    key: "channel", label: "Channel", width: "170px", cell: (e) => (
+      <Show when={e.channel}>
+        <span class="flex flex-col items-start gap-0.5">
+          <span data-testid="audit-channel" class={`badge badge-sm ${channelClass(e.channel!)} font-data`}>{e.channel}</span>
+          <Show when={e.client}>
+            <span class="font-data text-[11px] text-base-content/50 truncate self-stretch" title={e.client}>{e.client}</span>
+          </Show>
+        </span>
+      </Show>
+    ),
+  },
+  { key: "action", label: "Action", width: "120px", cell: (e) => <span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span> },
   { key: "resource", label: "Resource", width: "170px", cell: (e) => <span class="font-data text-xs text-base-content/70">{e.resource}</span> },
   { key: "id", label: "Id", cell: (e) => <span class="font-data text-[11px] text-base-content/40" title={e.resource_id && e.resource_id !== resourceLabel(e) ? e.resource_id : undefined}>{resourceLabel(e)}</span> },
 ];
@@ -68,7 +101,7 @@ const VALUE_CELL = "font-data text-xs align-top whitespace-pre-wrap wrap-break-w
 // AuditDetail is the drawer body: who did what and when, then the field-level
 // before/after diff over the row images the write recorded. An auth event (no
 // images) says so instead of rendering an empty table; a create renders only
-// its After column and a delete only its Before, so the one-sided registry
+// its After column and a delete only its Before, so the one-sided catalog
 // writes (#228) still read honestly.
 function AuditDetail(p: { e: AuditEvent }): JSX.Element {
   const e = p.e;
@@ -85,16 +118,37 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
         <KVStacked
           label="Who"
           value={
-            <span class="text-sm">
+            <span class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
               <span class="font-data">{accountableLabel(e)}</span>
               <Show when={e.real_actor}>
-                <span class="ml-1.5 badge badge-soft badge-warning badge-xs">as {actorLabel(e)}</span>
+                <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap">as {actorLabel(e)}</span>
               </Show>
+              <AgentTag agent={e.agent} />
             </span>
           }
         />
         <KVStacked label="Action" value={<span class={`badge badge-sm ${verbClass(e.verb)} font-data`}>{e.verb}</span>} />
         <KVStacked label="Resource" value={<span class="font-data text-xs" title={e.resource_id || undefined}>{e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>} />
+        <KVStacked
+          label="Channel"
+          hint={CHANNEL_HINT}
+          value={
+            <Show when={e.channel} fallback={<span class="font-data text-xs text-base-content/60">{channelOf(e)}</span>}>
+              <span class={`badge badge-sm ${channelClass(e.channel!)} font-data`}>{e.channel}</span>
+            </Show>
+          }
+        />
+        <Show when={e.client}>
+          <KVStacked
+            label="Client"
+            value={
+              <span class="flex flex-col">
+                <span class="font-data text-xs wrap-break-word">{e.client}</span>
+                <span class="text-xs text-base-content/50">as the agent reported it</span>
+              </span>
+            }
+          />
+        </Show>
       </div>
       <div class="flex flex-col gap-1.5">
         <span class="eyebrow">Change</span>
@@ -155,7 +209,8 @@ function AuditDetail(p: { e: AuditEvent }): JSX.Element {
 export default function Audit() {
   const [rows, setRows] = createSignal<AuditEvent[]>([]);
   const [error, setError] = createSignal<unknown>(null);
-  const [loading, setLoading] = createSignal(false);
+  // Starts true: the first read is issued on mount, so the first paint is already the loading state.
+  const [loading, setLoading] = createSignal(true);
   const [loadingOlder, setLoadingOlder] = createSignal(false);
   const [done, setDone] = createSignal(false);
 
@@ -181,38 +236,48 @@ export default function Audit() {
     return r.length ? r[r.length - 1].ts : undefined;
   };
 
+  // The document scrolls, so the list fills a box of definite height: the top
+  // bar, the main padding and room for the lab banner come off the viewport,
+  // and the rows scroll inside it (#1461).
   return (
-    <FlatList<AuditEvent>
-      config={{
-        entity: { name: "audit", plural: "events" },
-        rows,
-        loading,
-        error,
-        filterKeys: auditFilterKeys,
-        filterPlaceholder: "filter by who, action, resource, id",
-        columns,
-        empty: "No events yet.",
-        detail: (e) => ({
-          title: <span class="font-data text-sm" title={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>,
-          body: <AuditDetail e={e} />,
-          wide: true,
-        }),
-        footer: ({ shown, total, filtering }) => (
-          <>
-            <span>
-              {shown}
-              <Show when={filtering}> of {total} loaded</Show> shown
-            </span>
-            <Button
-              class="text-xs"
-              disabled={done() || loadingOlder() || loading()}
-              onClick={() => load(oldest())}
-            >
-              {loadingOlder() ? "Loading…" : done() ? "No older events" : "Load older"}
-            </Button>
-          </>
-        ),
-      }}
-    />
+    <div class="h-[calc(100dvh-9rem)] min-h-96">
+      <FlatList<AuditEvent>
+        config={{
+          entity: { name: "audit", plural: "events" },
+          rows,
+          loading,
+          loadingRows: AUDIT_LOADING_ROWS,
+          fixedLayout: true,
+          // A page of 100 is taller than the skeleton: scrolling the rows inside
+          // the card keeps the footer where the first paint put it (#1461).
+          fill: true,
+          error,
+          filterKeys: auditFilterKeys,
+          filterPlaceholder: "filter by who, action, resource, id, channel, client",
+          columns,
+          empty: "No events yet.",
+          detail: (e) => ({
+            title: <span class="font-data text-sm" title={e.resource_id || undefined}>{e.verb} {e.resource}{resourceLabel(e) ? ` ${resourceLabel(e)}` : ""}</span>,
+            body: <AuditDetail e={e} />,
+            wide: true,
+          }),
+          footer: ({ shown, total, filtering }) => (
+            <>
+              <span>
+                {shown}
+                <Show when={filtering}> of {total} loaded</Show> shown
+              </span>
+              <Button
+                class="min-w-28 text-xs"
+                disabled={done() || loadingOlder() || loading()}
+                onClick={() => load(oldest())}
+              >
+                {loadingOlder() ? "Loading…" : done() ? "No older events" : "Load older"}
+              </Button>
+            </>
+          ),
+        }}
+      />
+    </div>
   );
 }

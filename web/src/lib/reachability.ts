@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { EndpointWebhookBody, ReachRejectionBody, ReachSessionBody, ReachTLSBody } from "../api/api.gen";
 import { share, spans } from "./timeline";
 
 // The reachability data layer: a thin typed wrapper over the generated client
@@ -35,7 +35,10 @@ export type ReachEndpoint = {
   label?: string;
   transport: string;
   address?: string;
-  node?: string;
+  outpost?: string;
+  // Why verdict is null (#981), present only while it is: no outpost is assigned
+  // to probe the endpoint, or its outpost has not landed a first probe.
+  pending?: "no-outpost" | "awaiting-probe";
   // When ingest last landed a batch this endpoint's task delivered, by the
   // server's clock, whatever the batch carried (#933). The one freshness
   // every endpoint has, a driver endpoint's included.
@@ -47,16 +50,16 @@ export type ReachEndpoint = {
   authenticated?: ReachVerdict | null;
   // The held session, when the endpoint has held one (#1059): its latest
   // state, when it changed, and why (lib/session reads it).
-  session?: components["schemas"]["ReachSessionBody"];
+  session?: ReachSessionBody;
   // The gate a terminal refusal holds, whether or not a session is held: its
   // rung and class (ADR-0158), for a changed key the pinned and offered keys
   // (#1035), and why it holds and since when (#1110).
-  rejection?: components["schemas"]["ReachRejectionBody"];
+  rejection?: ReachRejectionBody;
   // A tls endpoint's handshake and certificate (#1035): lib/tls reads it.
-  tls?: components["schemas"]["ReachTLSBody"];
+  tls?: ReachTLSBody;
   // A webhook endpoint's block (#1024): a push endpoint, no ladder, read by
   // last_seen (last heard), its scheme and refusals.
-  webhook?: components["schemas"]["EndpointWebhookBody"];
+  webhook?: EndpointWebhookBody;
   layers: ReachLayer[];
   history: ReachHistory[];
 };
@@ -82,11 +85,36 @@ export function verdictWord(v: ReachVerdict | null, now: number = Date.now()): V
   return v.value === "up" ? "responding" : "down";
 }
 
+// A pending notice is the reason an endpoint has no verdict yet and where the
+// operator acts on it: the Outposts page to make an outpost and assign it, or the
+// assigned outpost's blade to see whether it is running (#981).
+export type PendingNotice = { text: string; href: string; linkLabel: string };
+
+export function pendingNotice(iface: ReachEndpoint): PendingNotice | null {
+  if (iface.verdict) return null;
+  switch (iface.pending) {
+    case "no-outpost":
+      return {
+        text: "No outpost is assigned, so nothing probes this endpoint. Create and enroll an outpost, run it, then assign this endpoint to it.",
+        href: "/outposts",
+        linkLabel: "Open Outposts",
+      };
+    case "awaiting-probe":
+      return {
+        text: `Waiting for outpost ${iface.outpost}'s first probe of this endpoint.`,
+        href: `/outposts?n=${encodeURIComponent(iface.outpost ?? "")}`,
+        linkLabel: "Open outpost",
+      };
+    default:
+      return null;
+  }
+}
+
 // lastSeenAt is when the endpoint last delivered anything: the server's
 // last_seen stamp. Nothing a sample carries will do. The verdict is stored
 // only when it changes, so its ts is the last TRANSITION (#931); a driver's
 // instanced series is not stamped with the endpoint, an unchanged property
-// writes no row, and a node's clock can date a sample ahead (#933). Null
+// writes no row, and an outpost's clock can date a sample ahead (#933). Null
 // before any stamp.
 export function lastSeenAt(iface: ReachEndpoint): string | null {
   return iface.last_seen ?? null;
@@ -131,7 +159,7 @@ export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
   }
   if (!port && iface.responsive && requestHeld(iface)) {
     // A gated request rung (#1037): the component answered with a refusal
-    // retrying cannot fix, and the node sends nothing more under it.
+    // retrying cannot fix, and the outpost sends nothing more under it.
     return `The component refused the endpoint's request in a way retrying cannot fix (${iface.rejection?.class ?? "refused"}): nothing is sent to it until the endpoint changes or someone retries it.`;
   }
   if (ping && layerUp(ping) && !port && iface.responsive?.value === "down" && iface.transport === "snmp") {

@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/hyperscaleav/omniglass/internal/vocab"
 )
 
 // DocsRoot is the content root the lints scan, relative to this package.
@@ -33,22 +35,31 @@ type BannedTerm struct {
 	Replacement string
 	// Origin is the decision that retired the term.
 	Origin string
+	// Allow, when set, matches the phrasings that keep the word: a Pattern
+	// match lying wholly inside an Allow match is ordinary English, not the
+	// retired term. For a word whose retired sense shares its spelling with
+	// live ones (place the noun, against place the verb and "in place").
+	Allow *regexp.Regexp
 }
 
-// Banned is the denylist. Order is presentation only.
-var Banned = []BannedTerm{
-	{
-		// The entity an API is reached through renamed to endpoint (#811,
-		// #603's naming ruling): interface_type retired outright with its
-		// table (transports are the internal/transport code registry), and
-		// the entity noun's own spellings retire with it. The noun is banned
-		// in its entity phrasings rather than as a bare word, because
-		// "network interface" legitimately survives as the teaching contrast
-		// on the collection page and "user interface" is ordinary English.
-		Pattern:     regexp.MustCompile("\\binterface_type\\b|\\binterface-reachable\\b|\\ban interface\\b|\\bthe interface\\b|\\binterfaces\\b"),
-		Replacement: "endpoint (the entity), transport (the wire registry), endpoint-reachable (the datapoint)",
-		Origin:      "ADR-0134",
-	},
+// Banned is the denylist: the identifiers retired here, then every retired
+// word in the product vocabulary (internal/vocab/terms.yaml, #2029), which is
+// where a retired operator noun goes. Order is presentation only.
+var Banned = append(retiredIdentifiers, vocabularyRetired()...)
+
+// vocabularyRetired is the product vocabulary's retired words in the
+// denylist's shape.
+func vocabularyRetired() []BannedTerm {
+	var out []BannedTerm
+	for _, b := range vocab.MustLoad().Banned() {
+		out = append(out, BannedTerm{Pattern: b.Pattern, Replacement: b.Replacement, Origin: b.Origin, Allow: b.Allow})
+	}
+	return out
+}
+
+// retiredIdentifiers are the retired identifiers, routes, flags and phrasings
+// that are not a product noun.
+var retiredIdentifiers = []BannedTerm{
 	{
 		// The create form's precondition field, retired by ADR-0104's #702-review
 		// amendment: it binds the drafted NAME, because a name carries the stem
@@ -63,11 +74,11 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0104",
 	},
 	{
-		// The registry blade's destructive slot, renamed by ADR-0115: it named
+		// The catalog blade's destructive slot, renamed by ADR-0115: it named
 		// the thing being restored FROM rather than the thing being restored TO,
 		// and the console's other restore (Settings, the pen) already said
 		// default. Not a symbol, so nothing else catches it, and it is live
-		// operator copy on two registries. The decision log and the build log
+		// operator copy on two catalogs. The decision log and the build log
 		// keep it, as vocabularyAllowed historical records.
 		Pattern:     regexp.MustCompile(`(?i)\bRestore shipped\b`),
 		Replacement: "Restore default, the one restore vocabulary the console uses",
@@ -121,40 +132,16 @@ var Banned = []BannedTerm{
 		// on eighteen other tables. Spelled with the table, so it cannot catch the
 		// ordinary noun.
 		Pattern:     regexp.MustCompile(`\bservice\.label\b|\bsvcBody\.Label\b`),
-		Replacement: "service.name, a service account's identifier",
+		Replacement: "machine.name, a machine user's identifier",
 		Origin:      "ADR-0111",
 	},
 	{
-		// The other end of that sweep, and the reason ADR-0111 ran first: the
-		// friendly string an operator reads is `label` on all twenty-three tables
-		// that carry one, and the pen beside it is `label_generated` (ADR-0118).
-		// Three spellings are banned together because a page can reach for any of
-		// them: the column, the CLI flag, and the two-word noun the docs used for
-		// the concept. The noun matters most, since it is the one nothing else
-		// catches: a symbol lint sees `display_name` in a code fence, and no
-		// compiler sees "the display name" in a sentence.
-		Pattern:     regexp.MustCompile(`\bdisplay_names?\b|\bdisplay_name_generated\b|--display-name\b|(?i)\bdisplay names?\b`),
-		Replacement: "label (the friendly string), or label_generated (the pen that says the platform rendered it)",
-		Origin:      "ADR-0118",
-	},
-	{
-		// The totality-of-managed-things noun, renamed by ADR-0123: the word an
-		// operator's whole managed environment goes by is FLEET (a fleet of
-		// systems, stationed across locations), and estate is retired with it.
-		// The word boundary keeps the restate family (restate, restated,
-		// restatement) out of reach, which is the only English family that
-		// carries the old noun as a substring.
-		Pattern:     regexp.MustCompile(`(?i)\bestates?\b|\bestate-wide\b`),
-		Replacement: "fleet (the systems an operator runs, stationed across locations), or fleet-wide",
-		Origin:      "ADR-0123",
-	},
-	{
-		// The stored function that resolved a principal to its identifier, dropped
+		// The stored function that resolved a user to its identifier, dropped
 		// by ADR-0110. It is a retired schema OBJECT, so a page naming it is telling
 		// a contributor to call something that is not there; and it is a retired
 		// WORD, since both its branches returned an identifier and never a label.
 		Pattern:     regexp.MustCompile(`\bprincipal_label\b`),
-		Replacement: "the gateway's identifier resolution (internal/storage/principal_ident.go)",
+		Replacement: "the gateway's identifier resolution (internal/storage/user_ident.go)",
 		Origin:      "ADR-0110",
 	},
 	{
@@ -164,7 +151,7 @@ var Banned = []BannedTerm{
 	},
 	{
 		Pattern:     regexp.MustCompile(`--mode[ =]node`),
-		Replacement: "omniglass node run",
+		Replacement: "omniglass outpost run",
 		Origin:      "ADR-0058",
 	},
 	{
@@ -173,9 +160,17 @@ var Banned = []BannedTerm{
 		Origin:      "the list-surface split (build-log.md)",
 	},
 	{
+		// The simulator catalog's room archetypes and fleet manifests retired
+		// (#914): a simulated system is built to a standard, and a fleet is
+		// the dev seed's or a scale lab scenario.
+		Pattern:     regexp.MustCompile(`(?i)\b(system profile|fleet manifest|fleet compiler)s?\b`),
+		Replacement: "a standard (a simulated system) or a scale lab scenario (a fleet)",
+		Origin:      "ADR-0914",
+	},
+	{
 		Pattern:     regexp.MustCompile(`\bUpsertOfficial\b`),
-		Replacement: "the per-registry upserts (UpsertPropertyType and siblings)",
-		Origin:      "internal/storage/registries.go",
+		Replacement: "the per-catalog upserts (UpsertPropertyType and siblings)",
+		Origin:      "internal/storage/catalogs.go",
 	},
 
 	// The fleet-model wave. Each of these was retired by an ADR that shipped
@@ -184,7 +179,7 @@ var Banned = []BannedTerm{
 	//
 	// component_type is NOT here. ADR-0047 retired it (a flat classifier beside
 	// component); ADR-0085 partially reverses that, returning it as a nested
-	// registry above product, so the identifier is current vocabulary again,
+	// catalog above product, so the identifier is current vocabulary again,
 	// deliberately in a different shape. A denylist entry cannot express
 	// "banned, except in its own reintroduced meaning", so the fix is removal,
 	// not an exemption; the term's dead sense (component.component_type, the
@@ -194,10 +189,10 @@ var Banned = []BannedTerm{
 	// system_type is NOT here either, and left for exactly the same reason
 	// (ADR-0096). ADR-0048 retired it as the COLUMN name for what is now
 	// system.standard_id; ADR-0096 reuses the identifier for a new TABLE, the
-	// coarse space taxonomy, with a system.system_type_id pointing at it. The
+	// system type taxonomy, with a system.system_type_id pointing at it. The
 	// two are different objects and the live one is current vocabulary, so the
 	// entry had to go rather than gain an exemption every sentence about the
-	// registry would need. The dead sense survives in the historical ADR-0048
+	// catalog would need. The dead sense survives in the historical ADR-0048
 	// prose, under the same retirement-marker exemption.
 	{
 		Pattern:     regexp.MustCompile(`\bfield_definition\b`),
@@ -239,7 +234,7 @@ var Banned = []BannedTerm{
 	},
 	{
 		Pattern:     regexp.MustCompile(`\bsystem_template_(version|member)\b`),
-		Replacement: "standard (the composition shape) and system_role (the slots)",
+		Replacement: "standard (the composition shape) and system_slot (the slots)",
 		Origin:      "ADR-0071",
 	},
 
@@ -323,7 +318,7 @@ var Banned = []BannedTerm{
 		// form is dead, and the verb suffix keeps "Issue Type" and its cousins
 		// out of reach.
 		Pattern:     regexp.MustCompile("`?\\btype:(?:read|create|update|delete)\\b`?"),
-		Replacement: "location_type:<action>, the registry's own resource",
+		Replacement: "location_type:<action>, the catalog's own resource",
 		Origin:      "ADR-0082",
 	},
 	{
@@ -339,23 +334,23 @@ var Banned = []BannedTerm{
 
 	// The capability retirement (#626). "Capability" alone is NOT bannable: the
 	// word is ordinary English throughout the corpus in senses that have nothing
-	// to do with the registry (a governed AI capability, a capability-checked
+	// to do with the catalog (a governed AI capability, a capability-checked
 	// route meaning permission-gated, the capability-wrapping test-tier carve-out
 	// for raw sockets and ICMP, a template's capability manifest, a page's
 	// Design/Partial/Built status per documented capability). Only the retired
-	// registry's own identifiers are named: the five dropped tables, the Go
-	// symbols the health rollup and role assignment used to call, the routes,
+	// catalog's own identifiers are named: the five dropped tables, the Go
+	// symbols the health rollup and slot assignment used to call, the routes,
 	// and the permission stamp. capability-gated staffing retires with them: an
 	// occupant now satisfies its slot when its component's own verdict is
 	// healthy (internal/health), nothing about what it "provides".
 	{
-		Pattern: regexp.MustCompile(`\b(?:component_capability|product_capability|alarm_capability|system_role_capability)\b`),
-		Replacement: "the typed-slot guard (system_role_type, system_role_product) for assignment; " +
+		Pattern: regexp.MustCompile(`\b(?:component_capability|product_capability|alarm_capability|system_slot_capability)\b`),
+		Replacement: "the typed-slot guard (system_slot_type, system_slot_product) for assignment; " +
 			"a component's own verdict, from its active alarms, for health",
 		Origin: "#626",
 	},
 	{
-		// The registry table itself and its CRUD surface, scoped to the
+		// The catalog table itself and its CRUD surface, scoped to the
 		// code-formatted token so the sentence "a governed capability" stays
 		// legal: only a backticked `capability`/`capabilities`, the registry
 		// phrase, the retired Go symbols, and the permission stamp are named.
@@ -364,7 +359,7 @@ var Banned = []BannedTerm{
 			"\\b(?:EffectiveCapabilities|ComponentCapabilities|CreateCapability|UpdateCapability|DeleteCapability|" +
 			"ListCapabilities|GetCapability|UpsertCapability|CapabilityPatch|SetComponentCapability|ClearComponentCapability)\\b"),
 		Replacement: "the component_type taxonomy (product classification) and the typed-slot guard " +
-			"(system_role_type, system_role_product) for assignment; nothing replaces the registry itself",
+			"(system_slot_type, system_slot_product) for assignment; nothing replaces the catalog itself",
 		Origin: "#626",
 	},
 	{
@@ -383,6 +378,35 @@ var Banned = []BannedTerm{
 		Pattern:     regexp.MustCompile(`/reconciliation\b|\breconciliation list\b`),
 		Replacement: "the properties read (GET /components/{name}/properties, omniglass component property list), whose rows carry reconciliation",
 		Origin:      "ADR-1297",
+	}, {
+		// Where things sit is a location (ADR-2030): the console and the docs
+		// had drifted into place as a second noun for the same entity. Banned
+		// as the bare word, the wire names it carried (place_template, the
+		// rule fact, ?edit=place) with it, because the noun has too many
+		// phrasings to list. Allow carries the English that keeps the word:
+		// the idioms (in place, in its place, in-place, the one place, earns
+		// its place, decimal places), the verb before its object or after a
+		// modal, and "no binding places", where the identity verb is the
+		// collection term. Placed and placement never match: the boundary sits after place.
+		Pattern:     regexp.MustCompile(`(?i)\bplace_templates?\b|\bplaces?\b`),
+		Replacement: "location (the entity: a location, the location card, a subtree of locations, location_template)",
+		Origin:      "ADR-2030",
+		Allow: regexp.MustCompile(`(?i)` +
+			`\bin (?:the first |one |two |both |several |many |N |the same |the right |the wrong |its |their )?places?\b|\bin-place\b|` +
+			`\bthe (?:one|only|same|first|last|right|wrong|second) place\b|` +
+			`\b(?:earns?|earned|keeps?|kept|takes?|took|taking) (?:its |your |their |a |the )?place\b|` +
+			`\bdecimal places?\b|\bN[- ]places?\b|\bre-places?\b|\bplaces? (?:to|for) [a-z]|` +
+			`\b(?:to|can|may|will|must|would|should|you|we|they|who|which) place\b|` +
+			`\bplaces? (?:a|an|one|its|it|them|the|each|every)\b|\bbindings? places\b`),
+	}, {
+		// Type has one meaning (ADR-2034): the catalog row that says what
+		// kind of thing an instance is. Genus was a second word for that row
+		// (the device-class genus, a top-level genus) and retires from every
+		// operator surface. ADR titles keep it, and their anchors pass because
+		// the scan strips link targets.
+		Pattern:     regexp.MustCompile(`(?i)\bgenus\b|\bgenera\b`),
+		Replacement: "type (the catalog row that says what kind of thing an instance is: a component type, a system type)",
+		Origin:      "ADR-2034",
 	},
 }
 
@@ -395,6 +419,10 @@ var vocabularyAllowedFiles = map[string]bool{
 	filepath.Join("architecture", "decisions.md"): true,
 	filepath.Join("architecture", "build-log.md"): true,
 	filepath.Join("reference", "cli", "index.md"): true,
+	// Generated from internal/vocab, whose Formerly column names each retired word.
+	filepath.Join("reference", "glossary.md"): true,
+	// The frozen internal reference (#2029), superseded by reference/glossary.md.
+	filepath.Join("architecture", "glossary.md"): true,
 }
 
 // vocabularyAllowed reports whether rel is exempt from the vocabulary lint and
@@ -405,7 +433,7 @@ func vocabularyAllowed(rel string) bool {
 }
 
 // operatorStrings are the non-docs files whose text reaches an OPERATOR: seed
-// descriptions are upserted into registries at every boot and render verbatim
+// descriptions are upserted into catalogs at every boot and render verbatim
 // on catalog pages and in API payloads, the console nav labels and hints are
 // read on every page, and the README is the first thing a reader of the public
 // repo sees. The docs lint cannot see any of them (DocsRoot is the content
@@ -433,6 +461,24 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "web", "src", "pages", "Simulation.tsx"),
 	filepath.Join("..", "..", "web", "src", "components", "SimComponentDrawer.tsx"),
 	filepath.Join("..", "..", "web", "src", "components", "SimulationSection.tsx"),
+	// The catalog pages' shared copy, where the retired word for a type
+	// catalog row survived until ADR-2034.
+	filepath.Join("..", "..", "web", "src", "lib", "catalog.ts"),
+	// The product pages, whose create-form hint carried "genus" past the
+	// ADR-2034 sweep because nothing scanned them.
+	filepath.Join("..", "..", "web", "src", "lib", "products.ts"),
+	filepath.Join("..", "..", "web", "src", "pages", "Products.tsx"),
+	// The alarm and rule surfaces, where a rule's condition, an alarm's
+	// condition and a system's incidents read until ADR-2038.
+	filepath.Join("..", "..", "web", "src", "pages", "Rules.tsx"),
+	filepath.Join("..", "..", "web", "src", "pages", "SystemZoom.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "AlarmsPanel.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "SnoozeButton.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "HealthHistory.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "EventsPanel.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "NotificationStatusPill.tsx"),
+	filepath.Join("..", "..", "web", "src", "lib", "alarms.ts"),
+	filepath.Join("..", "..", "web", "src", "lib", "system_history.ts"),
 	filepath.Join("..", "..", "README.md"),
 	// The generated OpenAPI document carries every Huma operation and field
 	// description (#451): the doc: tags flow to the spec, the CLI reference,
@@ -582,16 +628,44 @@ func nearRetirementMarker(prose string, start, end int) bool {
 func scanLine(line string) []string {
 	prose := linkTarget.ReplaceAllString(line, "")
 	for _, term := range Banned {
-		loc := term.Pattern.FindStringIndex(prose)
-		if loc == nil {
-			continue
+		for _, loc := range term.Pattern.FindAllStringIndex(prose, -1) {
+			if allowed(term.Allow, prose, loc) {
+				continue // the English that keeps the word
+			}
+			if nearRetirementMarker(prose, loc[0], loc[1]) {
+				continue // named in order to retire it
+			}
+			return []string{prose[loc[0]:loc[1]] + " is retired (" + term.Origin + "); write " + term.Replacement}
 		}
-		if nearRetirementMarker(prose, loc[0], loc[1]) {
-			continue // named in order to retire it
-		}
-		return []string{prose[loc[0]:loc[1]] + " is retired (" + term.Origin + "); write " + term.Replacement}
 	}
 	return nil
+}
+
+// Matches reports whether text uses the term the way the docs lint would
+// flag it: a match outside the entry's Allow phrasings. Callers outside the
+// docs (an operator surface linted by its own test) use this rather than
+// Pattern directly, so the English the entry keeps stays kept everywhere.
+func (b BannedTerm) Matches(text string) bool {
+	for _, loc := range b.Pattern.FindAllStringIndex(text, -1) {
+		if !allowed(b.Allow, text, loc) {
+			return true
+		}
+	}
+	return false
+}
+
+// allowed reports whether the match at loc lies wholly inside a match of
+// allow, the entry's phrasings that keep the word. A nil allow keeps nothing.
+func allowed(allow *regexp.Regexp, prose string, loc []int) bool {
+	if allow == nil {
+		return false
+	}
+	for _, a := range allow.FindAllStringIndex(prose, -1) {
+		if a[0] <= loc[0] && loc[1] <= a[1] {
+			return true
+		}
+	}
+	return false
 }
 
 func atoi(s string) int {

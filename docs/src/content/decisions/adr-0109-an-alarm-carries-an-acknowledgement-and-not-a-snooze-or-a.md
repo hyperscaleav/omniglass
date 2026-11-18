@@ -18,7 +18,7 @@ summary: "An alarm's raised state belongs to its **condition** (ADR-0075) and an
   grant on `operator`, an `unacknowledged` filter on the list read, and the console affordance.
 - **Decision (orthogonal, not a status):** an alarm's raised state belongs to its **condition**: the
   one-open invariant is per `(component, dedup_key)` and the raiser owns the key
-  ([ADR-0075](#adr-0075-an-alarm-carries-its-condition-identity)). An acknowledgement is a fact about
+  ([ADR-0075](#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)). An acknowledgement is a fact about
   a **person**. Two independent facts, therefore two nullable columns and not a `status` enum, which
   would force them into one column and make acknowledged and cleared mutually exclusive. All four
   combinations are real and each one is tested: raised and unacknowledged (the queue), raised and

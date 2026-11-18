@@ -12,7 +12,7 @@ import (
 // readyReport is what the ready file says once the server serves: the
 // address each listener bound, under the key of the setting that asked for
 // it, so a listen address naming port 0 reads back as the port the kernel
-// handed out, and the bus URL the node-claim exchange advertises.
+// handed out, and the bus URL the outpost-claim exchange advertises.
 type readyReport struct {
 	Addr     string `json:"addr"`
 	NatsAddr string `json:"nats_addr"`

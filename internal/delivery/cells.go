@@ -75,7 +75,7 @@ func DeclaredOf(cells []*int64) (Declared, error) {
 // kind's slot << 8 | the outcome's code, in slot then code order, zeros
 // left out. A kind or outcome with no code is an error: the server tallies
 // only what it knows. A count past int32 packs at int32's ceiling, still
-// loss, so a node's ledger declaring more than it sent cannot refuse the
+// loss, so an outpost's ledger declaring more than it sent cannot refuse the
 // batch it shortchanged. Pure.
 func (t Tally) Cells() ([]int32, error) {
 	out := []int32{}

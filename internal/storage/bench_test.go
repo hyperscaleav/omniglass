@@ -158,16 +158,16 @@ func buildBenchFleet(b *testing.B, size benchSize) *benchFleet {
 		}
 	}
 
-	// One standard carrying one role, so the systems below are classified and
+	// One standard carrying one slot, so the systems below are classified and
 	// the health reads have something to resolve rather than an empty set.
 	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "bench-standard", Label: "Bench Standard"}); err != nil {
 		b.Fatalf("upsert standard: %v", err)
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "bench-standard", storage.SystemRoleSpec{
-		Name: "bench-role", Label: "Bench Role", Quorum: 1,
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "bench-standard", storage.SystemSlotSpec{
+		Name: "bench-slot", Label: "Bench Slot", Quorum: 1,
 		AcceptedTypes: []string{"generic-device"}, Impact: "degraded",
 	}); err != nil {
-		b.Fatalf("declare role: %v", err)
+		b.Fatalf("declare slot: %v", err)
 	}
 
 	std := "bench-standard"
@@ -209,11 +209,11 @@ func buildBenchFleet(b *testing.B, size benchSize) *benchFleet {
 		e.compIDs = append(e.compIDs, c.ID)
 	}
 
-	// Staff every system's first member into the role, so a system verdict has
+	// Staff every system's first member into the slot, so a system verdict has
 	// a real occupant to resolve and the recompute chain a real system to climb.
 	for i, sys := range sysNames {
-		if err := gw.AssignRole(ctx, "", sys, "bench-role", compNames[i], all, all, all, all); err != nil {
-			b.Fatalf("assign role on %s: %v", sys, err)
+		if err := gw.AssignSlot(ctx, "", sys, "bench-slot", compNames[i], all, all, all, all); err != nil {
+			b.Fatalf("assign slot on %s: %v", sys, err)
 		}
 	}
 
@@ -521,16 +521,16 @@ func BenchmarkLocationHealth(b *testing.B) {
 	})
 }
 
-// BenchmarkSystemHealth: one system's report, the role-resolution side of the
-// same subsystem. It resolves the system's declared and inherited roles, folds
-// the verdict, and explains each role.
+// BenchmarkSystemHealth: one system's report, the slot-resolution side of the
+// same subsystem. It resolves the system's declared and inherited slots, folds
+// the verdict, and explains each slot.
 //
-// Like ResolveTags this should be flat across the sizes: a system's roles do not
+// Like ResolveTags this should be flat across the sizes: a system's slots do not
 // multiply because the fleet got bigger. Unlike ResolveTags it is a small
-// constant of statements plus one alarm read per IMPAIRED role, so on a healthy
+// constant of statements plus one alarm read per IMPAIRED slot, so on a healthy
 // system most of the number is the resolve, and on a broken one counting and
 // timing would move together. It is here because nothing else in the file
-// exercises role resolution at all.
+// exercises slot resolution at all.
 func BenchmarkSystemHealth(b *testing.B) {
 	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
@@ -540,7 +540,7 @@ func BenchmarkSystemHealth(b *testing.B) {
 			if err != nil {
 				return 0, err
 			}
-			return len(rep.Roles), nil
+			return len(rep.Slots), nil
 		})
 		b.ResetTimer()
 		for b.Loop() {

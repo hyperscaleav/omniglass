@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type * as S from "../api/api.gen";
 import { entityNameError } from "./names";
 import { can, type Me } from "./auth";
 export { ENTITY_NAME_RE, entityNameError } from "./names";
@@ -8,30 +8,29 @@ export { ENTITY_NAME_RE, entityNameError } from "./names";
 // plus the pure rules the Simulation page and the simulated component drawer share. Shapes are
 // the generated ones (api/simfleet.go, api/impairment.go). A simulated component
 // is addressed by its component's uuid everywhere here, never its name: the seeded
-// fleet reuses names across places (thirty rooms each hold a `display-1`), so a
-// name is ambiguous and the API answers it with a 409.
+// fleet reuses names across locations (thirty rooms each hold a `display-1`), so a
+// name is ambiguous and the API answers it with a 404 listing the candidates.
 
-type S = components["schemas"];
-export type SimFleet = S["SimFleetOutputBody"];
-export type SimNode = S["SimNodeBody"];
+export type SimFleet = S.SimFleetOutputBody;
+export type SimOutpost = S.SimOutpostBody;
 // The generated schema keeps its old name for the row type; the console calls it
 // what it is, a simulated component.
-export type SimComponent = S["SimDeviceBody"];
-export type SimImpairmentStatus = S["SimImpairmentStatus"];
-export type SimProfile = S["SimProfileBody"];
-export type ComponentSim = S["ComponentSimOutputBody"];
-export type SimSurface = S["SimSurfaceBody"];
-export type SimRoute = S["SimRouteBody"];
-export type SimCommand = S["SimCommandBody"];
-export type SimOID = S["SimOIDBody"];
-export type SimResult = S["SimOperationResult"];
-export type FireInput = Omit<S["FireSimInputBody"], "$schema">;
-export type AddSimComponent = Omit<S["AddSimComponentInputBody"], "$schema">;
-export type AddSimComponentResult = S["AddSimComponentOutputBody"];
-export type SimSystemPlan = S["SimSystemPlanOutputBody"];
-export type SimRoleFill = S["SimRoleFillBody"];
-export type AddSimSystem = Omit<S["AddSimSystemInputBody"], "$schema">;
-export type AddSimSystemResult = S["AddSimSystemOutputBody"];
+export type SimComponent = S.SimDeviceBody;
+export type SimImpairmentStatus = S.SimImpairmentStatus;
+export type SimProfile = S.SimProfileBody;
+export type ComponentSim = S.ComponentSimOutputBody;
+export type SimSurface = S.SimSurfaceBody;
+export type SimRoute = S.SimRouteBody;
+export type SimCommand = S.SimCommandBody;
+export type SimOID = S.SimOIDBody;
+export type SimResult = S.SimOperationResult;
+export type FireInput = Omit<S.FireSimInputBody, "$schema">;
+export type AddSimComponent = Omit<S.AddSimComponentInputBody, "$schema">;
+export type AddSimComponentResult = S.AddSimComponentOutputBody;
+export type SimSystemPlan = S.SimSystemPlanOutputBody;
+export type SimSlotFill = S.SimSlotFillBody;
+export type AddSimSystem = Omit<S.AddSimSystemInputBody, "$schema">;
+export type AddSimSystemResult = S.AddSimSystemOutputBody;
 
 // The impairment as the console holds it: every field present, since a PUT
 // replaces the whole impairment and a field left out reads as zero.
@@ -67,7 +66,7 @@ export function sidebarPollMs(f: SimFleet | undefined): number {
   return f?.connected ? SIDEBAR_POLL_MS : SIDEBAR_IDLE_POLL_MS;
 }
 
-// simulatorConnected is the nav's "simulator" condition (#890): a principal
+// simulatorConnected is the nav's "simulator" condition (#890): a user
 // who can read simulation, with a simulator connected to the server. The
 // sidebar's Simulation door and Platform health's simulation section (#1647)
 // both wait on it, so they appear and disappear together.
@@ -99,8 +98,8 @@ export async function fireSim(id: string, body: FireInput): Promise<SimResult> {
   return data as SimResult;
 }
 
-export async function addSimComponent(node: string, body: AddSimComponent): Promise<AddSimComponentResult> {
-  const { data, error } = await api.POST("/nodes/{name}/simulation/components", { params: { path: { name: node } }, body });
+export async function addSimComponent(outpost: string, body: AddSimComponent): Promise<AddSimComponentResult> {
+  const { data, error } = await api.POST("/outposts/{name}/simulation/components", { params: { path: { name: outpost } }, body });
   if (error) throw error;
   return data as AddSimComponentResult;
 }
@@ -111,8 +110,8 @@ export async function planSimSystem(standard: string): Promise<SimSystemPlan> {
   return data as SimSystemPlan;
 }
 
-export async function addSimSystem(node: string, body: AddSimSystem): Promise<AddSimSystemResult> {
-  const { data, error } = await api.POST("/nodes/{name}/simulation/systems", { params: { path: { name: node } }, body });
+export async function addSimSystem(outpost: string, body: AddSimSystem): Promise<AddSimSystemResult> {
+  const { data, error } = await api.POST("/outposts/{name}/simulation/systems", { params: { path: { name: outpost } }, body });
   if (error) throw error;
   return data as AddSimSystemResult;
 }
@@ -175,7 +174,7 @@ export type SimStatus = {
     // A few words: "unplugged", or the shaped traffic ("150 ms, 2.5% loss").
     summary: string;
     // Whether the simulator applied it (it may not: impairments unavailable on
-    // the node, the change not yet reached it, or the component not served).
+    // the outpost, the change not yet reached it, or the component not served).
     applied: boolean;
   };
 };
@@ -271,13 +270,13 @@ export function risenHits(seen: Map<string, number>, rows: readonly SimComponent
   return risen;
 }
 
-export function totalHits(n: SimNode): number {
+export function totalHits(n: SimOutpost): number {
   return (n.components ?? []).reduce((sum, d) => sum + d.hits, 0);
 }
 
-// The connected simulator nodes: where a simulated component can be added.
-export function connectedNodes(f: SimFleet | undefined): string[] {
-  return (f?.nodes ?? []).filter((n) => n.connected).map((n) => n.node);
+// The connected simulator outposts: where a simulated component can be added.
+export function connectedOutposts(f: SimFleet | undefined): string[] {
+  return (f?.outposts ?? []).filter((n) => n.connected).map((n) => n.outpost);
 }
 
 // hitsByProtocol orders a component's per-protocol counts, busiest first.
@@ -288,28 +287,28 @@ export function hitsByProtocol(d: SimComponent): { protocol: string; hits: numbe
 }
 
 // The add-component form's rule: the name on the shared entity name rule
-// (lib/names); node and product must be chosen.
-export type AddComponentDraft = { node: string; product: string; name: string; location: string };
+// (lib/names); outpost and product must be chosen.
+export type AddComponentDraft = { outpost: string; product: string; name: string; location: string };
 export type AddComponentErrors = Partial<Record<keyof AddComponentDraft, string>>;
 
 export function validateAddComponent(d: AddComponentDraft): AddComponentErrors {
   const e: AddComponentErrors = {};
-  if (!d.node) e.node = "Choose the node whose simulator serves it.";
+  if (!d.outpost) e.outpost = "Choose the outpost whose simulator serves it.";
   if (!d.product) e.product = "Choose a simulated product.";
   const nameErr = d.name.trim() ? entityNameError(d.name.trim()) : "Name the new component.";
   if (nameErr) e.name = nameErr;
   return e;
 }
 
-// The add-system form's rule: node, standard and system type must be chosen;
+// The add-system form's rule: outpost, standard and system type must be chosen;
 // the name is optional (the server mints one from the type) but, when typed,
 // follows the entity name rule.
-export type AddSystemDraft = { node: string; standard: string; system_type: string; name: string; location: string };
+export type AddSystemDraft = { outpost: string; standard: string; system_type: string; name: string; location: string };
 export type AddSystemErrors = Partial<Record<keyof AddSystemDraft, string>>;
 
 export function validateAddSystem(d: AddSystemDraft): AddSystemErrors {
   const e: AddSystemErrors = {};
-  if (!d.node) e.node = "Choose the node whose simulator serves it.";
+  if (!d.outpost) e.outpost = "Choose the outpost whose simulator serves it.";
   if (!d.standard) e.standard = "Choose the standard the system is built to.";
   if (!d.system_type) e.system_type = "Choose the system's type.";
   const nameErr = entityNameError(d.name.trim());
@@ -328,10 +327,10 @@ export function addSystemBody(d: AddSystemDraft): AddSimSystem {
   };
 }
 
-// planShortfall: the roles a plan leaves short, and by how many in all.
-export function planShortfall(p: SimSystemPlan | undefined): { roles: SimRoleFill[]; missing: number } {
-  const roles = (p?.roles ?? []).filter((r) => (r.missing ?? 0) > 0 || !r.product);
-  return { roles, missing: roles.reduce((n, r) => n + (r.missing ?? 0), 0) };
+// planShortfall: the slots a plan leaves short, and by how many in all.
+export function planShortfall(p: SimSystemPlan | undefined): { slots: SimSlotFill[]; missing: number } {
+  const slots = (p?.slots ?? []).filter((r) => (r.missing ?? 0) > 0 || !r.product);
+  return { slots, missing: slots.reduce((n, r) => n + (r.missing ?? 0), 0) };
 }
 
 // surfaceKind says which fire form a surface takes: an HTTP call, a command

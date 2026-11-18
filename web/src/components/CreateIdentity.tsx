@@ -63,7 +63,7 @@ import { type DraftLabel } from "../lib/labeldraft";
 // A label is a Go text/template over a closed data map (ADR-0098), so rendering
 // one in the browser would be a second implementation of the engine; the console
 // asks :renderLabel instead. The NAME used to be the exception: its shape was a
-// stem plus a token, resolved client-side from the type registry the picker had
+// stem plus a token, resolved client-side from the type catalog the picker had
 // already loaded, so it could appear the instant a picker moved (ADR-0104).
 // #702 folded it into the same answer, for two reasons that both point the same
 // way. The form makes a round trip per picker change regardless, so the

@@ -6,7 +6,7 @@ description: "The Drivers catalog: each driver's declarative spec (the menu one 
 **Catalog, under Components: Drivers** (`/drivers`, with `driver:read`, covered by every viewer's `*:read` floor)
 is the directory of **drivers**: the normalized menu that turns a device family's API into
 what to fetch, how to parse it, and what actuates,
-on the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
+on the same flat-catalog pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 Where a [vendor](/guides/admin/vendors/) names who a device comes from, a driver names how it is
 talked to (for example `Generic SNMP` or `Newtron NVP`). Each row shows the **name** (the
 operator-facing name, for example `snmp-generic`), the **label**, an optional
@@ -31,7 +31,7 @@ An endpoint carries two kinds of data, and a driver configures only one of them:
   Omniglass produces it from the endpoint's transport. A driver never declares or emits it, and a
   spec that emits one is refused. A driver only tunes how some of it is gathered: its `ladder` (below)
   picks the reachability rung and whether to ping. The cadences become per-endpoint-type defaults a
-  driver and an operator can override with #1373. The keys are the `node-probe` and `platform` writer
+  driver and an operator can override with #1373. The keys are the `outpost-probe` and `platform` writer
   classes, listed from the code on [who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class).
 - **Collected data** is what the device's own API says: a volume, a call state, an input. It is
   exactly what the driver's polls and listeners emit, each a **collected** key, and the driver
@@ -48,7 +48,7 @@ an attach must supply (host, port, credentials as secret references), and its th
 families (poll functions, listeners, command bindings). The detail blade renders the spec as
 the **menu it is**: what each poll asks and what lands, what each listener waits for, what each
 command binding actuates. On a line protocol a listener's **arm** commands (the subscribe
-conversation) are sent on every connection the node holds, its **match** rule claims the
+conversation) are sent on every connection the outpost holds, its **match** rule claims the
 component's pushes, and each claimed line lands as a sample, an event or a log line with no poll involved (a listener rides a
 held line session or a udp socket, and is refused at write on any other transport, where nothing
 would run it); a request may
@@ -58,13 +58,13 @@ answer the request as a failure carrying the device's text instead of timing out
 a spec is Go RE2 with **substring** semantics: `INPUT \S+` also matches `EVT INPUT hdmi2`, so anchor
 a pattern meant to match a whole line (`^INPUT \S+$`). `unmatched: collection-failed` makes a line
 nobody claims a collection fault, and `unmatched: log` a log line on the component, rather than a counted discard ([routing](/architecture/collection/#listeners-over-a-held-session)).
-An emit names a **collected** key. A built-in key (every `node-probe` or `platform` key, [listed from
+An emit names a **collected** key. A built-in key (every `outpost-probe` or `platform` key, [listed from
 the code](/architecture/properties/#who-writes-a-key-the-writer-class)),
 `command-issued`, or a key a calc rule outputs is refused at the spec's write, naming the key, since
 each has its own writer ([who writes a key](/architecture/properties/#who-writes-a-key-the-writer-class)):
-the node would otherwise take a driver's value as its own observation, the pin or the gate. A spec
+the outpost would otherwise take a driver's value as its own observation, the pin or the gate. A spec
 stored before that refusal is held to it where it acts: the worklist strips such an emit from the
-tasks a node receives (the rest still run), a re-derivation never bakes one, and the server names the
+tasks an outpost receives (the rest still run), a re-derivation never bakes one, and the server names the
 spec and its tasks in a warning at boot so you can mend it.
 
 An emit lands on **any of the four lanes** ([an emit lands on any lane](/architecture/collection/#an-emit-lands-on-any-lane)).
@@ -82,7 +82,7 @@ to the whole line, and a severity or attribute that does not is left out, each a
 and a `layout`: `rfc3339`, `rfc3164` with an optional `zone`, `unix`, `unix-ms`, or `go:` a Go
 reference layout); a time more than five minutes ahead lands at arrival. On a plain poll an event or
 a log line lands when its content changes, not every run. `unmatched: log` lands each line no
-listener claims as a log line, whole. The shipped `newtron-nvp` lands an input push as the
+listener claims as a log line, whole. The shipped `newtron-panel-nvp` lands an input push as the
 `video-input` property and an `input-changed` event, the panel's diagnostics lines as log lines
 with their severity, and anything else it pushes as raw log lines:
 
@@ -114,7 +114,7 @@ with no line ending, such as `login: `) and `send` a line, which may name a secr
 (`${secret.login.password}`, the input declared `kind: secret`), and its `ready` match says the
 login passed. `session.terminal` lists the replies retrying cannot fix, each a `match` with a
 `class` (`auth`, `host-key`, `certificate`, `protocol`): a line matching one, during the login or
-answering any request, moves the session to `rejected`, where the node attempts nothing more until
+answering any request, moves the session to `rejected`, where the outpost attempts nothing more until
 the endpoint's connection fingerprint changes (its secret is rotated, its address, port or transport
 changes, the driver's login declaration changes) or an operator retries it (**Retry** on the
 rejected session's notice in the console, or `omniglass endpoint retry <component>/<endpoint>`, with
@@ -136,18 +136,18 @@ offered key). The console's **Trust this key** on the session's notice trusts th
 a confirm ([held sessions](/guides/operator/collection/#a-changed-key)), and so does
 `omniglass endpoint retry <component>/ssh --host-key <the offered key>`. While the refusal holds, the key must be
 the offered one it names (any other is refused, 409, and changes nothing; retry without a key first
-to have the node read a key the component presents since); with no refusal held, `--host-key`
+to have the outpost read a key the component presents since); with no refusal held, `--host-key`
 declares a pin ahead of time, for a replacement whose key you already know.
 
 A driver on `tls` speaks the line protocol over a TLS connection, its handshake the transport rung
 ([tls](/architecture/collection/#tls)). How the handshake judges the certificate is the driver's
 `tls-mode` input, a string input the engine reads by name, like `host` and `port`: `verify` (the
-certificate chains to one of the node's system roots and names the host), `pin` (the first public
+certificate chains to one of the outpost's system roots and names the host), `pin` (the first public
 key offered is trusted, any other refused) or `skip` (nothing is checked). The driver declares its
 default, as the official `newtron-nvp-tls` declares `pin` for gear that signs its own certificate; a
 driver that declares no `tls-mode` input verifies; and a spec that defaults it to `skip` refuses at
 write, since skipping verification is only ever an operator's choice. An operator edits the mode in
-place on the endpoint like any input, which moves its connection fingerprint, so a session a
+location on the endpoint like any input, which moves its connection fingerprint, so a session a
 certificate refused tries again under the new mode with no retry. A refused certificate reads
 `rejected` with class `certificate` and its reason; for a pinned key that changed, the reason names
 both keys and `omniglass endpoint retry <component>/tls --certificate <the offered key>` trusts the new one.
@@ -165,8 +165,8 @@ A spec may also declare its **reachability ladder** (`ladder`), bottom up: `ladd
 gate: `connect` on the transport's port, the protocol's `handshake`, or a named `request` answered,
 given as `ladder.transport.request`, where an open port cannot be detected; it runs as a line over
 `tcp`, a datagram over `udp`, or a get over `snmp`) and
-`ladder.session.enabled` (whether a login rung exists). Every field defaults from the transport
-registry, so most drivers declare nothing, and a rung the transport cannot run refuses at write. A
+`ladder.session.enabled` (whether a login rung exists). Every field defaults from the
+transport registry, so most drivers declare nothing, and a rung the transport cannot run refuses at write. A
 cloud API is never pinged, but its 443 is checked open before its session runs:
 
 ```yaml
@@ -184,7 +184,7 @@ and reads down, rejected.
 A udp driver speaks the line protocol as datagrams ([udp](/architecture/collection/#udp)). An open
 udp port cannot be detected, so it must name its request rung, and it may declare a `listen-port`
 input, the local port its endpoint binds, which its requests leave from and the component's pushes
-arrive on (unset, the node picks one, which suits a component that answers to a request's source).
+arrive on (unset, the outpost picks one, which suits a component that answers to a request's source).
 Every udp request declares its reply's shape (`reply`), since a datagram's answer is told from a
 late reply to another ask only by it. A request may declare `retries` (udp only, 0 to 5), how many
 times a lost datagram is re-sent within
@@ -227,11 +227,16 @@ A request declares its `method` (GET unless it says otherwise), `path`, `query`,
 `format` (`json`, `xml`, `html` or `text`, declared rather than read off the `Content-Type`, which gear
 mislabels). An emit locates its value with one selector the format admits: a `jsonpath` on a json
 answer, an `xpath` on an xml answer (its prefixes declared on the request's `namespaces`) or on an html
-page, a `regex` on any. A selector must find exactly one value: none, or more than one node, is a
+page, a `regex` on any. A selector must find exactly one value: none, or more than one outpost, is a
 fault naming the emit, and the rest still land. A command's request renders `${value}` and
 `${arg.<key>}` where you place them, escaped for where they land (a path segment, a query value, a
 JSON or xml body), and a JSON body leaf that is exactly `${value}` keeps the value's type, so an
-intended volume is sent as a number. A request never names a secret and never sets `Authorization`
+intended volume is sent as a number. A device's own units are shaped at the edge, so the platform
+holds the canon either side: an emit's `transform: { scale: 0.01 }` reads a device's percentage as the
+ratio (41 lands as 0.41), and a command binding's `transform: { scale: 100 }`, the inverse, scales the
+intended value before `${value}` is substituted (an intended 0.41 goes out as 41). A response settle
+reads the reply back through the same scale, so it compares to the intended value in the canon's
+units. A command's transform declares a scale alone, and refuses a value that is not a number. A request never names a secret and never sets `Authorization`
 or `Cookie`: the credential is the session block's.
 
 ```yaml
@@ -249,7 +254,8 @@ polls:
     schedule: { every: 30s }
     request: { path: /api/audio }
     emits:
-      - { name: volume, extract: { jsonpath: volume } }
+      # The bar reports 0 to 100; volume stores the ratio (0 to 1).
+      - { name: volume, extract: { jsonpath: volume }, transform: { scale: 0.01 } }
   - name: firmware
     schedule: { every: 1h }
     request: { path: /api/status.xml, format: xml, namespaces: { d: "urn:polaris:dsp:1", sys: "urn:polaris:system:1" } }
@@ -257,6 +263,7 @@ polls:
       - { name: firmware-version, extract: { xpath: "/d:status/sys:device/sys:firmware" } }
 commands:
   - command_type: set-volume
+    transform: { scale: 100 }   # the intended ratio, in the bar's 0 to 100
     request: { method: POST, path: /api/audio/volume, body: { volume: "${value}" } }
     settle: { from: response, success: { regex: '"ok":\s*true' } }
 ```
@@ -264,7 +271,7 @@ commands:
 `session.scheme` says how the credential `session.credential` names rides every request: `basic` (a
 `basic-auth` secret), `bearer` (a `bearer-token`), `api-key` (an `api-key`, placed by
 `session.api_key: { in: header, name: X-Census-Key }` or `{ in: query, name: apikey }`), or `digest`
-(a `basic-auth` secret answered as HTTP digest, MD5 or SHA-256: the node holds the component's
+(a `basic-auth` secret answered as HTTP digest, MD5 or SHA-256: the outpost holds the component's
 challenge, answers a stale nonce afresh, and never sends the password). A 401 to a
 credentialed request reads `rejected`, class `auth`, and nothing credentialed is sent again until the
 endpoint's connection fingerprint changes; a `session.terminal` rule may name a `status` (a gear's
@@ -272,13 +279,13 @@ endpoint's connection fingerprint changes; a `session.terminal` rule may name a 
 interval; a 408, 429 or 5xx retries on the backoff, no sooner than a `Retry-After`; a redirect is
 not followed. The reachability probe never sends the credential, so an http endpoint's
 `endpoint-authenticated` is proven by its polls; a driver whose commands carry a credential needs a
-poll to carry it to the node. Over `https` the `tls-mode` input and the pinned key work as over `tls`
+poll to carry it to the outpost. Over `https` the `tls-mode` input and the pinned key work as over `tls`
 (above), and `omniglass endpoint retry <component>/https --certificate <the offered key>` trusts a changed key.
 
 Gear whose web API signs in once declares `session.login` instead of a scheme
 ([logging in over http](/architecture/collection/#logging-in-over-http)): the login dialog a telnet
 driver declares, its steps requests. A step names only the secret fields it sends
-(`${secret.login.password}`); the node keeps the session it opens (the component's cookies, the
+(`${secret.login.password}`); the outpost keeps the session it opens (the component's cookies, the
 values `capture` locates in the last answer, the `headers` that send them) in its memory alone, per
 endpoint, and logs in again only when a request draws a 401, a redirect to the declared login
 `path`, or the declared `expired` text, then replays that request once. A form login:
@@ -321,7 +328,7 @@ names only a capture, never a secret, `Cookie` or a header a poll or command set
 A component whose web page updates live from a server-sent events stream declares the stream in its
 session block, and listeners claim its events ([a server-sent events
 stream](/architecture/collection/#a-server-sent-events-stream)). The stream is a `GET` (a `path`, a
-`query`, `headers` other than `Accept` and `Last-Event-ID`, which the node sends), read as `json`
+`query`, `headers` other than `Accept` and `Last-Event-ID`, which the outpost sends), read as `json`
 (the default) or `text`, and it rides the session's scheme or login like every request. A listener
 over http declares no `arm` (a stream has no upstream); its `match` may name the event (`event:
 change`), and carry one data rule: a `prefix`, a `regex`, or a JSON `field` (`{ path: path, equals:
@@ -336,10 +343,10 @@ listeners:
   - name: volume-change
     match: { event: change, field: { path: path, equals: status.audio.volume } }
     emits:
-      - { name: volume, extract: { jsonpath: value } }
+      - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
 ```
 
-The node holds the stream as the endpoint's session: it reads `up`, `recovering` after a drop (it
+The outpost holds the stream as the endpoint's session: it reads `up`, `recovering` after a drop (it
 resumes from the last event id after the server's `retry`, landing nothing twice), and `rejected`
 when the component refuses its credential, which also gates the endpoint's polls and commands. A
 stream needs a listener (with none, nothing holds it), and a listener over http needs the stream.
@@ -351,7 +358,7 @@ polls, its commands and its listeners ([websocket and wss](/architecture/collect
 never one the handshake owns), riding the session's scheme (`basic`, `bearer` or `api-key`; not
 `digest`) or an http login. A request is a frame: a `line` sent as is, or a JSON `body` (a
 whole-leaf `${value}` keeps the intended value's type). Its `reply` may `correlate` by a field: the
-node writes a fresh id into that field of the body each time it sends it, and the answer is the
+outpost writes a fresh id into that field of the body each time it sends it, and the answer is the
 frame carrying the id back, so pushes and other answers between never confuse it. A listener's
 `arm` is the subscribe frame, sent on every connection (one line, compact JSON), and its `match`
 claims a push as any held session's does, a JSON `field` match the usual choice:
@@ -367,16 +374,17 @@ listeners:
     arm: ['{"type":"subscribe","paths":["status.audio.volume"]}']
     match: { field: { path: path, equals: status.audio.volume } }
     emits:
-      - { name: volume, extract: { jsonpath: value } }
+      - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
 commands:
   - command_type: set-volume
+    transform: { scale: 100 }
     request: { body: { type: set, path: status.audio.volume, value: "${value}" }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
     settle: { from: response, extract: { jsonpath: value } }
 ```
 
 A component that answers a request without echoing an id declares a `field` reply instead (`reply:
 { field: { path: type, equals: result } }`), or a `prefix` or `regex` for a text frame. The socket
-reads `up`, `recovering` when the component drops it or stops answering the node's pings, and
+reads `up`, `recovering` when the component drops it or stops answering the outpost's pings, and
 `rejected` when the upgrade is refused with a `401` or a `403`, after one attempt.
 
 A telnet driver:
@@ -395,7 +403,7 @@ session:
 
 A command binding declares its **settle** rule to read the device's answer: `settle: { from: response, ... }` to judge the reply as success or failure (extracting a value or matching a confirmation), or `settle: { from: observe }` to wait for the next probe to report the intended value (or simply record the issue if the device answers nothing you can judge). A **fire-and-forget** command (for example `reboot`) sets no value: it has no `target_property_type` or `target_metric_type` arm in the command type catalog. Fire-and-forget commands settle at their issue (the execution report lands them or times them out) and declare no settle rule. A **settleable** command (for example `set-input`) sets a value and opens an intended one, and judges success by reading the reply or waiting for the next probe to observe it.
 
-A poll's `schedule.every` is how often the node asks the device, on the node's own timer rather
+A poll's `schedule.every` is how often the outpost asks the device, on the outpost's own timer rather
 than its heartbeat: a `10s` poll runs every ten seconds at a stable phase of its own, whatever
 the heartbeat
 ([ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own)).
@@ -408,7 +416,7 @@ A row without a spec is a **stub** and cannot be attached; specs are
 authored over the API or CLI (`omniglass driver create --spec ...`) and **validate at write**,
 so a spec that references an unregistered sample name, an unknown secret shape, or a broken
 template refuses with the fault named (422). Attaching a driver to a component happens on the
-component's own detail ([nodes and reachability](/guides/operator/collection/)): the spec
+component's own detail ([outposts and reachability](/guides/operator/collection/)): the spec
 derives the endpoint and its tasks. Its inputs (the host, the port, an attached secret's name) then
 edit in place on the endpoint's blade or with `omniglass endpoint update <component>/<endpoint> --inputs ...`, checked
 against the spec's declared inputs; no re-attach. Clearing an optional input restores its default;
@@ -460,7 +468,7 @@ rotateToken <component>/webhook` mints another, and the old URL answers 404 at o
 A driver is consumed by the [product](/guides/admin/products/) catalog: a `product` references
 its driver through an optional `driver_id` to say which driver reads it, chosen from a driver
 picker on the product's create and edit forms, and three of the shipped official products bind a
-driver this way. It is a leaf catalog beside the vendor registry. See
+driver this way. It is a leaf catalog beside the vendor catalog. See
 [core entities](/architecture/core-entities/) for where it sits in the fleet model.
 
 - **New driver** (with `driver:create`, an admin permission) opens a create drawer: give it a
@@ -528,16 +536,16 @@ collection](/architecture/collection/#shared-api-collection-one-component-many-o
 identity where its values arrive, on the conduit component:
 
 ```bash
-omniglass component identity-binding update hq.\$comp.meetings-cloud ucc-room-id zr-huddle-north \
+omniglass component identity-binding update hq.\$comp.ucc-platform ucc-room-id zr-huddle-north \
   --owner-kind system --owner huddle-north
 ```
 
 Until it is bound, its values land on no owner and wait in the component's unbound inbox
-(`omniglass component unbound-identity list hq.\$comp.meetings-cloud`), where each row shows the
+(`omniglass component unbound-identity list hq.\$comp.ucc-platform`), where each row shows the
 match key, the value, how often it was heard and the keys it carried; binding it makes the next value
 land on its owner. A binding costs update on both ends: on the conduit component and on the owner.
 Only collected keys fan out, and a fanned value lands at the owner's own (empty) instance, its
-source naming the conduit and its endpoint (`meetings-cloud/http`).
+source naming the conduit and its endpoint (`ucc-platform/http`).
 
 ## Check, preview, and run a poll now
 
@@ -548,8 +556,8 @@ Three commands take the guesswork out of writing a spec, each a route an agent c
 # Check a spec as a save would, writing nothing: every fault, each on its function
 omniglass driver validate --spec "$(cat display-web.json)" | jq '.findings[] | {function, message}'
 
-# Run its polls once through a node against the component, storing nothing
-omniglass driver preview --node edge-hq --spec "$(cat display-web.json)" \
+# Run its polls once through an outpost against the component, storing nothing
+omniglass driver preview --outpost edge-hq --spec "$(cat display-web.json)" \
   --inputs '{"host":"10.20.4.31","login":"display-login"}' | jq '.results[] | {poll, samples, faults}'
 
 # Once attached, run an endpoint's poll now; its samples land
@@ -558,12 +566,12 @@ omniglass endpoint poll run 'hq.west.level-2.huddle.$comp.display-1/http' identi
 
 Validate needs only `driver:read`. A preview (`driver:preview`) answers with the samples each poll
 extracted, each emit that did not locate, and an excerpt of the raw answer to write the next extractor
-against, masked of the secret it used; a secret input must be one you may reveal, since the preview
+against, masked of the secret it used; a secret input must be one you may bind (`secret:bind`), since the preview
 hands it to the target you name. A preview runs a poll that is its own request (http, https, snmp, a
 tcp line); a poll riding a held session (telnet, ssh, a websocket, a tls line, a login session) is
 attached first and run now (`endpoint:run`), which lands its samples and is refused, with the reason,
 while the endpoint is gated. A preview aimed at a device already attached takes its turn with that
 endpoint's own work, never sending beside it, and is refused the same way (409, naming the reason)
-while the endpoint is gated; a node too busy to queue another answers 429, so retry in a moment.
+while the endpoint is gated; an outpost too busy to queue another answers 429, so retry in a moment.
 Both are operator grants, audited
 ([collection](/architecture/collection/#on-demand-validate-preview-and-run-a-poll-now)).

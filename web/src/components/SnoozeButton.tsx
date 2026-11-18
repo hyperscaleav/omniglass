@@ -8,7 +8,13 @@ import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 
-type Snoozable = { id: string; snoozed_until?: string; snoozed_by?: string };
+type Snoozable = { id: string; message?: string; snoozed_until?: string; snoozed_by?: string };
+
+// A control's accessible name (#1404): its visible word, then the alarm it acts
+// on, so a page of alarms offers "Snooze No route to host" and "Snooze Touch
+// input lost" rather than the same plain word per row. The visible word leads,
+// so the name still contains the label a sighted reader sees.
+const acting = (verb: string, alarm: Snoozable) => (alarm.message ? `${verb} ${alarm.message}` : verb);
 
 // Which control's duration menu is open, and the last error of each, held
 // outside the row: an alarm list that polls hands its rows new objects, so a
@@ -31,11 +37,11 @@ const setError = (key: string, msg: string | null) =>
 // What a snooze is, against the three acts it is mistaken for: the tooltip on
 // the control, so the difference is taught where the choice is made.
 export const SNOOZE_TIP =
-  "Silence this condition's notifications for a while: nobody is paged, mailed or told in their inbox about it raising or clearing, and what it suppresses stays on the timeline, reading snoozed. " +
-  "Unlike acknowledging, it records nothing about who has seen it. Unlike opting out, it silences everyone. Unlike pausing a rule, it silences this condition alone. " +
+  "Silence this alarm's notifications for a while: nobody is paged, mailed or told in their inbox about it raising or clearing, and what it suppresses stays on the timeline, reading snoozed. " +
+  "Unlike acknowledging, it records nothing about who has seen it. Unlike opting out, it silences everyone. Unlike pausing a rule, it silences this alarm alone. " +
   "If it is still raised when the snooze ends, people are told again.";
 
-// SnoozedBadge (#1318): the snooze on the alarm's condition, for every reader
+// SnoozedBadge (#1318): the snooze on the alarm, for every reader
 // (a viewer sees it and holds no control). It names who set it and the exact
 // deadline in its tooltip.
 export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
@@ -54,9 +60,9 @@ export function SnoozedBadge(props: { alarm: Snoozable }): JSX.Element {
 }
 
 // SnoozeButton (#1318) sits beside AcknowledgeButton wherever an alarm offers
-// acknowledgement. A snooze belongs to the alarm's CONDITION (its component
-// and dedup key), so snoozing one alarm silences every alarm of that
-// condition, the next re-raise included. It is gated on its own permission,
+// acknowledgement. A snooze is stored on the alarm's component and dedup key, so
+// snoozing one alarm silences every alarm raised for the same thing, the
+// next re-raise included. It is gated on its own permission,
 // alarm:snooze, never on the component's update (ADR-1318), and renders
 // nothing for a caller who may not. Unsnoozed, it opens a menu of durations;
 // snoozed, it ends the snooze early.
@@ -96,7 +102,7 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
       <Show
         when={!props.alarm.snoozed_until}
         fallback={
-          <Button size="xs" intent="quiet" loading={busy()} title={err() ?? "End the snooze now. If the condition is still raised, people are told again."}
+          <Button size="xs" intent="quiet" loading={busy()} label={acting("Unsnooze", props.alarm)} title={err() ?? "End the snooze now. If the alarm is still raised, people are told again."}
             onClick={() => void run(() => unsnoozeAlarm(props.component, props.alarm.id))}>
             Unsnooze
           </Button>
@@ -106,13 +112,13 @@ export function SnoozeControl(props: { component: string; alarm: Snoozable; surf
             if (o) setOpenMenu(key());
             else if (openMenu() === key()) setOpenMenu(null);
           }}>
-          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5 self-center" title={err() ?? SNOOZE_TIP} disabled={busy()}>
+          <Popover.Trigger class="btn btn-quiet btn-xs gap-1.5 self-center" aria-label={acting("Snooze", props.alarm)} title={err() ?? SNOOZE_TIP} disabled={busy()}>
             <Moon size={14} />
             Snooze
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content class="menu z-50 w-44 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl focus:outline-none" aria-label="Snooze for">
-              <p class="menu-title px-2 pb-1 text-[10.5px]">Silence this condition for</p>
+              <p class="menu-title px-2 pb-1 text-[10.5px]">Silence this alarm for</p>
               <ul class="flex flex-col">
                 <For each={SNOOZE_PRESETS}>
                   {(p) => (

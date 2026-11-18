@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 import matter from "gray-matter";
-import { normalizeMask, paintedBoxes, planMasks, planStandingMasks, shootBaseline, type MaskEntry } from "./shotmasklib.mjs";
+import { normalizeMask, paintedBoxes, planMasks, planStandingMasks, shootBaseline, withCaptureRetry, type MaskEntry } from "./shotmasklib.mjs";
 
 // The mask-geometry contract behind the docs screenshot gate (#773, #1081).
 //
@@ -23,7 +23,7 @@ import { normalizeMask, paintedBoxes, planMasks, planStandingMasks, shootBaselin
 // (#1081), for a value whose only fixed container also holds what the shot is
 // there to show. These tests drive the capture's own mask code (shotmasklib.mjs)
 // against synthetic markup, so they can change the value on demand: the shots'
-// own proof is a clock-shifted recapture (DOCS_SHOTS_TZ with DOCS_SHOTS_EXACT=1),
+// own proof is a clock-shifted recapture (DOCS_SHOTS_TZ with the gate),
 // which cannot reach a single-digit day on most days of the month. No server
 // needed, so this spec runs wherever Playwright does.
 //
@@ -31,9 +31,8 @@ import { normalizeMask, paintedBoxes, planMasks, planStandingMasks, shootBaselin
 // tests judge the masks the capture actually uses: a page that loosens a mask back
 // onto its text fails this spec.
 //
-// The comparison is BYTE equality rather than the gate's default compareShot,
-// whose pixelmatch threshold cannot see a mask edge move over a dark surface at
-// all (#774). Byte equality is the property a mask owes the gate.
+// The comparison is BYTE equality, the property a mask owes the gate: the gate's
+// compareShot is exact too (#774), and byte equality is its fast path.
 
 const DOCS = fileURLToPath(new URL("../../docs/src/content/docs/", import.meta.url));
 
@@ -157,7 +156,7 @@ const cases: {
   {
     name: "a system summary card's since-line",
     page: "guides/operator/fleet.md",
-    shot: "fleet-place-systems",
+    shot: "fleet-location-systems",
     value: "[data-testid=summary-since]",
     markup: summaryCard,
     narrow: "since Oct 4, 06:59 PM · 9s",
@@ -262,6 +261,88 @@ test.describe("docs screenshot masks", () => {
     expect(late.equals(fresh)).toBe(true);
   });
 
+  // Chromium can drop one capture under runner load (#1177). The capture is retried
+  // once on exactly that protocol error, logging the call and the page state; a
+  // second drop, or any other error, is not retried.
+  const dropped = () => new Error("page.screenshot: Protocol error (Page.captureScreenshot): Unable to capture screenshot");
+
+  test("a dropped capture is retried once and logs the page state", async ({ page }) => {
+    await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+    const lines: string[] = [];
+    let calls = 0;
+    const shot = await withCaptureRetry(
+      page,
+      async () => {
+        if (++calls === 1) throw dropped();
+        return page.screenshot();
+      },
+      { log: (l) => lines.push(l) },
+    );
+    expect(calls).toBe(2);
+    expect(shot.length).toBeGreaterThan(0);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("Page.captureScreenshot");
+    expect(lines[0]).toContain('"readyState":"complete"');
+  });
+
+  test("a capture that drops twice fails after one retry", async ({ page }) => {
+    await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+    let calls = 0;
+    await expect(
+      withCaptureRetry(
+        page,
+        async () => {
+          calls++;
+          throw dropped();
+        },
+        { log: () => {} },
+      ),
+    ).rejects.toThrow("Unable to capture screenshot");
+    expect(calls).toBe(2);
+  });
+
+  for (const other of [
+    "locator.screenshot: Timeout 30000ms exceeded",
+    "page.screenshot: Protocol error (Page.captureScreenshot): Cannot take screenshot with 0 width.",
+  ]) {
+    test(`an error that is not a dropped capture is not retried: ${other}`, async ({ page }) => {
+      await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+      let calls = 0;
+      await expect(
+        withCaptureRetry(
+          page,
+          async () => {
+            calls++;
+            throw new Error(other);
+          },
+          { log: () => {} },
+        ),
+      ).rejects.toThrow(other);
+      expect(calls).toBe(1);
+    });
+  }
+
+  // The seam both docs-shots renders go through: shootBaseline itself survives the
+  // browser dropping its one capture, the failure the CI run hit, and still paints
+  // the masks (the retried raster is the one a clean run writes).
+  test("a baseline whose capture the browser drops once is shot on the retry", async ({ page }) => {
+    const entry = { selector: "[data-testid=blade-since]", width: 184 };
+    await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
+    const clean = await shootBaseline(page, await planMasks(page, [entry]));
+
+    const capture = page.screenshot.bind(page);
+    let calls = 0;
+    page.screenshot = async (opts) => {
+      if (++calls === 1) throw dropped();
+      return capture(opts);
+    };
+    const lines: string[] = [];
+    const retried = await shootBaseline(page, await planMasks(page, [entry]), { log: (l) => lines.push(l) });
+    expect(calls).toBe(2);
+    expect(lines).toHaveLength(1);
+    expect(retried.equals(clean)).toBe(true);
+  });
+
   test("a value that outgrows its declared box after planning still fails by name", async ({ page }) => {
     await page.setContent(bladeRow("since Oct 24, 01:57 AM · 17s"));
     const value = await valueBox(page, "[data-testid=blade-since]");
@@ -271,8 +352,8 @@ test.describe("docs screenshot masks", () => {
     await expect(shootBaseline(page, plan)).rejects.toThrow(`wider than its declared ${entry.width}px box`);
   });
 
-  // CatalogShell.tsx's subrail: each registry's entry is a label and, right-aligned
-  // at the end of the row, the live count of the registry's rows. The rail's width
+  // CatalogShell.tsx's subrail: each catalog's entry is a label and, right-aligned
+  // at the end of the row, the live count of the catalog's rows. The rail's width
   // is fixed, so the count's RIGHT edge holds still and its left edge moves with
   // its digits, which is what a declared box anchored at the top-left cannot
   // hold (#1482). A release that seeds one more driver or type moves a digit on

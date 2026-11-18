@@ -6,9 +6,9 @@ set -euo pipefail
 # and the server in lab mode, with the Playwright capture in a container on the
 # lab's own network.
 #
-# The lab runs with --no-node: the dev fleet without the simulated fleet's
+# The lab runs with --no-outpost: the dev fleet without the simulated fleet's
 # wiring (whose hundred-odd audited endpoint creates would fill the pages it
-# photographs) and no node collecting, so every page holds still between
+# photographs) and no outpost collecting, so every page holds still between
 # captures. The lab's banner is a fact about the lab, not the product the docs
 # teach, so the capture hides it (docs-shots.mjs) and the shots show the console
 # an operator runs.
@@ -31,11 +31,10 @@ set -euo pipefail
 # DOCS_SHOTS_TZ moves the capture browser's clock (an IANA zone), which is how the
 # masks are validated: they must cover boxes whose size does not depend on the text
 # they hide, so the proof is a recapture whose rendered timestamps have a different
-# width, not two captures minutes apart (#773). Compare it exactly: the gate's
-# perceptual threshold scores a mask edge moving one pixel over a dark surface as
-# zero (#774, #1081), and DOCS_SHOTS_EXACT=1 makes the diff count every pixel:
+# width, not two captures minutes apart (#773). The gate compares every pixel in
+# every channel (#774), so the proof is the gate itself:
 #
-#	DOCS_SHOTS_EXACT=1 DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check
+#	DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check
 #
 # Prereqs: docker, and `make` run first (make docs-shots does): the lab is the
 # binary and the image it builds.
@@ -55,7 +54,7 @@ BASELINE="${DOCS_SHOTS_BASELINE:-docs/screenshots/baseline}"
 lab_init ogshots
 # --platform-history: an hour of made-up server figures, so platform health's
 # sparklines draw full lines; for a capture only, never a learner's lab (#1790).
-STACK_SCENARIO=dev lab_up --no-node --platform-history
+STACK_SCENARIO=dev lab_up --no-outpost --platform-history
 
 # A couple of secrets so the Secrets surface renders real rows. LOUD on
 # failure: every CLI write here lands an audit row, so a write that silently
@@ -65,6 +64,15 @@ STACK_SCENARIO=dev lab_up --no-node --platform-history
 sec() { lab_run -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$LAB_TOKEN" "$LAB_IMAGE" "$@" >/dev/null; }
 sec secret create --name device-basic --secret-type basic-auth --owner-kind platform --fields '{"username":"admin","password":"s3cret-pw"}'
 sec secret create --name core-snmp --secret-type snmp-community --owner-kind platform --fields '{"community":"public"}'
+
+# One write by an agent through an MCP tool call, so the audit trail shows a row
+# with its channel, its declared client and its agent (#1178): an agent token
+# limited to MCP, then a tag set over `omniglass mcp call`. The component sits in
+# a place no shot photographs, so only the audit page moves. Just as LOUD.
+agent_token="$(lab_run -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$LAB_TOKEN" "$LAB_IMAGE" \
+  auth create-token --description "docs capture agent" --agent claude-code --ttl-days 1 --channels '["mcp"]' | jq -er .token)"
+out="$(lab_run -e OMNIGLASS_SERVER="$LAB_SERVER_URL" -e OMNIGLASS_TOKEN="$agent_token" "$LAB_IMAGE" \
+  mcp call set-component-tag --args '{"name":"hq.west.level-4.meeting-405.$comp.videobar-1","key":"asset-id","value":"AV-0415"}')" || { echo "$out" >&2; exit 1; }
 
 mkdir -p "$OUT" "$BASELINE"
 lab_run -v "$ROOT:/w" -w /w \

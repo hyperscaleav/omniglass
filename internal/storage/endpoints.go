@@ -28,7 +28,7 @@ var (
 	ErrEndpointExists            = errors.New("storage: endpoint name already exists on this component")
 	ErrUnknownTransport          = errors.New("storage: unknown transport")
 	ErrEndpointComponentNotFound = errors.New("storage: endpoint component not found")
-	ErrEndpointNodeNotFound      = errors.New("storage: endpoint node not found")
+	ErrEndpointOutpostNotFound   = errors.New("storage: endpoint outpost not found")
 	// ErrEndpointPatchInvalid refuses an edit naming the field: a value the
 	// driver's declared inputs refuse, an undeclared input, a transport the
 	// driver does not speak, or a raw target on a driver-attached endpoint.
@@ -65,8 +65,8 @@ func checkBareParams(transportName string, params []byte) error {
 	return nil
 }
 
-// checkListenPort refuses a bare udp endpoint's listen port the node could
-// not bind (#1037), through the one reading the node itself uses.
+// checkListenPort refuses a bare udp endpoint's listen port the outpost could
+// not bind (#1037), through the one reading the outpost itself uses.
 func checkListenPort(p map[string]any) error {
 	raw, ok := p[driver.ListenPortInput]
 	if !ok {
@@ -84,7 +84,7 @@ func checkListenPort(p map[string]any) error {
 
 // Endpoint is a named, placement-bound connection: Transport names the wire it
 // speaks over (a code-registry fact, internal/transport, ADR-0073), Component
-// is the owner (nil for a server-hosted endpoint), Node is the server-assigned
+// is the owner (nil for a server-hosted endpoint), Outpost is the server-assigned
 // placement (nil until assigned), Params is the address/target jsonb. ID is the
 // surrogate primary key (a uuidv7); Name is the friendly address, unique within
 // the owning component.
@@ -95,8 +95,8 @@ type Endpoint struct {
 	Transport   string
 	Component   *string
 	ComponentID *string
-	Node        *string
-	NodeID      *string
+	Outpost     *string
+	OutpostID   *string
 	Params      []byte
 	// Driver and DriverID record the attachment that authored this endpoint
 	// (#813): nil for a bare probe endpoint. Inputs is the effective input set
@@ -127,7 +127,7 @@ type EndpointSpec struct {
 	Transport string
 	Label     string
 	Component *string
-	Node      *string
+	Outpost   *string
 	Params    []byte
 	// Driver switches the create into an attach (#813): the transport comes
 	// from the driver's spec (setting both refuses), Inputs must satisfy the
@@ -137,23 +137,24 @@ type EndpointSpec struct {
 	Inputs map[string]string
 	// OutOfBand marks the endpoint a management path (#1648).
 	OutOfBand bool
-	// SecretRead and CanAdmin fence the attach's secret-reference resolution to
-	// what the CALLER may read: a reference resolves only to a secret in this
-	// read scope, and an admin-sensitive one only with the admin tier. Without
-	// them a bare-name lookup would let an operator bind (and the worklist
-	// deliver) any tenant's credential; the API tier fills them from
-	// secret:read.
-	SecretRead scope.Set
-	CanAdmin   bool
+	// SecretRead, SecretBind and CanAdmin fence the attach's secret-reference
+	// resolution to what the CALLER may bind: a reference resolves only to a
+	// secret in the read scope (else it reads as absent), binds only one in the
+	// bind scope (else forbidden), and an admin-sensitive one only with the
+	// admin tier. Without them a bare-name lookup would let an operator bind
+	// (and the worklist deliver) any tenant's credential; the API tier fills
+	// them from secret:read and secret:bind (#2047).
+	SecretRead, SecretBind scope.Set
+	CanAdmin               bool
 }
 
 // EndpointPatch is the update input: nil fields unchanged. Type and component
 // rebind are deferred (they cross the adapter kind and the scope boundary),
 // mirroring the component tier's deferred reparent; the operationally useful
-// Node (re)assignment and Params retarget move here.
+// Outpost (re)assignment and Params retarget move here.
 type EndpointPatch struct {
-	Node   *string
-	Params []byte
+	Outpost *string
+	Params  []byte
 	// Label follows the platform's patch convention: nil leaves it alone, an
 	// empty string clears it. It is the only identity field an operator may
 	// move here, and moving it moves nothing else: the name stays derived.
@@ -167,17 +168,17 @@ type EndpointPatch struct {
 	Transport *string
 	// OutOfBand re-marks the endpoint a management path, or not (#1648).
 	OutOfBand *bool
-	// SecretRead and CanAdmin are the caller's secret scope and admin tier:
-	// an edit re-resolves every attached secret under them, so it cannot
-	// send a credential the caller could not use to a new address.
-	SecretRead scope.Set
-	CanAdmin   bool
+	// SecretRead, SecretBind and CanAdmin are the caller's secret scopes and
+	// admin tier: an edit re-resolves every attached secret under them, so it
+	// cannot send a credential the caller may not bind to a new address.
+	SecretRead, SecretBind scope.Set
+	CanAdmin               bool
 }
 
 // endpointCols is the bare select list (scan order), for the un-aliased
 // insert/update RETURNING and the by-id load; endpointColsJoin is the same
 // list aliased to `i` for the scoped join over the component table.
-// The two arcs store primary keys (component.id, node.principal_id), so each is
+// The two arcs store primary keys (component.id, outpost.user_id), so each is
 // selected alongside a scalar subquery for the owner's current name: the id is
 // what the row points at, the name is what an operator reads and types. The
 // subquery form works identically in a plain select and in a RETURNING list, so
@@ -187,13 +188,13 @@ type EndpointPatch struct {
 const (
 	endpointCols = `id, name, coalesce(label, ''), transport,
 		(select c.name from component c where c.id = endpoint.component) as component_name, component,
-		(select n.name from node n where n.principal_id = endpoint.node_name) as node_name_ref, node_name,
+		(select n.name from outpost n where n.user_id = endpoint.outpost_id) as outpost_name_ref, outpost_id,
 		params,
 		(select d.name from driver d where d.id = endpoint.driver_id) as driver_name, driver_id, inputs,
 		out_of_band, created_at, updated_at`
 	endpointColsJoin = `i.id, i.name, coalesce(i.label, ''), i.transport,
 		(select c2.name from component c2 where c2.id = i.component) as component_name, i.component,
-		(select n.name from node n where n.principal_id = i.node_name) as node_name_ref, i.node_name,
+		(select n.name from outpost n where n.user_id = i.outpost_id) as outpost_name_ref, i.outpost_id,
 		i.params,
 		(select d2.name from driver d2 where d2.id = i.driver_id) as driver_name, i.driver_id, i.inputs,
 		i.out_of_band, i.created_at, i.updated_at`
@@ -201,7 +202,7 @@ const (
 
 func scanEndpoint(row pgx.Row) (*Endpoint, error) {
 	var it Endpoint
-	if err := row.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.Driver, &it.DriverID, &it.Inputs, &it.OutOfBand, &it.CreatedAt, &it.UpdatedAt); err != nil {
+	if err := row.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.Component, &it.ComponentID, &it.Outpost, &it.OutpostID, &it.Params, &it.Driver, &it.DriverID, &it.Inputs, &it.OutOfBand, &it.CreatedAt, &it.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &it, nil
@@ -254,23 +255,23 @@ func endpointComponentID(ctx context.Context, q querier, ref *string, create sco
 	return &c.ID, nil
 }
 
-// endpointNodeID resolves an optional node reference (a name or a principal id)
-// to the principal id the placement arc stores. An unknown node is
-// ErrNodeNotFound, so an unassignable placement fails loudly.
-func endpointNodeID(ctx context.Context, q querier, ref *string) (*string, error) {
+// endpointOutpostID resolves an optional outpost reference (a name or a user id)
+// to the user id the placement arc stores. An unknown outpost is
+// ErrOutpostNotFound, so an unassignable placement fails loudly.
+func endpointOutpostID(ctx context.Context, q querier, ref *string) (*string, error) {
 	if ref == nil {
 		return nil, nil
 	}
 	col := "name"
 	if isUUID(*ref) {
-		col = "principal_id"
+		col = "user_id"
 	}
 	var pid string
-	if err := q.QueryRow(ctx, `select principal_id from node where `+col+` = $1`, *ref).Scan(&pid); err != nil {
+	if err := q.QueryRow(ctx, `select user_id from outpost where `+col+` = $1`, *ref).Scan(&pid); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNodeNotFound
+			return nil, ErrOutpostNotFound
 		}
-		return nil, fmt.Errorf("storage: resolve node %q: %w", *ref, err)
+		return nil, fmt.Errorf("storage: resolve outpost %q: %w", *ref, err)
 	}
 	return &pid, nil
 }
@@ -360,7 +361,7 @@ func (p *PG) GetEndpoint(ctx context.Context, ref string, read scope.Set) (*Endp
 }
 
 // CreateEndpoint inserts an endpoint owned by an optional component, placed on
-// an optional node, writing the audit row in the same transaction. The create
+// an optional outpost, writing the audit row in the same transaction. The create
 // scope is checked against the owning component (the cascade): a component-less
 // endpoint requires an all create scope; a component-bound one requires that
 // component in the create scope. A missing component is a 422, an out-of-scope
@@ -425,7 +426,7 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 		inputs = plan.inputs
 		driverID = &plan.driverID
 	}
-	nodeID, err := endpointNodeID(ctx, tx, spec.Node)
+	outpostID, err := endpointOutpostID(ctx, tx, spec.Outpost)
 	if err != nil {
 		return nil, err
 	}
@@ -441,13 +442,13 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 		}
 	}
 	// A push endpoint (#1024, ADR-1024) is hosted by the server: nothing is
-	// dialed, so it takes no node and no address, and it posts as one
+	// dialed, so it takes no outpost and no address, and it posts as one
 	// component, which it must name.
 	push := transport.IsPush(spec.Transport)
 	if push {
 		switch {
-		case nodeID != nil:
-			return nil, fmt.Errorf("%w: node: a %s endpoint is hosted by the server, so it takes no node", ErrEndpointParamsInvalid, spec.Transport)
+		case outpostID != nil:
+			return nil, fmt.Errorf("%w: outpost: a %s endpoint is hosted by the server, so it takes no outpost", ErrEndpointParamsInvalid, spec.Transport)
 		case componentID == nil:
 			return nil, fmt.Errorf("%w: component: a %s endpoint lands what it is sent on one component; name it", ErrEndpointParamsInvalid, spec.Transport)
 		case plan == nil && string(params) != "{}" && string(params) != "null":
@@ -455,15 +456,15 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 		}
 	}
 	it, err := scanEndpoint(tx.QueryRow(ctx, `
-		insert into endpoint (name, transport, component, node_name, params, label, driver_id, inputs, out_of_band)
+		insert into endpoint (name, transport, component, outpost_id, params, label, driver_id, inputs, out_of_band)
 		values ($1, $1, $2, $3, $4, $5, $6, $7, $8)
 		returning `+endpointCols,
-		spec.Transport, componentID, nodeID, params, labelOrNull(spec.Label), driverID, inputs, spec.OutOfBand))
+		spec.Transport, componentID, outpostID, params, labelOrNull(spec.Label), driverID, inputs, spec.OutOfBand))
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
 	}
 	// The endpoint is transport-named: its name IS its transport (unique per
-	// component). Deriving the reachability poll task here, the node's unit of work
+	// component). Deriving the reachability poll task here, the outpost's unit of work
 	// over this connection, makes task a derived artifact, never operator-authored.
 	// A push endpoint has nothing to dial, so no reachability task; its token
 	// is minted instead, a secret on its component.
@@ -484,10 +485,13 @@ func (p *PG) createEndpointTx(ctx context.Context, tx pgx.Tx, actorID string, sp
 	if err := writeAuditRes(ctx, tx, actorID, "create", "endpoint", it.ID, nil, it); err != nil {
 		return nil, err
 	}
+	if err := notifyWorklistChanged(ctx, tx, it.ID); err != nil {
+		return nil, err
+	}
 	return it, nil
 }
 
-// UpdateEndpoint patches an endpoint's node placement, params, label, or (on a
+// UpdateEndpoint patches an endpoint's outpost placement, params, label, or (on a
 // driver-attached endpoint, #1061) its inputs in place, with the read-then-action
 // scope split (both evaluated against the owning component)
 // and in-transaction audit. Type and component rebind are deferred, and the name
@@ -515,26 +519,33 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch Endp
 		return nil, err
 	}
 	// A driver-attached endpoint's params are DERIVED from its inputs (its host
-	// and port), and its credential rides the worklist to the placed node. Its
-	// address therefore edits through its inputs (#1061), every attached secret
-	// re-resolved under the editor's own scope, so an edit cannot send a
-	// credential its editor could not use to a new address; a raw target patch
-	// on it refuses.
+	// and port), and its credential rides the worklist to the placed outpost. Its
+	// address therefore edits through its inputs (#1061), and an address edit or
+	// an outpost move re-resolves every attached secret under the editor's own scope,
+	// so an edit cannot send a credential its editor could not use to a new
+	// address or outpost; a raw target patch on it refuses.
 	params, inputs, err := p.patchedConnection(ctx, tx, before, patch)
 	if err != nil {
 		return nil, err
 	}
-	nodeID, err := endpointNodeID(ctx, tx, patch.Node)
+	outpostID, err := endpointOutpostID(ctx, tx, patch.Outpost)
 	if err != nil {
 		return nil, err
 	}
-	if nodeID != nil && transport.IsPush(before.Transport) {
-		return nil, fmt.Errorf("%w: node: a %s endpoint is hosted by the server, so it takes no node", ErrEndpointPatchInvalid, before.Transport)
+	if outpostID != nil && transport.IsPush(before.Transport) {
+		return nil, fmt.Errorf("%w: outpost: a %s endpoint is hosted by the server, so it takes no outpost", ErrEndpointPatchInvalid, before.Transport)
+	}
+	// Both outposts hear an edit that moves the endpoint: the one it leaves
+	// (announced as placed now) and the one it lands on (after the update).
+	if outpostID != nil {
+		if err := notifyWorklistChanged(ctx, tx, before.ID); err != nil {
+			return nil, err
+		}
 	}
 	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanEndpoint(tx.QueryRow(ctx, `
 		update endpoint set
-			node_name = coalesce($2, node_name),
+			outpost_id = coalesce($2, outpost_id),
 			params    = coalesce($3, params),
 			inputs    = coalesce($6, inputs),
 			label     = case when $5::boolean then $4 else label end,
@@ -542,7 +553,7 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch Endp
 			updated_at = now()
 		where id = $1
 		returning `+endpointCols,
-		before.ID, nodeID, nullableJSON(params), labelVal, setLabel, nullableJSON(inputs), patch.OutOfBand))
+		before.ID, outpostID, nullableJSON(params), labelVal, setLabel, nullableJSON(inputs), patch.OutOfBand))
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
 	}
@@ -554,6 +565,9 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, ref string, patch Endp
 		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "endpoint", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := notifyWorklistChanged(ctx, tx, after.ID); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -613,7 +627,9 @@ func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint,
 		}
 		current = extra
 	}
-	if len(patch.Inputs) == 0 && current == nil {
+	// An outpost move sends the attached credential to a new outpost, so it re-resolves
+	// every attached secret under the editor's scope as an address edit does.
+	if len(patch.Inputs) == 0 && current == nil && patch.Outpost == nil {
 		return nil, nil, nil
 	}
 	stored := map[string]string{}
@@ -649,7 +665,7 @@ func (p *PG) patchedConnection(ctx context.Context, tx pgx.Tx, before *Endpoint,
 		}
 		stored[k] = v
 	}
-	effective, err := p.resolveInputs(ctx, tx, d, sp, stored, patch.SecretRead, patch.CanAdmin)
+	effective, err := p.resolveInputs(ctx, tx, d, sp, stored, SecretUse{Read: patch.SecretRead, Bind: patch.SecretBind, CanAdmin: patch.CanAdmin})
 	if err != nil {
 		if errors.Is(err, ErrAttachInvalid) {
 			return nil, nil, fmt.Errorf("%w: %s", ErrEndpointPatchInvalid, strings.TrimPrefix(err.Error(), ErrAttachInvalid.Error()+": "))
@@ -702,7 +718,7 @@ func (p *PG) rederiveAttached(ctx context.Context, tx pgx.Tx, driverID, endpoint
 // RetryEndpoint records an operator's retry of the endpoint's held session
 // (#1049): it increments the endpoint's session_retry counter, carried on
 // the worklist and part of the endpoint's connection fingerprint (ADR-0158),
-// so the gate a terminal refusal holds lifts and the node attempts the
+// so the gate a terminal refusal holds lifts and the outpost attempts the
 // endpoint again. The read/action split
 // runs through the owning component like every endpoint write, and the
 // retry is audited in the same transaction.
@@ -710,7 +726,7 @@ func (p *PG) rederiveAttached(ctx context.Context, tx pgx.Tx, driverID, endpoint
 // pin, when set, accepts a changed key: a host key on an ssh endpoint
 // (#1032), a certificate's public key on a tls endpoint (#1035). It lands as
 // the endpoint's declared ssh-host-key or tls-certificate, the pin the
-// worklist delivers ahead of the key trusted on first use, so the node's
+// worklist delivers ahead of the key trusted on first use, so the outpost's
 // session redials onto it. Each only on its transport, and only a SHA256
 // fingerprint. While the endpoint's gate names an offered key (a key
 // refusal's evidence, #1078), the key must be that key: any other is
@@ -740,17 +756,17 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, ref string, pin RetryPi
 			return nil, err
 		}
 		if gate, ok := rejection.Parse(published); ok && gate.HasKeys() && gate.OfferedKey != key {
-			// The gate is the node's last word on what the component offers: a
-			// gated node dials no more, so the component may have moved on
+			// The gate is the outpost's last word on what the component offers: a
+			// gated outpost dials no more, so the component may have moved on
 			// since. The refusal says what the record names, and how to read
 			// the key again, never that the component offers it now.
-			return nil, fmt.Errorf("%w: the refusal on record names the offered key %s, not the key sent; to trust another, retry the endpoint without a host key so the node reads the key the component offers now, then trust that one", ErrRetryHostKeyStale, gate.OfferedKey)
+			return nil, fmt.Errorf("%w: the refusal on record names the offered key %s, not the key sent; to trust another, retry the endpoint without a host key so the outpost reads the key the component offers now, then trust that one", ErrRetryHostKeyStale, gate.OfferedKey)
 		}
 		if _, replaced, err = keyPin(ctx, tx, *before.ComponentID, before.Name, pinKeyOf[before.Transport]); err != nil {
 			return nil, err
 		}
 		// A pin (the ssh host key, a tls certificate's public key) is the one
-		// declared row a node-probe key admits, and only through this path
+		// declared row an outpost-probe key admits, and only through this path
 		// (ADR-0161). Its source names the path: the one mark a read trusts a
 		// declared pin by.
 		if err := admitWrites(ctx, tx, writeProperty, gatewayWriter(writerclass.KeyPin),
@@ -772,6 +788,9 @@ func (p *PG) RetryEndpoint(ctx context.Context, actorID, ref string, pin RetryPi
 		returning `+endpointCols, before.ID))
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
+	}
+	if err := notifyWorklistChanged(ctx, tx, after.ID); err != nil {
+		return nil, err
 	}
 	type pinned struct {
 		*Endpoint
@@ -839,7 +858,7 @@ var ErrRetryHostKey = errors.New("storage: retry host key")
 // refusal on record no longer names.
 var ErrRetryHostKeyStale = errors.New("storage: retry host key stale")
 
-// latestRejection is the endpoint-rejection the node last published for an
+// latestRejection is the endpoint-rejection the outpost last published for an
 // endpoint (its gate), or "" when none was.
 func latestRejection(ctx context.Context, q querier, componentID, instance string) (string, error) {
 	got, err := latestRejections(ctx, q, []endpointRef{{componentID, instance}})
@@ -854,8 +873,12 @@ func latestRejection(ctx context.Context, q querier, componentID, instance strin
 type endpointRef struct{ componentID, instance string }
 
 // latestRejections is latestRejection for many endpoints in one round trip, in
-// the order given (#1571): a node's worklist reads one per component endpoint,
+// the order given (#1571): an outpost's worklist reads one per component endpoint,
 // and a statement each made a large site's pull cost thousands of them.
+//
+// The rejection is an observed row, so ts leads the order and not id (#712): a
+// outpost supplies the observed lane's ts, and a late-arriving older report must
+// not become current by being written last.
 func latestRejections(ctx context.Context, q querier, refs []endpointRef) ([]string, error) {
 	out := make([]string, len(refs))
 	if len(refs) == 0 {
@@ -890,7 +913,7 @@ func latestRejections(ctx context.Context, q querier, refs []endpointRef) ([]str
 }
 
 // EndpointKeyPin is the key an ssh or tls endpoint pins in force (keyPin):
-// the operator's declared pin, else the key the node trusted on first use, ""
+// the operator's declared pin, else the key the outpost trusted on first use, ""
 // for none or for a transport that pins nothing. An unknown component folds
 // into "" as LatestProperty's does.
 func (p *PG) EndpointKeyPin(ctx context.Context, componentRef, endpoint, transport string) (string, error) {
@@ -918,9 +941,9 @@ const pinSource = string(writerclass.KeyPin)
 // the SQL its endpoint's component id, as text, and instance read from) whose
 // key a backfill retired as a declared pin no :retry set, published after
 // that declared row and never before it (ADR-1100): such a key is never taken
-// as the pin from the observed series, however it comes back (a node still
+// as the pin from the observed series, however it comes back (an outpost still
 // holding it in memory republishes it), until a :retry declares it. A key the
-// node learned before the plant stays its own, as the backfill's echo rule
+// outpost learned before the plant stays its own, as the backfill's echo rule
 // keeps it.
 func retiredPinSQL(comp, inst string) string {
 	return `select 1 from retired_sample r
@@ -936,7 +959,7 @@ func retiredPinSQL(comp, inst string) string {
 
 // keyPin is an endpoint's key pin under its property (ssh-host-key, #1032;
 // tls-certificate, #1035): the operator's declared key, and the pin in force
-// (the declared key, else the key the node trusted on first use). The
+// (the declared key, else the key the outpost trusted on first use). The
 // declared key is the latest set through :retry alone (pinSource): a declared
 // row any other path left, a value or a tombstone, is neither delivered nor
 // read as the pin a trust replaces; nor is an observed key retired as such a
@@ -957,8 +980,12 @@ type pinQuery struct{ componentID, instance, property string }
 type pinPair struct{ declared, pin string }
 
 // keyPins is keyPin for many endpoints in one round trip, in the order given
-// (#1571): a node's worklist reads one per ssh or tls endpoint, and a
+// (#1571): an outpost's worklist reads one per ssh or tls endpoint, and a
 // statement each made a large site's pull cost thousands of them.
+//
+// The declared pin is the latest row by `id desc` (insertion order, #712: a
+// declared row carries no caller ts), the observed row beside it by
+// `ts desc, id desc`, because an outpost supplies the observed lane's ts.
 func keyPins(ctx context.Context, q querier, qs []pinQuery) ([]pinPair, error) {
 	out := make([]pinPair, len(qs))
 	if len(qs) == 0 {
@@ -1023,6 +1050,9 @@ func (p *PG) DeleteEndpoint(ctx context.Context, actorID, ref string, read, acti
 	if err := deleteWebhookToken(ctx, tx, actorID, before.ID); err != nil {
 		return err
 	}
+	if err := notifyWorklistChanged(ctx, tx, before.ID); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `delete from endpoint where id = $1`, before.ID); err != nil {
 		return mapEndpointWriteErr(err)
 	}
@@ -1085,8 +1115,8 @@ func mapEndpointWriteErr(err error) error {
 		case "23505": // unique_violation
 			return ErrEndpointExists
 		case "23503": // foreign_key_violation
-			if pgErr.ConstraintName == "endpoint_node_name_fkey" {
-				return ErrEndpointNodeNotFound
+			if pgErr.ConstraintName == "endpoint_outpost_name_fkey" {
+				return ErrEndpointOutpostNotFound
 			}
 		}
 	}

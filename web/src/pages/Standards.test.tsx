@@ -7,7 +7,7 @@ import Standards from "./Standards";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { classifierPropertiesKey, type ClassifierProperty } from "../lib/classifier_properties";
 import { classifierMetricsKey } from "../lib/classifier_metrics";
-import { standardRolesKey, type DeclaredRole } from "../lib/system_roles";
+import { standardSlotsKey, type DeclaredSlot } from "../lib/system_slots";
 import { PROPERTIES_KEY, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY } from "../lib/metric_types";
 import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
@@ -16,7 +16,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 import { TEMPLATES_KEY } from "../lib/templates";
 
-// Standards is the catalog of blueprints a system conforms to, on the flat
+// Standards is the catalog of contracts a system is built to, on the flat
 // FlatList surface beside Products. An official row is read-only (no
 // pencil, no Delete, and a read-only contract); a custom row carries Edit, Delete,
 // and a writable declared-property contract on its detail blade. Data is seeded
@@ -32,15 +32,15 @@ const catalog: PropertyRow[] = [
   { name: "has_camera", data_type: "bool", label: "Has camera", official: true },
 ];
 
-// The roles the custom standard declares (RoleEditor keys the query on the
+// The slots the custom standard declares (SlotEditor keys the query on the
 // standard's uuid, which is what the page passes it), plus the component_type
-// and product registries its typed-slot pickers read (#626).
-const roles: DeclaredRole[] = [{ name: "table-mic", label: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" }];
+// and product catalogs its typed-slot pickers read (#626).
+const slots: DeclaredSlot[] = [{ name: "table-mic", label: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" }];
 const componentTypes: ComponentType[] = [{ id: uuidFor("ct-video-bar"), name: "video-bar", label: "Video Bar", official: true, forked: false, default_tags: [] }];
 const products: Product[] = [{ id: uuidFor("prod-cisco-room-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("ct-video-bar"), official: true }];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
@@ -55,15 +55,15 @@ function mount(me: Me = admin, path = "/standards") {
   qc.setQueryData([...METRICS_KEY], []);
   qc.setQueryData([...classifierMetricsKey("standard", "huddle-space")], []);
   qc.setQueryData([...classifierMetricsKey("standard", "meeting-room")], []);
-  // The role panel mounts beside the contract lanes, keyed on the uuid.
+  // The slot panel mounts beside the contract lanes, keyed on the uuid.
   qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
   qc.setQueryData([...PRODUCTS_KEY], products);
-  qc.setQueryData([...standardRolesKey(uuidFor("std-huddle-space"))], roles);
-  qc.setQueryData([...standardRolesKey(uuidFor("std-meeting-room"))], []);
+  qc.setQueryData([...standardSlotsKey(uuidFor("std-huddle-space"))], slots);
+  qc.setQueryData([...standardSlotsKey(uuidFor("std-meeting-room"))], []);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TEMPLATES_KEY], [
-    { kind: "standard_template", name: "huddle", label: "Huddle space template", standard: { roles: [{ name: "bar", label: "Bar", quorum: 1 }] } },
-    { kind: "system_template", name: "huddle-system", label: "Huddle system", system: { standard: "huddle", roles: {} } },
+    { kind: "standard_template", name: "huddle", label: "Huddle space template", standard: { slots: [{ name: "bar", label: "Bar", quorum: 1 }] } },
+    { kind: "system_template", name: "huddle-system", label: "Huddle system", system: { standard: "huddle", slots: {} } },
   ]);
   window.history.pushState({}, "", path);
   return render(() => (
@@ -138,12 +138,12 @@ describe("Standards page", () => {
   });
 
   // The blade model (#621): a blade opens read-only, and EVERY mutating control,
-  // the contract panels' declare/edit/withdraw and the role panel's declare row
+  // the contract panels' declare/edit/withdraw and the slot panel's declare row
   // included, appears only after the pencil flips the blade into edit mode.
-  it("keeps the contract and role controls out of read mode until the pencil flips edit", async () => {
+  it("keeps the contract and slot controls out of read mode until the pencil flips edit", async () => {
     mount();
     const blade = await openBlade("Huddle space");
-    // Read mode: the declared line and role render as fact rows...
+    // Read mode: the declared line and slot render as fact rows...
     expect(within(blade).getByText("seat_count")).toBeInTheDocument();
     expect(within(blade).getByText("8")).toBeInTheDocument();
     expect(within(blade).getByText("table-mic")).toBeInTheDocument();
@@ -153,21 +153,21 @@ describe("Standards page", () => {
     expect(within(blade).queryByLabelText("Metric to declare")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Edit seat_count")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Withdraw seat_count")).not.toBeInTheDocument();
-    expect(within(blade).queryByLabelText("Role name")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Slot name")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Edit table-mic")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Withdraw table-mic")).not.toBeInTheDocument();
     // The pencil enters edit mode; the existing controls return as they were.
     fireEvent.click(within(blade).getByLabelText("Edit"));
     expect(within(blade).getByLabelText("Property to declare")).toBeInTheDocument();
     expect(within(blade).getByLabelText("Withdraw seat_count")).toBeInTheDocument();
-    expect(within(blade).getByLabelText("Role name")).toBeInTheDocument();
+    expect(within(blade).getByLabelText("Slot name")).toBeInTheDocument();
     expect(within(blade).getByLabelText("Withdraw table-mic")).toBeInTheDocument();
   });
 
   // The permissionless arm of the same rule: a viewer's blade is locked, so
   // the pencil renders greyed (naming the missing permission) and there is
   // still no route into the controls.
-  it("gives a viewer a greyed pencil and no contract or role controls on a custom row", async () => {
+  it("gives a viewer a greyed pencil and no contract or slot controls on a custom row", async () => {
     mount(viewer);
     const blade = await openBlade("Huddle space");
     expect(within(blade).getByText("seat_count")).toBeInTheDocument();
@@ -175,7 +175,7 @@ describe("Standards page", () => {
     expect(editBtn.disabled).toBe(true);
     expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires standard:update");
     expect(within(blade).queryByLabelText("Property to declare")).not.toBeInTheDocument();
-    expect(within(blade).queryByLabelText("Role name")).not.toBeInTheDocument();
+    expect(within(blade).queryByLabelText("Slot name")).not.toBeInTheDocument();
     expect(within(blade).queryByLabelText("Withdraw seat_count")).not.toBeInTheDocument();
   });
 
@@ -228,7 +228,8 @@ describe("Standards page", () => {
     expect(await screen.findByTestId("template-create-preview")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Create standard" }));
     await waitFor(() => expect(url).toMatch(/\/standards:createFromTemplate$/));
-    expect(sent).toEqual({ template: "huddle" });
+    // The stub records the body after it reads it, a beat after the url.
+    await waitFor(() => expect(sent).toEqual({ template: "huddle" }));
     await waitFor(() => expect(window.location.search).toBe("?open=huddle-space&from=huddle"));
   });
 

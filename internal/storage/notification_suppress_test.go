@@ -9,7 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// A snoozed condition's notifications are written suppressed (#1318,
+// A snoozed identity's notifications are written suppressed (#1318,
 // ADR-1318): every row a firing rule would write, on every channel, a raise
 // and a clear alike, is written with the terminal status suppressed and the
 // reason, so the alarm's history keeps what was held back while nothing is
@@ -96,18 +96,18 @@ func TestASnoozedConditionsRowsAreWrittenSuppressedOnEveryChannel(t *testing.T) 
 		t.Errorf("alice's inbox went from %d to %d during the snooze; a suppressed row is never shown", aliceBefore, got)
 	}
 
-	// Another condition on the same component notifies as usual.
+	// Another identity on the same component notifies as usual.
 	other, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no audio", DedupKey: "audio"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, n := range f.rows(t, other.ID) {
 		if n.Status == storage.NotificationSuppressed {
-			t.Errorf("another condition's row was suppressed: %+v", n)
+			t.Errorf("another identity's row was suppressed: %+v", n)
 		}
 	}
 	if got := inbox("alice"); got <= aliceBefore {
-		t.Error("another condition's raise never reached alice's inbox")
+		t.Error("another identity's raise never reached alice's inbox")
 	}
 
 	// The list filters by the new status, under the caller's component scope.
@@ -150,20 +150,20 @@ func TestTheTickSuppressesARowWaitingOutItsRetry(t *testing.T) {
 	up := &sender{sent: map[string]int{}, answer: func(int) storage.SendResult { return storage.SendResult{OK: true, Status: 200} }}
 	drainAll(t, f, up)
 	if len(up.sent) != 0 {
-		t.Fatalf("the tick sent %d rows of a snoozed condition, want none", len(up.sent))
+		t.Fatalf("the tick sent %d rows of a snoozed identity, want none", len(up.sent))
 	}
 	for _, n := range f.list(t, storage.NotificationFilter{AlarmID: a.ID}) {
 		if n.Status != storage.NotificationSuppressed || n.Attempts != 1 || !strings.Contains(n.LastError, "snoozed until") {
 			t.Errorf("a row in backoff when the snooze began = %s after %d attempts (%q), want suppressed with the reason", n.Status, n.Attempts, n.LastError)
 		}
 	}
-	// A row of another condition still sends.
+	// A row of another identity still sends.
 	if _, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no audio", DedupKey: "audio"}); err != nil {
 		t.Fatal(err)
 	}
 	drainAll(t, f, up)
 	if len(up.sent) != 2 {
-		t.Fatalf("another condition's rows sent %d, want both", len(up.sent))
+		t.Fatalf("another identity's rows sent %d, want both", len(up.sent))
 	}
 }
 
@@ -194,7 +194,7 @@ func TestASnoozeWaitsForATransitionAlreadyJudged(t *testing.T) {
 	}()
 	select {
 	case err := <-done:
-		t.Fatalf("the snooze returned (%v) while a transition of its condition was judged and uncommitted", err)
+		t.Fatalf("the snooze returned (%v) while a transition of its identity was judged and uncommitted", err)
 	case <-time.After(300 * time.Millisecond):
 	}
 	if err := commit(); err != nil {

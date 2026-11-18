@@ -1,4 +1,4 @@
-import { byLabel, createIdentity, entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -56,9 +56,9 @@ export default function Variables() {
   const me = useMe();
   const variables = useQuery(() => ({ queryKey: VARIABLES_KEY, queryFn: listVariables }));
 
-  // Ordered by the label an operator reads, unlabelled last, exactly as
-  // ListVariables orders them in SQL (`order by label nulls last, name`, #613).
-  const rows = createMemo(() => [...(variables.data ?? [])].sort(byLabel));
+  // Rendered in the order ListVariables serves (`order by label nulls last, name`,
+  // #613, #757).
+  const rows = createMemo(() => variables.data ?? []);
 
   return (
     <FlatList<Variable>
@@ -260,7 +260,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
   // The operator types the label and the cascade name follows it, until they
-  // take the name over by hand (createIdentity, the registry-page affordance).
+  // take the name over by hand (createIdentity, the catalog-page affordance).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [valueType, setValueType] = createSignal<ValueType>("string");
   const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
@@ -269,7 +269,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 
-  // The Scope select offers only the tiers this principal may actually write at.
+  // The Scope select offers only the tiers this user may actually write at.
   // The platform tier is install-wide, gated server-side on platform:create on top
   // of variable:create, so offering it to a caller holding only the resource half
   // would be offering a control the server refuses.

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -26,14 +27,14 @@ const reach: EventRule = {
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { expr: 'value == "down"' }, clear_criteria: { expr: 'value == "up"' },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high",
-  fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: true, version: 1,
-  open_alarms: 1, pending_streaks: 1, conditions_in_force: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
+  fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, official: true, version: 1,
+  open_alarms: 1, pending_streaks: 1, firing: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
 };
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
   fire_criteria: { expr: "value > 40.0" }, clear_criteria: { expr: "value < 35.0" }, fire_sustain: "1m0s", clear_sustain: "30s",
-  severity: "average", fire_event_type: "condition-started", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
+  severity: "average", fire_event_type: "rule-fired", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0, firing: 0,
 };
 // A rule whose component type and component were deleted after it was written:
 // it matches nothing by them, and stays editable.
@@ -50,40 +51,40 @@ const levels: SeverityLevel[] = [
 const properties: PropertyRow[] = [{ name: "endpoint-reachable", data_type: "string", label: "Endpoint reachable", official: true }];
 const metrics: MetricRow[] = [{ name: "temperature-c", data_type: "float", label: "Temperature", unit: "°C", official: true }];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
-const scoped: Me = { principal: { id: "u-hq", kind: "human" }, human: { username: "viewer-hq" }, permissions: ["*:read"], fleet_permissions: [], grants: [{ role: "viewer", scope_kind: "location", scope_id: uuidFor("loc-hq") }] };
-// Owns one place, views the fleet: rule:create is in its flattened set, but a
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+const scoped: Me = { user: { id: "u-hq", kind: "person" }, person: { username: "viewer-hq" }, permissions: ["*:read"], fleet_permissions: [], grants: [{ role: "viewer", scope_kind: "location", scope_id: uuidFor("loc-hq") }] };
+// Owns one location, views the fleet: rule:create is in its flattened set, but a
 // fleet-wide rule needs it on an all-scope grant, so the server refuses it.
-const placeOwner: Me = {
-  principal: { id: "u-po", kind: "human" }, human: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
+const locationOwner: Me = {
+  user: { id: "u-po", kind: "person" }, person: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
   grants: [{ role: "owner", scope_kind: "location", scope_id: uuidFor("loc-hq") }, { role: "viewer", scope_kind: "all" }],
 };
 
 const display = uuidFor("comp-display-1");
 const reachState = {
-  conditions: [{ component: "display-1", component_id: display, instance: "icmp", since: new Date(Date.now() - 60_000).toISOString() }],
+  firings: [{ component: "display-1", component_id: display, instance: "icmp", since: new Date(Date.now() - 60_000).toISOString() }],
   open: [{ alarm_id: uuidFor("alarm-1"), component: "display-1", component_id: display, instance: "icmp", severity: "high", raised_at: new Date(Date.now() - 60_000).toISOString() }],
   pending: [{ component: "codec-1", component_id: uuidFor("comp-codec-1"), instance: "http", pending: "fire" as const, since: new Date(Date.now() - 5_000).toISOString() }],
   last_judged_at: new Date(Date.now() - 10_000).toISOString(),
 };
 
 const eventTypes: EventTypeRow[] = [
-  { name: "condition-started", label: "Condition Started", official: true },
-  { name: "condition-ended", label: "Condition Ended", official: true },
+  { name: "rule-fired", label: "Rule Fired", official: true },
+  { name: "rule-cleared", label: "Rule Cleared", official: true },
   { name: "call-started", label: "Call Started", official: true },
 ];
 // An informational rule: no severity, so it raises no alarm; it holds one
-// condition in force.
+// firing.
 const watch: EventRule = {
   id: uuidFor("rule-input-watch"), name: "input-watch", label: "Input watch",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { expr: 'value == "down"' }, fire_sustain: "0s", clear_sustain: "0s",
-  fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: false, version: 1,
-  open_alarms: 0, pending_streaks: 0, conditions_in_force: 1,
+  fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, official: false, version: 1,
+  open_alarms: 0, pending_streaks: 0, firing: 1,
 };
 const watchState = {
-  conditions: [{ component: "display-1", component_id: display, instance: "tcp", since: new Date(Date.now() - 90_000).toISOString() }],
+  firings: [{ component: "display-1", component_id: display, instance: "tcp", since: new Date(Date.now() - 90_000).toISOString() }],
   open: [], pending: [],
 };
 
@@ -111,7 +112,7 @@ function mount(me: Me = admin, rules: EventRule[] = [reach, hot], opts: { state?
   qc.setQueryData([...EVENT_RULES_KEY], rules);
   if (opts.state !== false) {
     qc.setQueryData([...ruleStateKey("reachability-lost")], reachState);
-    for (const r of rules.filter((x) => x.name !== "reachability-lost")) qc.setQueryData([...ruleStateKey(r.name)], { conditions: [], open: [], pending: [] });
+    for (const r of rules.filter((x) => x.name !== "reachability-lost")) qc.setQueryData([...ruleStateKey(r.name)], { firings: [], open: [], pending: [] });
   }
   qc.setQueryData([...severityLevelsKey], levels);
   qc.setQueryData([...PROPERTIES_KEY], properties);
@@ -140,7 +141,7 @@ function catchWrites() {
       writes.push({ method: req.method, url: req.url, body });
       return req.method === "DELETE" ? new Response(null, { status: 204 }) : json({ ...hot, ...(body as object) });
     }
-    if (req.url.endsWith("/state")) return json({ conditions: [], open: [], pending: [] });
+    if (req.url.endsWith("/state")) return json({ firings: [], open: [], pending: [] });
     return json({ event_rules: [reach, hot] });
   });
   return writes;
@@ -170,6 +171,26 @@ describe("Rules page", () => {
     expect((document.querySelector('[data-live="too-hot"]') as HTMLElement).textContent).toContain("disabled");
     expect(document.querySelector('[data-severity="high"]')?.textContent).toBe("High");
     expect(gets.filter((u) => u.endsWith("/state"))).toEqual([]);
+  });
+
+  // #1013: JetBrains Mono draws `==` as one bar and `!=` as a not-equals sign,
+  // so a criterion would read as characters nobody can type. The stylesheet's
+  // data-font rule turns ligatures off once, for every code rendering; loading
+  // the real app.css lets jsdom resolve the cascade the browser does.
+  it("renders a rule's criteria in the typed characters, not ligatures", async () => {
+    const sheet = document.createElement("style");
+    sheet.textContent = readFileSync("src/app.css", "utf8");
+    document.head.append(sheet);
+    try {
+      mount(admin, [reach], { state: false });
+      fireEvent.click(screen.getByText("Reachability lost"));
+      const b = await blade();
+      for (const id of ["rule-fire-expr", "rule-clear-expr"]) {
+        expect(getComputedStyle(within(b).getByTestId(id)).fontVariantLigatures).toBe("none");
+      }
+    } finally {
+      sheet.remove();
+    }
   });
 
   it("says when a rule's criteria do not compile, on its row and its blade, with the message", async () => {
@@ -237,7 +258,7 @@ describe("Rules page", () => {
     // (fixtures are stamped at load, so the age is matched, not pinned)
     expect(within(b).getByTestId("rule-judged").textContent).toMatch(/^1\ds ago$/);
     expect(within(b).getByText("Every component")).toBeTruthy();
-    // The level it raises at links to the severity registry beside the rules.
+    // The level it raises at links to the severity catalog beside the rules.
     expect(within(b).getByRole("link", { name: "All levels" }).getAttribute("href")).toBe("/severity-levels");
   });
 
@@ -247,11 +268,11 @@ describe("Rules page", () => {
       if (req.url.includes(":timeline")) {
         expect(req.url).toContain(`/components/${display}/alarms/${uuidFor("alarm-1")}:timeline`);
         return json({ component: display, alarm_id: uuidFor("alarm-1"), entries: [
-          { at: reachState.open[0].raised_at, kind: "event", what: "condition-started", rule: "reachability-lost", instance: "icmp" },
+          { at: reachState.open[0].raised_at, kind: "event", what: "rule-fired", rule: "reachability-lost", instance: "icmp" },
           { at: reachState.open[0].raised_at, kind: "audit", what: "raise", rule: "reachability-lost" },
         ] });
       }
-      return json({ conditions: [], open: [], pending: [] });
+      return json({ firings: [], open: [], pending: [] });
     });
     mount();
     fireEvent.click(screen.getByText("Reachability lost"));
@@ -261,7 +282,7 @@ describe("Rules page", () => {
     const list = await waitFor(() => within(open).getByRole("list", { name: "Timeline of Reachability lost" }));
     const items = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items).toHaveLength(2);
-    expect(items[0]).toContain("condition-started");
+    expect(items[0]).toContain("rule-fired");
     expect(items[1]).toContain("raised");
   });
 
@@ -275,7 +296,7 @@ describe("Rules page", () => {
   it("caps a long live list at eight rows and counts the rest", async () => {
     const { qc } = mount();
     const open = Array.from({ length: 11 }, (_, i) => ({ ...reachState.open[0], alarm_id: uuidFor(`alarm-cap-${i}`) }));
-    qc.setQueryData([...ruleStateKey("reachability-lost")], { conditions: [], open, pending: [] });
+    qc.setQueryData([...ruleStateKey("reachability-lost")], { firings: [], open, pending: [] });
     fireEvent.click(screen.getByText("Reachability lost"));
     const b = await blade();
     const region = within(b).getByRole("region", { name: "Open alarms" });
@@ -318,8 +339,8 @@ describe("Rules page", () => {
     expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires rule:update");
   });
 
-  it("offers no rule write to a caller whose rule permissions stop at one place", async () => {
-    mount(placeOwner);
+  it("offers no rule write to a caller whose rule permissions stop at one location", async () => {
+    mount(locationOwner);
     expect(screen.queryByText("New rule")).toBeNull();
     fireEvent.click(screen.getByText("Too hot"));
     const b = await blade();
@@ -329,7 +350,7 @@ describe("Rules page", () => {
     expect(editBtn.disabled).toBe(true);
   });
 
-  it("lists every rule to a caller scoped to one place, like a registry, but offers it no write", () => {
+  it("lists every rule to a caller scoped to one location, like a catalog, but offers it no write", () => {
     mount(scoped);
     expect(screen.getByText("Too hot")).toBeTruthy();
     expect(screen.queryByText(/fleet-wide config/)).toBeNull();
@@ -362,7 +383,7 @@ describe("Rules page", () => {
       name: "reach-flap", sample_key: "endpoint-reachable",
       fire_criteria: { op: "ne", value: "up" }, fire_sustain: "45s", clear_sustain: "0s",
       // The default level: the worst that does not take its component out.
-      severity: "average", fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, selector: { component_types: [], components: [] },
+      severity: "average", fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, selector: { component_types: [], components: [] },
     });
   });
 
@@ -382,7 +403,7 @@ describe("Rules page", () => {
       }
       if (req.url.endsWith("/event-rules:preview")) return json(preview);
       if (req.method === "POST") return json({ ...hot, ...(body as object) });
-      if (req.url.endsWith("/state")) return json({ conditions: [], open: [], pending: [] });
+      if (req.url.endsWith("/state")) return json({ firings: [], open: [], pending: [] });
       return json({ event_rules: [reach, hot] });
     });
     return reqs;
@@ -587,7 +608,7 @@ describe("Rules page", () => {
     const writes: { method: string; url: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "GET") return req.url.endsWith("/state") ? json({ conditions: [], open: [], pending: [] }) : json({ event_rules: [reach, hot] });
+      if (req.method === "GET") return req.url.endsWith("/state") ? json({ firings: [], open: [], pending: [] }) : json({ event_rules: [reach, hot] });
       writes.push({ method: req.method, url: req.url, body: await req.clone().json() });
       if (req.url.includes(":rename")) return json({ title: "Conflict", status: 409, detail: "an event rule already has that name" }, 409);
       return json({ ...hot, label: "Too warm" });
@@ -616,7 +637,7 @@ describe("Rules page", () => {
     return writes;
   }
 
-  it("marks a selector entry the registries no longer have as deleted, with why", async () => {
+  it("marks a selector entry the catalogs no longer have as deleted, with why", async () => {
     await editStale();
     const selected = screen.getByLabelText("Selected");
     const chips = within(selected).getAllByText("deleted");
@@ -688,7 +709,7 @@ describe("Rules page", () => {
     expect(writes[0].url).toMatch(/\/event-rules\/too-hot$/);
   });
 
-  it("authors an informational rule: severity None, the event type pickers from the registry, no clear event", async () => {
+  it("authors an informational rule: severity None, the event type pickers from the catalog, no clear event", async () => {
     const writes = catchWrites();
     mount();
     fireEvent.click(screen.getByText("New rule"));
@@ -700,10 +721,10 @@ describe("Rules page", () => {
     expect([...sev.options].map((o) => o.textContent)).toContain("None (informational)");
     fireEvent.change(sev, { target: { value: "" } });
     const fireType = screen.getByLabelText("Fire event type") as HTMLSelectElement;
-    expect(fireType.value).toBe("condition-started");
-    expect([...fireType.options].map((o) => o.value)).toEqual(["condition-started", "condition-ended", "call-started"]);
+    expect(fireType.value).toBe("rule-fired");
+    expect([...fireType.options].map((o) => o.value)).toEqual(["rule-fired", "rule-cleared", "call-started"]);
     const clearType = screen.getByLabelText("Clear event type") as HTMLSelectElement;
-    expect(clearType.value).toBe("condition-ended");
+    expect(clearType.value).toBe("rule-cleared");
     expect([...clearType.options].map((o) => o.textContent)).toContain("No clear event");
     fireEvent.change(clearType, { target: { value: "" } });
     const submit = screen.getByText("Create rule").closest("button") as HTMLButtonElement;
@@ -713,29 +734,29 @@ describe("Rules page", () => {
     const body = writes[0].body as Record<string, unknown>;
     expect(body.severity).toBeUndefined();
     expect(body.clear_event_type).toBeUndefined();
-    expect(body.fire_event_type).toBe("condition-started");
+    expect(body.fire_event_type).toBe("rule-fired");
   });
 
-  it("shows an informational rule as such, with its condition in force, on the list and the blade", async () => {
+  it("shows an informational rule as such, firing, on the list and the blade", async () => {
     mount(admin, [reach, hot, watch], { state: false });
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.url.endsWith("/event-rules/input-watch/state")) return json(watchState);
-      return json({ conditions: [], open: [], pending: [] });
+      return json({ firings: [], open: [], pending: [] });
     });
     const row = screen.getByText("Input watch").closest("tr") as HTMLElement;
     expect(within(row).getByText("informational")).toBeTruthy();
-    expect(within(row).getByText("1 in force")).toBeTruthy();
+    expect(within(row).getByText("1 firing")).toBeTruthy();
     fireEvent.click(screen.getByText("Input watch"));
     const b = await blade();
     expect(within(b).getByText("informational")).toBeTruthy();
-    const conds = within(b).getByRole("region", { name: "Conditions in force" });
+    const conds = within(b).getByRole("region", { name: "Firing" });
     expect(await within(conds).findByText("display-1")).toBeTruthy();
     expect(within(conds).getByText("tcp")).toBeTruthy();
   });
 
   it("opens the rule a link names, so an event row can point at the rule that wrote it", async () => {
-    window.history.pushState({}, "", "/rules?rule=reachability-lost");
+    window.history.pushState({}, "", "/event-rules?rule=reachability-lost");
     try {
       mount();
       const b = await blade();
@@ -746,13 +767,13 @@ describe("Rules page", () => {
   });
 
   it("opens the rule a link names by uuid, so an event written before a rename still leads to its rule", async () => {
-    window.history.pushState({}, "", `/rules?rule=${reach.id}`);
+    window.history.pushState({}, "", `/event-rules?rule=${reach.id}`);
     try {
       mount();
       const b = await blade();
       expect(within(b).getByText("reachability-lost")).toBeTruthy();
       // Its live state reads by the rule's current name.
-      const conds = within(b).getByRole("region", { name: "Conditions in force" });
+      const conds = within(b).getByRole("region", { name: "Firing" });
       expect(await within(conds).findByText("display-1")).toBeTruthy();
     } finally {
       window.history.pushState({}, "", "/");
@@ -760,12 +781,12 @@ describe("Rules page", () => {
   });
 
   it("follows the rule a link names as it changes (back and forward), and lets go of it when the blade closes", async () => {
-    window.history.pushState({}, "", "/rules?rule=reachability-lost");
+    window.history.pushState({}, "", "/event-rules?rule=reachability-lost");
     try {
       mount();
       let b = await blade();
       expect(within(b).getByText("reachability-lost")).toBeTruthy();
-      window.history.pushState({}, "", "/rules?rule=too-hot");
+      window.history.pushState({}, "", "/event-rules?rule=too-hot");
       window.dispatchEvent(new PopStateEvent("popstate"));
       await waitFor(() => expect(within(asides()[asides().length - 1] as HTMLElement).getByText("too-hot")).toBeTruthy());
       b = asides()[asides().length - 1] as HTMLElement;
@@ -777,7 +798,7 @@ describe("Rules page", () => {
   });
 
   it("says a linked rule is not found only once the list has loaded, and reads no state for it", async () => {
-    window.history.pushState({}, "", "/rules?rule=no-such-rule");
+    window.history.pushState({}, "", "/event-rules?rule=no-such-rule");
     try {
       let release!: () => void;
       const gate = new Promise<void>((r) => { release = r; });
@@ -789,7 +810,7 @@ describe("Rules page", () => {
           await gate;
           return json({ event_rules: [reach, hot] });
         }
-        return json({ conditions: [], open: [], pending: [] });
+        return json({ firings: [], open: [], pending: [] });
       });
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       qc.setQueryData([...severityLevelsKey], levels);

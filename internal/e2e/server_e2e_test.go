@@ -87,7 +87,7 @@ type runningServer struct {
 	URL      string // http://<addr>, the API's base
 	Addr     string // the HTTP listener's bound address
 	NatsAddr string // the embedded bus's bound address
-	NatsURL  string // the bus URL the node-claim exchange advertises
+	NatsURL  string // the bus URL the outpost-claim exchange advertises
 }
 
 // startServer is the one way an end-to-end test starts `omniglass server`.
@@ -96,7 +96,7 @@ type runningServer struct {
 // file (OMNIGLASS_READY_FILE), which this waits for. Nothing picks a port,
 // releases it and hands the number to a later bind, so a concurrent run on
 // the host cannot take it first (#1077). The bus URL is left to the server
-// to derive from the address it bound, so a node is told the port it got.
+// to derive from the address it bound, so an outpost is told the port it got.
 //
 // env is the caller's settings (the DSN, at least), laid over a fresh
 // JetStream store and data dir; the listen settings and the ready file are

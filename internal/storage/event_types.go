@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/hyperscaleav/omniglass/internal/key"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -14,7 +15,7 @@ import (
 
 // EventType is a registered occurrence key: the "happen" half of the telemetry
 // model, the twin of PropertyType (the "know" half). An event is a different shape
-// from a sample (an occurrence, not a value), so it gets its own registry.
+// from a sample (an occurrence, not a value), so it gets its own catalog.
 // PayloadSchema is an optional jsonb schema for the occurrence payload. Official
 // marks a seed-owned, read-only type. An event type is addressed by its name.
 type EventType struct {
@@ -26,7 +27,7 @@ type EventType struct {
 	Description   string
 	PayloadSchema []byte
 	Official      bool
-	// WriterClass is who may write this event (ADR-0161): node-probe for
+	// WriterClass is who may write this event (ADR-0161): outpost-probe for
 	// collection-failed, collected otherwise (no calc rule outputs an event).
 	// Resolved from the name, never stored.
 	WriterClass writerclass.Class `json:"-"`
@@ -49,13 +50,48 @@ type EventTypeSpec struct {
 	PayloadSchema []byte
 }
 
+// The event_type fields a PATCH can write, spelled as the wire body spells them,
+// because an update_mask names wire fields (ADR-0091).
+const (
+	EventTypeFieldLabel         = "label"
+	EventTypeFieldDescription   = "description"
+	EventTypeFieldPayloadSchema = "payload_schema"
+)
+
+// EventTypePatchFields is every field an event_type PATCH lets a write set, in
+// the order a refusal lists them.
+var EventTypePatchFields = []string{EventTypeFieldLabel, EventTypeFieldDescription, EventTypeFieldPayloadSchema}
+
 // EventTypePatch carries the mutable fields of an event-type update; a nil field is
 // unchanged. The name is fixed at create. PayloadSchema replaces wholesale when
-// non-nil.
+// non-nil, and, being a nullable object with no empty value to overload, clears
+// by being named in Write with no bytes (#1189, ADR-0106's rule).
 type EventTypePatch struct {
 	Label         *string
 	Description   *string
 	PayloadSchema []byte
+	// Write is the resolved update_mask: the fields this write writes. NIL means
+	// the caller sent no mask, read as the implied mask of the fields the patch
+	// populated. A NON-NIL empty set names no fields and writes nothing.
+	Write updatemask.Fields
+}
+
+// Populated is the patch's implied mask: the fields it carries a value for.
+// Exported because the API resolves the wire mask against the same patch it is
+// about to write, so "populated" is defined once for both layers.
+func (p EventTypePatch) Populated() updatemask.Fields {
+	f := updatemask.Fields{}
+	populatedIf(f, EventTypeFieldLabel, p.Label != nil)
+	populatedIf(f, EventTypeFieldDescription, p.Description != nil)
+	populatedIf(f, EventTypeFieldPayloadSchema, len(p.PayloadSchema) > 0)
+	return f
+}
+
+func (p EventTypePatch) writeFields() updatemask.Fields {
+	if p.Write != nil {
+		return p.Write
+	}
+	return updatemask.Implied(p.Populated())
 }
 
 // UpsertEventType installs an official event type, authoritative on conflict (the
@@ -83,7 +119,7 @@ func (p *PG) UpsertEventType(ctx context.Context, et EventType) error {
 }
 
 // ListEventTypes returns every registered event type (official and custom). No
-// scope.Set: the registry is fleet-wide reference data.
+// scope.Set: the catalog is fleet-wide reference data.
 func (p *PG) ListEventTypes(ctx context.Context) ([]EventType, error) {
 	rows, err := p.pool.Query(ctx, eventTypeListSQL)
 	if err != nil {
@@ -185,7 +221,7 @@ func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventType
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Cross-registry uniqueness. The ingest registries (property_type, metric_type,
+	// Cross-catalog uniqueness. The ingest catalogs (property_type, metric_type,
 	// event_type) are separate tables with separate uniqueness, so nothing at the
 	// schema level stops a name landing in two of them, and such a name resolves to
 	// NOTHING at ingest (the snapshot refuses it rather than picking a winner).
@@ -195,7 +231,7 @@ func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventType
 	if err := tx.QueryRow(ctx,
 		`select exists (select 1 from property_type_in_effect() property_type where name = $1)
 		     or exists (select 1 from metric_type_in_effect() metric_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
-		return nil, fmt.Errorf("storage: check registry clash for %q: %w", spec.Name, err)
+		return nil, fmt.Errorf("storage: check catalog clash for %q: %w", spec.Name, err)
 	}
 	if clash {
 		return nil, ErrEventTypeExists
@@ -239,21 +275,23 @@ func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch Ev
 	if err := guardEventTypeMutable(ctx, tx, name); err != nil {
 		return nil, err
 	}
-	before, err := registryAuditImage(ctx, tx, "event_type", name)
+	before, err := catalogAuditImage(ctx, tx, "event_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrEventTypeNotFound
 		}
 		return nil, fmt.Errorf("storage: audit image event_type %q: %w", name, err)
 	}
-	setLabel, labelVal := labelPatch(patch.Label)
+	w := patch.writeFields()
+	setLabel, labelVal := labelPatch(maskedPtr(w, EventTypeFieldLabel, patch.Label))
 	if _, err := tx.Exec(ctx, `
 		update event_type set
 			label   = case when $5::boolean then $2 else label end,
 			description    = coalesce($3, description),
-			payload_schema = coalesce($4, payload_schema)
+			payload_schema = case when $6::boolean then $4::jsonb else payload_schema end
 		where id = (select id from event_type_in_effect() event_type where name = $1)`,
-		name, labelVal, patch.Description, schemaArg(patch.PayloadSchema), setLabel); err != nil {
+		name, labelVal, maskedPtr(w, EventTypeFieldDescription, patch.Description), schemaArg(patch.PayloadSchema), setLabel,
+		w.Has(EventTypeFieldPayloadSchema)); err != nil {
 		return nil, fmt.Errorf("storage: update event type %q: %w", name, err)
 	}
 	var et EventType
@@ -265,7 +303,7 @@ func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch Ev
 		}
 		return nil, fmt.Errorf("storage: reload event type %q: %w", name, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "event_type", name)
+	after, err := catalogAuditImage(ctx, tx, "event_type", name)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image event_type %q: %w", name, err)
 	}
@@ -290,7 +328,7 @@ func (p *PG) DeleteEventType(ctx context.Context, actorID, name string) error {
 	if err := guardEventTypeMutable(ctx, tx, name); err != nil {
 		return err
 	}
-	before, err := registryAuditImage(ctx, tx, "event_type", name)
+	before, err := catalogAuditImage(ctx, tx, "event_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrEventTypeNotFound

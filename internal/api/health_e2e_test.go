@@ -19,13 +19,17 @@ type alarmWire struct {
 	Severity  string `json:"severity"`
 	Message   string `json:"message"`
 	Active    bool   `json:"active"`
+	// The acknowledgement a health read carries beside the alarm (#990).
+	Acknowledged   bool    `json:"acknowledged"`
+	AcknowledgedAt *string `json:"acknowledged_at"`
+	AcknowledgedBy string  `json:"acknowledged_by"`
 }
 
 type healthWire struct {
 	OwnerKind string `json:"owner_kind"`
 	Owner     string `json:"owner"`
 	Verdict   string `json:"verdict"`
-	Roles     []struct {
+	Slots     []struct {
 		Name       string      `json:"name"`
 		Impact     string      `json:"impact"`
 		Quorum     int         `json:"quorum"`
@@ -33,7 +37,7 @@ type healthWire struct {
 		Impaired   bool        `json:"impaired"`
 		Down       []string    `json:"down"`
 		Alarms     []alarmWire `json:"alarms"`
-	} `json:"roles"`
+	} `json:"slots"`
 	Systems []struct {
 		Name    string `json:"name"`
 		Verdict string `json:"verdict"`
@@ -45,7 +49,7 @@ type healthWire struct {
 
 // TestHealthAPI drives the alarm and health surfaces over HTTP as an operator
 // would: raise an alarm on a component, watch its system and the location above
-// it go degraded, read WHY (the impaired role, the component the alarm took
+// it go degraded, read WHY (the impaired slot, the component the alarm took
 // down, and the alarm itself), then clear the alarm and watch everything come
 // back. The drill-down from a degraded location to the causing alarm is the
 // point of the slice, so it is driven end to end here rather than asserted at
@@ -79,7 +83,7 @@ func TestHealthAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
 		"name": "hq-room", "label": "HQ Room",
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/standards/hq-room/roles/table-mic", map[string]any{
+	c.do(ownerTok, http.MethodPatch, "/standards/hq-room/slots/table-mic", map[string]any{
 		"label": "Table Microphone", "quorum": 1,
 		"accepted_types": []string{"video-bar"}, "impact": "outage",
 	}, http.StatusOK)
@@ -90,7 +94,7 @@ func TestHealthAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{
 		"name": "bar-1", "product": bar.Name,
 	}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPut, "/systems/hq-1/roles/table-mic/assignments/bar-1", nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPut, "/systems/hq-1/slots/table-mic/assignments/bar-1", nil, http.StatusNoContent)
 
 	health := func(tok, path string) healthWire {
 		t.Helper()
@@ -102,13 +106,13 @@ func TestHealthAPI(t *testing.T) {
 	}
 
 	// Staffed and quiet: healthy, and the impact the standard declared rides along
-	// on the role even while nothing is wrong.
+	// on the slot even while nothing is wrong.
 	sys := health(ownerTok, "/systems/hq-1/health")
 	if sys.Verdict != "healthy" {
 		t.Fatalf("staffed system verdict = %q, want healthy", sys.Verdict)
 	}
-	if len(sys.Roles) != 1 || sys.Roles[0].Impact != "outage" || sys.Roles[0].Impaired {
-		t.Fatalf("roles = %+v, want one table-mic at impact outage, not impaired", sys.Roles)
+	if len(sys.Slots) != 1 || sys.Slots[0].Impact != "outage" || sys.Slots[0].Impaired {
+		t.Fatalf("slots = %+v, want one table-mic at impact outage, not impaired", sys.Slots)
 	}
 
 	// Raise a high alarm on the bar: it impairs the component wholesale
@@ -124,21 +128,36 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("raised alarm = %+v, want an active high", raised)
 	}
 
-	// The role's impact is outage, so the system is an outage the moment its
+	// The slot's impact is outage, so the system is an outage the moment its
 	// one occupant goes down. What the slot meant is what decides.
 	sys = health(ownerTok, "/systems/hq-1/health")
 	if sys.Verdict != "outage" {
-		t.Fatalf("system verdict = %q, want outage (the impaired role's declared impact)", sys.Verdict)
+		t.Fatalf("system verdict = %q, want outage (the impaired slot's declared impact)", sys.Verdict)
 	}
-	role := sys.Roles[0]
-	if !role.Impaired || role.Satisfying != 0 {
-		t.Fatalf("role = %+v, want impaired with nobody satisfying it", role)
+	slot := sys.Slots[0]
+	if !slot.Impaired || slot.Satisfying != 0 {
+		t.Fatalf("slot = %+v, want impaired with nobody satisfying it", slot)
 	}
-	if len(role.Down) != 1 || role.Down[0] != "bar-1" {
-		t.Fatalf("down = %v, want the assigned component the alarm took down", role.Down)
+	if len(slot.Down) != 1 || slot.Down[0] != "bar-1" {
+		t.Fatalf("down = %v, want the assigned component the alarm took down", slot.Down)
 	}
-	if len(role.Alarms) != 1 || role.Alarms[0].ID != raised.ID {
-		t.Fatalf("alarms = %+v, want the causing alarm named", role.Alarms)
+	if len(slot.Alarms) != 1 || slot.Alarms[0].ID != raised.ID {
+		t.Fatalf("alarms = %+v, want the causing alarm named", slot.Alarms)
+	}
+	if a := slot.Alarms[0]; a.Acknowledged || a.AcknowledgedAt != nil || a.AcknowledgedBy != "" {
+		t.Fatalf("slot alarm = %+v, want it unacknowledged before anybody acknowledges", a)
+	}
+
+	// Acknowledging is orthogonal to cleared (ADR-0109): the alarm stays raised
+	// and the slot stays impaired, and the health read now says who looked and
+	// when, so the system page needs no trip to each component (#990).
+	c.do(ownerTok, http.MethodPost, ackPath("bar-1", raised.ID), nil, http.StatusOK)
+	slot = health(ownerTok, "/systems/hq-1/health").Slots[0]
+	if len(slot.Alarms) != 1 {
+		t.Fatalf("alarms after acknowledge = %+v, want the alarm still raised", slot.Alarms)
+	}
+	if a := slot.Alarms[0]; !a.Acknowledged || a.AcknowledgedAt == nil || a.AcknowledgedBy == "" {
+		t.Fatalf("slot alarm after acknowledge = %+v, want acknowledged, with when and by whom", a)
 	}
 
 	// The system's members read carries each member's own verdict (#940): a
@@ -220,7 +239,7 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("member verdict after clearing = %q, want healthy", v)
 	}
 	// A recently cleared alarm stays on the system's read: Activity explains a
-	// past incident with it.
+	// past unhealthy stretch with it.
 	if got := systemAlarms(); len(got) != 1 || got[0].ID != raised.ID || got[0].Active {
 		t.Fatalf("system alarms after clearing = %+v, want the cleared row kept", got)
 	}
@@ -242,7 +261,7 @@ func TestHealthAPI(t *testing.T) {
 	}
 
 	// The transition series is edges and only edges: incomplete the moment the
-	// system was created (it inherited a role the standard already declared and
+	// system was created (it inherited a slot the standard already declared and
 	// nobody was filling it, which is a commissioning gap, not a failure, #631),
 	// healthy when the bar was assigned, outage on the alarm, healthy on the
 	// clear. Four writes moved the verdict; the reads in between added nothing,
@@ -321,7 +340,7 @@ func TestHealthAPIScope(t *testing.T) {
 
 	// A viewer that can see only the north campus: the *:read floor passes the
 	// permission gate, scope injection is what hides the south.
-	viewerTok := setupScopedPrincipal(t, ctx, dsn, "viewer-north-health",
+	viewerTok := setupScopedUser(t, ctx, dsn, "viewer-north-health",
 		grantSpec{role: "viewer", scopeKind: "location", scopeID: northID},
 		grantSpec{role: "viewer", scopeKind: "system", scopeID: northSysID})
 	c.do(viewerTok, http.MethodGet, "/locations/north/health", nil, http.StatusOK)

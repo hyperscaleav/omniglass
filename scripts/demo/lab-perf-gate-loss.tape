@@ -38,7 +38,7 @@ Wait
 Type "# Now edit the run: three property items lost at ingest (outcome missing), and one boot unsettled"
 Enter
 Wait
-Type `jq -c '.delivery |= map(if .kind == "property" and .hop == "ingest" and .lane == "node" then .out -= 3 | .loss = 3 / .in | .outcomes.missing = 3 else . end) | .delivery_unsettled = [{node: "edge-hq", boot: "1"}]' /tmp/perf-runs.jsonl > /tmp/lossy.jsonl`
+Type `jq -c '.delivery |= map(if .kind == "property" and .hop == "ingest" and .lane == "outpost" then .out -= 3 | .loss = 3 / .in | .outcomes.missing = 3 else . end) | .delivery_unsettled = [{outpost: "edge-hq", boot: "1"}]' /tmp/perf-runs.jsonl > /tmp/lossy.jsonl`
 Enter
 Wait
 Type "omniglass lab perf check --baseline /tmp/perf-base.json --samples /tmp/lossy.jsonl --runs 1 --json /tmp/lossy.verdict >/tmp/lossy.txt || echo check exited $?"
