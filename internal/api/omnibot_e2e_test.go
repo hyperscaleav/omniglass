@@ -122,8 +122,8 @@ turns:
 func TestOmnibotHoldsOnlyItsPersonsGrants(t *testing.T) {
 	t.Parallel()
 	s := newMCPStack(t)
-	s.c.do(s.owner, http.MethodPost, "/principals", map[string]string{"username": "vera", "password": "orange-boat-42x"}, http.StatusCreated)
-	s.c.do(s.owner, http.MethodPost, "/principals/vera/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
+	s.c.do(s.owner, http.MethodPost, "/users", map[string]string{"username": "vera", "password": "orange-boat-42x"}, http.StatusCreated)
+	s.c.do(s.owner, http.MethodPost, "/users/vera/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
 	viewer := loginBearer(t, s.c, "vera", "orange-boat-42x")
 	out, _ := omnibotRun(t, s, viewer, `
 turns:

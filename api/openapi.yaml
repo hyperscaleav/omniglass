@@ -98,12 +98,12 @@ components:
           format: uri
           readOnly: true
           type: string
-        principal_id:
-          description: "The principal to add: a human's username, a service account's name, or its uuid"
+        user_id:
+          description: "The user to add: a person's username, a machine user's name, or its uuid"
           minLength: 1
           type: string
       required:
-        - principal_id
+        - user_id
       type: object
     AddSimComponentInputBody:
       additionalProperties: false
@@ -425,6 +425,28 @@ components:
         - policy
         - source
       type: object
+    AguiContextInput:
+      additionalProperties: true
+      properties:
+        description:
+          description: "What it is: a kind, or page"
+          maxLength: 100
+          type: string
+        value:
+          description: A name or dotted address, or a route and its query; never a rendered value
+          maxLength: 2000
+          type: string
+      required:
+        - description
+        - value
+      type: object
+    AguiForwardedInput:
+      additionalProperties: true
+      properties:
+        skill:
+          $ref: "#/components/schemas/AguiSkillInput"
+          description: An embedded skill to run, its prompt ahead of the person's message
+      type: object
     AguiMessageInput:
       additionalProperties: true
       properties:
@@ -456,6 +478,21 @@ components:
         - interruptId
         - status
       type: object
+    AguiSkillInput:
+      additionalProperties: true
+      properties:
+        arguments:
+          additionalProperties:
+            type: string
+          description: The skill's arguments, by name
+          type: object
+        name:
+          description: The skill, as omniglass mcp skill lists it
+          maxLength: 100
+          type: string
+      required:
+        - name
+      type: object
     AlarmBody:
       additionalProperties: false
       description: A raised problem on a component, with a severity, from the moment it raises until it clears.
@@ -475,7 +512,7 @@ components:
           format: date-time
           type: string
         acknowledged_by:
-          description: Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)
+          description: Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name)
           type: string
         active:
           type: boolean
@@ -490,7 +527,7 @@ components:
           description: The component's uuid, the stable form of component
           type: string
         dedup_key:
-          description: "The condition identity: one open alarm per (component, dedup_key)"
+          description: "What the alarm is about: one open alarm per (component, dedup_key)"
           type: string
         id:
           type: string
@@ -509,10 +546,10 @@ components:
           description: The severity level the alarm was raised at, by name (see /severity-levels)
           type: string
         snoozed_by:
-          description: Who snoozed the condition, by name; empty while it is not snoozed, or once that principal has been purged (the audit log keeps the name)
+          description: Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)
           type: string
         snoozed_until:
-          description: "Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"
+          description: "Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"
           format: date-time
           type: string
       required:
@@ -583,7 +620,7 @@ components:
           description: A notification's uuid, what :retry names
           type: string
         recipient:
-          description: "The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin"
+          description: "The person a notification is addressed to, by username: shown to that person and to holders of user:read:admin"
           type: string
         recipient_withheld:
           description: True when a notification is addressed to a person whose name the caller may not see
@@ -598,7 +635,7 @@ components:
           description: "The alarm edge a notification is about: raised or cleared"
           type: string
         what:
-          description: The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed)
+          description: The event's type (e.g. rule-fired), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its alarm was snoozed)
           type: string
       required:
         - at
@@ -1699,7 +1736,7 @@ components:
           format: date-time
           type: string
         issuer:
-          description: Who issued it, by name; empty once that principal is purged (the audit log keeps the name)
+          description: Who issued it, by name; empty once that user is purged (the audit log keeps the name)
           type: string
         issuer_id:
           description: The issuer's uuid, the actor on the command's audit row
@@ -2129,7 +2166,7 @@ components:
           description: A compact form of label; empty inherits the nearest ancestor's
           type: string
         default_tags:
-          description: Tags every instance of this type (or a descendant that does not override) starts with
+          description: Tags every instance of this type (or a descendant that does not set its own) starts with
           items:
             type: string
           type:
@@ -2642,7 +2679,7 @@ components:
           $ref: "#/components/schemas/CriteriaInput"
           description: "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)"
         clear_event_type:
-          description: The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none
+          description: The event type the rule writes when it clears, by name (rule-cleared is the generic one); absent, it writes none
           type: string
         clear_sustain:
           description: A Go duration; empty is 0s
@@ -2655,9 +2692,9 @@ components:
           type: boolean
         fire_criteria:
           $ref: "#/components/schemas/CriteriaInput"
-          description: "The criteria that starts the condition: {expr}, or the short form {op, value}"
+          description: "The criteria the rule fires on: {expr}, or the short form {op, value}"
         fire_event_type:
-          description: The event type the rule writes when its condition starts, by name (condition-started is the generic one)
+          description: The event type the rule writes when it fires, by name (rule-fired is the generic one)
           minLength: 1
           type: string
         fire_sustain:
@@ -3157,8 +3194,8 @@ components:
           enum:
             - webhook
             - email
-            - principal_group
-            - principal
+            - user_group
+            - user
           type: string
         label:
           description: A human label
@@ -3167,17 +3204,17 @@ components:
           description: The target's name (lowercase kebab)
           minLength: 1
           type: string
-        principal:
-          description: A principal target's person, by username or uuid; binding one takes principal:read:admin
-          type: string
-        principal_group:
-          description: A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin
-          type: string
         secret:
           description: "A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer)"
           type: string
         url:
           description: "A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is"
+          type: string
+        user:
+          description: A user target's person, by username or uuid; binding one takes user:read:admin
+          type: string
+        user_group:
+          description: A user_group target's group, by name or uuid; binding one takes user_group:read:admin
           type: string
       required:
         - name
@@ -3298,39 +3335,6 @@ components:
         - name
         - "on"
         - channels
-      type: object
-    CreatePrincipalInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/CreatePrincipalInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        email:
-          description: Contact email for the account
-          format: email
-          maxLength: 320
-          type: string
-        label:
-          description: What an operator reads in lists; falls back to the username
-          maxLength: 200
-          type: string
-        password:
-          description: Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in
-          maxLength: 256
-          minLength: 12
-          type: string
-        username:
-          description: Unique sign-in name (lowercase letters, digits, and . _ -)
-          maxLength: 200
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9._-]*$
-          type: string
-      required:
-        - username
       type: object
     CreateProductInputBody:
       additionalProperties: false
@@ -3766,6 +3770,39 @@ components:
       required:
         - name
       type: object
+    CreateUserInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/CreateUserInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        email:
+          description: Contact email for the account
+          format: email
+          maxLength: 320
+          type: string
+        label:
+          description: What an operator reads in lists; falls back to the username
+          maxLength: 200
+          type: string
+        password:
+          description: Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in
+          maxLength: 256
+          minLength: 12
+          type: string
+        username:
+          description: Unique sign-in name (lowercase letters, digits, and . _ -)
+          maxLength: 200
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
+          type: string
+      required:
+        - username
+      type: object
     CreateVariableInputBody:
       additionalProperties: false
       properties:
@@ -4143,7 +4180,7 @@ components:
           description: True when the component's product declares the property; false for one set directly on the component
           type: boolean
         is_set:
-          description: True when the component overrides the contract default
+          description: True when the component declares its own value over the contract default
           type: boolean
         label:
           description: The property's human label; omitted when unset
@@ -4161,7 +4198,7 @@ components:
           description: Whether the product contract requires a value; always false off-contract
           type: boolean
         set_value:
-          description: The component's override; omitted when the property is unset
+          description: The component's declared value; omitted when the property is unset
         source_rule:
           description: The calc rule whose calculated sample is the value, by the name it was written under; absent when the value is a declared one or a default
           type: string
@@ -4169,7 +4206,7 @@ components:
           description: That calc rule's uuid, the stable form of source_rule
           type: string
         value:
-          description: "The effective value: the override, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation"
+          description: "The effective value: the declared value, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation"
         value_id:
           description: The stored value's id when set; omitted when the property is unset
           type: string
@@ -4264,7 +4301,7 @@ components:
           format: int64
           type: integer
         understaffed:
-          description: How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure
+          description: How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own health. See the health read's short for the occupancy-aware figure
           format: int64
           type: integer
       required:
@@ -4634,17 +4671,13 @@ components:
           type: string
         clear_criteria:
           $ref: "#/components/schemas/CriteriaBody"
-          description: When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria
+          description: When the sample meets this for clear_sustain, it clears (and the alarm clears); absent, the negation of fire_criteria
         clear_event_type:
-          description: The event type the rule writes when its condition ends, by name; absent, it writes none
+          description: The event type the rule writes when it clears, by name; absent, it writes none
           type: string
         clear_sustain:
           description: How long the clear criteria must hold, a Go duration
           type: string
-        conditions_in_force:
-          description: How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
-          format: int64
-          type: integer
         criteria_error:
           $ref: "#/components/schemas/CriteriaErrorBody"
           description: "Why the rule's stored criteria do not compile (its key's data type changed under them, a row the backfill left in short form, or an expression a newer diagnostic refuses); absent when they compile. While present the rule holds: it judges nothing"
@@ -4661,13 +4694,17 @@ components:
           type: boolean
         fire_criteria:
           $ref: "#/components/schemas/CriteriaBody"
-          description: When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity)
+          description: When the sample meets this for fire_sustain, the rule fires (and it opens an alarm when it names a severity)
         fire_event_type:
-          description: The event type the rule writes when its condition starts, by name
+          description: The event type the rule writes when it fires, by name
           type: string
         fire_sustain:
           description: How long the fire criteria must hold, a Go duration (0s fires at once)
           type: string
+        firing:
+          description: How many firings the rule holds right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
+          format: int64
+          type: integer
         id:
           description: The rule's uuid, the stable form of name
           type: string
@@ -4727,7 +4764,7 @@ components:
         - version
         - open_alarms
         - pending_streaks
-        - conditions_in_force
+        - firing
       type: object
     EventRuleStateOutputBody:
       additionalProperties: false
@@ -4739,16 +4776,16 @@ components:
           format: uri
           readOnly: true
           type: string
-        conditions:
-          description: The conditions the rule holds in force, informational or not
-          items:
-            $ref: "#/components/schemas/RuleConditionBody"
-          type:
-            - array
-            - "null"
         criteria_error:
           $ref: "#/components/schemas/CriteriaErrorBody"
           description: Why the rule's stored criteria do not compile; absent when they compile. While present the rule holds
+        firings:
+          description: The rule's firings, informational or not
+          items:
+            $ref: "#/components/schemas/RuleFiringBody"
+          type:
+            - array
+            - "null"
         last_judged_at:
           description: When an ingested sample was last judged by the rule, to within 5s; absent when it never has been
           format: date-time
@@ -4768,7 +4805,7 @@ components:
             - array
             - "null"
       required:
-        - conditions
+        - firings
         - open
         - pending
       type: object
@@ -5226,10 +5263,10 @@ components:
           readOnly: true
           type: string
         group:
-          description: The source group's name, the identifier /principal-groups/{group} takes; present when the grant is inherited.
+          description: The source group's name, the identifier /user-groups/{group} takes; present when the grant is inherited.
           type: string
         group_id:
-          description: Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal.
+          description: Set when this grant is inherited from a group the user belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the user.
           type: string
         group_label:
           description: The source group's friendly label, present when the grant is inherited and the group has one.
@@ -5275,7 +5312,7 @@ components:
         label:
           type: string
         member_count:
-          description: How many principals belong to the group (populated on list and get; 0 from create/update).
+          description: How many users belong to the group (populated on list and get; 0 from create/update).
           format: int64
           type: integer
         name:
@@ -5297,7 +5334,7 @@ components:
           format: date-time
           type: string
         acknowledged_by:
-          description: Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)
+          description: Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name)
           type: string
         component:
           description: The component the alarm is on, by name
@@ -5437,31 +5474,6 @@ components:
         - ts
         - verdict
       type: object
-    HumanBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/HumanBody.json
-          format: uri
-          readOnly: true
-          type: string
-        email:
-          type: string
-        has_avatar:
-          description: True when the principal has a profile picture; fetch it from the avatar endpoint.
-          type: boolean
-        label:
-          type: string
-        must_change_password:
-          description: True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears.
-          type: boolean
-        username:
-          type: string
-      required:
-        - username
-      type: object
     IdentityBindingBody:
       additionalProperties: false
       properties:
@@ -5564,7 +5576,7 @@ components:
           minimum: 1
           type: integer
         mode:
-          description: view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal
+          description: view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user
           enum:
             - view_as
             - act_as
@@ -6395,44 +6407,6 @@ components:
       required:
         - action_rules
       type: object
-    ListPrincipalSessionsOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ListPrincipalSessionsOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        sessions:
-          items:
-            $ref: "#/components/schemas/SessionBody"
-          type:
-            - array
-            - "null"
-      required:
-        - sessions
-      type: object
-    ListPrincipalsOutputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/ListPrincipalsOutputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        principals:
-          items:
-            $ref: "#/components/schemas/PrincipalBody"
-          type:
-            - array
-            - "null"
-      required:
-        - principals
-      type: object
     ListProductMetricsOutputBody:
       additionalProperties: false
       properties:
@@ -6820,6 +6794,44 @@ components:
       required:
         - sources
       type: object
+    ListUserSessionsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListUserSessionsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        sessions:
+          items:
+            $ref: "#/components/schemas/SessionBody"
+          type:
+            - array
+            - "null"
+      required:
+        - sessions
+      type: object
+    ListUsersOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/ListUsersOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        users:
+          items:
+            $ref: "#/components/schemas/UserBody"
+          type:
+            - array
+            - "null"
+      required:
+        - users
+      type: object
     ListVariablesOutputBody:
       additionalProperties: false
       properties:
@@ -7186,6 +7198,15 @@ components:
         - logs
         - sources
       type: object
+    MachineBody:
+      additionalProperties: false
+      properties:
+        name:
+          description: The machine user's identifier, unique across machine users
+          type: string
+      required:
+        - name
+      type: object
     MarkAllReadOutputBody:
       additionalProperties: false
       properties:
@@ -7214,7 +7235,7 @@ components:
           readOnly: true
           type: string
         agent:
-          description: "Set when the request authenticated with an agent token: the agent acting on this principal's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling."
+          description: "Set when the request authenticated with an agent token: the agent acting on this user's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling."
           type: string
         fleet_permissions:
           description: The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a location or system does not reach it. A UI hint; the server is the authority.
@@ -7229,20 +7250,20 @@ components:
           type:
             - array
             - "null"
-        human:
-          $ref: "#/components/schemas/HumanBody"
+        machine:
+          $ref: "#/components/schemas/MachineBody"
         permissions:
           items:
             type: string
           type:
             - array
             - "null"
-        principal:
-          $ref: "#/components/schemas/PrincipalStruct"
-        service:
-          $ref: "#/components/schemas/SvcBody"
+        person:
+          $ref: "#/components/schemas/PersonBody"
+        user:
+          $ref: "#/components/schemas/UserStruct"
       required:
-        - principal
+        - user
         - permissions
         - fleet_permissions
         - grants
@@ -7256,12 +7277,12 @@ components:
           description: The friendly string, where the member is a human who has one
           type: string
         name:
-          description: "The member's identifier: a human's username, or a service account's name"
+          description: "The member's identifier: a person's username, or a machine user's name"
           type: string
-        principal_id:
+        user_id:
           type: string
       required:
-        - principal_id
+        - user_id
         - kind
       type: object
     MetricBucketBody:
@@ -7589,7 +7610,7 @@ components:
           format: date-time
           type: string
         recipient:
-          description: "The person it is addressed to, by username: shown to that person and to holders of principal:read:admin, withheld from everyone else (see recipient_withheld)"
+          description: "The person it is addressed to, by username: shown to that person and to holders of user:read:admin, withheld from everyone else (see recipient_withheld)"
           type: string
         recipient_withheld:
           description: True when the row is addressed to a person whose name the caller may not see
@@ -7598,7 +7619,7 @@ components:
           format: date-time
           type: string
         status:
-          description: "queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm's condition was snoozed (the reason in last_error)"
+          description: "queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm was snoozed (the reason in last_error)"
           enum:
             - queued
             - sent
@@ -7714,28 +7735,16 @@ components:
           description: The target's uuid, the stable form of name
           type: string
         kind:
-          description: "The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read"
+          description: "The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person. A person is told only about alarms on components they can read"
           enum:
             - webhook
             - email
-            - principal_group
-            - principal
+            - user_group
+            - user
           type: string
         label:
           type: string
         name:
-          type: string
-        principal:
-          description: The person a principal target reaches, by username; shown to a caller who reads the principal directory (principal:read:admin, all-scope)
-          type: string
-        principal_group:
-          description: The group a principal_group target reaches, by name; shown to a caller who reads the group directory (principal_group:read:admin, all-scope)
-          type: string
-        principal_group_id:
-          description: The group's uuid
-          type: string
-        principal_id:
-          description: The person's uuid
           type: string
         secret:
           description: The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned
@@ -7748,6 +7757,18 @@ components:
           type: string
         url:
           description: A webhook's destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole
+          type: string
+        user:
+          description: The person a user target reaches, by username; shown to a caller who reads the user directory (user:read:admin, all-scope)
+          type: string
+        user_group:
+          description: The group a user_group target reaches, by name; shown to a caller who reads the group directory (user_group:read:admin, all-scope)
+          type: string
+        user_group_id:
+          description: The group's uuid
+          type: string
+        user_id:
+          description: The person's uuid
           type: string
       required:
         - id
@@ -7947,6 +7968,31 @@ components:
       required:
         - kind
         - ref
+      type: object
+    PersonBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PersonBody.json
+          format: uri
+          readOnly: true
+          type: string
+        email:
+          type: string
+        has_avatar:
+          description: True when the user has a profile picture; fetch it from the avatar endpoint.
+          type: boolean
+        label:
+          type: string
+        must_change_password:
+          description: True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears.
+          type: boolean
+        username:
+          type: string
+      required:
+        - username
       type: object
     PersonalRuleBody:
       additionalProperties: false
@@ -8954,13 +9000,13 @@ components:
           type: string
         clear_criteria:
           $ref: "#/components/schemas/CriteriaInput"
-          description: The criteria it ends on; absent, the negation of fire_criteria
+          description: The criteria it clears on; absent, the negation of fire_criteria
         clear_sustain:
           description: Accepted and ignored, like fire_sustain
           type: string
         fire_criteria:
           $ref: "#/components/schemas/CriteriaInput"
-          description: "The criteria its condition starts on: {expr}, or the short form {op, value}"
+          description: "The criteria it fires on: {expr}, or the short form {op, value}"
         fire_sustain:
           description: "Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone"
           type: string
@@ -9132,72 +9178,6 @@ components:
       required:
         - component
         - component_id
-      type: object
-    PrincipalBody:
-      additionalProperties: false
-      description: Who a role is granted to, a person who signs in or a machine user that holds tokens.
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/PrincipalBody.json
-          format: uri
-          readOnly: true
-          type: string
-        active:
-          type: boolean
-        archived_at:
-          description: Set when the principal is archived (soft-deleted); absent means live
-          format: date-time
-          type: string
-        grants:
-          items:
-            $ref: "#/components/schemas/GrantBody"
-          type:
-            - array
-            - "null"
-        groups:
-          items:
-            $ref: "#/components/schemas/PrincipalGroupRef"
-          type:
-            - array
-            - "null"
-        human:
-          $ref: "#/components/schemas/HumanBody"
-        id:
-          type: string
-        kind:
-          type: string
-        service:
-          $ref: "#/components/schemas/SvcBody"
-      required:
-        - id
-        - kind
-        - active
-        - grants
-        - groups
-      type: object
-    PrincipalGroupRef:
-      additionalProperties: false
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-      required:
-        - id
-        - name
-      type: object
-    PrincipalStruct:
-      additionalProperties: false
-      properties:
-        id:
-          type: string
-        kind:
-          type: string
-      required:
-        - id
-        - kind
       type: object
     ProductBody:
       additionalProperties: false
@@ -9695,7 +9675,7 @@ components:
           readOnly: true
           type: string
         dedup_key:
-          description: "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition"
+          description: "What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing"
           type: string
         message:
           description: What is wrong, for the operator reading it later
@@ -10557,18 +10537,18 @@ components:
       required:
         - revoked
       type: object
-    RevokeAllPrincipalSessionsInputBody:
+    RevokeAllUserSessionsInputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/RevokeAllPrincipalSessionsInputBody.json
+            - /api/v1/schemas/RevokeAllUserSessionsInputBody.json
           format: uri
           readOnly: true
           type: string
         purpose:
-          description: "Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens"
+          description: "Which credentials to revoke: all of the user's web-login sessions, or all its CLI/API tokens"
           enum:
             - session
             - token
@@ -10576,13 +10556,13 @@ components:
       required:
         - purpose
       type: object
-    RevokeAllPrincipalSessionsOutputBody:
+    RevokeAllUserSessionsOutputBody:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
           examples:
-            - /api/v1/schemas/RevokeAllPrincipalSessionsOutputBody.json
+            - /api/v1/schemas/RevokeAllUserSessionsOutputBody.json
           format: uri
           readOnly: true
           type: string
@@ -10666,7 +10646,7 @@ components:
         - permission_universe
         - roles
       type: object
-    RuleConditionBody:
+    RuleFiringBody:
       additionalProperties: false
       properties:
         component:
@@ -10676,10 +10656,10 @@ components:
           description: The component's uuid
           type: string
         instance:
-          description: The sample instance (an endpoint) the condition is on
+          description: The sample instance (an endpoint) it fired on
           type: string
         since:
-          description: When the condition came into force
+          description: When the rule fired there
           format: date-time
           type: string
       required:
@@ -10788,6 +10768,17 @@ components:
           format: uri
           readOnly: true
           type: string
+        context:
+          description: What the person handed over with the prompt, read as data ahead of it; ignored on a resume
+          items:
+            $ref: "#/components/schemas/AguiContextInput"
+          maxItems: 20
+          type:
+            - array
+            - "null"
+        forwardedProps:
+          $ref: "#/components/schemas/AguiForwardedInput"
+          description: An embedded skill to run; ignored on a resume
         messages:
           description: The client's view of the conversation; only its last user message is read, as the prompt
           items:
@@ -12037,7 +12028,7 @@ components:
           readOnly: true
           type: string
         duration:
-          description: "How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer"
+          description: "How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer"
           type: string
       required:
         - duration
@@ -12128,15 +12119,6 @@ components:
         - property_type_name
         - property_type_id
         - required
-      type: object
-    SvcBody:
-      additionalProperties: false
-      properties:
-        name:
-          description: The service account's identifier, unique across service principals
-          type: string
-      required:
-        - name
       type: object
     SwapSlotPositionsInputBody:
       additionalProperties: false
@@ -13639,7 +13621,7 @@ components:
           $ref: "#/components/schemas/CriteriaInput"
           description: "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)"
         clear_event_type:
-          description: The event type the rule writes when its condition ends, by name; empty writes none
+          description: The event type the rule writes when it clears, by name; empty writes none
           type: string
         clear_negates:
           description: Drop the clear criteria, so the rule clears on the negation of its fire criteria
@@ -13655,9 +13637,9 @@ components:
           type: boolean
         fire_criteria:
           $ref: "#/components/schemas/CriteriaInput"
-          description: "The criteria that starts the condition: {expr}, or the short form {op, value}"
+          description: "The criteria the rule fires on: {expr}, or the short form {op, value}"
         fire_event_type:
-          description: The event type the rule writes when its condition starts, by name; it cannot be emptied
+          description: The event type the rule writes when it fires, by name; it cannot be emptied
           type: string
         fire_sustain:
           description: How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s
@@ -13933,31 +13915,6 @@ components:
           description: The predicate (empty always holds)
           type: string
       type: object
-    UpdatePrincipalInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          examples:
-            - /api/v1/schemas/UpdatePrincipalInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        email:
-          description: Email; empty clears it
-          maxLength: 320
-          type: string
-        label:
-          description: Label; empty clears it
-          maxLength: 200
-          type: string
-        username:
-          description: Sign-in name (lowercase letters, digits, and . _ -); renaming is safe
-          maxLength: 200
-          minLength: 1
-          pattern: ^[a-z0-9][a-z0-9._-]*$
-          type: string
-      type: object
     UpdateProductInputBody:
       additionalProperties: false
       properties:
@@ -14166,6 +14123,31 @@ components:
           description: Whether bindings cascade to descendants; defaults true
           type: boolean
       type: object
+    UpdateUserInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UpdateUserInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        email:
+          description: Email; empty clears it
+          maxLength: 320
+          type: string
+        label:
+          description: Label; empty clears it
+          maxLength: 200
+          type: string
+        username:
+          description: Sign-in name (lowercase letters, digits, and . _ -); renaming is safe
+          maxLength: 200
+          minLength: 1
+          pattern: ^[a-z0-9][a-z0-9._-]*$
+          type: string
+      type: object
     UpdateVariableInputBody:
       additionalProperties: false
       properties:
@@ -14212,6 +14194,72 @@ components:
         website:
           description: A new website (http or https)
           type: string
+      type: object
+    UserBody:
+      additionalProperties: false
+      description: Who a role is granted to, a person who signs in or a machine user that holds tokens.
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/UserBody.json
+          format: uri
+          readOnly: true
+          type: string
+        active:
+          type: boolean
+        archived_at:
+          description: Set when the user is archived (soft-deleted); absent means live
+          format: date-time
+          type: string
+        grants:
+          items:
+            $ref: "#/components/schemas/GrantBody"
+          type:
+            - array
+            - "null"
+        groups:
+          items:
+            $ref: "#/components/schemas/UserGroupRef"
+          type:
+            - array
+            - "null"
+        id:
+          type: string
+        kind:
+          type: string
+        machine:
+          $ref: "#/components/schemas/MachineBody"
+        person:
+          $ref: "#/components/schemas/PersonBody"
+      required:
+        - id
+        - kind
+        - active
+        - grants
+        - groups
+      type: object
+    UserGroupRef:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+      type: object
+    UserStruct:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+      required:
+        - id
+        - kind
       type: object
     ValidateDriverInputBody:
       additionalProperties: false
@@ -14797,7 +14845,7 @@ paths:
       x-omniglass-permission: assistant:use
   /assistant/conversations/{name}:run:
     post:
-      description: "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. A server with no model is a 503. Gated by assistant:use."
+      description: "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use."
       operationId: run-assistant-conversation
       parameters:
         - description: Your conversation's name
@@ -14837,12 +14885,12 @@ paths:
             description: Max rows to return, newest first (default 100, capped at 500)
             format: int64
             type: integer
-        - description: Filter to one resource kind (e.g. auth, principal_grant)
+        - description: Filter to one resource kind (e.g. auth, user_grant)
           explode: false
           in: query
           name: resource
           schema:
-            description: Filter to one resource kind (e.g. auth, principal_grant)
+            description: Filter to one resource kind (e.g. auth, user_grant)
             type: string
         - description: Filter to one verb (e.g. login, create)
           explode: false
@@ -14967,7 +15015,7 @@ paths:
       summary: Log out the current session
   /auth/me:
     get:
-      description: Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
+      description: Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
       operationId: get-auth-me
       responses:
         "200":
@@ -14982,10 +15030,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: The authenticated principal, its permissions, and grants
+      summary: The authenticated user, its permissions, and grants
       x-omniglass-mcp: {}
     patch:
-      description: Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
+      description: Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own user).
       operationId: update-auth-me
       requestBody:
         content:
@@ -14998,7 +15046,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HumanBody"
+                $ref: "#/components/schemas/PersonBody"
           description: OK
         default:
           content:
@@ -15226,7 +15274,7 @@ paths:
       summary: Get your own profile picture
   /auth/me/notifications:
     get:
-      description: "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read."
+      description: "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read."
       operationId: list-auth-me-notifications
       parameters:
         - description: Only the entries not yet read
@@ -15310,7 +15358,7 @@ paths:
       x-omniglass-permission: notification:read
   /auth/me/sessions:
     get:
-      description: Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+      description: Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another user's). The token secret is never returned.
       operationId: list-auth-me-sessions
       responses:
         "200":
@@ -16230,12 +16278,12 @@ paths:
           schema:
             description: Include cleared alarms, so the list is the history rather than what is wrong now
             type: boolean
-        - description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended
+        - description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended
           explode: false
           in: query
           name: unacknowledged
           schema:
-            description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended
+            description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended
             type: boolean
       responses:
         "200":
@@ -16254,7 +16302,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: component:read
     post:
-      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: raise-component-alarm
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -16352,7 +16400,7 @@ paths:
       x-omniglass-permission: alarm:acknowledge
   /components/{name}/alarms/{id}:snooze:
     post:
-      description: "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403."
+      description: "Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403."
       operationId: snooze-component-alarm
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -16362,12 +16410,12 @@ paths:
           schema:
             description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
-        - description: "The alarm id: any alarm of the condition to snooze"
+        - description: "The alarm id: any alarm of the dedup key to snooze"
           in: path
           name: id
           required: true
           schema:
-            description: "The alarm id: any alarm of the condition to snooze"
+            description: "The alarm id: any alarm of the dedup key to snooze"
             type: string
       requestBody:
         content:
@@ -16388,7 +16436,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Snooze an alarm's condition
+      summary: Snooze an alarm
       x-omniglass-mcp: {}
       x-omniglass-permission: alarm:snooze
   /components/{name}/alarms/{id}:timeline:
@@ -16428,7 +16476,7 @@ paths:
       x-omniglass-permission: alarm:read
   /components/{name}/alarms/{id}:unsnooze:
     post:
-      description: "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is."
+      description: "Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is."
       operationId: unsnooze-component-alarm
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -16458,7 +16506,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: End an alarm's condition's snooze
+      summary: End an alarm's snooze
       x-omniglass-mcp: {}
       x-omniglass-permission: alarm:snooze
   /components/{name}/commands:
@@ -16764,7 +16812,7 @@ paths:
       x-omniglass-permission: secret:read
   /components/{name}/effective-tags:
     get:
-      description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope."
+      description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope."
       operationId: effective-tags
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -16799,7 +16847,7 @@ paths:
       x-omniglass-permission: component:read
   /components/{name}/effective-variables:
     get:
-      description: "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope."
+      description: "Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union and the most specific binding shadows the rest, with the winner and the shadowed candidates. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope."
       operationId: effective-variables
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -17225,7 +17273,7 @@ paths:
       x-omniglass-permission: component:read
   /components/{name}/properties:
     get:
-      description: "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404."
+      description: "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404."
       operationId: list-component-properties
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -18293,7 +18341,7 @@ paths:
       x-omniglass-permission: endpoint:update
   /event-rules:
     get:
-      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
+      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
       operationId: list-event-rule
       responses:
         "200":
@@ -18312,7 +18360,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
     post:
-      description: Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+      description: Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
       operationId: create-event-rule
       requestBody:
         content:
@@ -18419,7 +18467,7 @@ paths:
       x-omniglass-permission: rule:update
   /event-rules/{name}/state:
     get:
-      description: "What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read."
+      description: "What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read."
       operationId: get-event-rule-state
       parameters:
         - description: The rule's name
@@ -18447,7 +18495,7 @@ paths:
       x-omniglass-permission: rule:read
   /event-rules/{name}:rename:
     post:
-      description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant."
+      description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant."
       operationId: rename-event-rule
       parameters:
         - description: The rule's current name
@@ -19352,7 +19400,7 @@ paths:
       x-omniglass-permission: location:read
   /locations/{name}/properties:
     get:
-      description: Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+      description: Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
       operationId: list-location-properties
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -19921,7 +19969,7 @@ paths:
       summary: List notification targets
       x-omniglass-permission: notification_target:read
     post:
-      description: "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant."
+      description: "Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant."
       operationId: create-notification-target
       requestBody:
         content:
@@ -20277,7 +20325,7 @@ paths:
       x-omniglass-permission: notification_type:read
   /notifications:
     get:
-      description: The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
+      description: The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.
       operationId: list-notification
       parameters:
         - description: Only the notifications about this alarm (its uuid)
@@ -20362,7 +20410,7 @@ paths:
       x-omniglass-permission: notification:read
   /notifications/{id}:retry:
     post:
-      description: Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+      description: Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
       operationId: retry-notification
       parameters:
         - description: The notification's uuid
@@ -20815,963 +20863,6 @@ paths:
           description: Internal Server Error
       summary: Claim an outpost identity in exchange for its NATS credential
       x-omniglass-plaintext: true
-  /principal-groups:
-    get:
-      description: Every principal group. Gated by principal_group:read:admin.
-      operationId: list-groups
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListGroupsOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List principal groups
-      x-omniglass-permission: principal_group:read:admin
-    post:
-      description: Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.
-      operationId: create-group
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateGroupInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GroupBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a principal group
-      x-omniglass-permission: principal_group:create
-  /principal-groups/{group}:
-    delete:
-      description: "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope)."
-      operationId: delete-group
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Delete a principal group
-      x-omniglass-permission: principal_group:delete
-    get:
-      description: One principal group, by name or uuid. Gated by principal_group:read:admin.
-      operationId: get-group
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GroupBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Get a principal group
-      x-omniglass-permission: principal_group:read:admin
-    patch:
-      description: "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope)."
-      operationId: update-group
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateGroupInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GroupBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a principal group
-      x-omniglass-permission: principal_group:update
-  /principal-groups/{group}/grants:
-    get:
-      description: The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
-      operationId: list-group-grants
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListGroupGrantsOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List a group's grants
-      x-omniglass-permission: principal_group:read:admin
-    post:
-      description: Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
-      operationId: create-group-grant
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateGroupGrantInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GrantBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Grant a role to a group
-      x-omniglass-permission: principal_grant:create
-  /principal-groups/{group}/grants/{grantId}:
-    delete:
-      description: Removes one grant from a group. Gated by principal_grant:delete (all-scope).
-      operationId: revoke-group-grant
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-        - description: The grant's id (uuid)
-          in: path
-          name: grantId
-          required: true
-          schema:
-            description: The grant's id (uuid)
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Revoke a group grant
-      x-omniglass-permission: principal_grant:delete
-  /principal-groups/{group}/members:
-    get:
-      description: The principals in a group. Gated by principal_group:read:admin.
-      operationId: list-group-members
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListMembersOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List a group's members
-      x-omniglass-permission: principal_group:read:admin
-    post:
-      description: Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
-      operationId: add-group-member
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AddMemberInputBody"
-        required: true
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Add a member to a group
-      x-omniglass-permission: principal_group:update
-  /principal-groups/{group}/members/{principal}:
-    delete:
-      description: Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
-      operationId: remove-group-member
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-        - description: "The member: a human's username, a service account's name, or the principal's uuid"
-          in: path
-          name: principal
-          required: true
-          schema:
-            description: "The member: a human's username, a service account's name, or the principal's uuid"
-            examples:
-              - alice
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Remove a member from a group
-      x-omniglass-permission: principal_group:update
-  /principal-groups/{group}:rename:
-    post:
-      description: Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
-      operationId: rename-group
-      parameters:
-        - description: The group, by name or uuid
-          in: path
-          name: group
-          required: true
-          schema:
-            description: The group, by name or uuid
-            examples:
-              - night-shift
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RenameGroupInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GroupBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Rename a principal group
-      x-omniglass-permission: principal_group:rename
-  /principals:
-    get:
-      description: Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
-      operationId: list-principals
-      parameters:
-        - description: Optionally filter by principal kind
-          explode: false
-          in: query
-          name: kind
-          schema:
-            description: Optionally filter by principal kind
-            enum:
-              - human
-              - service
-            type: string
-        - description: Include archived (soft-deleted) principals, hidden by default
-          explode: false
-          in: query
-          name: include_archived
-          schema:
-            description: Include archived (soft-deleted) principals, hidden by default
-            type: boolean
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListPrincipalsOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: List principals
-      x-omniglass-permission: principal:read:admin
-    post:
-      description: Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.
-      operationId: create-principal
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreatePrincipalInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PrincipalBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Create a human principal
-      x-omniglass-permission: principal:create
-      x-omniglass-plaintext: true
-  /principals/{id}:
-    get:
-      description: Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
-      operationId: get-principal
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PrincipalBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Get a principal
-      x-omniglass-permission: principal:read:admin
-    patch:
-      description: "Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it."
-      operationId: update-principal
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdatePrincipalInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PrincipalBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Update a principal
-      x-omniglass-permission: principal:update
-  /principals/{id}/avatar:
-    get:
-      description: Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
-      operationId: get-principal-avatar
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AvatarOutputBody"
-          description: OK
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Get a principal's profile picture
-      x-omniglass-permission: principal:read:admin
-  /principals/{id}/grants:
-    post:
-      description: Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
-      operationId: create-grant
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateGrantInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GrantBody"
-          description: Created
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Grant a role to a principal
-      x-omniglass-permission: principal_grant:create
-  /principals/{id}/grants/{grantId}:
-    delete:
-      description: Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
-      operationId: revoke-grant
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-        - description: The grant's id (uuid)
-          in: path
-          name: grantId
-          required: true
-          schema:
-            description: The grant's id (uuid)
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Revoke a grant
-      x-omniglass-permission: principal_grant:delete
-  /principals/{id}/sessions:
-    get:
-      description: Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
-      operationId: list-principal-sessions
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListPrincipalSessionsOutputBody"
-          description: OK
-        "403":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Forbidden
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Not Found
-        "422":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Unprocessable Entity
-        "500":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Internal Server Error
-      summary: List a principal's sessions
-      x-omniglass-permission: principal:revoke-session
-  /principals/{id}/sessions/{sid}:revoke:
-    post:
-      description: Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
-      operationId: revoke-principal-session
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-        - description: The credential id to revoke (from the principal's session list)
-          in: path
-          name: sid
-          required: true
-          schema:
-            description: The credential id to revoke (from the principal's session list)
-            type: string
-      responses:
-        "204":
-          description: No Content
-        "403":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Forbidden
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Not Found
-        "422":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Unprocessable Entity
-        "500":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Internal Server Error
-      summary: Revoke a principal's session
-      x-omniglass-permission: principal:revoke-session
-  /principals/{id}/sessions:revokeAll:
-    post:
-      description: Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
-      operationId: revoke-all-principal-sessions
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RevokeAllPrincipalSessionsInputBody"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RevokeAllPrincipalSessionsOutputBody"
-          description: OK
-        "403":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Forbidden
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Not Found
-        "422":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Unprocessable Entity
-        "500":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Internal Server Error
-      summary: Revoke all of a principal's sessions or tokens
-      x-omniglass-permission: principal:revoke-session
-  /principals/{id}:archive:
-    post:
-      description: "Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived."
-      operationId: archive-principal
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Archive a principal
-      x-omniglass-permission: principal:archive
-  /principals/{id}:disable:
-    post:
-      description: Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
-      operationId: disable-principal
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Disable a principal
-      x-omniglass-permission: principal:update
-  /principals/{id}:enable:
-    post:
-      description: Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
-      operationId: enable-principal
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Enable a principal
-      x-omniglass-permission: principal:update
-  /principals/{id}:impersonate:
-    post:
-      description: Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
-      operationId: impersonate-principal
-      parameters:
-        - description: The principal to impersonate, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal to impersonate, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ImpersonateInputBody"
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ImpersonateOutputBody"
-          description: Created
-        "403":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Forbidden
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Not Found
-        "422":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Unprocessable Entity
-        "500":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Internal Server Error
-      summary: Impersonate a principal (view-as or act-as)
-      x-omniglass-permission: principal:impersonate
-      x-omniglass-plaintext: true
-  /principals/{id}:purge:
-    post:
-      description: Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
-      operationId: purge-principal
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Purge a principal
-      x-omniglass-permission: principal:purge:admin
-  /principals/{id}:removeAvatar:
-    post:
-      description: Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
-      operationId: remove-principal-avatar
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Remove a principal's profile picture
-      x-omniglass-permission: principal:set-avatar
-  /principals/{id}:resetPassword:
-    post:
-      description: Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
-      operationId: reset-principal-password
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ResetPasswordInputBody"
-        required: true
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Reset a principal's password
-      x-omniglass-permission: principal:reset-password
-      x-omniglass-plaintext: true
-  /principals/{id}:restore:
-    post:
-      description: "Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope)."
-      operationId: restore-principal
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Restore a principal
-      x-omniglass-permission: principal:archive
-  /principals/{id}:setAvatar:
-    post:
-      description: Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
-      operationId: set-principal-avatar
-      parameters:
-        - description: The principal, addressed by its uuid, a human's username, or a service account's name
-          in: path
-          name: id
-          required: true
-          schema:
-            description: The principal, addressed by its uuid, a human's username, or a service account's name
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SetAvatarInputBody"
-        required: true
-      responses:
-        "204":
-          description: No Content
-        default:
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Error
-      summary: Set a principal's profile picture
-      x-omniglass-permission: principal:set-avatar
   /products:
     get:
       description: Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
@@ -22527,7 +21618,7 @@ paths:
       x-omniglass-permission: settings:read
   /settings/me:
     get:
-      description: The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+      description: The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
       operationId: get-settings-me
       responses:
         "200":
@@ -22545,7 +21636,7 @@ paths:
       summary: Get the caller's effective settings
   /settings/{namespace}:
     delete:
-      description: Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
+      description: Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
       operationId: delete-settings-namespace
       parameters:
         - description: the settings namespace
@@ -22568,7 +21659,7 @@ paths:
       x-omniglass-permission: settings:update
       x-omniglass-platform-permission: platform:update
     patch:
-      description: Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
+      description: Applies an RFC 7386 JSON Merge Patch to the namespace's platform binding; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
       operationId: patch-settings-namespace
       parameters:
         - description: the settings namespace, e.g. ui
@@ -22610,7 +21701,7 @@ paths:
       x-omniglass-platform-permission: platform:update
   /settings:restoreDefaults:
     post:
-      description: Removes every platform override (a factory reset). Gated by settings:update and platform:update.
+      description: Removes every platform binding (a factory reset). Gated by settings:update and platform:update.
       operationId: restore-settings-defaults
       responses:
         "204":
@@ -23539,7 +22630,7 @@ paths:
       x-omniglass-permission: system:update
   /systems/{name}/alarms:
     get:
-      description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-alarms
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -23896,7 +22987,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}/properties:
     get:
-      description: "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-properties
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -24944,6 +24035,963 @@ paths:
       summary: List the sources no endpoint claims
       x-omniglass-mcp: {}
       x-omniglass-permission: outpost:read
+  /user-groups:
+    get:
+      description: Every user group. Gated by user_group:read:admin.
+      operationId: list-groups
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListGroupsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List user groups
+      x-omniglass-permission: user_group:read:admin
+    post:
+      description: Creates a user group. Gated by user_group:create (all-scope). A duplicate name is 409.
+      operationId: create-group
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a user group
+      x-omniglass-permission: user_group:create
+  /user-groups/{group}:
+    delete:
+      description: "Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by user_group:delete (all-scope)."
+      operationId: delete-group
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Delete a user group
+      x-omniglass-permission: user_group:delete
+    get:
+      description: One user group, by name or uuid. Gated by user_group:read:admin.
+      operationId: get-group
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a user group
+      x-omniglass-permission: user_group:read:admin
+    patch:
+      description: "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by user_group:update (all-scope)."
+      operationId: update-group
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGroupInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a user group
+      x-omniglass-permission: user_group:update
+  /user-groups/{group}/grants:
+    get:
+      description: The role x scope grants a group confers on its members. Gated by user_group:read:admin.
+      operationId: list-group-grants
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListGroupGrantsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a group's grants
+      x-omniglass-permission: user_group:read:admin
+    post:
+      description: Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+      operationId: create-group-grant
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupGrantInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Grant a role to a group
+      x-omniglass-permission: user_grant:create
+  /user-groups/{group}/grants/{grantId}:
+    delete:
+      description: Removes one grant from a group. Gated by user_grant:delete (all-scope).
+      operationId: revoke-group-grant
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+        - description: The grant's id (uuid)
+          in: path
+          name: grantId
+          required: true
+          schema:
+            description: The grant's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Revoke a group grant
+      x-omniglass-permission: user_grant:delete
+  /user-groups/{group}/members:
+    get:
+      description: The users in a group. Gated by user_group:read:admin.
+      operationId: list-group-members
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListMembersOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a group's members
+      x-omniglass-permission: user_group:read:admin
+    post:
+      description: Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
+      operationId: add-group-member
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Add a member to a group
+      x-omniglass-permission: user_group:update
+  /user-groups/{group}/members/{user}:
+    delete:
+      description: Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).
+      operationId: remove-group-member
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+        - description: "The member: a person's username, a machine user's name, or the user's uuid"
+          in: path
+          name: user
+          required: true
+          schema:
+            description: "The member: a person's username, a machine user's name, or the user's uuid"
+            examples:
+              - alice
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a member from a group
+      x-omniglass-permission: user_group:update
+  /user-groups/{group}:rename:
+    post:
+      description: Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by user_group:rename (all-scope).
+      operationId: rename-group
+      parameters:
+        - description: The group, by name or uuid
+          in: path
+          name: group
+          required: true
+          schema:
+            description: The group, by name or uuid
+            examples:
+              - night-shift
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameGroupInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Rename a user group
+      x-omniglass-permission: user_group:rename
+  /users:
+    get:
+      description: Lists all users (people and machine users) with their grants. Gated by user:read:admin.
+      operationId: list-users
+      parameters:
+        - description: Optionally filter by user kind
+          explode: false
+          in: query
+          name: kind
+          schema:
+            description: Optionally filter by user kind
+            enum:
+              - person
+              - machine
+            type: string
+        - description: Include archived (soft-deleted) users, hidden by default
+          explode: false
+          in: query
+          name: include_archived
+          schema:
+            description: Include archived (soft-deleted) users, hidden by default
+            type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListUsersOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List users
+      x-omniglass-permission: user:read:admin
+    post:
+      description: Creates a person with an optional initial password. Gated by user:create (all-scope). The new user holds no grants; assign roles separately.
+      operationId: create-user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Create a person
+      x-omniglass-permission: user:create
+      x-omniglass-plaintext: true
+  /users/{id}:
+    get:
+      description: Fetches one user by id with its profile and grants. Gated by user:read:admin.
+      operationId: get-user
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a user
+      x-omniglass-permission: user:read:admin
+    patch:
+      description: "Updates a person's label, email, and username. Gated by user:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it."
+      operationId: update-user
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Update a user
+      x-omniglass-permission: user:update
+  /users/{id}/avatar:
+    get:
+      description: Returns the user's profile picture as a base64-encoded JPEG. Gated by user:read:admin. A user without a picture is a 404.
+      operationId: get-user-avatar
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a user's profile picture
+      x-omniglass-permission: user:read:admin
+  /users/{id}/grants:
+    post:
+      description: Assigns a role at a scope to a user. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
+      operationId: create-grant
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGrantInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Grant a role to a user
+      x-omniglass-permission: user_grant:create
+  /users/{id}/grants/{grantId}:
+    delete:
+      description: Removes one grant from a user. Gated by user_grant:delete (all-scope). The last owner grant cannot be revoked.
+      operationId: revoke-grant
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+        - description: The grant's id (uuid)
+          in: path
+          name: grantId
+          required: true
+          schema:
+            description: The grant's id (uuid)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Revoke a grant
+      x-omniglass-permission: user_grant:delete
+  /users/{id}/sessions:
+    get:
+      description: Lists another user's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by user:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another user).
+      operationId: list-user-sessions
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListUserSessionsOutputBody"
+          description: OK
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: List a user's sessions
+      x-omniglass-permission: user:revoke-session
+  /users/{id}/sessions/{sid}:revoke:
+    post:
+      description: Revokes one of another user's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by user:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-user revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+      operationId: revoke-user-session
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+        - description: The credential id to revoke (from the user's session list)
+          in: path
+          name: sid
+          required: true
+          schema:
+            description: The credential id to revoke (from the user's session list)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Revoke a user's session
+      x-omniglass-permission: user:revoke-session
+  /users/{id}/sessions:revokeAll:
+    post:
+      description: Revokes every one of another user's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by user:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+      operationId: revoke-all-user-sessions
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RevokeAllUserSessionsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeAllUserSessionsOutputBody"
+          description: OK
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Revoke all of a user's sessions or tokens
+      x-omniglass-permission: user:revoke-session
+  /users/{id}:archive:
+    post:
+      description: "Soft-deletes a user: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by user:archive (all-scope). The last active owner cannot be archived."
+      operationId: archive-user
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Archive a user
+      x-omniglass-permission: user:archive
+  /users/{id}:disable:
+    post:
+      description: Soft-disables a user so it can no longer authenticate; its audit trail is kept. Gated by user:update (all-scope). The last active owner cannot be disabled.
+      operationId: disable-user
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Disable a user
+      x-omniglass-permission: user:update
+  /users/{id}:enable:
+    post:
+      description: Re-enables a disabled user, restoring its ability to authenticate. Gated by user:update (all-scope).
+      operationId: enable-user
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Enable a user
+      x-omniglass-permission: user:update
+  /users/{id}:impersonate:
+    post:
+      description: Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by user:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
+      operationId: impersonate-user
+      parameters:
+        - description: The user to impersonate, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user to impersonate, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImpersonateInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImpersonateOutputBody"
+          description: Created
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+      summary: Impersonate a user (view-as or act-as)
+      x-omniglass-permission: user:impersonate
+      x-omniglass-plaintext: true
+  /users/{id}:purge:
+    post:
+      description: Hard-deletes an archived user and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by user:purge:admin (admin-sensitive, all-scope), and the user must be archived first.
+      operationId: purge-user
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Purge a user
+      x-omniglass-permission: user:purge:admin
+  /users/{id}:removeAvatar:
+    post:
+      description: Clears another person's profile picture. Gated by user:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+      operationId: remove-user-avatar
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Remove a user's profile picture
+      x-omniglass-permission: user:set-avatar
+  /users/{id}:resetPassword:
+    post:
+      description: Sets a new password for another person (an administrator action; the target's current password is not required). Gated by user:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
+      operationId: reset-user-password
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Reset a user's password
+      x-omniglass-permission: user:reset-password
+      x-omniglass-plaintext: true
+  /users/{id}:restore:
+    post:
+      description: "Reverses an archive: the account is restored to active and can authenticate again. Gated by user:archive (all-scope)."
+      operationId: restore-user
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Restore a user
+      x-omniglass-permission: user:archive
+  /users/{id}:setAvatar:
+    post:
+      description: Sets another person's profile picture (an administrator action). Gated by user:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+      operationId: set-user-avatar
+      parameters:
+        - description: The user, addressed by its uuid, a person's username, or a machine user's name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The user, addressed by its uuid, a person's username, or a machine user's name
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvatarInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Set a user's profile picture
+      x-omniglass-permission: user:set-avatar
   /variables:
     get:
       description: Lists every variable. Requires an all-scope read. Gated by variable:read.
@@ -25374,7 +25422,7 @@ paths:
           description: Internal Server Error
       summary: Answer a webhook sender's verification of its URL
     post:
-      description: "The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit."
+      description: "The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a user, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit."
       operationId: receive-webhook
       parameters:
         - description: The endpoint's webhook token, minted by the server when the endpoint was created or its token rotated

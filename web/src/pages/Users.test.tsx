@@ -3,31 +3,31 @@ import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-lib
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Users from "./Users";
-import { PRINCIPALS_KEY, ROLES_KEY, type Principal } from "../lib/principals";
+import { USERS_KEY, ROLES_KEY, type User } from "../lib/users";
 import { GROUPS_KEY } from "../lib/groups";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // The Users page is a config over the shared FlatList: a directory row per
-// principal, a row opening the detail blade (facts, the groups it belongs to, grants,
+// user, a row opening the detail blade (facts, the groups it belongs to, grants,
 // disable / enable, impersonate, and an inline edit), and a create Drawer. Data is
 // seeded into the query cache so no server is needed; `>` grants the caller every
 // permission, so every gated affordance is present.
-const seed: Principal[] = [
-  { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", label: "Alice Ng" }, grants: [{ id: uuidFor("g1"), role: "admin", scope_kind: "all" }], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] },
-  { id: uuidFor("u-svc"), kind: "service", active: true, service: { name: "ingest-bot" }, grants: [] },
-  { id: "u-bob", kind: "human", active: false, human: { username: "bob" }, grants: [] },
+const seed: User[] = [
+  { id: uuidFor("u-alice"), kind: "person", active: true, person: { username: "alice", email: "alice@example.com", label: "Alice Ng" }, grants: [{ id: uuidFor("g1"), role: "admin", scope_kind: "all" }], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] },
+  { id: uuidFor("u-svc"), kind: "machine", active: true, machine: { name: "ingest-bot" }, grants: [] },
+  { id: "u-bob", kind: "person", active: false, person: { username: "bob" }, grants: [] },
 ];
 
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   // The directory list (keyed on the show-archived flag, default false), and each
-  // principal by id (the detail blade fetches getPrincipal so it resolves even an
+  // user by id (the detail blade fetches getUser so it resolves even an
   // archived user, hidden from the list).
-  qc.setQueryData([...PRINCIPALS_KEY, false], seed);
-  for (const pr of seed) qc.setQueryData([...PRINCIPALS_KEY, pr.id], pr);
+  qc.setQueryData([...USERS_KEY, false], seed);
+  for (const pr of seed) qc.setQueryData([...USERS_KEY, pr.id], pr);
   qc.setQueryData([...ME_KEY], me);
   // The grant builder's catalogs; empty is enough for the detail Drawer to render.
   qc.setQueryData([...ROLES_KEY], []);
@@ -58,16 +58,14 @@ describe("Users page", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("renders a directory row per user: name, username, kind, and grant count", () => {
-    const { getByText, getAllByText, queryByText } = mount();
+    const { getByText, getAllByText } = mount();
     expect(getByText("Alice Ng")).toBeTruthy();
     expect(getByText("alice")).toBeTruthy(); // the username under the label
     expect(getByText("ingest-bot")).toBeTruthy(); // a machine user is shown by its name
     // Both a person and a machine badge render (capitalized via CSS): the kind reads
-    // person or machine (ADR-2036), never the wire's human or service.
+    // person or machine (ADR-2036), as the wire spells it.
     expect(getAllByText("person").length).toBeGreaterThan(0);
     expect(getByText("machine")).toBeTruthy();
-    expect(queryByText("human")).toBeNull();
-    expect(queryByText("service")).toBeNull();
     expect(getByText("inactive")).toBeTruthy(); // bob is disabled
   });
 
@@ -79,20 +77,20 @@ describe("Users page", () => {
     expect(screen.getAllByText("bob")).toHaveLength(1);
   });
 
-  it("renders an image thumbnail in the name cell for a principal that has an avatar", async () => {
-    // A principal with human.has_avatar renders the image (lazily fetched as a data
+  it("renders an image thumbnail in the name cell for a user that has an avatar", async () => {
+    // A user with human.has_avatar renders the image (lazily fetched as a data
     // URL) rather than the initials placeholder.
-    const withPic: Principal = { id: "u-eve", kind: "human", active: true, human: { username: "eve", label: "Eve Stone", has_avatar: true }, grants: [] };
+    const withPic: User = { id: "u-eve", kind: "person", active: true, person: { username: "eve", label: "Eve Stone", has_avatar: true }, grants: [] };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       if (url.includes("/avatar")) {
         return new Response(JSON.stringify({ image_base64: "SGVsbG8=" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      return new Response(JSON.stringify({ principals: [withPic] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ users: [withPic] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...PRINCIPALS_KEY, false], [withPic]);
+    qc.setQueryData([...USERS_KEY, false], [withPic]);
     qc.setQueryData([...ME_KEY], me);
     render(() => (
       <QueryClientProvider client={qc}>
@@ -103,10 +101,10 @@ describe("Users page", () => {
     expect(img.src).toContain("data:image/jpeg;base64,SGVsbG8=");
   });
 
-  it("renders initials (no image) in the name cell for a principal without an avatar", () => {
-    const noPic: Principal = { id: "u-frank", kind: "human", active: true, human: { username: "frank", label: "Frank Lin" }, grants: [] };
+  it("renders initials (no image) in the name cell for a user without an avatar", () => {
+    const noPic: User = { id: "u-frank", kind: "person", active: true, person: { username: "frank", label: "Frank Lin" }, grants: [] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...PRINCIPALS_KEY, false], [noPic]);
+    qc.setQueryData([...USERS_KEY, false], [noPic]);
     qc.setQueryData([...ME_KEY], me);
     render(() => (
       <QueryClientProvider client={qc}>
@@ -143,16 +141,16 @@ describe("Users page", () => {
   });
 
   it("lands on the new user's detail in edit mode after a successful create", async () => {
-    // The create POST returns the new principal; the create flow seeds its detail
+    // The create POST returns the new user; the create flow seeds its detail
     // cache and flags it to open in edit mode, so the blade opens on carol's seeded,
     // editable fields (add grants right away) rather than a read-only view.
-    const carol: Principal = { id: "u-carol", kind: "human", active: true, human: { username: "carol", email: "carol@example.com", label: "Carol Diaz" }, grants: [] };
+    const carol: User = { id: "u-carol", kind: "person", active: true, person: { username: "carol", email: "carol@example.com", label: "Carol Diaz" }, grants: [] };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      const isDetailGet = method === "GET" && /\/principals\/[^/?]+$/.test(url);
-      const body = url.includes("/principals") && method === "POST" ? carol : isDetailGet ? carol : { principals: [...seed, carol] };
+      const isDetailGet = method === "GET" && /\/users\/[^/?]+$/.test(url);
+      const body = url.includes("/users") && method === "POST" ? carol : isDetailGet ? carol : { users: [...seed, carol] };
       return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
     });
 
@@ -214,7 +212,7 @@ describe("Users page", () => {
         calls.push({ url, method, body: raw ? JSON.parse(raw) : null });
         return new Response(JSON.stringify({ revoked: 2 }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      // The Sessions section's per-principal list fetch: no rows needed here.
+      // The Sessions section's per-user list fetch: no rows needed here.
       return new Response(JSON.stringify({ sessions: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -226,7 +224,7 @@ describe("Users page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    // `>` grants principal:revoke-session, so both bulk actions are in the kebab.
+    // `>` grants user:revoke-session, so both bulk actions are in the kebab.
     fireEvent.click(within(blade).getByLabelText("More actions"));
     expect(within(blade).getByText("Revoke all sessions")).toBeTruthy();
     expect(within(blade).getByText("Revoke all tokens")).toBeTruthy();
@@ -234,20 +232,20 @@ describe("Users page", () => {
     // Clicking one confirms, then posts to :revokeAll with the chosen purpose.
     fireEvent.click(within(blade).getByText("Revoke all tokens"));
     await waitFor(() => expect(calls.length).toBe(1));
-    expect(calls[0].url).toContain(`/principals/${uuidFor("u-alice")}/sessions:revokeAll`);
+    expect(calls[0].url).toContain(`/users/${uuidFor("u-alice")}/sessions:revokeAll`);
     expect(calls[0].method).toBe("POST");
     expect(calls[0].body).toEqual({ purpose: "token" });
   });
 
   it("hides the revoke affordances on an owner target (see, not end) and says why", async () => {
-    const owner: Principal = { id: "u-own", kind: "human", active: true, human: { username: "founder", label: "Fay Ounder" }, grants: [{ id: "g0", role: "owner", scope_kind: "all" }], groups: [] };
+    const owner: User = { id: "u-own", kind: "person", active: true, person: { username: "founder", label: "Fay Ounder" }, grants: [{ id: "g0", role: "owner", scope_kind: "all" }], groups: [] };
     // The owner's session list loads (an admin can see it); no revoke should be offered.
     vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify({ sessions: [{ id: "s1", kind: "session", prefix: "abc123", created_at: "2026-07-13T00:00:00Z", expires_at: "2026-07-13T12:00:00Z", current: false }] }), { status: 200, headers: { "Content-Type": "application/json" } }),
     );
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...PRINCIPALS_KEY, false], [owner]);
-    qc.setQueryData([...PRINCIPALS_KEY, owner.id], owner);
+    qc.setQueryData([...USERS_KEY, false], [owner]);
+    qc.setQueryData([...USERS_KEY, owner.id], owner);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...ROLES_KEY], []);
     qc.setQueryData(["locations"], []);
@@ -274,12 +272,12 @@ describe("Users page", () => {
   });
 
   it("an archived user (via Show archived) offers Restore in the slot and Purge in the kebab", async () => {
-    const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", label: "Dana Vale" }, grants: [] };
+    const dana: User = { id: "u-dana", kind: "person", active: false, archived_at: "2026-01-01T00:00:00Z", person: { username: "dana", label: "Dana Vale" }, grants: [] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...PRINCIPALS_KEY, false], []); // default directory hides her
-    qc.setQueryData([...PRINCIPALS_KEY, true], [dana]); // the "show archived" view
-    qc.setQueryData([...PRINCIPALS_KEY, dana.id], dana);
-    qc.setQueryData([...ME_KEY], me); // `>` grants purge (principal:purge:admin)
+    qc.setQueryData([...USERS_KEY, false], []); // default directory hides her
+    qc.setQueryData([...USERS_KEY, true], [dana]); // the "show archived" view
+    qc.setQueryData([...USERS_KEY, dana.id], dana);
+    qc.setQueryData([...ME_KEY], me); // `>` grants purge (user:purge:admin)
     qc.setQueryData([...ROLES_KEY], []);
     qc.setQueryData(["locations"], []);
     qc.setQueryData(["systems"], []);
@@ -313,7 +311,7 @@ describe("Users page", () => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       if (url.includes(":archive")) return new Response(null, { status: 204 });
-      return new Response(JSON.stringify({ principals: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ users: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));
@@ -328,9 +326,9 @@ describe("Users page", () => {
   });
 
   it("purging an archived user closes the blade and does not refetch the dead detail", async () => {
-    const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", label: "Dana Vale" }, grants: [] };
+    const dana: User = { id: "u-dana", kind: "person", active: false, archived_at: "2026-01-01T00:00:00Z", person: { username: "dana", label: "Dana Vale" }, grants: [] };
     // Confirm the purge; the POST 204s, the directory refetch returns an empty list,
-    // and a GET of the purged principal's own detail 404s (as the real server would).
+    // and a GET of the purged user's own detail 404s (as the real server would).
     // The blade must close, and the now-dead detail query must not be refetched (an
     // orphan 404 that would keep the blade in a broken state).
     let detailRefetched = false;
@@ -340,16 +338,16 @@ describe("Users page", () => {
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
       if (url.includes(":purge")) return new Response(null, { status: 204 });
-      if (method === "GET" && /\/principals\/u-dana(\?|$)/.test(url)) {
+      if (method === "GET" && /\/users\/u-dana(\?|$)/.test(url)) {
         detailRefetched = true;
         return new Response(JSON.stringify({ title: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
       }
-      return new Response(JSON.stringify({ principals: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ users: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...PRINCIPALS_KEY, false], []);
-    qc.setQueryData([...PRINCIPALS_KEY, true], [dana]);
-    qc.setQueryData([...PRINCIPALS_KEY, dana.id], dana);
+    qc.setQueryData([...USERS_KEY, false], []);
+    qc.setQueryData([...USERS_KEY, true], [dana]);
+    qc.setQueryData([...USERS_KEY, dana.id], dana);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...ROLES_KEY], []);
     qc.setQueryData(["locations"], []);
@@ -371,7 +369,7 @@ describe("Users page", () => {
     fireEvent.click(within(blade).getByText("Purge"));
     // The blade closes: no aside remains.
     await waitFor(() => expect(document.querySelector("aside[data-blade]")).toBeNull());
-    // And the purged principal's own detail query was not refetched (no orphan 404).
+    // And the purged user's own detail query was not refetched (no orphan 404).
     expect(detailRefetched).toBe(false);
   });
 
@@ -416,10 +414,10 @@ describe("Users page", () => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      if (method === "POST" && url.includes("/principals")) {
+      if (method === "POST" && url.includes("/users")) {
         return new Response(JSON.stringify({ detail: "password is too common; choose a less predictable one" }), { status: 422, headers: { "Content-Type": "application/json" } });
       }
-      return new Response(JSON.stringify({ principals: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ users: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     mount();
     fireEvent.click(screen.getByText("New user"));
@@ -451,10 +449,10 @@ describe("Users page", () => {
   });
 
   it("does not offer Reset password on your own blade (use your profile)", async () => {
-    const meAlice: Me = { principal: { id: uuidFor("u-alice"), kind: "human" }, human: { username: "alice" }, permissions: [">"], grants: [] };
+    const meAlice: Me = { user: { id: uuidFor("u-alice"), kind: "person" }, person: { username: "alice" }, permissions: [">"], grants: [] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...PRINCIPALS_KEY, false], seed);
-    for (const pr of seed) qc.setQueryData([...PRINCIPALS_KEY, pr.id], pr);
+    qc.setQueryData([...USERS_KEY, false], seed);
+    for (const pr of seed) qc.setQueryData([...USERS_KEY, pr.id], pr);
     qc.setQueryData([...ME_KEY], meAlice);
     qc.setQueryData([...ROLES_KEY], []);
     qc.setQueryData(["locations"], []);
@@ -465,7 +463,7 @@ describe("Users page", () => {
         <Router><Route path="*" component={() => <Users />} /></Router>
       </QueryClientProvider>
     ));
-    fireEvent.click(screen.getByText("Alice Ng")); // alice is the signed-in principal
+    fireEvent.click(screen.getByText("Alice Ng")); // alice is the signed-in user
     const blade = await waitFor(() => {
       const el = document.querySelector("aside[data-blade]");
       if (!el) throw new Error("no blade yet");
@@ -485,7 +483,7 @@ describe("Users page", () => {
         resetCalled = true;
         return new Response(null, { status: 204 });
       }
-      return new Response(JSON.stringify({ principals: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ users: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     mount();
     fireEvent.click(screen.getByText("Alice Ng"));
@@ -552,7 +550,7 @@ describe("Users create identity", () => {
 
 // The blade's edit mode composes with its id deep link: ?u=<id>&edit=1 opens the
 // user's blade already editing, which is also how the create flow hands off (the
-// one-shot openPrincipalInEdit signal is gone).
+// one-shot openUserInEdit signal is gone).
 describe("edit as a URL fact", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 

@@ -414,7 +414,7 @@ func TestRunIdempotent(t *testing.T) {
 	// The breadth block adds one raised-then-cleared pair (#796) beside the
 	// fixture's standing alarms; a second run must add nothing to either.
 	if alarms != len(fixtures.Alarms)+1 {
-		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing condition", alarms, len(fixtures.Alarms)+1)
+		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing alarm", alarms, len(fixtures.Alarms)+1)
 	}
 	// Membership and staffing are counted too, because they are where a resolver
 	// that zipped the fixture onto the fleet in the wrong order shows up: every
@@ -463,14 +463,14 @@ func TestRunIdempotent(t *testing.T) {
 	if campuses != 4 {
 		t.Errorf("campuses = %d, want 4 (hq, east, airport, harbor)", campuses)
 	}
-	if err := conn.QueryRow(ctx, `select count(*) from principal where kind = 'human'`).Scan(&humans); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from users where kind = 'person'`).Scan(&humans); err != nil {
 		t.Fatalf("count humans: %v", err)
 	}
 	if humans != 4 {
-		t.Errorf("human principals = %d, want 4", humans)
+		t.Errorf("people = %d, want 4", humans)
 	}
 	// The four people's grants, and the simulated pusher's one (#1370).
-	if err := conn.QueryRow(ctx, `select count(*) from principal_grant`).Scan(&grants); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from user_grant`).Scan(&grants); err != nil {
 		t.Fatalf("count grants: %v", err)
 	}
 	if grants != 5 {
@@ -525,7 +525,7 @@ func TestRunIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `
 		select count(*) from credential
 		where kind = 'password'
-		  and principal_id in (select principal_id from human
+		  and user_id in (select user_id from person
 		    where username in ('operator', 'viewer', 'viewer-hq', 'tech-east'))`).Scan(&pwCreds); err != nil {
 		t.Fatalf("count password creds: %v", err)
 	}
@@ -1286,7 +1286,7 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 	var gotScopeID *string
 	if err := conn.QueryRow(ctx, `
 		select g.scope_kind, g.scope_op, g.scope_id
-		from principal_grant g join human h on h.principal_id = g.principal_id
+		from user_grant g join person h on h.user_id = g.user_id
 		where h.username = $1 and g.role_id = (select id from role where name = $2)`, username, role).Scan(&gotKind, &gotOp, &gotScopeID); err != nil {
 		t.Fatalf("read grant for %s/%s: %v", username, role, err)
 	}
@@ -1710,7 +1710,7 @@ func TestSeededFleetIsSimulated(t *testing.T) {
 	rows, err := conn.Query(ctx, `
 		select c.id, p.name from component c join product p on p.id = c.product_id
 		where not exists (select 1 from endpoint e where e.component = c.id
-			and e.outpost_id = (select principal_id from outpost where name = 'edge-hq')
+			and e.outpost_id = (select user_id from outpost where name = 'edge-hq')
 			and e.params->>'target' like '127.60.%')`)
 	if err != nil {
 		t.Fatal(err)
@@ -1948,7 +1948,7 @@ func TestSeededFleetHoldsARejectedSession(t *testing.T) {
 		var e ep
 		var n int
 		rows, err := conn.Query(ctx, `
-			select e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from outpost n where n.principal_id = e.outpost_id)
+			select e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-telnet' and l.name = 'huddle'`)
 		if err != nil {
@@ -2025,7 +2025,7 @@ func TestSeededFleetHoldsAProbeGate(t *testing.T) {
 	snmpEndpoints := func() []ep {
 		t.Helper()
 		rows, err := conn.Query(ctx, `
-			select e.id::text, e.inputs->>'host', e.inputs->>'port', e.inputs->>'community', (select n.name from outpost n where n.principal_id = e.outpost_id)
+			select e.id::text, e.inputs->>'host', e.inputs->>'port', e.inputs->>'community', (select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component
 			where d.name = 'snmp-generic' and c.id = (select c2.id from component c2 join location l on l.id = c2.location_id
 				join product p on p.id = c2.product_id where l.name = 'auditorium' and p.name = 'newtron-panel-7')`)
@@ -2123,7 +2123,7 @@ func TestSeededFleetHoldsAHostKeyRejection(t *testing.T) {
 	sshEndpoints := func() []ep {
 		t.Helper()
 		rows, err := conn.Query(ctx, `
-			select e.id::text, e.name, e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from outpost n where n.principal_id = e.outpost_id)
+			select e.id::text, e.name, e.inputs->>'host', e.inputs->>'port', e.inputs->>'login', (select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-ssh' and l.name = 'briefing'`)
 		if err != nil {
@@ -2195,7 +2195,7 @@ func TestSeededFleetHoldsATLSEndpoint(t *testing.T) {
 	tlsEndpoints := func() ([]ep, error) {
 		rows, err := conn.Query(ctx, `
 			select e.inputs->>'host', e.inputs->>'port', coalesce(e.inputs->>'tls-mode', ''), e.params->>'target',
-				(select n.name from outpost n where n.principal_id = e.outpost_id)
+				(select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-tls' and l.name = 'huddle' and e.name = 'tls'`)
 		if err != nil {
@@ -2250,7 +2250,7 @@ func TestSeededFleetHoldsAUDPEndpoint(t *testing.T) {
 	udpEndpoints := func() ([]ep, error) {
 		rows, err := conn.Query(ctx, `
 			select e.inputs->>'host', e.inputs->>'port', coalesce(e.params->>'listen-port', ''), e.params->>'target',
-				(select n.name from outpost n where n.principal_id = e.outpost_id)
+				(select n.name from outpost n where n.user_id = e.outpost_id)
 			from endpoint e join driver d on d.id = e.driver_id join component c on c.id = e.component join location l on l.id = c.location_id
 			where d.name = 'newtron-nvp-udp' and l.name = 'huddle' and e.name = 'udp'`)
 		if err != nil {

@@ -1,10 +1,6 @@
 ---
 title: Templates
 description: "Example configurations an operator clones. Creating from one is one-time and leaves no link back, which is exactly why a template can be improved in any release without migrating anyone."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import SeededSet from '../../../components/SeededSet.astro';
@@ -40,7 +36,7 @@ What replaced the pinned shapes is not a template at all:
 | system | [`standard`](/architecture/core-entities/) | **conformance**, with live inheritance |
 
 **Creating from a template applies template to row. Conformance applies row to instance.** Only the second is live:
-a standard's contract default resolves for every conforming system until that system overrides it.
+a standard's contract default resolves for every conforming system until that system binds its own value.
 A template's link is severed at creation. How to reach and read a class of component is not a
 template's job either: that is the driver's spec
 ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).

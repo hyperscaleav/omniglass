@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { can, canFleet, type Me } from "./auth";
 
 const me = (permissions: string[], fleet_permissions: string[]): Me => ({
-  principal: { id: "p", kind: "human" },
+  user: { id: "p", kind: "person" },
   permissions,
   fleet_permissions,
   grants: [],
@@ -26,7 +26,7 @@ describe("canFleet", () => {
     expect(canFleet(me([], ["rule:update"]), "rule", "delete")).toBe(false);
   });
 
-  it("grants nothing without the field or a principal", () => {
+  it("grants nothing without the field or a user", () => {
     expect(canFleet({ ...me([">"], []), fleet_permissions: undefined }, "rule", "read")).toBe(false);
     expect(canFleet(null, "rule", "read")).toBe(false);
   });

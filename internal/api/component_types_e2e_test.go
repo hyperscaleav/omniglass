@@ -76,7 +76,7 @@ func TestComponentTypesAPI(t *testing.T) {
 	}
 
 	// A viewer reads the seeded tree via the *:read floor.
-	viewerTok := principalWithGrants(t, ctx, dsn, "ct-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "ct-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	rows := list(viewerTok)
 	if len(rows) == 0 {
 		t.Fatal("component_types empty, want the seeded tree")
@@ -243,7 +243,7 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 
 	// A viewer holds component_type:read but not :update, so they cannot fork
 	// a row they could not have written either.
-	viewerTok := principalWithGrants(t, ctx, dsn, "fork-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "fork-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	c.do(viewerTok, http.MethodPatch, "/component-types/mic",
 		map[string]any{"label": "Viewer Mic"}, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusForbidden)

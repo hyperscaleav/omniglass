@@ -146,7 +146,7 @@ func TestMCPServesTheGeneratedCatalog(t *testing.T) {
 	// Credential-blind (#2025): a write that takes a secret's value, or a read
 	// that reveals one, is never a tool, so plaintext never enters an agent's
 	// context.
-	for _, name := range []string{"create-secret", "update-secret", "reveal-secret", "copy-secret", "create-auth-me-token", "impersonate-principal"} {
+	for _, name := range []string{"create-secret", "update-secret", "reveal-secret", "copy-secret", "create-auth-me-token", "impersonate-user"} {
 		if _, ok := tools[name]; ok {
 			t.Errorf("%s carries a credential in plaintext but is served as a tool", name)
 		}
@@ -227,13 +227,13 @@ func TestMCPWriteIsAuditedAsTheUserViaMCP(t *testing.T) {
 }
 
 // Authorization through MCP is the route's: a viewer's write is the route's 403
-// as a tool error and nothing is written; a scope-limited principal sees only
+// as a tool error and nothing is written; a scope-limited user sees only
 // its scope; and no token, a wrong token or a session cookie alone gets no MCP
 // session at all.
 func TestMCPAuthorizationIsTheRoutes(t *testing.T) {
 	t.Parallel()
 	s := newMCPStack(t)
-	viewer := principalWithGrants(t, s.ctx, s.dsn, "mcp-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewer := userWithGrants(t, s.ctx, s.dsn, "mcp-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	cs := s.session(t, viewer, "viewer-agent")
 	res, text := callTool(t, cs, "create-component", map[string]any{"name": "viewer-comp", "product": "generic-device"})
 	if !res.IsError || !strings.Contains(text, "403") && !strings.Contains(strings.ToLower(text), "forbidden") {
@@ -247,7 +247,7 @@ func TestMCPAuthorizationIsTheRoutes(t *testing.T) {
 	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "in-scope-1", "product": "generic-device"}, http.StatusCreated)
 	s.c.do(s.owner, http.MethodPost, "/components", map[string]any{"name": "out-of-scope-1", "product": "generic-device"}, http.StatusCreated)
 	inScope := entityID(t, s.c, s.owner, "/components", "in-scope-1")
-	scoped := principalWithGrants(t, s.ctx, s.dsn, "mcp-scoped", []grant{{role: "viewer", scopeKind: "component", scopeID: inScope}})
+	scoped := userWithGrants(t, s.ctx, s.dsn, "mcp-scoped", []grant{{role: "viewer", scopeKind: "component", scopeID: inScope}})
 	scs := s.session(t, scoped, "scoped-agent")
 	_, list := callTool(t, scs, "list-components", nil)
 	if !strings.Contains(list, "in-scope-1") || strings.Contains(list, "out-of-scope-1") {
@@ -317,13 +317,13 @@ func TestMCPTokenLifecycleAndImpersonation(t *testing.T) {
 		t.Error("a revoked token still drives the MCP session")
 	}
 
-	target := principalWithGrants(t, s.ctx, s.dsn, "mcp-target", []grant{{role: "operator", scopeKind: "all"}})
+	target := userWithGrants(t, s.ctx, s.dsn, "mcp-target", []grant{{role: "operator", scopeKind: "all"}})
 	targetID := meID(t, s.c, target)
 	impersonate := func(mode string) string {
 		var r struct {
 			Token string `json:"token"`
 		}
-		if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/principals/"+targetID+":impersonate", map[string]any{"mode": mode}, http.StatusCreated), &r); err != nil {
+		if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/users/"+targetID+":impersonate", map[string]any{"mode": mode}, http.StatusCreated), &r); err != nil {
 			t.Fatalf("impersonate %s: %v", mode, err)
 		}
 		return r.Token
@@ -427,7 +427,7 @@ func TestMCPTriagesTheFleetsAlarms(t *testing.T) {
 		t.Fatalf("no audit row for the MCP acknowledgement: %+v", out.Events)
 	}
 
-	viewer := principalWithGrants(t, s.ctx, s.dsn, "triage-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	viewer := userWithGrants(t, s.ctx, s.dsn, "triage-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	vcs := s.session(t, viewer, "viewer-agent")
 	if res, text := callTool(t, vcs, "list-alarms", nil); res.IsError || !strings.Contains(text, warn) {
 		t.Errorf("a viewer's list-alarms = %v %s, want the fleet's alarms (component:read is enough to see them)", res.IsError, text)

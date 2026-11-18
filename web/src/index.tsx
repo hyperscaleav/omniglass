@@ -19,7 +19,7 @@ if (!root) throw new Error("missing #root element");
 const queryClient = new QueryClient();
 
 // When a protected request 401s, the session has ended (expired, reset, or locked
-// out): drop any stale bearer and null the cached principal so the AuthGuard
+// out): drop any stale bearer and null the cached user so the AuthGuard
 // redirects to /login on the spot, carrying the current path to return to.
 setUnauthorizedHandler(() => {
   clearToken();

@@ -190,7 +190,7 @@ func millisecondScenario(t *testing.T, noisy bool) []string {
 	}
 	if _, err := r.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{Name: "room-hot", SampleKey: "room-temperature",
 		Fire: criteria("gt", 90), Clear: &rules.Criteria{Op: "le", Value: []byte("90")},
-		Severity: "high", FireEventType: "condition-started", ClearEventType: "condition-ended"}, r.all); err != nil {
+		Severity: "high", FireEventType: "rule-fired", ClearEventType: "rule-cleared"}, r.all); err != nil {
 		t.Fatal(err)
 	}
 	base := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
@@ -235,7 +235,7 @@ func TestRulesJudgeAMillisecondScenarioAsBefore(t *testing.T) {
 	}
 	var fired bool
 	for _, s := range aligned {
-		fired = fired || strings.HasPrefix(s, "condition-started")
+		fired = fired || strings.HasPrefix(s, "rule-fired")
 	}
 	if !fired {
 		t.Errorf("the scenario's event rule never fired: %v", aligned)

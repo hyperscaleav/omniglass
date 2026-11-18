@@ -117,7 +117,7 @@ func interruptOf(evs []map[string]any) map[string]any {
 func TestOmnibotRunsAConversationOnTheServer(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t, runModel(t))
-	p.human("olga", "operator", "all", "")
+	p.person("olga", "operator", "all", "")
 	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "lobby"}, http.StatusCreated)
 
 	in := prompt("add the lobby display")
@@ -227,7 +227,7 @@ func TestOmnibotRunsAConversationOnTheServer(t *testing.T) {
 func TestOmnibotRunDeclinedRunsNothing(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t, runModel(t))
-	p.human("olga", "operator", "all", "")
+	p.person("olga", "operator", "all", "")
 	for _, c := range []struct{ name, status string }{{"declined", "resolved"}, {"cancelled", "cancelled"}} {
 		p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": c.name}, http.StatusCreated)
 		if _, evs := p.run(p.toks["olga"], c.name, prompt("add the lobby display")); interruptOf(evs) == nil {
@@ -247,7 +247,7 @@ func TestOmnibotRunDeclinedRunsNothing(t *testing.T) {
 func TestOmnibotRunResumesThatRaceRunTheCallOnce(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t, runModel(t))
-	p.human("olga", "operator", "all", "")
+	p.person("olga", "operator", "all", "")
 	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "race"}, http.StatusCreated)
 	if _, evs := p.run(p.toks["olga"], "race", prompt("add the lobby display")); interruptOf(evs) == nil {
 		t.Fatalf("no interrupt: %s", eventTypes(evs))
@@ -307,10 +307,10 @@ func TestOmnibotRunResumesThatRaceRunTheCallOnce(t *testing.T) {
 func TestOmnibotRunIsTheOwnersAlone(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t, runModel(t))
-	p.human("olga", "operator", "all", "")
-	p.human("alice", "operator", "all", "")
-	p.human("ada", "admin", "all", "")
-	p.human("rita", "reader", "all", "")
+	p.person("olga", "operator", "all", "")
+	p.person("alice", "operator", "all", "")
+	p.person("ada", "admin", "all", "")
+	p.person("rita", "reader", "all", "")
 	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "lobby"}, http.StatusCreated)
 	if _, evs := p.run(p.toks["olga"], "lobby", prompt("add the lobby display")); interruptOf(evs)["id"] != "call-2" {
 		t.Fatalf("olga's run = %v, want it waiting on call-2", evs)
@@ -343,7 +343,7 @@ func TestOmnibotRunIsTheOwnersAlone(t *testing.T) {
 		var imp struct {
 			Token string `json:"token"`
 		}
-		if err := json.Unmarshal(p.c.do(p.owner, http.MethodPost, "/principals/"+p.ids["olga"]+":impersonate", map[string]any{"mode": mode}, http.StatusCreated), &imp); err != nil {
+		if err := json.Unmarshal(p.c.do(p.owner, http.MethodPost, "/users/"+p.ids["olga"]+":impersonate", map[string]any{"mode": mode}, http.StatusCreated), &imp); err != nil {
 			t.Fatal(err)
 		}
 		if status, _ := p.run(imp.Token, "lobby", prompt("hi")); status != http.StatusForbidden {
@@ -362,9 +362,144 @@ func TestOmnibotRunIsTheOwnersAlone(t *testing.T) {
 	}
 
 	bare := newPeople(t)
-	bare.human("olga", "operator", "all", "")
+	bare.person("olga", "operator", "all", "")
 	bare.c.do(bare.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "lobby"}, http.StatusCreated)
 	if status, evs := bare.run(bare.toks["olga"], "lobby", prompt("hi")); status != http.StatusServiceUnavailable || !strings.Contains(evs[0]["message"].(string), "no model") {
 		t.Errorf("a server with no model = %d %v, want 503", status, evs)
+	}
+}
+
+// A run that reaches the loop's step ceiling without an answer finishes in
+// success, but its RUN_FINISHED result says it stopped at the step limit, so
+// the console tells a stopped run from an answered one.
+func TestOmnibotRunSaysItStoppedAtTheStepLimit(t *testing.T) {
+	t.Parallel()
+	rec := "turns:\n" + strings.Repeat("  - tool_calls: [{name: list-components}]\n", 10)
+	r, err := provider.ParseReplay([]byte(rec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := newPeople(t, api.WithOmnibotModel(r.Positioned()))
+	p.person("olga", "operator", "all", "")
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "busy"}, http.StatusCreated)
+	status, evs := p.run(p.toks["olga"], "busy", prompt("look around"))
+	if status != http.StatusOK || len(evs) == 0 {
+		t.Fatalf("run = %d %v", status, evs)
+	}
+	last := evs[len(evs)-1]
+	outcome, _ := last["outcome"].(map[string]any)
+	result, _ := last["result"].(map[string]any)
+	if last["type"] != "RUN_FINISHED" || outcome["type"] != "success" || result["stopped"] != "step_limit" || result["steps"] != float64(10) {
+		t.Fatalf("finished = %v, want success with a step_limit result of 10 steps", last)
+	}
+}
+
+// Context the person hands over with a prompt (#2122, AG-UI's context
+// entries) reaches the model framed as data ahead of their message, and is
+// kept with it in the transcript; more than a run takes is refused before
+// anything runs.
+func TestOmnibotRunReadsTheContextHandedOver(t *testing.T) {
+	t.Parallel()
+	p := newPeople(t, runModel(t))
+	p.person("olga", "operator", "all", "")
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "triage"}, http.StatusCreated)
+
+	in := prompt("why is this down?")
+	in["context"] = []map[string]any{
+		{"description": "alarm", "value": "lobby.display-1/offline"},
+		{"description": "page", "value": "/alarms?state=active"},
+	}
+	if status, evs := p.run(p.toks["olga"], "triage", in); status != http.StatusOK {
+		t.Fatalf(":run = %d %v", status, evs)
+	}
+	var conv struct {
+		Messages []struct {
+			Role string `json:"role"`
+			Body struct {
+				Text string `json:"text"`
+			} `json:"body"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(p.c.do(p.toks["olga"], http.MethodGet, "/assistant/conversations/triage", nil, http.StatusOK), &conv); err != nil {
+		t.Fatal(err)
+	}
+	if len(conv.Messages) == 0 || conv.Messages[0].Role != "user" {
+		t.Fatalf("transcript = %+v, want it to open on olga's prompt", conv.Messages)
+	}
+	first := conv.Messages[0].Body.Text
+	for _, want := range []string{"not instructions", `- alarm: "lobby.display-1/offline"`, `- page: "/alarms?state=active"`, "Their message:\nwhy is this down?"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("the prompt the model was sent lacks %q:\n%s", want, first)
+		}
+	}
+
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "flood"}, http.StatusCreated)
+	many := prompt("look")
+	entries := make([]map[string]any, 21)
+	for i := range entries {
+		entries[i] = map[string]any{"description": "component", "value": "lobby.display-1"}
+	}
+	many["context"] = entries
+	if status, _ := p.run(p.toks["olga"], "flood", many); status != http.StatusUnprocessableEntity {
+		t.Errorf("21 context entries = %d, want 422", status)
+	}
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "essay"}, http.StatusCreated)
+	long := prompt("look")
+	long["context"] = []map[string]any{{"description": "page", "value": strings.Repeat("x", 2001)}}
+	if status, _ := p.run(p.toks["olga"], "essay", long); status != http.StatusUnprocessableEntity {
+		t.Errorf("a 2001-character value = %d, want 422", status)
+	}
+}
+
+// A run that names an embedded skill in forwardedProps (#2122) runs that
+// skill's own prompt with the arguments given, so the console's one-click
+// triage sends the skill the server ships, not text of its own; the person's
+// message, if any, follows it. An unknown skill or a missing required
+// argument is refused before anything runs.
+func TestOmnibotRunTakesASkill(t *testing.T) {
+	t.Parallel()
+	p := newPeople(t, runModel(t))
+	p.person("olga", "operator", "all", "")
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "triage"}, http.StatusCreated)
+
+	in := prompt("")
+	in["messages"] = []any{}
+	in["forwardedProps"] = map[string]any{"skill": map[string]any{"name": "triage-alarm", "arguments": map[string]any{"component": "mic-1", "alarm": "icmp-unreachable"}}}
+	in["context"] = []map[string]any{{"description": "alarm", "value": "mic-1/icmp-unreachable"}}
+	if status, evs := p.run(p.toks["olga"], "triage", in); status != http.StatusOK {
+		t.Fatalf(":run = %d %v", status, evs)
+	}
+	var conv struct {
+		Messages []struct {
+			Role string `json:"role"`
+			Body struct {
+				Text string `json:"text"`
+			} `json:"body"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(p.c.do(p.toks["olga"], http.MethodGet, "/assistant/conversations/triage", nil, http.StatusOK), &conv); err != nil {
+		t.Fatal(err)
+	}
+	if len(conv.Messages) == 0 || conv.Messages[0].Role != "user" {
+		t.Fatalf("transcript = %+v, want it to open on the skill's prompt", conv.Messages)
+	}
+	first := conv.Messages[0].Body.Text
+	for _, want := range []string{`- alarm: "mic-1/icmp-unreachable"`, "## Given", "- component: mic-1", "- alarm: icmp-unreachable"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("the prompt the model was sent lacks %q:\n%s", want, first)
+		}
+	}
+
+	for name, skill := range map[string]map[string]any{
+		"nosuch":  {"name": "no-such-skill"},
+		"missing": {"name": "triage-alarm", "arguments": map[string]any{"alarm": "icmp-unreachable"}},
+	} {
+		p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": name}, http.StatusCreated)
+		bad := prompt("")
+		bad["messages"] = []any{}
+		bad["forwardedProps"] = map[string]any{"skill": skill}
+		if status, _ := p.run(p.toks["olga"], name, bad); status != http.StatusUnprocessableEntity {
+			t.Errorf("%s: :run = %d, want 422", name, status)
+		}
 	}
 }

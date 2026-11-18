@@ -117,13 +117,13 @@ func TestSeverityLevelAPI(t *testing.T) {
 	if err := json.Unmarshal(created, &loc); err != nil || loc.ID == "" {
 		t.Fatalf("created location %s (%v)", created, err)
 	}
-	placeOnly := setupScopedPrincipal(t, ctx, dsn, "north-sev-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
+	placeOnly := setupScopedUser(t, ctx, dsn, "north-sev-owner", grantSpec{role: "owner", scopeKind: "location", scopeID: loc.ID})
 	c.do(placeOnly, http.MethodGet, "/severity-levels", nil, http.StatusOK)
 	c.do(placeOnly, http.MethodGet, "/severity-levels/serious", nil, http.StatusOK)
 	c.do(placeOnly, http.MethodPost, "/severity-levels", map[string]any{"name": "north-level", "color": "red", "rank": 37}, http.StatusForbidden)
 	c.do(placeOnly, http.MethodPatch, "/severity-levels/serious", map[string]any{"label": "mine"}, http.StatusForbidden)
 	c.do(placeOnly, http.MethodDelete, "/severity-levels/serious", nil, http.StatusForbidden)
-	fleetAdmin := setupScopedPrincipal(t, ctx, dsn, "fleet-sev-admin", grantSpec{role: "admin", scopeKind: "all"})
+	fleetAdmin := setupScopedUser(t, ctx, dsn, "fleet-sev-admin", grantSpec{role: "admin", scopeKind: "all"})
 	c.do(fleetAdmin, http.MethodPost, "/severity-levels", map[string]any{"name": "fleet-level", "color": "red", "rank": 37}, http.StatusCreated)
 	c.do(fleetAdmin, http.MethodPatch, "/severity-levels/fleet-level", map[string]any{"label": "Fleet"}, http.StatusOK)
 	c.do(fleetAdmin, http.MethodDelete, "/severity-levels/fleet-level", nil, http.StatusNoContent)

@@ -63,16 +63,16 @@ func TestOutpostSimulationObservationAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 		var pid string
-		if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
+		if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
 			t.Fatal(err)
 		}
 		for _, q := range []struct {
 			sql  string
 			args []any
 		}{
-			{`insert into service (principal_id, name) values ($1, $2)`, []any{pid, label}},
-			{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, h, p}},
-			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = $2), $3, $4)`, []any{pid, role, scopeKind, scopeID}},
+			{`insert into machine (user_id, name) values ($1, $2)`, []any{pid, label}},
+			{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, h, p}},
+			{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = $2), $3, $4)`, []any{pid, role, scopeKind, scopeID}},
 		} {
 			if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
 				t.Fatalf("%s: %v", q.sql, err)

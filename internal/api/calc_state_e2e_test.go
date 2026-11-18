@@ -111,7 +111,7 @@ func TestCalcRuleStateAndPreviewAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eastViewer := setupScopedPrincipal(t, ctx, dsn, "east-viewer",
+	eastViewer := setupScopedUser(t, ctx, dsn, "east-viewer",
 		grantSpec{role: "viewer", scopeKind: "component", scopeID: e1.ID}, grantSpec{role: "viewer", scopeKind: "system", scopeID: sysE.ID})
 
 	// The preview, as the fleet and as the east viewer, writing nothing.

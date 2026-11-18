@@ -51,7 +51,7 @@ func (p *PG) OutpostSimDevices(ctx context.Context, name string, read scope.Set)
 		join component c on c.id = i.component
 		join product pr on pr.id = c.product_id
 		left join sim_impairment si on si.component_id = c.id
-		where i.outpost_id = (select principal_id from outpost where name = $1)
+		where i.outpost_id = (select user_id from outpost where name = $1)
 		order by c.id, i.name`, name)
 	if err != nil {
 		return nil, fmt.Errorf("storage: outpost sim devices %q: %w", name, err)

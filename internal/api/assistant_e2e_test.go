@@ -15,9 +15,9 @@ import (
 func TestAConversationIsKeptForItsOwnerAlone(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t)
-	p.human("alice", "viewer", "all", "")
-	p.human("bob", "viewer", "all", "")
-	p.human("rita", "reader", "all", "")
+	p.person("alice", "viewer", "all", "")
+	p.person("bob", "viewer", "all", "")
+	p.person("rita", "reader", "all", "")
 
 	p.c.do(p.toks["rita"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "x"}, http.StatusForbidden)
 	p.c.do(p.toks["bob"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "Not A Name"}, http.StatusUnprocessableEntity)
@@ -46,7 +46,7 @@ func TestAConversationIsKeptForItsOwnerAlone(t *testing.T) {
 	var imp struct {
 		Token string `json:"token"`
 	}
-	if err := json.Unmarshal(p.c.do(p.owner, http.MethodPost, "/principals/"+p.ids["bob"]+":impersonate", map[string]any{"mode": "view_as"}, http.StatusCreated), &imp); err != nil {
+	if err := json.Unmarshal(p.c.do(p.owner, http.MethodPost, "/users/"+p.ids["bob"]+":impersonate", map[string]any{"mode": "view_as"}, http.StatusCreated), &imp); err != nil {
 		t.Fatal(err)
 	}
 	p.c.do(imp.Token, http.MethodGet, "/assistant/conversations/triage", nil, http.StatusOK)

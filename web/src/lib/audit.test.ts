@@ -11,7 +11,7 @@ const rows: AuditEvent[] = [
   ev({ id: "1", actor_name: "alice", verb: "login", resource: "auth" }),
   ev({ id: "2", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2" }),
   ev({ id: "3", actor_name: "alice", verb: "logout", resource: "auth" }),
-  ev({ id: "4", actor_name: "carol", verb: "create", resource: "principal_grant", resource_id: "grant_01" }),
+  ev({ id: "4", actor_name: "carol", verb: "create", resource: "user_grant", resource_id: "grant_01" }),
 ];
 
 const shown = (chips: Chip[]): string[] => rows.filter(buildPredicate(auditFilterKeys, chips)).map((e) => e.id);
@@ -42,7 +42,7 @@ describe("auditFilterKeys", () => {
     const byKey = Object.fromEntries(auditFilterKeys.map((k) => [k.key, k]));
     expect(byKey.who.values!(rows)).toEqual(["alice", "bob", "carol"]);
     expect(byKey.action.values!(rows)).toEqual(["create", "delete", "login", "logout"]);
-    expect(byKey.resource.values!(rows)).toEqual(["auth", "component", "principal_grant"]);
+    expect(byKey.resource.values!(rows)).toEqual(["auth", "component", "user_grant"]);
   });
   it("who falls back to system when the actor is unknown", () => {
     expect(actorLabel(ev({ actor_name: undefined, actor: undefined }))).toBe("system");
@@ -50,7 +50,7 @@ describe("auditFilterKeys", () => {
 
   it("holds the impersonator accountable, and `who` matches either party", () => {
     // root acted while impersonating alice: the impersonator (root) is accountable.
-    const imp = [ev({ id: "imp", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal" })];
+    const imp = [ev({ id: "imp", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "user" })];
     expect(accountableLabel(imp[0])).toBe("root");
     const hit = (term: string) => imp.filter(buildPredicate(auditFilterKeys, [{ key: "who", op: "contains", values: [term] }])).map((e) => e.id);
     expect(hit("root")).toEqual(["imp"]); // the impersonator
@@ -82,7 +82,7 @@ describe("resourceLabel", () => {
 
   it("labels a slot assignment by the slot, a grant by its role", () => {
     expect(resourceLabel(labelEv("system_slot_assignment", { system: "boardroom", slot: "camera", component: "cam-1" }))).toBe("camera");
-    expect(resourceLabel(labelEv("principal_grant", { Role: "admin", ScopeKind: "all" }))).toBe("admin");
+    expect(resourceLabel(labelEv("user_grant", { Role: "admin", ScopeKind: "all" }))).toBe("admin");
   });
 
   it("labels a command by its type", () => {

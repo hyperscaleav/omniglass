@@ -28,7 +28,7 @@ func TestComponentAlarmsVerdictIsUnknownUntilSomethingObservesIt(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	verdictOf := func(name string) string {
 		t.Helper()

@@ -5,8 +5,8 @@ import type { Me } from "./auth";
 import type { System } from "./systems";
 import type { Component } from "./components";
 
-const admin: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
-const componentOnly: Me = { principal: { id: "p", kind: "human" }, permissions: ["*:read", "component:update"], grants: [] };
+const admin: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
+const componentOnly: Me = { user: { id: "p", kind: "person" }, permissions: ["*:read", "component:update"], grants: [] };
 
 const systems: System[] = [
   { id: uuidFor("sys-b"), name: "briefing", label: "Briefing", member_count: 1, actions: ["update"] },

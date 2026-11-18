@@ -1,6 +1,27 @@
 ---
 title: Connect an agent
 description: "Point Claude Code, or any MCP client, at omniglass: the MCP server's tools are generated from the API and run with your token."
+screenshots:
+  - id: omnibot-panel
+    path: /web/variables
+    alt: "The omnibot panel open over the console before the first prompt: what omnibot may do, how the agent policy decides each write, and the composer with Add a credential."
+    steps:
+      - { action: click, selector: 'button[aria-label="Ask omnibot"]' }
+      - { action: wait, selector: '[data-testid="omnibot-empty"]' }
+  - id: omnibot-tray
+    path: /web/systems/auditorium
+    alt: "An alarm alt-clicked from a component's Why into omnibot's tray: its chip names the component and when the alarm was raised, with a Triage button beside it."
+    steps:
+      - { action: click, selector: "[data-testid=alarm-strip] button" }
+      - { action: click, selector: '[data-testid=blade-why] [data-subject-kind="alarm"] [data-severity]', modifiers: [Alt] }
+      - { action: wait, selector: 'button[aria-label^="Triage alarm"]' }
+    # The seeded alarm has no rule, so its chip names it by when it was raised,
+    # which moves every seed: the tray row is masked whole, a full-width box
+    # that holds still whatever the chip says. The system's since line behind
+    # the drawer ages with the clock.
+    mask:
+      - "[data-testid=omnibot-tray]"
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
 ---
 
 Omniglass serves the **Model Context Protocol** (MCP), so an AI agent you already use (Claude Code, or
@@ -218,6 +239,25 @@ refused. The server runs omnibot only with a model: until a live provider lands,
 recording `OMNIGLASS_OMNIBOT_REPLAY` names, and without one a run is a 503. The lab's server plays one
 that tags the meeting 405 video bar, so the commands above run there as written.
 
+A run can carry what you are looking at as AG-UI `context`: references, a kind and a name or address,
+never a value (#2122). omnibot reads them as data ahead of your message and looks each up with its
+tools, under your grants. At most 20 entries, each value at most 2000 characters:
+
+```bash
+omniglass assistant conversation run lobby \
+  --context '[{"description":"alarm","value":"hq.lobby.mic-1/icmp-unreachable"}]' \
+  --messages '[{"role":"user","content":"why is this raised?"}]'
+```
+
+A run can also name one of the server's [skills](#skills) in `forwardedProps` in place of a message;
+the server renders the skill's own prompt from its arguments, so a client never composes skill text.
+An unknown skill, or one missing an argument it requires, is a 422:
+
+```bash
+omniglass assistant conversation run lobby --messages '[]' \
+  --forwardedProps '{"skill":{"name":"triage-alarm","arguments":{"component":"hq.lobby.mic-1"}}}'
+```
+
 ### Giving omnibot a credential
 
 omnibot can bind a credential to a device without ever seeing it. In the chat, `/secret` hands it one:
@@ -238,6 +278,46 @@ first by default); the poll runs on the server with the bound credential. The va
 model is sent and nothing the CLI prints, including an error. Type a credential only after `/secret`
 asks for it: omnibot does not scan what you type for one, so a value typed as a prompt reaches the
 model.
+
+### Omnibot in the console
+
+The console runs omnibot too, on the server, as above. **Ask omnibot** in the top bar opens it in a
+panel, and so does the [command palette](/guides/operator/#getting-around)'s last row, which carries
+what you typed there as a draft for you to send. Each prompt runs on one conversation, kept on the
+server like any other; **New conversation** starts another.
+
+::screenshot{#omnibot-panel}
+
+The panel shows omnibot's work as it happens: its text, and a card for each tool call naming the tool
+and its arguments. A tool the console knows how to show reads the way the console shows that thing
+elsewhere: a component is a link to its page, reachability is each endpoint's ladder. Any other tool,
+or a result that is not what its renderer reads, gets a plain card; the raw result is one click away
+under either. A call your [agent policy](#what-an-agent-may-do) asks about stops the run on a confirm
+card that names the call and lists the arguments it would run with, and its own card reads **Waiting for you**: **Confirm** runs it, **Decline** leaves it alone and omnibot hears why, and the card marks
+which. A destructive call says it cannot be undone. A run that reaches its step limit says so, and
+asking again carries on from there; one the server refuses (an agent or impersonation session cannot
+run omnibot) or that fails names the reason. A run whose connection closes before it finished says
+that it ended early, rather than looking busy for good; ask again to carry on.
+
+**Hand omnibot what you are looking at.** Alt-click a row (a component, a system, a location, an
+alarm, in a list, a tree or a blade), a system card, a marker on a system's map or a chart, and its
+name drops into a tray above the composer (a chart is its metric, by its owner's name and the
+metric's); shift-alt-click another row in the same list adds every row between, which is how a set
+goes in. ⌘J (Ctrl-J) hands over the page itself, its route and filters, when nothing else is gathered,
+and replaces a page handed over earlier and not yet sent; a system, location or component page
+is named by its name or address, never its uuid. Gathering sends nothing: type your question, and
+that prompt carries the tray as context and clears it, as does signing out. It holds references, never what the screen showed, so omnibot looks each thing
+up itself and sees only what you may. Alt rather than ⌘ or Ctrl, which still open a link in a new tab;
+a button inside a row keeps its own meaning. An alarm in the tray has a **Triage** button that runs
+the `triage-alarm` skill on it in one click, and the [command palette](/guides/operator/#getting-around)
+offers the same for each gathered alarm. An alarm no rule raised is known by its component and
+when it was raised, so its triage starts from the component alone.
+
+::screenshot{#omnibot-tray}
+
+**Add a credential** is the console's `/secret`: it creates the secret with your token through the
+same form as Values > Secrets, and puts only `secret <name>` in your draft, so omnibot learns the
+name and never the value.
 
 ## What the agent may assume, and what it should ask
 

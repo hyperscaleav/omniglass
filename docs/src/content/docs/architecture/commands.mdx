@@ -1,10 +1,6 @@
 ---
 title: Commands
 description: "The do primitive: the command_type catalog, command invocations, and computed settlement that ties want, told, and is together."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -233,7 +229,11 @@ spec says how its commands settle:
   and settles the command if it matches the intent or fails it if not. For a property target the
   value is also recorded as an observation on the dispatched endpoint, held to the property's
   validation like any telemetry (a value outside it fails the command and records nothing) and
-  written only when it changes; a metric target is judged without a recorded sample.
+  written only when it changes and only when the target was not observed after the command's first
+  delivery: a reply that reaches the server after the device has pushed a newer value still settles
+  the command, but leaves that value as the latest
+  ([ADR-1606](/architecture/decisions/#adr-1606-a-late-reply-settles-its-command-but-never-overwrites-a-newer-observation)).
+  A metric target is judged without a recorded sample.
 - `settle: { from: response, success: { regex: ... } }`: the reply only confirms (`OK`). A
   matching reply settles the command; any other fails it.
 - `settle: { from: observe }`, the default: the reply decides nothing, and the next observation of
@@ -382,4 +382,4 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
   }}
 />
 
-Related: [properties](/architecture/properties/), [events](/architecture/events/), [config, secrets, and variables](/architecture/variables/), and [alarms and actions](/architecture/alarms-actions/) (where a reconcile policy issues a command).
+Related: [properties](/architecture/properties/), [events](/architecture/events/), [variables, secrets, and declared values](/architecture/variables/), and [alarms and actions](/architecture/alarms-actions/) (where a reconcile policy issues a command).

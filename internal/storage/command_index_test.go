@@ -70,7 +70,7 @@ func newCommandPullFixture(t *testing.T) *commandPullFixture {
 	}
 	conn := connectDSN(t, dsn)
 	return &commandPullFixture{ctx: ctx, dsn: dsn, gw: gw, counter: counter,
-		actor: scalar(t, conn, `select principal_id from human where username = 'root'`)}
+		actor: scalar(t, conn, `select user_id from person where username = 'root'`)}
 }
 
 // issue records n deliverable commands on the fixture's component.

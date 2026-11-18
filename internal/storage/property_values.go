@@ -338,8 +338,8 @@ var ownerContracts = map[string]ownerContract{
 	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", "id", ErrSystemNotFound, "standard_metric"},
 	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", "id", ErrLocationNotFound, "location_type_metric"},
 	// An outpost has the arc but no classifier, so it resolves ad-hoc values only. Its
-	// arc points at principal_id, the outpost's primary key.
-	"outpost": {"outpost", "", "", "", "outpost_id", "principal_id", ErrOutpostNotFound, ""},
+	// arc points at user_id, the outpost's primary key.
+	"outpost": {"outpost", "", "", "", "outpost_id", "user_id", ErrOutpostNotFound, ""},
 }
 
 // contractDefaultSQL is a contract line's default as the effective reads take
@@ -569,10 +569,10 @@ func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind
 // scope, for any owner kind on the arc. An absent owner is that kind's not-found
 // sentinel (nothing to disclose); an existing but out-of-scope owner returns
 // inScope=false so each caller picks its own sentinel. An outpost is fleet-wide (not
-// scope-tree scoped, like a principal), so it is in scope once it exists.
+// scope-tree scoped, like a user), so it is in scope once it exists.
 // ownerArcValue resolves an owner reference to the value its arc column stores.
 // For every kind that is the entity's primary key: a uuid for the three fleet
-// kinds, principal_id for an outpost, so a rename never touches the arc.
+// kinds, user_id for an outpost, so a rename never touches the arc.
 //
 // The reference itself may be either form, since scopedByName resolves a uuid or
 // a name; this is only about what gets written.
@@ -602,10 +602,10 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 	case "outpost":
 		col := "name"
 		if isUUID(ownerRef) {
-			col = "principal_id"
+			col = "user_id"
 		}
 		var pid string
-		if err := q.QueryRow(ctx, `select principal_id from outpost where `+col+` = $1`, ownerRef).Scan(&pid); err != nil {
+		if err := q.QueryRow(ctx, `select user_id from outpost where `+col+` = $1`, ownerRef).Scan(&pid); err != nil {
 			return "", ErrOutpostNotFound
 		}
 		return pid, nil

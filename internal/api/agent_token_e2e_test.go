@@ -126,13 +126,13 @@ func TestAgentTokenIntersectsItsPerson(t *testing.T) {
 	var alice struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &alice); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/users", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &alice); err != nil {
 		t.Fatal(err)
 	}
 	var grant struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principals/"+alice.ID+"/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated), &grant); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/users/"+alice.ID+"/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated), &grant); err != nil {
 		t.Fatal(err)
 	}
 	aliceSession := loginBearer(t, c, "alice", "orange-boat-42x")
@@ -150,7 +150,7 @@ func TestAgentTokenIntersectsItsPerson(t *testing.T) {
 	c.do(op.Token, http.MethodPatch, "/components/amp-9", map[string]any{"label": "agent was here"}, http.StatusOK)
 
 	// Alice loses operator: her agent loses it with her, on the next request.
-	c.do(ownerTok, http.MethodDelete, "/principals/"+alice.ID+"/grants/"+grant.ID, nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/users/"+alice.ID+"/grants/"+grant.ID, nil, http.StatusNoContent)
 	if code, body := c.send(op.Token, http.MethodPatch, "/components/amp-9", map[string]any{"label": "again"}); code != http.StatusForbidden && code != http.StatusNotFound {
 		t.Errorf("the agent writes after its person lost the grant: %d %s", code, body)
 	}
@@ -188,7 +188,7 @@ func TestAgentTokenRefusals(t *testing.T) {
 		t.Errorf("roles on a personal token = %d %s, want 422", code, body)
 	}
 
-	c.do(ownerTok, http.MethodPost, "/principals", map[string]string{"username": "bob", "password": "orange-boat-42x"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/users", map[string]string{"username": "bob", "password": "orange-boat-42x"}, http.StatusCreated)
 	agent := mintAgent(t, c, ownerTok, map[string]any{"description": "a", "agent": "a", "ttl_days": 1})
 	for _, r := range []struct {
 		method, path string
@@ -197,7 +197,7 @@ func TestAgentTokenRefusals(t *testing.T) {
 		{http.MethodPost, "/auth/me/tokens", map[string]any{"description": "child"}},
 		{http.MethodPost, "/auth/me/tokens", map[string]any{"description": "child", "agent": "child", "ttl_days": 1}},
 		{http.MethodPost, "/auth/me:changePassword", map[string]any{"current_password": "x", "new_password": "a-long-new-password"}},
-		{http.MethodPost, "/principals/bob:impersonate", map[string]any{"mode": "view_as"}},
+		{http.MethodPost, "/users/bob:impersonate", map[string]any{"mode": "view_as"}},
 	} {
 		if code, body := c.send(agent.Token, r.method, r.path, r.body); code != http.StatusForbidden {
 			t.Errorf("%s %s as an agent = %d %s, want 403", r.method, r.path, code, body)
@@ -326,7 +326,7 @@ func TestAgentTokenOmnibotChannel(t *testing.T) {
 }
 
 // TestAgentTokenCannotEscalateThroughIAM: the never-reveal ceiling is not
-// escaped by handing a credential-revealing role to a principal the agent
+// escaped by handing a credential-revealing role to a user the agent
 // controls. Every escalation guard (granting a role, adding a group member,
 // resetting a password) measures the agent's bounded permissions, not its
 // person's.
@@ -338,34 +338,34 @@ func TestAgentTokenCannotEscalateThroughIAM(t *testing.T) {
 	c, ownerTok := auditImagesStack(t)
 	agent := mintAgent(t, c, ownerTok, map[string]any{"description": "iam", "agent": "iam-bot", "ttl_days": 1})
 
-	c.do(agent.Token, http.MethodPost, "/principals", map[string]string{"username": "mallory", "password": "orange-boat-42x"}, http.StatusCreated)
+	c.do(agent.Token, http.MethodPost, "/users", map[string]string{"username": "mallory", "password": "orange-boat-42x"}, http.StatusCreated)
 	for _, role := range []string{"owner", "operator"} {
-		if code, body := c.send(agent.Token, http.MethodPost, "/principals/mallory/grants", map[string]any{"role": role, "scope_kind": "all"}); code != http.StatusForbidden {
+		if code, body := c.send(agent.Token, http.MethodPost, "/users/mallory/grants", map[string]any{"role": role, "scope_kind": "all"}); code != http.StatusForbidden {
 			t.Errorf("an agent granting %s = %d %s, want 403", role, code, body)
 		}
 	}
-	c.do(agent.Token, http.MethodPost, "/principals/mallory/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
+	c.do(agent.Token, http.MethodPost, "/users/mallory/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
 
-	c.do(ownerTok, http.MethodPost, "/principal-groups", map[string]any{"name": "ops"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/principal-groups/ops/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/principal-groups", map[string]any{"name": "readers"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/principal-groups/readers/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
-	if code, body := c.send(agent.Token, http.MethodPost, "/principal-groups/readers/grants", map[string]any{"role": "operator", "scope_kind": "all"}); code != http.StatusForbidden {
+	c.do(ownerTok, http.MethodPost, "/user-groups", map[string]any{"name": "ops"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/user-groups/ops/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/user-groups", map[string]any{"name": "readers"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/user-groups/readers/grants", map[string]any{"role": "viewer", "scope_kind": "all"}, http.StatusCreated)
+	if code, body := c.send(agent.Token, http.MethodPost, "/user-groups/readers/grants", map[string]any{"role": "operator", "scope_kind": "all"}); code != http.StatusForbidden {
 		t.Errorf("an agent granting operator to a group = %d %s, want 403", code, body)
 	}
-	if code, body := c.send(agent.Token, http.MethodPost, "/principal-groups/ops/members", map[string]any{"principal_id": "mallory"}); code != http.StatusForbidden {
+	if code, body := c.send(agent.Token, http.MethodPost, "/user-groups/ops/members", map[string]any{"user_id": "mallory"}); code != http.StatusForbidden {
 		t.Errorf("an agent adding a member to a revealing group = %d %s, want 403", code, body)
 	}
-	c.do(agent.Token, http.MethodPost, "/principal-groups/readers/members", map[string]any{"principal_id": "mallory"}, http.StatusNoContent)
+	c.do(agent.Token, http.MethodPost, "/user-groups/readers/members", map[string]any{"user_id": "mallory"}, http.StatusNoContent)
 	// The person, unconstrained, still may.
-	c.do(ownerTok, http.MethodPost, "/principal-groups/ops/members", map[string]any{"principal_id": "mallory"}, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPost, "/user-groups/ops/members", map[string]any{"user_id": "mallory"}, http.StatusNoContent)
 
-	c.do(ownerTok, http.MethodPost, "/principals", map[string]string{"username": "carol", "password": "orange-boat-42x"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/principals/carol/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated)
-	if code, body := c.send(agent.Token, http.MethodPost, "/principals/carol:resetPassword", map[string]any{"password": "a-brand-new-pass-77"}); code != http.StatusForbidden {
+	c.do(ownerTok, http.MethodPost, "/users", map[string]string{"username": "carol", "password": "orange-boat-42x"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/users/carol/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated)
+	if code, body := c.send(agent.Token, http.MethodPost, "/users/carol:resetPassword", map[string]any{"password": "a-brand-new-pass-77"}); code != http.StatusForbidden {
 		t.Errorf("an agent resetting a revealer's password = %d %s, want 403", code, body)
 	}
-	c.do(ownerTok, http.MethodPost, "/principals/carol:resetPassword", map[string]any{"password": "a-brand-new-pass-77"}, http.StatusNoContent)
+	c.do(ownerTok, http.MethodPost, "/users/carol:resetPassword", map[string]any{"password": "a-brand-new-pass-77"}, http.StatusNoContent)
 }
 
 // loginBearer logs a person in and returns the web session's secret, which is

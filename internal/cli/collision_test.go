@@ -12,7 +12,7 @@ import (
 // cobra: both are added, and lookup returns whichever it finds first. The second
 // is unreachable, silently, and the only symptom is a command that runs the wrong
 // thing. That has now happened three times (the `members` collision under the
-// principal groups, `type list`, and the `outpost` run mode swallowing every
+// user groups, `type list`, and the `outpost` run mode swallowing every
 // generated outpost command), each found by a person typing it rather than by the
 // build.
 //

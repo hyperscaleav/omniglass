@@ -20,7 +20,7 @@ import { openTree, pickTree } from "../components/TreeSelect.testkit";
 // pencil. A system conforms to a STANDARD, whose declared-property contract the
 // detail's Properties panel resolves. Data is seeded into the query cache so no
 // server is needed; `>` grants every permission.
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 const sys: System = { id: uuidFor("s-1"), name: "boardroom", label: "Boardroom", standard: "meeting-room", standard_id: uuidFor("std-meeting-room"), system_type: "class", system_type_id: uuidFor("st-class"), member_count: 2, effective_tags: {} };
 // The system type taxonomy (ADR-0096), nested: the picker renders it as a
 // tree, not a flat list, so the fixture is two levels deep. Deliberately NOT

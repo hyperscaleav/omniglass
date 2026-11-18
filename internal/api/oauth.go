@@ -574,7 +574,7 @@ func (e *oauthEndpoints) token(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	if err := e.gw.IssueOAuthToken(r.Context(), storage.OAuthTokenIssue{
-		PrincipalID: code.PrincipalID, ClientID: c.ID, SecretHash: hash, Prefix: prefix,
+		UserID: code.UserID, ClientID: c.ID, SecretHash: hash, Prefix: prefix,
 		ExpiresAt: now.Add(oauthTokenLifetime), RefreshHash: refreshHash, RefreshExpiresAt: now.Add(oauthRefreshLifetime),
 		Agent: c.Name, AgentRoles: code.Roles, UserAgent: r.UserAgent(), ClientIP: clientIP(r, e.trust),
 	}); err != nil {

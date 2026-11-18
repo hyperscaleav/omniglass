@@ -247,7 +247,7 @@ func (p *PG) RetentionWindows(ctx context.Context) (settings.RetentionSettings, 
 	if err != nil {
 		return settings.RetentionSettings{}, fmt.Errorf("storage: retention windows: %w", err)
 	}
-	s, err := settings.Typed(p.settings.ResolveOverride(doc, locks).Values)
+	s, err := settings.Typed(p.settings.ResolveBinding(doc, locks).Values)
 	if err != nil {
 		return settings.RetentionSettings{}, fmt.Errorf("storage: retention windows: %w", err)
 	}

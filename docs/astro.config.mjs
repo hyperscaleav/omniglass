@@ -146,8 +146,8 @@ export default defineConfig({
         },
         {
           // The pages that describe entirely unbuilt capability: every one is a
-          // :::design sketch, badged Design, and graduates out of this group as
-          // its subsystem lands (#434).
+          // :::design sketch, and graduates out of this group as its subsystem
+          // lands (#434).
           label: 'Design sketches',
           collapsed: true,
           items: [

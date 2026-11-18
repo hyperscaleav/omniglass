@@ -73,7 +73,7 @@ func TestImpairingAnUpstreamHoldsItsPathDependent(t *testing.T) {
 	}
 	// The shortest report window the setting takes, so the held count lands
 	// inside the test rather than a minute on.
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": 10}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": 10}); err != nil {
 		t.Fatal(err)
 	}
 	upstream, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "gateway-u"}, all, all, all, all)

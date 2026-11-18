@@ -1,10 +1,6 @@
 ---
 title: Tags
-description: A governed key vocabulary and per-entity value bindings that resolve union-on-key, override-on-value down the cascade.
-sidebar:
-  badge:
-    text: Partial
-    variant: note
+description: A governed key vocabulary and per-entity value bindings that resolve union-on-key, shadow-on-value down the cascade.
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -12,7 +8,7 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 :::note[Partial]
 The first slice ([ADR-0021](/architecture/decisions/#adr-0021-tag-slice-1-a-governed-key-registry-with-entity-update-gated-bindings)) is
 **built**: the governed **`tag`** key catalog, the per-entity **`tag_binding`** cell on the exclusive arc, and the
-union-on-key / override-on-value **cascade** resolver, over the API and the generated CLI. Also built: the
+union-on-key / shadow-on-value **cascade** resolver, over the API and the generated CLI. Also built: the
 console **Tags directory**, the per-entity **binding editor**, **value-domain enums**
 ([#190](https://github.com/hyperscaleav/omniglass/issues/190)), the directory **Tags column** with per-key
 **tag filtering** (by effective value, plus **is set** / **is absent**,
@@ -28,7 +24,7 @@ the [decision log](/architecture/decisions/).
 A **tag** is an operator **`key: value`** label for dimensions Omniglass does not model natively
 (`category: audio-dsp`, `environment: prod`, `cost-center: 4021`): not a signal, no lifecycle, riding the
 same [cascade](/architecture/cascade/) as
-[config, secrets, and variables](/architecture/variables/) but with a **union-on-key, override-on-value**
+[variables, secrets, and declared values](/architecture/variables/) but with a **union-on-key, shadow-on-value**
 combinator rather than a single most-specific value.
 
 ## Two layers: the key vocabulary and the value binding
@@ -83,7 +79,7 @@ The flat case is the shape a [file](/architecture/files/) needs (a file is not o
 has no parent to cascade from); the same key model serves both, toggled by this one field.
 :::
 
-## Values resolve union-on-key, override-on-value
+## Values resolve union-on-key, shadow-on-value
 
 An entity's effective tags resolve down the same [cascade](/architecture/cascade/) as every other
 operator-set value; the structural chain, precedence key, and fall-through rule are stated once, there. Tags
@@ -148,7 +144,7 @@ The `tag` row is the tenant-wide governed key vocabulary; minting a key needs `t
 />
 
 The `tag_binding` row is the `key: value` cell at one owner on the exclusive arc
-(`platform / location / system / component / outpost`); it resolves **union on key, override on value** down the
+(`platform / location / system / component / outpost`); it resolves **union on key, shadow on value** down the
 [cascade](/architecture/cascade/). Setting a value is the owner's own `update` write, except at `platform`
 (`tag:update` plus `platform:update`).
 

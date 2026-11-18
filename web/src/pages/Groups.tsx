@@ -17,7 +17,7 @@ import { useFormActions } from "../lib/formactions";
 // group holds role x scope grants that its members inherit, so an admin assigns
 // access to a team once. A row opens the group blade (rooted here on group, drilling
 // into its members' user blades); the blade body lives in GroupDetail. Gated by
-// principal_group.
+// user_group.
 
 const columns: FlatColumn<Group>[] = [
   identityColumn<Group>(),
@@ -52,11 +52,11 @@ export default function Groups() {
         rowId: (g) => g.id,
         openId,
         blades: { registry: identityRegistry, rootKind: "group" },
-        create: can(me.data, "principal_group", "create")
+        create: can(me.data, "user_group", "create")
           // The handoff is the URL (#762): ?g=<id>&edit=1 opens the new group's
           // blade already editing, so members and grants are added without a
           // second step.
-          ? { label: "New user group", can: () => can(me.data, "principal_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => { setParams({ g: g.id, edit: "1" }); ctx.close(); }} onClose={ctx.close} /> }
+          ? { label: "New user group", can: () => can(me.data, "user_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => { setParams({ g: g.id, edit: "1" }); ctx.close(); }} onClose={ctx.close} /> }
           : undefined,
       }}
     />

@@ -71,7 +71,7 @@ const components: Comp[] = [
   { id: uuidFor("c-3"), name: "disp-1", label: "Display 1", system: "boardroom", system_count: 1 },
 ];
 
-const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
+const owner: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
 
 // The health read's own arithmetic for the same three slots above, the
 // occupancy-aware counterpart of the slots read's understaffed: satisfying,

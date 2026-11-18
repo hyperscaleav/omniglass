@@ -29,7 +29,7 @@ import { seedSeverityLevels } from "../lib/testseverity";
 // properties, their cascade) is the detail view's Configure tab, one Expand
 // away. Every body self-fetches by id, so the catalog serves any page.
 
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 const view: FleetView = {
   locations: [
@@ -355,5 +355,34 @@ describe("a failed save in the component blade", () => {
     expect(within(footer).getByRole("button", { name: "Save" })).toBeTruthy();
     // One alert, not the footer's and the form's both.
     expect(within(blade).getAllByRole("alert").length).toBe(1);
+  });
+});
+
+// The subject stamp (#2122): a blade is its entity by name, and each alarm in
+// its Why strip is that alarm by component and rule, or when it was raised,
+// never by its message, so alt-click hands omnibot a reference.
+describe("the blade's subject stamp", () => {
+  const stamp = (el: Element | null) => el && [el.getAttribute("data-subject-kind"), el.getAttribute("data-subject-ref")];
+
+  it("stamps a system blade by name, and its alarms by component and when raised", async () => {
+    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
+    const blade = await screen.findByRole("dialog");
+    const why = within(blade).getByTestId("blade-why");
+    expect(stamp(why.closest("[data-subject-kind='system']"))).toEqual(["system", "boardroom"]);
+    expect(stamp(within(why).getByText("No route to host").closest("[data-subject-kind]"))).toEqual(["alarm", "mic-1@2026-08-15T14:20:00Z"]);
+  });
+
+  it("stamps a component blade by name, and its alarms by component and rule", async () => {
+    mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
+    const blade = await screen.findByRole("dialog");
+    const why = within(blade).getByTestId("blade-why");
+    expect(stamp(why.closest("[data-subject-kind='component']"))).toEqual(["component", "mic-1"]);
+    expect(stamp(within(why).getByText("No route to host").closest("[data-subject-kind]"))).toEqual(["alarm", "mic-1/icmp-unreachable"]);
+  });
+
+  it("stamps a location blade by name", async () => {
+    mountBlade({ kind: "location", id: uuidFor("eb-room") });
+    const blade = await screen.findByRole("dialog");
+    expect(stamp(within(blade).getByTestId("blade-systems").closest("[data-subject-kind]"))).toEqual(["location", "boardroom-a"]);
   });
 });

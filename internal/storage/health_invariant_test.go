@@ -58,7 +58,7 @@ func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) 
 		left join component c on c.id = sd.component_id
 		left join system    s on s.id = sd.system_id
 		left join location  l on l.id = sd.location_id
-		left join outpost      n on n.principal_id = sd.outpost_id
+		left join outpost      n on n.user_id = sd.outpost_id
 		where sd.property_type_id = (select id from property_type where name = 'health')
 		order by owner, sd.id asc`)
 	if err != nil {

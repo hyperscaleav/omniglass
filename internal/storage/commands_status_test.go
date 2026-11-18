@@ -49,12 +49,12 @@ func TestCommandStatusRecording(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 	all := scope.Set{All: true}
-	// The command row stamps its actor, so the issuer must be a real principal.
+	// The command row stamps its actor, so the issuer must be a real user.
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 
@@ -331,7 +331,7 @@ func TestFireAndForgetSettlesOnItsReport(t *testing.T) {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-ff"}, all, all, all, all); err != nil {

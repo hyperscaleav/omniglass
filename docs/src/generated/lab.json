@@ -118,6 +118,12 @@
       "setup": []
     },
     {
+      "id": "hand-omnibot-the-console",
+      "title": "Hand omnibot the console",
+      "description": "Hand omnibot the page with Ctrl-J, alt-click an alarm into its tray, and see the one-click Triage beside it.",
+      "setup": []
+    },
+    {
       "id": "issue-a-command",
       "title": "Issue a command and follow it",
       "description": "Tell a video bar its volume from its Activity tab, watch the toast follow the command until the bar's reply settles it, and open the command to read its reply and timing.",
@@ -133,6 +139,12 @@
       "id": "keep-outpost-logs-for-a-day",
       "title": "Keep an outpost's own logs for a day",
       "description": "Give an outpost's own debug log lines a window of their own, one day, on the Settings page, while a component's debug lines keep the shared three days.",
+      "setup": []
+    },
+    {
+      "id": "omnibot-panel",
+      "title": "Ask omnibot from the console",
+      "description": "Open omnibot from the top bar, ask it to tag a video bar, watch its reads arrive as cards, and confirm the write it asks about.",
       "setup": []
     },
     {

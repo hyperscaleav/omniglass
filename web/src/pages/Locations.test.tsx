@@ -18,7 +18,7 @@ import { pickTree } from "../components/TreeSelect.testkit";
 // location type's declared-property contract against the location's own values.
 // Data is seeded into the query cache so no server is needed; `>` grants every
 // permission.
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 const hq: Location = { id: uuidFor("l-hq"), name: "hq", label: "HQ", location_type: "campus", effective_tags: {} };
 const lab: Location = { id: uuidFor("l-lab"), name: "lab", label: "Lab", location_type: "campus", effective_tags: {} };
 const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", label: "HQ B1", location_type: "building", parent: "hq", parent_id: hq.id, effective_tags: {} };

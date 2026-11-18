@@ -3,16 +3,16 @@ title: Roadmap
 description: "The directional layer: the epics and the architectural arc ahead, and how forward-looking work converges into the spine as it ships."
 ---
 
-The [architecture](/architecture/) is written as one timeless design and converges **in place** as the
-code catches up: a page moves `Design` to `Partial` to `Built`, it is never forked into a separate
+The design is written as one timeless description and converges **in place** as the code catches up:
+a rebuilt page moves `Design` to `Partial` to `Built`, it is never forked into a separate
 "future" copy that later gets deleted. So this page is not a shadow architecture. It is the **readable
 index of direction**: the epics in flight, the big architectural arc still ahead, and pointers to where
 each lands in the spine.
 
 Three surfaces carry the time axis, and this page ties them together:
 
-- **[Implementation status](/architecture/status/)** is the live map of what is built (the per-page badge
-  and the per-slice log).
+- **[Implementation status](/architecture/status/)** is the live map of what is built (the rebuilt pages'
+  badges and the per-slice log).
 - **[Decision log](/architecture/decisions/)** is the dated history of calls, reversals, and divergences.
 - **GitHub epics** are the **source of truth** for scope and sequencing; this page links them and is not a
   substitute for them. Nothing here is a commitment that a detail ships unchanged; an epic is where the
@@ -107,7 +107,7 @@ that describes the target:
    #1047), and the outpost's push listeners (shared tcp and udp ports, syslog, traps: #1148 to #1150).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal catalog and the exclusive-arc owner columns), the sample sinks,
-   [config and variables](/architecture/variables/) resolved down the
+   [variables, secrets, and declared values](/architecture/variables/) resolved down the
    [cascade](/architecture/cascade/) all shipped, and so has the
    [expression engine](/architecture/expressions/) the rules share. Still ahead on this band: the
    rest of the expression design (the Omniglass functions, unit conversion, and the sites beyond rule

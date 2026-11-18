@@ -161,7 +161,7 @@ func TestClearingAStemOnAShippedTypeForksAndTheWalkResumesAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "ifc-owner", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "ifc-owner", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "ifc-hq", "location_type": "building"}, http.StatusCreated)
 	// A minted ceiling-mic product: the walk under test is the TYPE tree's

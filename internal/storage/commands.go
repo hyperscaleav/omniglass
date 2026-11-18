@@ -118,7 +118,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	// and here is its own not-found rather than a foreign-key error). For the
 	// three tree kinds the arc value IS the id it was handed; the outpost arm is
 	// what makes the call worth making, since an outpost's arc value is its
-	// principal_id.
+	// user_id.
 	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
 	if err != nil {
 		return nil, err

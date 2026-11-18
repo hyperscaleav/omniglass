@@ -38,17 +38,17 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	owner, _ := gw.AuthenticateBearer(ctx, zeros)
 	all := scope.Set{All: true}
 
-	alice, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "alice"}, all)
+	alice, err := gw.CreatePerson(ctx, owner.ID, storage.PersonSpec{Username: "alice"}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 
-	// Grant viewer @ all, then it shows on the principal.
+	// Grant viewer @ all, then it shows on the user.
 	g, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all)
 	if err != nil || g.ID == "" {
 		t.Fatalf("create grant: %+v err %v", g, err)
 	}
-	if got, _ := gw.GetPrincipal(ctx, alice.ID, all); len(got.Grants) != 1 || got.Grants[0].Role != "viewer" {
+	if got, _ := gw.GetUser(ctx, alice.ID, all); len(got.Grants) != 1 || got.Grants[0].Role != "viewer" {
 		t.Fatalf("grant not visible: %+v", got.Grants)
 	}
 
@@ -62,8 +62,8 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "nope", ScopeKind: "all"}, all); !errors.Is(err, storage.ErrUnknownRole) {
 		t.Fatalf("unknown role: want ErrUnknownRole, got %v", err)
 	}
-	if _, err := gw.CreateGrant(ctx, owner.ID, "00000000-0000-0000-0000-000000000000", storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all); !errors.Is(err, storage.ErrPrincipalNotFound) {
-		t.Fatalf("unknown principal: want ErrPrincipalNotFound, got %v", err)
+	if _, err := gw.CreateGrant(ctx, owner.ID, "00000000-0000-0000-0000-000000000000", storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all); !errors.Is(err, storage.ErrUserNotFound) {
+		t.Fatalf("unknown user: want ErrUserNotFound, got %v", err)
 	}
 	// A scoped grant targets a real entity, stored by id: its name resolves to
 	// that id (#1133), one naming nothing is refused, and the same root by id is
@@ -96,7 +96,7 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "location", ScopeID: hq.ID, ScopeOp: "self"}, all); err != nil {
 		t.Fatalf("viewer @ hq (self) alongside viewer @ hq (subtree): %v", err)
 	}
-	got, _ := gw.GetPrincipal(ctx, alice.ID, all)
+	got, _ := gw.GetUser(ctx, alice.ID, all)
 	var sawSelf bool
 	for _, gr := range got.Grants {
 		if gr.Role == "viewer" && gr.ScopeKind == "location" && gr.ScopeOp == "self" {
@@ -112,12 +112,12 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	if err := gw.RevokeGrant(ctx, owner.ID, alice.ID, g.ID, all); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
-	if got, _ := gw.GetPrincipal(ctx, alice.ID, all); len(got.Grants) != 2 {
+	if got, _ := gw.GetUser(ctx, alice.ID, all); len(got.Grants) != 2 {
 		t.Fatalf("expected the two scoped grants to remain: %+v", got.Grants)
 	}
 
 	// The owner invariant: root's single owner grant cannot be revoked.
-	rootPr, _ := gw.GetPrincipal(ctx, owner.ID, all)
+	rootPr, _ := gw.GetUser(ctx, owner.ID, all)
 	var ownerGrantID string
 	for _, gr := range rootPr.Grants {
 		if gr.Role == "owner" && gr.ScopeKind == "all" {
@@ -140,11 +140,11 @@ func TestGrantsAndOwnerInvariant(t *testing.T) {
 	}
 
 	// A non-all scope is refused for both grant and revoke.
-	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
-		t.Fatalf("scoped create grant: want ErrPrincipalForbidden, got %v", err)
+	if _, err := gw.CreateGrant(ctx, owner.ID, alice.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, scope.Set{}); !errors.Is(err, storage.ErrUserForbidden) {
+		t.Fatalf("scoped create grant: want ErrUserForbidden, got %v", err)
 	}
-	if err := gw.RevokeGrant(ctx, owner.ID, alice.ID, g.ID, scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
-		t.Fatalf("scoped revoke: want ErrPrincipalForbidden, got %v", err)
+	if err := gw.RevokeGrant(ctx, owner.ID, alice.ID, g.ID, scope.Set{}); !errors.Is(err, storage.ErrUserForbidden) {
+		t.Fatalf("scoped revoke: want ErrUserForbidden, got %v", err)
 	}
 	// Revoking an unknown grant is a clean not-found.
 	if err := gw.RevokeGrant(ctx, owner.ID, alice.ID, "00000000-0000-0000-0000-000000000000", all); !errors.Is(err, storage.ErrGrantNotFound) {

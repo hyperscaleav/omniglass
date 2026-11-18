@@ -239,7 +239,7 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("member verdict after clearing = %q, want healthy", v)
 	}
 	// A recently cleared alarm stays on the system's read: Activity explains a
-	// past incident with it.
+	// past unhealthy stretch with it.
 	if got := systemAlarms(); len(got) != 1 || got[0].ID != raised.ID || got[0].Active {
 		t.Fatalf("system alarms after clearing = %+v, want the cleared row kept", got)
 	}
@@ -340,7 +340,7 @@ func TestHealthAPIScope(t *testing.T) {
 
 	// A viewer that can see only the north campus: the *:read floor passes the
 	// permission gate, scope injection is what hides the south.
-	viewerTok := setupScopedPrincipal(t, ctx, dsn, "viewer-north-health",
+	viewerTok := setupScopedUser(t, ctx, dsn, "viewer-north-health",
 		grantSpec{role: "viewer", scopeKind: "location", scopeID: northID},
 		grantSpec{role: "viewer", scopeKind: "system", scopeID: northSysID})
 	c.do(viewerTok, http.MethodGet, "/locations/north/health", nil, http.StatusOK)

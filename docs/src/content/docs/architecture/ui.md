@@ -1,10 +1,6 @@
 ---
 title: UI
 description: "The operator console: one renderer library in two composition modes, reads through views, and an identity-based information architecture."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 The console is one renderer over the same views the rest of the platform reads. This page is the renderer / page / dashboard model and the information architecture; the stack and the concrete primitives are the [design system](/contributing/design-system/).
@@ -101,6 +97,25 @@ A detail view accepts a name-shaped address as an operator convenience, resolved
 
 **A name resolves only when it names exactly one entity** (#627 allows duplicate names across placements); if ambiguous, the page shows "More than one [noun] has this name; open it from Explore" and does not redirect, guiding the operator to Explore where they can disambiguate by placement.
 
+## Handing the console to omnibot
+
+A person hands [omnibot](/architecture/ai/) what they are looking at as references, never as what
+the console rendered (#2122). A row says what it is with a **subject stamp**, `data-subject-kind` and
+`data-subject-ref` (a component's dotted address, a system's name, an alarm's `component/rule`), and
+the shared primitives set it from their row: `FlatList`, `Outline`, the entity blades, the alarm
+rows, the system card, the system map's markers and `TimeseriesChart` (a metric, as
+`owner/metric`). One console-wide handler reads it, so a page built from those primitives is gatherable with no
+code of its own: alt-click adds a row to omnibot's tray, shift-alt-click every stamped row from the
+last one gathered, and a control inside a row keeps its own meaning. ⌘J hands over the page itself, as
+its route and arguments; a detail page names its entity by name or address (the `Page` primitive's
+`name`) in place of the uuid its route holds. A uuid is never a subject.
+
+:::note[Divergence: the stamp is on the list primitives, not ViewResult]
+The renderer contract above would let a view's column declare what a row is. It is not built, so the
+stamp rides the primitives the console has ([ADR-2122](/architecture/decisions/#adr-2122-a-console-subject-is-a-stamp-on-the-shared-primitives-gathered-by-one-modifier-click-handler));
+when `ViewResult` lands, its rows carry the same stamp and the handler does not change.
+:::
+
 ## One renderer library, two composition modes
 
 ::::design[Target design: the renderer library and composable dashboards, tracked in #523]
@@ -163,7 +178,7 @@ rules, config, groups, schedules, severity levels, the IAM resources). The type 
 hold their own page: location types (CRUD; Catalog, under Locations: Types) and secret types
 (read-only, at `/secret-types` by URL with no subrail entry), the former tabbed Types page having split with the
 system and component kinds already moved to Standards and Products ([build log](/architecture/build-log/)).
-Editing a setting is editing **[config](/architecture/variables/)**, an audited mutation, not a
+Editing a setting is editing **[a declared value](/architecture/variables/)**, an audited mutation, not a
 separate prop store ([audit](/architecture/audit/)).
 
 The standout is the **rule-authoring page**. Its **Expr editor** for a rule's criteria and a calc
@@ -280,7 +295,7 @@ down the cascade, a distinct kind of thing from the entities themselves. **Confi
 configuration, optionally observed back to detect drift and reconcile), distinct from platform
 Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
 interpolated values, no observed side); the full split is
-[config, secrets, and variables](/architecture/variables/).
+[variables, secrets, and declared values](/architecture/variables/).
 
 **Explore holds the fleet entities**: locations, systems, and components, reached through its
 outline of locations. **Outposts**, the collection daemons, are infrastructure rather than fleet

@@ -179,7 +179,7 @@ describe("the sidebar's poll", () => {
 });
 
 describe("simulatorConnected", () => {
-  const me = (permissions: string[]) => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+  const me = (permissions: string[]) => ({ user: { id: "p", kind: "person" }, permissions, grants: [] });
   it("holds only for a simulation reader with a simulator connected (#1647)", () => {
     expect(simulatorConnected(me(["simulation:read"]), { connected: true, outposts: [] })).toBe(true);
     expect(simulatorConnected(me(["simulation:read"]), { connected: false, outposts: [] })).toBe(false);

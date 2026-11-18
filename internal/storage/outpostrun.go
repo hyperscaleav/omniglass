@@ -153,7 +153,7 @@ func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewIn
 	if err != nil {
 		return nil, fmt.Errorf("storage: marshal preview params: %w", err)
 	}
-	plan := &PreviewPlan{OutpostID: n.PrincipalID, OutpostName: n.Name, Target: params["target"]}
+	plan := &PreviewPlan{OutpostID: n.UserID, OutpostName: n.Name, Target: params["target"]}
 	if in.Driver != "" {
 		plan.Driver = d.Name
 	}
@@ -207,7 +207,7 @@ func (p *PG) PlanDriverPreview(ctx context.Context, actorID string, in PreviewIn
 		plan.Tasks = append(plan.Tasks, task)
 		plan.Polls = append(plan.Polls, poll.Name)
 	}
-	outpostID := n.PrincipalID
+	outpostID := n.UserID
 	if err := writeAuditRes(ctx, tx, actorID, "preview", "outpost", outpostID, nil, map[string]any{
 		"driver": plan.Driver, "transport": sp.Transport, "target": plan.Target, "polls": plan.Polls, "secrets": secretNames,
 	}); err != nil {

@@ -1,10 +1,6 @@
 ---
 title: Audit
 description: The who-did-what record, written once in the same transaction as the change it describes.
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 The audit log answers "who changed this, and to what?": every mutation is recorded once, at the source.
@@ -29,7 +25,7 @@ drawer. See [implementation status](/architecture/status/).
   whichever reference the caller happened to use would give one entity two audit keys and orphan
   every row keyed on a name the moment somebody renamed it. The name at the time of the action is
   not lost: it is in the `old` and `new` images, which is a point-in-time snapshot rather than a
-  lookup key, exactly as `actor_username` is snapshotted beside `actor_principal_id`. A guard reads
+  lookup key, exactly as `actor_username` is snapshotted beside `actor_user_id`. A guard reads
   every `writeAuditRes` call site and fails on an argument that is not primary-key **shaped**, which
   catches the two ways this went wrong (a name, and a dual-accept route's reference) without being
   able to prove that a given uuid is the right table's. The remaining gap is narrow and known: a
@@ -121,10 +117,10 @@ lockout window), `revoke_session` (an admin ending another user's session), and
 `agent_refused` (an agent's call the install's [agent policy](/guides/agents/#what-an-agent-may-do)
 sets to never, with `resource = 'operation'` and `resource_id` the operation's id, written as the
 agent's with its channel). Self-service
-logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'principal'` and
+logout keeps `resource = 'auth'` with no target; admin revoke carries `resource = 'user'` and
 `resource_id` set to the target user's id so the trail answers "whose sessions did this admin
-revoke?". An impersonated action records **both** actors (`actor_principal_id` the impersonated user,
-`real_actor_principal_id` the admin behind it); both identifiers are **denormalized onto the row**
+revoke?". An impersonated action records **both** actors (`actor_user_id` the impersonated user,
+`real_actor_user_id` the admin behind it); both identifiers are **denormalized onto the row**
 (`actor_username`, `real_actor_username`) with the foreign keys going `ON DELETE SET NULL`, so the
 trail stays attributable after its actor is purged
 ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it)).

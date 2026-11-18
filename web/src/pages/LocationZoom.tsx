@@ -118,7 +118,7 @@ export default function LocationZoom() {
 
   return (
     <BladesContext.Provider value={blades}>
-      <Page title={location() ? entityLabel(location()!) : "Location"} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+      <Page title={location() ? entityLabel(location()!) : "Location"} name={location()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
         {/* A create from a template lands here with ?from= (#1329). */}
         <TemplateNotice />
         <DetailGate

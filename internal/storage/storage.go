@@ -46,82 +46,82 @@ type Gateway interface {
 	// UpsertRole installs or updates an official role by id, the boot-seed
 	// phase's write. Idempotent: re-seeding the same role is a no-op update.
 	UpsertRole(ctx context.Context, r Role) error
-	// BootstrapOwner creates the first owner (a human principal with a bearer
+	// BootstrapOwner creates the first owner (a person with a bearer
 	// credential and an owner@all grant) directly, in one transaction, idempotent
 	// per username. Returns whether a new owner was created (false if the
 	// username already exists, so re-running mints no second credential).
 	BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, err error)
 	// IssueBearerCredential mints an additional bearer credential (a web-login session
-	// or a CLI/API token) for an existing principal, addressed by human username, from a
+	// or a CLI/API token) for an existing user, addressed by username, from a
 	// BearerIssue spec: the secret hash and prefix, the purpose, the expiry, and the
 	// identifying metadata (a token's description, and the user-agent / client-ip that
 	// created it). Returns false if no such username.
 	IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool, error)
 	// AuthenticateBearer resolves a bearer credential by its sha256 hash to the
-	// principal, its kind profile, and its grants. Returns ErrCredentialNotFound
+	// user, its kind profile, and its grants. Returns ErrCredentialNotFound
 	// if no credential matches.
-	AuthenticateBearer(ctx context.Context, hash []byte) (*Principal, error)
-	// ResolvePrincipalRef maps a principal reference (a uuid, a human username, or
-	// a service account's name, #1133) to the principal id: a uuid passes through,
-	// a name is looked up, an unknown one is ErrPrincipalNotFound, and one that is
-	// both a username and a service name is refused. Backs addressing a principal
+	AuthenticateBearer(ctx context.Context, hash []byte) (*User, error)
+	// ResolveUserRef maps a user reference (a uuid, a person's username, or
+	// a machine user's name, #1133) to the user id: a uuid passes through,
+	// a name is looked up, an unknown one is ErrUserNotFound, and one that is
+	// both a username and a service name is refused. Backs addressing a user
 	// by name.
-	ResolvePrincipalRef(ctx context.Context, ref string) (string, error)
-	// ResolveUsername maps a human's username, and nothing else, to its principal
-	// id; an unknown one is ErrPrincipalNotFound. The break-glass set-password
+	ResolveUserRef(ctx context.Context, ref string) (string, error)
+	// ResolveUsername maps a person's username, and nothing else, to its user
+	// id; an unknown one is ErrUserNotFound. The break-glass set-password
 	// uses it so the sessions it revokes are the human's whose password it just
-	// rotated, whatever a service account shares the name.
+	// rotated, whatever a machine user shares the name.
 	ResolveUsername(ctx context.Context, username string) (string, error)
-	// The impersonation surface: an admin views/acts as another principal, audited
+	// The impersonation surface: an admin views/acts as another user, audited
 	// with the real actor. BeginImpersonation persists a session (the API enforces
 	// the escalation guard first); AuthenticateImpersonation is the authn fallback
-	// on a bearer miss, resolving the token to the target principal plus the real
+	// on a bearer miss, resolving the token to the target user plus the real
 	// actor, mode, and session id; EndImpersonation revokes a session.
 	BeginImpersonation(ctx context.Context, realActorID, targetID, mode string, ttl time.Duration) (string, *ImpersonationSession, error)
-	AuthenticateImpersonation(ctx context.Context, hash []byte) (pr *Principal, realActorID, mode, sessionID string, err error)
+	AuthenticateImpersonation(ctx context.Context, hash []byte) (pr *User, realActorID, mode, sessionID string, err error)
 	EndImpersonation(ctx context.Context, sessionID string) error
 	// AuthenticatePassword verifies a human's password against their argon2id
-	// credential and resolves the principal. Returns ErrBadCredentials for an
+	// credential and resolves the user. Returns ErrBadCredentials for an
 	// unknown user, no password set, or a wrong password.
-	AuthenticatePassword(ctx context.Context, username, password string) (*Principal, error)
+	AuthenticatePassword(ctx context.Context, username, password string) (*User, error)
 	// SetPassword installs or replaces a human's password credential (the caller
 	// passes the PHC-encoded argon2id hash). Returns false if no such username.
 	SetPassword(ctx context.Context, username, encoded string) (bool, error)
-	// UpdateHumanProfile applies a partial update to a human's own profile by
-	// principal id (the authenticated session's own id): a nil patch field is left
+	// UpdatePersonProfile applies a partial update to a human's own profile by
+	// user id (the authenticated session's own id): a nil patch field is left
 	// unchanged, a provided empty string clears the nullable column.
-	UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error
-	// ListPrincipals returns every principal with its profile and grants (the admin
-	// directory). Requires an all-scope read (a principal is not scope-tree scoped);
-	// a non-all scope is ErrPrincipalForbidden. Archived principals are excluded
+	UpdatePersonProfile(ctx context.Context, userID string, patch PersonProfilePatch) error
+	// ListUsers returns every user with its profile and grants (the admin
+	// directory). Requires an all-scope read (a user is not scope-tree scoped);
+	// a non-all scope is ErrUserForbidden. Archived users are excluded
 	// unless includeArchived is set. No credential secret is loaded.
-	ListPrincipals(ctx context.Context, read scope.Set, includeArchived bool) ([]Principal, error)
-	// GetPrincipal resolves one principal by id with its profile and grants.
-	// Requires an all-scope read; an unknown id is ErrPrincipalNotFound.
-	GetPrincipal(ctx context.Context, id string, read scope.Set) (*Principal, error)
-	// CreateHumanPrincipal creates a human principal (and its password credential
+	ListUsers(ctx context.Context, read scope.Set, includeArchived bool) ([]User, error)
+	// GetUser resolves one user by id with its profile and grants.
+	// Requires an all-scope read; an unknown id is ErrUserNotFound.
+	GetUser(ctx context.Context, id string, read scope.Set) (*User, error)
+	// CreatePerson creates a person (and its password credential
 	// when a hash is given) in one audited transaction. Requires an all-scope
 	// create; a duplicate username is ErrUsernameTaken.
-	CreateHumanPrincipal(ctx context.Context, actorID string, spec HumanSpec, create scope.Set) (*Principal, error)
-	// UpdatePrincipalHuman applies an admin profile update (label, email,
-	// username) to a human principal by id, audited. Requires an all-scope grant; a
-	// non-human target is ErrPrincipalNotHuman, an unknown id ErrPrincipalNotFound,
+	CreatePerson(ctx context.Context, actorID string, spec PersonSpec, create scope.Set) (*User, error)
+	// UpdatePerson applies an admin profile update (label, email,
+	// username) to a person by id, audited. Requires an all-scope grant; a
+	// non-human target is ErrUserNotPerson, an unknown id ErrUserNotFound,
 	// a username clash ErrUsernameTaken.
-	UpdatePrincipalHuman(ctx context.Context, actorID, id string, patch AdminHumanPatch, action scope.Set) (*Principal, error)
-	// CreateGrant assigns a role x scope to a principal, audited. Requires an
-	// all-scope grant. Bad scope / unknown role / unknown principal / duplicate map
-	// to ErrBadScope / ErrUnknownRole / ErrPrincipalNotFound / ErrGrantExists.
-	CreateGrant(ctx context.Context, actorID, principalID string, spec GrantSpec, action scope.Set) (*Grant, error)
-	// RevokeGrant deletes one grant from a principal, audited. Requires an all-scope
+	UpdatePerson(ctx context.Context, actorID, id string, patch AdminPersonPatch, action scope.Set) (*User, error)
+	// CreateGrant assigns a role x scope to a user, audited. Requires an
+	// all-scope grant. Bad scope / unknown role / unknown user / duplicate map
+	// to ErrBadScope / ErrUnknownRole / ErrUserNotFound / ErrGrantExists.
+	CreateGrant(ctx context.Context, actorID, userID string, spec GrantSpec, action scope.Set) (*Grant, error)
+	// RevokeGrant deletes one grant from a user, audited. Requires an all-scope
 	// grant. Unknown grant is ErrGrantNotFound; revoking the last owner grant is
 	// ErrLastOwner (the deferred owner-invariant trigger).
-	RevokeGrant(ctx context.Context, actorID, principalID, grantID string, action scope.Set) error
-	// Principal groups: a group holds role x scope grants its members inherit. All
-	// group management is all-scope admin work (like the principal directory). A
+	RevokeGrant(ctx context.Context, actorID, userID, grantID string, action scope.Set) error
+	// User groups: a group holds role x scope grants its members inherit. All
+	// group management is all-scope admin work (like the user directory). A
 	// member's effective grants are its direct grants unioned with its groups'
 	// grants, resolved in the grant loader, so a group grant scopes and flattens
 	// exactly like a direct one. Every group reference is the group's uuid or its
-	// name, and a member's is a uuid, username or service account name (#1133),
+	// name, and a member's is a uuid, username or machine user name (#1133),
 	// each resolved after the all-scope check.
 	CreateGroup(ctx context.Context, actorID string, spec GroupSpec, action scope.Set) (*Group, error)
 	ListGroups(ctx context.Context, read scope.Set) ([]Group, error)
@@ -129,75 +129,75 @@ type Gateway interface {
 	UpdateGroup(ctx context.Context, actorID, ref string, patch GroupPatch, action scope.Set) (*Group, error)
 	// RenameGroup moves the group's name. Its own function, not a patch field,
 	// because a rename breaks the references an operator stored outside this
-	// system; the API gates it on principal_group:rename.
+	// system; the API gates it on user_group:rename.
 	RenameGroup(ctx context.Context, actorID, ref, newName string, action scope.Set) (*Group, error)
 	DeleteGroup(ctx context.Context, actorID, ref string, action scope.Set) error
-	AddGroupMember(ctx context.Context, actorID, groupRef, principalRef string, action scope.Set) error
-	RemoveGroupMember(ctx context.Context, actorID, groupRef, principalRef string, action scope.Set) error
+	AddGroupMember(ctx context.Context, actorID, groupRef, userRef string, action scope.Set) error
+	RemoveGroupMember(ctx context.Context, actorID, groupRef, userRef string, action scope.Set) error
 	ListGroupMembers(ctx context.Context, groupRef string, read scope.Set) ([]GroupMember, error)
-	ListGroupsForPrincipal(ctx context.Context, principalID string, read scope.Set) ([]Group, error)
+	ListGroupsForUser(ctx context.Context, userID string, read scope.Set) ([]Group, error)
 	CreateGroupGrant(ctx context.Context, actorID, groupRef string, spec GrantSpec, action scope.Set) (*Grant, error)
 	RevokeGroupGrant(ctx context.Context, actorID, groupRef, grantID string, action scope.Set) error
 	ListGroupGrants(ctx context.Context, groupRef string, read scope.Set) ([]Grant, error)
-	// SetPrincipalActive enables or disables a principal (soft), audited. Requires
+	// SetUserActive enables or disables a user (soft), audited. Requires
 	// an all-scope grant. Disabling the last active owner is ErrLastOwner; a
-	// disabled principal cannot authenticate.
-	SetPrincipalActive(ctx context.Context, actorID, id string, active bool, action scope.Set) error
-	// ArchivePrincipal soft-deletes a principal (hidden from the directory, cannot
-	// authenticate, reversible); RestorePrincipal reverses it; PurgePrincipal
+	// disabled user cannot authenticate.
+	SetUserActive(ctx context.Context, actorID, id string, active bool, action scope.Set) error
+	// ArchiveUser soft-deletes a user (hidden from the directory, cannot
+	// authenticate, reversible); RestoreUser reverses it; PurgeUser
 	// hard-deletes an archived one (ErrNotArchived if not archived first, the
 	// hard gate). All require an all-scope grant; archiving the last active owner
 	// is ErrLastOwner. Purge preserves the audit trail (denormalized actor label).
-	ArchivePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
-	RestorePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
-	PurgePrincipal(ctx context.Context, actorID, id string, action scope.Set) error
-	// SetPrincipalPassword resets a human principal's password by id (an admin action,
-	// audited as the admin), requiring an all-scope grant. Unknown id is ErrPrincipalNotFound.
+	ArchiveUser(ctx context.Context, actorID, id string, action scope.Set) error
+	RestoreUser(ctx context.Context, actorID, id string, action scope.Set) error
+	PurgeUser(ctx context.Context, actorID, id string, action scope.Set) error
+	// SetUserPassword resets a person's password by id (an admin action,
+	// audited as the admin), requiring an all-scope grant. Unknown id is ErrUserNotFound.
 	// It also revokes every one of the target's bearer credentials (force logout).
-	SetPrincipalPassword(ctx context.Context, actorID, id, encoded string, action scope.Set) error
+	SetUserPassword(ctx context.Context, actorID, id, encoded string, action scope.Set) error
 	// SetOwnAvatar / ClearOwnAvatar write or clear the caller's own profile picture
 	// (a normalized base64 JPEG), audited as the caller. No capability is required;
 	// the caller resolves from their session.
-	SetOwnAvatar(ctx context.Context, principalID, jpegB64 string) error
-	ClearOwnAvatar(ctx context.Context, principalID string) error
-	// SetPrincipalAvatar / ClearPrincipalAvatar write or clear another principal's
+	SetOwnAvatar(ctx context.Context, userID, jpegB64 string) error
+	ClearOwnAvatar(ctx context.Context, userID string) error
+	// SetUserAvatar / ClearUserAvatar write or clear another user's
 	// profile picture (an admin action, audited as the actor), requiring an all-scope
-	// grant. An unknown id is ErrPrincipalNotFound; a non-all scope is ErrPrincipalForbidden.
-	SetPrincipalAvatar(ctx context.Context, actorID, id, jpegB64 string, action scope.Set) error
-	ClearPrincipalAvatar(ctx context.Context, actorID, id string, action scope.Set) error
-	// GetHumanAvatar returns a human's profile picture as a base64 JPEG. The bool is
+	// grant. An unknown id is ErrUserNotFound; a non-all scope is ErrUserForbidden.
+	SetUserAvatar(ctx context.Context, actorID, id, jpegB64 string, action scope.Set) error
+	ClearUserAvatar(ctx context.Context, actorID, id string, action scope.Set) error
+	// GetPersonAvatar returns a human's profile picture as a base64 JPEG. The bool is
 	// false (with no error) when the human has no picture; an unknown id is
-	// ErrPrincipalNotFound. Unscoped: it backs the self read (the caller's own row).
-	GetHumanAvatar(ctx context.Context, id string) (string, bool, error)
-	// GetPrincipalAvatar is the admin read of another principal's profile picture: it
+	// ErrUserNotFound. Unscoped: it backs the self read (the caller's own row).
+	GetPersonAvatar(ctx context.Context, id string) (string, bool, error)
+	// GetUserAvatar is the admin read of another user's profile picture: it
 	// applies the same all-scope invariant as the rest of the directory (a non-all
-	// scope is ErrPrincipalForbidden), then delegates to GetHumanAvatar.
-	GetPrincipalAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error)
+	// scope is ErrUserForbidden), then delegates to GetPersonAvatar.
+	GetUserAvatar(ctx context.Context, id string, action scope.Set) (string, bool, error)
 	// RevokeBearer deletes the bearer credential with the given sha256 hash
 	// (session logout). A no-op if none matches.
 	RevokeBearer(ctx context.Context, hash []byte) error
-	// ListBearerCredentials returns a principal's own bearer credentials (login
+	// ListBearerCredentials returns a user's own bearer credentials (login
 	// sessions and API tokens) with their non-secret metadata (id, prefix,
 	// created_at, expires_at), newest first; the secret hash is never returned.
 	// currentHash (the sha256 of the request's own token) is compared only in SQL to
 	// flag the current credential. It backs a signed-in user viewing their sessions.
-	ListBearerCredentials(ctx context.Context, principalID string, currentHash []byte) ([]BearerCredential, error)
+	ListBearerCredentials(ctx context.Context, userID string, currentHash []byte) ([]BearerCredential, error)
 	// RevokeBearerByID deletes one bearer credential by id, scoped to the owning
-	// principal (so a caller revokes only their own). Returns false when nothing
-	// matched (wrong/already-revoked id, another principal's credential, or a
+	// user (so a caller revokes only their own). Returns false when nothing
+	// matched (wrong/already-revoked id, another user's credential, or a
 	// malformed id). actorID is who revokes, the actor of the audit row a token's
 	// revoke writes (#1162).
-	RevokeBearerByID(ctx context.Context, actorID, principalID, credentialID string) (bool, error)
-	// RevokeBearersByPurpose deletes every one of a principal's bearer credentials of
-	// the given purpose ('session' or 'token'), scoped to the owning principal, and
+	RevokeBearerByID(ctx context.Context, actorID, userID, credentialID string) (bool, error)
+	// RevokeBearersByPurpose deletes every one of a user's bearer credentials of
+	// the given purpose ('session' or 'token'), scoped to the owning user, and
 	// returns the count deleted. It backs the admin "revoke all sessions" / "revoke
 	// all tokens" blade actions: end all of one kind at once without touching the other.
-	RevokeBearersByPurpose(ctx context.Context, actorID, principalID, purpose string) (int, error)
+	RevokeBearersByPurpose(ctx context.Context, actorID, userID, purpose string) (int, error)
 	// RevokeBearersByPurposeExcept is RevokeBearersByPurpose keeping any credential
 	// whose sha256 secret hash is in keep (empty keep is the plain bulk revoke). It backs
 	// "revoke my OTHER sessions" on a password change and the self-service "revoke all
 	// sessions" that keeps the session the caller is on, tokens untouched.
-	RevokeBearersByPurposeExcept(ctx context.Context, actorID, principalID, purpose string, keep [][]byte) (int, error)
+	RevokeBearersByPurposeExcept(ctx context.Context, actorID, userID, purpose string, keep [][]byte) (int, error)
 	// RegisterOAuthClient stores a self-registered OAuth client (#2048) and
 	// prunes the ones that never reached a token.
 	RegisterOAuthClient(ctx context.Context, name string, redirectURIs []string) (OAuthClient, error)
@@ -219,9 +219,9 @@ type Gateway interface {
 	// RefreshOAuthToken spends a client's refresh token and rotates its grant
 	// (#2073); a spent token presented again ends the grant.
 	RefreshOAuthToken(ctx context.Context, spec OAuthRefresh) (OAuthRefreshOutcome, error)
-	// AnyHuman reports whether any human principal exists (drives the login
+	// AnyPerson reports whether any person exists (drives the login
 	// screen's bootstrap hint).
-	AnyHuman(ctx context.Context) (bool, error)
+	AnyPerson(ctx context.Context) (bool, error)
 	// ListRoles returns every role, for building the in-process role index.
 	ListRoles(ctx context.Context) ([]Role, error)
 	// ListAuditLog returns recent audit rows (newest first) for the audit read
@@ -761,7 +761,7 @@ type Gateway interface {
 	ListOutpostLogs(ctx context.Context, outpostName string, window time.Duration, limit int) ([]LogLine, error)
 
 	// The outpost tier: the edge runtime's enrollment lifecycle and worklist. An outpost
-	// is fleet-wide (all-scope create/enroll/read, like a principal). The claim,
+	// is fleet-wide (all-scope create/enroll/read, like a user). The claim,
 	// authenticate, heartbeat, and worklist paths are the outpost's own lane (gated by
 	// the enrollment token or the outpost's NATS subject grant, not RBAC scope).
 	//
@@ -795,12 +795,12 @@ type Gateway interface {
 	SweepCommandSettlements(ctx context.Context) error
 	// OutpostSimDevices lists the components a simulator beside the outpost serves,
 	// within the component read scope.
-	// EnsureServicePrincipal and SetServiceToken are the trusted lane's
-	// (#1370): a service principal found or created by name, and its one
+	// EnsureMachine and SetMachineToken are the trusted lane's
+	// (#1370): a service user found or created by name, and its one
 	// token, replacing any before it.
-	EnsureServicePrincipal(ctx context.Context, actorID, name string) (string, error)
+	EnsureMachine(ctx context.Context, actorID, name string) (string, error)
 	EnsureRole(ctx context.Context, actorID string, r Role) error
-	SetServiceToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error)
+	SetMachineToken(ctx context.Context, actorID, name string, hash []byte, prefix string) (bool, error)
 	OutpostSimDevices(ctx context.Context, name string, read scope.Set) ([]SimDevice, error)
 	// OutpostSimWebhooks reads the webhook subscription of each simulated
 	// component on the outpost (ADR-1370), keyed by component id: only for the
@@ -875,7 +875,7 @@ type Gateway interface {
 	// model. product_property is the product's contract (which properties it declares
 	// and their defaults); property_value is the value store on the shared owner arc.
 	// EffectiveProperties resolves a component against its product's contract
-	// (default < override) and adds the ad-hoc values the contract does not declare.
+	// (default < declared value) and adds the ad-hoc values the contract does not declare.
 	ListProductProperties(ctx context.Context, productID string) ([]ProductProperty, error)
 
 	// The standard and location-type contracts: the system-side and place-side
@@ -1075,18 +1075,19 @@ type Gateway interface {
 	// transaction of the write that triggered it, never as a call of its own.
 	RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error)
 	ClearAlarm(ctx context.Context, actorID, componentName, alarmID string) error
-	// AcknowledgeAlarm records that a human has seen the incident. It is the one
+	// AcknowledgeAlarm records that a human has seen the alarm. It is the one
 	// alarm write that does NOT recompute health: acknowledging is not fixing,
-	// and the raised state belongs to the condition, not to the person looking.
+	// and the raised state belongs to
+	// the problem, not to the person looking.
 	AcknowledgeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error)
-	// SnoozeAlarm snoozes the alarm's condition (component, dedup_key) for a
+	// SnoozeAlarm snoozes the alarm (component, dedup_key) for a
 	// duration from now, setting or replacing the deadline (#1318); it
-	// suppresses the condition's notifications and moves nothing else.
-	// UnsnoozeAlarm ends it early; a condition that is not snoozed is a no-op.
+	// suppresses the alarm's notifications and moves nothing else.
+	// UnsnoozeAlarm ends it early; an alarm that is not snoozed is a no-op.
 	SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string, d time.Duration) (*Alarm, error)
 	UnsnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error)
 	// EndExpiredSnoozes is the end-of-snooze sweep the notifier's tick runs:
-	// it ends up to max snoozes past their deadline, announcing a condition
+	// it ends up to max snoozes past their deadline, announcing an alarm
 	// still raised again, and reports how many it ended.
 	EndExpiredSnoozes(ctx context.Context, max int) (int, error)
 	// AlarmTimeline reads one alarm's events and audit rows merged by time
@@ -1109,7 +1110,7 @@ type Gateway interface {
 	// Deliberately not a component list (a dot needs an id, a verdict and two
 	// flags), and deliberately flat, so the client owns how the fleet is
 	// gathered into bands. The three scope sets are separate because they answer
-	// three different permissions: a principal who may read the place tree but
+	// three different permissions: a user who may read the place tree but
 	// not its components sees the shape of their fleet with no contents.
 	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
 
@@ -1129,7 +1130,7 @@ type Gateway interface {
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
 	// binding a value is the owner's own write, so the binding methods take the
 	// owner's read/action scopes. ResolveTags is the per-component effective-tags
-	// view (union on key, override on value) down the structural cascade.
+	// view (union on key, shadow on value) down the structural cascade.
 	ListTags(ctx context.Context) ([]Tag, error)
 	DistinctTagValues(ctx context.Context, key string) ([]string, error)
 	CreateTag(ctx context.Context, actorID string, spec TagSpec, create scope.Set) (*Tag, error)
@@ -1159,18 +1160,18 @@ type Gateway interface {
 
 	// The settings engine (unscoped: platform config, not fleet data, so no ABAC
 	// scope applies; the route gates on settings:<action> only). The single
-	// setting_override table holds only what an operator changed at a cascade level;
+	// setting_binding table holds only what an operator changed at a cascade level;
 	// the base layers (the type's declared defaults, the operator file) live in
-	// memory. Slice-0 uses scope "platform" (principal_id NULL). Every write is
+	// memory. Slice-0 uses scope "platform" (user_id NULL). Every write is
 	// audited.
-	GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error)
-	UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error)
-	// MergePatchSettingOverride applies an RFC 7386 merge patch to the (scope,
-	// namespace) platform override as one atomic read-modify-write, serialized against
+	GetSettingBindings(ctx context.Context, scope string) ([]SettingBinding, error)
+	UpsertSettingBinding(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingBinding, error)
+	// MergePatchSettingBinding applies an RFC 7386 merge patch to the (scope,
+	// namespace) platform binding as one atomic read-modify-write, serialized against
 	// concurrent patches to the same namespace so no update is lost.
-	MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error)
-	DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error
-	DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error
+	MergePatchSettingBinding(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingBinding, error)
+	DeleteSettingBinding(ctx context.Context, actorID, scope, namespace string) error
+	DeleteAllSettingBindings(ctx context.Context, actorID, scope string) error
 
 	// The notification_type catalog (#618): official types from the boot
 	// seed, operator types created, patched and deleted; a type addressed by
@@ -1188,7 +1189,7 @@ type Gateway interface {
 	ListNotificationTargets(ctx context.Context, read scope.Set) ([]NotificationTarget, error)
 	GetNotificationTarget(ctx context.Context, ref string, read scope.Set) (*NotificationTarget, error)
 	// Binding a secret takes the caller's right to bind it (SecretUse, secret:bind);
-	// binding a group or a person the principal directory's read (PeopleUse).
+	// binding a group or a person the user directory's read (PeopleUse).
 	CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set, use SecretUse, people PeopleUse) (*NotificationTarget, error)
 	UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set, use SecretUse) (*NotificationTarget, error)
 	DeleteNotificationTarget(ctx context.Context, actorID, ref string, action scope.Set) error
@@ -1203,7 +1204,7 @@ type Gateway interface {
 	MailRelay(ctx context.Context) (*MailRelay, string, error)
 	// MergePatchNotificationSettings patches the notification namespace,
 	// judging the mail relay's secret binding on the result (the bind right).
-	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingOverride, error)
+	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error)
 	// The action rule (#618): reads catalog-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
 	GetActionRule(ctx context.Context, ref string) (*ActionRule, error)
@@ -1236,7 +1237,7 @@ type Gateway interface {
 	AssistantSettings(ctx context.Context) (settings.AssistantSettings, error)
 	// Group opt-out (#1354): a person opts out of a platform rule that
 	// allows it, or back in.
-	SetRuleOptOut(ctx context.Context, actorID, principalID, ref string, out bool) (*ActionRule, error)
+	SetRuleOptOut(ctx context.Context, actorID, userID, ref string, out bool) (*ActionRule, error)
 	// The notification delivery rows (#618): every read scoped by the
 	// alarm's component; the drain takes one due row per call.
 	// A person-addressed row's recipient is withheld as view says (#1341).
@@ -1245,9 +1246,9 @@ type Gateway interface {
 	RetryNotification(ctx context.Context, actorID, id string, read, action scope.Set, view RecipientView) (*Notification, error)
 	// The inbox (#1341): the caller's own inbox rows, scoped by their
 	// component read scope at read; another's entry is not found.
-	ListInbox(ctx context.Context, principalID string, f InboxFilter, read scope.Set) (*Inbox, error)
-	MarkInboxRead(ctx context.Context, actorID, principalID, id string, read scope.Set) (*Notification, error)
-	MarkInboxAllRead(ctx context.Context, actorID, principalID string, read scope.Set) (int, error)
+	ListInbox(ctx context.Context, userID string, f InboxFilter, read scope.Set) (*Inbox, error)
+	MarkInboxRead(ctx context.Context, actorID, userID, id string, read scope.Set) (*Notification, error)
+	MarkInboxAllRead(ctx context.Context, actorID, userID string, read scope.Set) (int, error)
 	DeliverNext(ctx context.Context, send SendFunc) (bool, error)
 	NotificationBacklog(ctx context.Context) (int, error)
 
@@ -1312,7 +1313,7 @@ func WithBlobStore(store blob.Store) Option {
 // dictionary), and it needs it passed IN rather than loaded here because the
 // file's path is a bootstrap config the server owns and the other run modes do
 // not have. A lane that passes none resolves the declared defaults and the
-// database override, which is every layer that lane HAS; the alternative,
+// database binding, which is every layer that lane HAS; the alternative,
 // skipping the file quietly, would render labels from one dictionary while the
 // settings read served another.
 func WithSettingsFile(doc settings.Doc) Option {
@@ -1380,7 +1381,7 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	}
 	// The gateway's own settings resolver. It is built here rather than injected
 	// because the only thing it needs beyond the file layer is a reader for the
-	// platform override, which is this gateway: injecting a service that closes
+	// platform binding, which is this gateway: injecting a service that closes
 	// over the gateway would make the two mutually constructing, and the settings
 	// package deliberately does not import storage.
 	p.settings = settings.NewService(p.settingsFile, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
@@ -1419,11 +1420,11 @@ func (p *PG) PoolStat() PoolStat {
 	}
 }
 
-// settingLevel reads the override rows at a scope and adapts them into a
+// settingLevel reads the binding rows at a scope and adapts them into a
 // settings level. The querier is a parameter because a gateway path resolving a
 // setting inside its own transaction must read it there.
 func (p *PG) settingLevel(ctx context.Context, q querier, scope string) (settings.Doc, map[string][]string, error) {
-	rows, err := settingOverridesOn(ctx, q, scope)
+	rows, err := settingBindingsOn(ctx, q, scope)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1431,11 +1432,11 @@ func (p *PG) settingLevel(ctx context.Context, q querier, scope string) (setting
 	return doc, locks, nil
 }
 
-// SettingLevel adapts override rows into the shape the settings resolver takes:
+// SettingLevel adapts binding rows into the shape the settings resolver takes:
 // one document per namespace, plus the locked key-paths. Pure, and exported
 // because every caller building a settings.Service over this gateway needs the
 // same adaptation and there is no reason for each to spell it out.
-func SettingLevel(rows []SettingOverride) (settings.Doc, map[string][]string) {
+func SettingLevel(rows []SettingBinding) (settings.Doc, map[string][]string) {
 	doc := settings.Doc{}
 	locks := map[string][]string{}
 	for _, r := range rows {

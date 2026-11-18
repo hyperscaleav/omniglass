@@ -38,14 +38,14 @@ func notifyWorklistChanged(ctx context.Context, tx pgx.Tx, endpointIDs ...string
 	return announceOutpostsOf(ctx, tx, `select outpost_id from endpoint where id = any($2)`, endpointIDs)
 }
 
-// announceOutpostsOf announces each outpost whose principal id endpointOutpostsSQL
+// announceOutpostsOf announces each outpost whose user id endpointOutpostsSQL
 // selects (an endpoint.outpost_id column, as of this point in tx). The query's
 // own arguments start at $2: $1 is the channel. It is the one way a writer
 // names the outposts it touched, so each writer states only which ones.
 func announceOutpostsOf(ctx context.Context, tx pgx.Tx, endpointOutpostsSQL string, args ...any) error {
 	if _, err := tx.Exec(ctx, `
 		select pg_notify($1, n.name) from outpost n
-		where n.principal_id in (`+endpointOutpostsSQL+`)`,
+		where n.user_id in (`+endpointOutpostsSQL+`)`,
 		append([]any{worklistChangedChannel}, args...)...); err != nil {
 		return fmt.Errorf("storage: announce a worklist change: %w", err)
 	}

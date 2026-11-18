@@ -76,7 +76,7 @@ func newCommandQueueFixture(t *testing.T, outposts ...string) commandQueueFixtur
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { f.conn.Close(context.Background()) })
-	if err := f.conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&f.actor); err != nil {
+	if err := f.conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&f.actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	return f

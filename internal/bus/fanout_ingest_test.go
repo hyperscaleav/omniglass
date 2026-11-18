@@ -83,8 +83,8 @@ func newFanIngest(t *testing.T, opts ...storage.Option) *fanIngest {
 	}
 	if _, err := conn.Exec(ctx, `
 		insert into endpoint (name, transport, component, outpost_id, params) values
-			('http', 'http', (select id from component where name = 'meetings-cloud'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:443"}'::jsonb),
-			('http-b', 'http', (select id from component where name = 'other-cloud'), (select principal_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:443"}'::jsonb);
+			('http', 'http', (select id from component where name = 'meetings-cloud'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:443"}'::jsonb),
+			('http-b', 'http', (select id from component where name = 'other-cloud'), (select user_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:443"}'::jsonb);
 		insert into task (id, mode, endpoint_id, enabled) values
 			('t-rooms', 'poll', (select id from endpoint where name = 'http'), true),
 			('t-other', 'poll', (select id from endpoint where name = 'http-b'), true)`); err != nil {
@@ -97,7 +97,7 @@ func newFanIngest(t *testing.T, opts ...storage.Option) *fanIngest {
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&f.actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&f.actor); err != nil {
 		t.Fatal(err)
 	}
 	f.bind(t, "zr-a", "room-a")
@@ -389,7 +389,7 @@ func TestAnOwnersRuleJudgesAFannedValue(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "in-a-call", SampleKey: "call-state",
-		Fire: rules.Criteria{Expr: `value == "active"`}, Severity: "high", FireEventType: "condition-started"}, all); err != nil {
+		Fire: rules.Criteria{Expr: `value == "active"`}, Severity: "high", FireEventType: "rule-fired"}, all); err != nil {
 		t.Fatal(err)
 	}
 	subject, ev := f.webhookLane(&ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{
@@ -450,7 +450,7 @@ func TestATickResolvesEveryConduitInOneRead(t *testing.T) {
 	}
 	if _, err := f.conn.Exec(f.ctx, `
 		insert into endpoint (name, transport, component, outpost_id, params) values
-			('http-r', 'http', (select id from component where name = 'rooms-cloud'), (select principal_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:443"}'::jsonb);
+			('http-r', 'http', (select id from component where name = 'rooms-cloud'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:443"}'::jsonb);
 		insert into task (id, mode, endpoint_id, enabled) values
 			('t-rooms-2', 'poll', (select id from endpoint where name = 'http-r'), true)`); err != nil {
 		t.Fatalf("second conduit: %v", err)

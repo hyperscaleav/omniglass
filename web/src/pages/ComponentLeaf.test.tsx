@@ -36,7 +36,7 @@ vi.mock("../lib/alarms", async (orig) => {
 // collection card states the distinction plainly: a stale sample under a
 // healthy outpost blames the component or the path, never collection.
 
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 const view: FleetView = {
   locations: [
@@ -492,7 +492,7 @@ describe("the leaf's dispatch facts (#786)", () => {
   });
 
   it("a viewer reads the rejected session with Retry greyed and its reason", () => {
-    const viewerMe = { principal: { id: "vw", kind: "human" }, permissions: ["*:read"], grants: [] } as unknown as Me;
+    const viewerMe = { user: { id: "vw", kind: "person" }, permissions: ["*:read"], grants: [] } as unknown as Me;
     mount(undefined, undefined, bar, viewerMe, undefined, { reach: rejectedReach });
     const card = screen.getByTestId("leaf-collection");
     expect((within(card).getByRole("button", { name: /retry/i }) as HTMLButtonElement).disabled).toBe(true);
@@ -567,7 +567,7 @@ describe("the miss face (#800)", () => {
 // component:update had no way left to acknowledge (#872 review). Why carries
 // it, on its own permission.
 describe("acknowledging from Why (#872)", () => {
-  const ackOnly: Me = { principal: { id: "u-ack", kind: "human" }, human: { username: "ack" }, permissions: ["component:read", "system:read", "location:read", "alarm:read", "alarm:acknowledge"], grants: [] };
+  const ackOnly: Me = { user: { id: "u-ack", kind: "person" }, person: { username: "ack" }, permissions: ["component:read", "system:read", "location:read", "alarm:read", "alarm:acknowledge"], grants: [] };
 
   it("offers Acknowledge on an unacknowledged alarm to a caller holding only the acknowledge permission", async () => {
     acked.length = 0;

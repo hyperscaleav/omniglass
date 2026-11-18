@@ -46,6 +46,6 @@ Wait
 Type "# And the token still authenticates, read when the command runs"
 Enter
 Wait
-Type `omniglass auth me | jq -c '{username: .human.username}'`
+Type `omniglass auth me | jq -c '{username: .person.username}'`
 Enter
 Wait

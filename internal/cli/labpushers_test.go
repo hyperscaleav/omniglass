@@ -20,7 +20,7 @@ func fakeMint() func() (string, []byte, string, error) {
 	}
 }
 
-// The scale plan provisions one principal and token per declared pusher
+// The scale plan provisions one user and token per declared pusher
 // (#1743): a corporate lab's every pusher, on its own site's outpost, with a
 // token of its own whose hash is what the seed sets, and each one handed to
 // the seed by name.

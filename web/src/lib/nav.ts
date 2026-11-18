@@ -78,11 +78,11 @@ export const navItems: NavItem[] = [
   // surface, so its door shows only while a simulator is connected.
   { label: "Simulation", path: "/simulation", icon: Icons.FlaskConical, live: true, resource: "simulation", when: "simulator", hint: "The simulated components a simulator serves beside an outpost: the hits collection lands on them, what is broken, and each one's API surface." },
   {
-    label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the fleet.",
+    label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and declared values, each resolved down the scope cascade, plus the files kept with the fleet.",
     children: [
       { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
-      { label: "Config", path: "/config", hint: "Reconciled component and system configuration: desired values operators set, optionally observed back from the device to detect drift and reconcile." },
+      { label: "Declared", path: "/config", hint: "The state operators declare for components and systems, optionally observed back from the device to detect drift and reconcile." },
       // Files are operator-uploaded content, not a cascaded value: a flat, tenant-wide
       // store of opaque bytes kept beside the fleet. It sits in Values as the
       // non-cascading member (deliberately off the exclusive arc).
@@ -102,9 +102,9 @@ export const navItems: NavItem[] = [
   {
     label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, user groups, the audit trail, the collection outposts, the platform's status, and platform settings.",
     children: [
-      { label: "Users", path: "/users", live: true, perm: "principal:read:admin", hint: "People and machine users: status, grants, and tokens." },
+      { label: "Users", path: "/users", live: true, perm: "user:read:admin", hint: "People and machine users: status, grants, and tokens." },
       { label: "Roles", path: "/roles", live: true, perm: "role:read:admin", hint: "The built-in roles: what each permission bundle grants, and how they inherit." },
-      { label: "User groups", path: "/user-groups", live: true, perm: "principal_group:read:admin", hint: "User groups: membership and the grants members inherit." },
+      { label: "User groups", path: "/user-groups", live: true, perm: "user_group:read:admin", hint: "User groups: membership and the grants members inherit." },
       { label: "Audit", path: "/audit", live: true, perm: "audit:read:admin", hint: "The audit trail of every privileged action and sign-in." },
       // Outposts and Platform health (#1644) are administration: enrolling an outpost
       // is an admin's job, and whether Omniglass itself is well is read off the

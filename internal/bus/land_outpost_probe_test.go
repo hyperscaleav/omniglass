@@ -50,8 +50,8 @@ func TestOutpostLaneConfinesOutpostProbeKeysToItsEndpoint(t *testing.T) {
 	}
 	// ssh is outpost-a's; panel, on the same component, is outpost-b's.
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('ssh', 'ssh', $1::uuid, (select principal_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb),
-		('panel', 'tcp', $1::uuid, (select principal_id from outpost where name = 'outpost-b'), '{"target":"10.0.0.2:23"}'::jsonb)`, comp.ID); err != nil {
+		('ssh', 'ssh', $1::uuid, (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:22"}'::jsonb),
+		('panel', 'tcp', $1::uuid, (select user_id from outpost where name = 'outpost-b'), '{"target":"10.0.0.2:23"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values

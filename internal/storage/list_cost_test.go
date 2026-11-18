@@ -396,25 +396,25 @@ func TestListRolesCostIsFlatInPageSize(t *testing.T) {
 	assertFlatCost(t, small, large, 1)
 }
 
-// TestListPrincipalsCostIsFlatInPageSize: the admin directory is four
-// statements however many principals the organisation holds (#671).
+// TestListUsersCostIsFlatInPageSize: the admin directory is four
+// statements however many users the organisation holds (#671).
 //
-// This replaces TestListPrincipalsCostIsPerRowToday, which pinned the defect at
-// its measured 1+3N (four statements for one principal, sixty-four for
+// This replaces TestListUsersCostIsPerRowToday, which pinned the defect at
+// its measured 1+3N (four statements for one user, sixty-four for
 // twenty-one) and said in its own failure message that the fix was to delete it.
-// ListPrincipals now drains its base query and hands every id to loadPrincipals:
+// ListUsers now drains its base query and hands every id to loadUsers:
 // one union over the three kind-profile tables, one over the effective grants,
 // one over the group memberships. Four, and four is the ceiling here for the
 // same reason it is exact: the profile read is a UNION rather than a branch per
-// kind, so a directory of humans, service accounts and outposts costs what a
+// kind, so a directory of humans, machine users and outposts costs what a
 // directory of humans costs, and this fixture holds an outpost beside its humans to
 // keep that honest rather than assumed.
 //
 // The fixture grows the grants and the group memberships with the page as well
-// as the principals, because both are read through the same union: a page whose
+// as the users, because both are read through the same union: a page whose
 // rows carry no grants would leave the grant assembly untested and flat by
 // accident.
-func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
+func TestListUsersCostIsFlatInPageSize(t *testing.T) {
 	t.Parallel()
 	gw, counter := countingFleet(t)
 	ctx := context.Background()
@@ -428,7 +428,7 @@ func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
 	if _, err := gw.CreateGroupGrant(ctx, "", grp.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all); err != nil {
 		t.Fatalf("create group grant: %v", err)
 	}
-	// An outpost principal, so the page is not single-kind. A per-kind branch would
+	// An outpost user, so the page is not single-kind. A per-kind branch would
 	// cost one more statement here than in a humans-only directory; the union
 	// costs the same, which is what makes the ceiling below a real number.
 	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "probe-outpost"}, all, all); err != nil {
@@ -436,22 +436,22 @@ func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
 	}
 
 	list := func() (int, error) {
-		ps, err := gw.ListPrincipals(ctx, all, false)
+		ps, err := gw.ListUsers(ctx, all, false)
 		return len(ps), err
 	}
 	add := func(i int) {
 		t.Helper()
-		pr, err := gw.CreateHumanPrincipal(ctx, "", storage.HumanSpec{
+		pr, err := gw.CreatePerson(ctx, "", storage.PersonSpec{
 			Username: fmt.Sprintf("probe-%d", i), Email: fmt.Sprintf("probe-%d@example.test", i), Label: "Probe",
 		}, all)
 		if err != nil {
-			t.Fatalf("create principal %d: %v", i, err)
+			t.Fatalf("create user %d: %v", i, err)
 		}
 		if _, err := gw.CreateGrant(ctx, "", pr.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all); err != nil {
-			t.Fatalf("grant principal %d: %v", i, err)
+			t.Fatalf("grant user %d: %v", i, err)
 		}
 		if err := gw.AddGroupMember(ctx, "", grp.ID, pr.ID, all); err != nil {
-			t.Fatalf("add principal %d to group: %v", i, err)
+			t.Fatalf("add user %d to group: %v", i, err)
 		}
 	}
 

@@ -36,7 +36,18 @@ type runEvent struct {
 	ThreadID string   `json:"threadId"`
 	RunID    string   `json:"runId"`
 	Outcome  *outcome `json:"outcome,omitempty"`
+	Result   *result  `json:"result,omitempty"`
 }
+
+// result is what a finished run reports beyond its outcome: today only that
+// it stopped at the loop's step ceiling without an answer.
+type result struct {
+	Stopped string `json:"stopped"`
+	Steps   int    `json:"steps"`
+}
+
+// StoppedStepLimit is the result of a run that reached its step ceiling.
+const StoppedStepLimit = "step_limit"
 
 type outcome struct {
 	Type       string      `json:"type"`
@@ -104,6 +115,7 @@ type Run struct {
 	messages int
 	done     bool
 	err      error
+	result   *result
 }
 
 // NewRun narrates run runID of conversation threadID onto w, flushing after
@@ -168,9 +180,15 @@ func (r *Run) Interrupt(p assistant.Pending) {
 	}})
 }
 
+// Stopped marks the run as one that reached its step ceiling after steps
+// without an answer; its Finish carries that as the run's result.
+func (r *Run) Stopped(steps int) {
+	r.result = &result{Stopped: StoppedStepLimit, Steps: steps}
+}
+
 // Finish ends the run in success, unless it has already ended.
 func (r *Run) Finish() {
-	r.end(runEvent{Type: typeRunFinished, ThreadID: r.threadID, RunID: r.runID, Outcome: &outcome{Type: "success"}})
+	r.end(runEvent{Type: typeRunFinished, ThreadID: r.threadID, RunID: r.runID, Outcome: &outcome{Type: "success"}, Result: r.result})
 }
 
 // Error ends the run on a failure, unless it has already ended.

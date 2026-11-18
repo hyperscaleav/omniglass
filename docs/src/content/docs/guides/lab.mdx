@@ -1,10 +1,6 @@
 ---
 title: "Try omniglass in five minutes"
 description: "One command brings up a working omniglass on Docker, with an edge outpost collecting from a simulated fleet, to learn on: what it runs, with which privilege, and the walkthroughs to follow in it."
-sidebar:
-  badge:
-    text: Built
-    variant: success
 ---
 
 import LabTopology from '../../../components/LabTopology.astro';
@@ -1101,7 +1097,9 @@ keep up. It runs on a host of its own, so nothing else competes for the machine 
 **Pin the build.** A soak measures one build. Build its image once and give it a tag of its own,
 named for the commit (`omniglass:soak-<shortsha>`), and run the binary built from the same commit:
 `--image` runs a server the binary does not check against itself, and a shared tag rebuilt mid-soak
-would measure two builds in one series.
+would measure two builds in one series. A release candidate is already pinned: run its published
+binary, which pulls the `v<version>-rc.<n>` image by the digest stamped into it at release, and leave
+`--image` off ([cutting a release](/contributing/release-ci/#cutting-a-release-manual)).
 
 **The lab unit.** The service manager starts the lab, restarts it if it fails, and stops it with
 SIGTERM, which the lab treats as Ctrl-C: it removes its containers and network and keeps its volumes,

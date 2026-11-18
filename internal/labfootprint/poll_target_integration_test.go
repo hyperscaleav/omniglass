@@ -63,7 +63,7 @@ func TestIntegrationPollTargetsMatchEachOutpostsWorklist(t *testing.T) {
 		componentOf[name] = component
 		outpostRef := "null"
 		if outpost != "" {
-			outpostRef = fmt.Sprintf("(select principal_id from outpost where name = '%s')", outpost)
+			outpostRef = fmt.Sprintf("(select user_id from outpost where name = '%s')", outpost)
 		}
 		exec(fmt.Sprintf(`insert into endpoint (name, transport, component, outpost_id, params)
 			values ($1, $2, (select id from component where name = $3), %s, '{"target":"10.0.0.1"}'::jsonb)`, outpostRef),

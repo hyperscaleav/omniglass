@@ -70,7 +70,7 @@ The environment is read at that moment, never copied into a flag's default, beca
 is what `--help`, shell completion and the CLI reference print. So every one of them names
 `$OMNIGLASS_TOKEN` and never shows its value, and help output is safe to paste into a ticket or
 a chat ([#979](https://github.com/hyperscaleav/omniglass/issues/979)). Errors hold the same line:
-a server URL or a database DSN carrying a `user:password` that does not parse is reported by
+a server URL or a database DSN whose embedded credentials do not parse is reported by
 name, with the parser's detail withheld (it can quote the password), so percent-encode any
 reserved character in it. A server URL is refused the same way when such a password would be
 misread rather than refused (an `@` past the host, a query or a fragment, or no `http://` or
@@ -117,7 +117,7 @@ A bare word that is not valid JSON falls back to itself, so the common case need
 (`--value HDMI1`); a string that would parse as JSON is quoted to force a string (`--value '"30"'`).
 
 A name is renameable, and a rename is its own command rather than a flag on `update`: `component`,
-`system`, `location`, and `principal-group` each carry one, and so do the catalogs `vendor`,
+`system`, `location`, and `user-group` each carry one, and so do the catalogs `vendor`,
 `driver`, `product`, `standard`, and `location-type`
 ([ADR-0555](/architecture/decisions/#adr-0555-a-registry-row-renames-through-its-own-rename-custom-method)),
 each gated by `<resource>:rename`, which is granted separately because moving a name breaks the
@@ -145,8 +145,8 @@ omniglass unclaimed-source list                             # senders posting to
 omniglass secret update demo-panel-login --fields '{"password":"rotated"}'   # its name
 omniglass secret reveal '$platform/demo-panel-login'        # <owner>/<name> where the name is shared
 omniglass file download codec-firmware-2.1.4.txt            # a filename
-omniglass principal-group member create night-shift --principal-id alice
-omniglass principal grant create alice --role viewer --scope-kind location --scope-id boi.17c
+omniglass user-group member create night-shift --user-id alice
+omniglass user grant create alice --role viewer --scope-kind location --scope-id boi.17c
 ```
 
 A name only you can see resolves for you even where someone else's out-of-scope row shares it, and
@@ -217,9 +217,9 @@ omniglass auth avatar                                   # read your picture back
 `--image-base64` takes a plain base64 string, not a file path (base64-encode the image
 yourself, as the `$(base64 …)` above does); the server accepts JPEG, PNG, or WebP and
 normalizes it to a 256x256 JPEG. An administrator manages **any** user's picture with
-`omniglass principal setAvatar alice --image-base64 …` and `omniglass principal removeAvatar alice`
-(gated by `principal:set-avatar`), reading one back with `omniglass principal avatar list alice` (gated by
-`principal:read:admin`). A user with no picture is a 404.
+`omniglass user setAvatar alice --image-base64 …` and `omniglass user removeAvatar alice`
+(gated by `user:set-avatar`), reading one back with `omniglass user avatar list alice` (gated by
+`user:read:admin`). A user with no picture is a 404.
 
 ## Collection commands
 
@@ -447,7 +447,7 @@ and is omitted for a `platform` secret (the install-wide tier, which needs an al
 `platform:create`). Field maps pass as a JSON object to `--fields`, validated against the type's shape.
 
 A secret's name is unique within its owner, and the cascade makes one name at several owners the
-ordinary case (a room's `core-snmp` overriding the platform's), so the bare name resolves only where
+ordinary case (a room's `core-snmp` shadowing the platform's), so the bare name resolves only where
 exactly one secret you can see carries it. `<owner>/<name>` always resolves: the owner by name,
 dotted address or uuid, or `$platform` for the install-wide tier, which has no name of its own
 (`omniglass secret reveal '$platform/core-snmp'`).
@@ -520,7 +520,7 @@ the rule is a 422; that name is then the key a binding carries (`--key`). `--app
 entity-kind allow-list passed as a JSON array (`'["component","system"]'`; empty means universal),
 checked when a value is bound. `--propagates`
 defaults true (the value cascades to descendants); `--propagates=false` binds a flat per-entity value
-that resolves only on its own entity. Resolving onto a component **unions** keys and **overrides** values
+that resolves only on its own entity. Resolving onto a component **unions** keys and **shadows** values
 most-specific-wins down the cascade.
 
 ## Component classification catalogs
@@ -755,16 +755,16 @@ omniglass notification-target test ops-chat                           # one synt
 omniglass action-rule create --name page-ops --on '["raised","cleared"]' --when 'severity_rank >= 40' --targets '["ops-chat"]'
 omniglass notification list --status failed                          # scoped by the alarm's component
 omniglass notification retry <id>                                     # notification:retry, an operator's
-omniglass notification-target create --name on-call-page --kind principal_group --principal-group on-call --channels '["inbox","email"]'
+omniglass notification-target create --name on-call-page --kind user_group --user-group on-call --channels '["inbox","email"]'
 omniglass notification-target create --name ops-mailbox --kind email --addresses '["ops@example.com"]'
 omniglass auth me notification list --unread                          # your own inbox, scoped as you read now
 omniglass auth me notification markAllRead
 omniglass sim mail --listen 0.0.0.0:2525 --out /tmp/mail.jsonl         # a mail relay simulator for a lab
 ```
 
-A noisy alarm's condition is snoozed from any alarm of it, for `1m` to `7d`: every notification about
-it is written `suppressed` until then, and a condition still raised when the snooze ends is announced
-again ([snoozing](/guides/operator/entities/#snoozing-silencing-a-noisy-condition-for-a-while)).
+A noisy alarm is snoozed for `1m` to `7d`, and the snooze carries to the alarm raised again after
+it: every notification about it is written `suppressed` until then, and an alarm still raised when
+the snooze ends is announced again ([snoozing](/guides/operator/entities/#snoozing-silencing-a-noisy-alarm-for-a-while)).
 
 ```sh
 a=$(omniglass component alarm list panel-2 | jq -r '.alarms[0].id')
@@ -905,13 +905,13 @@ on the page, minus the browser.
 - **Generated** (`internal/cli/api_gen.go`, do not edit): one command per API operation.
   The resource and verb come from the AIP-style path (`POST /locations` is `location
   create`, `GET /locations/{name}` is `location get <name>`, a `:verb` custom method is
-  `<resource> <verb> <id>`, so the user lifecycle is `principal disable <id>`,
-  `principal archive <id>`, `principal restore <id>`, and `principal purge <id>`); path
+  `<resource> <verb> <id>`, so the user lifecycle is `user disable <id>`,
+  `user archive <id>`, `user restore <id>`, and `user purge <id>`); path
   parameters are positional args, the request body is
   `--flags`, and OpenAPI query parameters become optional `--flags` (a set flag is
   appended to the request query string, an unset one keeps the server default), so
-  `principal list --include-archived --kind service` filters the listing. A user
-  `<id>` argument accepts either the uuid or a person's username (`omniglass principal
+  `user list --include-archived --kind machine` filters the listing. A user
+  `<id>` argument accepts either the uuid or a person's username (`omniglass user
   archive alice`), resolved by the server, so you rarely need to look a uuid up first.
   `--help` plus the example come from the operation's summary and description.
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client

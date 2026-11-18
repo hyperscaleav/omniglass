@@ -31,7 +31,7 @@ import type { EffectiveSlot } from "../lib/system_zoom";
 // build quiet, shared occupants chipped, and the no-slot strip a state rather
 // than an error. The identity route's default face (ADR-0129).
 
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 const view: FleetView = {
   locations: [
@@ -252,21 +252,21 @@ describe("the system zoom", () => {
   // The strip is where a storm is triaged from (#990): acknowledging a causing
   // alarm must not need the component's own page.
   describe("acknowledging from the Why strip", () => {
-    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
+    const viewer: Me = { user: { id: "u-v", kind: "person" }, person: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
     const responder: Me = { ...viewer, permissions: [...(viewer.permissions ?? []), "alarm:acknowledge"] };
     const withAck = (ack: object): FleetHealth => ({
       ...health,
       slots: (health.slots ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, ...ack })) })),
     }) as FleetHealth;
 
-    it("offers Acknowledge on an unacknowledged causing alarm when the principal may", () => {
+    it("offers Acknowledge on an unacknowledged causing alarm when the user may", () => {
       mount(undefined, health, [], [], responder);
       const strip = screen.getByTestId("alarm-strip");
       expect(within(strip).getByRole("button", { name: "Acknowledge" })).toBeTruthy();
       expect(within(strip).queryByText(/acknowledged by/)).toBeNull();
     });
 
-    it("hides Acknowledge from a principal without alarm:acknowledge", () => {
+    it("hides Acknowledge from a user without alarm:acknowledge", () => {
       mount(undefined, health, [], [], viewer);
       expect(within(screen.getByTestId("alarm-strip")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
     });
@@ -573,9 +573,9 @@ describe("the history tab (#792)", () => {
   }
 
   // #795 refinement: the tab reads like a status page: uptime up top, the
-  // timeline, then each unhealthy stretch as an incident whose reasoning
+  // timeline, then each unhealthy stretch as an entry whose reasoning
   // expands. The old flat what-went-wrong assertions live on inside the
-  // incident form below.
+  // entry form below.
   it("leads with the window's uptime beside the timeline", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     const tab = screen.getByTestId("history-tab");
@@ -598,11 +598,11 @@ describe("the history tab (#792)", () => {
     expect(figure().className).not.toContain("text-healthy");
   });
 
-  it("renders the ongoing unhealthy stretch as the first incident, expandable to the alarms that explain it", async () => {
+  it("renders the ongoing unhealthy stretch as the first entry, expandable to the alarms that explain it", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
-    const list = screen.getByTestId("incident-list");
-    const first = within(list).getAllByTestId(/^incident-/)[0];
+    const list = screen.getByTestId("stretch-list");
+    const first = within(list).getAllByTestId(/^stretch-/)[0];
     expect(within(first).getByText(/ongoing/)).toBeTruthy();
     fireEvent.click(within(first).getByRole("button", { name: /expand/ }));
     expect(await within(first).findByText("No route to host")).toBeTruthy();
@@ -611,17 +611,17 @@ describe("the history tab (#792)", () => {
 
   // The history reads a coarse clock so a second's tick does not redraw it
   // (#940), but a coarse "now" must never fall behind the report's own last
-  // edge: an incident that opened seconds ago (in the current minute, or
+  // edge: a stretch that opened seconds ago (in the current minute, or
   // after the clock last ticked) would have a negative length and vanish.
-  it("keeps an incident that opened seconds ago on the list", () => {
+  it("keeps a stretch that opened seconds ago on the list", () => {
     vi.setSystemTime(new Date("2026-08-20T16:00:40Z"));
     const fresh = { ...health, transitions: [{ ts: "2026-08-01T09:00:00Z", verdict: "healthy" }, { ts: "2026-08-20T16:00:30Z", verdict: "degraded" }] } as unknown as FleetHealth;
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`, fresh);
-    const list = screen.getByTestId("incident-list");
-    expect(within(list).getAllByTestId(/^incident-/)[0].textContent).toMatch(/ongoing/);
+    const list = screen.getByTestId("stretch-list");
+    expect(within(list).getAllByTestId(/^stretch-/)[0].textContent).toMatch(/ongoing/);
   });
 
-  it("an alarm outside every incident still shows, under other alarms", async () => {
+  it("an alarm outside every stretch still shows, under other alarms", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
     const tab = screen.getByTestId("history-tab");
@@ -640,14 +640,14 @@ describe("the history tab (#792)", () => {
   it("marks each raise on the strip's axis", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
-    await waitFor(() => expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2));
-    expect(screen.getByTestId("incident-marker-hal-1").classList.contains("border-b-error")).toBe(true);
-    expect(screen.getByTestId("incident-marker-hal-0").classList.contains("border-b-warning")).toBe(true);
+    await waitFor(() => expect(screen.getAllByTestId(/^alarm-marker-/)).toHaveLength(2));
+    expect(screen.getByTestId("alarm-marker-hal-1").classList.contains("border-b-error")).toBe(true);
+    expect(screen.getByTestId("alarm-marker-hal-0").classList.contains("border-b-warning")).toBe(true);
   });
 });
 
 describe("the Activity tab's order (#826)", () => {
-  it("reads like a status page: uptime and incidents first, then the events, then the logs", async () => {
+  it("reads like a status page: uptime and health history first, then the events, then the logs", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`);
     const history = await screen.findByTestId("history-tab");
     const events = await screen.findByTestId("events-tab");
@@ -675,7 +675,7 @@ describe("the events and logs tabs (#793)", () => {
   it("an event a rule derived names the rule, linking to it, and opens the alarm it carries on its component", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=events`);
     r.qc.setQueryData([...systemEventsKey(uuidFor("szp-sys"))], [
-      { ts: "2026-08-18T15:53:00Z", key: "condition-started", event_type_id: "et-3", origin: "derived", message: "Reachability lost", provenance: "observed",
+      { ts: "2026-08-18T15:53:00Z", key: "rule-fired", event_type_id: "et-3", origin: "derived", message: "Reachability lost", provenance: "observed",
         owner_kind: "component", owner: "videobar-1", owner_id: uuidFor("szp-c-bar"), derived_by_rule: "reachability-lost", derived_by_rule_id: uuidFor("szp-rule"), alarm_id: uuidFor("szp-alarm") },
     ]);
     const tab = screen.getByTestId("events-tab");
@@ -861,7 +861,7 @@ describe("the configure tab (#800)", () => {
   });
 
   it("hides Configure from a caller with no edit verb", async () => {
-    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "location:read", "component:read", "standard:read", "system_type:read", "metric_type:read"], grants: [] };
+    const viewer: Me = { user: { id: "u-v", kind: "person" }, person: { username: "v" }, permissions: ["system:read", "location:read", "component:read", "standard:read", "system_type:read", "metric_type:read"], grants: [] };
     mount(`/web/systems/${uuidFor("szp-sys")}`, health, [], [], viewer);
     await screen.findByTestId("tab-rail");
     expect(screen.queryByRole("tab", { name: "Configure" })).toBeNull();
@@ -1103,7 +1103,7 @@ describe("the system view refreshes (#940)", () => {
     expect(count("/systems:health")).toBe(0);
   });
 
-  // Activity explains incidents with the members' alarms. Read per member,
+  // Activity explains its health history with the members' alarms. Read per member,
   // a poll is one request per member; read per system it is one request
   // however big the room, so the poll's size is fixed.
   it("polls Activity with a fixed number of requests, however many members the system has", async () => {

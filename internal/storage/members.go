@@ -449,7 +449,7 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 // and then componentAction, the caller's component:read and component:update
 // sets: out of componentRead is ErrComponentNotFound, readable but out of
 // componentAction ErrComponentForbidden. It used to resolve by existence alone,
-// which let a principal scoped to one system bind a component it could not even
+// which let a user scoped to one system bind a component it could not even
 // read, make that system the component's primary, and inject its own system-band
 // variables and tags onto it through the cascade. A membership writes onto both
 // of its ends, so it costs a write on both. Ambiguity is judged inside

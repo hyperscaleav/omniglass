@@ -37,8 +37,8 @@ const rejected = (over: Partial<ReachEndpoint> = {}): ReachEndpoint => ({
   ...over,
 });
 
-const operator: Me = { principal: { id: "p1", kind: "human" }, permissions: ["*:read", "endpoint:create", "endpoint:update", "endpoint:retry"], grants: [] };
-const viewer: Me = { principal: { id: "p2", kind: "human" }, permissions: ["*:read"], grants: [] };
+const operator: Me = { user: { id: "p1", kind: "person" }, permissions: ["*:read", "endpoint:create", "endpoint:update", "endpoint:retry"], grants: [] };
+const viewer: Me = { user: { id: "p2", kind: "person" }, permissions: ["*:read"], grants: [] };
 
 function client(me: Me | null = operator) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });

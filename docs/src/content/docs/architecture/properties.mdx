@@ -1,10 +1,6 @@
 ---
 title: Metrics and properties
 description: "The two sample lanes: a metric is a quantity, a property is a value, each with its own catalog. Series, provenance, declared values as rows, current values derived, divergence, fusion, and how a value reads back."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -248,11 +244,11 @@ mac, ip, serial, locked-input: anything an operator *sets* on an owner is a **de
 
 An identical re-set appends nothing: a same-value save is a no-op, which the PUT route's idempotency and the dev seed's second-run-adds-nothing invariant both require.
 
-The cascade-resolved **config** items, **variables**, and **secrets** remain their own primitive ([config, secrets, and variables](/architecture/variables/)): a declared property is a fact about one owner; a config binding is a policy resolved down a tree.
+The cascade-resolved **config** items, **variables**, and **secrets** remain their own primitive ([variables, secrets, and declared values](/architecture/variables/)): a declared property is a fact about one owner; a config binding is a policy resolved down a tree.
 
 ### Precedence: spec versus status
 
-Which side wins is a per-item `reconcile` policy ([config](/architecture/variables/#drift-and-reconcile)):
+Which side wins is a per-item `reconcile` policy ([declared values](/architecture/variables/#drift-and-reconcile)):
 
 - **observed wins** (`reconcile: observe` or `warn`): the declaration was a hint, reality is truth; a differing observed MAC surfaces as divergence (silent, or an alarm under `warn`); adopting it as declared is a separate one-shot import.
 - **declared wins** (`reconcile: enforce`): the declaration is the spec; converge via the set command (the Kubernetes spec-and-status pattern), alarm if the set fails.
@@ -352,10 +348,10 @@ A drift rule reads the *pair* (intended, observed): the intended value is tested
 
 ## disagree and divergence
 
-Drift is a condition operator, **`disagree(A, B)`**, usable inside event rule conditions, comparing two provenances (or two sources) of one name:
+Drift is a condition operator, **`disagree(A, B)`**, usable inside event rule criteria, comparing two provenances (or two sources) of one name:
 
 - `disagree(intended, observed)`: the command did not land (reconciliation)
-- `disagree(declared, observed)`: the world drifted from intent (config drift, device swap)
+- `disagree(declared, observed)`: the world drifted from intent (drift from the declared value, device swap)
 - `disagree(observed, observed)` across `source`: sensors conflict (a failing sensor)
 
 > Any two provenances of the same name that disagree = an anomaly. One detector.
@@ -427,4 +423,4 @@ The catalogs typing these tables:
 
 The end-to-end pipeline diagram lives on [messaging](/architecture/messaging/#the-pipeline-end-to-end).
 
-Related: [events](/architecture/events/), [commands](/architecture/commands/), [calculations](/architecture/calculations/), [config and credentials](/architecture/variables/), [collection](/architecture/collection/), [alarms and actions](/architecture/alarms-actions/), and [the glossary](/architecture/glossary/).
+Related: [events](/architecture/events/), [commands](/architecture/commands/), [calculations](/architecture/calculations/), [variables, secrets, and declared values](/architecture/variables/), [collection](/architecture/collection/), [alarms and actions](/architecture/alarms-actions/), and [the glossary](/architecture/glossary/).

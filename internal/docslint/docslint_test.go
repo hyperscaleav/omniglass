@@ -2,7 +2,6 @@ package docslint
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -610,10 +609,10 @@ func TestADR2033LabelTemplateAndBlueprintFire(t *testing.T) {
 }
 
 // TestADR2036TheUserFires proves the ADR-2036 entries catch the retired IAM
-// words in prose (principal, principal group, service account, and human as a
-// kind) and pass what the words keep until the schema, API and permission
-// rename (#2075) lands: a backticked identifier, a route, a permission, a
-// command, a JSON field, and the English senses of principal and human.
+// words (principal, principal group, service account, and human as a kind) in
+// prose and in the identifier spellings the schema, API and permission rename
+// (#2075) retired, and pass a backticked identifier (history, an applied
+// migration's name) and the English senses of principal and human.
 func TestADR2036TheUserFires(t *testing.T) {
 	fires := func(line string) bool {
 		for _, msg := range scanLine(line) {
@@ -637,6 +636,16 @@ func TestADR2036TheUserFires(t *testing.T) {
 		"the human kind carries a username",
 		"humans and service principals",
 		"a human or machine user",
+		"GET /principals lists them",
+		"/principal-groups/{group}/members adds one",
+		"principal:read:admin gates the page",
+		`perm: "principal_group:read:admin"`,
+		"each grant row carries principal_id",
+		"me.principal.id is the caller",
+		"omniglass principal-group member create night-shift --principal-id alice",
+		"  --principal-group on-call --channels inbox",
+		"  principal: {",
+		`<SchemaTable table="principal" />`,
 	} {
 		if !fires(line) {
 			t.Errorf("retired IAM word passed: %q", line)
@@ -647,22 +656,9 @@ func TestADR2036TheUserFires(t *testing.T) {
 		"a machine user calls the API with a token",
 		"add a user group for the night shift",
 		"a person signs in with a password",
-		"the `principal` table keys every user",
-		"`GET /principals` lists them",
-		"`/principal-groups/{group}/members` adds one",
-		"a role granting `principal:read`",
-		"principal:read:admin gates the page",
-		`perm: "principal_group:read:admin"`,
-		"run `omniglass principal list`",
-		"the `principal_id` column",
-		"each grant row carries principal_id",
-		"the `human` table holds the username",
-		"`kind=human` filters the list",
-		"me.principal.id is the caller",
-		"omniglass principal-group member create night-shift --principal-id alice",
-		"  --principal-group on-call --channels inbox",
-		"  principal: {",
-		`<SchemaTable table="principal" />`,
+		"the `principal` table became `users`",
+		"migration `20261117224704_principal_becomes_user` renamed it",
+		"the `principal_id` column became `user_id`",
 		"the principal reason is cost",
 		"the principal axes of the design",
 		"the three principal surfaces",
@@ -674,22 +670,6 @@ func TestADR2036TheUserFires(t *testing.T) {
 		if fires(line) {
 			t.Errorf("IAM word in a kept sense fired: %q", line)
 		}
-	}
-}
-
-// TestPendingRenameKeepsOnlyADR2036 proves the #2075 carve-out waves through
-// only ADR-2036 hits, and only in the generated files that rename rewrites.
-func TestPendingRenameKeepsOnlyADR2036(t *testing.T) {
-	adr := "principal is retired (ADR-2036); write user"
-	other := "node is retired (ADR-2031); write outpost"
-	if !pendingRenameHit("openapi.json", adr) || !pendingRenameHit(filepath.Join("reference", "mcp", "index.md"), adr) {
-		t.Error("an ADR-2036 hit in a generated file the rename rewrites was reported")
-	}
-	if pendingRenameHit("openapi.json", other) {
-		t.Error("another ADR's hit in openapi.json was waved through")
-	}
-	if pendingRenameHit(filepath.Join("architecture", "identity-access.mdx"), adr) {
-		t.Error("an ADR-2036 hit in hand-written docs was waved through")
 	}
 }
 
@@ -720,6 +700,48 @@ func TestADR2034GenusFires(t *testing.T) {
 		"a generic type parameter",
 		"the content type of the response",
 		"an input of type checkbox",
+	} {
+		if fires(line) {
+			t.Errorf("kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2037DeclaredValueFires proves the ADR-2037 entries catch the retired
+// declared-state words and the cascade sense of override, and pass the
+// catalog's sparse edit, which keeps the word override.
+func TestADR2037DeclaredValueFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2037") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"re-render it from declared config",
+		"the reconcile desired-state loop",
+		"projects desired state onto the device",
+		"each desired value resolves down the cascade",
+		"set the config on the room",
+		"the world drifted from intent (config drift)",
+		"tags resolve union-on-key, override-on-value",
+		"union on key, override on value",
+		"the HQ credential overrides the product's binding",
+	} {
+		if !fires(line) {
+			t.Errorf("retired by ADR-2037 but passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"re-render it from declared values",
+		"tags resolve union-on-key, shadow-on-value",
+		"the HQ credential shadows the product's binding",
+		"drift from the declared value",
+		"an override is your sparse edit to a shipped catalog row",
+		"the row's origin is overridden",
+		"a column sort overrides the default order",
 	} {
 		if fires(line) {
 			t.Errorf("kept sense fired: %q", line)

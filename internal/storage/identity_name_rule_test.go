@@ -40,7 +40,7 @@ func TestValidateNameRefusesATableThatBearsNoName(t *testing.T) {
 	for _, table := range []string{
 		"metric",      // id only
 		"tag_binding", // id only
-		"human",       // a username, its own rule
+		"person",      // a username, its own rule
 		"blob",        // content-addressed
 	} {
 		if err := storage.ValidateName(table, "anything"); !errors.Is(err, storage.ErrTableNotNameBearing) {

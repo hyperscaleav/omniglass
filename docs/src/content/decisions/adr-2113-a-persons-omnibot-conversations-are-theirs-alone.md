@@ -8,7 +8,7 @@ refs: [2113, 1166, 2120]
 
 - **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [connect an agent](/guides/agents/#carrying-a-conversation-on), [identity and access](/architecture/identity-access/), [storage](/architecture/storage/#retention-what-is-kept-and-for-how-long)
 - **Decision:** (#2113, building on [ADR-1166](/architecture/decisions/#adr-1166-omnibot-is-an-mcp-client-on-its-own-agent-token-confirming-in-its-client). What a paused run keeps is [ADR-2113.2](/architecture/decisions/#adr-21132-a-paused-omnibot-run-keeps-only-its-transcript).)
-  1. **Owner-only, by predicate.** A conversation belongs to the principal that created it. Every
+  1. **Owner-only, by predicate.** A conversation belongs to the user that created it. Every
      gateway read and write takes the caller as its owner predicate, so anyone else's conversation is
      a non-disclosing 404 on every verb and absent from their list, an admin's and the platform
      owner's `>` included. The permission, `assistant:use`, rides `viewer`; it says who may keep

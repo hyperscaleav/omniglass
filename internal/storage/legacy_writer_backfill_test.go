@@ -525,21 +525,21 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 	}
 }
 
-// TestRetiredRowsReleaseTheConditionsTheyRaised: a condition, and the alarm
+// TestRetiredRowsReleaseTheFiringsTheyRaised: a firing, and the alarm
 // with it, that a now-retired row raised (one under an instance naming no
 // endpoint, one dated a year ahead) is released by the boot heal, and one a
 // retired row cleared is raised again: a series with nothing left ends its
-// condition, a series whose newest sample is the outpost's honest one is judged
+// firing, a series whose newest sample is the outpost's honest one is judged
 // against it. A series that cannot be healed (a legacy rule whose fire event
 // the ruling now reserves) is logged and skipped, never stopping the rest, and
 // the heal runs once over what was retired: a second heal judges nothing.
-func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
+func TestRetiredRowsReleaseTheFiringsTheyRaised(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
 	belowNarrowMetric(t, r.f.dsn)
-	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "edge", Severity: "high", ClearEventType: "rule-cleared"})
 	if _, err := r.f.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{Name: "legacy", SampleKey: "endpoint-reachable",
-		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), FireEventType: "condition-started",
+		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), FireEventType: "rule-fired",
 		Selector: storage.EventRuleSelector{Components: []string{"bar-1"}}}, r.f.all); err != nil {
 		t.Fatal(err)
 	}
@@ -567,9 +567,9 @@ func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 	r.observe("http", "down")
 	r.observe("http", "up")
 	forwardDate("http")
-	if r.openAlarm("tcp") == "" || r.openAlarm("ghost") == "" || r.openAlarm("http") != "" || r.conditions() != 2 {
-		t.Fatalf("the seed left alarms tcp %q, ghost %q, http %q with %d conditions; want tcp and ghost open",
-			r.openAlarm("tcp"), r.openAlarm("ghost"), r.openAlarm("http"), r.conditions())
+	if r.openAlarm("tcp") == "" || r.openAlarm("ghost") == "" || r.openAlarm("http") != "" || r.firings() != 2 {
+		t.Fatalf("the seed left alarms tcp %q, ghost %q, http %q with %d firings; want tcp and ghost open",
+			r.openAlarm("tcp"), r.openAlarm("ghost"), r.openAlarm("http"), r.firings())
 	}
 	// The legacy rule's fire event is one the ruling now reserves.
 	if _, err := r.f.conn.Exec(r.ctx, `update event_rule set fire_event_type_id = (select id from event_type where name = 'collection-failed')
@@ -589,8 +589,8 @@ func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
 	if r.openAlarm("tcp") != "" || r.openAlarm("ghost") != "" {
 		t.Errorf("after the heal alarms tcp %q, ghost %q stay open; want both released", r.openAlarm("tcp"), r.openAlarm("ghost"))
 	}
-	if r.openAlarm("http") == "" || r.conditions() != 1 {
-		t.Errorf("after the heal http's alarm is %q with %d conditions; want the honest down raised again", r.openAlarm("http"), r.conditions())
+	if r.openAlarm("http") == "" || r.firings() != 1 {
+		t.Errorf("after the heal http's alarm is %q with %d firings; want the honest down raised again", r.openAlarm("http"), r.firings())
 	}
 	events := len(r.events())
 	if n, err := r.f.gw.HealRetiredSeries(r.ctx); err != nil || n != 0 {

@@ -84,7 +84,7 @@ func TestInsertLogLines(t *testing.T) {
 }
 
 // TestInsertOutpostLogs round-trips the self-log lane (ADR-0066) on its own table:
-// an outpost's log lines land in outpost_log keyed to the outpost's principal_id (#589
+// an outpost's log lines land in outpost_log keyed to the outpost's user_id (#589
 // split them out of log_line), read back newest-first by ListOutpostLogs, with
 // empty severity/facility coalesced to "". An outpost's line never surfaces on a
 // component's log read: the tables are disjoint by construction.

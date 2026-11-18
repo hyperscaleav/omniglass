@@ -1,10 +1,6 @@
 ---
 title: Storage
 description: "How storage works: the Storage Gateway, views by default, per-database isolation, append-only partitioning and tiering, and the on-row lineage pattern."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 This page describes **how storage works**: the patterns every other leaf's entities land on (scope, audit, retention, lineage), not a per-table column dump.
@@ -88,7 +84,7 @@ and fanned outward by the **CDC publisher**
 ([messaging](/architecture/messaging/#two-lanes-one-bus)).
 :::
 
-Column schemas live with each owning feature: [samples](/architecture/properties/#the-sample-tables), [events](/architecture/events/#storage), [alarms and actions](/architecture/alarms-actions/#storage) (`alarm` / `action`), [commands](/architecture/commands/), [config and credentials](/architecture/variables/#storage), [core entities](/architecture/core-entities/) and [templates](/architecture/templates/), [collection](/architecture/collection/#storage), [calculations](/architecture/calculations/#storage), [files](/architecture/files/), [time](/architecture/time/#storage), and [identity and access](/architecture/identity-access/#storage).
+Column schemas live with each owning feature: [samples](/architecture/properties/#the-sample-tables), [events](/architecture/events/#storage), [alarms and actions](/architecture/alarms-actions/#storage) (`alarm` / `action`), [commands](/architecture/commands/), [variables, secrets, and declared values](/architecture/variables/#storage), [core entities](/architecture/core-entities/) and [templates](/architecture/templates/), [collection](/architecture/collection/#storage), [calculations](/architecture/calculations/#storage), [files](/architecture/files/), [time](/architecture/time/#storage), and [identity and access](/architecture/identity-access/#storage).
 
 ## Conventions
 
@@ -106,7 +102,7 @@ Column schemas live with each owning feature: [samples](/architecture/properties
 - **Provenance and lineage on every sample**: `provenance` (observed / calculated / intended / declared), `source` (which sensor or path, for observed), and a lineage pointer enforced per provenance by a CHECK ([the lineage CHECK](#the-lineage-check-the-pattern)). A `declared` row is an operator's assertion recorded in the series itself ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)); the metric lane admits the first three provenances today (no declared-metric writer exists, and its CHECK refuses the row).
 - **Ownership is the exclusive-arc**, though not one uniform arc: the sample tables, `event`, and `command` carry `owner_kind` (`component` / `system` / `location` / `outpost`) plus the matching typed FK and a CHECK (no platform or global arm on a sample; a `location` owns no observed sample, only its declared properties and its calculated health, since nothing observes a location, [ADR-0422](/architecture/decisions/#adr-0422-a-system-owns-its-own-telemetry-and-a-location-owns-no-observed-sample)); `log_line` is **component-only** (a single NOT NULL `component_id`; an outpost's self-logs live in `outpost_log`); `variable`'s arc is `platform` / `component` / `system` / `location` (no outpost arm; `platform` sets all three FKs null); `alarm` carries **no arc**, a single NOT NULL `component_id`, component-local by design today. Full pattern: [core entities](/architecture/core-entities/#ownership-the-exclusive-arc).
 - **A write struct takes the `Write` suffix; the bare noun is the row**: `MetricSampleWrite` in, `MetricSample` back, likewise `PropertySampleWrite`, `EventWrite`, `LogLineWrite`. A carrier is named for what it carries: hence the wire message is a `TelemetryBatch` ([ADR-0072](/architecture/decisions/#adr-0072-an-envelope-is-not-named-after-its-passengers-and-an-insert-struct-takes-the-write-suffix)).
-- **Keys**: samples and events use a surrogate id plus `ts`; each catalog (`metric_type`, `property_type`, `event_type`, `command_type`) is name-unique with the **`official` boolean** deciding authority, and the three ingest catalogs refuse a name a sibling holds; structural entities carry a unique, renameable `name` over a uuid primary key; a `task` is **content-addressed** (`sha256` over `(endpoint_id, mode, spec)`); an `outpost` by its `principal_id`. Every foreign key stores the target's primary key, so a rename is free ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
+- **Keys**: samples and events use a surrogate id plus `ts`; each catalog (`metric_type`, `property_type`, `event_type`, `command_type`) is name-unique with the **`official` boolean** deciding authority, and the three ingest catalogs refuse a name a sibling holds; structural entities carry a unique, renameable `name` over a uuid primary key; a `task` is **content-addressed** (`sha256` over `(endpoint_id, mode, spec)`); an `outpost` by its `user_id`. Every foreign key stores the target's primary key, so a rename is free ([ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key)).
 - **A `location`, `system`, or `component` name is unique within its placement, not across the fleet**
   ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)):
   each table trades its old global `UNIQUE (name)` constraint for a set of partial unique indexes, one
@@ -760,7 +756,7 @@ key pin is trusted only from the endpoint's audited `:retry`, whose row carries 
 legacy `:retry` pin was recognized by its audit row and stamped. A stored driver spec or derived task
 never hands an outpost an emit the ruling refuses (the worklist strips it), a contract cannot declare a
 reserved key, and at boot the server judges again every event rule series a retirement took rows
-from (so a condition a retired row raised lets go) and names every stored declaration the ruling
+from (so a firing a retired row raised lets go) and names every stored declaration the ruling
 refuses so an operator can mend it.
 
 The gateway also accepts a **query tracer** (`storage.WithQueryTracer`), installed on the pool's
@@ -828,7 +824,7 @@ system renders from it.
 
 **Logic lives in Go, and the schema carries exactly one deliberate exception.** That exception is
 the **owner-invariant** guard: `assert_owner_grant_exists()` and the `DEFERRABLE INITIALLY DEFERRED`
-constraint trigger `principal_grant_owner_guard`, which refuse to leave the fleet with zero
+constraint trigger `user_grant_owner_guard`, which refuse to leave the fleet with zero
 `owner @ all` grants at `COMMIT` ([ADR-0006](/architecture/decisions/)). It is a trigger on purpose,
 because the property it holds is true only at commit time and no application check can be: two
 transactions each revoking the second-to-last owner grant both see one remaining.

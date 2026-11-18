@@ -243,7 +243,7 @@ func TestPlanScaleLabGivesEachSiteOutpostItsOwnPushers(t *testing.T) {
 }
 
 // A pusher planned onto an outpost the lab does not run would never push, so the
-// plan refuses it rather than seed a principal nothing holds.
+// plan refuses it rather than seed a user nothing holds.
 func TestPlanRefusesAPusherOnNoOutpost(t *testing.T) {
 	o := scaleOptions()
 	o.Pushers = []Pusher{{Name: "x-booking-1", Profile: "booking-service", Outpost: "edge-nowhere", Token: "t", TokenHash: "h", TokenPrefix: "p"}}

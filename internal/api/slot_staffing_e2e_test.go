@@ -103,7 +103,7 @@ func (f *staffingFixture) component(name, product string) {
 // assignment writes onto its component (its primary membership, its label, the
 // system band of its cascade, its contribution to health), so every route that
 // names one needs component:update over the component as well as system:update
-// over the system. A principal scoped to one system binds nothing it cannot
+// over the system. A user scoped to one system binds nothing it cannot
 // write. Holding no component:update at all is a 403 naming the permission; a
 // component outside the caller's component read scope is the non-disclosing 404,
 // one it may read but not write a 403; and a member or occupant it reaches
@@ -127,29 +127,29 @@ func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
 	c.do(owner, http.MethodPatch, "/systems/probe-room/slots/spare", map[string]any{"label": "Spare"}, http.StatusOK)
 	c.do(owner, http.MethodPatch, "/systems/probe-room/slots/second", map[string]any{"label": "Second"}, http.StatusOK)
 	roomID := entityID(t, c, owner, "/systems", "probe-room")
-	// The component the principal has no authority over, and a rack of its own.
+	// The component the user has no authority over, and a rack of its own.
 	f.component("victim-dsp", f.display)
 	f.component("own-rack", f.display)
 	rackID := entityID(t, c, owner, "/components", "own-rack")
 	c.do(owner, http.MethodPost, "/components", map[string]any{"name": "own-dsp", "product": f.display, "parent": rackID}, http.StatusCreated)
-	// Members the principal finds already bound: one plain, one staffed.
+	// Members the user finds already bound: one plain, one staffed.
 	f.component("victim-member", f.display)
 	f.component("victim-staffed", f.display)
 	c.do(owner, http.MethodPut, "/systems/probe-room/members/victim-member", nil, http.StatusNoContent)
 	c.do(owner, http.MethodPut, "/systems/probe-room/slots/second/assignments/victim-staffed", nil, http.StatusNoContent)
 
-	// The issue's principal: one system, and no component authority at all.
-	blind := principalWithGrants(t, f.ctx, f.dsn, "room-staffer-blind", []grant{
+	// The issue's user: one system, and no component authority at all.
+	blind := userWithGrants(t, f.ctx, f.dsn, "room-staffer-blind", []grant{
 		{role: "room-staffer", scopeKind: "system", scopeID: roomID},
 	})
 	// The same, with component:update over its own rack and nothing else.
-	racked := principalWithGrants(t, f.ctx, f.dsn, "room-staffer-racked", []grant{
+	racked := userWithGrants(t, f.ctx, f.dsn, "room-staffer-racked", []grant{
 		{role: "room-staffer", scopeKind: "system", scopeID: roomID},
 		{role: "deploy", scopeKind: "component", scopeID: rackID},
 	})
 	// The same again beside the read floor: it reads every component and still
 	// writes only its rack.
-	floored := principalWithGrants(t, f.ctx, f.dsn, "room-staffer-floored", []grant{
+	floored := userWithGrants(t, f.ctx, f.dsn, "room-staffer-floored", []grant{
 		{role: "room-staffer", scopeKind: "system", scopeID: roomID},
 		{role: "deploy", scopeKind: "component", scopeID: rackID},
 		{role: "viewer", scopeKind: "all"},
@@ -180,14 +180,14 @@ func TestStaffingWritesNeedTheComponentInScope(t *testing.T) {
 	for _, r := range refusals {
 		st, raw := c.send(blind, r.method, r.path, nil)
 		if st != http.StatusForbidden || !strings.Contains(string(raw), "component:update") {
-			t.Errorf("%s by a principal with no component authority = %d %s, want 403 naming component:update", r.name, st, raw)
+			t.Errorf("%s by a user with no component authority = %d %s, want 403 naming component:update", r.name, st, raw)
 		}
 		if st, raw := c.send(racked, r.method, r.path, nil); st != r.racked {
-			t.Errorf("%s by a principal that cannot read the component = %d, want %d\nbody: %s", r.name, st, r.racked, raw)
+			t.Errorf("%s by a user that cannot read the component = %d, want %d\nbody: %s", r.name, st, r.racked, raw)
 		}
 		st, raw = c.send(floored, r.method, r.path, nil)
 		if st != r.floored {
-			t.Errorf("%s by a principal that reads but cannot write the component = %d, want %d\nbody: %s", r.name, st, r.floored, raw)
+			t.Errorf("%s by a user that reads but cannot write the component = %d, want %d\nbody: %s", r.name, st, r.floored, raw)
 		}
 		if st == http.StatusForbidden && !strings.Contains(string(raw), "component:update scope") {
 			t.Errorf("%s refusal = %s, want it to name the component:update scope", r.name, raw)
@@ -248,7 +248,7 @@ func crossTierPathWrites(t *testing.T) map[string]string {
 // proof: every write that names an entity of another scoped tier in its path
 // publishes that tier's update permission as its conditional permission, so the
 // spec says the route costs a write on both ends, and
-// TestStaffingWritesNeedTheComponentInScope drives each one with a principal
+// TestStaffingWritesNeedTheComponentInScope drives each one with a user
 // scoped to the gated end alone and proves it is refused. A new cross-tier
 // route fails here until it is stamped, and fails there until it is driven.
 func TestEveryCrossTierPathWriteGuardsBothEnds(t *testing.T) {

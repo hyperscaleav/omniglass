@@ -1596,20 +1596,20 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 	// agent token acts as (#1179), on the actor's behalf; null otherwise.
 	channel, client := auditChannelFrom(ctx)
 	// actor_username / real_actor_username denormalize the actor's IDENTIFIER at
-	// write time, so the row still names its actor after that principal is purged
+	// write time, so the row still names its actor after that user is purged
 	// (the foreign keys go null, the text remains). The identifier of a null id is
 	// null.
 	//
 	// The order is bound as an expression rather than resolved in Go, which is the
-	// one place principalIdent's policy is not applied by principalIdent itself:
+	// one place userIdent's policy is not applied by userIdent itself:
 	// this insert runs inside the CALLER's transaction on every operator write, so
 	// a Go resolution would cost a second round trip there, and the alarm write
 	// path pins its statement count as an exact equation (alarm_cost_test.go) that
-	// counts this insert. principal_ident_test.go holds the two shapes to the same
+	// counts this insert. user_ident_test.go holds the two shapes to the same
 	// answer.
 	if _, err := tx.Exec(ctx, `
-		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, resource_id, old, new, channel, client, agent)
-		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		insert into audit_log (actor_user_id, real_actor_user_id, actor_username, real_actor_username, verb, resource, resource_id, old, new, channel, client, agent)
+		values ($1, $2, `+userIdentSQL("$1")+`, `+userIdentSQL("$2")+`, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, resourceID, oldJSON, newJSON, channel, client, agentFrom(ctx)); err != nil {
 		return fmt.Errorf("storage: write audit: %w", err)
 	}

@@ -47,7 +47,7 @@ func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 	mustExec(t, conn, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('telnet', 'telnet', $1::uuid, (select principal_id from outpost where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb)`, comp.ID)
+		('telnet', 'telnet', $1::uuid, (select user_id from outpost where name = 'edge'), '{"target":"10.0.0.1:23"}'::jsonb)`, comp.ID)
 	base := time.Now().UTC().Truncate(time.Microsecond).Add(-10 * time.Minute)
 	land := func(w storage.KeyWriter, key, instance, value string, at time.Duration) {
 		t.Helper()
@@ -117,7 +117,7 @@ func TestPropertiesCarryEveryKeyAndItsReconciliation(t *testing.T) {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	if _, err := gw.IssueCommand(ctx, actor, "component", "switcher-1", "set-input", "", json.RawMessage(`"dp1"`), nil); err != nil {
