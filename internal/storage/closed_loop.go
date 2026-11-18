@@ -56,7 +56,7 @@ func (p *PG) ListClosedLoopPollTargets(ctx context.Context) ([]ClosedLoopPollTar
 			case when coalesce(t.spec->>'driver', '') <> '' then coalesce(t.spec->'schedule'->>'every', '0s') else '' end
 		from task t
 		join endpoint i on i.id = t.endpoint_id
-		join outpost n on n.principal_id = i.outpost_id
+		join outpost n on n.user_id = i.outpost_id
 		where t.enabled and t.mode = 'poll' and i.component is not null
 		order by 1, 2, 3`)
 	if err != nil {

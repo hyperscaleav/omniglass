@@ -71,9 +71,16 @@ states its one-line justification in the PR body.
 
 ## Status moves with the code
 
-The architecture pages are written in the present tense as the **target design**, so build status is
+:::note[The site is being rebuilt]
+The docs site is being rebuilt by audience, section by section, in the vocabulary's words
+([ADR-2087.2](/architecture/decisions/#adr-20872-the-docs-site-is-rebuilt-by-audience-the-old-pages-leave-as-their-section-lands)). The rebuilt pages carry the status badges. The pages that predate
+the rebuild carry none: each stays the reference for its capability, kept true when a slice falsifies it,
+until its section is rebuilt and the section's PR deletes it. Git is their history.
+:::
+
+The rebuilt pages are written in the present tense as the **target design**, so build status is
 carried *alongside* the prose, not woven into it, and keeping it current is part of docs-with-everything.
-A slice that advances a page updates three surfaces in the **same PR**:
+A slice that advances a rebuilt page updates three surfaces in the **same PR**:
 
 - the page's **status badge** moves to its new floor (`Design` to `Partial` to `Built`), which the live
   grid on [implementation status](/architecture/status/) reads directly, so the grid never lies;

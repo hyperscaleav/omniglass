@@ -133,14 +133,14 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 	}
 
 	systems := indexTypeNodes(doc.SystemTypes)
-	if got := systems["board"].ParentID; got != "room" {
-		t.Errorf("system_types: board parent_id = %q, want %q", got, "room")
+	if got := systems["board"].ParentID; got != "collaboration" {
+		t.Errorf("system_types: board parent_id = %q, want %q", got, "collaboration")
 	}
 	if systems["board"].Icon != "" {
-		t.Errorf("system_types: board icon = %q, want empty; it inherits room's and a render that flattened it would teach the wrong rule", systems["board"].Icon)
+		t.Errorf("system_types: board icon = %q, want empty; it inherits collaboration's and a render that flattened it would teach the wrong rule", systems["board"].Icon)
 	}
-	if systems["room"].Icon == "" {
-		t.Error("system_types: room carries no icon of its own, which is the value board inherits")
+	if systems["collaboration"].Icon == "" {
+		t.Error("system_types: collaboration carries no icon of its own, which is the value board inherits")
 	}
 	if systems["av"].ParentID != "" {
 		t.Errorf("system_types: av parent_id = %q, want the root", systems["av"].ParentID)
@@ -235,7 +235,7 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		// The retention pass's lane behind past its catch-up passes (#1629).
 		{Name: "retention-behind", SampleKey: "retention-behind", Fire: "value == 1", Clear: "value == 0", FireSustain: "5m", Severity: "warning"},
 	} {
-		w.FireEventType, w.ClearEventType = "condition-started", "condition-ended"
+		w.FireEventType, w.ClearEventType = "rule-fired", "rule-cleared"
 		r := rules[w.Name]
 		if r.Label == "" || r.Description == "" {
 			t.Errorf("event rule %s has no label or description: %+v", w.Name, r)

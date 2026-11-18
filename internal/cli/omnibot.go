@@ -30,7 +30,7 @@ var openModel = func(path string) (provider.Provider, error) { return provider.L
 // run. This slice drives a recorded model (--replay); a live model is a later
 // slice.
 func newOmnibotCmd(version string) *cobra.Command {
-	var replay string
+	var replay, resume string
 	var maxSteps int
 	cmd := &cobra.Command{
 		Use:   "omnibot [prompt...]",
@@ -42,9 +42,12 @@ func newOmnibotCmd(version string) *cobra.Command {
 			"is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line " +
 			"continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks " +
 			"for a credential without echo, stores it as a secret with your own token, and tells omnibot only its " +
-			"name, so the value never reaches the model. The model is a recording (--replay) until a live provider lands.",
+			"name, so the value never reaches the model. --resume <name> keeps the conversation on the server under that " +
+			"name, for you alone, and picks it up where it was left; a call a paused run left waiting is put to you first. " +
+			"The model is a recording (--replay) until a live provider lands.",
 		Example: `  omniglass omnibot --replay lobby.yaml "add a display to the lobby"
-  omniglass omnibot --replay lobby.yaml`,
+  omniglass omnibot --replay lobby.yaml
+  omniglass omnibot --replay lobby.yaml --resume lobby-refit`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, pos []string) error {
 			if replay == "" {
@@ -74,14 +77,22 @@ func newOmnibotCmd(version string) *cobra.Command {
 				Tools:    sess,
 				MaxSteps: maxSteps,
 				Confirm:  confirmerFor(cmd, con),
-				Observe: func(c assistant.Call) {
-					fmt.Fprintln(cmd.ErrOrStderr(), observeLine(c))
+				Events: func(e assistant.Event) {
+					if e.Kind == assistant.EventResult {
+						fmt.Fprintln(cmd.ErrOrStderr(), observeLine(e))
+					}
 				},
 			}
-			if len(pos) == 0 {
-				return chat(ctx, con, cmd.OutOrStdout(), sess, loop)
+			t := &turns{loop: loop}
+			if resume != "" {
+				if err := t.resume(ctx, sess, resume, cmd.OutOrStdout(), con.out); err != nil {
+					return err
+				}
 			}
-			out, err := loop.Run(ctx, strings.Join(pos, " "))
+			if len(pos) == 0 {
+				return chat(ctx, con, cmd.OutOrStdout(), sess, t)
+			}
+			out, err := t.run(ctx, strings.Join(pos, " "))
 			if err != nil {
 				return err
 			}
@@ -93,6 +104,7 @@ func newOmnibotCmd(version string) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&replay, "replay", "", "a recorded model to drive the run (YAML turns)")
+	cmd.Flags().StringVar(&resume, "resume", "", "keep the conversation on the server under this name, picking it up if it exists")
 	cmd.Flags().IntVar(&maxSteps, "max-steps", 10, "the most model turns the run takes before it stops")
 	return cmd
 }
@@ -143,14 +155,15 @@ func terminalConfirmer(con *console) assistant.Confirmer {
 	}
 }
 
-// observeLine is a call's line on stderr. Only a call that ran has an outcome;
-// a declined or refused one never ran, so it carries none.
-func observeLine(c assistant.Call) string {
-	line := fmt.Sprintf("omnibot: %s %s", c.Decision, c.Tool)
-	if c.Decision != assistant.DecisionCalled {
+// observeLine is a call's line on stderr, from its result event. Only a call
+// that ran has an outcome; a declined or refused one never ran, so it carries
+// none.
+func observeLine(e assistant.Event) string {
+	line := fmt.Sprintf("omnibot: %s %s", e.Decision, e.Tool)
+	if e.Decision != assistant.DecisionCalled {
 		return line
 	}
-	if c.IsError {
+	if e.IsError {
 		return line + " (error)"
 	}
 	return line + " (ok)"

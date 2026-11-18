@@ -1,10 +1,6 @@
 ---
 title: API
 description: "The API contract: AIP-style resources and :verb methods, cursor lists, a problem+json error envelope, idempotent writes, and long-running operations carried by the action row."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 The contract is **two typed surfaces, one source of truth**. The **public HTTP / OpenAPI contract**
@@ -56,7 +52,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   A path or a reference resolves whichever form it is given, since a kebab name can never look like a
   uuid.
 - **A rename is a custom method, never a `PATCH` field.** `POST /components/{name}:rename` (also
-  `/systems`, `/locations`, `/principal-groups/{group}`) moves the `name`, gated by `<entity>:rename`
+  `/systems`, `/locations`, `/user-groups/{group}`) moves the `name`, gated by `<entity>:rename`
   rather than `<entity>:update`, and the `PATCH` body of those four carries no `name` at all. Renaming
   breaks every reference an operator stored outside the system (a bookmark, a runbook step, an
   integration's config), so it is an act a grant can withhold on its own instead of a side effect of
@@ -87,7 +83,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   [authorization](/architecture/identity-access/) check share one vocabulary. The **self-scoped**
   `/auth/me` family is the exception: authn-only, resolving the target from the session, never a path
   id, so it carries no capability and a credential id not the caller's own is a 404; the **admin**
-  counterparts on `/principals/{id}` do carry a capability and a scoped path id.
+  counterparts on `/users/{id}` do carry a capability and a scoped path id.
 - **Each typed catalog is its own plural collection**: `/location-types`, `/metric-types`,
   `/property-types`,
   `/event-types` ([ADR-0060](/architecture/decisions/#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership)).
@@ -99,13 +95,13 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   ([#627](https://github.com/hyperscaleav/omniglass/issues/627)): the request carries the same
   `parent`/`location` fields a create would, and availability is checked against that specific
   placement bucket, not a single global fact. It stays **blind to the caller's own grant scope**:
-  a deploy principal scoped to one subtree still gets a correct answer for a placement it cannot
+  a deploy user scoped to one subtree still gets a correct answer for a placement it cannot
   read via `GET`, because the check queries the target bucket directly rather than reading the row.
-- **A principal is addressable by uuid, username, or service account name.** Every
-  `/principals/{id}` route resolves any of them server-side (a value that parses as a uuid is used
-  directly, else a username or a service account's name, an unknown one a 404, and a word that is
+- **A user is addressable by uuid, username, or machine user name.** Every
+  `/users/{id}` route resolves any of them server-side (a value that parses as a uuid is used
+  directly, else a username or a machine user's name, an unknown one a 404, and a word that is
   both a username and a service name a 404 listing both uuids). A name resolves only for a caller who
-  may list the whole directory (`principal:read:admin` on an all-scope grant); anyone else gets the
+  may list the whole directory (`user:read:admin` on an all-scope grant); anyone else gets the
   all-scope 403 for every name, so a name cannot be probed. The uuid stays the stable identity (a
   username is mutable, nothing keys on it).
 
@@ -122,8 +118,8 @@ The forms, by what the name is unique within:
 | endpoint | `{endpoint}` | `<component>/<endpoint name>`, the component in any form above | `boi.17c.415a.$comp.display-1/https` |
 | secret, variable | `{secret}`, `{variable}` | a bare name, or `<owner>/<name>`, the owner a location, system or component in any form above, or `$platform` | `demo-panel-login`, `$platform/demo-panel-login` |
 | file | `{file}` | its filename | `codec-firmware-2.1.4.txt` |
-| principal group | `{group}` | its name | `night-shift` |
-| principal, group member | `{id}`, `{principal}` | a username, a service account's name | `alice` |
+| user group | `{group}` | its name | `night-shift` |
+| user, group member | `{id}`, `{user}` | a username, a machine user's name | `alice` |
 | a grant's scope root | `scope_id` (body) | a bare name, a dotted address | `boi.17c` |
 
 The slash in an endpoint, secret or variable reference is one path segment, so a URL percent-encodes
@@ -147,7 +143,7 @@ name is a lookup: automation that must never drift addresses `<owner>/<name>` or
 
 **What stays uuid-only, and why**: an alarm, an audit row, a grant, a session or API token, and a task
 have no name (a task's id is its content hash); a component-less (server-hosted) endpoint's name is not
-unique, since only a component makes it so; an outpost principal on `/principals` is reached by its name on
+unique, since only a component makes it so; an outpost user on `/users` is reached by its name on
 `/outposts` instead.
 
 ## Lists: filter, order, page
@@ -280,16 +276,16 @@ status mapping:
 |---|---|
 | 400 | malformed request (bad JSON, an undeclared param) |
 | 401 | unauthenticated |
-| 403 | **action denied on this target**: the principal lacks the capability entirely, or can read the target but not perform this action on it (below) |
+| 403 | **action denied on this target**: the user lacks the capability entirely, or can read the target but not perform this action on it (below) |
 | 404 | not found, **including out-of-read-scope** (below), and a name no single visible row answers to, which lists the rows that do |
 | 409 | conflict: PK collision, a stale conditional write, or an idempotency replay mismatch |
 | 422 | semantic validation (a driver attach missing a required input) |
 | 429 | throttled |
 
 **The 403/404 split is three-way, by where the target sits in the caller's
-[per-action scope](/architecture/identity-access/).** (a) The action is in **no** grant the principal
+[per-action scope](/architecture/identity-access/).** (a) The action is in **no** grant the user
 holds: **403**, capability missing entirely. (b) The target is in the caller's **read-scope** but outside
-`visible_set(P, action)` (the principal can `GET` it but cannot `:ack` it): **403**, which leaks nothing
+`visible_set(P, action)` (the user can `GET` it but cannot `:ack` it): **403**, which leaks nothing
 because the caller can already read the row. (c) The target is **outside the caller's read-scope**
 entirely: **404**, the only 404 case, so the API never discloses that an entity exists outside the
 caller's visible set.
@@ -459,8 +455,8 @@ slot assignment, in one transaction: it lands whole or not at all.
 level's rank moves health fleet-wide) lists the severity levels least to most severe,
 each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
 (gated `rule:*`; read like a catalog, written only on an all-scope grant) authors the rules that raise alarms: a sample
-key, fire and clear criteria, sustains, a selector, the event types it writes when its condition starts
-(`fire_event_type`, required) and ends (`clear_event_type`, optional), and a severity level, which is
+key, fire and clear criteria, sustains, a selector, the event types it writes when it fires
+(`fire_event_type`, required) and clears (`clear_event_type`, optional), and a severity level, which is
 optional: a rule without one is informational and raises no alarm, and a PATCH with an empty `severity`
 makes a rule informational (an empty `clear_event_type` drops the clear event; the fire type cannot be
 emptied). Criteria are expressions (#957): a body gives `{expr}` or the short form `{op, value}`, which is
@@ -498,12 +494,12 @@ type was deleted stays editable (it matches nothing by the stale entry), while a
 exist. `POST /event-rules/{name}:rename` (gated `rule:update` on an all-scope grant; `omniglass event-rule
 rename`) moves an operator rule's name (#977) and answers the rule with its `id`; every reference inside
 the platform holds that uuid (an alarm's `raised_by_rule_id` and its `dedup_key`, `rule:<uuid>[:<instance>]`,
-a condition, a streak, an event's `derived_by_rule_id`), so a rename bumps no version and leaves streaks
-and conditions running. An event keeps the name it was written under (`derived_by_rule`). An official
+a firing, a streak, an event's `derived_by_rule_id`), so a rename bumps no version and leaves streaks
+and firings running. An event keeps the name it was written under (`derived_by_rule`). An official
 rule keeps its name (409, the seed matches it by name), a taken name is a 409, an illegal or uuid-shaped
-one a 422. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,
+one a 422. The list and a get carry each rule's live state as counts (`firing`, `open_alarms`,
 `pending_streaks`), read for the whole list in one query; `GET /event-rules/{name}/state` lists the
-conditions in force, the alarms and the streaks themselves.
+firings, the alarms and the streaks themselves.
 Both are fenced to the caller's component read scope. The list, a get and the state also carry
 `last_judged_at`, when the rule last judged an arriving sample, to within 5s (absent when it never has);
 it names no component, so it is not fenced. Because writing a rule needs an all-scope grant,
@@ -664,7 +660,7 @@ returns it beside the computed settlement verdict (none/pending/settled/failed);
 actuates over the per-outpost command queue
 ([commands](/architecture/commands/#actuation-the-wire-to-the-device), #815). With `wait` the issue
 holds until the command is terminal or `wait_timeout` passes (1 to 120 seconds), bounded to 64 waits
-at once and 4 per principal, a wait past either a 429 refused before anything is issued.
+at once and 4 per user, a wait past either a 429 refused before anything is issued.
 `GET /components/{name}/commands` and `GET /components/{name}/commands/{id}` read commands back whole (#1155): one by its id under its
 component, or the history newest first, narrowed by `status`, `since`, `until` and `limit`, each
 carrying a time per transition, the derived in-flight `phase`, the settle mode, what carried it, the
@@ -738,7 +734,7 @@ owning entity's own write. The tag vocabulary and an entity's tags read on the v
   collision-free.
 - `GET /components/{name}/effective-tags` is the **cascade** for one component: each a `resolvedTag`
   (`{key, value, owner_kind, owner_id?, owner_name?, band, depth, winner}`), keys unioning and values
-  overriding most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
+  shadowing most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves
   only from a binding on the component itself (`component:read`, read-scoped).
 - The directory list routes (`GET /components`, `/systems`, `/locations`) each carry an **`effective_tags`**
   map (`{key: winning_value}`) on every row, resolved for the whole page in one batched query. A
@@ -750,7 +746,7 @@ The **classification catalogs** ([core entities](/architecture/core-entities/#ca
 are official-vs-custom catalogs the fleet entities reference, on the same pattern as the
 `*_type` catalogs; `vendor` and `driver` are flat, `component_type` a hierarchy above `product`
 ([core entities](/architecture/core-entities/#catalog-reference-data-component_type)), and
-`system_type` its system-side counterpart, the coarse taxonomy of what kind of space a system is
+`system_type` its system-side counterpart, the taxonomy of what a system is for
 ([core entities](/architecture/core-entities/#catalog-reference-data-system_type)). Each is its own
 resource with one shared CRUD shape: the list routes
 (`GET /vendors`, `/drivers`, `/component-types`, `/products`, `/standards`, `/system-types`) order
@@ -852,7 +848,7 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
   scheme, for example `javascript:`).
 - A **driver** (Generic SNMP, Kestrel Device API, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional `version`.
-- A **component_type** (Mic, Camera, Wireless Mic, ...) is the device-class genus a product is
+- A **component_type** (Mic, Camera, Wireless Mic, ...) is the device-class type a product is
   classified under, a **hierarchy** (a subtype falls within its ancestor's subtree): what a
   [system slot's type guard](#system-slots-a-system-declares-one-a-component-fills-it) accepts.
 - A **product** ([core entities](/architecture/core-entities/#catalog-reference-data-product)) is the
@@ -1078,10 +1074,10 @@ An alarm hangs off its component and rides that component's gating:
 - `GET /components/{name}/alarms` lists them newest first (`component:read`), the **active** set by
   default, the whole history with `include_cleared`, and the queue an operator actually works with
   `unacknowledged` (on its own, raised and unacknowledged; with `include_cleared`, also the
-  incidents that came and went unattended).
+  alarms that came and went unattended).
 - `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
   `component:update`). `severity` names a [severity level](/architecture/alarms-actions/#severity-a-catalog-of-named-levels) (`GET /severity-levels`, an unknown one a 422), driving the component's own
-  verdict (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the condition
+  verdict (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the alarm's
   identity, defaulting to the message. A bad severity is a **422**.
 - `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so
   the record of what was wrong outlives the fix; clearing one already cleared, or another
@@ -1111,11 +1107,11 @@ Un-acknowledging is deliberately not a verb yet
 
 **Snooze rides the same shape** (#1318): `POST /components/{name}/alarms/{id}:snooze` (a `duration`,
 `1m` to `7d`, else a 422 naming the bound) and `:unsnooze`, both gated by **`alarm:snooze`**, its scope
-resolved on the component tier from that permission. A snooze belongs to the alarm's condition
+resolved on the component tier from that permission. A snooze belongs to the alarm's identity
 (`component`, `dedup_key`), not to the row, so every alarm read carries `snoozed_until` and
-`snoozed_by` on each alarm of a snoozed condition; it does not acknowledge or recompute health, and
+`snoozed_by` on each alarm of a snoozed identity; it does not acknowledge or recompute health, and
 both verbs are audited on the alarm they name
-([alarms and actions](/architecture/alarms-actions/#snooze-a-fact-about-a-condition)).
+([alarms and actions](/architecture/alarms-actions/#snooze-silencing-an-alarm-for-a-while)).
 
 An alarm's transitions also queue its **notifications** (#618): `/notification-types` (the message
 catalog, `notification_type:*`, read on the viewer floor, `:rename` and a `:preview` that renders against
@@ -1127,7 +1123,7 @@ the component tier). An alarm's `:timeline` carries each notification after the 
 ([alarms and actions](/architecture/alarms-actions/#notifications)).
 
 People are recipients too (#1341). A target's kind may be `email` (a shared mailbox) or name people,
-`principal_group` or `principal`, on the channels `inbox` and `email`; binding people takes the
+`user_group` or `user`, on the channels `inbox` and `email`; binding people takes the
 directory's admin-tier read. The caller's own inbox is `GET /auth/me/notifications` with
 `POST /auth/me/notifications/{id}:markRead` and `POST /auth/me/notifications:markAllRead`
 (`notification:read`, the caller's rows alone, scoped at read). A person's own subscriptions are
@@ -1136,7 +1132,7 @@ a saved rule or, `POST /auth/me/action-rules:testDraft`, on a draft not yet save
 under `notification:subscribe`, which `viewer` carries; another user's rule is a 404. A member of a
 group a rule targets opts out with `POST /action-rules/{name}:optOut` and back in with `:optIn`, where
 the rule allows it. A person-addressed row names its `recipient` only to that person and to the
-principal directory's readers.
+user directory's readers.
 
 - `GET /components/{name}/alarms/{id}:timeline` (**`alarm:read`**, the component's read scope
   injected, a non-disclosing **404** outside it or for an alarm not on the component) returns the
@@ -1164,7 +1160,7 @@ The reports are one shape over two owners:
   ([#940](https://github.com/hyperscaleav/omniglass/issues/940)).
 - `GET /systems/{name}/alarms` (`system:read`) is every member's alarms in one read, newest first, each
   naming its component: the active ones whatever their age and those cleared in the last 30 days, capped
-  at 500. A system's Activity explains its incidents with it, one request however many members the
+  at 500. A system's health history explains its unhealthy stretches with it, one request however many members the
   system has.
 
 Both resolve their owner **within the caller's scope first** (an out-of-scope system or location is a
@@ -1218,7 +1214,7 @@ Two properties are worth stating because they are easy to lose:
   says what exists and how it is placed; the client decides how the fleet is **grouped**, which is
   what lets a grouping (by location, by standard, by vendor, by tag) be a mapper rather than a second
   endpoint. Explore's outline of locations is one such mapper (ADR-0137).
-- **Scoped per tier.** The three tiers resolve their own read scope, so a principal who may read the
+- **Scoped per tier.** The three tiers resolve their own read scope, so a user who may read the
   location tree but not its components gets the shape of their fleet with no contents, and one with no
   fleet scope at all gets an **empty fleet rather than a refusal**: there is simply nothing of
   theirs to draw.
@@ -1290,12 +1286,26 @@ problem+json. Each tool also carries an **agent class** (read, write, destructiv
 destination), and the listing stamps the caller's resolved policy for it into the tool's `_meta`
 (`omniglass/agent_policy`); the server refuses a class the install sets to `never` for any agent
 request, MCP or REST, before the route runs, and `GET /auth/me/agent-policy` answers the caller's
-policy ([what an agent may do](/guides/agents/#what-an-agent-may-do)). The server runs as the **authenticated `human` or `service` principal's** token, so its
-reach is exactly that principal's grants ([AI](/architecture/ai/)). A client with no token meets a `401`
+policy ([what an agent may do](/guides/agents/#what-an-agent-may-do)). The server runs as the **authenticated person's or machine user's** token, so its
+reach is exactly that user's grants ([AI](/architecture/ai/)). A client with no token meets a `401`
 that points it at the server's OAuth 2.1 metadata, and signs its person in for an agent token of its
 own ([MCP clients sign in with OAuth 2.1](/architecture/identity-access/#mcp-clients-sign-in-with-oauth-21));
 those protocol routes sit outside the OpenAPI document, their shapes fixed by the RFCs. Connecting one:
 [connect an agent](/guides/agents/).
+
+omnibot's conversations are a person's own resource under `/assistant/conversations` (list, get,
+create, `{name}:append`, delete), gated by `assistant:use` and owner-only: anyone else's is a 404, and
+an append that does not name the conversation's last message is a 409 ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone)).
+`{name}:run` runs omnibot on one on the server and answers `text/event-stream`, the run narrated as
+AG-UI events; it ends in an interrupt when a call waits on the person, answered by the next run's
+`resume` ([ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui)).
+Its AG-UI `context` (at most 20 entries of at most 2000 characters) is framed for the model as data
+ahead of the person's message, and `forwardedProps.skill` (`{name, arguments}`) runs an embedded
+skill's rendered prompt in place of one; an unknown skill or a missing argument is a 422
+([ADR-2122](/architecture/decisions/#adr-2122-a-console-subject-is-a-stamp-on-the-shared-primitives-gathered-by-one-modifier-click-handler)).
+It is a 503 on a server with no model, a 403 for an agent or an impersonation session, and a 409 for a
+resume that names no waiting call, a prompt while one waits, or a run while another holds the
+conversation (a run claims it before any tool runs; an append while the claim is live is a 409 too). It is not an MCP tool.
 
 The catalog is **credential-blind**
 ([ADR-2025](/architecture/decisions/#adr-2025-the-mcp-catalog-is-credential-blind-and-reads-the-fleets-alarms-in-one-call)).

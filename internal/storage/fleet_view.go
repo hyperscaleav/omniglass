@@ -27,7 +27,7 @@ import (
 //
 // Scope is injected per tier, in the query, through the same scopedListSQL
 // primitive every other tree read uses. The three sets are separate arguments
-// rather than one, because they answer three different permissions: a principal
+// rather than one, because they answer three different permissions: a user
 // who may read the place tree but not its components gets the shape of their
 // fleet with no contents, which is a legitimate view and not an error.
 

@@ -10,63 +10,63 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// SettingOverride is one override row: the values and locked key-paths an operator
+// SettingBinding is one binding row: the values and locked key-paths an operator
 // set at a cascade level for a namespace. Slice-0 uses scope "platform" only. The
 // "default" level is the type's own declaration, off the cascade axis, and is never
 // a row here.
-type SettingOverride struct {
+type SettingBinding struct {
 	Scope     string
 	Namespace string
 	Doc       map[string]any
 	Locks     []string
 }
 
-// GetSettingOverrides returns every platform override row at a scope. Unscoped:
+// GetSettingBindings returns every platform binding row at a scope. Unscoped:
 // platform settings describe the platform, not the fleet, so no ABAC scope
 // applies; the route gates on settings:read.
-func (p *PG) GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error) {
-	return settingOverridesOn(ctx, p.pool, scope)
+func (p *PG) GetSettingBindings(ctx context.Context, scope string) ([]SettingBinding, error) {
+	return settingBindingsOn(ctx, p.pool, scope)
 }
 
-// settingOverridesOn is GetSettingOverrides against a caller-supplied querier.
+// settingBindingsOn is GetSettingBindings against a caller-supplied querier.
 // The gateway reads a setting itself (the acronym dictionary the label engine
 // titles with), and it does so from inside a transaction it is already holding,
 // where the pool is the one place the read must NOT go.
-func settingOverridesOn(ctx context.Context, q querier, scope string) ([]SettingOverride, error) {
+func settingBindingsOn(ctx context.Context, q querier, scope string) ([]SettingBinding, error) {
 	rows, err := q.Query(ctx, `
 		select namespace, doc, locks
-		from setting_override
-		where scope = $1 and principal_id is null
+		from setting_binding
+		where scope = $1 and user_id is null
 		order by namespace`, scope)
 	if err != nil {
-		return nil, fmt.Errorf("storage: list setting overrides: %w", err)
+		return nil, fmt.Errorf("storage: list setting bindings: %w", err)
 	}
 	defer rows.Close()
-	var out []SettingOverride
+	var out []SettingBinding
 	for rows.Next() {
-		o := SettingOverride{Scope: scope}
+		o := SettingBinding{Scope: scope}
 		var docRaw, locksRaw []byte
 		if err := rows.Scan(&o.Namespace, &docRaw, &locksRaw); err != nil {
-			return nil, fmt.Errorf("storage: scan setting override: %w", err)
+			return nil, fmt.Errorf("storage: scan setting binding: %w", err)
 		}
 		if err := json.Unmarshal(docRaw, &o.Doc); err != nil {
-			return nil, fmt.Errorf("storage: unmarshal override doc: %w", err)
+			return nil, fmt.Errorf("storage: unmarshal binding doc: %w", err)
 		}
 		if err := json.Unmarshal(locksRaw, &o.Locks); err != nil {
-			return nil, fmt.Errorf("storage: unmarshal override locks: %w", err)
+			return nil, fmt.Errorf("storage: unmarshal binding locks: %w", err)
 		}
 		out = append(out, o)
 	}
 	return out, rows.Err()
 }
 
-// UpsertSettingOverride inserts or replaces the (scope, namespace) platform row and
-// audits it. principal_id is NULL (platform-wide, no principal). The ON CONFLICT
-// target is the identity constraint, which treats the NULL principal as one value.
-func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error) {
+// UpsertSettingBinding inserts or replaces the (scope, namespace) platform row and
+// audits it. user_id is NULL (platform-wide, no user). The ON CONFLICT
+// target is the identity constraint, which treats the NULL user as one value.
+func (p *PG) UpsertSettingBinding(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingBinding, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage: begin upsert setting override: %w", err)
+		return nil, fmt.Errorf("storage: begin upsert setting binding: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -74,7 +74,7 @@ func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespac
 	if err != nil {
 		return nil, err
 	}
-	o, err := upsertOverrideTx(ctx, tx, actorID, scope, namespace, doc, locks)
+	o, err := upsertBindingTx(ctx, tx, actorID, scope, namespace, doc, locks)
 	if err != nil {
 		return nil, err
 	}
@@ -82,23 +82,23 @@ func (p *PG) UpsertSettingOverride(ctx context.Context, actorID, scope, namespac
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit upsert setting override: %w", err)
+		return nil, fmt.Errorf("storage: commit upsert setting binding: %w", err)
 	}
 	return o, nil
 }
 
-// MergePatchSettingOverride applies an RFC 7386 JSON Merge Patch to the (scope,
-// namespace) platform override as a single atomic read-modify-write. A
+// MergePatchSettingBinding applies an RFC 7386 JSON Merge Patch to the (scope,
+// namespace) platform binding as a single atomic read-modify-write. A
 // transaction-scoped advisory lock keyed on (scope, namespace) serializes concurrent
 // patches to the same namespace so no update is lost. A plain SELECT FOR UPDATE would
 // not suffice: on the first patch the row does not exist yet, so there is nothing to
 // lock, and racing inserts would clobber each other through ON CONFLICT. The advisory
 // lock covers the not-yet-existent row too. It releases at commit or rollback.
-func (p *PG) MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error) {
-	return p.mergePatchSettingOverride(ctx, actorID, scope, namespace, patch, nil)
+func (p *PG) MergePatchSettingBinding(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingBinding, error) {
+	return p.mergePatchSettingBinding(ctx, actorID, scope, namespace, patch, nil)
 }
 
-// MergePatchNotificationSettings is MergePatchSettingOverride on the platform
+// MergePatchNotificationSettings is MergePatchSettingBinding on the platform
 // notification namespace with the mail relay's binding judged (#1317): when
 // the settings that RESULT from the patch (every layer resolved, the operator
 // file included) bind a mail_secret and either it or the mail_relay changed,
@@ -106,8 +106,8 @@ func (p *PG) MergePatchSettingOverride(ctx context.Context, actorID, scope, name
 // a target requires, since every send hands it to the relay. Judged inside the
 // patch's own serialized transaction, so no concurrent patch slips between the
 // check and the write.
-func (p *PG) MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingOverride, error) {
-	return p.mergePatchSettingOverride(ctx, actorID, "platform", "notification", patch, func(tx pgx.Tx, before settings.Settings) error {
+func (p *PG) MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error) {
+	return p.mergePatchSettingBinding(ctx, actorID, "platform", "notification", patch, func(tx pgx.Tx, before settings.Settings) error {
 		after, err := p.platformSettings(ctx, tx)
 		if err != nil {
 			return err
@@ -120,32 +120,32 @@ func (p *PG) MergePatchNotificationSettings(ctx context.Context, actorID string,
 	})
 }
 
-func (p *PG) mergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any, check func(pgx.Tx, settings.Settings) error) (*SettingOverride, error) {
+func (p *PG) mergePatchSettingBinding(ctx context.Context, actorID, scope, namespace string, patch map[string]any, check func(pgx.Tx, settings.Settings) error) (*SettingBinding, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("storage: begin merge-patch setting override: %w", err)
+		return nil, fmt.Errorf("storage: begin merge-patch setting binding: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
 		`select pg_advisory_xact_lock(hashtext($1), hashtext($2))`, scope, namespace); err != nil {
-		return nil, fmt.Errorf("storage: lock setting override: %w", err)
+		return nil, fmt.Errorf("storage: lock setting binding: %w", err)
 	}
 
 	var docRaw []byte
 	err = tx.QueryRow(ctx,
-		`select doc from setting_override where scope = $1 and principal_id is null and namespace = $2`,
+		`select doc from setting_binding where scope = $1 and user_id is null and namespace = $2`,
 		scope, namespace).Scan(&docRaw)
 	current := map[string]any{}
 	switch {
 	case err == nil:
 		if err := json.Unmarshal(docRaw, &current); err != nil {
-			return nil, fmt.Errorf("storage: unmarshal override doc: %w", err)
+			return nil, fmt.Errorf("storage: unmarshal binding doc: %w", err)
 		}
 	case errors.Is(err, pgx.ErrNoRows):
-		// no override yet: patch merges onto an empty doc
+		// no binding yet: patch merges onto an empty doc
 	default:
-		return nil, fmt.Errorf("storage: read setting override: %w", err)
+		return nil, fmt.Errorf("storage: read setting binding: %w", err)
 	}
 
 	var before settings.Settings
@@ -159,7 +159,7 @@ func (p *PG) mergePatchSettingOverride(ctx context.Context, actorID, scope, name
 		return nil, err
 	}
 	merged := settings.ApplyMergePatch(current, patch)
-	o, err := upsertOverrideTx(ctx, tx, actorID, scope, namespace, merged, nil)
+	o, err := upsertBindingTx(ctx, tx, actorID, scope, namespace, merged, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -172,16 +172,16 @@ func (p *PG) mergePatchSettingOverride(ctx context.Context, actorID, scope, name
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("storage: commit merge-patch setting override: %w", err)
+		return nil, fmt.Errorf("storage: commit merge-patch setting binding: %w", err)
 	}
 	return o, nil
 }
 
-// upsertOverrideTx inserts or replaces the (scope, namespace) platform row and audits
-// it, inside the caller's transaction. principal_id is NULL (platform-wide, no
-// principal); the ON CONFLICT target is the identity constraint, which treats the
-// NULL principal as one value.
-func upsertOverrideTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error) {
+// upsertBindingTx inserts or replaces the (scope, namespace) platform row and audits
+// it, inside the caller's transaction. user_id is NULL (platform-wide, no
+// user); the ON CONFLICT target is the identity constraint, which treats the
+// NULL user as one value.
+func upsertBindingTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingBinding, error) {
 	if doc == nil {
 		doc = map[string]any{}
 	}
@@ -190,34 +190,34 @@ func upsertOverrideTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace 
 	}
 	docJSON, err := json.Marshal(doc)
 	if err != nil {
-		return nil, fmt.Errorf("storage: marshal override doc: %w", err)
+		return nil, fmt.Errorf("storage: marshal binding doc: %w", err)
 	}
 	locksJSON, err := json.Marshal(locks)
 	if err != nil {
-		return nil, fmt.Errorf("storage: marshal override locks: %w", err)
+		return nil, fmt.Errorf("storage: marshal binding locks: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into setting_override (scope, principal_id, namespace, doc, locks, updated_by)
+		insert into setting_binding (scope, user_id, namespace, doc, locks, updated_by)
 		values ($1, null, $2, $3, $4, $5)
-		on conflict on constraint setting_override_identity
+		on conflict on constraint setting_binding_identity
 		do update set doc = excluded.doc, locks = excluded.locks,
 		              updated_at = now(), updated_by = excluded.updated_by`,
 		scope, namespace, docJSON, locksJSON, nullize(actorID)); err != nil {
-		return nil, fmt.Errorf("storage: upsert setting override: %w", err)
+		return nil, fmt.Errorf("storage: upsert setting binding: %w", err)
 	}
-	o := SettingOverride{Scope: scope, Namespace: namespace, Doc: doc, Locks: locks}
+	o := SettingBinding{Scope: scope, Namespace: namespace, Doc: doc, Locks: locks}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "settings", namespace, nil, o); err != nil {
 		return nil, err
 	}
 	return &o, nil
 }
 
-// DeleteSettingOverride drops one namespace's platform row (restore to defaults) and
+// DeleteSettingBinding drops one namespace's platform row (restore to defaults) and
 // audits it. A missing row is not an error: restore is idempotent.
-func (p *PG) DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error {
+func (p *PG) DeleteSettingBinding(ctx context.Context, actorID, scope, namespace string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin delete setting override: %w", err)
+		return fmt.Errorf("storage: begin delete setting binding: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -226,9 +226,9 @@ func (p *PG) DeleteSettingOverride(ctx context.Context, actorID, scope, namespac
 		return err
 	}
 	if _, err := tx.Exec(ctx,
-		`delete from setting_override where scope = $1 and principal_id is null and namespace = $2`,
+		`delete from setting_binding where scope = $1 and user_id is null and namespace = $2`,
 		scope, namespace); err != nil {
-		return fmt.Errorf("storage: delete setting override: %w", err)
+		return fmt.Errorf("storage: delete setting binding: %w", err)
 	}
 	if err := p.announceReportWindowChange(ctx, tx, window); err != nil {
 		return err
@@ -239,12 +239,12 @@ func (p *PG) DeleteSettingOverride(ctx context.Context, actorID, scope, namespac
 	return tx.Commit(ctx)
 }
 
-// DeleteAllSettingOverrides removes every platform override (a factory reset) and
+// DeleteAllSettingBindings removes every platform binding (a factory reset) and
 // audits it once with an empty resource id.
-func (p *PG) DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error {
+func (p *PG) DeleteAllSettingBindings(ctx context.Context, actorID, scope string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("storage: begin reset setting overrides: %w", err)
+		return fmt.Errorf("storage: begin reset setting bindings: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -253,8 +253,8 @@ func (p *PG) DeleteAllSettingOverrides(ctx context.Context, actorID, scope strin
 		return err
 	}
 	if _, err := tx.Exec(ctx,
-		`delete from setting_override where scope = $1 and principal_id is null`, scope); err != nil {
-		return fmt.Errorf("storage: reset setting overrides: %w", err)
+		`delete from setting_binding where scope = $1 and user_id is null`, scope); err != nil {
+		return fmt.Errorf("storage: reset setting bindings: %w", err)
 	}
 	if err := p.announceReportWindowChange(ctx, tx, window); err != nil {
 		return err
@@ -296,7 +296,7 @@ func (p *PG) reportWindowOf(ctx context.Context, tx pgx.Tx) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	s, err := settings.Typed(p.settings.ResolveOverride(doc, locks).Values)
+	s, err := settings.Typed(p.settings.ResolveBinding(doc, locks).Values)
 	if err != nil {
 		return unresolvedReportWindow, nil
 	}

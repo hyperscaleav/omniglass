@@ -1,10 +1,6 @@
 ---
 title: Simulation
 description: How Omniglass simulates a fleet of devices on loopback addresses, so collection, alarms and the console can be exercised and taught without real gear.
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 Omniglass ships a device simulator in the same binary. It serves a whole fleet of fictional AV
@@ -434,7 +430,7 @@ Beside those, the fixture's simulated endpoints wire the rest:
   emulator device of the `booking-service` profile run by the simulator beside the outpost. Its
   [push face](#a-pusher-pushes-on-its-own-cadence) pushes the HQ boardroom system's `booking-count`
   (meetings left in its day) and `booking-state` (`booked` or `free`) through
-  `POST /telemetry:push` on one meeting day that repeats every day. It holds a service principal
+  `POST /telemetry:push` on one meeting day that repeats every day. It holds a machine user
   whose only grant is `telemetry:push` on that one system, and reads that system off its own grant
   (`GET /auth/me`), so it pushes nowhere else and reads nothing. The lab mints its token on every
   run, as it does the outpost's, and hands it to the simulator.
@@ -593,7 +589,7 @@ Some outside actors are not devices on the network at all: a scheduling platform
 reports the places it manages by pushing to Omniglass, and nothing polls it. A profile models one
 with a **push face** (#1743): a cadence (`push.every`, at least a second) and a body template
 (`push.body`) rendered for each system the pusher reports for, over the device's state, its id and
-its clock. The face holds a bearer token for a principal granted `telemetry:push` alone on those
+its clock. The face holds a bearer token for a user granted `telemetry:push` alone on those
 systems; it reads them off its own grant (`GET /auth/me`), renders each one's batch, and posts it
 through `POST /telemetry:push`, then does it again on every tick. A failed push (a server still
 coming up, an item the server refused) drops the grant it read, so the next tick reads it again,
@@ -609,15 +605,15 @@ A pusher is declared, not built in. The dev fleet's fixtures declare theirs unde
 `pushers` (a name, a profile, how many per site and how many of the site's systems each reports
 for), and the shipped `corporate` scenario declares one booking service per site over four
 systems ([the lab guide](/guides/lab/#the-manifest-format)). Either way the lab takes the
-same path: the seed grants each pusher's service principal `telemetry:push` on its systems, the
-lab mints its token on every run and sets it on the principal, and the simulator beside the
+same path: the seed grants each pusher's machine user `telemetry:push` on its systems, the
+lab mints its token on every run and sets it on the user, and the simulator beside the
 pusher's outpost runs it as an emulator device holding that token. The token reaches the simulator's
 environment and nowhere else: the seed is handed its hash, and neither the plan nor a log prints
 it ([ADR-1743](/architecture/decisions/#adr-1743-an-outside-actor-is-an-emulator-device-a-scenario-declares)).
 
 A scale scenario declares a webhook sender in the same list (#1747): its profile has a webhook
 face instead of a push face, and `systems` may be omitted to scope it to every system of its site.
-The seed makes it a component rather than a principal, with an endpoint of its profile's driver, a
+The seed makes it a component rather than a user, with an endpoint of its profile's driver, a
 signing secret minted for that seed alone (each field random, sealed in the server, never printed),
 and a binding per system on the driver's room identity, valued with the system's name. Everything
 the seed needs is read from the profile and the driver spec, so a second platform is a profile and

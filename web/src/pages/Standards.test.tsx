@@ -39,8 +39,8 @@ const slots: DeclaredSlot[] = [{ name: "table-mic", label: "Table microphone", q
 const componentTypes: ComponentType[] = [{ id: uuidFor("ct-video-bar"), name: "video-bar", label: "Video Bar", official: true, forked: false, default_tags: [] }];
 const products: Product[] = [{ id: uuidFor("prod-cisco-room-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("ct-video-bar"), official: true }];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 

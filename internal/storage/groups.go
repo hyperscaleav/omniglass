@@ -11,15 +11,15 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Principal groups: a group holds role x scope grants that its members inherit,
+// User groups: a group holds role x scope grants that its members inherit,
 // so an admin assigns access to a team once instead of per user. Membership is
 // static (an explicit join) and flat (a group does not contain groups). A group
-// grant lives in the same principal_grant table as a direct grant (keyed by
-// group_id instead of principal_id); the grant loader unions them into a
+// grant lives in the same user_grant table as a direct grant (keyed by
+// group_id instead of user_id); the grant loader unions them into a
 // member's pr.Grants, so inheritance needs no change to flatten or scope
-// resolution. Managing groups is all-scope admin work, like the principal
+// resolution. Managing groups is all-scope admin work, like the user
 // directory, so these require an all-scope grant (checked here, gated by a
-// principal_group capability on the route).
+// user_group capability on the route).
 
 // ErrGroupNotFound is returned when no group has the given id.
 var ErrGroupNotFound = errors.New("storage: group not found")
@@ -27,7 +27,7 @@ var ErrGroupNotFound = errors.New("storage: group not found")
 // ErrGroupExists is returned when a group name is already taken.
 var ErrGroupExists = errors.New("storage: group name already exists")
 
-// Group is a named set of principals that share inherited grants.
+// Group is a named set of users that share inherited grants.
 type Group struct {
 	ID          string
 	Name        string
@@ -57,19 +57,19 @@ type GroupPatch struct {
 	Description *string
 }
 
-// GroupMember is a lightweight view of a principal in a group's roster: the two
+// GroupMember is a lightweight view of a user in a group's roster: the two
 // facts a roster shows, kept apart.
 //
-// Name is the principal's IDENTIFIER, whichever kind it is (a human's username,
-// a service account's name, an outpost's name), resolved by principalIdent.
+// Name is the user's IDENTIFIER, whichever kind it is (a person's username,
+// a machine user's name, an outpost's name), resolved by userIdent.
 // Label is the friendly string, which only a human has a column for and
 // which is empty when nobody set one. The field that used to carry both is why
 // #563 renamed `service.label`.
 type GroupMember struct {
-	PrincipalID string
-	Kind        string
-	Name        string
-	Label       string
+	UserID string
+	Kind   string
+	Name   string
+	Label  string
 }
 
 const groupCols = `id, name, coalesce(label, ''), coalesce(description, ''), created_at, updated_at`
@@ -77,8 +77,8 @@ const groupCols = `id, name, coalesce(label, ''), coalesce(description, ''), cre
 // groupColsWithCounts adds the member and grant counts as correlated subqueries,
 // aliasing the table `g`, for the list and get reads that display a group's size.
 const groupColsWithCounts = `g.id, g.name, coalesce(g.label, ''), coalesce(g.description, ''), g.created_at, g.updated_at,
-	(select count(*) from principal_group_member m where m.group_id = g.id),
-	(select count(*) from principal_grant pg where pg.group_id = g.id)`
+	(select count(*) from user_group_member m where m.group_id = g.id),
+	(select count(*) from user_grant pg where pg.group_id = g.id)`
 
 func scanGroupFull(row interface{ Scan(...any) error }) (*Group, error) {
 	var g Group
@@ -96,13 +96,13 @@ func scanGroup(row interface{ Scan(...any) error }) (*Group, error) {
 	return &g, nil
 }
 
-// CreateGroup creates a principal group, audited. Requires an all-scope grant. A
+// CreateGroup creates a user group, audited. Requires an all-scope grant. A
 // duplicate name is ErrGroupExists.
 func (p *PG) CreateGroup(ctx context.Context, actorID string, spec GroupSpec, action scope.Set) (*Group, error) {
 	if !action.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
-	if err := ValidateName("principal_group", spec.Name); err != nil {
+	if err := ValidateName("user_group", spec.Name); err != nil {
 		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -112,12 +112,12 @@ func (p *PG) CreateGroup(ctx context.Context, actorID string, spec GroupSpec, ac
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	g, err := scanGroup(tx.QueryRow(ctx,
-		`insert into principal_group (name, label, description) values ($1, $2, $3) returning `+groupCols,
+		`insert into user_group (name, label, description) values ($1, $2, $3) returning `+groupCols,
 		spec.Name, labelOrNull(spec.Label), nullize(spec.Description)))
 	if err != nil {
 		return nil, mapGroupWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "principal_group", g.ID, nil, g); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "user_group", g.ID, nil, g); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -129,9 +129,9 @@ func (p *PG) CreateGroup(ctx context.Context, actorID string, spec GroupSpec, ac
 // ListGroups returns every group, ordered by name. Requires an all-scope grant.
 func (p *PG) ListGroups(ctx context.Context, read scope.Set) ([]Group, error) {
 	if !read.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
-	rows, err := p.pool.Query(ctx, `select `+groupColsWithCounts+` from principal_group g order by g.name`)
+	rows, err := p.pool.Query(ctx, `select `+groupColsWithCounts+` from user_group g order by g.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list groups: %w", err)
 	}
@@ -152,13 +152,13 @@ func (p *PG) ListGroups(ctx context.Context, read scope.Set) ([]Group, error) {
 // unknown one is ErrGroupNotFound.
 func (p *PG) GetGroup(ctx context.Context, ref string, read scope.Set) (*Group, error) {
 	if !read.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
 	id, err := groupIDByRef(ctx, p.pool, ref)
 	if err != nil {
 		return nil, err
 	}
-	g, err := scanGroupFull(p.pool.QueryRow(ctx, `select `+groupColsWithCounts+` from principal_group g where g.id = $1`, id))
+	g, err := scanGroupFull(p.pool.QueryRow(ctx, `select `+groupColsWithCounts+` from user_group g where g.id = $1`, id))
 	if err != nil {
 		return nil, notFoundOr(err, ErrGroupNotFound)
 	}
@@ -169,7 +169,7 @@ func (p *PG) GetGroup(ctx context.Context, ref string, read scope.Set) (*Group, 
 // ErrGroupNotFound.
 func (p *PG) UpdateGroup(ctx context.Context, actorID, groupRef string, patch GroupPatch, action scope.Set) (*Group, error) {
 	if !action.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -181,7 +181,7 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupRef string, patch Gr
 		return nil, err
 	}
 
-	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1 for update`, groupID))
+	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from user_group where id = $1 for update`, groupID))
 	if err != nil {
 		return nil, notFoundOr(err, ErrGroupNotFound)
 	}
@@ -193,12 +193,12 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupRef string, patch Gr
 		desc = *patch.Description
 	}
 	after, err := scanGroup(tx.QueryRow(ctx,
-		`update principal_group set label = $2, description = $3, updated_at = now() where id = $1 returning `+groupCols,
+		`update user_group set label = $2, description = $3, updated_at = now() where id = $1 returning `+groupCols,
 		groupID, labelOrNull(display), nullize(desc)))
 	if err != nil {
 		return nil, mapGroupWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "principal_group", groupID, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "update", "user_group", groupID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -208,7 +208,7 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupRef string, patch Gr
 }
 
 // RenameGroup moves a group's name, requiring the same all-scope grant UpdateGroup
-// does (group management is all-scope admin work, like the principal directory).
+// does (group management is all-scope admin work, like the user directory).
 //
 // Separate from the patch because a rename is a separate act: it breaks the
 // references an operator stored outside this system. Nothing inside breaks, since
@@ -216,9 +216,9 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupRef string, patch Gr
 // row keys on that uuid rather than on the name it just moved.
 func (p *PG) RenameGroup(ctx context.Context, actorID, groupRef, newName string, action scope.Set) (*Group, error) {
 	if !action.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
-	if err := ValidateName("principal_group", newName); err != nil {
+	if err := ValidateName("user_group", newName); err != nil {
 		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -231,17 +231,17 @@ func (p *PG) RenameGroup(ctx context.Context, actorID, groupRef, newName string,
 		return nil, err
 	}
 
-	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1 for update`, groupID))
+	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from user_group where id = $1 for update`, groupID))
 	if err != nil {
 		return nil, notFoundOr(err, ErrGroupNotFound)
 	}
 	after, err := scanGroup(tx.QueryRow(ctx,
-		`update principal_group set name = $2, updated_at = now() where id = $1 returning `+groupCols,
+		`update user_group set name = $2, updated_at = now() where id = $1 returning `+groupCols,
 		before.ID, newName))
 	if err != nil {
 		return nil, mapGroupWriteErr(err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "rename", "principal_group", after.ID, before, after); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "rename", "user_group", after.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -255,7 +255,7 @@ func (p *PG) RenameGroup(ctx context.Context, actorID, groupRef, newName string,
 // ErrGroupNotFound.
 func (p *PG) DeleteGroup(ctx context.Context, actorID, groupRef string, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -267,104 +267,104 @@ func (p *PG) DeleteGroup(ctx context.Context, actorID, groupRef string, action s
 		return err
 	}
 
-	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from principal_group where id = $1`, groupID))
+	before, err := scanGroup(tx.QueryRow(ctx, `select `+groupCols+` from user_group where id = $1`, groupID))
 	if err != nil {
 		return notFoundOr(err, ErrGroupNotFound)
 	}
 	// A notification target that notifies the group holds it (#1341): the
 	// refusal names the target, as a bound secret's does.
-	if err := boundTarget(ctx, tx, "principal_group_id", groupID, "principal group"); err != nil {
+	if err := boundTarget(ctx, tx, "user_group_id", groupID, "user group"); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from principal_group where id = $1`, groupID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from user_group where id = $1`, groupID); err != nil {
 		if isForeignKeyViolation(err) {
-			if berr := boundTarget(ctx, p.pool, "principal_group_id", groupID, "principal group"); berr != nil {
+			if berr := boundTarget(ctx, p.pool, "user_group_id", groupID, "user group"); berr != nil {
 				return berr
 			}
 		}
 		return fmt.Errorf("storage: delete group: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "principal_group", groupID, before, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "user_group", groupID, before, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-// AddGroupMember adds a principal to a group, audited and idempotent (re-adding
+// AddGroupMember adds a user to a group, audited and idempotent (re-adding
 // an existing member is a no-op). Requires an all-scope grant, checked before
-// either reference resolves: the group by uuid or name, the principal by uuid,
-// username, or a service account's name (#1133).
-func (p *PG) AddGroupMember(ctx context.Context, actorID, groupRef, principalRef string, action scope.Set) error {
+// either reference resolves: the group by uuid or name, the user by uuid,
+// username, or a machine user's name (#1133).
+func (p *PG) AddGroupMember(ctx context.Context, actorID, groupRef, userRef string, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin add member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	groupID, principalID, err := p.memberRefs(ctx, tx, groupRef, principalRef)
+	groupID, userID, err := p.memberRefs(ctx, tx, groupRef, userRef)
 	if err != nil {
 		return err
 	}
 
 	tag, err := tx.Exec(ctx,
-		`insert into principal_group_member (group_id, principal_id) values ($1, $2) on conflict do nothing`, groupID, principalID)
+		`insert into user_group_member (group_id, user_id) values ($1, $2) on conflict do nothing`, groupID, userID)
 	if err != nil {
 		return mapMemberWriteErr(err)
 	}
 	if tag.RowsAffected() == 0 {
 		return tx.Commit(ctx) // already a member: nothing changed, nothing to audit
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "principal_group_member", groupID, nil, map[string]string{"group_id": groupID, "principal_id": principalID}); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "user_group_member", groupID, nil, map[string]string{"group_id": groupID, "user_id": userID}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-// RemoveGroupMember removes a principal from a group, audited. Requires an
+// RemoveGroupMember removes a user from a group, audited. Requires an
 // all-scope grant, checked before either reference resolves (as AddGroupMember).
 // Removing a non-member is a no-op.
-func (p *PG) RemoveGroupMember(ctx context.Context, actorID, groupRef, principalRef string, action scope.Set) error {
+func (p *PG) RemoveGroupMember(ctx context.Context, actorID, groupRef, userRef string, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin remove member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	groupID, principalID, err := p.memberRefs(ctx, tx, groupRef, principalRef)
+	groupID, userID, err := p.memberRefs(ctx, tx, groupRef, userRef)
 	if err != nil {
 		return err
 	}
 
-	tag, err := tx.Exec(ctx, `delete from principal_group_member where group_id = $1 and principal_id = $2`, groupID, principalID)
+	tag, err := tx.Exec(ctx, `delete from user_group_member where group_id = $1 and user_id = $2`, groupID, userID)
 	if err != nil {
 		return fmt.Errorf("storage: remove member: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return tx.Commit(ctx)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "principal_group_member", groupID, map[string]string{"group_id": groupID, "principal_id": principalID}, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "user_group_member", groupID, map[string]string{"group_id": groupID, "user_id": userID}, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-// ListGroupMembers returns the principals in a group. Requires an all-scope grant.
+// ListGroupMembers returns the users in a group. Requires an all-scope grant.
 func (p *PG) ListGroupMembers(ctx context.Context, groupRef string, read scope.Set) ([]GroupMember, error) {
 	if !read.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
 	groupID, err := groupIDByRef(ctx, p.pool, groupRef)
 	if err != nil {
 		return nil, err
 	}
-	// A group can hold humans and service accounts, and a roster shows two
+	// A group can hold people and machine users, and a roster shows two
 	// different facts about each: its NAME, the identifier that says which
-	// principal this is, and its label, the friendly string a human may
-	// have been given and a service account has no column for.
+	// user this is, and its label, the friendly string a human may
+	// have been given and a machine user has no column for.
 	//
 	// This read used to return one field for both, `coalesce(h.label,
 	// s.label, '')`, which crossed a friendly string and an identifier in one
@@ -375,14 +375,14 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupRef string, read scope.S
 	//
 	// The join shape, not the sub-select one: a roster has no LIMIT, and the
 	// sub-selects cost 3011 buffer hits over 500 members where these joins cost
-	// 15 (principal_ident.go carries the measurement).
+	// 15 (user_ident.go carries the measurement).
 	rows, err := p.pool.Query(ctx,
-		`select p.id, p.kind, `+principalIdentJoinedCols("pi")+`, coalesce(h.label, '')
-		   from principal_group_member m
-		   join principal p on p.id = m.principal_id
-		   left join human h on h.principal_id = p.id`+principalIdentJoins("pi", "p.id")+`
+		`select p.id, p.kind, `+userIdentJoinedCols("pi")+`, coalesce(h.label, '')
+		   from user_group_member m
+		   join users p on p.id = m.user_id
+		   left join person h on h.user_id = p.id`+userIdentJoins("pi", "p.id")+`
 		  where m.group_id = $1
-		  order by coalesce(`+principalIdentJoinedSQL("pi")+`, p.id::text)`, groupID)
+		  order by coalesce(`+userIdentJoinedSQL("pi")+`, p.id::text)`, groupID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list members: %w", err)
 	}
@@ -391,27 +391,27 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupRef string, read scope.S
 	for rows.Next() {
 		var m GroupMember
 		var username, serviceName, outpostName *string
-		if err := rows.Scan(&m.PrincipalID, &m.Kind, &username, &serviceName, &outpostName, &m.Label); err != nil {
+		if err := rows.Scan(&m.UserID, &m.Kind, &username, &serviceName, &outpostName, &m.Label); err != nil {
 			return nil, fmt.Errorf("storage: scan member: %w", err)
 		}
-		m.Name = principalIdent(username, serviceName, outpostName)
+		m.Name = userIdent(username, serviceName, outpostName)
 		out = append(out, m)
 	}
 	return out, rows.Err()
 }
 
-// ListGroupsForPrincipal returns the groups a principal belongs to, for showing
+// ListGroupsForUser returns the groups a user belongs to, for showing
 // where inherited access comes from. Requires an all-scope grant.
-func (p *PG) ListGroupsForPrincipal(ctx context.Context, principalID string, read scope.Set) ([]Group, error) {
+func (p *PG) ListGroupsForUser(ctx context.Context, userID string, read scope.Set) ([]Group, error) {
 	if !read.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
 	rows, err := p.pool.Query(ctx,
 		`select `+groupColsPrefixed("g")+`
-		   from principal_group_member m join principal_group g on g.id = m.group_id
-		  where m.principal_id = $1 order by g.name`, principalID)
+		   from user_group_member m join user_group g on g.id = m.group_id
+		  where m.user_id = $1 order by g.name`, userID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: list principal groups: %w", err)
+		return nil, fmt.Errorf("storage: list user groups: %w", err)
 	}
 	defer rows.Close()
 	out := []Group{}
@@ -431,7 +431,7 @@ func (p *PG) ListGroupsForPrincipal(ctx context.Context, principalID string, rea
 // direct grant. Validation mirrors CreateGrant.
 func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupRef string, spec GrantSpec, action scope.Set) (*Grant, error) {
 	if !action.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
 	if spec.ScopeOp == "" {
 		spec.ScopeOp = scope.OpSubtree
@@ -463,7 +463,7 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupRef string, spe
 
 	var gid string
 	err = tx.QueryRow(ctx,
-		`insert into principal_grant (group_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from `+refRows("role", spec.Role)+` role where `+catalogRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
+		`insert into user_grant (group_id, role_id, scope_kind, scope_id, scope_op) values ($1, (select id from `+refRows("role", spec.Role)+` role where `+catalogRefCol(spec.Role)+` = $2), $3, $4, $5) returning id`,
 		groupID, spec.Role, spec.ScopeKind, nullize(spec.ScopeID), spec.ScopeOp).Scan(&gid)
 	if err != nil {
 		return nil, mapGrantWriteErr(err)
@@ -472,7 +472,7 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupRef string, spe
 	if spec.ScopeID != "" {
 		g.ScopeID = &spec.ScopeID
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "principal_grant", gid, nil, g); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "user_grant", gid, nil, g); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -485,7 +485,7 @@ func (p *PG) CreateGroupGrant(ctx context.Context, actorID, groupRef string, spe
 // grant. An unknown grant (for that group) is ErrGrantNotFound.
 func (p *PG) RevokeGroupGrant(ctx context.Context, actorID, groupRef, grantID string, action scope.Set) error {
 	if !action.All {
-		return ErrPrincipalForbidden
+		return ErrUserForbidden
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -499,15 +499,15 @@ func (p *PG) RevokeGroupGrant(ctx context.Context, actorID, groupRef, grantID st
 
 	var g Grant
 	err = tx.QueryRow(ctx,
-		`select id, (select name from role where id = principal_grant.role_id), scope_kind, scope_id, scope_op from principal_grant where id = $1 and group_id = $2`,
+		`select id, (select name from role where id = user_grant.role_id), scope_kind, scope_id, scope_op from user_grant where id = $1 and group_id = $2`,
 		grantID, groupID).Scan(&g.ID, &g.Role, &g.ScopeKind, &g.ScopeID, &g.ScopeOp)
 	if err != nil {
 		return notFoundOr(err, ErrGrantNotFound)
 	}
-	if _, err := tx.Exec(ctx, `delete from principal_grant where id = $1`, grantID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from user_grant where id = $1`, grantID); err != nil {
 		return fmt.Errorf("storage: delete group grant: %w", err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "delete", "principal_grant", grantID, g, nil); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "delete", "user_grant", grantID, g, nil); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -516,14 +516,14 @@ func (p *PG) RevokeGroupGrant(ctx context.Context, actorID, groupRef, grantID st
 // ListGroupGrants returns a group's grants. Requires an all-scope grant.
 func (p *PG) ListGroupGrants(ctx context.Context, groupRef string, read scope.Set) ([]Grant, error) {
 	if !read.All {
-		return nil, ErrPrincipalForbidden
+		return nil, ErrUserForbidden
 	}
 	groupID, err := groupIDByRef(ctx, p.pool, groupRef)
 	if err != nil {
 		return nil, err
 	}
 	rows, err := p.pool.Query(ctx,
-		`select id, (select name from role where id = principal_grant.role_id), scope_kind, scope_id, scope_op from principal_grant where group_id = $1 order by created_at`, groupID)
+		`select id, (select name from role where id = user_grant.role_id), scope_kind, scope_id, scope_op from user_grant where group_id = $1 order by created_at`, groupID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list group grants: %w", err)
 	}
@@ -568,12 +568,12 @@ func mapGroupWriteErr(err error) error {
 }
 
 // mapMemberWriteErr translates a foreign-key violation (unknown group or
-// principal) into ErrGroupNotFound / ErrPrincipalNotFound.
+// user) into ErrGroupNotFound / ErrUserNotFound.
 func mapMemberWriteErr(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
-		if pgErr.ConstraintName == "principal_group_member_principal_id_fkey" {
-			return ErrPrincipalNotFound
+		if pgErr.ConstraintName == "user_group_member_user_id_fkey" {
+			return ErrUserNotFound
 		}
 		return ErrGroupNotFound
 	}
@@ -581,14 +581,14 @@ func mapMemberWriteErr(err error) error {
 }
 
 // memberRefs resolves a membership write's two references: the group by uuid or
-// name, the principal by uuid, username or service account name. Its callers run
+// name, the user by uuid, username or machine user name. Its callers run
 // it after the all-scope check.
-func (p *PG) memberRefs(ctx context.Context, q querier, groupRef, principalRef string) (groupID, principalID string, err error) {
+func (p *PG) memberRefs(ctx context.Context, q querier, groupRef, userRef string) (groupID, userID string, err error) {
 	if groupID, err = groupIDByRef(ctx, q, groupRef); err != nil {
 		return "", "", err
 	}
-	if principalID, err = principalIDByRef(ctx, q, principalRef); err != nil {
+	if userID, err = userIDByRef(ctx, q, userRef); err != nil {
 		return "", "", err
 	}
-	return groupID, principalID, nil
+	return groupID, userID, nil
 }

@@ -67,7 +67,7 @@ func isUUID(ref string) bool { return uuidRe.MatchString(ref) }
 
 // IsUUID reports whether ref is the canonical uuid form every resolver tries
 // first. A caller that must decide "uuid or name" the way the gateway will
-// (the principal routes' directory check, #1133) uses this rather than a
+// (the user routes' directory check, #1133) uses this rather than a
 // lenient parser, which also reads 32 bare hex digits, a legal username, as a
 // uuid.
 func IsUUID(ref string) bool { return isUUID(ref) }

@@ -63,7 +63,7 @@ terms:
     nav: /systems
   - word: system type
     plural: system types
-    definition: What kind of space a system is, such as a boardroom, a classroom or a video wall.
+    definition: What a system is for, such as meeting, teaching or signage, never the space it sits in.
     audience: admin
     collection: system-types
     schema: SystemTypeBody
@@ -204,7 +204,7 @@ terms:
         pattern: '(?i)\bregistr(?:y|ies)\b'
         origin: ADR-2035
         replacement: catalog (the rows the fleet is typed by)
-        allow: '(?i)\btransport registr(?:y|ies)\b|\bregistry (?:transports?|entry|entries)\b|\bcode registry\b|\bregistry of diagnostics\b|\bgenerated registry\b|\bgenerated from the registry\b|\b(?:env|environment|namespace|simulator|blade|pages|skills?|container|npm|package|wire|permission) registry\b|\bto a registry\b|\bregistry credential\b|\basks the registry\b|\bregistry=\{\w*registry\}'
+        allow: '(?i)\btransport registr(?:y|ies)\b|\bregistry (?:transports?|entry|entries)\b|\bcode registry\b|\bregistry of diagnostics\b|\bgenerated registry\b|\bgenerated from the registry\b|\b(?:env|environment|namespace|simulator|blade|pages|skills?|container|npm|package|wire|permission) registry\b|\bto a registry\b|\bregistry credential\b|\basks the registry\b|\bregistry=\{\w*registry\}|\bregistry: \{'
   - word: metric type
     plural: metric types
     definition: A numeric signal in the catalog, the series a sample measures, with its unit and precision.
@@ -276,6 +276,19 @@ terms:
     schema: EventRuleBody
     permission: rule
     nav: /event-rules
+  # What a rule holds between its fire and its clear (ADR-2038). Condition is
+  # banned only in the rule's sense (a condition a rule held, an alarm's
+  # condition, the condition-started type); the English condition (a
+  # precondition, a race, the condition a guard checks) keeps the word.
+  - word: firing
+    plural: firings
+    definition: One stretch of a rule's criteria holding on a component, from the moment it fires until it clears.
+    audience: admin
+    retired:
+      - word: condition
+        pattern: '(?i)\bcondition-(?:started|ended)\b|\balarm(?:''s)? conditions?\b|\bconditions? (?:is |was )?(?:in force|snoozed|started|ended)\b|\brule(?:''s)? conditions?\b'
+        origin: ADR-2038
+        replacement: firing (a rule fires and clears; the type is rule-fired or rule-cleared), or the alarm's identity (component and dedup key) for a snooze
   - word: calc rule
     plural: calc rules
     definition: A rule that derives a new value from other signals on each owner it applies to.
@@ -300,6 +313,23 @@ terms:
     schema: AlarmBody
     permission: alarm
     nav: /alarms
+    retired:
+      # An incident is the ITSM's record (ADR-2038), whose Omniglass handle is a
+      # ticket; a system's unhealthy stretches are its health history. The ITSM's
+      # own incident keeps the word.
+      - word: incident
+        pattern: '(?i)\bincidents?\b'
+        origin: ADR-2038
+        replacement: alarm (a raised problem), health history (a system's unhealthy stretches), or ticket (the ITSM's record)
+        allow: '(?i)\bincident write-ups?\b|\bITSM(?:''s)? incidents?\b'
+      # Alert as the alarm's noun. The RFC 5424 level beside its neighbors, a
+      # quoted or code-spanned value, a daisyUI alert class, a role="alert", an
+      # alerts@ address and the pop-up the alarm metaphor contrasts keep it.
+      - word: alert
+        pattern: '(?i)(?:^|[^-\w"`])alerts?(?:$|[^-\w"`@])'
+        origin: ADR-2038
+        replacement: alarm (a raised problem, held until it clears)
+        allow: '(?i)\b(?:error|critical),? alert,? (?:and|or) emergency\b|\bpop-up \*alert\*'
   - word: notification
     plural: notifications
     definition: One message about an alarm sent on one channel, such as a webhook, an email or the inbox.
@@ -309,7 +339,7 @@ terms:
     permission: notification
   - word: notification target
     plural: notification targets
-    definition: Where a notification goes, a webhook, a mailbox, a group or a person.
+    definition: Where a notification goes, a webhook, a mailbox, a user group or a person.
     audience: admin
     collection: notification-targets
     schema: NotificationTargetBody
@@ -340,6 +370,36 @@ terms:
     schema: SecretBody
     permission: secret
     nav: /secrets
+  # A value set at one cascade level is a binding a deeper one shadows
+  # (ADR-2037); override is kept for the catalog's sparse edit alone, so the
+  # cascade sense is retired here with the declared-state words.
+  - word: declared value
+    plural: declared values
+    definition: The state an operator declares a component or system should hold, which reconcile compares with what the device reports.
+    audience: operator
+    nav: /config
+    nav_label: Declared
+    retired:
+      - word: declared config
+        pattern: '(?i)\bdeclared[- ]config\b'
+        origin: ADR-2037
+      - word: desired state
+        pattern: '(?i)\bdesired[- ]states?\b'
+        origin: ADR-2037
+      - word: desired value
+        pattern: '(?i)\bdesired[- ]values?\b'
+        origin: ADR-2037
+      - word: set the config
+        pattern: '(?i)\bset the config\b'
+        origin: ADR-2037
+      - word: config drift
+        pattern: '(?i)\bconfig[- ]drift\b'
+        origin: ADR-2037
+        replacement: drift (a declared value the device no longer reports)
+      - word: override on value
+        pattern: '(?i)\boverride[- ]on[- ]value\b|\boverrides the (?:platform|product|location|system|standard|component|group|user|driver)\x27s\b'
+        origin: ADR-2037
+        replacement: shadow on value (a deeper binding shadows a shallower one); override is the catalog's sparse edit alone
   - word: file
     plural: files
     definition: Uploaded content kept with the fleet, such as a firmware image, a config dump or a runbook.
@@ -395,24 +455,53 @@ terms:
         pattern: '(?i)(?:^|[^-\w])workspaces?(?:$|[^-\w])'
         origin: "#872"
         replacement: detail view (an entity's own page)
-  - word: principal
-    plural: principals
-    definition: A user, a person or a machine, that roles are granted to.
-    audience: admin
-    collection: principals
-    schema: PrincipalBody
-    permission: principal
-    nav: /users
-    nav_label: Users
-  - word: principal group
-    plural: principal groups
+  # The subject a grant is given to (ADR-2036). User group comes first so a
+  # "principal group" reports the group's replacement rather than the user's.
+  # The schema, API and CLI rename (#2075) left no identifier saying principal,
+  # so the retired words' allow keeps only a code span (history, an applied
+  # migration's name) and the English adjective.
+  - word: user group
+    plural: user groups
     definition: A set of users granted roles together, each member inheriting the group's grants.
     audience: admin
-    collection: principal-groups
+    collection: user-groups
     schema: GroupBody
-    permission: principal_group
-    nav: /groups
-    nav_label: Groups
+    permission: user_group
+    nav: /user-groups
+    retired:
+      - word: principal group
+        pattern: '(?i)\bprincipal[- ]groups?\b'
+        origin: ADR-2036
+        replacement: user group (a set of users granted roles together)
+        allow: '(?i)`[^`]*\bprincipal[- ]groups?\b[^`]*`'
+  - word: user
+    plural: users
+    definition: Who a role is granted to, a person who signs in or a machine user that holds tokens.
+    audience: admin
+    collection: users
+    schema: UserBody
+    permission: user
+    nav: /users
+    retired:
+      # The noun anywhere, identifiers included. A code span (history, an
+      # applied migration's name) and the English adjective (the principal
+      # reason) keep the word.
+      - word: principal
+        pattern: '(?i)\bprincipal(?:s|_\w+)?\b'
+        origin: ADR-2036
+        replacement: user (a person or a machine user)
+        allow: '(?i)`[^`]*\bprincipal(?:s|_\w+)?\b[^`]*`|\bprincipal (?:axis|axes|reasons?|surfaces?|concerns?|risks?|costs?|goals?|aims?|purposes?|ones|uses?|questions?|ways?|means)\b'
+      - word: service account
+        pattern: '(?i)\bservice[- ]accounts?\b'
+        origin: ADR-2036
+        replacement: machine user (a user with no person behind it, holding tokens)
+      # Human as the kind: the noun before a user word, and the pairing with
+      # the other kind. Human as English (a human reads, human-in-the-loop, a
+      # human identifier) keeps the word.
+      - word: human
+        pattern: '(?i)\bhuman (?:principals?|users?|members?|kinds?|accounts?|identit(?:y|ies))\b|\bhumans? (?:and|or|vs\.?|versus) (?:service|machine)\b|\b(?:service|machine)(?: users?| principals?| accounts?)? (?:and|or) humans?\b|\bhuman/service\b'
+        origin: ADR-2036
+        replacement: person (the kind of user a human signs in as; the other kind is machine)
   - word: role
     plural: roles
     definition: A named bundle of permissions granted to users, which may inherit another role's.
@@ -468,6 +557,8 @@ not_terms:
     reason: inbound webhook delivery, a mechanism
   - collection: simulation
     reason: the lab simulator, not part of a real fleet
+  - collection: assistant
+    reason: omnibot's own state, a person's stored conversations with it, rather than a thing in the fleet
   - nav: /
     reason: Home
   - nav: /explore
@@ -480,7 +571,5 @@ not_terms:
     reason: the lab simulator
   - nav: /platform
     reason: Status, the platform's own health page
-  - nav: /config
-    reason: a stub whose word is being decided (ADR-2037)
   - nav: /log-types
     reason: a stub, the log lane is untyped today

@@ -238,10 +238,10 @@ func TestAgentRoleOverrideNarrowsOnlyItsHolders(t *testing.T) {
 	var alice struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &alice); err != nil {
+	if err := json.Unmarshal(s.c.do(s.owner, http.MethodPost, "/users", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &alice); err != nil {
 		t.Fatal(err)
 	}
-	s.c.do(s.owner, http.MethodPost, "/principals/"+alice.ID+"/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated)
+	s.c.do(s.owner, http.MethodPost, "/users/"+alice.ID+"/grants", map[string]any{"role": "operator", "scope_kind": "all"}, http.StatusCreated)
 	aliceAgent := mintAgent(t, s.c, loginBearer(t, s.c, "alice", "orange-boat-42x"), map[string]any{"description": "ops", "agent": "ops-bot", "ttl_days": 1})
 	ownerAgent := mintAgent(t, s.c, s.owner, map[string]any{"description": "claude", "agent": "claude", "ttl_days": 1})
 

@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 
-// The component_type catalog data layer: the device-class genus a product is
+// The component_type catalog data layer: the device-class type a product is
 // classified under (ADR-0085 partially reverses ADR-0047: the shape returns
 // above product, not beside component). It nests by parent_id/parent name
 // (mic over wireless-mic, ceiling-mic, boundary-mic), and each identity fact

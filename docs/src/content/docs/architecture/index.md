@@ -14,11 +14,10 @@ in the [glossary](/architecture/glossary/).
 
 :::note[A proposed architecture]
 This is a **proposed, forward-looking architecture**: the target design, written in present tense,
-not a promise that every detail ships unchanged. Each page carries a status badge, **Design**
-(specified, little or none built), **Partial** (some capabilities shipped), **Built** (all shipped
-and tested), or **Diverged** (built, but differing from this design, see the page's note); the
-badge is the page's floor. The per-capability breakdown lives on
-[implementation status](/architecture/status/); undecided design points are flagged inline as
+not a promise that every detail ships unchanged. The docs site is being rebuilt by audience, and
+these pages predate the rebuild: they carry no status badge, and each leaves when its section is
+rebuilt ([ADR-2087.2](/architecture/decisions/#adr-20872-the-docs-site-is-rebuilt-by-audience-the-old-pages-leave-as-their-section-lands)). The rebuilt pages carry the badges, which
+[implementation status](/architecture/status/) lists; undecided design points are flagged inline as
 `Open question` asides; how a call was made or reversed, and where the build diverges, lives in the
 [decision log](/architecture/decisions/); the epics and the arc ahead are indexed on the
 [roadmap](/architecture/roadmap/). Unbuilt prose inside a page sits in a marked **design fence**,
@@ -106,10 +105,10 @@ back.
 
 ## Detect
 
-An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its condition, an
-**[expression](/architecture/expressions/)**, is met, recording an
+An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its criteria, an
+**[expression](/architecture/expressions/)**, are met, recording an
 **[event](/architecture/events/)**: our assertion that something happened. Pair a fire
-with a clear and the two events open and resolve an **alarm**, the stateful incident, one row per
+with a clear and the two events open and resolve an **alarm**, the stateful record of a fault, one row per
 occurrence, the thing an operator works and a ticket binds to. An alarm impairs its **component's
 own verdict** wholesale, turning a detection into a verdict on the system.
 
@@ -184,7 +183,7 @@ The journey rides on a few foundations:
 - the **[Storage Gateway](/architecture/storage/)** is the one door to the database; every read and
   write goes through it, which is where **scope** ([identity and access](/architecture/identity-access/))
   is enforced: a permission on every route, a visibility filter on every query. A grant can target a
-  **[group](/architecture/groups/)** of principals as well as a single one.
+  **[group](/architecture/groups/)** of users as well as a single one.
 - the **[workers](/architecture/workers/)** are durable JetStream consumers over the
   **[messaging](/architecture/messaging/)** subject contract; the built one is the telemetry
   consumer. Not all background work rides one yet: the event rule sweep closes sustains and

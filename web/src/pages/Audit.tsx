@@ -62,7 +62,7 @@ const columns: FlatColumn<AuditEvent>[] = [
       <span class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
         <span class="font-data">{accountableLabel(e)}</span>
         <Show when={e.real_actor}>
-          <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap" title="Acted while impersonating this principal">as {actorLabel(e)}</span>
+          <span class="badge badge-soft badge-warning badge-xs whitespace-nowrap" title="Acted while impersonating this user">as {actorLabel(e)}</span>
         </Show>
         <AgentTag agent={e.agent} />
       </span>
@@ -247,6 +247,7 @@ export default function Audit() {
           rows,
           loading,
           loadingRows: AUDIT_LOADING_ROWS,
+          fixedLayout: true,
           // A page of 100 is taller than the skeleton: scrolling the rows inside
           // the card keeps the footer where the first paint put it (#1461).
           fill: true,

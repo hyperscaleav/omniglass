@@ -171,7 +171,7 @@ func (p *PG) platformSettings(ctx context.Context, q querier) (settings.Settings
 	if err != nil {
 		return settings.Settings{}, fmt.Errorf("storage: resolve platform settings: %w", err)
 	}
-	s, err := settings.Typed(p.settings.ResolveOverride(doc, locks).Values)
+	s, err := settings.Typed(p.settings.ResolveBinding(doc, locks).Values)
 	if err != nil {
 		return settings.Settings{}, fmt.Errorf("storage: resolve platform settings: %w", err)
 	}

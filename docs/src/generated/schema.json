@@ -18,11 +18,11 @@
       "default": "now()"
      },
      {
-      "name": "actor_principal_id",
+      "name": "actor_user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "verb",
@@ -50,11 +50,11 @@
       "nullable": true
      },
      {
-      "name": "real_actor_principal_id",
+      "name": "real_actor_user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "actor_username",
@@ -1011,12 +1011,12 @@
    "outpost": {
     "columns": [
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": false,
       "pk": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "name",
@@ -1118,7 +1118,7 @@
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "outpost.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "source",
@@ -1473,6 +1473,108 @@
    }
   },
   "config": {
+   "assistant_conversation": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "pending",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "input_tokens",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "output_tokens",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "run_id",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "run_until",
+      "type": "timestamp with time zone",
+      "nullable": true
+     }
+    ],
+    "uniques": [
+     {
+      "name": "assistant_conversation_user_id_name_key",
+      "definition": "CREATE UNIQUE INDEX assistant_conversation_user_id_name_key ON public.assistant_conversation USING btree (user_id, name)"
+     }
+    ]
+   },
+   "assistant_message": {
+    "columns": [
+     {
+      "name": "conversation_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "assistant_conversation.id"
+     },
+     {
+      "name": "seq",
+      "type": "integer",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "role",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "body",
+      "type": "jsonb",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "credential": {
     "columns": [
      {
@@ -1483,11 +1585,11 @@
       "pk": true
      },
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "kind",
@@ -1572,7 +1674,7 @@
     "uniques": [
      {
       "name": "credential_one_password",
-      "definition": "CREATE UNIQUE INDEX credential_one_password ON public.credential USING btree (principal_id) WHERE (kind = 'password'::text)"
+      "definition": "CREATE UNIQUE INDEX credential_one_password ON public.credential USING btree (user_id) WHERE (kind = 'password'::text)"
      },
      {
       "name": "credential_secret_hash_key",
@@ -1701,11 +1803,11 @@
       "fk_target": "oauth_client.id"
      },
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "redirect_uri",
@@ -1946,7 +2048,7 @@
      }
     ]
    },
-   "setting_override": {
+   "setting_binding": {
     "columns": [
      {
       "name": "id",
@@ -1961,7 +2063,7 @@
       "nullable": false
      },
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": true
      },
@@ -1996,14 +2098,14 @@
     ],
     "checks": [
      {
-      "name": "setting_override_scope_check",
+      "name": "setting_binding_scope_check",
       "expr": "CHECK ((scope = 'platform'::text))"
      }
     ],
     "uniques": [
      {
-      "name": "setting_override_identity",
-      "definition": "CREATE UNIQUE INDEX setting_override_identity ON public.setting_override USING btree (scope, principal_id, namespace) NULLS NOT DISTINCT"
+      "name": "setting_binding_identity",
+      "definition": "CREATE UNIQUE INDEX setting_binding_identity ON public.setting_binding USING btree (scope, user_id, namespace) NULLS NOT DISTINCT"
      }
     ]
    },
@@ -2287,7 +2389,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "outpost.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "component_id",
@@ -2542,7 +2644,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "outpost.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "label",
@@ -3097,15 +3199,101 @@
      }
     ]
    },
-   "human": {
+   "impersonation_session": {
     "columns": [
      {
-      "name": "principal_id",
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "token_hash",
+      "type": "bytea",
+      "nullable": false
+     },
+     {
+      "name": "target_user_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "real_actor_user_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "mode",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "revoked_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "impersonation_session_mode_check",
+      "expr": "CHECK ((mode = ANY (ARRAY['view_as'::text, 'act_as'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "impersonation_session_token_hash_key",
+      "definition": "CREATE UNIQUE INDEX impersonation_session_token_hash_key ON public.impersonation_session USING btree (token_hash)"
+     }
+    ]
+   },
+   "machine": {
+    "columns": [
+     {
+      "name": "user_id",
       "type": "uuid",
       "nullable": false,
       "pk": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     }
+    ],
+    "uniques": [
+     {
+      "name": "machine_name_key",
+      "definition": "CREATE UNIQUE INDEX machine_name_key ON public.machine USING btree (name)"
+     }
+    ]
+   },
+   "person": {
+    "columns": [
+     {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "users.id"
      },
      {
       "name": "username",
@@ -3152,263 +3340,8 @@
     ],
     "uniques": [
      {
-      "name": "human_username_key",
-      "definition": "CREATE UNIQUE INDEX human_username_key ON public.human USING btree (username)"
-     }
-    ]
-   },
-   "impersonation_session": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "token_hash",
-      "type": "bytea",
-      "nullable": false
-     },
-     {
-      "name": "target_principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "real_actor_principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "mode",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "expires_at",
-      "type": "timestamp with time zone",
-      "nullable": false
-     },
-     {
-      "name": "revoked_at",
-      "type": "timestamp with time zone",
-      "nullable": true
-     }
-    ],
-    "checks": [
-     {
-      "name": "impersonation_session_mode_check",
-      "expr": "CHECK ((mode = ANY (ARRAY['view_as'::text, 'act_as'::text])))"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "impersonation_session_token_hash_key",
-      "definition": "CREATE UNIQUE INDEX impersonation_session_token_hash_key ON public.impersonation_session USING btree (token_hash)"
-     }
-    ]
-   },
-   "principal": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "kind",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "active",
-      "type": "boolean",
-      "nullable": false,
-      "default": "true"
-     },
-     {
-      "name": "archived_at",
-      "type": "timestamp with time zone",
-      "nullable": true
-     },
-     {
-      "name": "seq",
-      "type": "bigint",
-      "nullable": false
-     }
-    ],
-    "checks": [
-     {
-      "name": "principal_kind_check",
-      "expr": "CHECK ((kind = ANY (ARRAY['human'::text, 'service'::text, 'outpost'::text, 'agent'::text])))"
-     }
-    ]
-   },
-   "principal_grant": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "principal_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "scope_kind",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "scope_id",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "scope_op",
-      "type": "text",
-      "nullable": false,
-      "default": "'subtree'::text"
-     },
-     {
-      "name": "group_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "principal_group.id"
-     },
-     {
-      "name": "role_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "role.id"
-     }
-    ],
-    "checks": [
-     {
-      "name": "principal_grant_scope_kind_check",
-      "expr": "CHECK ((scope_kind = ANY (ARRAY['all'::text, 'location'::text, 'system'::text, 'component'::text])))"
-     },
-     {
-      "name": "principal_grant_scope_op_check",
-      "expr": "CHECK ((scope_op = ANY (ARRAY['subtree'::text, 'subtree_excl_root'::text, 'self'::text])))"
-     },
-     {
-      "name": "principal_grant_target_ck",
-      "expr": "CHECK ((num_nonnulls(principal_id, group_id) = 1))"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "principal_grant_unique",
-      "definition": "CREATE UNIQUE INDEX principal_grant_unique ON public.principal_grant USING btree (principal_id, role_id, scope_kind, COALESCE(scope_id, ''::text), scope_op)"
-     },
-     {
-      "name": "principal_group_grant_unique",
-      "definition": "CREATE UNIQUE INDEX principal_group_grant_unique ON public.principal_grant USING btree (group_id, role_id, scope_kind, COALESCE(scope_id, ''::text), scope_op) WHERE (group_id IS NOT NULL)"
-     }
-    ]
-   },
-   "principal_group": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "name",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "label",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "description",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "principal_group_name_key",
-      "definition": "CREATE UNIQUE INDEX principal_group_name_key ON public.principal_group USING btree (name)"
-     }
-    ]
-   },
-   "principal_group_member": {
-    "columns": [
-     {
-      "name": "group_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "principal_group.id"
-     },
-     {
-      "name": "principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
+      "name": "person_username_key",
+      "definition": "CREATE UNIQUE INDEX person_username_key ON public.person USING btree (username)"
      }
     ]
    },
@@ -3481,29 +3414,6 @@
      {
       "name": "role_namespace_name_key",
       "definition": "CREATE UNIQUE INDEX role_namespace_name_key ON public.role USING btree (namespace, name)"
-     }
-    ]
-   },
-   "service": {
-    "columns": [
-     {
-      "name": "principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "name",
-      "type": "text",
-      "nullable": false
-     }
-    ],
-    "uniques": [
-     {
-      "name": "service_name_key",
-      "definition": "CREATE UNIQUE INDEX service_name_key ON public.service USING btree (name)"
      }
     ]
    },
@@ -3805,6 +3715,198 @@
       "fk_target": "component_type.id"
      }
     ]
+   },
+   "user_grant": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "scope_kind",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "scope_id",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "scope_op",
+      "type": "text",
+      "nullable": false,
+      "default": "'subtree'::text"
+     },
+     {
+      "name": "group_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "user_group.id"
+     },
+     {
+      "name": "role_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "role.id"
+     }
+    ],
+    "checks": [
+     {
+      "name": "user_grant_scope_kind_check",
+      "expr": "CHECK ((scope_kind = ANY (ARRAY['all'::text, 'location'::text, 'system'::text, 'component'::text])))"
+     },
+     {
+      "name": "user_grant_scope_op_check",
+      "expr": "CHECK ((scope_op = ANY (ARRAY['subtree'::text, 'subtree_excl_root'::text, 'self'::text])))"
+     },
+     {
+      "name": "user_grant_target_ck",
+      "expr": "CHECK ((num_nonnulls(user_id, group_id) = 1))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "user_grant_unique",
+      "definition": "CREATE UNIQUE INDEX user_grant_unique ON public.user_grant USING btree (user_id, role_id, scope_kind, COALESCE(scope_id, ''::text), scope_op)"
+     },
+     {
+      "name": "user_group_grant_unique",
+      "definition": "CREATE UNIQUE INDEX user_group_grant_unique ON public.user_grant USING btree (group_id, role_id, scope_kind, COALESCE(scope_id, ''::text), scope_op) WHERE (group_id IS NOT NULL)"
+     }
+    ]
+   },
+   "user_group": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "description",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "user_group_name_key",
+      "definition": "CREATE UNIQUE INDEX user_group_name_key ON public.user_group USING btree (name)"
+     }
+    ]
+   },
+   "user_group_member": {
+    "columns": [
+     {
+      "name": "group_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "user_group.id"
+     },
+     {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
+   "users": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "kind",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+     },
+     {
+      "name": "archived_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "seq",
+      "type": "bigint",
+      "nullable": false
+     }
+    ],
+    "checks": [
+     {
+      "name": "users_kind_check",
+      "expr": "CHECK ((kind = ANY (ARRAY['person'::text, 'machine'::text])))"
+     }
+    ]
    }
   },
   "telemetry": {
@@ -3876,11 +3978,11 @@
       "default": "now()"
      },
      {
-      "name": "owner_principal_id",
+      "name": "owner_user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "channels",
@@ -3904,7 +4006,7 @@
     "checks": [
      {
       "name": "action_rule_channels_check",
-      "expr": "CHECK ((((owner_principal_id IS NULL) AND (cardinality(channels) = 0)) OR ((owner_principal_id IS NOT NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+      "expr": "CHECK ((((owner_user_id IS NULL) AND (cardinality(channels) = 0)) OR ((owner_user_id IS NOT NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
      },
      {
       "name": "action_rule_namespace_check",
@@ -3922,11 +4024,11 @@
     "uniques": [
      {
       "name": "action_rule_owner_name_key",
-      "definition": "CREATE UNIQUE INDEX action_rule_owner_name_key ON public.action_rule USING btree (owner_principal_id, name) WHERE (owner_principal_id IS NOT NULL)"
+      "definition": "CREATE UNIQUE INDEX action_rule_owner_name_key ON public.action_rule USING btree (owner_user_id, name) WHERE (owner_user_id IS NOT NULL)"
      },
      {
       "name": "action_rule_platform_name_key",
-      "definition": "CREATE UNIQUE INDEX action_rule_platform_name_key ON public.action_rule USING btree (namespace, name) WHERE (owner_principal_id IS NULL)"
+      "definition": "CREATE UNIQUE INDEX action_rule_platform_name_key ON public.action_rule USING btree (namespace, name) WHERE (owner_user_id IS NULL)"
      }
     ]
    },
@@ -3941,12 +4043,12 @@
       "fk_target": "action_rule.id"
      },
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": false,
       "pk": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "created_at",
@@ -4043,7 +4145,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "raised_by_rule_id",
@@ -4055,8 +4157,8 @@
     ],
     "uniques": [
      {
-      "name": "alarm_open_condition_key",
-      "definition": "CREATE UNIQUE INDEX alarm_open_condition_key ON public.alarm USING btree (component_id, dedup_key) WHERE (cleared_at IS NULL)"
+      "name": "alarm_open_identity_key",
+      "definition": "CREATE UNIQUE INDEX alarm_open_identity_key ON public.alarm USING btree (component_id, dedup_key) WHERE (cleared_at IS NULL)"
      }
     ]
    },
@@ -4086,7 +4188,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "created_at",
@@ -4519,7 +4621,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "outpost.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "command_type_id",
@@ -4840,7 +4942,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "outpost.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "event_type_id",
@@ -5069,7 +5171,7 @@
      }
     ]
    },
-   "event_rule_condition": {
+   "event_rule_firing": {
     "columns": [
      {
       "name": "rule_id",
@@ -5536,7 +5638,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "outpost.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "owner_id",
@@ -5921,11 +6023,11 @@
       "default": "now()"
      },
      {
-      "name": "recipient_principal_id",
+      "name": "recipient_user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "recipient_name",
@@ -6014,18 +6116,18 @@
       "default": "now()"
      },
      {
-      "name": "principal_group_id",
+      "name": "user_group_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal_group.id"
+      "fk_target": "user_group.id"
      },
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "channels",
@@ -6043,7 +6145,7 @@
     "checks": [
      {
       "name": "notification_target_kind_check",
-      "expr": "CHECK ((((kind = 'webhook'::text) AND (url IS NOT NULL) AND (principal_group_id IS NULL) AND (principal_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) = 0)) OR ((kind = 'email'::text) AND (url IS NULL) AND (principal_group_id IS NULL) AND (principal_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) \u003e 0)) OR ((kind = 'principal_group'::text) AND (principal_group_id IS NOT NULL) AND (url IS NULL) AND (principal_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'principal'::text) AND (principal_id IS NOT NULL) AND (url IS NULL) AND (principal_group_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+      "expr": "CHECK ((((kind = 'webhook'::text) AND (url IS NOT NULL) AND (user_group_id IS NULL) AND (user_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) = 0)) OR ((kind = 'email'::text) AND (url IS NULL) AND (user_group_id IS NULL) AND (user_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) \u003e 0)) OR ((kind = 'user_group'::text) AND (user_group_id IS NOT NULL) AND (url IS NULL) AND (user_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'user'::text) AND (user_id IS NOT NULL) AND (url IS NULL) AND (user_group_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
      }
     ],
     "uniques": [
@@ -6212,7 +6314,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "outpost.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "property_type_id",

@@ -132,16 +132,16 @@ var retiredIdentifiers = []BannedTerm{
 		// on eighteen other tables. Spelled with the table, so it cannot catch the
 		// ordinary noun.
 		Pattern:     regexp.MustCompile(`\bservice\.label\b|\bsvcBody\.Label\b`),
-		Replacement: "service.name, a service account's identifier",
+		Replacement: "machine.name, a machine user's identifier",
 		Origin:      "ADR-0111",
 	},
 	{
-		// The stored function that resolved a principal to its identifier, dropped
+		// The stored function that resolved a user to its identifier, dropped
 		// by ADR-0110. It is a retired schema OBJECT, so a page naming it is telling
 		// a contributor to call something that is not there; and it is a retired
 		// WORD, since both its branches returned an identifier and never a label.
 		Pattern:     regexp.MustCompile(`\bprincipal_label\b`),
-		Replacement: "the gateway's identifier resolution (internal/storage/principal_ident.go)",
+		Replacement: "the gateway's identifier resolution (internal/storage/user_ident.go)",
 		Origin:      "ADR-0110",
 	},
 	{
@@ -189,7 +189,7 @@ var retiredIdentifiers = []BannedTerm{
 	// system_type is NOT here either, and left for exactly the same reason
 	// (ADR-0096). ADR-0048 retired it as the COLUMN name for what is now
 	// system.standard_id; ADR-0096 reuses the identifier for a new TABLE, the
-	// coarse space taxonomy, with a system.system_type_id pointing at it. The
+	// system type taxonomy, with a system.system_type_id pointing at it. The
 	// two are different objects and the live one is current vocabulary, so the
 	// entry had to go rather than gain an exemption every sentence about the
 	// catalog would need. The dead sense survives in the historical ADR-0048
@@ -398,6 +398,15 @@ var retiredIdentifiers = []BannedTerm{
 			`\bdecimal places?\b|\bN[- ]places?\b|\bre-places?\b|\bplaces? (?:to|for) [a-z]|` +
 			`\b(?:to|can|may|will|must|would|should|you|we|they|who|which) place\b|` +
 			`\bplaces? (?:a|an|one|its|it|them|the|each|every)\b|\bbindings? places\b`),
+	}, {
+		// Type has one meaning (ADR-2034): the catalog row that says what
+		// kind of thing an instance is. Genus was a second word for that row
+		// (the device-class genus, a top-level genus) and retires from every
+		// operator surface. ADR titles keep it, and their anchors pass because
+		// the scan strips link targets.
+		Pattern:     regexp.MustCompile(`(?i)\bgenus\b|\bgenera\b`),
+		Replacement: "type (the catalog row that says what kind of thing an instance is: a component type, a system type)",
+		Origin:      "ADR-2034",
 	},
 }
 
@@ -452,6 +461,24 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "web", "src", "pages", "Simulation.tsx"),
 	filepath.Join("..", "..", "web", "src", "components", "SimComponentDrawer.tsx"),
 	filepath.Join("..", "..", "web", "src", "components", "SimulationSection.tsx"),
+	// The catalog pages' shared copy, where the retired word for a type
+	// catalog row survived until ADR-2034.
+	filepath.Join("..", "..", "web", "src", "lib", "catalog.ts"),
+	// The product pages, whose create-form hint carried "genus" past the
+	// ADR-2034 sweep because nothing scanned them.
+	filepath.Join("..", "..", "web", "src", "lib", "products.ts"),
+	filepath.Join("..", "..", "web", "src", "pages", "Products.tsx"),
+	// The alarm and rule surfaces, where a rule's condition, an alarm's
+	// condition and a system's incidents read until ADR-2038.
+	filepath.Join("..", "..", "web", "src", "pages", "Rules.tsx"),
+	filepath.Join("..", "..", "web", "src", "pages", "SystemZoom.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "AlarmsPanel.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "SnoozeButton.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "HealthHistory.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "EventsPanel.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "NotificationStatusPill.tsx"),
+	filepath.Join("..", "..", "web", "src", "lib", "alarms.ts"),
+	filepath.Join("..", "..", "web", "src", "lib", "system_history.ts"),
 	filepath.Join("..", "..", "README.md"),
 	// The generated OpenAPI document carries every Huma operation and field
 	// description (#451): the doc: tags flow to the spec, the CLI reference,

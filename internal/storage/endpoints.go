@@ -178,7 +178,7 @@ type EndpointPatch struct {
 // endpointCols is the bare select list (scan order), for the un-aliased
 // insert/update RETURNING and the by-id load; endpointColsJoin is the same
 // list aliased to `i` for the scoped join over the component table.
-// The two arcs store primary keys (component.id, outpost.principal_id), so each is
+// The two arcs store primary keys (component.id, outpost.user_id), so each is
 // selected alongside a scalar subquery for the owner's current name: the id is
 // what the row points at, the name is what an operator reads and types. The
 // subquery form works identically in a plain select and in a RETURNING list, so
@@ -188,13 +188,13 @@ type EndpointPatch struct {
 const (
 	endpointCols = `id, name, coalesce(label, ''), transport,
 		(select c.name from component c where c.id = endpoint.component) as component_name, component,
-		(select n.name from outpost n where n.principal_id = endpoint.outpost_id) as outpost_name_ref, outpost_id,
+		(select n.name from outpost n where n.user_id = endpoint.outpost_id) as outpost_name_ref, outpost_id,
 		params,
 		(select d.name from driver d where d.id = endpoint.driver_id) as driver_name, driver_id, inputs,
 		out_of_band, created_at, updated_at`
 	endpointColsJoin = `i.id, i.name, coalesce(i.label, ''), i.transport,
 		(select c2.name from component c2 where c2.id = i.component) as component_name, i.component,
-		(select n.name from outpost n where n.principal_id = i.outpost_id) as outpost_name_ref, i.outpost_id,
+		(select n.name from outpost n where n.user_id = i.outpost_id) as outpost_name_ref, i.outpost_id,
 		i.params,
 		(select d2.name from driver d2 where d2.id = i.driver_id) as driver_name, i.driver_id, i.inputs,
 		i.out_of_band, i.created_at, i.updated_at`
@@ -255,8 +255,8 @@ func endpointComponentID(ctx context.Context, q querier, ref *string, create sco
 	return &c.ID, nil
 }
 
-// endpointOutpostID resolves an optional outpost reference (a name or a principal id)
-// to the principal id the placement arc stores. An unknown outpost is
+// endpointOutpostID resolves an optional outpost reference (a name or a user id)
+// to the user id the placement arc stores. An unknown outpost is
 // ErrOutpostNotFound, so an unassignable placement fails loudly.
 func endpointOutpostID(ctx context.Context, q querier, ref *string) (*string, error) {
 	if ref == nil {
@@ -264,10 +264,10 @@ func endpointOutpostID(ctx context.Context, q querier, ref *string) (*string, er
 	}
 	col := "name"
 	if isUUID(*ref) {
-		col = "principal_id"
+		col = "user_id"
 	}
 	var pid string
-	if err := q.QueryRow(ctx, `select principal_id from outpost where `+col+` = $1`, *ref).Scan(&pid); err != nil {
+	if err := q.QueryRow(ctx, `select user_id from outpost where `+col+` = $1`, *ref).Scan(&pid); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrOutpostNotFound
 		}

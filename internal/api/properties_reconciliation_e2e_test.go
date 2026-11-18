@@ -52,7 +52,7 @@ func readProps(t *testing.T, c *apiClient, tok, path string) map[string]propRow 
 // naming the instance; a property only observed appears with want null and no
 // drift; a system's declared row and a property pushed on it carry the same
 // block; an out-of-scope
-// component is the non-disclosing 404, a principal without component:read is
+// component is the non-disclosing 404, a user without component:read is
 // refused, and the retired reconciliation route is gone. Skipped under -short.
 func TestPropertiesCarryReconciliationAPI(t *testing.T) {
 	t.Parallel()
@@ -144,7 +144,7 @@ func TestPropertiesCarryReconciliationAPI(t *testing.T) {
 	c.do(sysViewerTok, http.MethodGet, "/systems/huddle-2/properties", nil, http.StatusOK)
 
 	// A viewer scoped to a different component gets a non-disclosing 404 on
-	// disp-1 and reads its own component; a principal holding no component:read
+	// disp-1 and reads its own component; a user holding no component:read
 	// is refused outright.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create other component: %v", err)
@@ -156,7 +156,7 @@ func TestPropertiesCarryReconciliationAPI(t *testing.T) {
 	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-other", "viewer", "component", other.ID)
 	c.do(viewerTok, http.MethodGet, "/components/disp-1/properties", nil, http.StatusNotFound)
 	c.do(viewerTok, http.MethodGet, "/components/other-1/properties", nil, http.StatusOK)
-	limitedTok := setupLimitedPrincipal(t, ctx, dsn)
+	limitedTok := setupLimitedUser(t, ctx, dsn)
 	c.do(limitedTok, http.MethodGet, "/components/disp-1/properties", nil, http.StatusForbidden)
 
 	// The reconciliation route is retired: nothing answers it.

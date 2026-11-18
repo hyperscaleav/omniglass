@@ -400,7 +400,7 @@ func TestRetentionWindowsReadTheSettingsStore(t *testing.T) {
 	if w.MetricDays != 14 || w.PropertyDays != 90 || w.TrendDays != 730 {
 		t.Fatalf("default windows %+v, want 14, 90 and 730 days", w)
 	}
-	if _, err := f.gw.UpsertSettingOverride(f.ctx, "", "platform", "retention", map[string]any{"metric_days": 7}, nil); err != nil {
+	if _, err := f.gw.UpsertSettingBinding(f.ctx, "", "platform", "retention", map[string]any{"metric_days": 7}, nil); err != nil {
 		t.Fatalf("override: %v", err)
 	}
 	if w, err = f.gw.RetentionWindows(f.ctx); err != nil || w.MetricDays != 7 || w.PropertyDays != 90 {

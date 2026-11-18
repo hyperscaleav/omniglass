@@ -3,7 +3,9 @@
 Open observability and control plane for AV/IT fleets, and a learning tool for monitoring
 itself. Single Go binary (run modes: server, outpost, migrate), BYO PostgreSQL. The
 architecture of record is the docs site under [docs/](docs/) (published at
-docs.omniglass.hyperscaleav.com); read the [architecture spine](docs/src/content/docs/architecture/index.md) before non-trivial changes.
+docs.omniglass.hyperscaleav.com), being rebuilt by audience (#2153): the rebuilt pages carry the status
+badges, and the old pages stay the reference until their section lands. Read the
+[architecture spine](docs/src/content/docs/architecture/index.md) before non-trivial changes.
 
 This repo is **public from the first commit** and built **one vertical slice per PR**.
 Treat every change as portfolio-quality and externally visible.
@@ -18,7 +20,7 @@ Treat every change as portfolio-quality and externally visible.
    without a test that failed before it and passes after; a bug fix starts with a
    failing regression test. Full loop: [docs/contributing/test-driven.md](docs/src/content/docs/contributing/test-driven.md).
 3. **Docs with everything.** A feature is not done until the docs that teach it ship in
-   the same PR, and **status moves with the code**: advance the page's status badge to its new floor
+   the same PR, and **status moves with the code**: advance the rebuilt page's status badge to its new floor
    (`Design`/`Partial`/`Built`), add the build-log entry, and log any divergence from a page's design in
    the [decision log](docs/src/content/docs/architecture/decisions.md). Each log entry (and each
    adversarial-review anti-pattern) is **its own file** in a fragment directory
@@ -90,8 +92,9 @@ cd .claude/worktrees/<type>+<short-name>
 
 - Branch prefix and PR title use the conventional-commit type (`feat`, `fix`, `docs`,
   `ci`, `chore`, `refactor`, `test`, `perf`). PR title is `<type>: <description>`; CI
-  enforces it and semantic-release reads it on merge.
-- Squash-merge. `feat:` = minor, `fix:`/`perf:` = patch, `BREAKING CHANGE:` = major.
+  enforces it and the release notes list it.
+- Squash-merge. Releases are cut from a `release/<major>.<minor>` branch, whose name sets
+  the version; a fix reaches a release branch by cherry-pick from `main`.
 - Validate locally: `make test-short` to iterate, `make test` before the PR.
 - No `--no-verify` without explicit approval.
 

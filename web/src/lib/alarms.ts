@@ -5,7 +5,7 @@ import { compareSeverity, type SeverityLevel } from "./severity";
 // The alarms data layer: thin typed wrappers over the generated client, plus the
 // pure ordering and splitting the panel renders.
 //
-// An ALARM is a condition recorded on a COMPONENT, and it impairs that component's
+// An ALARM is raised on a COMPONENT by a firing with a severity, and it impairs that component's
 // own verdict wholesale (#626): any active alarm degrades it, one at an outage
 // severity level (high and above, see lib/severity) is an outage. A system slot the component fills no longer counts it toward quorum
 // while it is down, so the slot can drop below quorum and its impact becomes the
@@ -92,8 +92,8 @@ export async function acknowledgeAlarm(name: string, id: string): Promise<Alarm>
 // unacknowledgedCount is the queue an operator actually works: raised, and nobody
 // has looked at it yet. Cleared alarms are excluded because the queue is about
 // what still needs somebody, not about the history.
-// The snooze (#1318): a bounded silence on the alarm's condition (component
-// and dedup key), not on one row. The console offers four presets inside the
+// The snooze (#1318): a bounded silence on the alarm (stored on its
+// component and dedup key), not on one row. The console offers four presets inside the
 // server's bound of 1m to 7d.
 export const SNOOZE_PRESETS: { duration: string; label: string }[] = [
   { duration: "15m", label: "15 minutes" },
@@ -163,7 +163,7 @@ export const ALARM_TIMELINE_POLL_MS = 5_000;
 
 // ageWords says how long ago, to the second, against one clock (now): "14s
 // ago", "2m 14s ago", "2h 3m ago", "3d 4h ago". Seconds stay readable for the
-// lines of one incident, which often land seconds apart.
+// lines of one fault, which often land seconds apart.
 export function ageWords(at: string, now: number): string {
   const s = Math.max(0, Math.floor((now - Date.parse(at)) / 1000));
   if (s < 60) return `${s}s ago`;
@@ -195,7 +195,7 @@ const AUDIT_WORDS: Record<string, string> = {
 };
 
 // timelineWhat is an event or audit entry's verb as an operator reads it: an
-// event by its type (condition-started), an audit row by what was done to the
+// event by its type (rule-fired), an audit row by what was done to the
 // alarm. A notification is not a sentence (#1413): it reads as a status row,
 // its status in the shared NotificationStatusPill.
 export function timelineWhat(e: Pick<AlarmTimelineEntry, "kind" | "what">): string {

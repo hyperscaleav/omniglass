@@ -25,7 +25,7 @@ import (
 
 // TestAMeasuredCorporateLabReadsItsPushLane is the scale lab's push lane end
 // to end (#1743): the corporate plan seeded as the lab seeds it, each pusher
-// it declares holding a token minted for its principal, and each one an
+// it declares holding a token minted for its user, and each one an
 // emulator device of its profile pushing through the real push route. The
 // lab's delivery read over the window carries push-lane rows, the boot
 // settled by a push after it, every item stored, loss 0.
@@ -101,7 +101,7 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if ok, err := f.gw.SetServiceToken(f.ctx, "", p.Name, hash, prefix); err != nil || !ok {
+			if ok, err := f.gw.SetMachineToken(f.ctx, "", p.Name, hash, prefix); err != nil || !ok {
 				t.Fatalf("set %s's token: %v %v", p.Name, ok, err)
 			}
 			tokens[p.Name] = tok

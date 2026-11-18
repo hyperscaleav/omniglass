@@ -50,7 +50,7 @@ import (
 // of its primary system's TYPE; a system's map carries the label of the
 // location it sits at. That is the worked example this epic exists to serve:
 //
-//	Boardroom 204B Display   from   {{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}
+//	Board Meeting 204B Display   from   {{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}
 //
 // The keys are FLAT, never dotted. The map is a closed map[string]string and
 // that flatness is half the sandbox argument in ADR-0098: a value that is a
@@ -151,7 +151,7 @@ func (p *PG) labelEngine(ctx context.Context, q querier) (*label.Engine, error) 
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve the acronym dictionary: %w", err)
 	}
-	s, err := settings.Typed(p.settings.ResolveOverride(doc, locks).Values)
+	s, err := settings.Typed(p.settings.ResolveBinding(doc, locks).Values)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve the acronym dictionary: %w", err)
 	}

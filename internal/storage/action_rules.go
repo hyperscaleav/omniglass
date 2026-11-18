@@ -98,7 +98,7 @@ func officialTypeFor(transition string) string {
 const actionRuleCols = `r.id, r.name, coalesce(r.label, ''), r.description, r.on_transitions, r.when_expr,
 	coalesce(nt.name, ''), coalesce(r.notification_type_id::text, ''),
 	coalesce((select array_agg(t.name order by t.name) from action_rule_target art join notification_target t on t.id = art.target_id where art.rule_id = r.id), '{}'),
-	coalesce(r.owner_principal_id::text, ''), r.channels, r.opt_out_allowed, r.enabled, r.official, r.created_at, r.updated_at`
+	coalesce(r.owner_user_id::text, ''), r.channels, r.opt_out_allowed, r.enabled, r.official, r.created_at, r.updated_at`
 
 const actionRuleFrom = ` from action_rule r left join notification_type nt on nt.id = r.notification_type_id`
 
@@ -114,7 +114,7 @@ func scanActionRule(row pgx.Row) (*ActionRule, error) {
 // ListActionRules lists every platform rule, by name. Rules read like a
 // catalog; a personal rule is its owner's alone and never listed here.
 func (p *PG) ListActionRules(ctx context.Context) ([]ActionRule, error) {
-	rows, err := p.pool.Query(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.owner_principal_id is null order by r.name`)
+	rows, err := p.pool.Query(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.owner_user_id is null order by r.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list action rules: %w", err)
 	}
@@ -150,7 +150,7 @@ func getActionRule(ctx context.Context, q querier, ref, owner string, forUpdate 
 		return nil, ErrActionRuleNotFound
 	}
 	r, err := scanActionRule(q.QueryRow(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.id = (select x.id from `+refRows("action_rule", ref)+` x where x.`+catalogRefCol(ref)+` = $1
-		and x.owner_principal_id is not distinct from nullif($2, '')::uuid)`+lock, ref, owner))
+		and x.owner_user_id is not distinct from nullif($2, '')::uuid)`+lock, ref, owner))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrActionRuleNotFound
 	}
@@ -399,12 +399,12 @@ func (p *PG) DeleteActionRule(ctx context.Context, actorID, ref string, action s
 // ErrOptOutNotAllowed is an opt-out of a rule whose admin has not allowed it.
 var ErrOptOutNotAllowed = errors.New("storage: this action rule does not allow opting out")
 
-// SetRuleOptOut opts the principal out of a platform rule (out true) or back
+// SetRuleOptOut opts the user out of a platform rule (out true) or back
 // in, audited and idempotent (#1354). Opting out takes a rule marked
 // opt_out_allowed; opting back in is always allowed. An opt-out reaches the
 // rule's group targets: a person a target names directly is told regardless.
-func (p *PG) SetRuleOptOut(ctx context.Context, actorID, principalID, ref string, out bool) (*ActionRule, error) {
-	if !isUUID(principalID) {
+func (p *PG) SetRuleOptOut(ctx context.Context, actorID, userID, ref string, out bool) (*ActionRule, error) {
+	if !isUUID(userID) {
 		return nil, ErrActionRuleNotFound
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -423,15 +423,15 @@ func (p *PG) SetRuleOptOut(ctx context.Context, actorID, principalID, ref string
 			return nil, ErrOptOutNotAllowed
 		}
 		verb = "opt_out"
-		tag, err = tx.Exec(ctx, `insert into action_rule_opt_out (rule_id, principal_id) values ($1, $2::uuid) on conflict do nothing`, r.ID, principalID)
+		tag, err = tx.Exec(ctx, `insert into action_rule_opt_out (rule_id, user_id) values ($1, $2::uuid) on conflict do nothing`, r.ID, userID)
 	} else {
-		tag, err = tx.Exec(ctx, `delete from action_rule_opt_out where rule_id = $1 and principal_id = $2::uuid`, r.ID, principalID)
+		tag, err = tx.Exec(ctx, `delete from action_rule_opt_out where rule_id = $1 and user_id = $2::uuid`, r.ID, userID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: %s of %s: %w", verb, r.Name, err)
 	}
 	if tag.RowsAffected() > 0 {
-		if err := writeAuditRes(ctx, tx, actorID, verb, "action_rule", r.ID, nil, map[string]any{"principal_id": principalID, "opted_out": out}); err != nil {
+		if err := writeAuditRes(ctx, tx, actorID, verb, "action_rule", r.ID, nil, map[string]any{"user_id": userID, "opted_out": out}); err != nil {
 			return nil, err
 		}
 	}

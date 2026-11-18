@@ -13,9 +13,10 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 
 | Term | Meaning | API | Permission | Formerly |
 | --- | --- | --- | --- | --- |
-| **alarm** | A raised problem on a component, with a severity, from the moment it raises until it clears. | `/alarms` | `alarm` |  |
+| **alarm** | A raised problem on a component, with a severity, from the moment it raises until it clears. | `/alarms` | `alarm` | incident, alert |
 | **command** | One instruction sent to a component, typed by a command type, and its outcome. |  | `command` |  |
 | **component** | One managed device or service, an instance of a product, placed at a location and usually a member of a system. | `/components` | `component` |  |
+| **declared value** | The state an operator declares a component or system should hold, which reconcile compares with what the device reports. |  |  | declared config, desired state, desired value, set the config, config drift, override on value |
 | **degraded** | The health of a system that still works but has lost something it should have. |  |  |  |
 | **detail view** | An entity's own page, a system with its location as context, or a location or component on its own. |  |  | workspace |
 | **endpoint** | A connection to a component over one transport, the API Omniglass reaches it through. | `/endpoints` | `endpoint` | interface |
@@ -47,13 +48,12 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **driver** | The declared recipe that collects from a product, what to fetch, how to read it and what it can set. | `/drivers` | `driver` |  |
 | **event rule** | A rule that watches signals and fires when its criteria hold, raising an alarm if it carries a severity. | `/event-rules` | `rule` |  |
 | **event type** | A kind of discrete occurrence in the catalog, what an event is typed by. | `/event-types` | `event_type` |  |
+| **firing** | One stretch of a rule's criteria holding on a component, from the moment it fires until it clears. |  |  | condition |
 | **location type** | What kind of location a location is, and which kinds it may sit under. | `/location-types` | `location_type` |  |
 | **metric type** | A numeric signal in the catalog, the series a sample measures, with its unit and precision. | `/metric-types` | `metric_type` |  |
-| **notification target** | Where a notification goes, a webhook, a mailbox, a group or a person. | `/notification-targets` | `notification_target` |  |
+| **notification target** | Where a notification goes, a webhook, a mailbox, a user group or a person. | `/notification-targets` | `notification_target` |  |
 | **notification type** | What a notification about an alarm says, as a subject and a text. | `/notification-types` | `notification_type` |  |
 | **outpost** | A collection process placed near the fleet that runs tasks and commands over endpoints and reports back. | `/outposts` | `outpost` | node |
-| **principal** | A user, a person or a machine, that roles are granted to. | `/principals` | `principal` |  |
-| **principal group** | A set of users granted roles together, each member inheriting the group's grants. | `/principal-groups` | `principal_group` |  |
 | **product** | A concrete model a vendor sells, with the driver that collects from it and the component type it is classified under. | `/products` | `product` |  |
 | **property type** | A categorical signal in the catalog, a value a component reports or is declared to have. | `/property-types` | `property_type` |  |
 | **role** | A named bundle of permissions granted to users, which may inherit another role's. | `/roles` | `role` |  |
@@ -62,9 +62,11 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **severity level** | How bad an alarm is, ranked, with its color and whether it takes its component out. | `/severity-levels` | `severity_level` |  |
 | **standard** | The contract a system is built to, declaring the slots it fills and the properties every conforming system exposes. | `/standards` | `standard` | blueprint |
 | **system slot** | A position in a system a component fills, such as a main display or a table microphone, with how many it wants and what losing it means. |  |  | system role |
-| **system type** | What kind of space a system is, such as a boardroom, a classroom or a video wall. | `/system-types` | `system_type` |  |
+| **system type** | What a system is for, such as meeting, teaching or signage, never the space it sits in. | `/system-types` | `system_type` |  |
 | **task** | An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint. | `/tasks` | `task` |  |
 | **transport** | The wire an endpoint speaks over, such as ssh, https or snmp, built into Omniglass. | `/transports` | `endpoint` |  |
 | **unclaimed source** | A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored. | `/unclaimed-sources` | `outpost` |  |
+| **user** | Who a role is granted to, a person who signs in or a machine user that holds tokens. | `/users` | `user` | principal, service account, human |
+| **user group** | A set of users granted roles together, each member inheriting the group's grants. | `/user-groups` | `user_group` | principal group |
 | **vendor** | An organization behind products, a manufacturer, an integrator or a developer. | `/vendors` | `vendor` |  |
 

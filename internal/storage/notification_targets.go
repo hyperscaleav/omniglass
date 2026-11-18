@@ -27,17 +27,17 @@ import (
 
 // Target kinds are a code-declared enum (like transports), published through
 // the API's enum. webhook is #618's; email (a fixed set of addresses, a
-// shared mailbox) is #1317's; a principal group and a principal (one person)
+// shared mailbox) is #1317's; a user group and a user (one person)
 // are #1341's, the targets that name people rather than a destination.
 const (
-	ChannelWebhook       = "webhook"
-	TargetEmail          = "email"
-	TargetPrincipalGroup = "principal_group"
-	TargetPrincipal      = "principal"
+	ChannelWebhook  = "webhook"
+	TargetEmail     = "email"
+	TargetUserGroup = "user_group"
+	TargetUser      = "user"
 )
 
 // ChannelKinds are the kinds a target may name.
-var ChannelKinds = []string{ChannelWebhook, TargetEmail, TargetPrincipalGroup, TargetPrincipal}
+var ChannelKinds = []string{ChannelWebhook, TargetEmail, TargetUserGroup, TargetUser}
 
 // Delivery channels: the way one notification row travels. A webhook row goes
 // to a target's URL; a person's row goes to their console inbox (delivered by
@@ -60,7 +60,7 @@ func deliveryFor(kind string) string {
 }
 
 // isPersonKind reports whether a target kind names people.
-func isPersonKind(kind string) bool { return kind == TargetPrincipalGroup || kind == TargetPrincipal }
+func isPersonKind(kind string) bool { return kind == TargetUserGroup || kind == TargetUser }
 
 // The secret types a target may bind: an hmac key it signs each body with,
 // or a bearer token it presents.
@@ -82,11 +82,11 @@ type NotificationTarget struct {
 	SecretType string
 	// A person target's binding (#1341): the group it expands to, or the one
 	// person, each by name and uuid, and the channels it delivers on.
-	PrincipalGroupID string
-	PrincipalGroup   string
-	PrincipalID      string
-	Principal        string
-	Channels         []string
+	UserGroupID string
+	UserGroup   string
+	UserID      string
+	User        string
+	Channels    []string
 	// Addresses are an email target's fixed recipients (#1317).
 	Addresses []string
 	Enabled   bool
@@ -102,23 +102,23 @@ type NotificationTargetSpec struct {
 	Kind   string
 	URL    string
 	Secret string
-	// PrincipalGroup (a group's name or uuid) binds a principal_group target,
-	// Principal (a username or uuid) a principal target; Channels are the
+	// UserGroup (a group's name or uuid) binds a user_group target,
+	// User (a username or uuid) a user target; Channels are the
 	// channels a person target delivers on.
-	PrincipalGroup string
-	Principal      string
-	Channels       []string
+	UserGroup string
+	User      string
+	Channels  []string
 	// Addresses are an email target's recipients.
 	Addresses []string
 	Enabled   *bool
 }
 
 // PeopleUse is the caller's right over the people a target would name: binding
-// a group or a person is reading the principal directory (its members are who
+// a group or a person is reading the user directory (its members are who
 // the target reaches), so it takes that directory's admin-tier read, as
 // binding a secret takes the right to bind it (secret:bind).
 type PeopleUse struct {
-	Groups, Principals bool
+	Groups, Users bool
 }
 
 // SecretUse is the caller's right over a secret it binds, to a target, an
@@ -152,8 +152,8 @@ var (
 	ErrNotificationTargetForbidden = errors.New("storage: notification targets take an all-scope grant")
 	ErrNotificationTargetInUse     = errors.New("storage: notification target is in use by an action rule")
 	// ErrNotificationTargetPeopleForbidden is binding a group or a person
-	// without the principal directory's admin-tier read.
-	ErrNotificationTargetPeopleForbidden = errors.New("storage: binding a group or a person takes the principal directory's read")
+	// without the user directory's admin-tier read.
+	ErrNotificationTargetPeopleForbidden = errors.New("storage: binding a group or a person takes the user directory's read")
 	// ErrBoundToTarget is deleting a group or a person a target names.
 	ErrBoundToTarget = errors.New("storage: a notification target names it")
 )
@@ -161,7 +161,7 @@ var (
 // TargetBindingError is a delete refused because a notification target names
 // the group or person: it names the target, so the admin knows what to unbind.
 type TargetBindingError struct {
-	What   string // "principal group" or "principal"
+	What   string // "user group" or "user"
 	Target string
 }
 
@@ -171,8 +171,8 @@ func (e *TargetBindingError) Error() string {
 
 func (e *TargetBindingError) Unwrap() error { return ErrBoundToTarget }
 
-// boundTarget refuses deleting a group or a principal a target binds, naming
-// the first such target; col is principal_group_id or principal_id.
+// boundTarget refuses deleting a group or a user a target binds, naming
+// the first such target; col is user_group_id or user_id.
 func boundTarget(ctx context.Context, q querier, col, id, what string) error {
 	var name string
 	err := q.QueryRow(ctx, `select name from notification_target where `+col+` = $1::uuid order by name limit 1`, id).Scan(&name)
@@ -201,19 +201,19 @@ func MaskURL(raw string) string {
 }
 
 const notificationTargetCols = `t.id, t.name, coalesce(t.label, ''), t.kind, coalesce(t.url, ''), coalesce(t.secret_id::text, ''),
-	coalesce(s.name, ''), coalesce(st.name, ''), coalesce(t.principal_group_id::text, ''), coalesce(g.name, ''),
-	coalesce(t.principal_id::text, ''), coalesce(h.username, ''), t.channels, t.addresses, t.enabled, t.created_at, t.updated_at`
+	coalesce(s.name, ''), coalesce(st.name, ''), coalesce(t.user_group_id::text, ''), coalesce(g.name, ''),
+	coalesce(t.user_id::text, ''), coalesce(h.username, ''), t.channels, t.addresses, t.enabled, t.created_at, t.updated_at`
 
 const notificationTargetFrom = ` from notification_target t
 	left join secret s on s.id = t.secret_id
 	left join secret_type st on st.id = s.secret_type
-	left join principal_group g on g.id = t.principal_group_id
-	left join human h on h.principal_id = t.principal_id`
+	left join user_group g on g.id = t.user_group_id
+	left join person h on h.user_id = t.user_id`
 
 func scanNotificationTarget(row pgx.Row) (*NotificationTarget, error) {
 	var t NotificationTarget
 	if err := row.Scan(&t.ID, &t.Name, &t.Label, &t.Kind, &t.URL, &t.SecretID, &t.Secret, &t.SecretType,
-		&t.PrincipalGroupID, &t.PrincipalGroup, &t.PrincipalID, &t.Principal, &t.Channels, &t.Addresses,
+		&t.UserGroupID, &t.UserGroup, &t.UserID, &t.User, &t.Channels, &t.Addresses,
 		&t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func auditTarget(t *NotificationTarget) map[string]any {
 		img["url"] = MaskURL(t.URL)
 	}
 	if isPersonKind(t.Kind) {
-		img["principal_group"], img["principal"], img["channels"] = t.PrincipalGroup, t.Principal, t.Channels
+		img["user_group"], img["user"], img["channels"] = t.UserGroup, t.User, t.Channels
 	}
 	if t.Kind == TargetEmail {
 		img["addresses"] = t.Addresses
@@ -368,7 +368,7 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 		return nil, fmt.Errorf("%w: %w", ErrNotificationTargetInvalid, err)
 	}
 	if !validChannel(spec.Kind) {
-		return nil, fmt.Errorf("%w: kind %q is not a target kind (webhook, email, principal_group, principal)", ErrNotificationTargetInvalid, spec.Kind)
+		return nil, fmt.Errorf("%w: kind %q is not a target kind (webhook, email, user_group, user)", ErrNotificationTargetInvalid, spec.Kind)
 	}
 	if err := checkTargetShape(spec, people); err != nil {
 		return nil, err
@@ -378,7 +378,7 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 		return nil, fmt.Errorf("storage: begin create notification target: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var secretID, groupID, principalID *string
+	var secretID, groupID, userID *string
 	var channels, addresses []string
 	switch {
 	case spec.Kind == TargetEmail:
@@ -389,7 +389,7 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 		if channels, err = checkPersonChannels(spec.Channels); err != nil {
 			return nil, err
 		}
-		if groupID, principalID, err = resolveTargetPeople(ctx, tx, spec); err != nil {
+		if groupID, userID, err = resolveTargetPeople(ctx, tx, spec); err != nil {
 			return nil, err
 		}
 	default:
@@ -411,9 +411,9 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 		enabled = *spec.Enabled
 	}
 	var id string
-	err = tx.QueryRow(ctx, `insert into notification_target (name, label, kind, url, secret_id, principal_group_id, principal_id, channels, addresses, enabled)
+	err = tx.QueryRow(ctx, `insert into notification_target (name, label, kind, url, secret_id, user_group_id, user_id, channels, addresses, enabled)
 		values ($1, $2, $3, nullif($4, ''), $5::uuid, $6::uuid, $7::uuid, $8, $9, $10) returning id::text`,
-		spec.Name, labelOrNull(spec.Label), spec.Kind, spec.URL, secretID, groupID, principalID, channels, addresses, enabled).Scan(&id)
+		spec.Name, labelOrNull(spec.Label), spec.Kind, spec.URL, secretID, groupID, userID, channels, addresses, enabled).Scan(&id)
 	if isUniqueViolation(err) {
 		return nil, ErrNotificationTargetExists
 	}
@@ -440,28 +440,28 @@ func (p *PG) CreateNotificationTarget(ctx context.Context, actorID string, spec 
 func checkTargetShape(spec NotificationTargetSpec, people PeopleUse) error {
 	switch spec.Kind {
 	case ChannelWebhook:
-		if spec.PrincipalGroup != "" || spec.Principal != "" || len(spec.Channels) > 0 || len(spec.Addresses) > 0 {
+		if spec.UserGroup != "" || spec.User != "" || len(spec.Channels) > 0 || len(spec.Addresses) > 0 {
 			return fmt.Errorf("%w: a webhook target names a URL, not a group, a person, channels or addresses", ErrNotificationTargetInvalid)
 		}
 		return nil
 	case TargetEmail:
-		if spec.URL != "" || spec.Secret != "" || spec.PrincipalGroup != "" || spec.Principal != "" || len(spec.Channels) > 0 {
+		if spec.URL != "" || spec.Secret != "" || spec.UserGroup != "" || spec.User != "" || len(spec.Channels) > 0 {
 			return fmt.Errorf("%w: an email target names its addresses alone; the relay and its credential are the install's (notification settings)", ErrNotificationTargetInvalid)
 		}
 		return nil
-	case TargetPrincipalGroup:
+	case TargetUserGroup:
 		if !people.Groups {
 			return ErrNotificationTargetPeopleForbidden
 		}
-		if spec.PrincipalGroup == "" || spec.Principal != "" {
-			return fmt.Errorf("%w: a principal_group target names one group (principal_group) and no person", ErrNotificationTargetInvalid)
+		if spec.UserGroup == "" || spec.User != "" {
+			return fmt.Errorf("%w: a user_group target names one group (user_group) and no person", ErrNotificationTargetInvalid)
 		}
-	case TargetPrincipal:
-		if !people.Principals {
+	case TargetUser:
+		if !people.Users {
 			return ErrNotificationTargetPeopleForbidden
 		}
-		if spec.Principal == "" || spec.PrincipalGroup != "" {
-			return fmt.Errorf("%w: a principal target names one person (principal) and no group", ErrNotificationTargetInvalid)
+		if spec.User == "" || spec.UserGroup != "" {
+			return fmt.Errorf("%w: a user target names one person (user) and no group", ErrNotificationTargetInvalid)
 		}
 	}
 	if spec.URL != "" || spec.Secret != "" || len(spec.Addresses) > 0 {
@@ -511,16 +511,16 @@ func checkPersonChannels(chs []string) ([]string, error) {
 }
 
 // resolveTargetPeople binds a person target: the group by name or uuid, or the
-// person by username or uuid, who must be a human (a service account or a
+// person by username or uuid, who must be a human (a machine user or a
 // outpost is no one to tell).
-func resolveTargetPeople(ctx context.Context, q querier, spec NotificationTargetSpec) (groupID, principalID *string, err error) {
-	if spec.Kind == TargetPrincipalGroup {
-		id, err := groupIDByRef(ctx, q, spec.PrincipalGroup)
+func resolveTargetPeople(ctx context.Context, q querier, spec NotificationTargetSpec) (groupID, userID *string, err error) {
+	if spec.Kind == TargetUserGroup {
+		id, err := groupIDByRef(ctx, q, spec.UserGroup)
 		if err == nil {
-			err = q.QueryRow(ctx, `select id::text from principal_group where id = $1::uuid`, id).Scan(&id)
+			err = q.QueryRow(ctx, `select id::text from user_group where id = $1::uuid`, id).Scan(&id)
 		}
 		if errors.Is(err, ErrGroupNotFound) || errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil, fmt.Errorf("%w: principal_group %q is not a group", ErrNotificationTargetInvalid, spec.PrincipalGroup)
+			return nil, nil, fmt.Errorf("%w: user_group %q is not a group", ErrNotificationTargetInvalid, spec.UserGroup)
 		}
 		if err != nil {
 			return nil, nil, err
@@ -528,16 +528,16 @@ func resolveTargetPeople(ctx context.Context, q querier, spec NotificationTarget
 		return &id, nil, nil
 	}
 	col := "username"
-	if isUUID(spec.Principal) {
-		col = "principal_id::text"
+	if isUUID(spec.User) {
+		col = "user_id::text"
 	}
 	var id string
-	err = q.QueryRow(ctx, `select principal_id::text from human where `+col+` = $1`, spec.Principal).Scan(&id)
+	err = q.QueryRow(ctx, `select user_id::text from person where `+col+` = $1`, spec.User).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil, fmt.Errorf("%w: principal %q is not a person: a principal target names a human by username or uuid", ErrNotificationTargetInvalid, spec.Principal)
+		return nil, nil, fmt.Errorf("%w: user %q is not a person: a user target names a human by username or uuid", ErrNotificationTargetInvalid, spec.User)
 	}
 	if err != nil {
-		return nil, nil, fmt.Errorf("storage: resolve target principal %q: %w", spec.Principal, err)
+		return nil, nil, fmt.Errorf("storage: resolve target user %q: %w", spec.User, err)
 	}
 	return nil, &id, nil
 }

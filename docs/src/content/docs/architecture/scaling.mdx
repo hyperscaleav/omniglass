@@ -1,10 +1,6 @@
 ---
 title: Scaling and deployment
 description: "One binary that runs a laptop demo or a Kubernetes fleet: two run modes, embedded Postgres and NATS, the CDC bridge, horizontal scale, high availability, platform configuration, and per-database multi-tenancy."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import DriverCost from '../../../components/DriverCost.astro';
@@ -339,20 +335,20 @@ Configuration is **two tiers**, and platform settings are deliberately **central
 - **The platform settings store (a single home).** Everything else lives in the single, audited
   [settings engine](/architecture/settings/): feature flags, buffer and retention defaults, CDC routing,
   integration settings, UI defaults, official-catalog overrides, resolved most-specific-wins down the
-  principal hierarchy. An operator **settings file** (`settings.json` or YAML) is the GitOps layer, read
+  user hierarchy. An operator **settings file** (`settings.json` or YAML) is the GitOps layer, read
   into memory at boot and mounting cleanly as a **Kubernetes ConfigMap** (and a future operator); only
-  the **override** an operator sets through the API is persisted in Postgres (audited), while the file
+  the **binding** an operator sets through the API is persisted in Postgres (audited), while the file
   and the embedded defaults are recomputed each boot, so restore is a delete and the file never drifts
   into a second authoritative copy
   ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)).
 
-This is distinct from fleet [config and variables](/architecture/variables/), which describe the
+This is distinct from fleet [declared values and variables](/architecture/variables/), which describe the
 *fleet* and resolve down the cascade; the settings store describes the **platform itself**.
 
 :::note[Partial: the settings engine's platform level]
 The settings store is built at the **platform** level (the install-wide rung, renamed from `global` by
 [ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)):
-the pure resolver, the `setting_override` table, the
+the pure resolver, the `setting_binding` table, the
 admin API, the two `settings:<action>` permissions, and the Admin settings page, with `ui.theme` wired
 through to re-theme the SPA (see [settings](/architecture/settings/)). The **group** and **user** cascade
 rungs, and the `platform`-domain settings (CDC routing, integrations) named above, are the

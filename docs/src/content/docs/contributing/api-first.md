@@ -125,12 +125,12 @@ Every operation lives under `/api/v1/*`. The path shape is derivable, not specia
   `DELETE` removes. No upsert/register shortcuts.
 - **`:verb` (not `/verb`) for non-CRUD custom methods**: `/components/{name}:rename`,
   `/components/{name}/commands:issue`, `/auth/me:changePassword`,
-  `/auth/me/sessions/{id}:revoke`, `/outposts:claim`, `/principals/{id}:disable`.
+  `/auth/me/sessions/{id}:revoke`, `/outposts:claim`, `/users/{id}:disable`.
 - **A rename is a custom method, not a field write.** Every renameable collection carries a
   `:rename`, gated `<resource>:rename` and not `<resource>:update`, because moving a name breaks the
   bookmarks, runbooks, and integration config held outside the platform while nothing inside it
   breaks (every reference stores the uuid). That is why `name` is absent from the `PATCH` body of a
-  component, a system, a location, and a principal group
+  component, a system, a location, and a user group
   ([ADR-0076](/architecture/decisions/)).
 - **Singular kind sub-segments**: `/rules/calc`, `/property-types`,
   `/location-types`, `/types/event`.

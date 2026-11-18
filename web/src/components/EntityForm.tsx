@@ -683,7 +683,7 @@ export function EntityCreateForm(props: {
         <span class={EYEBROW}>Classification</span>
         <div class="flex flex-col gap-3">
           <Show when={isSystem()}>
-            <FieldRow label="Type" hint="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard: the type is what it IS, the standard is what it is built to. It is also where a generated name's stem comes from.">
+            <FieldRow label="Type" hint="What this system is for (meeting, teaching, signage). Separate from the standard: the type is what it IS, the standard is what it is built to. It is also where a generated name's stem comes from.">
               <SystemTypeSelect types={systemTypes.data ?? []} value={systemType()} onChange={setSystemType} emptyLabel="Unclassified" />
             </FieldRow>
             <FieldRow label="Standard" hint="The contract this system is built to. Optional.">

@@ -48,7 +48,7 @@ type PlanPhase struct {
 // PlanResult is what a SeedPlan wrote and where the time went.
 type PlanResult struct {
 	Locations, Systems, Components, Slots, Endpoints int
-	// Pushers is the outside actors seeded (#1743): one service principal
+	// Pushers is the outside actors seeded (#1743): one service user
 	// each, granted the pusher role on its systems, holding no token.
 	Pushers int
 	// Senders is the webhook senders seeded (#1747): one component each,
@@ -183,7 +183,7 @@ func SeedPlan(ctx context.Context, gw storage.Gateway, actorID string, p *scenar
 }
 
 // seedPlanPushers seeds each pusher the plan declares as its own service
-// principal, granted the pusher role on exactly its systems (GrantPusher,
+// user, granted the pusher role on exactly its systems (GrantPusher,
 // the shape the dev fleet's pusher takes). Its token is the lab's to mint
 // per run, so none is set here.
 func seedPlanPushers(ctx context.Context, gw storage.Gateway, actorID string, p *scenario.Plan, sysIDs map[string]string) (int, error) {

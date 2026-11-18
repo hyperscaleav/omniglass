@@ -289,8 +289,8 @@ func TestPreviewRefusals(t *testing.T) {
 func TestOnDemandRunPermissions(t *testing.T) {
 	t.Parallel()
 	s := newOutpostRunStack(t)
-	viewer := principalWithGrants(t, s.ctx, s.dsn, "run-viewer", []grant{{role: "viewer", scopeKind: "all"}})
-	operator := principalWithGrants(t, s.ctx, s.dsn, "run-operator", []grant{{role: "operator", scopeKind: "all"}})
+	viewer := userWithGrants(t, s.ctx, s.dsn, "run-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	operator := userWithGrants(t, s.ctx, s.dsn, "run-operator", []grant{{role: "operator", scopeKind: "all"}})
 	spec := map[string]any{"spec": map[string]any{"version": 1, "transport": "tcp"}}
 	if code, _ := s.c.send(viewer, http.MethodPost, "/drivers:validate", spec); code != http.StatusOK {
 		t.Errorf("viewer validate = %d, want 200", code)
@@ -313,7 +313,7 @@ func TestOnDemandRunPermissions(t *testing.T) {
 	// Outposts take an all-scope outpost:read, so an operator scoped to one
 	// component may not name one for a preview: a 403, not a 500.
 	compID := entityID(t, s.c, s.owner, "/components", "display-api")
-	scoped := principalWithGrants(t, s.ctx, s.dsn, "run-scoped", []grant{{role: "operator", scopeKind: "component", scopeID: compID}})
+	scoped := userWithGrants(t, s.ctx, s.dsn, "run-scoped", []grant{{role: "operator", scopeKind: "component", scopeID: compID}})
 	if code, _ := s.c.send(scoped, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusForbidden {
 		t.Errorf("a component-scoped preview = %d, want 403", code)
 	}
@@ -403,7 +403,7 @@ func TestHandingASecretToAOutpostTakesSecretBind(t *testing.T) {
 	attach := map[string]any{"component": "display-bind", "driver": "boreal-edge-web", "outpost": "edge-api",
 		"inputs": map[string]string{"host": "10.20.4.31", "login": "display-login"}}
 
-	reader := principalWithGrants(t, s.ctx, s.dsn, "bind-less", []grant{{role: "bind-less", scopeKind: "all"}})
+	reader := userWithGrants(t, s.ctx, s.dsn, "bind-less", []grant{{role: "bind-less", scopeKind: "all"}})
 	if code, raw := s.c.send(reader, http.MethodPost, "/drivers:preview", previewBody); code != http.StatusForbidden || !strings.Contains(string(raw), "secret:bind") {
 		t.Errorf("a preview without secret:bind = %d %s, want 403 naming it", code, raw)
 	}
@@ -411,7 +411,7 @@ func TestHandingASecretToAOutpostTakesSecretBind(t *testing.T) {
 		t.Errorf("an attach without secret:bind = %d %s, want 403 naming it", code, raw)
 	}
 
-	binder := principalWithGrants(t, s.ctx, s.dsn, "binder", []grant{{role: "binder", scopeKind: "all"}})
+	binder := userWithGrants(t, s.ctx, s.dsn, "binder", []grant{{role: "binder", scopeKind: "all"}})
 	s.c.do(binder, http.MethodPost, "/drivers:preview", previewBody, http.StatusOK)
 	var ep struct {
 		ID     string            `json:"id"`

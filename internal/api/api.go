@@ -19,6 +19,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/hyperscaleav/omniglass/internal/assistant/provider"
 	"github.com/hyperscaleav/omniglass/internal/clientaddr"
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
 	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
@@ -69,14 +70,14 @@ type options struct {
 	// version is the server's build version, reported to MCP clients.
 	version string
 	// outpostRunner reaches the outposts for on-demand runs (#1163); nil answers
-	// those routes 503. outpostRuns and outpostRunsPerPrincipal bound the runs in
+	// those routes 503. outpostRuns and outpostRunsPerUser bound the runs in
 	// flight, in all and per caller; zero takes the defaults.
-	outpostRunner                        OutpostRunner
-	outpostRuns, outpostRunsPerPrincipal int
-	// commandWaiters and commandWaitersPerPrincipal bound the command issues
+	outpostRunner                   OutpostRunner
+	outpostRuns, outpostRunsPerUser int
+	// commandWaiters and commandWaitersPerUser bound the command issues
 	// waiting on their outcome at once, in all and per caller; zero takes the
 	// defaults.
-	commandWaiters, commandWaitersPerPrincipal int
+	commandWaiters, commandWaitersPerUser int
 	// lab marks a server `omniglass lab` started (#1195); /auth/status
 	// reports it so the console shows the lab banner.
 	lab bool
@@ -96,6 +97,13 @@ type options struct {
 	// log is where a route logs a failure it answers without its cause.
 	// Unset is slog.Default.
 	log *slog.Logger
+	// omnibotModel is the model a server-side omnibot run (#2121) asks. Nil
+	// answers :run 503: the server has no model to run omnibot with.
+	omnibotModel provider.Provider
+	// self is the handler being built, so a server-side run calls its tools
+	// back through the same router a direct call takes. Set at request time
+	// only: the spec dump has none.
+	self http.Handler
 }
 
 // Option configures NewHandler.
@@ -143,14 +151,18 @@ func WithLogger(l *slog.Logger) Option { return func(o *options) { o.log = l } }
 // WithVersion sets the build version the MCP server reports to its clients.
 func WithVersion(v string) Option { return func(o *options) { o.version = v } }
 
+// WithOmnibotModel is the model a server-side omnibot run asks (#2121): a
+// recording in the lab and in tests until a live provider lands.
+func WithOmnibotModel(p provider.Provider) Option { return func(o *options) { o.omnibotModel = p } }
+
 // WithNatsURL sets the advertised NATS URL returned by the outpost-claim exchange.
 func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
 
 // WithCommandWaitLimits bounds how many command issues may wait on their
-// outcome at once, in all and per principal (a wait past either is a 429,
+// outcome at once, in all and per user (a wait past either is a 429,
 // refused before anything is issued). Zero keeps a default.
-func WithCommandWaitLimits(total, perPrincipal int) Option {
-	return func(o *options) { o.commandWaiters, o.commandWaitersPerPrincipal = total, perPrincipal }
+func WithCommandWaitLimits(total, perUser int) Option {
+	return func(o *options) { o.commandWaiters, o.commandWaitersPerUser = total, perUser }
 }
 
 // WithTelemetryPublisher supplies the bus seam the push-ingest route publishes
@@ -186,6 +198,7 @@ func NewHandler(gw storage.Gateway, opts ...Option) http.Handler {
 		o.log = slog.Default()
 	}
 	r := chi.NewRouter()
+	o.self = r
 	r.Route("/api/v1", func(sub chi.Router) {
 		// Time every request first, so its duration covers the whole API
 		// stack; the route template it records is read after the router ran.
@@ -285,8 +298,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/auth/me",
-		Summary:     "The authenticated principal, its permissions, and grants",
-		Description: "Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
+		Summary:     "The authenticated user, its permissions, and grants",
+		Description: "Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.",
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.meHandler)
 
@@ -305,7 +318,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Method:      http.MethodPatch,
 		Path:        "/auth/me",
 		Summary:     "Update your own profile",
-		Description: "Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).",
+		Description: "Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own user).",
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.updateMeHandler)
 
@@ -324,7 +337,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		Method:      http.MethodGet,
 		Path:        "/auth/me/sessions",
 		Summary:     "List your own sessions and tokens",
-		Description: "Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.",
+		Description: "Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another user's). The token secret is never returned.",
 		Middlewares: huma.Middlewares{a.authn},
 	}, a.listMeSessionsHandler)
 
@@ -443,10 +456,11 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerNotificationRoutes(api, a, gw)
 	registerInboxRoutes(api, a, gw)
 	registerPersonalRuleRoutes(api, a, gw)
+	registerAssistantRoutes(api, a, gw, o)
 	registerOptOutRoutes(api, a, gw)
 	registerDraftTestRoute(api, a, gw)
-	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerPrincipal))
-	registerOutpostRunRoutes(api, a, gw, o.outpostRunner, newRunLimiter(o.outpostRuns, o.outpostRunsPerPrincipal))
+	registerCommandRoutes(api, a, gw, newWaitLimiter(o.commandWaiters, o.commandWaitersPerUser))
+	registerOutpostRunRoutes(api, a, gw, o.outpostRunner, newRunLimiter(o.outpostRuns, o.outpostRunsPerUser))
 	registerProductPropertyRoutes(api, a, gw)
 	registerComponentPropertyRoutes(api, a, gw)
 	registerStandardPropertyRoutes(api, a, gw)
@@ -477,8 +491,8 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerMetricTypeRoutes(api, a, gw)
 	registerTagRoutes(api, a, gw)
 	registerFileRoutes(api, a, gw)
-	registerPrincipalRoutes(api, a, gw)
-	registerPrincipalGroupRoutes(api, a, gw)
+	registerUserRoutes(api, a, gw)
+	registerUserGroupRoutes(api, a, gw)
 	registerImpersonationRoutes(api, a, gw)
 	registerAuditRoutes(api, a, gw)
 	registerSettingsRoutes(api, a, gw, svc)
@@ -519,15 +533,15 @@ func specAPI(gw storage.Gateway) huma.API {
 }
 
 // defaultSettingsService builds a settings service with no operator file, reading
-// the platform override live from the Gateway (the same seam the boot path uses,
+// the platform binding live from the Gateway (the same seam the boot path uses,
 // minus the operator file). It is the fallback when no service is wired via
-// WithSettingsService, so NewHandler(gw) resolves real overrides; the boot path
-// supplies a file-aware service instead. The override reader is never invoked
+// WithSettingsService, so NewHandler(gw) resolves real bindings; the boot path
+// supplies a file-aware service instead. The binding reader is never invoked
 // during the server-less spec dump (handlers are only registered, not called), so
 // specAPI's stub gateway is fine.
 func defaultSettingsService(gw storage.Gateway) *settings.Service {
 	return settings.NewService(nil, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
-		rows, err := gw.GetSettingOverrides(ctx, scope)
+		rows, err := gw.GetSettingBindings(ctx, scope)
 		if err != nil {
 			return nil, nil, err
 		}

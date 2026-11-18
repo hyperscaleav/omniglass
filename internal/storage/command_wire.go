@@ -170,7 +170,7 @@ func (p *PG) PendingOutpostCommands(ctx context.Context, outpost string) ([]Comm
 		with here as (
 			select distinct e.component as component_id
 			from endpoint e
-			where e.outpost_id = (select principal_id from outpost where name = $1)
+			where e.outpost_id = (select user_id from outpost where name = $1)
 			  and e.driver_id is not null
 			  and e.component is not null
 		),
@@ -180,7 +180,7 @@ func (p *PG) PendingOutpostCommands(ctx context.Context, outpost string) ([]Comm
 			(select m.value from metric_declared m where m.command_id = k.id order by m.id desc limit 1),
 			k.disruptive, k.quiet_seconds, k.hold_seconds, k.target_id, k.outpost_id::text, k.power_outlet_param
 		from candidate k
-		where k.outpost_id = (select principal_id from outpost where name = $1)
+		where k.outpost_id = (select user_id from outpost where name = $1)
 		  and (k.dispatched_at is null or k.dispatched_at < now() - interval '`+redeliverAfter+`')`, outpost)
 	if err != nil {
 		return nil, fmt.Errorf("storage: pending commands for %q: %w", outpost, err)
@@ -320,7 +320,7 @@ func (p *PG) markDispatched(ctx context.Context, delivered []dispatch) error {
 			from unnest($1::bigint[], $2::uuid[]) as u(id, endpoint_id)
 			where c.id = u.id
 			returning c.id, c.delivery_count, extract(epoch from c.first_dispatched_at - c.ts) * 1000, c.first_dispatched_at,
-				(select n.platform_component_id::text from endpoint i join outpost n on n.principal_id = i.outpost_id where i.id = u.endpoint_id)`,
+				(select n.platform_component_id::text from endpoint i join outpost n on n.user_id = i.outpost_id where i.id = u.endpoint_id)`,
 			ids, endpoints)
 		if err != nil {
 			return fmt.Errorf("storage: mark %d commands dispatched: %w", len(ids), err)
@@ -428,7 +428,7 @@ func (p *PG) RecordCommandExecution(ctx context.Context, outpost string, command
 		  and exists (
 			select 1 from endpoint i
 			where i.id = c.dispatched_endpoint_id
-			  and i.outpost_id = (select principal_id from outpost where name = $2))
+			  and i.outpost_id = (select user_id from outpost where name = $2))
 		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.outpost_id)::text,
 			c.instance, (select name from command_type where id = c.command_type_id), c.dispatched_endpoint_id::text,
 			extract(epoch from c.executed_at - c.first_dispatched_at) * 1000, c.executed_at,
@@ -618,7 +618,9 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 	// The reply is an observation of a property target, recorded where the
 	// driver's polls of it land: held to the property's validation like any
 	// telemetry (a value outside it fails the command and records nothing),
-	// and written only as a transition.
+	// written only as a transition, and not at all when the target was
+	// observed after the command was first delivered (#1606): a late reply is
+	// evidence for the command, never a newer state of the device.
 	if ct.TargetPropertyType != "" {
 		var dataType string
 		var validation []byte
@@ -632,7 +634,11 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		if err != nil {
 			return nil, err
 		}
-		if latest == nil || !replyMatchesIntent(latest.Value, verdict.Value) {
+		newer, err := observedSinceDispatch(ctx, tx, commandID, latest)
+		if err != nil {
+			return nil, err
+		}
+		if !newer && (latest == nil || !replyMatchesIntent(latest.Value, verdict.Value)) {
 			now, err := dbNow(ctx, tx)
 			if err != nil {
 				return nil, err
@@ -650,6 +656,27 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		return failed(fmt.Sprintf("the reply carried %s, not the intended %s", verdict.Value, valueText(intended.Value)))
 	}
 	return &settlementOutcome{status: "settled", by: SettledByReply, reason: fmt.Sprintf("the reply carried %s, the intended value", verdict.Value)}, nil
+}
+
+// observedSinceDispatch reports whether the target's latest observation was
+// taken after the command's first delivery to a node, the earliest moment an
+// exchange that could have produced the reply began (#1606). A redelivery
+// advances dispatched_at, but the report of an earlier delivery's exchange is
+// still accepted, so the last take would miss a push made between the two. A
+// reply read after the first delivery is older than such an observation
+// however late it reaches the server, so it must not be written over it. The observation's time is the one it carries (a node's sample time
+// for a poll, the database's for a push); a node clock ahead of the database's
+// only withholds a reply observation the next poll restores (ADR-0141's "late,
+// never wrong"), and one behind it leaves today's behavior.
+func observedSinceDispatch(ctx context.Context, q querier, commandID int64, latest *CurrentValue) (bool, error) {
+	if latest == nil {
+		return false, nil
+	}
+	var dispatched *time.Time
+	if err := q.QueryRow(ctx, `select first_dispatched_at from command where id = $1`, commandID).Scan(&dispatched); err != nil {
+		return false, fmt.Errorf("storage: first delivery time of command %d: %w", commandID, err)
+	}
+	return dispatched != nil && latest.TS.After(*dispatched), nil
 }
 
 // writeReplyObservation records a command's reply, read through its driver

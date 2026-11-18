@@ -4,7 +4,8 @@ import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
 import { entryHref, visibleGroups } from "../lib/catalog";
 import { useMe, can } from "../lib/auth";
-import { Search, ArrowRight } from "./icons";
+import { tray, triageCall, type Subject } from "../lib/handover";
+import { Search, ArrowRight, Bot } from "./icons";
 
 // The ⌘K command palette: a global jump across the whole app (distinct from a
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
@@ -51,7 +52,25 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
 export const matches = (c: Command, q: string): boolean =>
   c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q) || (c.section ?? "").toLowerCase().includes(q);
 
-export default function CommandPalette(props: { open: boolean; onClose: () => void }) {
+// An ask row hands the palette's query to omnibot (#1167) instead of jumping;
+// a triage row runs the triage-alarm skill on an alarm gathered into omnibot's
+// tray (#2122).
+export type AskRow = { label: string; ask: true };
+export type TriageRow = { label: string; triage: Subject };
+export type Row = Command | AskRow | TriageRow;
+
+// withAsk ends the results with a triage row for each gathered alarm the query
+// matches, then the ask row, for a person who may run omnibot.
+export function withAsk(results: Command[], q: string, allowed: boolean, gathered: Subject[] = []): Row[] {
+  if (!allowed) return results;
+  const triage = gathered
+    .filter((s) => triageCall(s))
+    .map((s) => ({ label: `Triage alarm ${s.ref}`, triage: s }))
+    .filter((r) => r.label.toLowerCase().includes(q.toLowerCase()));
+  return [...results, ...triage, { label: q ? `Ask omnibot: ${q}` : "Ask omnibot", ask: true }];
+}
+
+export default function CommandPalette(props: { open: boolean; onClose: () => void; onAsk?: (prompt: string) => void; onTriage?: (alarm: Subject) => void }) {
   const navigate = useNavigate();
   const me = useMe();
   const commands = createMemo(() => buildCommands((tokens) => can(me.data, ...tokens)));
@@ -61,9 +80,10 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
   const optId = (i: number) => `${listId}-opt-${i}`;
 
   const results = createMemo(() => {
-    const q = query().trim().toLowerCase();
-    if (!q) return commands();
-    return commands().filter((c) => matches(c, q));
+    const raw = query().trim();
+    const q = raw.toLowerCase();
+    const found = q ? commands().filter((c) => matches(c, q)) : commands();
+    return withAsk(found, raw, !!props.onAsk && can(me.data, "assistant", "use"), props.onTriage ? tray() : []);
   });
 
   // Reset query + selection each time it opens; keep active in range as results change.
@@ -77,10 +97,12 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
     if (active() >= results().length) setActive(Math.max(0, results().length - 1));
   });
 
-  const go = (c: Command | undefined) => {
+  const go = (c: Row | undefined) => {
     if (!c) return;
     props.onClose();
-    navigate(c.path);
+    if ("ask" in c) props.onAsk?.(query().trim());
+    else if ("triage" in c) props.onTriage?.(c.triage);
+    else navigate(c.path);
   };
 
   const onKey = (e: KeyboardEvent) => {
@@ -134,8 +156,11 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
                         onMouseEnter={() => setActive(i())}
                         onClick={() => go(c)}
                       >
-                        <Show when={c.group}>
-                          <span class="text-xs text-base-content/40">{c.group}</span>
+                        <Show when={"ask" in c || "triage" in c}>
+                          <Bot size={14} />
+                        </Show>
+                        <Show when={"group" in c && c.group}>
+                          <span class="text-xs text-base-content/40">{"group" in c && c.group}</span>
                           <span class="text-base-content/30">/</span>
                         </Show>
                         <span class="flex-1">{c.label}</span>

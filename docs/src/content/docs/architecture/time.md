@@ -1,10 +1,6 @@
 ---
 title: Time
 description: "The one primitive that manufactures events from the passage of time, so the rest of the pipeline stays purely event-driven."
-sidebar:
-  badge:
-    text: Design
-    variant: caution
 ---
 
 ::::design[Target design: the time primitive, tracked in #419]
@@ -36,7 +32,7 @@ woken by a ticker with a crash-recovery backstop), each due row's fire realized 
 - **recurring** (a schedule): reschedule the next `fire_at` after firing. Digests, synthetic
   checks, SLA calendar resets.
 - **armed and cancellable** (a relative one-shot): armed by an event, fires later, cancelled if
-  the condition clears. The `for`-duration sustain, runbook waits, escalation delays.
+  the rule clears. The `for`-duration sustain, runbook waits, escalation delays.
 - **reset-on-arrival** (a watchdog): pushed to `now + tolerance` on each sample, fires if it
   lapses. No-data and staleness.
 

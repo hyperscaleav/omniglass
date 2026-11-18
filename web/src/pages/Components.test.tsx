@@ -18,7 +18,7 @@ import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 // edit; the detail is read-only in view (no in-body mutation control) and editable via
 // the pencil. Data is seeded into the query cache so no server is needed; `>` grants
 // every permission.
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 const comp: Component = { id: uuidFor("c-1"), name: "mic-2", label: "Ceiling Mic 2", product_id: "shure-mxa920", system_count: 0, effective_tags: {} };
 
 // #614: every component is an instance of a product; the create form's
@@ -406,38 +406,38 @@ describe("Components create identity", () => {
 // established that a create form does not present what the platform refuses, and
 // a 403 discovered after the form is filled in is the outcome that pattern
 // exists to prevent.
-describe("Components create offers a system only to a principal who may bind one", () => {
+describe("Components create offers a system only to a user who may bind one", () => {
   afterEach(() => {
     window.history.pushState({}, "", "/");
     vi.restoreAllMocks();
   });
 
   // The operator tier as roles.yaml seeds it, beside the all-scoped viewer floor
-  // a real principal carries: system:READ is held, system:update is not, which is
+  // a real user carries: system:READ is held, system:update is not, which is
   // what makes this test about the permission that gates the membership rather
   // than about visibility.
   const operatorMe: Me = {
-    principal: { id: "u-op", kind: "human" },
-    human: { username: "op" },
+    user: { id: "u-op", kind: "person" },
+    person: { username: "op" },
     permissions: ["component:create,update,rename,move", "*:read"],
     grants: [],
   };
 
-  // A principal holding system:update whose grants reach no system at all. That
+  // A user holding system:update whose grants reach no system at all. That
   // is not a corner case: applicableKinds("system") is {"system"} alone and the
   // cross-tier expansion is unbuilt (#10), so a location-scoped deploy grant
   // resolves system:update to the empty set while the viewer floor beside it
   // reads every system in the fleet. Every row comes back readable and none
   // writable, which is what the actions array says.
   const deployMe: Me = {
-    principal: { id: "u-dep", kind: "human" },
-    human: { username: "tech-east" },
+    user: { id: "u-dep", kind: "person" },
+    person: { username: "tech-east" },
     permissions: ["system:create,update,rename,move", "component:create,update,rename,move", "*:read"],
     grants: [],
   };
   const readOnlySystems: System[] = systems.map((s) => ({ ...s, actions: [] }));
 
-  it("offers the picker to a principal who may write a membership", async () => {
+  it("offers the picker to a user who may write a membership", async () => {
     stubFetch();
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
@@ -470,7 +470,7 @@ describe("Components create offers a system only to a principal who may bind one
     expect(screen.getByLabelText("Parent component")).toBeTruthy();
   });
 
-  it("hides it from a principal who may not, and names the permission", async () => {
+  it("hides it from a user who may not, and names the permission", async () => {
     stubFetch();
     mount("/components/create", operatorMe);
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
@@ -487,7 +487,7 @@ describe("Components create offers a system only to a principal who may bind one
   // leak it into the draft first, one request earlier and against a route gated
   // by component:create rather than system:update. stubFetch answers the draft
   // itself and would have swallowed that, so this test drives its own fetch.
-  it("neither drafts nor posts a system for the principal it hid the picker from", async () => {
+  it("neither drafts nor posts a system for the user it hid the picker from", async () => {
     let sent: Record<string, unknown> | undefined;
     const drafted: Record<string, unknown>[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

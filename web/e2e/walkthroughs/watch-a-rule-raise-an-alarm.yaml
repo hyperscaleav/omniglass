@@ -3,7 +3,7 @@
 # reachability-lost wait out its sustain and open a High alarm that moves the
 # system, live. The component is panel-2 (Touch Panel 2 in Media Lab, the only
 # component by that name in the seeded fleet), which fills the Touch Control
-# slot of the system Media Lab Classroom 2, so the alarm takes that system to
+# slot of the system Media Lab Teaching 2, so the alarm takes that system to
 # degraded.
 #
 # The wait is real time, and the 60s budget counts it. The outpost finds the
@@ -25,7 +25,7 @@ title: Watch a rule raise an alarm
 description: Unplug a simulated touch panel from its page, open the system it serves, and watch the official reachability rule open a High alarm that takes the system to degraded while you look.
 steps:
   - goto: /components/panel-2
-    caption: Touch Panel 2 fills the Touch Control slot of Media Lab Classroom 2. It reads healthy.
+    caption: Touch Panel 2 fills the Touch Control slot of Media Lab Teaching 2. It reads healthy.
   - click: { role: button, name: Open simulation }
     caption: The panel is simulated, so it can be broken on purpose from its own page.
   - click: '#sim-unplugged'
@@ -34,7 +34,7 @@ steps:
     caption: Save. The panel is marked unplugged, and the simulator applies it on its next pull.
   - press: Escape
     caption: Close the simulation. The panel's page lists the systems it serves.
-  - click: '[data-testid="leaf-memberships"] >> role=button[name="Media Lab Classroom 2"]'
+  - click: '[data-testid="leaf-memberships"] >> role=button[name="Media Lab Teaching 2"]'
     caption: Open the system it serves. It still reads healthy; the official rule waits for a down to hold 15s, so one failed probe never pages.
   - wait: { selector: '[data-testid="alarm-strip"]:has-text("panel-2")', timeout: 45000 }
     caption: The down held, so the rule opened a High alarm on the panel. The system's view refreshes on its own, so Why names it with no reload.

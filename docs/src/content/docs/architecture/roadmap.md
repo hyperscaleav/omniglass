@@ -3,16 +3,16 @@ title: Roadmap
 description: "The directional layer: the epics and the architectural arc ahead, and how forward-looking work converges into the spine as it ships."
 ---
 
-The [architecture](/architecture/) is written as one timeless design and converges **in place** as the
-code catches up: a page moves `Design` to `Partial` to `Built`, it is never forked into a separate
+The design is written as one timeless description and converges **in place** as the code catches up:
+a rebuilt page moves `Design` to `Partial` to `Built`, it is never forked into a separate
 "future" copy that later gets deleted. So this page is not a shadow architecture. It is the **readable
 index of direction**: the epics in flight, the big architectural arc still ahead, and pointers to where
 each lands in the spine.
 
 Three surfaces carry the time axis, and this page ties them together:
 
-- **[Implementation status](/architecture/status/)** is the live map of what is built (the per-page badge
-  and the per-slice log).
+- **[Implementation status](/architecture/status/)** is the live map of what is built (the rebuilt pages'
+  badges and the per-slice log).
 - **[Decision log](/architecture/decisions/)** is the dated history of calls, reversals, and divergences.
 - **GitHub epics** are the **source of truth** for scope and sequencing; this page links them and is not a
   substitute for them. Nothing here is a commitment that a detail ships unchanged; an epic is where the
@@ -25,8 +25,8 @@ modes over a BYO Postgres, and the tiers below are shipped, tested, and live in 
 per-slice detail is on [implementation status](/architecture/status/).
 
 - **Identity and access, end to end.** Password, session-cookie, and API-token auth with expiry,
-  lockout, and password policy; the full principal lifecycle (disable, archive, purge); impersonation
-  with dual-actor audit; principal groups with grant-by-group; grants with scope operators; and the
+  lockout, and password policy; the full user lifecycle (disable, archive, purge); impersonation
+  with dual-actor audit; user groups with grant-by-group; grants with scope operators; and the
   append-only [audit](/architecture/audit/) trail with its admin read surface.
 - **The fleet and its catalogs.** The `location` / `system` / `component` trees on the shared
   scoped-CRUD primitive, `system_member` multi-membership, system slots with the typed-slot assignment
@@ -73,7 +73,7 @@ authoritative.
 | Epic | Outcome | Lands in |
 |---|---|---|
 | [Pre-release hardening for 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. The expression engine (#524), the event rule tier (#819), and [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603) are done: #603 closed with both its arcs (the stateless one, then held sessions, listeners, scheduled polls and re-derived tasks) and two protocol waves, and its open follow-ups (more protocols, server ingress, files, connection metrics) moved to the [collection tracker after 0.1.0 (#1187)](https://github.com/hyperscaleav/omniglass/issues/1187). What the tag still waits on is the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430), the [slot staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504), and the pre-tag hygiene the epic lists. | [collection](/architecture/collection/), [outposts](/architecture/outposts/) |
-| [Groups as scope and the cross-tier cascade (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
+| [Groups as scope and the cross-tier cascade (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). User groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
 | [Public releases (#57)](https://github.com/hyperscaleav/omniglass/issues/57) | Ahead: signed and notarized binaries for every major OS/arch and one-line installs (Homebrew / Scoop / winget), so a first-time user runs with no security warning. | [scaling and deployment](/architecture/scaling/) |
 | [Embedded Postgres run mode (#19)](https://github.com/hyperscaleav/omniglass/issues/19) | Ahead: an opt-in single-binary mode with a managed embedded Postgres, for edge, demo, and learning installs with zero external database. | [scaling and deployment](/architecture/scaling/) |
 
@@ -107,7 +107,7 @@ that describes the target:
    #1047), and the outpost's push listeners (shared tcp and udp ports, syslog, traps: #1148 to #1150).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal catalog and the exclusive-arc owner columns), the sample sinks,
-   [config and variables](/architecture/variables/) resolved down the
+   [variables, secrets, and declared values](/architecture/variables/) resolved down the
    [cascade](/architecture/cascade/) all shipped, and so has the
    [expression engine](/architecture/expressions/) the rules share. Still ahead on this band: the
    rest of the expression design (the Omniglass functions, unit conversion, and the sites beyond rule

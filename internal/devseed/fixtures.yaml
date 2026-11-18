@@ -428,8 +428,8 @@ variables:
 # directory and the effective-tags cascade come up populated. `environment` is
 # universal with a tenant-wide default; `category` is narrowed to components;
 # `asset-id` is non-propagating (a flat per-entity label). The scoped binding
-# overrides the platform default for the west building's subtree, so a component
-# under it teaches the override while a component under another top keeps the
+# shadows the platform default for the west building's subtree, so a component
+# under it teaches the shadowing while a component under another top keeps the
 # platform value: the binding stops at its own top.
 tags:
   - name: environment
@@ -1176,7 +1176,7 @@ components:
     product: newtron-panel-7
     location: lab
 
-# Property values: two overrides the huddle display declares over its product's
+# Property values: two values the huddle display declares over its product's
 # contract, so the effective-properties panel teaches direct-vs-inherited.
 # `model-number` stays unset and resolves to the product default ("QM55"), and
 # `mac-address` stays unset with no default, showing the other two states.
@@ -1232,7 +1232,7 @@ systems:
   # briefing-av below the ONE provisioning exception. The pods keep their other
   # job: the fleet's same-BUCKET same-type siblings, the pair that demonstrates
   # the ordinal the system rule reads (#693): two `class` systems in one room
-  # mint `classroom` and `classroom-2`, rendering "Classroom" and "Classroom 2".
+  # mint `classroom` and `classroom-2`, rendering "Teaching" and "Teaching 2".
   - key: lab-pod-a
     standard: classroom
     system_type: class
@@ -2296,7 +2296,7 @@ sim_identity_bindings:
 # declares its pushers: each an emulator device of a profile with a push
 # face. The booking service is a scheduling platform's integration that
 # posts a location's bookings (booking-count, booking-state) to POST
-# /telemetry:push, owned by the location's system. Its principal holds
+# /telemetry:push, owned by the location's system. Its user holds
 # telemetry:push alone, scoped to its systems, so it can push nowhere else
 # and read nothing. The lab mints its token on every run, as it does the
 # outpost's, and the emulator beside the outpost pushes with it. A push has no

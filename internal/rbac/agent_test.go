@@ -35,7 +35,7 @@ func TestWithinIntersects(t *testing.T) {
 
 // TestWithoutDropsActions is the agent ceiling (#1179, #2047): a reveal or
 // enroll action is refused whatever pattern would grant it, the owner's `>`
-// included, so an agent principal can never decrypt a credential, while it
+// included, so an agent user can never decrypt a credential, while it
 // still binds one it never reads.
 func TestWithoutDropsActions(t *testing.T) {
 	owner := set(">").Without("reveal", "enroll")

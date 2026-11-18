@@ -72,20 +72,20 @@ Show
 Type "# A technician who may edit this room, and read (not edit) every component"
 Enter
 Wait
-Type `omniglass principal create --username staff-tech --password 'staffing-demo-passphrase' | jq -c '{username: .human.username}'`
+Type `omniglass user create --username staff-tech --password 'staffing-demo-passphrase' | jq -c '{username: .person.username}'`
 Enter
 Wait
-Type `omniglass principal grant create staff-tech --role deploy --scope-kind system --scope-id staff-room | jq -c '{role, scope_kind}'`
+Type `omniglass user grant create staff-tech --role deploy --scope-kind system --scope-id staff-room | jq -c '{role, scope_kind}'`
 Enter
 Wait
-Type `omniglass principal grant create staff-tech --role viewer --scope-kind all | jq -c '{role, scope_kind}'`
+Type `omniglass user grant create staff-tech --role viewer --scope-kind all | jq -c '{role, scope_kind}'`
 Enter
 Wait
 Type `omniglass component create --name staff-other-bar --product kestrel-vroom | jq -c '{name, product}'`
 Enter
 Wait
 Hide
-Type `demo_hush 'tech=$(omniglass principal impersonate staff-tech --mode act_as | jq -r .token)'`
+Type `demo_hush 'tech=$(omniglass user impersonate staff-tech --mode act_as | jq -r .token)'`
 Enter
 Wait
 Show

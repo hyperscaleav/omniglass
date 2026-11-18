@@ -59,7 +59,7 @@ func TestReachabilityNamesWhyAVerdictIsPending(t *testing.T) {
 		('c-verdict', 'icmp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.13"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `update endpoint set outpost_id = (select principal_id from outpost where name = 'edge-1')
+	if _, err := conn.Exec(ctx, `update endpoint set outpost_id = (select user_id from outpost where name = 'edge-1')
 		where name in ('b-assigned', 'c-verdict')`); err != nil {
 		t.Fatalf("assign outpost: %v", err)
 	}

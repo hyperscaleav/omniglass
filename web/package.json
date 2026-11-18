@@ -30,6 +30,7 @@
     "solid-js": "^1.9.18"
   },
   "devDependencies": {
+    "@ag-ui/core": "1.0.5",
     "@playwright/test": "^1.65.0",
     "@solidjs/testing-library": "^0.8.10",
     "@tailwindcss/vite": "^4.3.4",

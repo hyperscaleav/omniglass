@@ -84,7 +84,7 @@ func TestAnOrphanedBatchIsWarnedOnceAndCounted(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
-		('tcp', 'tcp', (select id from component where name = 'disp-2'), (select principal_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
+		('tcp', 'tcp', (select id from component where name = 'disp-2'), (select user_id from outpost where name = 'outpost-b'), '{"target":"127.0.0.1:1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values

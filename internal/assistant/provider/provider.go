@@ -17,13 +17,14 @@ const (
 
 // Message is one entry in the conversation: the person's prompt, a model
 // turn (its text and the calls it asked for), or a tool's result answering
-// the call named by ToolCallID.
+// the call named by ToolCallID. Its JSON is how a stored conversation keeps
+// it (#2113).
 type Message struct {
-	Role       Role
-	Text       string
-	ToolCalls  []ToolCall
-	ToolCallID string
-	IsError    bool
+	Role       Role       `json:"role"`
+	Text       string     `json:"text,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	IsError    bool       `json:"is_error,omitempty"`
 }
 
 // Tool is a tool offered to the model: its name, what it does, and the JSON
@@ -36,9 +37,9 @@ type Tool struct {
 
 // ToolCall is a call the model asked for.
 type ToolCall struct {
-	ID        string
-	Name      string
-	Arguments map[string]any
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments,omitempty"`
 }
 
 // Turn is a model's answer: text for the person, calls to make, or both. A

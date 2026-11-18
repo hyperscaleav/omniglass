@@ -1,10 +1,6 @@
 ---
 title: Commands
 description: "The do primitive: the command_type catalog, command invocations, and computed settlement that ties want, told, and is together."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -205,7 +201,7 @@ Issuing is one transaction writing three things:
 `POST /components/{name}/commands:issue` is the write, gated by `command:issue` and scope-injected
 through the component. The **fence is the issue scope, not the read scope**
 ([ADR-0117](/architecture/decisions/#adr-0117-an-actuation-is-fenced-by-the-permission-that-authorizes-it)):
-`command` is a component-tier resource, so a principal holding a wide component read beside a
+`command` is a component-tier resource, so a user holding a wide component read beside a
 room-scoped command grant may command that room and no more. The read scope decides only which
 refusal it is owed, a non-disclosing 404 outside it and a 403 for a component it can see but not
 command ([the three-way split](/architecture/identity-access/#the-three-way-status-split)).
@@ -233,7 +229,11 @@ spec says how its commands settle:
   and settles the command if it matches the intent or fails it if not. For a property target the
   value is also recorded as an observation on the dispatched endpoint, held to the property's
   validation like any telemetry (a value outside it fails the command and records nothing) and
-  written only when it changes; a metric target is judged without a recorded sample.
+  written only when it changes and only when the target was not observed after the command's first
+  delivery: a reply that reaches the server after the device has pushed a newer value still settles
+  the command, but leaves that value as the latest
+  ([ADR-1606](/architecture/decisions/#adr-1606-a-late-reply-settles-its-command-but-never-overwrites-a-newer-observation)).
+  A metric target is judged without a recorded sample.
 - `settle: { from: response, success: { regex: ... } }`: the reply only confirms (`OK`). A
   matching reply settles the command; any other fails it.
 - `settle: { from: observe }`, the default: the reply decides nothing, and the next observation of
@@ -336,7 +336,7 @@ holds it, and the read floor gives every issuer it wherever it may issue.
 saying where. It polls quickly at first (a reply settles a command within an outpost's cycle) and backs
 off to once a second, and once the deadline passes it judges the command itself, so a timeout answers
 at the window rather than at the next sweep. At most 64 waits run at once across a server and 4 per
-principal; a wait past either is a 429 refused before anything is issued, so a refusal leaves nothing
+user; a wait past either is a 429 refused before anything is issued, so a refusal leaves nothing
 behind to retry around.
 
 ## Storage
@@ -382,4 +382,4 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
   }}
 />
 
-Related: [properties](/architecture/properties/), [events](/architecture/events/), [config, secrets, and variables](/architecture/variables/), and [alarms and actions](/architecture/alarms-actions/) (where a reconcile policy issues a command).
+Related: [properties](/architecture/properties/), [events](/architecture/events/), [variables, secrets, and declared values](/architecture/variables/), and [alarms and actions](/architecture/alarms-actions/) (where a reconcile policy issues a command).

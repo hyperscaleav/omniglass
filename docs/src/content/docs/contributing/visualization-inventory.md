@@ -67,7 +67,7 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 | V09 | `Count` per catalog row (`pages/CatalogOverview.tsx`) | `/catalog` | derived | each catalog's own list read, on the list page's query key | mount+focus | metric card |
 | V10 | `explore-counts` line and the "need attention" count (`components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, plus `systemHealth` per troubled system (stale 30 s) | mount+focus | metric card |
 | V11 | `InboxIndicator` unread count on the top bar (`components/InboxIndicator.tsx`) | every page in the shell | event | `useUnreadCount` (`lib/inbox.ts`) | poll 30 s, and at once when an entry is marked read | metric card |
-| V12 | `RuleLive` tallies: in force, open, pending (`pages/Rules.tsx`) | `/event-rules` | derived | `listEventRules` | poll 10 s | metric card |
+| V12 | `RuleLive` tallies: firing, open, pending (`pages/Rules.tsx`) | `/event-rules` | derived | `listEventRules` | poll 10 s | metric card |
 | V13 | `CalcLive` tallies: computed, pending, without inputs, failing (`pages/CalcRules.tsx`) | `/calc-rules` | derived | `listCalcRules` | poll 10 s | metric card |
 
 ## Status pills and health indicators
@@ -102,7 +102,7 @@ component set; the surfaces below are where they are mounted.
 
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
-| V31 | `HealthHistory compact` with `incident-marker-*` triangles and the expandable `incident-list` (`components/HealthHistory.tsx`, in `pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event (recorded verdict edges) | `systemHealth` transitions | poll 5 s; the clock ticks every 60 s | timeline |
+| V31 | `HealthHistory compact` with `alarm-marker-*` triangles and the expandable `stretch-list` (`components/HealthHistory.tsx`, in `pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event (recorded verdict edges) | `systemHealth` transitions | poll 5 s; the clock ticks every 60 s | timeline |
 | V32 | `AvailabilityStrip`, up / down segments with an uptime figure (`components/ReachabilityPanel.tsx`) | `/components/<id>` (Configure tab), blades on the four fleet routes | event (reachability edges) | `getReachability` history | mount+focus | timeline |
 | V33 | `AlarmTimeline`, one alarm's lifecycle with kind chips and `NotificationStatusPill` (`components/AlarmTimeline.tsx`) | `/systems/<id>`, `/components/<id>`, `/event-rules`, blades and the Alarms panel on the four fleet routes | event | `alarmTimeline` (`lib/alarms.ts`) | poll 5 s, focus refetch off, only while expanded | timeline |
 
@@ -111,10 +111,10 @@ component set; the surfaces below are where they are mounted.
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
 | V34 | `alarm-strip` "Why": `SeverityBadge` and `AlarmTimeline` (`pages/SystemZoom.tsx`) | `/systems/<id>` | event | `systemAlarms` | poll 5 s | new: alarm list |
-| V35 | `incident-list` and "Other alarms" (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event | `systemAlarms`, `systemHealth` | poll 5 s | new: alarm list |
+| V35 | `stretch-list` and "Other alarms" (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event | `systemAlarms`, `systemHealth` | poll 5 s | new: alarm list |
 | V36 | `leaf-alarms` "Why": `SeverityBadge`, `SnoozedBadge`, `AlarmTimeline` (`pages/ComponentLeaf.tsx`) | `/components/<id>` | event | `componentAlarmsRead` (`lib/alarms.ts`) | poll 5 s | new: alarm list |
 | V37 | `AlarmsPanel`: grouped by severity, unacknowledged badge, `AlarmTimeline` (`components/AlarmsPanel.tsx`) | `/components/<id>` (Configure tab), component blades | event | `componentAlarms` | mount+focus (focus refetch off) | new: alarm list |
-| V38 | Rule detail "Open alarms" and "conditions in force" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/event-rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
+| V38 | Rule detail "Open alarms" and "Firing" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/event-rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
 | V39 | `events-tab` with `RuleLink` and alarm timeline toggles (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event | `systemEvents` | poll 5 s, only while the tab is open | event list |
 | V40 | `EventsPanel`: key badge, origin badge, time (`components/EventsPanel.tsx`) | `/components/<id>` (Activity tab) | event | `getEvents` | mount+focus | event list |
 | V41 | `logs-tab` mono block with `LogFilters`, severity-coloured lines (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | log | `systemLogs` | poll 5 s, only while the tab is open | log list |
@@ -155,8 +155,8 @@ what each page draws itself.
 | `Explore.tsx` | `/explore` | V10, V19 (blades only otherwise) |
 | `Files.tsx` | `/files`, `/files/<id>` | none checked: config chips only (`Sensitive`, content type) |
 | `FleetRedirect.tsx` | `/fleet`, `/locations`, `/systems`, `/components` | none checked: redirects to `/explore` |
-| `GroupDetail.tsx` | `/groups` (blade) | none checked: member list with kind chips |
-| `Groups.tsx` | `/groups` | none checked |
+| `GroupDetail.tsx` | `/user-groups` (blade) | none checked: member list with kind chips |
+| `Groups.tsx` | `/user-groups` | none checked |
 | `Home.tsx` | `/` | V06 |
 | `Inbox.tsx` | `/inbox` | V44 |
 | `LocationTypes.tsx` | `/location-types` | none checked: config chips only |
@@ -189,7 +189,7 @@ what each page draws itself.
 | `Systems.tsx` | `/systems/<id>` | wrapper: mounts `SystemZoom` |
 | `Tags.tsx` | `/tags` | none checked: config chips only |
 | `Templates.tsx` | `/templates` | none checked: config chips only |
-| `UserDetail.tsx` | `/users` (blade) | none checked: principal kind chips and grants |
+| `UserDetail.tsx` | `/users` (blade) | none checked: user kind chips and grants |
 | `Users.tsx` | `/users` | none checked: config chips only |
 | `Variables.tsx` | `/variables` | none checked: config chips only |
 | `Vendors.tsx` | `/vendors` | none checked: config chips only |

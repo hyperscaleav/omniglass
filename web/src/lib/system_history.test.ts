@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct } from "./system_history";
+import { stretchReasons, memberAlarmRows, stretchesOf, markerX, uptimePct } from "./system_history";
 import type { Alarm } from "./alarms";
 import { SEEDED_LEVELS } from "./testseverity";
 
@@ -16,9 +16,9 @@ const alarms = (component: string, componentId: string, list: Partial<Alarm>[]):
   alarms: list as Alarm[],
 });
 
-describe("incidentRows", () => {
+describe("memberAlarmRows", () => {
   const rows = () =>
-    incidentRows(
+    memberAlarmRows(
       [
         alarms("videobar-1", "c-bar", [
           { id: "a1", severity: "high", message: "No route to host", raised_at: iso(3), active: true },
@@ -41,14 +41,14 @@ describe("incidentRows", () => {
   });
 
   it("keeps an alarm raised before the window when it was still active inside it", () => {
-    const r = incidentRows(
+    const r = memberAlarmRows(
       [alarms("x", "cx", [{ id: "old", severity: "high", message: "m", raised_at: iso(31 * 24), cleared_at: iso(29 * 24), active: false }])],
       now,
       30 * 24,
       SEEDED_LEVELS,
     );
     expect(r).toHaveLength(1);
-    const gone = incidentRows(
+    const gone = memberAlarmRows(
       [alarms("x", "cx", [{ id: "gone", severity: "high", message: "m", raised_at: iso(40 * 24), cleared_at: iso(35 * 24), active: false }])],
       now,
       30 * 24,
@@ -67,7 +67,7 @@ describe("markerX", () => {
 });
 
 // The statuspage read (#795 refinement): the window's uptime as the health
-// KPI, and the transitions grouped into INCIDENTS, each a contiguous
+// KPI, and the transitions grouped into a HEALTH HISTORY, each a contiguous
 // unhealthy stretch with the alarms that explain it.
 import type { Span } from "./timeline";
 const span = (value: string, fromH: number, toH: number): Span<string> =>
@@ -82,8 +82,8 @@ describe("uptimePct", () => {
   });
 });
 
-describe("incidentsOf", () => {
-  it("groups consecutive unhealthy spans into one incident carrying the worst verdict and its sub-spans", () => {
+describe("stretchesOf", () => {
+  it("groups consecutive unhealthy spans into one stretch carrying the worst verdict and its sub-spans", () => {
     const spans = [
       span("healthy", 720, 200),
       span("degraded", 200, 190),
@@ -91,7 +91,7 @@ describe("incidentsOf", () => {
       span("healthy", 180, 72),
       span("incomplete", 72, 0),
     ];
-    const inc = incidentsOf(spans, now);
+    const inc = stretchesOf(spans, now);
     expect(inc).toHaveLength(2);
     // Ongoing first, then newest.
     expect(inc[0].ongoing).toBe(true);
@@ -102,13 +102,13 @@ describe("incidentsOf", () => {
     expect(inc[1].to - inc[1].from).toBe(20 * 3600_000);
   });
 
-  it("a fully healthy window has no incidents", () => {
-    expect(incidentsOf([span("healthy", 720, 0)], now)).toHaveLength(0);
+  it("a fully healthy window has no unhealthy stretches", () => {
+    expect(stretchesOf([span("healthy", 720, 0)], now)).toHaveLength(0);
   });
 });
 
-describe("incidentReasons", () => {
-  const rows = incidentRows(
+describe("stretchReasons", () => {
+  const rows = memberAlarmRows(
     [
       alarms("videobar-1", "c-bar", [
         { id: "a1", severity: "high", message: "No route to host", raised_at: iso(195), cleared_at: iso(185), active: false },
@@ -120,16 +120,16 @@ describe("incidentReasons", () => {
     SEEDED_LEVELS,
   );
 
-  it("keeps only the alarms overlapping the incident's stretch", () => {
+  it("keeps only the alarms overlapping the stretch", () => {
     const spans = [span("healthy", 720, 200), span("degraded", 200, 180), span("healthy", 180, 0)];
-    const inc = incidentsOf(spans, now)[0];
-    const reasons = incidentReasons(inc, rows);
+    const inc = stretchesOf(spans, now)[0];
+    const reasons = stretchReasons(inc, rows);
     expect(reasons.map((r) => r.id)).toEqual(["a1"]);
   });
 
-  it("an ongoing alarm overlaps an ongoing incident", () => {
+  it("an ongoing alarm overlaps an ongoing stretch", () => {
     const spans = [span("healthy", 720, 12), span("degraded", 12, 0)];
-    const inc = incidentsOf(spans, now)[0];
-    expect(incidentReasons(inc, rows).map((r) => r.id)).toEqual(["a2"]);
+    const inc = stretchesOf(spans, now)[0];
+    expect(stretchReasons(inc, rows).map((r) => r.id)).toEqual(["a2"]);
   });
 });

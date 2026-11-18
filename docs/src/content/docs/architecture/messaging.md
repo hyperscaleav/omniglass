@@ -1,10 +1,6 @@
 ---
 title: Messaging
 description: "The internal and edge NATS subject contract, the sibling to the public API: JetStream streams and consumers, the two lanes, request-reply, KV, the live UI relay, and per-tenant subject isolation."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[Implementation status]
@@ -298,7 +294,7 @@ persist: "persistence consumer\nbatch sink (async)" { class: node }
 tables: "metric · state · log\nsample tables" { class: node; shape: cylinder }
 sched: "schedule + timer\n(leader-elected clock)" { class: node }
 pg: "event · alarm\n(PG)" { class: node; shape: cylinder }
-alarm: "alarm\none incident · new row per open\n(event_rule, owner)" { class: node }
+alarm: "alarm\none fault · new row per open\n(event_rule, owner)" { class: node }
 cdc: "JetStream\nrecord/state lane" { class: node; shape: queue }
 actions: "action_rule consumer\nnotify · command\nremediate-verify-escalate" { class: node }
 itsm: "ITSM (action target)" { class: node }
@@ -339,7 +335,7 @@ react; a command's intended sample then re-enters the data lane on the device ro
 outpost is `audit_log`, the ground-truth record of operator writes (including config changes); observed
 and calculated samples carry `source_rule` on the row, and intended names its command via
 `command_id`. The raw payload is not stored: a parse or validation failure rides a
-`collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first),
+`collection.failed` event. A [declared value](/architecture/variables/) holds declared intent (PG-first),
 keyed to a property sample as its observed side.
 
 :::
@@ -490,7 +486,7 @@ Synchronous internal calls use **NATS request-reply**: an in-process call in sin
 ## KV and object store
 
 - **KV** holds config, **distributed locks and leader-election** (the CDC publisher and the clock
-  are leader-elected singletons), and the principal and permission cache (replacing Postgres
+  are leader-elected singletons), and the user and permission cache (replacing Postgres
   `LISTEN/NOTIFY` invalidation, [identity and access](/architecture/identity-access/)).
 - **Object store** holds internal artifacts (a compiled per-outpost runtime unit); user files stay on
   the content-addressed [blob store](/architecture/files/).

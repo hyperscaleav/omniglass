@@ -55,7 +55,7 @@ var referenceFields = map[string]string{
 	// A dependency edge's upstream component (#1648), by name beside its uuid.
 	"upstream_id": "upstream",
 	// A person target's group or person (#1341), by name beside its uuid.
-	"principal_group_id": "principal_group",
+	"user_group_id": "user_group",
 	// An action rule's notification type (#618), by name beside its uuid.
 	"notification_type_id": "notification_type",
 	// A calc rule's input names the property or metric it reads as `key`, the
@@ -95,9 +95,9 @@ var idOnlyIsCorrect = map[string]string{
 	"resource_id":      "an audit row's target is polymorphic and may since have been deleted",
 	"value_id":         "a stored property value has no name, only the property it answers",
 	"endpoint_id":      "an endpoint's name is unique only within its component: a body carries it beside the component, and the two are its address, <component>/<name> (#1133)",
-	"principal_id":     "a principal's identifier is per kind (a username, a service account's name), so a body carries it in a kind-specific field, never a generic name pair",
+	"user_id":          "a user's identifier is per kind (a username, a machine user's name), so a body carries it in a kind-specific field, never a generic name pair",
 	"scope_id":         "a scope root is a uuid handle on a subtree",
-	"target_id":        "an impersonation target is a principal, as above",
+	"target_id":        "an impersonation target is a user, as above",
 	"outpost_id":       "an outpost is addressed by its enrollment identity, which is its primary key",
 	"caused_event_id":  "an event is addressed by its bigint id; an occurrence has no name handle",
 	"settled_event_id": "an event is addressed by its bigint id; an occurrence has no name handle",

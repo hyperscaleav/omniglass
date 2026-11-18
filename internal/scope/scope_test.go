@@ -47,7 +47,7 @@ func TestResolveSecretArcKinds(t *testing.T) {
 // nothing while telling Covers a telemetry scope may be checked against the
 // location table. This is the fence on POST /telemetry:push, and it is resolved
 // from telemetry:push rather than component:read or system:read on purpose: a
-// principal routinely holds a wide read and a narrow write (viewer over the
+// user routinely holds a wide read and a narrow write (viewer over the
 // fleet plus operator on one component), so resolving the read scope would let
 // it push anywhere it can see.
 func TestResolveTelemetryComponentAndSystemTiers(t *testing.T) {
@@ -340,7 +340,7 @@ func TestResolveInterfaceTaskCascade(t *testing.T) {
 // TestResolveAlarmResolvesOnTheComponentTierFromItsOwnAction pins the scope half
 // of #728. An alarm hangs off a component, so the component tier is what contains
 // it; the load-bearing part is that the acknowledgement resolves from
-// alarm:acknowledge and NOT from the component gate, since a principal commonly
+// alarm:acknowledge and NOT from the component gate, since a user commonly
 // holds a wide component read beside a narrow write and either one deciding who
 // may acknowledge is a defect.
 func TestResolveAlarmResolvesOnTheComponentTierFromItsOwnAction(t *testing.T) {
@@ -453,7 +453,7 @@ func TestResolveDedupRoots(t *testing.T) {
 // a tree table, and Resolve stamps every set with the resource it was resolved
 // for so the gateway can ask exactly that.
 func TestRegisteredSeparatesADecisionFromAnOmission(t *testing.T) {
-	for _, r := range []string{"component", "command", "telemetry", "secret", "outpost", "platform"} {
+	for _, r := range []string{"component", "command", "telemetry", "secret", "outpost", "platform", "assistant"} {
 		if !scope.Registered(r) {
 			t.Errorf("Registered(%q) = false, want true", r)
 		}
@@ -464,6 +464,9 @@ func TestRegisteredSeparatesADecisionFromAnOmission(t *testing.T) {
 	for _, tier := range []string{"location", "system", "component"} {
 		if scope.Covers("outpost", tier) {
 			t.Errorf("Covers(outpost, %s) = true, want false: a fleet-wide resource has no tier", tier)
+		}
+		if scope.Covers("assistant", tier) {
+			t.Errorf("Covers(assistant, %s) = true, want false: a conversation is fenced by its owner, not a tier", tier)
 		}
 	}
 	g := []scope.Grant{{Role: "operator", ScopeKind: "component", ScopeID: "C"}}

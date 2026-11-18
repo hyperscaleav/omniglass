@@ -148,7 +148,7 @@ func TestComponentCheckNameIsScopedToPlacement(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "scope-cam", "product": "generic-device"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "sub-1", "product": "generic-device", "parent": "scope-disp"}, http.StatusCreated)
 
-	// A deploy principal (component:update) scoped ONLY to scope-disp.
+	// A deploy user (component:update) scoped ONLY to scope-disp.
 	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-disp", "deploy", "component", disp.ID)
 	// It cannot read scope-cam (out of scope -> non-disclosing 404).
 	c.do(deployTok, http.MethodGet, "/components/scope-cam", nil, http.StatusNotFound)
@@ -302,7 +302,7 @@ func TestGetComponentByAmbiguousNameIs404(t *testing.T) {
 // TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates drives
 // ruling 2 (scope decides before ambiguity) over the CREATE path, not just
 // the read path TestGetComponentByAmbiguousNameIs404 already covers: a
-// deploy principal scoped to one component's subtree posts a bare parent
+// deploy user scoped to one component's subtree posts a bare parent
 // name that is ambiguous FLEET-WIDE but unique within its own scope, and the
 // create must resolve to the in-scope row cleanly (not a 404, not a coin-flip
 // onto the wrong "shared") rather than the pre-fix scope-blind resolve that
@@ -311,7 +311,7 @@ func TestGetComponentByAmbiguousNameIs404(t *testing.T) {
 // bare name, and asserts the response body carries neither in-scope uuid it
 // cannot yet distinguish between NOR the out-of-scope uuid the caller was
 // never allowed to see, closing the disclosure C2 named (mapRefErr's
-// Candidates list, not just this one caller's principal grant).
+// Candidates list, not just this one caller's user grant).
 func TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
@@ -468,7 +468,7 @@ func TestComponentCreateWithoutNameGenerates(t *testing.T) {
 
 // TestComponentResetName drives :resetName over HTTP: it regenerates the
 // name and flips name_generated to true, and it is gated by the SAME
-// component:rename token :rename uses (a scoped principal holding rename but
+// component:rename token :rename uses (a scoped user holding rename but
 // not the all-scope create grant can still call it).
 func TestComponentResetName(t *testing.T) {
 	t.Parallel()

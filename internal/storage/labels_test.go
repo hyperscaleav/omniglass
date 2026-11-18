@@ -651,7 +651,7 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 
 // TestTwoSameTypeSystemsInOneRoomReadDifferently is #693: a divisible boardroom
 // whose two halves are both `board` systems in the same room. The shipped
-// system rule read the type alone, so both rendered "Boardroom": the platform
+// system rule read the type alone, so both rendered "Board Meeting": the platform
 // could tell them apart (`boardroom` and `boardroom-2`) and the operator
 // reading the console could not.
 //
@@ -687,11 +687,11 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 	// alone when it was created and read "Room A"; the second arriving
 	// restamped it, so it is re-read here.
 	first = *mustGetSystemByID(t, gw, ctx, first.ID)
-	if first.Label != "Room A Boardroom" {
-		t.Errorf("the first half's label = %q, want %q", first.Label, "Room A Boardroom")
+	if first.Label != "Room A Board Meeting" {
+		t.Errorf("the first half's label = %q, want %q", first.Label, "Room A Board Meeting")
 	}
-	if second.Label != "Room A Boardroom 2" {
-		t.Errorf("the second half's label = %q, want %q", second.Label, "Room A Boardroom 2")
+	if second.Label != "Room A Board Meeting 2" {
+		t.Errorf("the second half's label = %q, want %q", second.Label, "Room A Board Meeting 2")
 	}
 	if first.Label == second.Label {
 		t.Errorf("both halves read %q, so the console cannot tell them apart", first.Label)
@@ -706,7 +706,7 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 // TestAPlaceHoldingSeveralSystemsNamesEachKind is #872's rule for the case
 // the architect named: a room's sole system reads as the room ("Media Lab"),
 // and once the room holds several, each reads as the room and its kind
-// ("Media Lab Meeting Room", "Media Lab Signage"). The siblings restamp as the
+// ("Media Lab Meeting", "Media Lab Signage"). The siblings restamp as the
 // count changes, in the write that changed it: a second arriving, one
 // leaving by delete, one moving out.
 func TestAPlaceHoldingSeveralSystemsNamesEachKind(t *testing.T) {
@@ -729,8 +729,8 @@ func TestAPlaceHoldingSeveralSystemsNamesEachKind(t *testing.T) {
 	if sign.Label != "Room A Signage" {
 		t.Errorf("the second system reads %q, want %q", sign.Label, "Room A Signage")
 	}
-	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Boardroom" {
-		t.Errorf("the first system, once its room holds two, reads %q, want %q", got, "Room A Boardroom")
+	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Board Meeting" {
+		t.Errorf("the first system, once its room holds two, reads %q, want %q", got, "Room A Board Meeting")
 	}
 
 	// One moves out: each place recounts, the one it left and the one it
@@ -750,8 +750,8 @@ func TestAPlaceHoldingSeveralSystemsNamesEachKind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create signage again: %v", err)
 	}
-	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Boardroom" {
-		t.Fatalf("board beside a second signage reads %q, want %q", got, "Room A Boardroom")
+	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Board Meeting" {
+		t.Fatalf("board beside a second signage reads %q, want %q", got, "Room A Board Meeting")
 	}
 	if err := gw.DeleteSystem(ctx, "", sign2.ID, all, all); err != nil {
 		t.Fatalf("delete signage: %v", err)
@@ -795,8 +795,8 @@ func TestAnUnplacedSystemReadsItsKind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create typed: %v", err)
 	}
-	if typed.Label != "Boardroom" {
-		t.Errorf("unplaced classified label = %q, want %q", typed.Label, "Boardroom")
+	if typed.Label != "Board Meeting" {
+		t.Errorf("unplaced classified label = %q, want %q", typed.Label, "Board Meeting")
 	}
 	bare, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "loose"}, all, all)
 	if err != nil {
@@ -976,22 +976,22 @@ func TestASystemsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if sys.Label != "Boardroom/sys-a" {
-		t.Fatalf("on create = %q, want %q", sys.Label, "Boardroom/sys-a")
+	if sys.Label != "Board Meeting/sys-a" {
+		t.Fatalf("on create = %q, want %q", sys.Label, "Board Meeting/sys-a")
 	}
 	renamed, err := gw.RenameSystem(ctx, "", sys.ID, "sys-b", all, all)
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
-	if renamed.Label != "Boardroom/sys-b" {
-		t.Fatalf("after rename = %q, want %q", renamed.Label, "Boardroom/sys-b")
+	if renamed.Label != "Board Meeting/sys-b" {
+		t.Fatalf("after rename = %q, want %q", renamed.Label, "Board Meeting/sys-b")
 	}
 	reclassified, err := gw.UpdateSystem(ctx, "", renamed.ID, storage.SystemPatch{SystemTypeID: strptr("class")}, all, all)
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
 	}
-	if reclassified.Label != "Classroom/sys-b" {
-		t.Fatalf("after reclassify = %q, want %q", reclassified.Label, "Classroom/sys-b")
+	if reclassified.Label != "Teaching/sys-b" {
+		t.Fatalf("after reclassify = %q, want %q", reclassified.Label, "Teaching/sys-b")
 	}
 }
 

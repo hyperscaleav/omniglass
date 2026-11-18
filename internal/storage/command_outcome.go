@@ -164,7 +164,7 @@ func (p *PG) commandStop(ctx context.Context, q querier, id int64) (commandStopF
 	var f commandStopFacts
 	err := q.QueryRow(ctx, `select c.dispatched_at is not null, c.executed_at is not null, coalesce(c.exec_error, ''),
 			ride.id is not null, coalesce(ride.name, ''),
-			coalesce((select n.name from outpost n where n.principal_id = ride.outpost_id), '')
+			coalesce((select n.name from outpost n where n.user_id = ride.outpost_id), '')
 		from command c join command_type ct on ct.id = c.command_type_id
 		`+commandRideSQL+`
 		where c.id = $1`, id).Scan(&f.delivered, &f.executed, &f.execErr, &f.carried, &f.endpoint, &f.outpost)

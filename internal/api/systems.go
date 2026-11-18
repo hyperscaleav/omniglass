@@ -24,7 +24,7 @@ type systemBody struct {
 	LabelGenerated bool              `json:"label_generated" doc:"Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back."`
 	Standard       string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
 	StandardID     string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
-	SystemType     string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to."`
+	SystemType     string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what this system is for (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to."`
 	SystemTypeID   string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
 	ParentID       *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
 	Parent         *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
@@ -133,7 +133,7 @@ type createSystemInput struct {
 		StandardID string `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
 		// Nullable for now: a floor on system_type_id waits until the shipped
 		// tree has proven out.
-		SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified"`
+		SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
 		Location     *string `json:"location,omitempty" doc:"Location name this system is placed at"`
 		// The create form's ordinal precondition (#702); see

@@ -1,10 +1,6 @@
 ---
 title: Core entities
 description: "The fleet model: component, system, location, and outpost as the structural entities, the variable-depth trees, and the exclusive-arc owner."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -57,13 +53,13 @@ contract's defaults take over. Every component is required to name a
 specifically), a **`standard`** stays optional on a system, and a **`location_type`** stays optional
 on a location. The **`component_type`** catalog, retired in the fields fold
 ([ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)),
-**returns as the product's genus**
+**returns as the product's type**
 ([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)):
 a nested taxonomy above the product (`product.component_type_id`, required), not a second classifier
 on the component. The old `system_type` COLUMN was promoted to `standard`,
 [ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model);
-the name now belongs to a different object, the nested **`system_type` catalog** that says what kind
-of space a system is (`system.system_type_id`, nullable for now,
+the name now belongs to a different object, the nested **`system_type` catalog** that says what a
+system is for (`system.system_type_id`, nullable for now,
 [ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
 The **exclusive-arc** owner columns are real, carrying the sample lanes (**`metric`**,
 **`property`**), **`event`**, and **`command`**,
@@ -79,7 +75,7 @@ each slot carrying an **impact**. See [implementation status](/architecture/stat
 - A **component** is a deployed device, app, or service (a display, a DSP, a cloud UCC service). It
   owns samples and points at the **`product`** it is, the source of its shape; the pointer is
   **required** (a generic product covers anything not yet modeled more specifically), so a component
-  always resolves a contract and, through its product, a **`component_type`** genus.
+  always resolves a contract and, through its product, a **`component_type`**.
 - A **system** is a set of components doing one job: a meeting room, a classroom, a video wall. It is
   the **logical** grouping the business cares about, the unit Omniglass monitors, and what support
   troubleshoots through (its health, usually remotely). It is located at a location and **conforms
@@ -157,7 +153,7 @@ least-specific tier, **`platform`**
 | `component` | a deployed instance (`dsp-boardroom-3`); points at its `product`, the source of its shape, required |
 | `system` | a composition of components / subsystems (the service tree); conforms to its `standard` |
 | `location` | a location tree; no template (the `location_type` is the only shape-definer) |
-| `outpost` | the edge process; addressed by its `name`, identified by the `principal_id` it is bound to ([identity and access](/architecture/identity-access/)) |
+| `outpost` | the edge process; addressed by its `name`, identified by the `user_id` it is bound to ([identity and access](/architecture/identity-access/)) |
 
 The column mechanics render from the generated schema facts:
 
@@ -206,7 +202,7 @@ official/custom pattern as the `*_type` catalogs ([Location Types guide](/guides
   manufacturer-only `component_make`.
 - A **`driver`** (Generic SNMP, Kestrel Device API, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional **`version`**.
-- The capability catalog retired (#626): a product's device-class genus is now `component_type`
+- The capability catalog retired (#626): a product's device-class type is now `component_type`
   (below), and what a [system slot](#system-slots-what-a-system-needs-filled) requires is a
   typed-slot guard over it, not a capability set.
 
@@ -215,7 +211,7 @@ See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
 ### Catalog reference data: `component_type`
 
 A **`component_type`** (`display`, `projector`, `video-bar`, `dsp`, `mic`, ...) is the **device-class
-genus**: a seeded-plus-custom taxonomy that **nests by `parent_id`** and mirrors the
+type**: a seeded-plus-custom taxonomy that **nests by `parent_id`** and mirrors the
 OpenAVCloud AV Device Taxonomy v1.1 ([ADR-0131](/architecture/decisions/#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional)): category roots, subcategory types,
 and concrete leaves, microphones subtyped by form factor (`mic` over `wireless-mic`,
 `ceiling-mic`, `boundary-mic`), on the same official/custom pattern as the other classification
@@ -223,7 +219,7 @@ catalogs, operator-graftable at any level
 ([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)).
 It classifies the **product** (`product.component_type_id`, required), not the component directly, so
 a component inherits its type through the product it is. The row carries the identity facts that
-genuinely span products, **inheriting down the tree with override at any level**: the naming **`stem`**
+genuinely span products, **inheriting down the tree, shadowed at any level**: the naming **`stem`**
 (the auto-generated component name's prefix, e.g. `display-1`), **`label`**, **`icon`** (the
 console glyph), **`abbrev`** (the two-to-three character hostname stem: `fp`, `cam`, `dsp`, `cp`), and
 **`default_tags`**. A blank fact on a child means "inherit the nearest ancestor's", and a type that
@@ -272,7 +268,7 @@ A **`product`** (Kestrel VRoom, Boreal Edge 55, ...) is the concrete **SKU**: a 
 mislabeled cloud service can never read as correct through a silent fallback;
 [ADR-0086](/architecture/decisions/#adr-0086-the-product-classification-floor-and-the-kind-split)
 retired `vm`, folded into `app`, since nothing forked on it that did not fork the same way on `app`), a
-required **`component_type_id`** (the genus above it), an optional **`icon`** override (unset inherits
+required **`component_type_id`** (the type above it), an optional **`icon`** override (unset inherits
 the `component_type`'s icon; a per-SKU glyph is the exception, not the rule), optional **`vendor_id`**
 and **`driver_id`**, an optional **`parent_product_id`** (a variant points at its base), and the
 `official` boolean. The vendor, driver, and parent FKs are **`on delete set null`**; the `component_type`
@@ -289,8 +285,8 @@ product (`component.product_id -> product.component_type_id`). See the
 
 ### Catalog reference data: `system_type`
 
-A **`system_type`** (`board`, `class`, `meeting`, `video-wall`, ...) is the **coarse space genus**:
-what kind of space a system **is**. It is the system-side counterpart of `component_type` and it
+A **`system_type`** (`board`, `class`, `meeting`, `video-wall`, ...) says **what a system is for**:
+meeting, teaching, signage, never the space it sits in. It is the system-side counterpart of `component_type` and it
 nests the same way, by `parent_id`, on the same official/custom pattern, operator-graftable at any level
 ([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
 The shipped tree is universal, and it is rendered from the seed rather than restated here, so a blank
@@ -298,11 +294,11 @@ cell is a fact the row genuinely inherits rather than one somebody forgot to cop
 
 <SeededSet kind="system_types" />
 
-The row carries the identity facts that span every space of that kind, **inheriting down the tree
-with override at any level**: the naming **`stem`** (the prefix a generated system name is built from,
+The row carries the identity facts that span every system of that type, **inheriting down the tree,
+shadowed at any level**: the naming **`stem`** (the prefix a generated system name is built from,
 e.g. `boardroom-2`), **`label`**, **`icon`** (the console glyph), and **`abbrev`** (the compact
 label form: `br`, `cls`, `vw`). A blank fact on a child means "inherit the nearest ancestor's", so
-`board` states its own stem and abbrev while taking its icon from `room`, which overrides `av`'s. A
+`board` states its own stem and abbrev while taking its icon from `collaboration`, which shadows `av`'s. A
 type that states a fact of its own goes back to inheriting by patching that field to `""`, the same
 three-state sentinel `component_type` uses ([#716](https://github.com/hyperscaleav/omniglass/issues/716)).
 A **root** must carry a stem of its own: it has no ancestor to inherit one from, so a blank there is not
@@ -319,7 +315,7 @@ tree, so the column would have no reader.
 
 The **type is not the standard**, and both stay. The type says what a system **is**; the standard
 below says which contract it is **built to**. One fleet holds ten signage standards and six
-classroom standards under a single coarse type, which is exactly why standard's own
+classroom standards under a single type, which is exactly why standard's own
 `parent_standard_id` inheritance (which expresses **design forks**, two ways to build the same kind of
 room) is the wrong axis for this question.
 
@@ -333,7 +329,7 @@ the `official` boolean; the promotion of the former `system_type` label catalog
 A **`system`** conforms through the optional **`system.standard_id`**; a **one-off system** is
 first-class and carries no contract. The standard is a separate axis from `system_type` above: a
 system can carry either, both, or neither. Conformance is **not** a copy: the standard's contract defaults
-resolve **live** for every conforming system until it overrides one. See the
+resolve **live** for every conforming system until it binds its own. See the
 [Standards guide](/guides/admin/standards/).
 
 A system also declares **slots** directly on itself (an ad hoc slot), which is how a one-off system
@@ -396,7 +392,7 @@ rather than absent.
 
 :::note[Not the IAM role]
 A **system slot** is a position in a system a component fills; an **[IAM role](/architecture/identity-access/)**
-(viewer / operator / admin / owner) is a capability set granted to a principal. Until
+(viewer / operator / admin / owner) is a capability set granted to a user. Until
 [ADR-2032](/architecture/decisions/#adr-2032-role-is-iams-what-a-system-needs-filled-is-a-system-slot) the slot was also
 called a role; the storage methods are `ListSystemSlots` / `SetSystemSlot` / `DeleteSystemSlot`, and
 RBAC keeps `ListRoles` / `UpsertRole`.
@@ -446,7 +442,7 @@ An `operator` holds no system permission, so it creates components and a `deploy
 into systems. The reverse holds as well: a membership writes onto its component (its primary, its
 label, the system band of its cascade), so every route that binds, unbinds, re-defaults or staffs a
 component needs `component:update` over it as well as `system:update` over the system, and a
-principal scoped to one system binds nothing it cannot write
+user scoped to one system binds nothing it cannot write
 ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)).
 
 The console edits membership from the component, over the routes above and no others: a component's
@@ -746,7 +742,7 @@ suppress four consequences:
 - **action dispatch is held**: an alarm may open, but no `action_rule` pages or opens a ticket
   ([alarms and actions](/architecture/alarms-actions/));
 - **drift is observed, not enforced**: no command is sent to make the device match its declared value, so a tech mid-swap is not fought
-  ([config](/architecture/variables/));
+  ([declared values](/architecture/variables/));
 - **health rolls up no impact**: the member does not sink its parent's
   [health](/architecture/health/); it surfaces as "outage (maintenance)", the truth plus the mode;
 - **SLA does not count it**: the window is excluded from availability and the SLO.
@@ -1087,7 +1083,7 @@ read its parent would stale every descendant on a campus rename.
 **A rule reads placement, and that is what the recompute verb is for**
 ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
 `LocationLabel` and `SystemTypeLabel` above are the keys behind
-`{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Boardroom 204B Display`, and they
+`{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Board Meeting 204B Display`, and they
 are the reason this epic has a recompute verb at all: they are facts on rows the labelled entity does
 not own.
 
@@ -1143,12 +1139,12 @@ That key is what the **shipped global rule for systems** reads, after the locati
 location is shared:
 `{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}`.
 A system is the logical group of components that makes a location work, and nearly every room holds
-exactly one, so it reads as the location it monitors: "Briefing Room", not its kind of space read back
+exactly one, so it reads as the location it monitors: "Briefing Room", not its system type read back
 under a breadcrumb that already says Briefing Room ([ADR-0139](/architecture/decisions/#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context)). The kind and the standard are attributes
 beside the label. A location holding **several** systems names each one's kind after the location
-(`SharesLocation`): "Media Lab Meeting Room" beside "Media Lab Signage", an unclassified one naming
+(`SharesLocation`): "Media Lab Meeting" beside "Media Lab Signage", an unclassified one naming
 itself ("Media Lab Lobby Wall"), and two of one kind told apart by the ordinal their names carry
-("Room A Boardroom", "Room A Boardroom 2"). The siblings restamp in the write that changes the
+("Room A Board Meeting", "Room A Board Meeting 2"). The siblings restamp in the write that changes the
 count: a create, a move (both locations), a delete. A system with no location reads its kind and ordinal,
 as every system did before. The same restamps-nothing rule applies as for locations: a fleet that already exists keeps
 its labels until an operator runs `:previewLabels` and `:recomputeLabels` on systems.

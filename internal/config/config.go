@@ -89,6 +89,10 @@ type Config struct {
 	// it at boot (bus.ParseIngestPartitions), so a bad value fails the boot,
 	// not this Load. Set OMNIGLASS_INGEST_PARTITIONS.
 	IngestPartitions string
+	// OmnibotReplay is the path of a recorded model the server's omnibot
+	// plays (#2121): a demo or a test, never a live model. Empty means the
+	// server has no model and a run is refused. Set OMNIGLASS_OMNIBOT_REPLAY.
+	OmnibotReplay string
 }
 
 // Load resolves the configuration from the environment, applying defaults for
@@ -118,6 +122,8 @@ func Load() Config {
 		ClosedLoopProbeEvery: Get("OMNIGLASS_CLOSED_LOOP_PROBE_EVERY"),
 
 		IngestPartitions: Get("OMNIGLASS_INGEST_PARTITIONS"),
+
+		OmnibotReplay: Get("OMNIGLASS_OMNIBOT_REPLAY"),
 	}
 }
 

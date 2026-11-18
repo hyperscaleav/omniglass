@@ -372,7 +372,7 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 // caller scoped to one subtree, where the name is unique, must still
 // succeed: only a caller who can see BOTH same-named rows is genuinely
 // ambiguous. Both halves are asserted here, against the same route: the
-// scoped deploy principal succeeds, and the all-scoped owner (who can see
+// scoped deploy user succeeds, and the all-scoped owner (who can see
 // both "seat-1" rows) is refused with a 409, not a silent pick of either row
 // and not a 500. Skipped under -short.
 func TestSetSystemSlotResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
@@ -390,7 +390,7 @@ func TestSetSystemSlotResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// A root system a scoped deploy principal will be granted, with a child
+	// A root system a scoped deploy user will be granted, with a child
 	// "seat-1" (the system_parent_name_key bucket).
 	var scopeAV struct {
 		ID string `json:"id"`
@@ -403,7 +403,7 @@ func TestSetSystemSlotResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
 	// bucket), making the bare name ambiguous fleet-wide.
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "seat-1"}, http.StatusCreated)
 
-	// A deploy principal (system:update) scoped ONLY to scope-av's subtree.
+	// A deploy user (system:update) scoped ONLY to scope-av's subtree.
 	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-av", "deploy", "system", scopeAV.ID)
 
 	// Within scope-av's subtree, "seat-1" is unique (the other row sits

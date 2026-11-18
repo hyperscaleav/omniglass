@@ -112,20 +112,20 @@ func TestCLIEndToEnd(t *testing.T) {
 		t.Fatalf("change-password with a wrong current should fail, got exit 0:\n%s", out)
 	}
 
-	// Admin principal directory: the owner lists itself, creates a human, and the
+	// Admin user directory: the owner lists itself, creates a human, and the
 	// new human then appears in the directory.
-	if out, code := cli("principal", "list"); code != 0 || !strings.Contains(out, `"username": "root"`) {
-		t.Fatalf("principal list exit %d:\n%s", code, out)
+	if out, code := cli("user", "list"); code != 0 || !strings.Contains(out, `"username": "root"`) {
+		t.Fatalf("user list exit %d:\n%s", code, out)
 	}
-	if out, code := cli("principal", "create", "--username", "charlie", "--password", "orange-boat-42x"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
-		t.Fatalf("principal create exit %d:\n%s", code, out)
+	if out, code := cli("user", "create", "--username", "charlie", "--password", "orange-boat-42x"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
+		t.Fatalf("user create exit %d:\n%s", code, out)
 	}
-	createOut, code := cli("principal", "create", "--username", "dana", "--password", "orange-boat-42x")
+	createOut, code := cli("user", "create", "--username", "dana", "--password", "orange-boat-42x")
 	if code != 0 || !strings.Contains(createOut, `"username": "dana"`) {
-		t.Fatalf("principal create dana exit %d:\n%s", code, createOut)
+		t.Fatalf("user create dana exit %d:\n%s", code, createOut)
 	}
-	if out, code := cli("principal", "list"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
-		t.Fatalf("principal list after create exit %d:\n%s", code, out)
+	if out, code := cli("user", "list"); code != 0 || !strings.Contains(out, `"username": "charlie"`) {
+		t.Fatalf("user list after create exit %d:\n%s", code, out)
 	}
 
 	// AIP :verb custom methods must substitute the {id} path param (regression for
@@ -133,16 +133,16 @@ func TestCLIEndToEnd(t *testing.T) {
 	// and confirm dana disappears from the default (active-only) directory.
 	danaID := regexp.MustCompile(`"id":\s*"([^"]+)"`).FindStringSubmatch(createOut)
 	if danaID == nil {
-		t.Fatalf("no id in principal create output:\n%s", createOut)
+		t.Fatalf("no id in user create output:\n%s", createOut)
 	}
-	if out, code := cli("principal", "resetPassword", danaID[1], "--password", "purple-goat-91z"); code != 0 {
-		t.Fatalf("principal resetPassword exit %d (id must substitute, not 404):\n%s", code, out)
+	if out, code := cli("user", "resetPassword", danaID[1], "--password", "purple-goat-91z"); code != 0 {
+		t.Fatalf("user resetPassword exit %d (id must substitute, not 404):\n%s", code, out)
 	}
-	if out, code := cli("principal", "archive", danaID[1]); code != 0 {
-		t.Fatalf("principal archive exit %d (id must substitute, not 404):\n%s", code, out)
+	if out, code := cli("user", "archive", danaID[1]); code != 0 {
+		t.Fatalf("user archive exit %d (id must substitute, not 404):\n%s", code, out)
 	}
-	if out, code := cli("principal", "list"); code != 0 || strings.Contains(out, `"username": "dana"`) {
-		t.Fatalf("principal list after archive should hide dana, exit %d:\n%s", code, out)
+	if out, code := cli("user", "list"); code != 0 || strings.Contains(out, `"username": "dana"`) {
+		t.Fatalf("user list after archive should hide dana, exit %d:\n%s", code, out)
 	}
 
 	// healthz needs no token.

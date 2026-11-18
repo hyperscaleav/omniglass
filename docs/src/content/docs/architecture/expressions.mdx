@@ -1,10 +1,6 @@
 ---
 title: Expressions
 description: "Omniglass expressions: one engine built on Expr and extended with Omniglass functions, behind every operator-authored expression leaf."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import ExpressionSites from '../../../components/ExpressionSites.astro';
@@ -143,7 +139,7 @@ marking the field invalid nor stopping a save. Beneath the field each diagnostic
 its code to its entry in the table below, and offers its fix as a button (a keyboard user reaches it with
 Tab; in the editor, F8 moves to the next diagnostic and Mod-Shift-M lists them with their fixes). A fix is
 an edit of the author's own, so Ctrl-Z takes it back. A stored rule's warnings show on its blade as a note,
-never an alert.
+never an error banner.
 
 The first rules (#1054) are the mistakes authors made first: counting with `sum`, comparing a measured
 number to a decimal with `==`, spelling `all` as a count against a length, and an input the reduce never
@@ -232,7 +228,7 @@ line, error string, or property label.
 
 ## Divergence and `disagree(A, B)`
 
-**`disagree(A, B)`** compares two provenances or sources of one key: config drift, reconcile
+**`disagree(A, B)`** compares two provenances or sources of one key: drift from the declared value, reconcile
 conflict, and cross-source disagreement are all the one operator, surfacing **divergence**,
 the universal anomaly signal. Reading both sides as inputs (never writing a verdict back into
 either) keeps the pipeline's DAG acyclic.

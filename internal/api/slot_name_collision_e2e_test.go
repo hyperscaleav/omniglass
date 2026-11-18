@@ -85,7 +85,7 @@ func TestASlotCollisionNamesOnlyAReadableSystem(t *testing.T) {
 	c.do(owner, http.MethodPost, "/systems", map[string]any{"name": "secret-boardroom", "standard_id": "redact-std"}, http.StatusCreated)
 	c.do(owner, http.MethodPatch, "/systems/secret-boardroom/slots/lectern-mic", map[string]any{"label": "Lectern mic"}, http.StatusOK)
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "redact-site", "location_type": "campus"}, http.StatusCreated)
-	narrow := principalWithGrants(t, f.ctx, f.dsn, "catalog-admin", []grant{
+	narrow := userWithGrants(t, f.ctx, f.dsn, "catalog-admin", []grant{
 		{role: "admin", scopeKind: "location", scopeID: entityID(t, c, owner, "/locations", "redact-site")},
 	})
 	c.do(narrow, http.MethodGet, "/systems/secret-boardroom", nil, http.StatusNotFound)
@@ -129,7 +129,7 @@ func TestACapacityRefusalNamesOnlyAReadableSystem(t *testing.T) {
 	staff("hidden-boardroom", 3)
 	staff("site-huddle", 2)
 
-	narrow := principalWithGrants(t, f.ctx, f.dsn, "site-admin", []grant{
+	narrow := userWithGrants(t, f.ctx, f.dsn, "site-admin", []grant{
 		{role: "admin", scopeKind: "system", scopeID: entityID(t, c, owner, "/systems", "site-huddle")},
 	})
 	c.do(narrow, http.MethodGet, "/systems/hidden-boardroom", nil, http.StatusNotFound)

@@ -26,7 +26,7 @@ screenshots:
     # The alarm's controls follow its age the same way, and their buttons cast
     # a shadow below the row's own box, so the Why card is masked whole: a row
     # mask left that sliver live, moving with the age (#2117). Activity's
-    # incident entries carry a stamp or a duration on every line and are masked
+    # health history entries carry a stamp or a duration on every line and are masked
     # whole (`xpath=ancestor::li[1]`), as are its logs and the charts. The summary
     # card declares a box instead, since its since line ends its row.
     mask:
@@ -59,15 +59,15 @@ screenshots:
       - action: click
         selector: "role=tab[name='Activity']"
       - action: click
-        selector: "[data-testid=incident-0] button"
-    alt: "The Activity tab, statuspage style: the window's uptime, the timeline, the ongoing incident expanded to the alarm that explains it, then the events and the logs."
+        selector: "[data-testid=stretch-0] button"
+    alt: "The Activity tab, statuspage style: the window's uptime, the timeline, the ongoing unhealthy stretch expanded to the alarm that explains it, then the events and the logs."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=uptime-kpi]"
       - "text=/ongoing/ >> xpath=ancestor::li[1]"
       - "text=/\\u2192/ >> xpath=ancestor::li[1]"
       - ".og-statestrip"
-      # The logs under the incidents render seed-run stamps.
+      # The logs under the health history render seed-run stamps.
       - "[data-testid=logs-tab]"
   - id: fleet-data
     path: /web/systems/huddle
@@ -248,13 +248,13 @@ outline rooted there.
 
 The system's view refreshes on its own while it is open, every 5 seconds: its verdict, **Why**,
 the slots and who is staffing them, each component's health light, and the data section's latest
-values (the 24 hour sparklines every 30), and on **Activity** the incidents, events and logs. A component going down shows up as the system's new
+values (the 24 hour sparklines every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
 verdict and the alarm in Why without a reload, and every age on the page (since when, how long an
 alarm has been raised) keeps counting. It reads only this system and its members, never the whole
 fleet, and stops while the browser tab is hidden.
 
 A system's label is its location's by default, so a room and its system read as one name. A location
-holding several systems names each one's kind ("Media Lab Meeting Room", "Media Lab Signage"),
+holding several systems names each one's kind ("Media Lab Meeting", "Media Lab Signage"),
 and a system with no location reads its kind. Type your own label and it stays yours.
 
 ## A location's own view
@@ -332,14 +332,14 @@ nothing to chart yet, and says so.
 
 **Activity** reads the way a status page reads: the window's **uptime** up top (the
 health KPI over time), the timeline beside it with one marker per alarm raise, then
-**incidents**: one entry per contiguous stretch away from healthy, ongoing first, each
+the **health history**: one entry per contiguous stretch away from healthy, ongoing first, each
 expanding to the verdict changes inside it and the alarms that explain them. An alarm the
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 
 ::screenshot{#fleet-history}
 
-Under the incidents, the **events** are the system's story on the event lane: the system's
+Under the health history, the **events** are the system's story on the event lane: the system's
 own events and its members', newest first, each row labeled by the owner that raised it;
 and the **logs** are the members' raw lines merged, each naming the component that wrote
 it. Both cover the last 24 hours, capped; both scope to what you can read. A component's

@@ -36,7 +36,7 @@ func TestListSecretsScopedDirectoryAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	// hq (campus) > wing-a, wing-b (buildings); a component in the sibling wing.
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "campus"}, http.StatusCreated)
@@ -54,7 +54,7 @@ func TestListSecretsScopedDirectoryAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/secrets", secretReq("install-wide", "platform", "", "d"), http.StatusCreated)
 
 	wingA := entityID(t, c, ownerTok, "/locations", "wing-a")
-	opTok := principalWithGrants(t, ctx, dsn, "wing-a-operator",
+	opTok := userWithGrants(t, ctx, dsn, "wing-a-operator",
 		[]grant{{role: "operator", scopeKind: "location", scopeID: wingA}})
 
 	list := func(tok string) map[string]bool {

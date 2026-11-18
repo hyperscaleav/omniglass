@@ -101,7 +101,7 @@ func TestAnUnlabelledTagSortsLast(t *testing.T) {
 //
 // A tag's name is fixed at creation: `UpdateTag` replaces the governance fields
 // and the name is not among them, and there is no `:rename` custom method the
-// way component, system, location and principal_group have one. So the rename
+// way component, system, location and user_group have one. So the rename
 // half of the contract is proved the only way this table permits, by driving the
 // update that DOES exist and asserting the name it lands on is the one it
 // started with. The label half is the same statement from the other side: an

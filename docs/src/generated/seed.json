@@ -7,11 +7,13 @@
    "description": "Read-only access to everything, and subscribing yourself to the alarms you can see. The floor every other role inherits.",
    "declared": [
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ],
    "effective": [
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
@@ -76,7 +78,8 @@
     "file:create",
     "file:delete",
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
@@ -113,13 +116,14 @@
     "secret:update",
     "file:create",
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
    "id": "admin",
    "label": "Administrator",
-   "description": "Manages the fleet, users, roles, and grants: full create, update, and delete on locations, systems, and components, and on principals, credentials, grants, and roles. Deliberately NOT the superuser: it cannot grant a role above its own tier, so it cannot make itself owner. Inherits Operator.",
+   "description": "Manages the fleet, users, roles, and grants: full create, update, and delete on locations, systems, and components, and on users, credentials, grants, and roles. Deliberately NOT the superuser: it cannot grant a role above its own tier, so it cannot make itself owner. Inherits Operator.",
    "inherits": [
     "operator"
    ],
@@ -129,17 +133,17 @@
     "task:*",
     "system:create,update,delete,rename,move",
     "location:create,update,delete,rename,move",
-    "principal:*",
-    "principal:read:admin",
-    "principal:purge:admin",
+    "user:*",
+    "user:read:admin",
+    "user:purge:admin",
     "secret:\u003e",
     "file:\u003e",
     "variable:*",
     "platform:*",
     "settings:read,update",
-    "principal_grant:*",
-    "principal_group:*",
-    "principal_group:read:admin",
+    "user_grant:*",
+    "user_group:*",
+    "user_group:read:admin",
     "outpost:*",
     "role:read:admin",
     "audit:read:admin",
@@ -175,18 +179,18 @@
     "location:delete",
     "location:rename",
     "location:move",
-    "principal:*",
-    "principal:read:admin",
-    "principal:purge:admin",
+    "user:*",
+    "user:read:admin",
+    "user:purge:admin",
     "secret:\u003e",
     "file:\u003e",
     "variable:*",
     "platform:*",
     "settings:read",
     "settings:update",
-    "principal_grant:*",
-    "principal_group:*",
-    "principal_group:read:admin",
+    "user_grant:*",
+    "user_group:*",
+    "user_group:read:admin",
     "outpost:*",
     "role:read:admin",
     "audit:read:admin",
@@ -261,7 +265,8 @@
     "file:create",
     "file:delete",
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
@@ -1369,14 +1374,14 @@
    "description": "A collection task could not use what it had: an unusable config or a payload that did not parse. Carries the task identity in its payload, so the failure names its work; the alternative is a silent skip nobody sees."
   },
   {
-   "name": "condition-started",
-   "label": "Condition Started",
-   "description": "An event rule's condition came into force on a component: the generic fire event for a rule that needs no semantic type of its own. Written once at the edge, after the rule's fire sustain, never per sample while the condition holds."
+   "name": "rule-fired",
+   "label": "Rule Fired",
+   "description": "An event rule fired on a component and endpoint: the generic fire event for a rule that needs no semantic type of its own. Written once at the edge, after the rule's fire sustain, never per sample while the rule stays fired."
   },
   {
-   "name": "condition-ended",
-   "label": "Condition Ended",
-   "description": "An event rule's condition left force: condition-started's closing half, written once when the rule's clear criteria has held for its clear sustain. The pair brackets how long the condition held."
+   "name": "rule-cleared",
+   "label": "Rule Cleared",
+   "description": "An event rule cleared where it had fired: rule-fired's closing half, written once when the rule's clear criteria has held for its clear sustain. The pair brackets how long the firing lasted."
   }
  ],
  "command_types": [
@@ -2181,52 +2186,52 @@
    "icon": "layers"
   },
   {
-   "id": "room",
-   "label": "Room",
+   "id": "collaboration",
+   "label": "Collaboration",
    "parent_id": "av",
-   "stem": "room",
-   "abbrev": "rm",
+   "stem": "collaboration",
+   "abbrev": "collab",
    "icon": "door-open"
   },
   {
    "id": "board",
-   "label": "Boardroom",
-   "parent_id": "room",
+   "label": "Board Meeting",
+   "parent_id": "collaboration",
    "stem": "boardroom",
    "abbrev": "br"
   },
   {
    "id": "class",
-   "label": "Classroom",
-   "parent_id": "room",
+   "label": "Teaching",
+   "parent_id": "collaboration",
    "stem": "classroom",
    "abbrev": "cls"
   },
   {
    "id": "meeting",
-   "label": "Meeting Room",
-   "parent_id": "room",
+   "label": "Meeting",
+   "parent_id": "collaboration",
    "stem": "meeting",
    "abbrev": "mtg"
   },
   {
    "id": "training",
-   "label": "Training Room",
-   "parent_id": "room",
+   "label": "Training",
+   "parent_id": "collaboration",
    "stem": "training",
    "abbrev": "trn"
   },
   {
    "id": "conference",
-   "label": "Conference Room",
-   "parent_id": "room",
+   "label": "Conference",
+   "parent_id": "collaboration",
    "stem": "conference",
    "abbrev": "conf"
   },
   {
    "id": "huddle",
-   "label": "Huddle Room",
-   "parent_id": "room",
+   "label": "Huddle",
+   "parent_id": "collaboration",
    "stem": "huddle",
    "abbrev": "hud"
   },
@@ -4154,8 +4159,8 @@
    "clear": "value == \"up\"",
    "fire_sustain": "15s",
    "severity": "high",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "ingest-lag-high",
@@ -4166,8 +4171,8 @@
    "clear": "value \u003c= 30",
    "fire_sustain": "2m",
    "severity": "warning",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "outpost-silent",
@@ -4177,8 +4182,8 @@
    "fire": "value \u003e 90",
    "clear": "value \u003c= 90",
    "severity": "high",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "worklist-stale",
@@ -4189,8 +4194,8 @@
    "clear": "value \u003c 1",
    "fire_sustain": "2m",
    "severity": "warning",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "disk-nearly-full",
@@ -4201,8 +4206,8 @@
    "clear": "value \u003c= 0.85",
    "fire_sustain": "2m",
    "severity": "warning",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "retention-behind",
@@ -4213,8 +4218,8 @@
    "clear": "value == 0",
    "fire_sustain": "5m",
    "severity": "warning",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   }
  ],
  "platform_figures": [

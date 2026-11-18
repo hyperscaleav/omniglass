@@ -18,7 +18,7 @@ import (
 )
 
 // The emulator's booking service pushes through POST /telemetry:push with
-// the token the lab minted for its principal (#1370, #1743): it reads the
+// the token the lab minted for its user (#1370, #1743): it reads the
 // system it may push to off its own grant, and the system's booking-count
 // and booking-state land on the system as observed telemetry.
 func TestTheEmulatorsBookingServiceLandsItsBookings(t *testing.T) {
@@ -46,7 +46,7 @@ func TestTheEmulatorsBookingServiceLandsItsBookings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.SetServiceToken(ctx, "", "sim-booking-service", hash, prefix); err != nil {
+	if _, err := gw.SetMachineToken(ctx, "", "sim-booking-service", hash, prefix); err != nil {
 		t.Fatal(err)
 	}
 	busSrv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)

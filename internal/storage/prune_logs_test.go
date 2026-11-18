@@ -25,7 +25,7 @@ func (f *pruneFixture) logRow(table, severity string, age time.Duration, msg str
 		return
 	}
 	mustExec(f.t, f.conn, `insert into outpost_log (ts, outpost_id, source, severity, message)
-		values ($1, (select principal_id from outpost where name = 'log-outpost'), 'outpost', $2, $3)`, ts, sev, msg)
+		values ($1, (select user_id from outpost where name = 'log-outpost'), 'outpost', $2, $3)`, ts, sev, msg)
 }
 
 func (f *pruneFixture) logMessages(table string) string {

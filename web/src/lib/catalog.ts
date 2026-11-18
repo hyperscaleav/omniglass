@@ -143,26 +143,26 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Components",
-    copy: "A component points at a product (its shape), a product names its vendor, a driver is how we talk to it, and a component type is the device-class genus it is classified under.",
+    copy: "A component points at a product (its shape), a product names its vendor, a driver is how we talk to it, and a component type is the device-class type it is classified under.",
     entries: [
       { label: "Vendors", path: "/vendors", gate: ["vendor", "read"], key: VENDORS_KEY, list: listVendors },
       { label: "Products", path: "/products", gate: ["product", "read"], key: PRODUCTS_KEY, list: listProducts },
       { label: "Drivers", path: "/drivers", gate: ["driver", "read"], key: DRIVERS_KEY, list: listDrivers },
       // "Types": the Components header already says where it lives (mirrors
-      // Locations' own Types entry below). The device-class genus catalog
-      // (ADR-0085): a product is classified under one of its outposts.
+      // Locations' own Types entry below). The device-class type catalog
+      // (ADR-0085): a product is classified under one of its types.
       { label: "Types", path: "/component-types", gate: ["component_type", "read"], key: COMPONENT_TYPES_KEY, list: listComponentTypes },
       templatesSlot(["component_template"]),
     ],
   },
   {
     header: "Systems",
-    copy: "A system type is the coarse kind of space a system is (a boardroom, a classroom, a video wall); a standard is the contract it is built to, the properties every conforming system exposes.",
+    copy: "A system type is what a system is for (meeting, teaching, signage); a standard is the contract it is built to, the properties every conforming system exposes.",
     entries: [
       { label: "Standards", path: "/standards", gate: ["standard", "read"], key: STANDARDS_KEY, list: listStandards },
       // "Types": the Systems header already says where it lives (mirrors the
-      // Components and Locations groups). The coarse space taxonomy
-      // (ADR-0096): a system is classified as one of its outposts.
+      // Components and Locations groups). The system type taxonomy
+      // (ADR-0096): a system is classified as one of its types.
       { label: "Types", path: "/system-types", gate: ["system_type", "read"], key: SYSTEM_TYPES_KEY, list: listSystemTypes },
       templatesSlot(["standard_template", "system_template"]),
     ],
@@ -205,7 +205,7 @@ export const ROOT_STEM_HINT = "Leave blank to inherit the parent's; required on 
 // root is what makes the stem above mandatory, so the two statements have to
 // agree and are therefore written once.
 export const TYPE_PARENT_HINT =
-  "Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.";
+  "Where this type grafts in the tree. Root creates a new top-level type and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.";
 
 // catalogLock is the catalog blades' one read-only verdict: the value the
 // edit slot's `locked` binding carries, one voice on every catalog page. An

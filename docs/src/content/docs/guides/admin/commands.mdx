@@ -162,7 +162,7 @@ it could not read the endpoint's credentials, is withheld rather than stored.
 **Waiting on an issue.** Add `wait=true` to the issue (`--wait` on the CLI) and it answers once the
 command settles, fails or times out, or once `wait_timeout` passes (1 to 120 seconds, 30 by default),
 with the command as it stands then. A waiting issue judges the command itself when its window closes,
-so a timeout comes back at the window. Waits are bounded: a server holds 64 at once and a principal 4,
+so a timeout comes back at the window. Waits are bounded: a server holds 64 at once and a user 4,
 and a wait past either is refused with a 429 before anything is issued, so issue without `wait` and
 read the command back, or retry.
 

@@ -12,7 +12,7 @@ type AuditEntry struct {
 	ID            string
 	TS            string // RFC3339
 	ActorID       string // empty for a system/bootstrap write
-	ActorName     string // the actor's identifier: a human's username, a service account's name, an outpost's name
+	ActorName     string // the actor's identifier: a person's username, a machine user's name, an outpost's name
 	RealActorID   string // set when the action was taken while impersonating
 	RealActorName string
 	Verb          string
@@ -67,7 +67,7 @@ const auditMaxLimit = 500
 // events, no tx).
 //
 // Live first, then the snapshot the write denormalized. The live resolution is
-// the same one every other surface uses (principalIdent), so a principal that
+// the same one every other surface uses (userIdent), so a user that
 // still exists reads as whatever it is called NOW, and a purged one reads as
 // whatever it was called at the time. This used to name `human.username` by
 // hand, which resolved a human actor live and a service actor only from the
@@ -83,15 +83,15 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 	}
 	rows, err := p.pool.Query(ctx, `
 		select a.id, to_char(a.ts, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-		       coalesce(a.actor_principal_id::text, ''),
-		       `+principalIdentJoinedCols("ac")+`, coalesce(a.actor_username, ''),
-		       coalesce(a.real_actor_principal_id::text, ''),
-		       `+principalIdentJoinedCols("ra")+`, coalesce(a.real_actor_username, ''),
+		       coalesce(a.actor_user_id::text, ''),
+		       `+userIdentJoinedCols("ac")+`, coalesce(a.actor_username, ''),
+		       coalesce(a.real_actor_user_id::text, ''),
+		       `+userIdentJoinedCols("ra")+`, coalesce(a.real_actor_username, ''),
 		       a.verb, a.resource, coalesce(a.resource_id, ''), a.old, a.new,
 		       coalesce(a.channel, ''), coalesce(a.client, ''), coalesce(a.agent, '')
 		from audit_log a`+
-		principalIdentJoins("ac", "a.actor_principal_id")+
-		principalIdentJoins("ra", "a.real_actor_principal_id")+`
+		userIdentJoins("ac", "a.actor_user_id")+
+		userIdentJoins("ra", "a.real_actor_user_id")+`
 		where ($2 = '' or a.resource = $2)
 		  and ($3 = '' or a.verb = $3)
 		  and ($4 = '' or a.ts < $4::timestamptz)
@@ -122,14 +122,14 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 			&e.Verb, &e.Resource, &e.ResourceID, &e.Old, &e.New, &e.Channel, &e.Client, &e.Agent); err != nil {
 			return nil, fmt.Errorf("storage: scan audit row: %w", err)
 		}
-		e.ActorName = liveOrSnapshot(principalIdent(actorUser, actorSvc, actorOutpost), actorSnap)
-		e.RealActorName = liveOrSnapshot(principalIdent(realUser, realSvc, realOutpost), realSnap)
+		e.ActorName = liveOrSnapshot(userIdent(actorUser, actorSvc, actorOutpost), actorSnap)
+		e.RealActorName = liveOrSnapshot(userIdent(realUser, realSvc, realOutpost), realSnap)
 		out = append(out, e)
 	}
 	return out, rows.Err()
 }
 
-// liveOrSnapshot prefers the identifier the principal has NOW and falls back to
+// liveOrSnapshot prefers the identifier the user has NOW and falls back to
 // the one the write denormalized onto the row. The snapshot is what makes the
 // trail survive a purge (ADR-0016), and it is the only thing left to read once
 // the foreign key has gone null.
@@ -148,8 +148,8 @@ func liveOrSnapshot(live string, snapshot *string) string {
 // takes no transaction: auth events are read/no-tx paths, so the emit is a
 // standalone autocommit insert. It records the real actor from context for
 // consistency, though auth events are not impersonated. The resource and
-// resourceID name what the action targeted (e.g. "principal" and the target
-// principal's id for a session revoke); callers can omit them to default to
+// resourceID name what the action targeted (e.g. "user" and the target
+// user's id for a session revoke); callers can omit them to default to
 // resource='auth' with no target.
 func (p *PG) WriteAuthEventFor(ctx context.Context, actorID, verb, resource, resourceID string) error {
 	if resource == "" {
@@ -157,8 +157,8 @@ func (p *PG) WriteAuthEventFor(ctx context.Context, actorID, verb, resource, res
 	}
 	channel, client := auditChannelFrom(ctx)
 	if _, err := p.pool.Exec(ctx, `
-		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, resource_id, channel, client, agent)
-		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, $4, $5, $6, $7, $8)`,
+		insert into audit_log (actor_user_id, real_actor_user_id, actor_username, real_actor_username, verb, resource, resource_id, channel, client, agent)
+		values ($1, $2, `+userIdentSQL("$1")+`, `+userIdentSQL("$2")+`, $3, $4, $5, $6, $7, $8)`,
 		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, nullize(resourceID), channel, client, agentFrom(ctx)); err != nil {
 		return fmt.Errorf("storage: write auth event: %w", err)
 	}

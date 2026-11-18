@@ -16,7 +16,7 @@ import (
 
 type auditListInput struct {
 	Limit    int    `query:"limit" doc:"Max rows to return, newest first (default 100, capped at 500)"`
-	Resource string `query:"resource" doc:"Filter to one resource kind (e.g. auth, principal_grant)"`
+	Resource string `query:"resource" doc:"Filter to one resource kind (e.g. auth, user_grant)"`
 	Verb     string `query:"verb" doc:"Filter to one verb (e.g. login, create)"`
 	Before   string `query:"before" doc:"Only events strictly older than this RFC3339 timestamp (paging backward)"`
 	Agent    string `query:"agent" doc:"Filter to the events one agent took on its person's behalf (the name its agent token was minted with)"`

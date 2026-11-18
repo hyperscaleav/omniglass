@@ -1,10 +1,6 @@
 ---
 title: Data collection
 description: "Data collection is built from drivers: a declarative spec of inputs, polls, listeners and command bindings, attached to a component's endpoint and run at the edge, which parses on the spot."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -171,7 +167,7 @@ proposed. The record below is the model it replaced ([ADR-0827](/architecture/de
 A top-level `functions` array: each **function** one trigger plus a DAG of steps, the trigger a
 `schedule` (a poll, `onStart` arming subscriptions), a `listen` on an inbound source, or a `command`
 invoked by an operator or a [flow](/architecture/alarms-actions/) with typed `args` (the **set**
-function a reconcile would push declared config through).
+function a reconcile would push declared values through).
 :::
 
 ### Two axes: task mode and endpoint transport
@@ -487,8 +483,8 @@ from it. A driver that only connects does not count. Two methods carry one tier 
 and the live lab check are in [simulation](/architecture/simulation/#the-dev-fleet).
 
 One window for every endpoint type is the first step of the cadence model (#1373): each endpoint type's
-catalog entry holds its built-in data's defaults, a driver overrides them per endpoint type it uses, and
-an operator overrides them down the cascade.
+catalog entry holds its built-in data's defaults, a driver shadows them per endpoint type it uses, and
+an operator shadows them down the cascade.
 
 ### Self-monitoring: every outpost's account of itself
 
@@ -1538,9 +1534,9 @@ it, so a binding naming the conduit is refused (422).
 A binding is a relationship with two ends, so it costs a write on both, the
 [ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)
 rule: `component:update` on the conduit and the owner's update (`component:update`, or
-`system:update` for a system). One end alone is not enough in either direction. A principal scoped to
+`system:update` for a system). One end alone is not enough in either direction. A user scoped to
 a system could otherwise claim an identity that belongs to another owner and pull a conduit it cannot read onto its own
-system; a principal scoped to the conduit could write onto systems it cannot update. A move to another
+system; a user scoped to the conduit could write onto systems it cannot update. A move to another
 owner also costs update on the owner it leaves. Consent is given at write: a binding persists if its
 author later loses scope, as a membership does, and deleting the conduit or the owner deletes it. The
 [identity and access](/architecture/identity-access/) page has the refusal each end gives.
@@ -1817,7 +1813,7 @@ The **transports** are a **code registry** the binary ships (`internal/transport
   notes={{
     label: 'The friendly string an operator reads, and the ONLY identity string they type here since the name is derived; NULL falls back to that name, verbatim',
     component_id: 'Set: pre-bound to the component; NULL: shared, resolved by match key',
-    outpost_id: 'Placement: the outpost primary key (principal_id); ON DELETE CASCADE so a purged outpost takes its endpoints',
+    outpost_id: 'Placement: the outpost primary key (user_id); ON DELETE CASCADE so a purged outpost takes its endpoints',
     params: 'The transport parameters the authoring schema validated',
     driver_id: 'Set when a driver attach authored this endpoint (#813); NULL for a bare probe endpoint',
     inputs: 'The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values',

@@ -93,7 +93,7 @@ func TestClearingAStemDoesNotWeakenTheStemRuleAPI(t *testing.T) {
 		"name": "ifc-stem-rule", "label": "Stem Rule", "parent_id": "mic", "stem": "good",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "ifc-sys-stem-rule", "label": "Sys Stem Rule", "parent_id": "room", "stem": "good",
+		"name": "ifc-sys-stem-rule", "label": "Sys Stem Rule", "parent_id": "collaboration", "stem": "good",
 	}, http.StatusCreated)
 
 	for _, bad := range []string{"Bad Stem", "-leading-hyphen", "has space", "UPPER", "trailing space "} {
@@ -161,7 +161,7 @@ func TestClearingAStemOnAShippedTypeForksAndTheWalkResumesAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "ifc-owner", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "ifc-owner", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "ifc-hq", "location_type": "building"}, http.StatusCreated)
 	// A minted ceiling-mic product: the walk under test is the TYPE tree's

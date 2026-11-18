@@ -28,7 +28,7 @@ Wait
 Type "# The agent knows who it acts for"
 Enter
 Wait
-Type `OMNIGLASS_TOKEN="$agent" omniglass auth me | jq -c '{agent, acting_for: .human.username}'`
+Type `OMNIGLASS_TOKEN="$agent" omniglass auth me | jq -c '{agent, acting_for: .person.username}'`
 Enter
 Wait
 

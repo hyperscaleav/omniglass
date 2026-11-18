@@ -51,8 +51,8 @@ vi.mock("../lib/components", async (orig) => {
   };
 });
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const updaterOnly: Me = { principal: { id: "u-up", kind: "human" }, human: { username: "up" }, permissions: ["system:read", "system:update", "location:read", "location:update", "tag:read"], grants: [] };
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const updaterOnly: Me = { user: { id: "u-up", kind: "person" }, person: { username: "up" }, permissions: ["system:read", "system:update", "location:read", "location:update", "tag:read"], grants: [] };
 
 function mount(kind: "system" | "location", id: string, me: Me = owner, systemActions: string[] = ["create", "update", "delete"]) {
   return mountHost(kind, id, "page", me, systemActions);
@@ -249,7 +249,7 @@ describe("a component's memberships, editable from its own face (#767)", () => {
   const beta = uuidFor("mf-beta");
   const gamma = uuidFor("mf-gamma");
   const member = (system_id: string, system: string, primary: boolean) => ({ component: "mic", component_id: comp, component_verdict: "healthy", primary, system, system_id, system_count: 1 });
-  const readerOnly: Me = { principal: { id: "u-rd", kind: "human" }, human: { username: "rd" }, permissions: ["component:read", "component:update", "system:read", "location:read", "tag:read", "product:read"], grants: [] };
+  const readerOnly: Me = { user: { id: "u-rd", kind: "person" }, person: { username: "rd" }, permissions: ["component:read", "component:update", "system:read", "location:read", "tag:read", "product:read"], grants: [] };
 
   type Call = { method: string; path: string };
   function mountComponent(me: Me = owner, memberships = [member(alpha, "alpha", true), member(gamma, "gamma", false)]) {
@@ -450,7 +450,7 @@ describe("the one form, empty", () => {
     ]);
     qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building"] }]);
     qc.setQueryData([...STANDARDS_KEY], []);
-    qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st-room"), name: "room", label: "Room" }]);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st-collab"), name: "collaboration", label: "Collaboration" }]);
     qc.setQueryData([...PRODUCTS_KEY], []);
     window.history.pushState({}, "", "/web/x");
     render(() => (
@@ -487,7 +487,7 @@ describe("the one form, empty", () => {
       const req = input as Request;
       if (req.method === "POST" && req.url.includes(":renderLabel")) {
         asked.push(req.url);
-        return new Response(JSON.stringify({ name: "room", ordinal: 1, label: "Room", rule: "global" }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ name: "collaboration", ordinal: 1, label: "Collaboration", rule: "global" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
     });
@@ -497,7 +497,7 @@ describe("the one form, empty", () => {
       await waitFor(() => expect(within(form).getByText(/This system is unclassified or its type chain sets no stem/)).toBeTruthy());
       expect(asked).toEqual([]);
 
-      await pickTree(within(form).getByLabelText("Type"), "Room");
+      await pickTree(within(form).getByLabelText("Type"), "Collaboration");
       await waitFor(() => expect(asked.length).toBe(1));
       expect(asked[0]).toContain("/systems:renderLabel");
     } finally { stub.mockRestore(); }

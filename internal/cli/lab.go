@@ -572,7 +572,7 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 		return fmt.Errorf("this lab has no user %q to sign in as; start over with omniglass lab run --fresh", user)
 	}
 	if reportSeconds > 0 {
-		if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": reportSeconds}); err != nil {
+		if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": reportSeconds}); err != nil {
 			return err
 		}
 	}
@@ -597,6 +597,10 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 		if err := setPusherTokens(ctx, out, gw, pushers); err != nil {
 			return err
 		}
+	}
+	// The server reads the lab's omnibot recording as it starts (#2121).
+	if err := lab.WriteOmnibotReplay(cfg().DataDir); err != nil {
+		return err
 	}
 	fmt.Fprintln(out, lab.FormatSeedResult(lab.SeedResult{Outpost: present, Summary: summary}))
 	return nil

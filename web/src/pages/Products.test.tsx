@@ -54,8 +54,8 @@ const propertyCatalog: PropertyRow[] = [
   { name: "port-count", data_type: "int", label: "Port count", official: true },
 ];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
@@ -271,7 +271,7 @@ describe("Products page", () => {
   });
 });
 
-// #614: the component_type catalog returns as the product's genus (ADR-0085),
+// #614: the component_type catalog returns as the product's type (ADR-0085),
 // so classifying a product is now a required, pickable fact, not an implicit
 // derivation from kind. The picker offers the seeded tree, indented by depth,
 // so a nested type (interactive-display under display) reads as nested.

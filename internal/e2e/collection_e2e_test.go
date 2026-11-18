@@ -85,7 +85,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from outpost where name = 'site-a'), $1::jsonb)`, `{"target":"`+target+`"}`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'site-a'), $1::jsonb)`, `{"target":"`+target+`"}`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values ('t-a', 'poll', (select id from endpoint where name = 'disp-1-tcp'), true)`); err != nil {

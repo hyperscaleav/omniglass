@@ -270,7 +270,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/effective-tags",
 		Summary:     "Effective tags for a component",
-		Description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
+		Description: "Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.",
 	}, "component", "read"), func(ctx context.Context, in *effectiveTagsInput) (*effectiveTagsOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
@@ -317,7 +317,7 @@ type entityNameInput struct {
 
 // registerEntityTagRoutes registers the list, set, and remove binding routes for
 // one entity kind. Binding is modeled as custom methods on the entity (like the
-// principal lifecycle actions), so the generated CLI reads `component set-tag
+// user lifecycle actions), so the generated CLI reads `component set-tag
 // <name>` rather than colliding with the top-level tag resource. Reading an
 // entity's tags rides that entity's read floor; setting or removing a value is
 // the entity's own update, so binding a tag needs no permission beyond the write

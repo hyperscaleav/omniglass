@@ -48,11 +48,11 @@ func TestOutpostTags(t *testing.T) {
 	mustBind(t, gw, "environment", "outpost", strptr("edge-1"), "edge-prod")
 	mustBind(t, gw, "rack", "outpost", strptr("edge-1"), "r7")
 
-	eff, err := gw.EffectiveTags(ctx, "outpost", []string{outpost.PrincipalID})
+	eff, err := gw.EffectiveTags(ctx, "outpost", []string{outpost.UserID})
 	if err != nil {
 		t.Fatalf("effective outpost tags: %v", err)
 	}
-	m := eff[outpost.PrincipalID]
+	m := eff[outpost.UserID]
 	if m["environment"] != "edge-prod" {
 		t.Errorf("environment = %q, want edge-prod (outpost-direct wins over platform)", m["environment"])
 	}
@@ -73,8 +73,8 @@ func TestOutpostTags(t *testing.T) {
 	if err := gw.DeleteTagBinding(ctx, "", "rack", "outpost", strptr("edge-1"), all, all); err != nil {
 		t.Fatalf("unbind rack: %v", err)
 	}
-	eff2, _ := gw.EffectiveTags(ctx, "outpost", []string{outpost.PrincipalID})
-	if _, ok := eff2[outpost.PrincipalID]["rack"]; ok {
+	eff2, _ := gw.EffectiveTags(ctx, "outpost", []string{outpost.UserID})
+	if _, ok := eff2[outpost.UserID]["rack"]; ok {
 		t.Errorf("rack still effective after unbind")
 	}
 }

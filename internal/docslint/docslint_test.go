@@ -607,3 +607,144 @@ func TestADR2033LabelTemplateAndBlueprintFire(t *testing.T) {
 		}
 	}
 }
+
+// TestADR2036TheUserFires proves the ADR-2036 entries catch the retired IAM
+// words (principal, principal group, service account, and human as a kind) in
+// prose and in the identifier spellings the schema, API and permission rename
+// (#2075) retired, and pass a backticked identifier (history, an applied
+// migration's name) and the English senses of principal and human.
+func TestADR2036TheUserFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2036") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"a principal holds grants",
+		"Principals sign in with a password or a token.",
+		"every principal in the install",
+		"add a principal group for the night shift",
+		"a principal-group's members inherit its grants",
+		"a service account calls the API with a token",
+		"Service accounts never sign in to the console.",
+		"a service-account token",
+		"a human principal signs in with a password",
+		"human users and machine users alike",
+		"the human kind carries a username",
+		"humans and service principals",
+		"a human or machine user",
+		"GET /principals lists them",
+		"/principal-groups/{group}/members adds one",
+		"principal:read:admin gates the page",
+		`perm: "principal_group:read:admin"`,
+		"each grant row carries principal_id",
+		"me.principal.id is the caller",
+		"omniglass principal-group member create night-shift --principal-id alice",
+		"  --principal-group on-call --channels inbox",
+		"  principal: {",
+		`<SchemaTable table="principal" />`,
+	} {
+		if !fires(line) {
+			t.Errorf("retired IAM word passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"a user holds grants",
+		"a machine user calls the API with a token",
+		"add a user group for the night shift",
+		"a person signs in with a password",
+		"the `principal` table became `users`",
+		"migration `20261117224704_principal_becomes_user` renamed it",
+		"the `principal_id` column became `user_id`",
+		"the principal reason is cost",
+		"the principal axes of the design",
+		"the three principal surfaces",
+		"a human-in-the-loop gate",
+		"a human reads the label",
+		"the name is a human identifier",
+		"a human approves the PR",
+	} {
+		if fires(line) {
+			t.Errorf("IAM word in a kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2034GenusFires proves the genus entry catches the retired word for a
+// type catalog row, singular and plural, and passes an ADR link whose anchor
+// still carries it (ADR titles and anchors keep the word).
+func TestADR2034GenusFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2034") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"The device-class genus catalog: what kind of device a product is.",
+		"Root creates a new top-level genus.",
+		"two genera share a parent",
+		"The Genus column",
+	} {
+		if !fires(line) {
+			t.Errorf("genus passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"see [the registry](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)",
+		"a generic type parameter",
+		"the content type of the response",
+		"an input of type checkbox",
+	} {
+		if fires(line) {
+			t.Errorf("kept sense fired: %q", line)
+		}
+	}
+}
+
+// TestADR2037DeclaredValueFires proves the ADR-2037 entries catch the retired
+// declared-state words and the cascade sense of override, and pass the
+// catalog's sparse edit, which keeps the word override.
+func TestADR2037DeclaredValueFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2037") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"re-render it from declared config",
+		"the reconcile desired-state loop",
+		"projects desired state onto the device",
+		"each desired value resolves down the cascade",
+		"set the config on the room",
+		"the world drifted from intent (config drift)",
+		"tags resolve union-on-key, override-on-value",
+		"union on key, override on value",
+		"the HQ credential overrides the product's binding",
+	} {
+		if !fires(line) {
+			t.Errorf("retired by ADR-2037 but passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"re-render it from declared values",
+		"tags resolve union-on-key, shadow-on-value",
+		"the HQ credential shadows the product's binding",
+		"drift from the declared value",
+		"an override is your sparse edit to a shipped catalog row",
+		"the row's origin is overridden",
+		"a column sort overrides the default order",
+	} {
+		if fires(line) {
+			t.Errorf("kept sense fired: %q", line)
+		}
+	}
+}

@@ -144,6 +144,15 @@ func (s *Session) revoke(ctx context.Context) error {
 	return nil
 }
 
+// statusError is a REST answer other than the one a request wanted, so a
+// caller can tell a missing thing from a failure.
+type statusError struct {
+	code int
+	msg  string
+}
+
+func (e *statusError) Error() string { return e.msg }
+
 // request is one call to the REST API with the person's token.
 func (s *Session) request(ctx context.Context, method, path string, body any, want int, out any) error {
 	var rdr io.Reader
@@ -177,7 +186,7 @@ func (s *Session) request(ctx context.Context, method, path string, body any, wa
 		if msg == "" {
 			msg = http.StatusText(resp.StatusCode)
 		}
-		return fmt.Errorf("%s %s: %d %s", method, path, resp.StatusCode, redact.Secrets(msg, s.person))
+		return &statusError{code: resp.StatusCode, msg: fmt.Sprintf("%s %s: %d %s", method, path, resp.StatusCode, redact.Secrets(msg, s.person))}
 	}
 	if out != nil {
 		return json.Unmarshal(raw, out)

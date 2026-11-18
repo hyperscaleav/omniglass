@@ -12,7 +12,7 @@ is [deployment](/guides/deployment/).
 The dividing line is the [two authorization layers](/architecture/identity-access/), both
 enforced in the app on every request: a `<resource>:<action>` **permission** checked on every
 route, and an ABAC **scope** injected by the Storage Gateway on every applicable query. An
-administrator is simply a principal whose grants carry the admin-tier permissions (`principal:*`,
+administrator is simply a user whose grants carry the admin-tier permissions (`user:*`,
 `role:read:admin`, `audit:read:admin`, `secret:*`, and so on); the surfaces below render and refuse exactly
 along those grants, so what an administrator sees is what they are allowed to change.
 
@@ -21,17 +21,17 @@ along those grants, so what an administrator sees is what they are allowed to ch
 Every task on these pages has two front doors, and they call the same API with the same checks:
 
 - **The console.** The **Admin** area of the [web console](/guides/operator/) holds Users,
-  Roles, Groups, Settings, and Audit. Secrets and Variables have moved to the **Values**
+  Roles, User groups, Settings, and Audit. Secrets and Variables have moved to the **Values**
   group. A tab you have no read grant for is hidden and its route refused, so the console never
   paints a page you cannot use.
 - **The CLI.** The same surfaces are generated commands on the [`omniglass` CLI](/guides/cli/)
-  (`principal`, `principal-group`, `secret`, `variable`, and the rest, all in the [CLI
+  (`user`, `user-group`, `secret`, `variable`, and the rest, all in the [CLI
   reference](/reference/cli/)), plus the trusted direct-database lane (`bootstrap`, `token`,
   `set-password`) that mints the very first owner before any server is running.
 
 ## In this guide
 
-- **[Manage users](/guides/admin/users/)** is the principal directory: creating a human,
+- **[Manage users](/guides/admin/users/)** is the user directory: creating a person,
   editing and renaming, the disable-archive-purge lifecycle, admin password reset, and profile
   pictures.
 - **[Roles, groups, and grants](/guides/admin/access/)** is giving a user access: the built-in
@@ -49,7 +49,7 @@ Every task on these pages has two front doors, and they call the same API with t
   typed values and **[metrics](/guides/admin/metrics/)** for the numeric quantities, with their
   units and precision.
 - **[Rules and severity](/guides/admin/rules/)** is where alarms come from when nobody raises them:
-  writing an event rule (what it reads, when it fires and clears, how long a condition must hold),
+  writing an event rule (what it reads, when it fires and clears, how long its criteria must hold),
   watching its live state, and the ranked severity levels its alarms are raised at, which you can
   add to, rename, recolor and re-rank on the console.
 - **[Calc rules](/guides/admin/calc-rules/)** derive a value from others, on each component or on each
@@ -59,11 +59,11 @@ Every task on these pages has two front doors, and they call the same API with t
   **[location types](/guides/admin/location-types/)** for locations, **[standards](/guides/admin/standards/)** for
   systems, and **[products](/guides/admin/products/)** for components, with
   **[vendors](/guides/admin/vendors/)** and **[drivers](/guides/admin/drivers/)** the reference
-  catalogs a product ties together. Beside standards sit the two coarse genus catalogs the
+  catalogs a product ties together. Beside standards sit the two type catalogs the
   console calls **Types**: the
   [component type](/architecture/core-entities/#catalog-reference-data-component_type) tree above
   products, and the [system type](/architecture/core-entities/#catalog-reference-data-system_type)
-  tree that says what kind of space a system is.
+  tree that says what a system is for.
 - **[Notifications](/guides/admin/notifications/)** is sending an alarm to a chat channel: a
   webhook target, the action rule that sends to it, the message it carries, and how a delivery
   reads on the alarm's timeline, all on the console's **Catalog, under Actions**.
@@ -143,5 +143,5 @@ every outpost to pull its worklist at once, so it is in force within a second. S
 for what each count means.
 
 The model behind all of this is [identity and access](/architecture/identity-access/) and
-[config and credentials](/architecture/variables/); those pages say how it is built, these say
+[variables, secrets, and declared values](/architecture/variables/); those pages say how it is built, these say
 how to run it.

@@ -32,7 +32,7 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/api/v1/auth/me" {
-		_, _ = io.WriteString(w, `{"principal":{"id":"p"}}`)
+		_, _ = io.WriteString(w, `{"user":{"id":"p"}}`)
 		return
 	}
 	if r.URL.Path == "/api/v1/auth/me/agent-policy" {

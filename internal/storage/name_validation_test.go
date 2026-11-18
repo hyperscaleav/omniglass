@@ -40,7 +40,7 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 	return map[string]func(key string) error{
 		"event_rule": func(s string) error {
 			v, _ := json.Marshal("down")
-			_, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: s, SampleKey: "endpoint-reachable",
+			_, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: s, SampleKey: "endpoint-reachable",
 				Fire: rules.Criteria{Op: "eq", Value: v}, Severity: "high"}, scope.Set{All: true})
 			return err
 		},
@@ -131,7 +131,7 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 		// A group name was validated only by the Huma pattern, on a looser rule that
 		// admitted . and _, and the gateway accepted anything at all. Both are now the
 		// entity rule, so the refusal is proved here like every other table's.
-		"principal_group": func(s string) error {
+		"user_group": func(s string) error {
 			_, err := gw.CreateGroup(ctx, "", storage.GroupSpec{Name: s}, all)
 			return err
 		},
@@ -147,6 +147,12 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
 				Name: s, ValueType: "string", OwnerKind: "platform", Value: json.RawMessage(`"x"`),
 			}, all)
+			return err
+		},
+		// The owner need not exist: the name is refused before any row is
+		// written.
+		"assistant_conversation": func(s string) error {
+			_, err := gw.CreateAssistantConversation(ctx, "", "00000000-0000-4000-8000-000000000001", s)
 			return err
 		},
 		"secret": func(s string) error {

@@ -11,7 +11,7 @@ import { uuidFor } from "../lib/testids";
 // exactly as a user would without a server.
 const seed: AuditEvent[] = [
   { id: "1", ts: "2026-07-07T10:02:00Z", actor: "u-alice", actor_name: "alice", verb: "login", resource: "auth" },
-  { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "principal", resource_id: "u-alice", old: { label: "Alice" }, new: { label: "Alice Cooper" } },
+  { id: "2", ts: "2026-07-07T10:01:00Z", actor: "u-alice", actor_name: "alice", real_actor: "u-root", real_actor_name: "root", verb: "update", resource: "user", resource_id: "u-alice", old: { label: "Alice" }, new: { label: "Alice Cooper" } },
   { id: uuidFor("3"), ts: "2026-07-07T10:00:00Z", actor: "u-bob", actor_name: "bob", verb: "delete", resource: "component", resource_id: "cmp_9f2", old: { name: "encoder" } },
   { id: uuidFor("4"), ts: "2026-07-07T09:59:00Z", actor: "u-bob", actor_name: "bob", verb: "create", resource: "secret", resource_id: "00000000-0000-4000-8000-00000000aaaa", new: { name: "core-snmp", secret_type: "snmp-community" } },
   { id: uuidFor("5"), ts: "2026-07-07T09:58:00Z", actor: "u-bob", actor_name: "bob", verb: "set", resource: "tag_binding", resource_id: "hq" },
@@ -201,7 +201,7 @@ describe("Audit resource labels (ADR-0062)", () => {
 
   it("falls back to the raw resource_id when no image carries a name", async () => {
     const { findByText } = render(() => <Audit />);
-    // Row 2 (principal update) images carry no name key; its id renders as-is.
+    // Row 2 (user update) images carry no name key; its id renders as-is.
     expect(await findByText("u-alice")).toBeTruthy();
   });
 
@@ -242,6 +242,14 @@ describe("Audit drawer fits a jsonb change (#1088)", () => {
     expect(params[1].textContent).toBe('{\n  "target": "127.60.0.19:22",\n  "timeout": "5s"\n}');
     expect(params[2].textContent).toBe(params[1].textContent);
     expect(row("Inputs").children[2].textContent).toContain('"login": "touch-panel-login"');
+  });
+
+  it("fixes the trail's column widths so masked cell text cannot size them", async () => {
+    const { container, findByText } = render(() => <Audit />);
+    await findByText("retry");
+    const table = container.querySelector("table")!;
+    expect(table.className).toContain("table-fixed");
+    expect(table.className).toContain("w-full");
   });
 
   it("lays the change table out to the drawer's width, its values wrapping in place", async () => {

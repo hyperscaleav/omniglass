@@ -7,8 +7,8 @@ package erd
 // the live schema must be named here (the integration test enforces it).
 var Subsystems = []Cluster{
 	{Name: "identity", Tables: []string{
-		"principal", "human", "service", "principal_grant", "principal_group",
-		"principal_group_member", "impersonation_session",
+		"users", "person", "machine", "user_grant", "user_group",
+		"user_group_member", "impersonation_session",
 		"role", "system_slot", "system_slot_assignment",
 		"system_slot_type", "system_slot_product",
 		"slot_choice", "choice_alternate",
@@ -31,7 +31,7 @@ var Subsystems = []Cluster{
 	{Name: "telemetry", Tables: []string{
 		"property_type", "metric_type", "metric", "metric_series", "metric_declared", "metric_trend", "metric_trend_dirty", "metric_trend_mark", "metric_block", "metric_block_mark", "property",
 		"event_type", "event", "log_line", "alarm", "alarm_snooze", "severity_level", "event_rule", "event_rule_state", "event_rule_live",
-		"event_rule_condition", "calc_rule", "calc_rule_input", "calc_pending", "calc_rule_state",
+		"event_rule_firing", "calc_rule", "calc_rule_input", "calc_pending", "calc_rule_state",
 		"command_type", "command",
 		// The outbound notification lane (#618): what a message says.
 		"notification_type", "notification_target", "action_rule", "action_rule_target", "action_rule_opt_out", "notification",
@@ -60,7 +60,7 @@ var Subsystems = []Cluster{
 		"identity_binding", "unbound_identity",
 	}},
 	{Name: "config", Tables: []string{
-		"setting_override", "variable",
+		"setting_binding", "variable",
 		// label_rule is the global tier of the label rules (#682, ADR-0098),
 		// one row per labelled entity kind. It sits with config rather than
 		// with the fleet it labels: it is platform-wide policy an operator
@@ -72,6 +72,10 @@ var Subsystems = []Cluster{
 		// token it earns is a credential row linked to the client, which
 		// oauth_refresh renews (#2073).
 		"oauth_client", "oauth_code", "oauth_refresh",
+		// assistant_conversation is a person's stored omnibot conversation
+		// and assistant_message its transcript (#2113), read by their owner
+		// alone.
+		"assistant_conversation", "assistant_message",
 		// lab_mark is the one row omniglass lab writes into its own database
 		// (#1195), so a lab and a real deployment refuse each other's.
 		"lab_mark",

@@ -1,10 +1,6 @@
 ---
 title: Workers
-description: "One worker machinery over several JetStream consumers, plus the backtest capability and the reconcile desired-state loop."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
+description: "One worker machinery over several JetStream consumers, plus the backtest capability and the reconcile loop over declared values."
 ---
 
 :::note[Implementation status]
@@ -40,7 +36,7 @@ The one machinery is a **JetStream work-queue consumer** over a configurable con
   rules never wait on PG ([messaging](/architecture/messaging/#two-lanes-one-bus));
 - **the clock** ([time](/architecture/time/)): fires schedules and armed timers (a leader-elected
   singleton, below);
-- **reconcile**: the desired-state loop (below).
+- **reconcile**: the declared-value loop (below).
 
 A subsystem that consumes the same message is **a stage, not a second loop**; competing consumers
 scale horizontally with no leader (JetStream hands each message to exactly one member).
@@ -124,8 +120,8 @@ The axis that decides almost everything else about a subsystem:
 
 - **Stateless** (owner resolution, calc): output is a pure function of (input, rules, snapshot). Order-free, safe to backtest, no cross-event state. Write pattern: **append** (a batched multi-row INSERT).
 - **Stateful** (the alarm lifecycle): maintains persisted state across events (the open alarm), so:
-  - **Order-sensitive.** JetStream does not promise strict ordering (the server is ts-authoritative) and competing consumers can hand same-key messages to different members, so a stateful subsystem either tolerates reorder idempotently or serializes per state key. The alarm transition serializes per condition, today the raiser-supplied `dedup_key` ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)); the `event_rule` keying joins alongside when the rule engine lands, its ordered write in the same PG transaction as the event record.
-  - Write pattern: **guarded conditional upsert** (`INSERT ... ON CONFLICT` / `UPDATE ... WHERE`), with a **partial unique index** as the concurrency-correctness backstop (built for alarms: `alarm_open_condition_key`, one open row per `(component, dedup_key)`).
+  - **Order-sensitive.** JetStream does not promise strict ordering (the server is ts-authoritative) and competing consumers can hand same-key messages to different members, so a stateful subsystem either tolerates reorder idempotently or serializes per state key. The alarm transition serializes per alarm identity, today the raiser-supplied `dedup_key` ([ADR-0075](/architecture/decisions/#adr-0075-an-alarms-condition-identity-is-a-raiser-supplied-dedup-key)); the `event_rule` keying joins alongside when the rule engine lands, its ordered write in the same PG transaction as the event record.
+  - Write pattern: **guarded conditional upsert** (`INSERT ... ON CONFLICT` / `UPDATE ... WHERE`), with a **partial unique index** as the concurrency-correctness backstop (built for alarms: `alarm_open_identity_key`, one open row per `(component, dedup_key)`).
   - **Backtest is harder**: it must process each entity's series in order.
 
 :::design[Target design, tracked in #430]
@@ -162,16 +158,16 @@ backtest is **windowed by default** (the last 30 days), whole-history the explic
 
 :::design[The reconcile control loop, tracked in #526]
 
-## Reconcile: the desired-state control loop
+## Reconcile: the declared-value control loop
 
-Reconcile is another JetStream consumer: it projects **declared desired state** onto the things that
-drift, the system-level form of [config](/architecture/variables/)'s `reconcile: enforce` policy.
+Reconcile is another JetStream consumer: it projects **declared values** onto the things that
+drift, the system-level form of the [declared value](/architecture/variables/)'s `reconcile: enforce` policy.
 
 - **Inputs**: the desired declarations (templates, component assignments, config declared values)
   plus observed state; config changes commit in PG and CDC publishes them
   ([audit](/architecture/audit/)), so reconcile is a CDC consumer plus the current projections.
 - **Output**: the delta, asserted as **outpost config** (which tasks and commands each outpost runs,
-  derived from placements) and as **reconciled `run` actions** (desired-state commands that stay
+  derived from placements) and as **reconciled `run` actions** (declared-value commands that stay
   asserted, e.g. a codec's feedback registration).
 - **Idempotent**: assert-equals-observed is a no-op; it acts only on drift, logging a
   `log_line` per run on the server's platform component, as the retention pass does

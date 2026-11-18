@@ -33,6 +33,9 @@ type Settings struct {
 	// domain and not client-visible; a caller reads its own resolved policy
 	// from /auth/me/agent-policy instead.
 	Agent AgentSettings `json:"agent" settings:"platform"`
+	// Assistant is how the platform keeps omnibot's conversations (#2113):
+	// platform domain and not client-visible, an admin's retention choice.
+	Assistant AssistantSettings `json:"assistant" settings:"platform"`
 }
 
 // UISettings is the ui namespace.
@@ -175,6 +178,12 @@ type AgentSettings struct {
 	// Roles and Tools narrow the class policies above (#2088); neither widens.
 	Roles map[string]AgentClassOverride `json:"roles,omitempty" doc:"Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter"`
 	Tools map[string]string             `json:"tools,omitempty" doc:"Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter"`
+}
+
+// AssistantSettings is the assistant namespace (#2113): how long omnibot's
+// stored conversations are kept.
+type AssistantSettings struct {
+	ConversationDays int `json:"conversation_days" minimum:"1" maximum:"36500" default:"30" doc:"Days a stored omnibot conversation is kept after it last changed"`
 }
 
 // AgentClassOverride is one role's override of the class policies (#2088). An

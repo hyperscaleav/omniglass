@@ -63,6 +63,11 @@ describe("the location tree", () => {
     expect(o.roots[0].contents).toBe("2 HVAC Zones");
   });
 
+  it("carries each location's name, the reference omnibot is handed (#2122), not only its label", () => {
+    const o = buildOutline(input({ locations: [loc("hq", "Headquarters", "campus"), loc("hq.west", "West", "building", "hq")] }));
+    expect(o.roots[0].chain.map((c) => c.name)).toEqual(["hq", "hq.west"]);
+  });
+
   it("survives a parent cycle in the data", () => {
     expect(() => buildOutline(input({ locations: [loc("a", "A", "room", "b"), loc("b", "B", "room", "a")] }))).not.toThrow();
   });
