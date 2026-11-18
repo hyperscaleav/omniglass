@@ -7,10 +7,12 @@ name: release
 # and publishes it as a prerelease; once a candidate has passed the soak gate, a
 # dispatch with `final` tags that same commit v0.1.0. The version comes from the
 # branch name and the tags already cut (cmd/releaseversion), never from commit
-# subjects. Each run pushes the tag, creates the GitHub Release with generated
-# notes, builds and pushes the release image, and attaches the binaries, each
-# stamped with that image's digest (#1257). Nothing is committed back; the tag is
-# the artifact.
+# subjects. Each run pushes the tag, creates the GitHub Release with notes
+# grouped by change type (cmd/releasenotes, #2142), builds and pushes the
+# release image, and attaches the binaries, each stamped with that image's
+# digest (#1257). A final release then comments "Released in" on the PRs it
+# ships and the issues they closed. Nothing is committed back; the tag is the
+# artifact.
 #
 # Releasing is switched off until the repository variable RELEASES_ENABLED is
 # `true` (Settings, Secrets and variables, Actions, Variables). Until then a
@@ -36,6 +38,8 @@ on:
 permissions:
   contents: write       # create the GitHub Release (and push the tag, without the App)
   packages: write       # push the release image to GHCR
+  issues: write         # a final release's "Released in" comments on issues
+  pull-requests: write  # and on the PRs it ships
 
 concurrency:
   group: release
@@ -83,6 +87,25 @@ jobs:
             echo "- publish: ${PUBLISH}"
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      # The notes cover the commits since the previous final release, so each
+      # candidate's notes are cumulative. A dry run shows them in the summary.
+      - name: Write the notes
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+        run: |
+          go run ./cmd/releasenotes -repo "${GITHUB_REPOSITORY}" -tag "${TAG}" \
+            -previous "${PREVIOUS}" -to "${GITHUB_SHA}" \
+            -prs-file "${RUNNER_TEMP}/prs.txt" > "${RUNNER_TEMP}/notes.md"
+          {
+            echo
+            echo "<details><summary>Release notes ($(wc -l < "${RUNNER_TEMP}/prs.txt") PRs)</summary>"
+            echo
+            cat "${RUNNER_TEMP}/notes.md"
+            echo
+            echo "</details>"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Mint the release App token
         id: app
         if: env.PUBLISH == 'true' && vars.RELEASE_APP_CLIENT_ID != ''
@@ -107,11 +130,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
-          PREVIOUS: ${{ steps.version.outputs.previous }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
-          args=(--verify-tag --generate-notes --title "${TAG}")
-          if [ -n "${PREVIOUS}" ]; then args+=(--notes-start-tag "${PREVIOUS}"); fi
+          args=(--verify-tag --notes-file "${RUNNER_TEMP}/notes.md" --title "${TAG}")
           if [ "${PRERELEASE}" = "true" ]; then args+=(--prerelease --latest=false); fi
           gh release create "${TAG}" "${args[@]}"
 
@@ -182,3 +203,49 @@ jobs:
           GORELEASER_CURRENT_TAG: ${{ steps.version.outputs.tag }}
           # Stamped into each binary as main.imageDigest (.goreleaser.yaml).
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+
+      # A final release, once everything is attached, comments on each PR it
+      # ships and each issue that PR closed (#2142). Candidates comment nothing.
+      # A hidden marker makes a rerun skip what it already commented, and a
+      # failed comment only warns. Past MAX_COMMENTS PRs (the first release
+      # ships the whole history) it skips the comments rather than post
+      # hundreds and run into GitHub's limits on content creation.
+      - name: Mark PRs and issues released
+        if: env.PUBLISH == 'true' && steps.version.outputs.prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          MAX_COMMENTS: "100"
+        run: |
+          mapfile -t prs < "${RUNNER_TEMP}/prs.txt"
+          if (( ${#prs[@]} > MAX_COMMENTS )); then
+            echo "::notice::${TAG} ships ${#prs[@]} PRs, over ${MAX_COMMENTS}: no Released in comments."
+            echo "- comments: skipped, ${#prs[@]} PRs" >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          marker="<!-- omniglass-released: ${TAG} -->"
+          body="Released in [${TAG}](https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}).
+
+          ${marker}"
+          declare -A seen
+          posted=0
+          comment() {
+            local n="$1" bodies
+            [[ -n "${seen[$n]:-}" ]] && return 0
+            seen[$n]=1
+            bodies=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${n}/comments?per_page=100" --jq '.[].body' 2>/dev/null) || bodies=""
+            if grep -qF -- "${marker}" <<<"${bodies}"; then return 0; fi
+            if gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${n}/comments" -f body="${body}" > /dev/null; then
+              posted=$((posted + 1))
+            else
+              echo "::warning::Could not comment on #${n}."
+            fi
+            sleep 2
+          }
+          for pr in "${prs[@]}"; do
+            comment "${pr}"
+            issues=$(gh pr view "${pr}" --repo "${GITHUB_REPOSITORY}" --json closingIssuesReferences \
+              --jq '.closingIssuesReferences[].number' 2>/dev/null) || issues=""
+            for i in ${issues}; do comment "${i}"; done
+          done
+          echo "- comments: ${posted} posted" >> "${GITHUB_STEP_SUMMARY}"
