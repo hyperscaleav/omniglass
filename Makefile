@@ -445,24 +445,14 @@ clean-testcontainers:
 
 # ---- release ---------------------------------------------------------------
 # Releases are cut only by the release workflow (.github/workflows/release.yml),
-# which builds the image and stamps its digest into the binaries (#1257); there
-# is no local publish target. `release-plan` is the local dry-run preview: it
-# prints the next version and the generated notes and publishes nothing. Run it
-# from an up-to-date `main`. semantic-release reads the conventional-commit
-# subjects since the last tag (.releaserc.json drives the plugins).
-SEMANTIC_RELEASE := npx --yes -p semantic-release@24 \
-	-p @semantic-release/commit-analyzer \
-	-p @semantic-release/release-notes-generator \
-	-p @semantic-release/github semantic-release
-
-# The token is resolved inside the recipe shell at runtime (prefer an exported
-# GITHUB_TOKEN, else the gh CLI), never stored in a make variable, so it is
-# never echoed into the build log. The recipe is `@`-silenced and fails fast
-# with an actionable message when no token is available.
+# dispatched on a release/<major>.<minor> branch, which builds the image and
+# stamps its digest into the binaries (#1257); there is no local publish target.
+# `release-plan` is the local preview: run from a release branch, it prints the
+# tag the next dispatch would cut, from the branch name and the tags (#2139).
+# FINAL=1 previews the final release of the newest candidate instead.
 release-plan:
-	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
-	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
-	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --dry-run --no-ci
+	@git fetch --quiet --tags origin
+	@go run ./cmd/releaseversion -branch "$$(git branch --show-current)" $(if $(FINAL),-final)
 
 # Local dry build of the release matrix (all OS/arch archives + checksums), with
 # no tag and no publish, to validate .goreleaser.yaml. SBOM is skipped (needs

@@ -1,9 +1,9 @@
 name: pr-title
 
-# The squash-merge subject is the PR title, and semantic-release reads it to
-# decide the next version. This lints the title to the conventional-commit
-# grammar the repo uses so a malformed title cannot reach `main` and mis-version
-# (or silently not version) the release.
+# The squash-merge subject is the PR title, and a release's generated notes
+# list it. This lints the title to the conventional-commit grammar the repo uses
+# so a malformed title cannot reach `main` or a release branch. The version
+# itself comes from the release branch, not the titles (#2139).
 
 on:
   pull_request:

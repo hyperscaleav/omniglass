@@ -62,9 +62,10 @@ git push -u origin <type>/<short-name>
 - **Branch prefix and PR title** use the conventional-commit type: `feat`, `fix`,
   `docs`, `ci`, `chore`, `refactor`, `test`, `perf`. CI will enforce the PR-title format
   once the toolchain lands; today it is convention.
-- **Squash merge only.** The PR title becomes the commit on `main` and drives
-  semantic-release: `feat:` = minor, `fix:`/`perf:` = patch, `BREAKING CHANGE:` in the
-  body = major; `chore`/`docs`/`ci`/`test`/`refactor` produce no release.
+- **Squash merge only.** The PR title becomes the commit on `main` and a line in the
+  next release's generated notes. Releases are cut from a `release/<major>.<minor>` branch,
+  whose name sets the version, not the titles (see
+  [Release and CI](docs/src/content/docs/contributing/release-ci.md)).
 - **Validate locally before pushing.** Once the Go toolchain lands, `make test-short`
   for fast iteration and `make test` before opening the PR. Do not lean on CI to find
   what a local run would.

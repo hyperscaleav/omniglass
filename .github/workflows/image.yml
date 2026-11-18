@@ -1,14 +1,15 @@
 name: image
 
 # Build the single container image (console embedded) and publish it to GHCR.
-# On main it tags `latest` + the commit sha; on a PR it tags `pr-<n>` + the
-# commit sha so the preview pipeline can pin a deploy to an exact build. A
+# On main it tags `latest` + the commit sha; on a release branch, the commit
+# sha alone; on a PR it tags `pr-<n>` + the commit sha so the preview pipeline
+# can pin a deploy to an exact build. A
 # release's `v<version>` image is not built here: release.yml builds it inline
 # before the binaries and stamps its digest into them (#1257).
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   pull_request:
 
 # Least privilege: read the repo, write packages (GHCR). Fork PRs get a
