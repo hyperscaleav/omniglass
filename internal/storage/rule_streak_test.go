@@ -170,7 +170,7 @@ func TestRuleStreakSurvivesCosmeticEdit(t *testing.T) {
 	}
 }
 
-// A rule created, or enabled, while its condition already holds primes from
+// A rule created, or enabled, while its expression already holds primes from
 // the newest sample, so a transition-only input that will send nothing more
 // still fires once the sustain has held.
 func TestRuleCreatedWhileConditionHolds(t *testing.T) {

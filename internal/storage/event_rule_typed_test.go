@@ -118,7 +118,7 @@ func TestOfficialRuleCarriesTheGenericPair(t *testing.T) {
 }
 
 // TestInformationalRuleRaisesNoAlarm proves a rule with no severity opens no
-// alarm when its condition holds, on any path that acts on a rule (the
+// alarm when its expression holds, on any path that acts on a rule (the
 // ingest, the sweep that ends a sustain, the reconcile pass), and moves no
 // verdict.
 func TestInformationalRuleRaisesNoAlarm(t *testing.T) {

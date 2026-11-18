@@ -414,7 +414,7 @@ func TestRunIdempotent(t *testing.T) {
 	// The breadth block adds one raised-then-cleared pair (#796) beside the
 	// fixture's standing alarms; a second run must add nothing to either.
 	if alarms != len(fixtures.Alarms)+1 {
-		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing condition", alarms, len(fixtures.Alarms)+1)
+		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing alarm", alarms, len(fixtures.Alarms)+1)
 	}
 	// Membership and staffing are counted too, because they are where a resolver
 	// that zipped the fixture onto the fleet in the wrong order shows up: every

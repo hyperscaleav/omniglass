@@ -140,7 +140,7 @@ func TestAnOperatorAcknowledgesInScope(t *testing.T) {
 		t.Errorf("acknowledged by %q, want the calling user", got.AcknowledgedBy)
 	}
 	if !got.Active || got.ClearedAt != nil {
-		t.Error("acknowledging cleared the alarm: the raised state belongs to the condition, not to the person")
+		t.Error("acknowledging cleared the alarm: the raised state belongs to the alarm's identity, not to the person")
 	}
 
 	// And it is durable, read back through the ordinary list.
@@ -244,7 +244,7 @@ func TestTheReadSideExpressesRaisedAndUnacknowledged(t *testing.T) {
 	t.Parallel()
 	f := newAckFixture(t)
 
-	// A second condition on the same component, so the filter has something to
+	// A second alarm on the same component, so the filter has something to
 	// exclude rather than an empty set to trivially satisfy.
 	fan := raiseFor(t, f.c, f.owner, f.mine, "warning", "fan.degraded", "fan degraded")
 	f.c.do(f.responder, http.MethodPost, ackPath(f.mine, fan), nil, http.StatusOK)

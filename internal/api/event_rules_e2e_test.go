@@ -718,7 +718,7 @@ func TestEventRuleExpressionAPI(t *testing.T) {
 
 // TestEventRuleRenameAPI drives POST /event-rules/{name}:rename (#977): an
 // operator rule's name moves while every reference holds its uuid. A rule
-// holding an open alarm and a condition is renamed; the answer carries the
+// holding an open alarm and a firing is renamed; the answer carries the
 // same uuid, the old name 404s and the new resolves, the alarm stays open
 // and names the rule by its new name, and the next recovery clears it with a
 // clear event naming the rule by the same uuid and the new name, while the
@@ -812,7 +812,7 @@ func TestEventRuleRenameAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	if renamed.ID != made.ID || renamed.Name != "rn-after" || renamed.Version != made.Version || renamed.OpenAlarms != 1 || renamed.Firing != 1 {
-		t.Fatalf("renamed = %+v, want the same uuid under rn-after, version %d, its alarm and condition held", renamed, made.Version)
+		t.Fatalf("renamed = %+v, want the same uuid under rn-after, version %d, its alarm and firing held", renamed, made.Version)
 	}
 	c.do(ownerTok, http.MethodGet, "/event-rules/rn-before", nil, http.StatusNotFound)
 	c.do(viewer, http.MethodGet, "/event-rules/rn-after", nil, http.StatusOK)

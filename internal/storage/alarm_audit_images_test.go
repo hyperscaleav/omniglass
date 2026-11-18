@@ -15,7 +15,7 @@ import (
 // its own what was done, what it changed and what it became. Every alarm
 // audit row but the raise (a create, whose new image is the whole alarm)
 // carries a before and an after image of the field it moved, and names the
-// condition (component and dedup key) it was about.
+// identity (component and dedup key) it was about.
 func TestEveryAlarmAuditRowCarriesItsBeforeAndAfter(t *testing.T) {
 	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
@@ -85,14 +85,14 @@ func TestEveryAlarmAuditRowCarriesItsBeforeAndAfter(t *testing.T) {
 			t.Errorf("%s row: %s is %v before and after; want the change", verb, field, before)
 		}
 		if new["component"] != comp || new["dedup_key"] != raised.DedupKey {
-			t.Errorf("%s row: new image names %v / %v, want the condition %s / %s",
+			t.Errorf("%s row: new image names %v / %v, want the identity %s / %s",
 				verb, new["component"], new["dedup_key"], comp, raised.DedupKey)
 		}
 	}
 }
 
 // A rule's clear (clearAlarmByDedupTx) carries the same before and after as a
-// hand clear, and names its condition.
+// hand clear, and names its identity.
 func TestARulesClearAuditsItsBeforeAndAfter(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
@@ -112,6 +112,6 @@ func TestARulesClearAuditsItsBeforeAndAfter(t *testing.T) {
 		t.Errorf("rule clear: old %v, new %v; want cleared_at null before and set after", old, new)
 	}
 	if new["component"] != "bar-1" || new["dedup_key"] == nil || new["dedup_key"] == "" {
-		t.Errorf("rule clear: new %v, want the condition named (bar-1 and its dedup key)", new)
+		t.Errorf("rule clear: new %v, want the identity named (bar-1 and its dedup key)", new)
 	}
 }

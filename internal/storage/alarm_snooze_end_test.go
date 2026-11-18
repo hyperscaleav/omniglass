@@ -10,9 +10,9 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The end of a snooze tells people again about a condition that is still
+// The end of a snooze tells people again about an alarm that is still
 // raised (#1318, ADR-1318): at the deadline, or by :unsnooze, the snooze is
-// deleted and, if an alarm of the condition is still open, it is announced
+// deleted and, if an alarm of that identity is still open, it is announced
 // again as raised, judged against the rules as they stand then. The end is
 // audited (snooze-end from the platform, unsnooze naming the actor) just
 // before the new rows. Replicas sweeping one expired snooze announce it once.
@@ -80,9 +80,9 @@ func TestTheDeadlineAnnouncesAStillRaisedConditionAgain(t *testing.T) {
 	}
 }
 
-// TestAConditionThatClearedDuringTheSnoozeGetsNoAnnouncement: the end tells
-// people about a condition still raised, and nothing about one that is not.
-func TestAConditionThatClearedDuringTheSnoozeGetsNoAnnouncement(t *testing.T) {
+// TestAnAlarmThatClearedDuringTheSnoozeGetsNoAnnouncement: the end tells
+// people about an alarm still raised, and nothing about one that is not.
+func TestAnAlarmThatClearedDuringTheSnoozeGetsNoAnnouncement(t *testing.T) {
 	t.Parallel()
 	f := newNotifyFixture(t)
 	a, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "no video", DedupKey: "video"})
@@ -103,7 +103,7 @@ func TestAConditionThatClearedDuringTheSnoozeGetsNoAnnouncement(t *testing.T) {
 		t.Fatalf("the sweep ended %d (%v), want 1", n, err)
 	}
 	if after := len(f.list(t, storage.NotificationFilter{AlarmID: a.ID})); after != before {
-		t.Errorf("a cleared condition's snooze ending queued %d rows, want none", after-before)
+		t.Errorf("a cleared alarm's snooze ending queued %d rows, want none", after-before)
 	}
 	timeline, err := f.gw.AlarmTimeline(f.ctx, a.ComponentID, a.ID, storage.RecipientView{All: true})
 	if err != nil {
@@ -115,7 +115,7 @@ func TestAConditionThatClearedDuringTheSnoozeGetsNoAnnouncement(t *testing.T) {
 }
 
 // TestUnsnoozingEarlyAnnouncesLikeTheDeadline: :unsnooze takes the same
-// path, audited as unsnooze naming the operator; unsnoozing a condition that
+// path, audited as unsnooze naming the operator; unsnoozing an alarm that
 // is not snoozed announces nothing.
 func TestUnsnoozingEarlyAnnouncesLikeTheDeadline(t *testing.T) {
 	t.Parallel()
@@ -130,7 +130,7 @@ func TestUnsnoozingEarlyAnnouncesLikeTheDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := len(f.rows(t, a.ID)); got != first {
-		t.Fatalf("unsnoozing an unsnoozed condition queued %d rows, want none", got-first)
+		t.Fatalf("unsnoozing an unsnoozed alarm queued %d rows, want none", got-first)
 	}
 	if _, err := f.gw.SnoozeAlarm(f.ctx, f.ids["root"], "display-2", a.ID, time.Hour); err != nil {
 		t.Fatal(err)
@@ -263,10 +263,10 @@ func TestAVerbNeverSwallowsTheAnnouncementADeadlineOwes(t *testing.T) {
 	}
 }
 
-// TestAHeldConditionDoesNotHoldUpTheSweep: an expired snooze whose condition
+// TestAHeldAlarmDoesNotHoldUpTheSweep: an expired snooze whose alarm
 // lock is held (a transition of it in flight) is skipped for the pass, and
 // the other expired snoozes still end in the same call.
-func TestAHeldConditionDoesNotHoldUpTheSweep(t *testing.T) {
+func TestAHeldAlarmDoesNotHoldUpTheSweep(t *testing.T) {
 	t.Parallel()
 	f := newNotifyFixture(t)
 	held, err := f.gw.RaiseAlarm(f.ctx, "", "display-1", storage.AlarmSpec{Severity: "high", Message: "held", DedupKey: "a-held"})
@@ -299,7 +299,7 @@ func TestAHeldConditionDoesNotHoldUpTheSweep(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n, err := f.gw.EndExpiredSnoozes(f.ctx, 10); err != nil || n != 1 {
-		t.Fatalf("with one condition held the sweep ended %d (%v), want the other one", n, err)
+		t.Fatalf("with one alarm held the sweep ended %d (%v), want the other one", n, err)
 	}
 	_ = tx.Rollback(f.ctx)
 	if n, err := f.gw.EndExpiredSnoozes(f.ctx, 10); err != nil || n != 1 {

@@ -525,15 +525,15 @@ func TestRetiredPlantedPinIsNeverRelearned(t *testing.T) {
 	}
 }
 
-// TestRetiredRowsReleaseTheConditionsTheyRaised: a condition, and the alarm
+// TestRetiredRowsReleaseTheFiringsTheyRaised: a firing, and the alarm
 // with it, that a now-retired row raised (one under an instance naming no
 // endpoint, one dated a year ahead) is released by the boot heal, and one a
 // retired row cleared is raised again: a series with nothing left ends its
-// condition, a series whose newest sample is the outpost's honest one is judged
+// firing, a series whose newest sample is the outpost's honest one is judged
 // against it. A series that cannot be healed (a legacy rule whose fire event
 // the ruling now reserves) is logged and skipped, never stopping the rest, and
 // the heal runs once over what was retired: a second heal judges nothing.
-func TestRetiredRowsReleaseTheConditionsTheyRaised(t *testing.T) {
+func TestRetiredRowsReleaseTheFiringsTheyRaised(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
 	belowNarrowMetric(t, r.f.dsn)

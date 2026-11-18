@@ -17,8 +17,8 @@ const ruleDedupKeyVersion = "20261021050000"
 
 // TestRuleRename proves an event rule's name is renameable (#977, ADR-0062,
 // ADR-0076) while everything inside the platform holds its uuid: a rule with
-// an open alarm and a condition in force is renamed, the alarm keeps its
-// raised_by_rule_id and its dedup key (the uuid), the condition stays in
+// an open alarm and a firing in force is renamed, the alarm keeps its
+// raised_by_rule_id and its dedup key (the uuid), the firing stays in
 // force, and the next recovery clears it with a clear event naming the rule
 // by its uuid and its new name, while the fire event keeps the name it was
 // written under. The old name stops resolving and the new one resolves; the
@@ -58,7 +58,7 @@ func TestRuleRename(t *testing.T) {
 	}
 	after, err := r.f.gw.GetEventRule(r.ctx, "after", r.f.all)
 	if err != nil || after.ID != id || after.OpenAlarms != 1 || after.Firing != 1 {
-		t.Fatalf("the new name reads %+v (%v); want the same rule holding its alarm and condition", after, err)
+		t.Fatalf("the new name reads %+v (%v); want the same rule holding its alarm and firing", after, err)
 	}
 	if got := scalar(t, r.f.conn, `select dedup_key || ' ' || raised_by_rule_id::text || ' ' || (cleared_at is null)::text
 		from alarm where id = '`+alarm+`'`); got != wantKey+" "+id+" true" {
@@ -69,7 +69,7 @@ func TestRuleRename(t *testing.T) {
 		t.Fatalf("%d rename audit rows keyed on the uuid, want 1", n)
 	}
 
-	// A further down changes nothing: the condition is still in force.
+	// A further down changes nothing: the firing is still in force.
 	r.observe("tcp", "down")
 	if r.openAlarm("tcp") != alarm || r.firings() != 1 {
 		t.Fatalf("a down after the rename: alarm %q (was %q), %d firings; want both kept", r.openAlarm("tcp"), alarm, r.firings())
@@ -200,16 +200,16 @@ func TestRuleDedupKeyMigration(t *testing.T) {
 // TestRuleLegacyKeyAlarmIsTheRules proves the rolling-upgrade tolerance
 // (#977): after the migration an older replica still raises a rule's alarm
 // under the legacy key, rule:<name>[:<instance>], and the new binary finds it
-// by its rule and instance whatever key wrote it. Raised with its condition
+// by its rule and instance whatever key wrote it. Raised with its firing
 // row (a post-#949 replica), it is in force: a further down opens no second
 // alarm and writes no event, the state lists it on its instance, and the
 // recovery clears it with the clear event carrying it. Raised with no
-// condition row, a recovery still clears it. A disable clears one too.
+// firing row, a recovery still clears it. A disable clears one too.
 func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
 	r.rule(storage.EventRuleSpec{Name: "legacy", Severity: "high", ClearEventType: "rule-cleared"})
-	legacy := func(instance string, condition bool) string {
+	legacy := func(instance string, firing bool) string {
 		t.Helper()
 		key := "rule:legacy"
 		if instance != "" {
@@ -217,7 +217,7 @@ func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
 		}
 		mustExec(t, r.f.conn, `insert into alarm (component_id, severity, message, dedup_key, raised_by_rule_id)
 			values ((select id from component where name = 'bar-1'), 'high', 'old replica', $1, (select id from event_rule where name = 'legacy'))`, key)
-		if condition {
+		if firing {
 			mustExec(t, r.f.conn, `insert into event_rule_firing (rule_id, component_id, instance, since)
 				values ((select id from event_rule where name = 'legacy'), (select id from component where name = 'bar-1'), $1, now())`, instance)
 		}
@@ -231,7 +231,7 @@ func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
 		return scalar(t, r.f.conn, `select (cleared_at is not null)::text from alarm where id = '`+id+`'`) == "true"
 	}
 
-	// With its condition row, on an instance carrying a colon of its own.
+	// With its firing row, on an instance carrying a colon of its own.
 	a := legacy("tcp:2", true)
 	r.observe("tcp:2", "down")
 	if openCount() != 1 || len(r.events()) != 0 {
@@ -251,7 +251,7 @@ func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
 		t.Fatalf("the recovery: cleared %v, %d open, events %+v; want the legacy alarm cleared by the clear event", cleared(a), openCount(), evs)
 	}
 
-	// With no condition row: in force for the live counts and the evaluator,
+	// With no firing row: in force for the live counts and the evaluator,
 	// and a recovery clears it. On an instance: an outpost writes this key only
 	// under the endpoint its task ran (ADR-0161), so its series always has one.
 	b := legacy("panel", false)
@@ -268,7 +268,7 @@ func TestRuleLegacyKeyAlarmIsTheRules(t *testing.T) {
 		t.Fatalf("the recovery left the orphan legacy alarm open (%d open)", openCount())
 	}
 
-	// A disable lets go of a legacy-keyed alarm with its condition.
+	// A disable lets go of a legacy-keyed alarm with its firing.
 	c := legacy("icmp", true)
 	off := false
 	r.patch(storage.EventRulePatch{Enabled: &off})

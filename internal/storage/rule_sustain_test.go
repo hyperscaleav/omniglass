@@ -13,7 +13,7 @@ import (
 // before the alarm opens, whether a later sample or the sweep (a
 // transition-only input sends no later sample) finds it held; a spike
 // shorter than the sustain opens nothing; a recovery shorter than the clear
-// sustain holds the incident open; and the streak survives a restart.
+// sustain holds the alarm open; and the streak survives a restart.
 func TestRuleSustains(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
