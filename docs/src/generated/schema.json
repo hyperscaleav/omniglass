@@ -6150,18 +6150,45 @@
       "type": "ARRAY",
       "nullable": false,
       "default": "'{}'::text[]"
+     },
+     {
+      "name": "role_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "role.id"
+     },
+     {
+      "name": "official",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "namespace",
+      "type": "text",
+      "nullable": false,
+      "default": "'local'::text"
      }
     ],
     "checks": [
      {
       "name": "notification_target_kind_check",
-      "expr": "CHECK ((((kind = 'webhook'::text) AND (url IS NOT NULL) AND (user_group_id IS NULL) AND (user_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) = 0)) OR ((kind = 'email'::text) AND (url IS NULL) AND (user_group_id IS NULL) AND (user_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) \u003e 0)) OR ((kind = 'user_group'::text) AND (user_group_id IS NOT NULL) AND (url IS NULL) AND (user_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'user'::text) AND (user_id IS NOT NULL) AND (url IS NULL) AND (user_group_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+      "expr": "CHECK ((((kind = 'webhook'::text) AND (url IS NOT NULL) AND (user_group_id IS NULL) AND (user_id IS NULL) AND (role_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) = 0)) OR ((kind = 'email'::text) AND (url IS NULL) AND (user_group_id IS NULL) AND (user_id IS NULL) AND (role_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) \u003e 0)) OR ((kind = 'user_group'::text) AND (user_group_id IS NOT NULL) AND (url IS NULL) AND (user_id IS NULL) AND (role_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'user'::text) AND (user_id IS NOT NULL) AND (url IS NULL) AND (user_group_id IS NULL) AND (role_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'role'::text) AND (role_id IS NOT NULL) AND (url IS NULL) AND (user_group_id IS NULL) AND (user_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+     },
+     {
+      "name": "notification_target_namespace_check",
+      "expr": "CHECK ((namespace ~ '^[a-z0-9][a-z0-9-]*$'::text))"
+     },
+     {
+      "name": "notification_target_og_official_check",
+      "expr": "CHECK (((namespace \u003c\u003e 'og'::text) OR official))"
      }
     ],
     "uniques": [
      {
-      "name": "notification_target_name_key",
-      "definition": "CREATE UNIQUE INDEX notification_target_name_key ON public.notification_target USING btree (name)"
+      "name": "notification_target_namespace_name_key",
+      "definition": "CREATE UNIQUE INDEX notification_target_namespace_name_key ON public.notification_target USING btree (namespace, name)"
      }
     ]
    },

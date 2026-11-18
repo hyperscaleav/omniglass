@@ -1,10 +1,9 @@
 ---
-title: "Try omniglass in five minutes"
-description: "One command brings up a working omniglass on Docker, with an edge outpost collecting from a simulated fleet, to learn on: what it runs, with which privilege, and the walkthroughs to follow in it."
+title: "The lab"
+description: "A working omniglass on Docker with a simulated fleet: what it runs and with which privilege, its flags, the scale lab, and what to do when it will not start."
 ---
 
 import LabTopology from '../../../components/LabTopology.astro';
-import LabWalkthroughs from '../../../components/LabWalkthroughs.astro';
 import PerfGateFigures from '../../../components/PerfGateFigures.astro';
 
 A **lab** is a working omniglass on your own machine, brought up by one command, to learn on. It
@@ -13,130 +12,9 @@ own process, serving a fleet of simulated components and collecting from them fo
 component on purpose and watch the platform notice. The only thing it needs is Docker, on Linux,
 macOS or Windows.
 
-## Three commands
-
-From a checkout:
-
-```bash
-git clone https://github.com/hyperscaleav/omniglass.git && cd omniglass
-make
-./bin/omniglass lab run
-```
-
-`make` builds two things from one Dockerfile, with nothing but Docker: the image, tagged `omniglass:dev-<build id>`
-(and `omniglass:dev`, see [which image runs](#which-image-runs)), and this machine's own binary,
-`bin/omniglass`, both stamped with one build id. It builds and runs nothing else. `make lab` is the short form of the last two commands (`make`, then
-`./bin/omniglass lab run`; `LAB_ARGS` passes flags, as in `make lab LAB_ARGS=--fresh`).
-
-With a [release binary](/guides/install/#download-a-binary) there is nothing to build: run
-`omniglass lab run`, and it pulls its own release's image, by the digest stamped into it at release.
-
-## What you see
-
-The lab says what it is doing while it comes up, one line per stage, then where to go:
-
-```text
-Starting your omniglass lab. The first run takes a few minutes; later ones, under one.
-
-  docker     running (Engine API 1.56, unix:///var/run/docker.sock, from the default socket)
-  image      omniglass:dev-4a34346d (built by make beside this binary)
-  network    omniglass-lab_default (a private bridge; only the console is published)
-  database   Postgres is ready
-  seed       the dev fleet, seeded on this lab's first run
-  server     answering at http://127.0.0.1:8080/web
-  sign in    the login dev / dev works
-  outpost       edge-hq with its simulator: 124 of 124 simulated components running
-  collecting 128 of 128 simulated endpoints up, and 3 broken on purpose for you to find
-
-Your omniglass lab is ready (it took 14s).
-
-  Console    http://127.0.0.1:8080/web
-  Sign in    user dev, password dev
-
-  Stop it    press Ctrl-C here. Your lab's data is kept for next time;
-             omniglass lab run --fresh starts over from the seed.
-
-Where to go next: the guided walkthroughs, each recorded on this same lab,
-so every screen matches yours:
-  https://docs.omniglass.hyperscaleav.com/guides/lab/#walk-through-it
-
-The lab is one Docker project; see it with: docker compose -p omniglass-lab ps
-```
-
-Ready means four things, each checked before the lab says so: the console answers at the printed
-address, the printed login signs in, the simulator reports every simulated component `running`, and
-every simulated endpoint reads up except the ones the seed breaks on purpose. Two kinds of endpoint
-are left out of that count: an endpoint that receives pushes (a webhook carries no reachability
-verdict to wait for), and the planted faults below, which the seed marks itself rather than a list
-kept here. The lab is one compose project, so `docker compose ls`, `docker compose -p omniglass-lab
-ps` and `docker compose -p omniglass-lab logs server` all see it, and Docker Desktop groups it.
-
-## Sign in
-
-Open the printed console address and sign in as user `dev`, password `dev`: an owner, so every
-screen is open to you. The login is the same well-known one every walkthrough is recorded with, so
-the steps you follow match the screen you have. Every screen, the sign-in page included, carries a
-**Lab instance** banner, so a lab is never mistaken for a real deployment.
-
-The fleet is the dev fleet, the same one every walkthrough is recorded on: locations with systems in
-them, components of several products from several vendors, and the edge outpost `edge-hq` collecting
-from all of them.
-
-Every way omniglass collects runs here, healthy on at least one component, so you can watch each
-one work (and a regression in any of them shows in a lab, not only in a unit test). The HQ boardroom
-holds the ones the rest of the fleet does not use: the video bar's control socket over a secure
-websocket, the display's web admin behind an http digest login, the touch panel's https API behind
-its sign-in form, the same panel's console over ssh and over telnet (the healthy twins of two of the
-faults below), and a plain ping. Beside them:
-
-- **Webhooks arrive from the start.** The simulated meeting service is subscribed to its webhook
-  endpoint when the lab comes up, as its admin would subscribe it, and posts a meeting every minute,
-  so the endpoint's page reads last heard within the first two minutes.
-- **An integration pushes.** A simulated booking service pushes the HQ boardroom system's bookings
-  (`booking-count`, `booking-state`) through `POST /telemetry:push`, with a token the lab mints on
-  every run for a machine user that may push to that one system and do nothing else. It is an
-  outside actor, not a device on the network: the fleet declares it as a pusher, the way a scale
-  scenario declares its own, and the simulator beside the outpost runs it as an emulator device with
-  a [push face](/architecture/simulation/#a-pusher-pushes-on-its-own-cadence). Open the
-  boardroom's system page to see them; a push carries no endpoint, so there is no reachability to
-  read, only the values.
-
-[Simulation](/architecture/simulation/#the-dev-fleet) lists every method and where it runs.
-
-## Walk through it
-
-Each guided walkthrough is a recording of a real console flow on this same lab, banner and all, so
-you can replay it step by step in yours and see the same screens. A walkthrough whose scene needs
-one thing the dev fleet does not hold (set up monitoring starts from a display nothing collects from
-yet) lists the command that makes it, which its recording ran off camera. The CLI signs in with an
-API token: create one on your profile page in the console (**Create token**), then point the CLI at
-your lab:
-
-```bash
-export OMNIGLASS_SERVER=http://127.0.0.1:8080 OMNIGLASS_TOKEN=ogp_...
-```
-
-Start with one that matches what you came to learn:
-
-<LabWalkthroughs />
-
-## Faults planted for you to find
-
-The seed breaks a few things on purpose, so there is something real to diagnose the moment the lab
-is up: the readiness line counts them as "broken on purpose". Each is marked as a planted fault in
-the dev fleet's own fixtures, with a sentence saying what went wrong, and the lab reads them from
-there, so the count never drifts from the seed. They are the kind of thing that happens in the field:
-a credential rotated under an endpoint, a component reimaged so its key no longer matches the pin, an
-agent that refuses what the endpoint presents. The walkthroughs that fix a rejected session, trust a
-changed host key and fix a refused probe each start from one; try finding them on your own first.
-
-Breaking a component yourself works too, from its page or the CLI
-([break it on purpose](/guides/operator/simulation/#break-it-on-purpose)):
-
-```bash
-./bin/omniglass component impairment set <component> --unplugged   # dark on every protocol
-./bin/omniglass component impairment set <component>                # plug it back in
-```
+Your first session in a lab (bringing it up, signing in, the walkthroughs and the planted
+faults) is [your first ten minutes](/start/first-ten-minutes/). This page is the rest: what a lab
+runs and with which privilege, its flags, the scale lab, and what to do when it will not start.
 
 ## Checking that the lab is whole
 
@@ -186,20 +64,6 @@ The lab can also be watched whole while it runs. With its simulator connected,
 that slides every 10 seconds: every hop a request or a batch travels, from the outpost to the simulated
 device and back to the server, read as a loss ratio. A lab that is whole reads 0 on every gap, and every
 polled protocol draws its requests.
-
-## Stopping it, and your data
-
-Press **Ctrl-C** in the lab's terminal (or send it SIGTERM). The lab stops and removes every
-container and the network it created, and keeps its two volumes, so the next `omniglass lab run`
-picks up where you left off: a component you added is still there, and your secrets still decrypt,
-because the server's encryption key lives in the data volume too. Press Ctrl-C a second time to
-leave without cleaning up; a lab stopped that hard, or killed outright (SIGKILL, a closed laptop
-lid), is cleaned up by the next run before it starts.
-
-`omniglass lab run --fresh` removes both volumes first and starts over from the seed. Use it after
-pulling a change whose seed or schema an old lab cannot carry forward: lab data is disposable.
-
-The outpost is enrolled afresh on every run (its token re-minted), so the lab stores no outpost secret.
 
 ## What runs, with which privilege
 

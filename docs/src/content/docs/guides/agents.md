@@ -234,6 +234,23 @@ refused. The server runs omnibot only with a model: until a live provider lands,
 recording `OMNIGLASS_OMNIBOT_REPLAY` names, and without one a run is a 503. The lab's server plays one
 that tags the meeting 405 video bar, so the commands above run there as written.
 
+A recording for the server can hold `conversations` beside its turns, each a `match` and turns of its
+own. A run plays the first conversation whose match its message contains, else the top-level turns,
+and counts its turns from that message, so each prompt in a conversation starts a script of its own.
+The lab's recording triages the video bar's alarm for a [triage-alarm](#skills) skill run, matching
+the skill's heading:
+
+```yaml
+turns:
+  - tool_calls: [{name: get-component, arguments: {name: 'hq.west.level-4.meeting-405.$comp.videobar-1'}}]
+  # ...
+conversations:
+  - match: "# Triage an alarm"
+    turns:
+      - tool_calls: [{name: list-component-alarms, arguments: {name: 'hq.west.level-4.meeting-405.$comp.videobar-1'}}]
+      - text: The meeting 405 video bar's alarm is still active ...
+```
+
 A run can carry what you are looking at as AG-UI `context`: references, a kind and a name or address,
 never a value (#2122). omnibot reads them as data ahead of your message and looks each up with its
 tools, under your grants. At most 20 entries, each value at most 2000 characters:
