@@ -16,7 +16,7 @@ import (
 // An endpoint that still exists but whose current driver spec no longer emits
 // a key is a retired observer of it (#1217): nothing prunes a series' latest
 // row, so its last reading would stand live for good beside an endpoint that
-// no longer collects the key. A native probe key is the node's own, not a
+// no longer collects the key. A native probe key is the outpost's own, not a
 // driver's emit, so it stays live on its endpoint whatever the spec emits.
 
 // emitSpec is a tcp driver whose one poll emits the named property key.
@@ -56,15 +56,15 @@ func newLivenessRig(t *testing.T) *livenessRig {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	drv, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "emitter", Label: "Emitter", Version: "1.0.0", Spec: emitSpec("video-input")})
 	if err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
 	name, node, c := "emitter", "edge", "panel-1"
-	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &name, Component: &c, Node: &node,
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &name, Component: &c, Outpost: &node,
 		Inputs: map[string]string{"host": "10.0.0.1"}}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -80,10 +80,10 @@ func (r *livenessRig) emits(t *testing.T, key string) {
 }
 
 // observe lands a video-input reading on the endpoint named instance, as the
-// node lane stamps it.
+// outpost lane stamps it.
 func (r *livenessRig) observe(t *testing.T, instance, value string, at time.Duration) {
 	t.Helper()
-	if err := r.gw.InsertPropertySamples(r.ctx, storage.NodeWriter(r.comp.ID, "tcp"), []storage.PropertySampleWrite{{
+	if err := r.gw.InsertPropertySamples(r.ctx, storage.OutpostWriter(r.comp.ID, "tcp"), []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: r.comp.ID, Key: "video-input", Instance: instance, Value: value, Source: "tcp", TS: r.base.Add(at),
 	}}); err != nil {
 		t.Fatalf("observe %s on %s: %v", value, instance, err)
@@ -139,7 +139,7 @@ func TestANativeProbeKeyStaysLiveWhateverTheDriverEmits(t *testing.T) {
 	r := newLivenessRig(t)
 	all := scope.Set{All: true}
 	r.emits(t, "power-state")
-	if err := r.gw.InsertMetricSamples(r.ctx, storage.NodeWriter(r.comp.ID, "tcp"), []storage.MetricSampleWrite{{
+	if err := r.gw.InsertMetricSamples(r.ctx, storage.OutpostWriter(r.comp.ID, "tcp"), []storage.MetricSampleWrite{{
 		OwnerKind: "component", OwnerID: r.comp.ID, Key: "tcp-connect-time", Instance: "tcp", Value: 4.8, Source: "tcp", TS: r.base,
 	}}); err != nil {
 		t.Fatalf("observe tcp-connect-time: %v", err)

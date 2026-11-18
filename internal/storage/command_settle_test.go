@@ -604,11 +604,11 @@ func TestADriverThatStoppedEmittingDoesNotSettleAnOwnerLevelCommand(t *testing.T
 		t.Fatal(err)
 	}
 	name, comp, node := "observer-proto", "display", "edge"
-	if _, err := r.gw.CreateEndpoint(r.ctx, "", storage.EndpointSpec{Driver: &name, Component: &comp, Node: &node,
+	if _, err := r.gw.CreateEndpoint(r.ctx, "", storage.EndpointSpec{Driver: &name, Component: &comp, Outpost: &node,
 		Inputs: map[string]string{"host": "10.20.4.61"}}, all); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.gw.InsertPropertySamples(r.ctx, storage.NodeWriter("display", "tcp"), []storage.PropertySampleWrite{{
+	if err := r.gw.InsertPropertySamples(r.ctx, storage.OutpostWriter("display", "tcp"), []storage.PropertySampleWrite{{
 		OwnerKind: "component", OwnerID: "display", Key: "video-input", Instance: "tcp", Value: "hdmi3", Source: "tcp",
 	}}); err != nil {
 		t.Fatalf("observe on tcp: %v", err)
