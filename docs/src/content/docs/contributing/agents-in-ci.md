@@ -70,7 +70,7 @@ draft saying what is left.
 Every same-repo PR that is not a draft or from dependabot gets one adversarial review: inline findings, each with
 its failure scenario, and one summary review that requests changes or comments. It never
 approves. Its check, `agent-review`, is the verdict: red while its latest review on the PR's
-head requests changes, green when it says ship. The review is composed and the verdict read
+head requests changes or opens with a blocking count, green when it says ship. The review is composed and the verdict read
 with the default branch's `scripts/agent-review.sh` and `scripts/agent-trust.sh`, so a PR
 cannot rewrite its own check. The one exception was the PR that added `agent-review.sh`
 (#2211): main had no copy yet, so its own review used the PR's. The check is not in either main ruleset yet; making it required
@@ -90,8 +90,9 @@ and a read-only token:
 A lens posts nothing. It returns its surviving findings as JSON, and the `agent-review` job,
 which waits for every lens, posts them as one review: a finding on a diff line becomes an inline
 comment, any other goes in the review's body. One blocking finding from any lens makes it
-request changes, so agent-fix still sees one review per round and the five-round cap still
-counts rounds, not lenses. A lens that fails or times out fails the check rather than passing
+request changes (on a PR its own App wrote, GitHub allows only a comment, so the review
+comments and opens with the blocking count), so agent-fix still sees one review per round and the five-round cap still
+counts rounds, not lenses. A lens that fails, times out or runs out of its 80 turns fails the check rather than passing
 without its part; rerunning the failed jobs retries it.
 
 The review posts as a second GitHub App, `hyperscale-reviewer`, when one is set up. GitHub lets

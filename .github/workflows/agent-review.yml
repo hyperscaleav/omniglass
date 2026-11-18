@@ -197,9 +197,10 @@ jobs:
           # Pushes by the agents' own App (agent-build, agent-fix) are reviewed
           # too; no other bot is admitted.
           allowed_bots: ${{ steps.app.outputs.app-slug }}
+          # 80 turns: 40 ran out on large PRs (#2056); a small PR stops well short.
           claude_args: >-
             --model ${{ needs.plan.outputs.model }}
-            --max-turns 40
+            --max-turns 80
             --allowedTools "Read,Glob,Grep,Skill,StructuredOutput,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
             --json-schema '{"type":"object","properties":{"summary":{"type":"string","description":"One line on what this lens swept and what survived"},"findings":{"type":"array","items":{"type":"object","properties":{"severity":{"type":"string","enum":["blocking","advisory"]},"path":{"type":"string","description":"Repo-relative path of the file"},"line":{"type":"integer","minimum":0,"description":"A line of the PR version of the file that the diff adds or changes, or 0 when there is none"},"rule":{"type":"string","description":"The catalog id or the invariant"},"failure":{"type":"string","description":"Inputs and state, then the wrong outcome, concretely"},"fix":{"type":"string","description":"The pattern, with an exemplar path"}},"required":["severity","path","line","rule","failure","fix"]}}},"required":["summary","findings"]}'
           prompt: |
