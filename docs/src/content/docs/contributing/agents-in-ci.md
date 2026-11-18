@@ -82,7 +82,7 @@ and a read-only token:
 
 | Lens | Sweeps |
 | --- | --- |
-| `catalog-1`, `catalog-2`, `catalog-3` | the [anti-pattern catalog](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review/references/anti-patterns), dealt into three shards in name order, so a new entry joins a shard without a workflow change |
+| `catalog-1`, `catalog-2`, ... | the [anti-pattern catalog](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review/references/anti-patterns), dealt into even shards in name order (`SHARDS` in `scripts/agent-review.sh` sets how many), so a new entry joins a shard without a workflow change |
 | `invariants` | the skill's invariants: routes gated, queries scoped, audits in-transaction, migrations idempotent, no fixed test ports, no mocked system under test |
 | `neighbor` | the docs claims the diff falsifies |
 

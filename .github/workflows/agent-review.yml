@@ -2,7 +2,7 @@ name: agent-review
 
 # An independent adversarial review on every same-repo PR (#2175), by Claude
 # Code agents running the repo's adversarial-review skill read-only. The sweep
-# is split into lenses (#2211): the anti-pattern catalog in three shards, the
+# is split into lenses (#2211): the anti-pattern catalog in shards, the
 # invariants, and the neighbor check, each its own job with its own context,
 # run side by side. A lens posts nothing; it returns its findings as JSON. The
 # agent-review job then posts one review that carries them all, as inline

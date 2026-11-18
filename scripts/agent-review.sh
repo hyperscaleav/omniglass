@@ -10,7 +10,7 @@
 #
 #   agent-review.sh lenses DIR   print the lenses, as a JSON array of
 #                                {name, task}, for the anti-pattern catalog in
-#                                DIR: the catalog split into three shards, then
+#                                DIR: the catalog split into SHARDS shards, then
 #                                the invariants and the neighbor check
 #   agent-review.sh review       read the lenses' results on stdin and print
 #                                the one review to post, as the body of
@@ -31,7 +31,9 @@
 set -euo pipefail
 shopt -s inherit_errexit
 
-SHARDS=3
+# Six shards of about 16 entries each: with three, the slowest shard of 31
+# took 10 minutes on its own (PR #2213's first run).
+SHARDS=6
 
 mode=${1:-}
 
@@ -52,9 +54,8 @@ case "$mode" in
     printf '%s\n' "${entries[@]}" | jq -R -s -c --argjson shards "$SHARDS" '
       split("\n") | map(select(length > 0)) as $all
       | ($all | length) as $n
-      | (($n + $shards - 1) / $shards | floor) as $size
       | [range(0; $shards) as $i
-          | $all[($i * $size):(($i + 1) * $size)]
+          | $all[($i * $n / $shards | floor):(($i + 1) * $n / $shards | floor)]
           | select(length > 0)]
       | to_entries
       | map({

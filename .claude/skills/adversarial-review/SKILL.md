@@ -69,8 +69,8 @@ rolled-up diff before the PR.
 
 ## In CI
 
-agent-review runs this skill as parallel lenses (`scripts/agent-review.sh lenses`): three
-catalog shards (step 2), the invariants (step 3) and the neighbor check (step 5), each in its
+agent-review runs this skill as parallel lenses (`scripts/agent-review.sh lenses`): the
+catalog in shards (step 2), the invariants (step 3) and the neighbor check (step 5), each in its
 own job and context. A lens does only its part, posts nothing, and returns its survivors as
 JSON; the workflow posts them as one review. The guide is
 [agents in CI](../../../docs/src/content/docs/contributing/agents-in-ci.md).

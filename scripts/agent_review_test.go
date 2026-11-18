@@ -65,13 +65,13 @@ func TestAgentReviewLensesDealEveryCatalogEntryOnce(t *testing.T) {
 	for _, l := range lenses {
 		got = append(got, l.Name)
 	}
-	if strings.Join(got, ",") != "catalog-1,catalog-2,catalog-3,invariants,neighbor" {
+	if strings.Join(got, ",") != "catalog-1,catalog-2,catalog-3,catalog-4,catalog-5,catalog-6,invariants,neighbor" {
 		t.Fatalf("lenses = %v", got)
 	}
 	for _, c := range "abcdefg" {
 		entry := string(c) + "-entry.md"
 		seen := 0
-		for _, l := range lenses[:3] {
+		for _, l := range lenses[:len(lenses)-2] {
 			if strings.Contains(l.Task, entry) {
 				seen++
 			}
@@ -114,6 +114,34 @@ func TestAgentReviewLensesSweepTheRealCatalog(t *testing.T) {
 		if !found {
 			t.Errorf("no lens sweeps %s", e.Name())
 		}
+	}
+}
+
+func TestAgentReviewLensesShardTheRealCatalogEvenly(t *testing.T) {
+	dir := filepath.Join("..", ".claude", "skills", "adversarial-review", "references", "anti-patterns")
+	out, code := agentReview(t, "", "lenses", dir)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	var lenses []lens
+	if err := json.Unmarshal([]byte(out), &lenses); err != nil {
+		t.Fatal(err)
+	}
+	min, max := -1, 0
+	for _, l := range lenses {
+		if !strings.HasPrefix(l.Name, "catalog-") {
+			continue
+		}
+		n := strings.Count(l.Task, ".md")
+		if min < 0 || n < min {
+			min = n
+		}
+		if n > max {
+			max = n
+		}
+	}
+	if max-min > 1 {
+		t.Fatalf("catalog shards run %d to %d entries; the slowest shard sets the review's time", min, max)
 	}
 }
 
