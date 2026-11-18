@@ -113,7 +113,7 @@ case "$mode" in
         elif member($sender) | not then
           "skip: @\($sender) is not on the maintainers or contributors team"
         elif .event == "review" and ((.review_state // "") | ascii_downcase) != "changes_requested" and ((.mentions // false) | not) then
-          "skip: a review starts a fix only when it requests changes or mentions @hyperscale-agent"
+          "skip: a review starts a fix only when it requests changes or mentions @hyperscale-agent (or @claude)"
         else "run" end'
     ;;
 
