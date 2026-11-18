@@ -112,8 +112,8 @@ Take the first that applies, and note in the report which rung fired:
 3. **A priority bug.** An open issue of Type `Bug`, Priority `High` then `Medium` (the
    Project field; fall back to newest when the field is unreadable), sized for one day.
    The fix starts with the failing regression test.
-4. **A self-scoped cut.** Read the roadmap, the epics, and the architecture spine; a page
-   whose badge is `Partial` names its own gaps. Pick the next thin cut, draft the
+4. **A self-scoped cut.** Read the roadmap, the epics, the docs rebuild epic (#2153), and
+   the [status grid](/architecture/status/); a rebuilt page whose badge is `Partial` names its own gaps. Pick the next thin cut, draft the
    definition in the `/define-work` shape, file it with the autopilot marker line, put it
    on the board (`scripts/board.sh add <n>`), and proceed immediately; the PR is where it
    gets approved.

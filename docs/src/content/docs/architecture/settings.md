@@ -1,10 +1,6 @@
 ---
 title: Settings
 description: "A cascade-resolved, lockable settings engine: ordered layers merged into an effective document, with per-key provenance, top-down locks, and a platform-versus-profile domain split."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[Partial]

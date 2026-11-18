@@ -3,16 +3,16 @@ title: Roadmap
 description: "The directional layer: the epics and the architectural arc ahead, and how forward-looking work converges into the spine as it ships."
 ---
 
-The [architecture](/architecture/) is written as one timeless design and converges **in place** as the
-code catches up: a page moves `Design` to `Partial` to `Built`, it is never forked into a separate
+The design is written as one timeless description and converges **in place** as the code catches up:
+a rebuilt page moves `Design` to `Partial` to `Built`, it is never forked into a separate
 "future" copy that later gets deleted. So this page is not a shadow architecture. It is the **readable
 index of direction**: the epics in flight, the big architectural arc still ahead, and pointers to where
 each lands in the spine.
 
 Three surfaces carry the time axis, and this page ties them together:
 
-- **[Implementation status](/architecture/status/)** is the live map of what is built (the per-page badge
-  and the per-slice log).
+- **[Implementation status](/architecture/status/)** is the live map of what is built (the rebuilt pages'
+  badges and the per-slice log).
 - **[Decision log](/architecture/decisions/)** is the dated history of calls, reversals, and divergences.
 - **GitHub epics** are the **source of truth** for scope and sequencing; this page links them and is not a
   substitute for them. Nothing here is a commitment that a detail ships unchanged; an epic is where the

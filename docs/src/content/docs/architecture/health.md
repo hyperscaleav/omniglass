@@ -1,10 +1,6 @@
 ---
 title: Health, KPIs, and service levels
 description: "Health as a verdict rolled up from alarms through the slots its components occupy, recorded as a transition so the edges are accurate, plus the KPIs every fleet should track and SLI / SLO / SLA."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 Health answers "is this system working right now?" and "since when?". It is a **first-class

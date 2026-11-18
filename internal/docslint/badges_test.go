@@ -145,3 +145,33 @@ func TestSubstantiveLines(t *testing.T) {
 		t.Fatalf("substantiveLines = %v, want [10 11]", got)
 	}
 }
+
+// TestBadgeFenceScope pins where the lint looks (ADR-2087.2): a badged page is
+// checked in any section, since the rebuilt pages carry the badges wherever
+// they land, and a page with no badge is not checked at all.
+func TestBadgeFenceScope(t *testing.T) {
+	bad := page("Built", "real prose\n\n:::design[#434]\nplanned\n:::\n")
+	unbadged := "---\ntitle: X\n---\n\nreal prose\n\n:::design[#434]\nplanned\n:::\n"
+	for _, c := range []struct {
+		name, rel, body string
+		want            int
+	}{
+		{"a badged operator page is checked", filepath.Join("operator", "g.md"), bad, 1},
+		{"an unbadged page is not checked", filepath.Join("architecture", "a.md"), unbadged, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, c.rel), c.body)
+			old := DocsRoot
+			DocsRoot = dir
+			defer func() { DocsRoot = old }()
+			findings, err := ScanBadgeFences()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(findings) != c.want {
+				t.Fatalf("got %d findings, want %d: %v", len(findings), c.want, findings)
+			}
+		})
+	}
+}

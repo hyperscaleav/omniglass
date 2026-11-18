@@ -1,10 +1,6 @@
 ---
 title: Views
 description: "The read side: a view is a named, parameterized, scope-checked query returning a uniform ViewResult, the backend-for-frontend every read goes through."
-sidebar:
-  badge:
-    text: Design
-    variant: caution
 ---
 
 ::::design[Target design: the ViewResult contract, tracked in #523]

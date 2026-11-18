@@ -1,10 +1,6 @@
 ---
 title: Cascade
 description: How effective settings (declared values, variables, tags, rule-sets) are resolved for any entity and how the resolve view explains why a given value won.
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[Partial]

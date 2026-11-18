@@ -1,10 +1,6 @@
 ---
 title: Messaging
 description: "The internal and edge NATS subject contract, the sibling to the public API: JetStream streams and consumers, the two lanes, request-reply, KV, the live UI relay, and per-tenant subject isolation."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[Implementation status]

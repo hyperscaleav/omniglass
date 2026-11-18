@@ -1,10 +1,6 @@
 ---
 title: Audit
 description: The who-did-what record, written once in the same transaction as the change it describes.
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 The audit log answers "who changed this, and to what?": every mutation is recorded once, at the source.
