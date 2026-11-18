@@ -106,14 +106,36 @@ jobs:
             echo "</details>"
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      # The token is minted in a dry run too, so a dry run proves the App's
+      # client id, private key and contents permission before the first real
+      # tag push (#2147): a wrong one fails right here. Only a real push tests
+      # the App's bypass on the v* ruleset.
       - name: Mint the release App token
         id: app
-        if: env.PUBLISH == 'true' && vars.RELEASE_APP_CLIENT_ID != ''
+        if: vars.RELEASE_APP_CLIENT_ID != ''
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-contents: write
+
+      - name: Check the release App token
+        if: steps.app.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          repos=$(gh api --paginate /installation/repositories --jq '.repositories[].full_name')
+          if ! grep -qxF -- "${GITHUB_REPOSITORY}" <<<"${repos}"; then
+            echo "::error::The release App's token does not cover ${GITHUB_REPOSITORY}; install the App on it."
+            exit 1
+          fi
+          echo "- release App token: minted with contents write, covers ${GITHUB_REPOSITORY}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Warn when the release App is not configured
+        if: vars.RELEASE_APP_CLIENT_ID == ''
+        run: |
+          echo "::warning::RELEASE_APP_CLIENT_ID is unset: the tag push would use GITHUB_TOKEN, which the v* tags ruleset refuses."
+          echo "- release App token: not configured, the tag push would be refused" >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Push the tag
         if: env.PUBLISH == 'true'
