@@ -1,15 +1,15 @@
 # A preview takes the lane of the endpoint it names, and honors that endpoint's gate
 #
-# Every request a node sends to a device rides that endpoint's lane: one in flight at a time, an
+# Every request an outpost sends to a device rides that endpoint's lane: one in flight at a time, an
 # operator's ahead of the scheduled polls, and the endpoint's gate read as each request is taken.
 # A preview aimed at an attached display waits its turn on the display's lane and reads it. Once
 # the display refuses the endpoint's login, the same preview is held with the refusal and nothing
 # is sent; fixed in place, the gate lifts and the preview reads again (#1249).
 
-Type "# The node's pool runs endpoint lanes: one request per device at a time, operators first"
+Type "# The outpost's pool runs endpoint lanes: one request per device at a time, operators first"
 Enter
 Wait
-Type `omniglass node run --help | grep -- '--lane-workers '`
+Type `omniglass outpost run --help | grep -- '--lane-workers '`
 Enter
 Wait
 
@@ -30,7 +30,7 @@ Wait
 Type `inputs="{\"host\":\"$host\",\"port\":\"$port\",\"login\":\"demo-lane-login\"}"`
 Enter
 Wait
-Type `omniglass endpoint create --component "$display" --driver boreal-edge-web --node edge-hq --inputs "$inputs" | jq -c '{name, driver}'`
+Type `omniglass endpoint create --component "$display" --driver boreal-edge-web --outpost edge-hq --inputs "$inputs" | jq -c '{name, driver}'`
 Enter
 Wait
 Hide
@@ -51,7 +51,7 @@ Wait
 Type `reach`
 Enter
 Wait
-Type `omniglass driver preview --node edge-hq --driver boreal-edge-web --polls '["identity"]' --inputs "$inputs" | jq -c '{stored, results: [.results[] | {poll, samples: [.samples[] | .name]}]}'`
+Type `omniglass driver preview --outpost edge-hq --driver boreal-edge-web --polls '["identity"]' --inputs "$inputs" | jq -c '{stored, results: [.results[] | {poll, samples: [.samples[] | .name]}]}'`
 Enter
 Wait
 
@@ -73,7 +73,7 @@ Wait
 Type "# The same preview waits on that lane, reads the gate, and is held: a 409 naming the refusal, nothing sent"
 Enter
 Wait
-Type `omniglass driver preview --node edge-hq --driver boreal-edge-web --polls '["identity"]' --inputs "$inputs" 2>/dev/null | jq -r '"\(.status) \(.detail)"' || true`
+Type `omniglass driver preview --outpost edge-hq --driver boreal-edge-web --polls '["identity"]' --inputs "$inputs" 2>/dev/null | jq -r '"\(.status) \(.detail)"' || true`
 Enter
 Wait
 
@@ -96,6 +96,6 @@ Show
 Type `reach`
 Enter
 Wait
-Type `omniglass driver preview --node edge-hq --driver boreal-edge-web --polls '["identity"]' --inputs "$inputs" | jq -c '{stored, results: [.results[] | {poll, samples: [.samples[] | .name]}]}'`
+Type `omniglass driver preview --outpost edge-hq --driver boreal-edge-web --polls '["identity"]' --inputs "$inputs" | jq -c '{stored, results: [.results[] | {poll, samples: [.samples[] | .name]}]}'`
 Enter
 Wait

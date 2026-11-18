@@ -48,22 +48,22 @@ export async function getLogs(name: string, f: LogFilter = NO_FILTER): Promise<C
   return { component: data?.component ?? name, logs: (data?.logs ?? []) as ComponentLog[], sources: data?.sources ?? [] };
 }
 
-// A node's own self-logs (ADR-0066): the same raw log line, owner-bound to the
-// node instead of a component. The node's operational story (connected, worklist
+// An outpost's own self-logs (ADR-0066): the same raw log line, owner-bound to the
+// outpost instead of a component. The outpost's operational story (connected, worklist
 // pulled, a task skipped) shipped back over the telemetry lane.
-export type NodeLogs = { node: string; logs: ComponentLog[] };
+export type OutpostLogs = { outpost: string; logs: ComponentLog[] };
 
-export const NODE_LOGS_KEY = (name: string) => ["node-logs", name] as const;
+export const OUTPOST_LOGS_KEY = (name: string) => ["outpost-logs", name] as const;
 
-export async function getNodeLogs(name: string): Promise<NodeLogs> {
-  const { data, error } = await api.GET("/nodes/{name}/logs", { params: { path: { name } } });
+export async function getOutpostLogs(name: string): Promise<OutpostLogs> {
+  const { data, error } = await api.GET("/outposts/{name}/logs", { params: { path: { name } } });
   if (error) throw error;
-  return { node: data?.node ?? name, logs: (data?.logs ?? []) as ComponentLog[] };
+  return { outpost: data?.outpost ?? name, logs: (data?.logs ?? []) as ComponentLog[] };
 }
 
 // severityVariant maps a severity onto a daisyUI badge variant, so an error or a
 // warning line reads at a glance: the canonical RFC 5424 words a component's line
-// carries (#1145), and the short and slog spellings a node's self-logs use.
+// carries (#1145), and the short and slog spellings an outpost's self-logs use.
 // Anything else stays neutral.
 export function severityVariant(severity: string | undefined): string {
   switch ((severity ?? "").toLowerCase()) {

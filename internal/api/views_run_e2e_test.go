@@ -238,7 +238,7 @@ func tailOf(t *testing.T, ev sseEvent) viewTailWire {
 	return out
 }
 
-// customRoleTok mints a principal holding one custom role, all-scoped, so a
+// customRoleTok mints a user holding one custom role, all-scoped, so a
 // test can withhold exactly one permission.
 func (f *viewsFixture) customRoleTok(t *testing.T, role string, perms []string) string {
 	t.Helper()
@@ -250,7 +250,7 @@ func (f *viewsFixture) customRoleTok(t *testing.T, role string, perms []string) 
 	if _, err := conn.Exec(f.ctx, `insert into role (name, official, permissions, inherits) values ($1, false, $2, '{}')`, role, perms); err != nil {
 		t.Fatalf("insert role: %v", err)
 	}
-	return principalWithGrants(t, f.ctx, f.dsn, role+"-svc", []grant{{role: role, scopeKind: "all"}})
+	return userWithGrants(t, f.ctx, f.dsn, role+"-svc", []grant{{role: role, scopeKind: "all"}})
 }
 
 // A viewer scoped to group A (location loc-a) reads through a binding only

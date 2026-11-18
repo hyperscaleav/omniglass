@@ -111,7 +111,7 @@ type pendingStream struct {
 }
 
 // maxStreamHead bounds an answer's head: a stream's head is a few headers,
-// and a hostile component cannot make the node hold more.
+// and a hostile component cannot make the outpost hold more.
 const maxStreamHead = 64 << 10
 
 // headLimit bounds the bytes read off a connection until it is lifted:
@@ -271,7 +271,7 @@ func (p *pendingStream) Authenticate(ctx context.Context, auth *SessionAuth, _ C
 					continue
 				}
 				if !answered {
-					return &RequestFault{Status: resp.StatusCode, Reason: "the component's 401 offers no digest challenge this node answers (" + offeredSchemes(resp.Header) + ")"}
+					return &RequestFault{Status: resp.StatusCode, Reason: "the component's 401 offers no digest challenge this outpost answers (" + offeredSchemes(resp.Header) + ")"}
 				}
 			}
 		}

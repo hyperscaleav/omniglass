@@ -32,7 +32,7 @@ const (
 )
 
 // simAttachWait is how long a sweep waits for the simulator beside a fresh
-// node to connect before its first component is refused for good.
+// outpost to connect before its first component is refused for good.
 const simAttachWait = 90 * time.Second
 
 // DriverConfig is one driver cost sweep.
@@ -75,11 +75,11 @@ type DriverCostTable struct {
 
 // driverRunArgs is the `lab run` a sweep brings its lab up with: ephemeral,
 // on its own project and a free port, bound to this process, with no fleet
-// and no node of its own, since the sweep starts a node per driver.
+// and no outpost of its own, since the sweep starts an outpost per driver.
 func driverRunArgs(cfg DriverConfig, ready string, pid int) []string {
 	args := []string{"lab", "run", "--ephemeral", "--project", cfg.Project, "--port", "0",
 		"--ready-file", ready, "--while-pid", strconv.Itoa(pid),
-		"--scenario", "empty", "--no-node", "--cadence", lab.CadenceLab}
+		"--scenario", "empty", "--no-outpost", "--cadence", lab.CadenceLab}
 	if cfg.Image != "" {
 		args = append(args, "--image", cfg.Image)
 	}
@@ -113,11 +113,11 @@ func pickDrivers(targets []DriverTarget, skips []DriverSkip, only []string) ([]D
 
 // stepComponents are the component counts a driver is measured at: none,
 // then n, 2n and 3n. CPU fits every step; memory fits the three loads alone
-// (the idle node sits apart as the warm cost), and three is the fewest that
+// (the idle outpost sits apart as the warm cost), and three is the fewest that
 // can show a bend.
 func stepComponents(n int) []int { return []int{0, n, 2 * n, 3 * n} }
 
-func sweepComponentName(node string, i int) string { return fmt.Sprintf("%s-%04d", node, i) }
+func sweepComponentName(outpost string, i int) string { return fmt.Sprintf("%s-%04d", outpost, i) }
 
 // secretBody is a sim secret as the create route takes it.
 func secretBody(s storage.SecretSpec) map[string]any {
@@ -165,7 +165,7 @@ func reportWindowOf(body []byte) (time.Duration, error) {
 const driverTasksWait = 30 * time.Second
 
 // MeasureDrivers brings a throwaway lab up with no fleet, measures each
-// shipped driver on a node of its own, tears the lab down, and checks
+// shipped driver on an outpost of its own, tears the lab down, and checks
 // nothing it created is left. A driver whose steps do not fit a line is
 // listed as not measured, with why, rather than written down as a cost.
 func MeasureDrivers(ctx context.Context, cfg DriverConfig) (table DriverCostTable, err error) {
@@ -317,27 +317,27 @@ func (a driverAttempt) wantsBiggerStep() bool {
 	return a.row.MemoryNotMeasured != ""
 }
 
-// worklistUndelivered is whether the node never installed the worklist of
+// worklistUndelivered is whether the outpost never installed the worklist of
 // the attempt's step.
 func (a driverAttempt) worklistUndelivered() bool {
 	var wu worklistUndeliveredError
 	return errors.As(a.err, &wu)
 }
 
-// worklistUndeliveredError is a step whose worklist the node never
+// worklistUndeliveredError is a step whose worklist the outpost never
 // installed: the server refuses a reply over the bus's max payload, and the
-// node runs on with the last one it took (#1586), so the step measured a
+// outpost runs on with the last one it took (#1586), so the step measured a
 // smaller one than it was sized for.
 type worklistUndeliveredError struct{ installed, held int }
 
 func (e worklistUndeliveredError) Error() string {
-	return fmt.Sprintf("the node installed %d of the %d tasks the server holds for it: "+
+	return fmt.Sprintf("the outpost installed %d of the %d tasks the server holds for it: "+
 		"a worklist over the bus's max payload is not delivered (#1586)", e.installed, e.held)
 }
 
 // nextAttempt is the step a driver is swept again at after attempt a at
 // step, prev the step swept before it (0 for none), and the cap the sweep
-// after it grows to. A worklist the node never took halves the step and
+// after it grows to. A worklist the outpost never took halves the step and
 // caps the sweep there, down to but not onto the step before; a memory miss
 // grows the step to the cap; anything else is done.
 func nextAttempt(a driverAttempt, step, prev, maxStep int) (int, int, bool) {
@@ -398,41 +398,41 @@ func keptAttempt(attempts []driverAttempt) (DriverCost, error) {
 // stepWindow is when one step was measured.
 type stepWindow struct{ from, to time.Time }
 
-// measureDriver measures one driver on a node of its own, its simulator
+// measureDriver measures one driver on an outpost of its own, its simulator
 // beside it, and removes both whatever the outcome.
 func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string, cfg DriverConfig, t DriverTarget, step int, report time.Duration) (DriverCost, error) {
-	node := sweepNodeName(t.Driver, step)
-	if _, err := h.send(ctx, http.MethodPost, api+"/nodes", map[string]string{"name": node}, nil); err != nil {
-		return DriverCost{}, fmt.Errorf("create the node: %w", err)
+	outpost := sweepOutpostName(t.Driver, step)
+	if _, err := h.send(ctx, http.MethodPost, api+"/outposts", map[string]string{"name": outpost}, nil); err != nil {
+		return DriverCost{}, fmt.Errorf("create the outpost: %w", err)
 	}
 	var enrolled struct {
 		Token string `json:"token"`
 	}
-	if _, err := h.send(ctx, http.MethodPost, api+"/nodes/"+url.PathEscape(node)+":enroll", nil, &enrolled); err != nil {
-		return DriverCost{}, fmt.Errorf("enroll the node: %w", err)
+	if _, err := h.send(ctx, http.MethodPost, api+"/outposts/"+url.PathEscape(outpost)+":enroll", nil, &enrolled); err != nil {
+		return DriverCost{}, fmt.Errorf("enroll the outpost: %w", err)
 	}
-	nodeSvc, err := sweepNodeService(h.env, node, enrolled.Token)
+	outpostSvc, err := sweepOutpostService(h.env, outpost, enrolled.Token)
 	if err != nil {
 		return DriverCost{}, err
 	}
 	// The removal is set before the start's error is checked: a container
 	// created but not started comes back with its id and the error, and is
 	// still removed.
-	var nodeID, simID string
+	var outpostID, simID string
 	defer func() {
 		cctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		if simID != "" {
 			_ = eng.StopAndRemove(cctx, simID)
 		}
-		if nodeID != "" {
-			_ = eng.StopAndRemove(cctx, nodeID)
+		if outpostID != "" {
+			_ = eng.StopAndRemove(cctx, outpostID)
 		}
 	}()
-	if nodeID, err = eng.RunContainer(ctx, nodeSvc, h.env["LAB_NETWORK"]); err != nil {
-		return DriverCost{}, fmt.Errorf("start the node: %w", err)
+	if outpostID, err = eng.RunContainer(ctx, outpostSvc, h.env["LAB_NETWORK"]); err != nil {
+		return DriverCost{}, fmt.Errorf("start the outpost: %w", err)
 	}
-	simSvc, err := sweepSimService(h.env, node, enrolled.Token, nodeID)
+	simSvc, err := sweepSimService(h.env, outpost, enrolled.Token, outpostID)
 	if err != nil {
 		return DriverCost{}, err
 	}
@@ -448,11 +448,11 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 	added := 0
 	for _, want := range stepComponents(per) {
 		for ; added < want; added++ {
-			if err := h.addSimComponent(ctx, api, node, sweepComponentName(node, added), t.Product, added == 0); err != nil {
+			if err := h.addSimComponent(ctx, api, outpost, sweepComponentName(outpost, added), t.Product, added == 0); err != nil {
 				return DriverCost{}, err
 			}
 		}
-		tasks, err := h.waitDriverTasks(ctx, node, want*len(t.Polls))
+		tasks, err := h.waitDriverTasks(ctx, outpost, want*len(t.Polls))
 		if err != nil {
 			return DriverCost{}, fmt.Errorf("%d components: %w", want, err)
 		}
@@ -460,10 +460,10 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 		if err := sleep(ctx, warmup); err != nil {
 			return DriverCost{}, err
 		}
-		if err := h.waitWorklistInstalled(ctx, node); err != nil {
+		if err := h.waitWorklistInstalled(ctx, outpost); err != nil {
 			return DriverCost{}, fmt.Errorf("%d components: %w", want, err)
 		}
-		s, w, err := h.measureStep(ctx, nodeID, window)
+		s, w, err := h.measureStep(ctx, outpostID, window)
 		if err != nil {
 			return DriverCost{}, err
 		}
@@ -478,7 +478,7 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 		return DriverCost{}, err
 	}
 	for i, w := range windows {
-		out, err := h.psql(ctx, pollCPUQuery(node, w.from, w.to, report))
+		out, err := h.psql(ctx, pollCPUQuery(outpost, w.from, w.to, report))
 		if err != nil {
 			return DriverCost{}, fmt.Errorf("read the poll CPU: %w", err)
 		}
@@ -491,19 +491,19 @@ func (h *harness) measureDriver(ctx context.Context, eng lab.Engine, api string,
 	return c, err
 }
 
-// waitDriverTasks waits for node's driver tasks to reach want, and fails if
+// waitDriverTasks waits for outpost's driver tasks to reach want, and fails if
 // they settle anywhere else: a count short of it means an attach fell back to
 // a probe, which is not the driver.
-func (h *harness) waitDriverTasks(ctx context.Context, node string, want int) (int, error) {
+func (h *harness) waitDriverTasks(ctx context.Context, outpost string, want int) (int, error) {
 	deadline := time.Now().Add(driverTasksWait)
 	for {
-		out, err := h.psql(ctx, driverTasksQuery(node))
+		out, err := h.psql(ctx, driverTasksQuery(outpost))
 		if err != nil {
-			return 0, fmt.Errorf("count the node's tasks: %w", err)
+			return 0, fmt.Errorf("count the outpost's tasks: %w", err)
 		}
 		tasks, err := strconv.Atoi(strings.TrimSpace(out))
 		if err != nil {
-			return 0, fmt.Errorf("count the node's tasks: %q: %w", out, err)
+			return 0, fmt.Errorf("count the outpost's tasks: %q: %w", out, err)
 		}
 		if tasks == want {
 			return tasks, nil
@@ -517,20 +517,20 @@ func (h *harness) waitDriverTasks(ctx context.Context, node string, want int) (i
 	}
 }
 
-// waitWorklistInstalled waits for the node to report a worklist of every
+// waitWorklistInstalled waits for the outpost to report a worklist of every
 // task the server holds for it, and fails with what it did install if it
-// does not: past the warmup the node has pulled several times, so a count
+// does not: past the warmup the outpost has pulled several times, so a count
 // short of the server's is a reply it never got.
-func (h *harness) waitWorklistInstalled(ctx context.Context, node string) error {
+func (h *harness) waitWorklistInstalled(ctx context.Context, outpost string) error {
 	deadline := time.Now().Add(driverTasksWait)
 	for {
-		held, err := h.psqlInt(ctx, heldTasksQuery(node))
+		held, err := h.psqlInt(ctx, heldTasksQuery(outpost))
 		if err != nil {
-			return fmt.Errorf("count the node's tasks: %w", err)
+			return fmt.Errorf("count the outpost's tasks: %w", err)
 		}
-		installed, err := h.psqlInt(ctx, installedWorklistQuery(node))
+		installed, err := h.psqlInt(ctx, installedWorklistQuery(outpost))
 		if err != nil {
-			return fmt.Errorf("read the node's worklist: %w", err)
+			return fmt.Errorf("read the outpost's worklist: %w", err)
 		}
 		if installed == held {
 			return nil
@@ -557,11 +557,11 @@ func (h *harness) psqlInt(ctx context.Context, q string) (int, error) {
 	return int(f), nil
 }
 
-// addSimComponent adds one simulated component to node. The first waits out
+// addSimComponent adds one simulated component to outpost. The first waits out
 // a 409 while the fresh simulator connects; later ones do not, since a 409
 // then means the block is full or the profile serves nothing to reach.
-func (h *harness) addSimComponent(ctx context.Context, api, node, name, product string, first bool) error {
-	u := api + "/nodes/" + url.PathEscape(node) + "/simulation/components"
+func (h *harness) addSimComponent(ctx context.Context, api, outpost, name, product string, first bool) error {
+	u := api + "/outposts/" + url.PathEscape(outpost) + "/simulation/components"
 	body := map[string]string{"name": name, "product": product}
 	deadline := time.Now().Add(simAttachWait)
 	for {
@@ -578,19 +578,19 @@ func (h *harness) addSimComponent(ctx context.Context, api, node, name, product 
 	}
 }
 
-// measureStep reads the node's cgroup across one window: CPU between its
+// measureStep reads the outpost's cgroup across one window: CPU between its
 // ends, and the working set as the median of reads spread across it.
-func (h *harness) measureStep(ctx context.Context, nodeID string, window time.Duration) (DriverStep, stepWindow, error) {
-	first, err := h.usage(ctx, nodeID)
+func (h *harness) measureStep(ctx context.Context, outpostID string, window time.Duration) (DriverStep, stepWindow, error) {
+	first, err := h.usage(ctx, outpostID)
 	if err != nil {
-		return DriverStep{}, stepWindow{}, fmt.Errorf("read the node: %w", err)
+		return DriverStep{}, stepWindow{}, fmt.Errorf("read the outpost: %w", err)
 	}
 	stop := sampleUsage(ctx, window/workingSetReads, func(ctx context.Context) (map[string]Usage, error) {
-		u, err := h.usage(ctx, nodeID)
+		u, err := h.usage(ctx, outpostID)
 		if err != nil {
 			return nil, err
 		}
-		return map[string]Usage{"node": u}, nil
+		return map[string]Usage{"outpost": u}, nil
 	})
 	if err := sleep(ctx, window); err != nil {
 		_, _ = stop()
@@ -598,16 +598,16 @@ func (h *harness) measureStep(ctx context.Context, nodeID string, window time.Du
 	}
 	reads, err := stop()
 	if err != nil {
-		return DriverStep{}, stepWindow{}, fmt.Errorf("read the node: %w", err)
+		return DriverStep{}, stepWindow{}, fmt.Errorf("read the outpost: %w", err)
 	}
-	last, err := h.usage(ctx, nodeID)
+	last, err := h.usage(ctx, outpostID)
 	if err != nil {
-		return DriverStep{}, stepWindow{}, fmt.Errorf("read the node: %w", err)
+		return DriverStep{}, stepWindow{}, fmt.Errorf("read the outpost: %w", err)
 	}
 	mc, err := Millicores(first, last)
 	if err != nil {
-		return DriverStep{}, stepWindow{}, fmt.Errorf("the node %w", err)
+		return DriverStep{}, stepWindow{}, fmt.Errorf("the outpost %w", err)
 	}
-	return DriverStep{WorkingSetBytes: MedianWorkingSetMiB(reads["node"]) * (1 << 20), Millicores: mc},
+	return DriverStep{WorkingSetBytes: MedianWorkingSetMiB(reads["outpost"]) * (1 << 20), Millicores: mc},
 		stepWindow{from: first.At, to: last.At}, nil
 }

@@ -288,7 +288,7 @@ func TestCollectDriverPollHTTP(t *testing.T) {
 }
 
 func TestCollectDriverPollHTTPRefusedAndFaulted(t *testing.T) {
-	// A refused credential: a terminal auth the node gates on, authenticated no.
+	// A refused credential: a terminal auth the outpost gates on, authenticated no.
 	r := &collection.Runner{HTTPFetch: &fakeHTTPFetcher{ans: collection.HTTPAnswer{Status: 401}}}
 	dps, faults := r.CollectDriverPoll(context.Background(), httpPollTask())
 	if len(faults) != 1 {

@@ -10,8 +10,8 @@ import { severityLevelsKey } from "../lib/severity";
 // My alarm subscriptions (#1355). The list is seeded into the query cache;
 // fetch answers the writes, the :test preview and the expression check a test
 // drives, and refuses anything else.
-const viewer: Me = { principal: { id: "u-1", kind: "human" }, human: { username: "ada", email: "ada@example.com" }, permissions: ["*:read", "notification:subscribe"], grants: [] };
-const noSubscribe: Me = { principal: { id: "u-2", kind: "human" }, human: { username: "bo" }, permissions: ["*:read"], grants: [] };
+const viewer: Me = { user: { id: "u-1", kind: "person" }, person: { username: "ada", email: "ada@example.com" }, permissions: ["*:read", "notification:subscribe"], grants: [] };
+const noSubscribe: Me = { user: { id: "u-2", kind: "person" }, person: { username: "bo" }, permissions: ["*:read"], grants: [] };
 
 const outages: Subscription = {
   id: "r-1", name: "hq-outages", label: "HQ outages", on: ["raised", "cleared"], when: "severity_rank >= 40",

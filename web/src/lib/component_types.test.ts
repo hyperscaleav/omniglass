@@ -20,7 +20,7 @@ describe("component_types data layer", () => {
     vi.restoreAllMocks();
   });
 
-  it("lists the registry and normalizes a missing default_tags to empty", async () => {
+  it("lists the catalog and normalizes a missing default_tags to empty", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
         component_types: [{ id: uuidFor("ct-display"), name: "display", label: "Display", official: true, stem: "display", icon: "monitor", abbrev: "fp" }],
@@ -89,7 +89,7 @@ describe("resolveComponentTypeIcon", () => {
     expect(resolveComponentTypeIcon("ceiling-mic", byName)).toBe("mic");
   });
 
-  it("falls back to box for a name outside the registry", () => {
+  it("falls back to box for a name outside the catalog", () => {
     const byName = componentTypeByName(seededTree);
     expect(resolveComponentTypeIcon("no-such-type", byName)).toBe("box");
     expect(resolveComponentTypeIcon(undefined, byName)).toBe("box");

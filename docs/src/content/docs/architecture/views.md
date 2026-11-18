@@ -80,7 +80,7 @@ The named-view framework below is not built: there is no `view` table and no `/v
 The binding above is the built read of samples a named view will bind, and its typed series and rows,
 not a generic `{columns, rows}`, are the result shape a named view answers
 ([ADR-1830](/architecture/decisions/#adr-1830-a-view-binding-reads-its-history-and-follows-the-tail-from-the-same-cursor)). Today's read side is typed CRUD `GET`s plus six
-hand-written composed reads (reachability, events, the component and node log
+hand-written composed reads (reachability, events, the component and outpost log
 reads, the fleet projection at `GET /views/fleet`, the first route actually served under
 `/views/`, and the platform projection at `GET /views/platform`, the second, behind
 [Platform health](/guides/operator/platform-health/), with its closed-loop read at
@@ -114,7 +114,7 @@ and the `official` boolean:
   a `firing-now` view a dashboard widget or an agent reads unchanged.
 - **Private views** are operator-saved **structured** queries (filter + order + fields + params),
   **never raw SQL**, following the official / private
-  [namespace shadow](/architecture/properties/#key-scope-org-and-official) like the registries.
+  [namespace shadow](/architecture/properties/#key-scope-org-and-official) like the catalogs.
 - **Parameterized**: typed params bound at run time at `/views/{id}:run?param=`; an undeclared or
   missing-required param is a clean 400.
 

@@ -13,11 +13,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// SimStatusFunc reports the simulator beside a node (bus.Server.SimStatus).
-type SimStatusFunc func(node string) (simhub.Status, bool)
+// SimStatusFunc reports the simulator beside an outpost (bus.Server.SimStatus).
+type SimStatusFunc func(outpost string) (simhub.Status, bool)
 
 // WithSimStatus supplies the server's view of the simulators beside its
-// nodes. Without it every node reads as having no simulator.
+// outposts. Without it every outpost reads as having no simulator.
 func WithSimStatus(f SimStatusFunc) Option {
 	return func(o *options) { o.simStatus = f }
 }
@@ -43,7 +43,7 @@ type simDeviceBody struct {
 
 type simulationOutput struct {
 	Body struct {
-		Connected    bool                           `json:"connected" doc:"A simulator beside this node pulled its device list recently."`
+		Connected    bool                           `json:"connected" doc:"A simulator beside this outpost pulled its device list recently."`
 		LastSeen     *time.Time                     `json:"last_seen,omitempty"`
 		Capabilities collection.SimCapabilities     `json:"capabilities"`
 		Impairments  collection.SimImpairmentStatus `json:"impairments" doc:"Whether the simulator can apply impairments (and why not), its last apply error, and the devices it impairs."`
@@ -53,18 +53,18 @@ type simulationOutput struct {
 
 func registerSimulationRoutes(api huma.API, a *authenticator, gw storage.Gateway, status SimStatusFunc) {
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "get-node-simulation",
+		OperationID: "get-outpost-simulation",
 		Method:      http.MethodGet,
-		Path:        "/nodes/{name}/simulation",
-		Summary:     "Get a node's simulator",
-		Description: "The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.",
-	}, "node", "read"), func(ctx context.Context, in *nodePathInput) (*simulationOutput, error) {
-		if _, err := gw.GetNode(ctx, in.Name, a.scopeFor(ctx, "node", "read")); err != nil {
-			return nil, mapNodeErr(err)
+		Path:        "/outposts/{name}/simulation",
+		Summary:     "Get an outpost's simulator",
+		Description: "The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.",
+	}, "outpost", "read"), func(ctx context.Context, in *outpostPathInput) (*simulationOutput, error) {
+		if _, err := gw.GetOutpost(ctx, in.Name, a.scopeFor(ctx, "outpost", "read")); err != nil {
+			return nil, mapOutpostErr(err)
 		}
-		devices, err := gw.NodeSimDevices(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
+		devices, err := gw.OutpostSimDevices(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
-			return nil, huma.Error500InternalServerError("get node simulation")
+			return nil, huma.Error500InternalServerError("get outpost simulation")
 		}
 		var st simhub.Status
 		var seen bool
@@ -75,7 +75,7 @@ func registerSimulationRoutes(api huma.API, a *authenticator, gw storage.Gateway
 	})
 }
 
-// simulationBody joins the node's candidate devices to its simulator's
+// simulationBody joins the outpost's candidate devices to its simulator's
 // status. Pure, so the join is unit-testable.
 func simulationBody(devices []storage.SimDevice, st simhub.Status, seen bool, now time.Time) *simulationOutput {
 	out := &simulationOutput{}
@@ -86,7 +86,7 @@ func simulationBody(devices []storage.SimDevice, st simhub.Status, seen bool, no
 		out.Body.Capabilities = st.Capabilities
 		out.Body.Impairments = st.Impairments
 	}
-	// The simulator's impaired list covers its whole node: keep only the
+	// The simulator's impaired list covers its whole outpost: keep only the
 	// devices in this caller's view.
 	visible := make(map[string]bool, len(devices))
 	for _, d := range devices {

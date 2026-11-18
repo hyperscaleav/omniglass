@@ -20,7 +20,7 @@ func unreferenced(facts []byte, name string) bool {
 	return strings.Count(string(facts), `"`+name+`"`) == 1
 }
 
-// A release can ship a name an operator already holds in another registry
+// A release can ship a name an operator already holds in another catalog
 // (#1307): the operator's custom property x, then a release that seeds a metric
 // x. The official row is the platform's and always lands, so the boot never
 // skips it and never fails on it; on this install the operator's row shadows it
@@ -47,7 +47,7 @@ func TestSeedAlwaysUpsertsAnOfficialRowAndAnOperatorsOfTheSameNameShadowsIt(t *t
 		t.Fatal(err)
 	}
 	// A shipped metric an operator could name a property after: not a reserved
-	// key (the node's own, closed to an operator-created type), and named
+	// key (the outpost's own, closed to an operator-created type), and named
 	// nowhere else in the seed.
 	var clash string
 	for _, m := range facts.MetricTypes {
@@ -101,7 +101,7 @@ func TestSeedAlwaysUpsertsAnOfficialRowAndAnOperatorsOfTheSameNameShadowsIt(t *t
 	}
 
 	// At ingest the name resolves to the operator's row, and nothing is refused.
-	reg := collection.NewRegistry(metrics, properties, events)
+	reg := collection.NewCatalog(metrics, properties, events)
 	if _, ok := reg.Property(clash); !ok {
 		t.Errorf("%q does not resolve on the operator's property lane", clash)
 	}

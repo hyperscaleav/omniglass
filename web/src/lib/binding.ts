@@ -6,7 +6,7 @@
 // answered, so a fold sees every row exactly once.
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { api, openStream } from "../api/client";
+import { api, sendRaw } from "../api/client";
 import type { ViewBindingBody, ViewMarkEvent, ViewResetEvent, ViewResultBody, ViewRowsEvent, ViewTailBindingBody } from "../api/api.gen";
 import type { ChartBucket } from "./chart";
 
@@ -189,7 +189,7 @@ let shared: ViewHub | undefined;
 
 // viewHub is the console's one hub: every binding on the page shares it.
 export function viewHub(): ViewHub {
-  shared ??= new ViewHub({ open: openStream });
+  shared ??= new ViewHub({ open: (url, signal) => sendRaw(url, { signal, headers: { Accept: "text/event-stream" } }) });
   return shared;
 }
 

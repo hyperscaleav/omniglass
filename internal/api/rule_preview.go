@@ -14,8 +14,8 @@ type previewEventRuleInput struct {
 	Body struct {
 		SampleKey     string         `json:"sample_key" minLength:"1" doc:"The property or metric the candidate rule reads"`
 		Selector      *selectorBody  `json:"selector,omitempty" required:"false" doc:"The components it watches; absent or empty, every component"`
-		FireCriteria  criteriaInput  `json:"fire_criteria" doc:"The criteria its condition starts on: {expr}, or the short form {op, value}"`
-		ClearCriteria *criteriaInput `json:"clear_criteria,omitempty" required:"false" doc:"The criteria it ends on; absent, the negation of fire_criteria"`
+		FireCriteria  criteriaInput  `json:"fire_criteria" doc:"The criteria it fires on: {expr}, or the short form {op, value}"`
+		ClearCriteria *criteriaInput `json:"clear_criteria,omitempty" required:"false" doc:"The criteria it clears on; absent, the negation of fire_criteria"`
 		FireSustain   string         `json:"fire_sustain,omitempty" required:"false" doc:"Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone"`
 		ClearSustain  string         `json:"clear_sustain,omitempty" required:"false" doc:"Accepted and ignored, like fire_sustain"`
 	}
@@ -55,6 +55,7 @@ type previewEventRuleOutput struct {
 func registerEventRulePreviewRoute(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "preview-event-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/event-rules:preview",
 		Summary:     "Preview an event rule",

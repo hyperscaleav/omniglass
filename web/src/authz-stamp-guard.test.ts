@@ -10,12 +10,12 @@ import { describe, expect, it } from "vitest";
 // "create")). Nothing ties the two strings together at build time: a page that
 // gates on a word the API never stamps still typechecks, still renders, and
 // still passes every rendering test that mounts it as an admin, because a
-// wildcard principal (">" or "*") matches ANY resource word, wrong ones
+// wildcard user (">" or "*") matches ANY resource word, wrong ones
 // included.
 //
 // That is exactly how the Properties page shipped gating on "property" while
 // the API stamps "property_type": invisible under a wildcard, wrong for every
-// role-scoped principal, whose real permission (property_type:create) matched
+// role-scoped user, whose real permission (property_type:create) matched
 // the server and never the console. The console hid buttons the server would
 // have honored.
 //
@@ -63,7 +63,7 @@ function pageGates(): Gate[] {
 // The nav config gates the same way with different spelling: a `resource:` field
 // becomes <resource>:read, and a `perm:` field carries the topic whole. The
 // sidebar and the route guard both read it, so a wrong word here hides a tab
-// from exactly the principals the server would have let in.
+// from exactly the users the server would have let in.
 function navGates(): Gate[] {
   const out: Gate[] = [];
   readFileSync(join(SRC, "lib", "nav.ts"), "utf8")
@@ -147,7 +147,7 @@ describe("console gate strings match the API's stamps", () => {
       `\nThese gate on a resource word no API route stamps:\n  ${offenders.join("\n  ")}\n\n` +
         `The server's word is the one gated(...) registers in internal/api (the\n` +
         `x-omniglass-permission stamp). A console gate on any other word is invisible\n` +
-        `under a wildcard principal and wrong for every role-scoped one: the console\n` +
+        `under a wildcard user and wrong for every role-scoped one: the console\n` +
         `hides affordances the server would honor. Use the stamped resource.\n`,
     ).toEqual([]);
   });

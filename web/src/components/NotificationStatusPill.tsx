@@ -11,7 +11,7 @@ const STATUS: Record<Notification["status"], { word: string; tone: string; tip: 
   queued: { word: "on its way", tone: "badge-soft badge-info", tip: "Queued: the worker delivers it shortly, retrying with backoff if the target refuses" },
   sent: { word: "sent", tone: "badge-soft badge-success", tip: "Sent: the target accepted the message" },
   failed: { word: "failed", tone: "badge-soft badge-error", tip: "Failed: every attempt was refused, and it will not be tried again unless retried" },
-  suppressed: { word: "snoozed", tone: "badge-ghost", tip: "Snoozed: the alarm's condition was snoozed, so the message was recorded and deliberately not sent" },
+  suppressed: { word: "snoozed", tone: "badge-ghost", tip: "Snoozed: the alarm was snoozed, so the message was recorded and deliberately not sent" },
 };
 
 export default function NotificationStatusPill(props: { status: string; size?: "xs" | "sm" }): JSX.Element {

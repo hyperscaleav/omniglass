@@ -185,7 +185,7 @@ func deleteWebhookToken(ctx context.Context, tx pgx.Tx, actorID, endpointID stri
 // WebhookTarget is everything the receiver needs to check and land one post
 // to a resolved token: the endpoint and its component, the scheme its driver
 // declares (none for a bare endpoint) with its block, the scheme's credential
-// unsealed (confined to secrets cascading onto the component, as a node's
+// unsealed (confined to secrets cascading onto the component, as an outpost's
 // worklist is), and its listeners in the spec's order.
 type WebhookTarget struct {
 	EndpointID, EndpointName, ComponentID string
@@ -236,7 +236,7 @@ func (p *PG) ResolveWebhook(ctx context.Context, tokenHash []byte) (*WebhookTarg
 	if credInput != "" {
 		var in map[string]string
 		_ = json.Unmarshal(inputs, &in)
-		fields, _, err := p.nodeSecretFields(ctx, in[credInput], t.ComponentID)
+		fields, _, err := p.outpostSecretFields(ctx, in[credInput], t.ComponentID)
 		var amb *ErrAmbiguousName
 		switch {
 		case errors.Is(err, ErrSecretNotFound), errors.As(err, &amb):
@@ -397,7 +397,7 @@ func (p *PG) RecordUnclaimedSources(ctx context.Context, us []UnclaimedSource) e
 }
 
 // ListUnclaimedSources reads the inbox, most recently heard first, within
-// its age (the node:read observation of every listener).
+// its age (the outpost:read observation of every listener).
 func (p *PG) ListUnclaimedSources(ctx context.Context) ([]UnclaimedSource, error) {
 	rows, err := p.pool.Query(ctx, `
 		select host, transport, source, first_heard_at, last_heard_at, heard_count, last_message

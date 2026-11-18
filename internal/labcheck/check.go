@@ -106,7 +106,7 @@ func classSignals(vs []Value) []string {
 }
 
 // ownValue is a value a system holds of its own: a pushed or collected one, or
-// one a calc rule rolls up. The platform's health verdict and the node's
+// one a calc rule rolls up. The platform's health verdict and the outpost's
 // probes are about the system's members, not a value it carries itself.
 func ownValue(vs []Value) bool {
 	return slices.ContainsFunc(vs, func(v Value) bool {

@@ -36,7 +36,7 @@ import (
 //
 // `ts` LEADS, and it is a wall-clock value. That is deliberate and cannot be
 // swapped for the sequence: the observed lane accepts a caller-supplied `ts`
-// (a node backfilling, a device reporting a reading it took a minute ago), and
+// (an outpost backfilling, a device reporting a reading it took a minute ago), and
 // a late-arriving older sample must not become the current value merely because
 // it was written last. So the series is ordered by the value's own time, and
 // insertion order is only the tiebreak. The consequence, stated so it is not
@@ -305,7 +305,7 @@ func TestAnIntendedSeriesResolvesByInsertionOrderAcrossABackwardsClockStep(t *te
 	}
 	conn := connectDSN(t, dsn)
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	for _, c := range []struct{ instance, value string }{{"", `"dp1"`}, {"", `"hdmi2"`}, {"ip-control", `"hdmi3"`}} {

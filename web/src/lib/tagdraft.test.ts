@@ -4,7 +4,7 @@ import type { Tag } from "./tags";
 
 const tag = (name: string, applies_to: string[] = [], propagates = true, allowed_values: string[] = []): Tag => ({ id: name, name, applies_to, propagates, allowed_values });
 
-const registry: Tag[] = [
+const catalog: Tag[] = [
   tag("environment"),
   tag("category", ["component"]),
   tag("rack_position", ["location"]),
@@ -24,39 +24,39 @@ describe("keyApplies", () => {
 
 describe("keySuggestions", () => {
   it("offers only keys that apply to the kind and are not already bound", () => {
-    const s = keySuggestions(registry, "component", ["environment"], "");
+    const s = keySuggestions(catalog, "component", ["environment"], "");
     expect(s.map((t) => t.name)).toEqual(["asset-id", "category"]); // environment bound out, rack_position wrong kind
   });
   it("filters by a case-insensitive substring query", () => {
-    const s = keySuggestions(registry, "location", [], "RACK");
+    const s = keySuggestions(catalog, "location", [], "RACK");
     expect(s.map((t) => t.name)).toEqual(["rack_position"]);
   });
   it("excludes a key already bound", () => {
-    const s = keySuggestions(registry, "location", ["rack_position"], "");
+    const s = keySuggestions(catalog, "location", ["rack_position"], "");
     expect(s.map((t) => t.name)).not.toContain("rack_position");
   });
 });
 
 describe("exactKey", () => {
   it("finds an exact name match", () => {
-    expect(exactKey(registry, "environment")?.name).toBe("environment");
+    expect(exactKey(catalog, "environment")?.name).toBe("environment");
   });
   it("returns undefined for a partial or unknown name", () => {
-    expect(exactKey(registry, "env")).toBeUndefined();
-    expect(exactKey(registry, "nope")).toBeUndefined();
+    expect(exactKey(catalog, "env")).toBeUndefined();
+    expect(exactKey(catalog, "nope")).toBeUndefined();
   });
 });
 
 describe("canCoin", () => {
   it("is true for a new non-empty name when the caller may create keys", () => {
-    expect(canCoin(registry, "new_key", true)).toBe(true);
+    expect(canCoin(catalog, "new_key", true)).toBe(true);
   });
   it("is false without the create permission", () => {
-    expect(canCoin(registry, "new_key", false)).toBe(false);
+    expect(canCoin(catalog, "new_key", false)).toBe(false);
   });
   it("is false for an existing key or empty query", () => {
-    expect(canCoin(registry, "environment", true)).toBe(false);
-    expect(canCoin(registry, "  ", true)).toBe(false);
+    expect(canCoin(catalog, "environment", true)).toBe(false);
+    expect(canCoin(catalog, "  ", true)).toBe(false);
   });
 });
 

@@ -585,7 +585,7 @@ func (c *fakeHeldConn) lines() []string {
 
 // #817: a session sends its instantiation commands on every connection it
 // makes (establish and each recover), before it reads up, and reports each
-// with its reply for the node's logs.
+// with its reply for the outpost's logs.
 func TestSessionArmsOnEstablishAndReArmsOnRecover(t *testing.T) {
 	d, r := &fakeSessionDialer{}, newRecorder()
 	var mu sync.Mutex
@@ -692,7 +692,7 @@ func TestSessionCloseTearsDown(t *testing.T) {
 }
 
 // A poll over a session that is not up fails at once naming the state: a
-// down device must not stall the node's tick for the poll's timeout.
+// down device must not stall the outpost's tick for the poll's timeout.
 func TestSessionExchangeFailsFastNamingTheStateWhenNotUp(t *testing.T) {
 	d, r := &fakeSessionDialer{refuse: true}, newRecorder()
 	s := startTestSession(t, d, r)
@@ -787,8 +787,8 @@ func TestSessionDownReadsUpOnAPush(t *testing.T) {
 }
 
 // TestHostKeyPinKnowsWhatItLearned: a key trusted on first use (by Trust or
-// Admit) is the node's own, a key the worklist delivered never becomes one by
-// matching, and a carried key stays learned. Only a learned key is the node's
+// Admit) is the outpost's own, a key the worklist delivered never becomes one by
+// matching, and a carried key stays learned. Only a learned key is the outpost's
 // to republish or carry once the worklist delivers none (ADR-0161).
 func TestHostKeyPinKnowsWhatItLearned(t *testing.T) {
 	first := collection.NewHostKeyPin("")
@@ -953,7 +953,7 @@ func TestSessionMachinePanicIsAFailedAttempt(t *testing.T) {
 }
 
 // A transition hook that panics is logged and the machine runs on: the hook
-// is the node's, the session is the device's.
+// is the outpost's, the session is the device's.
 func TestSessionTransitionHookPanicIsContained(t *testing.T) {
 	captureLogs(t)
 	d, r := &fakeSessionDialer{}, newRecorder()
@@ -1032,7 +1032,7 @@ func TestSessionExchangeWaitsForADialSlot(t *testing.T) {
 	}
 }
 
-// The slots bound a session's first dial, the establish a node restart
+// The slots bound a session's first dial, the establish an outpost restart
 // storms, never a redial: an endpoint that blackholes its dials holds a slot
 // a whole dial timeout each attempt, so a fleet with a few of them would
 // queue every healthy session's recovery behind theirs.

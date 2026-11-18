@@ -1,6 +1,6 @@
 ---
 title: Explore your fleet
-description: "Explore: every place in the fleet as one outline, and the detail view for each system, with its place as context."
+description: "Explore: every location in the fleet as one outline, and the detail view for each system, with its location as context."
 screenshots:
   # Component names repeat across rooms (every huddle has a videobar-1), so the
   # component is reached the way an operator reaches it: from the degraded
@@ -15,37 +15,38 @@ screenshots:
       # walk to the component view this shot teaches.
       - action: click
         selector: "aside[data-blade] button[aria-label=Expand]"
-    alt: "A component's view: its place as a card saying the place is its own, the verdict with its since-line, why, what it is, the systems it serves with its role in each, and collection."
+    alt: "A component's view: its location as a card saying the location is its own, the verdict with its since-line, why, what it is, the systems it serves with its slot in each, and collection."
     # The since-line and the alarm ages count from the capture's own clock.
     #
     # A mask is painted at the size of what it resolves to, and a since-line
     # or an age changes width with the clock (#773, #1081), so no mask on this
-    # page names the text alone. The header and alarm rows are masked whole
-    # (`xpath=ancestor::div[1]`, stretched to their card) because the standard,
-    # the size and the alarm's controls follow the age on the same line and
-    # move when it does. Activity's incident entries carry a stamp or a
-    # duration on every line and are masked whole (`xpath=ancestor::li[1]`),
-    # as are its logs and the charts. The summary card declares a box instead,
-    # since its since line ends its row.
+    # page names the text alone. The header row is masked whole
+    # (`xpath=ancestor::div[1]`, stretched to its card) because the standard and
+    # the size follow the since-line on the same line and move when it does.
+    # The alarm's controls follow its age the same way, and their buttons cast
+    # a shadow below the row's own box, so the Why card is masked whole: a row
+    # mask left that sliver live, moving with the age (#2117). Activity's
+    # health history entries carry a stamp or a duration on every line and are masked
+    # whole (`xpath=ancestor::li[1]`), as are its logs and the charts. The summary
+    # card declares a box instead, since its since line ends its row.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - "text=/unacknowledged/ >> xpath=ancestor::div[1]"
-      - "text=/acknowledged/ >> xpath=ancestor::div[1]"
+      - "[data-testid=leaf-alarms]"
   - id: fleet-configure
     path: /web/systems/huddle?tab=configure
-    alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, roles, properties, tags)."
+    alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, slots, properties, tags)."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet-system
     path: /web/systems/huddle
-    alt: "A system's view: the place as a card of context, the system's header (verdict, since, standard, size), then Overview: its components as rows naming each one's role, roles grouped only where they say something."
+    alt: "A system's view: the location as a card of context, the system's header (verdict, since, standard, size), then Overview: its components as rows naming each one's slot, slots grouped only where they say something."
     # The since-line ages with the capture; the history strip is Activity's
     # now (#872), so nothing else on Overview moves.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet-map
     path: /web/systems/huddle
-    alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per role position, each the type icon of the component holding it, in its health colour, with its label under it."
+    alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per slot position, each the type icon of the component holding it, in its health colour, with its label under it."
     # The header's since-line ages with the capture.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
@@ -58,15 +59,15 @@ screenshots:
       - action: click
         selector: "role=tab[name='Activity']"
       - action: click
-        selector: "[data-testid=incident-0] button"
-    alt: "The Activity tab, statuspage style: the window's uptime, the timeline, the ongoing incident expanded to the alarm that explains it, then the events and the logs."
+        selector: "[data-testid=stretch-0] button"
+    alt: "The Activity tab, statuspage style: the window's uptime, the timeline, the ongoing unhealthy stretch expanded to the alarm that explains it, then the events and the logs."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=uptime-kpi]"
       - "text=/ongoing/ >> xpath=ancestor::li[1]"
       - "text=/\\u2192/ >> xpath=ancestor::li[1]"
       - ".og-statestrip"
-      # The logs under the incidents render seed-run stamps.
+      # The logs under the health history render seed-run stamps.
       - "[data-testid=logs-tab]"
   - id: fleet-data
     path: /web/systems/huddle
@@ -84,11 +85,11 @@ screenshots:
       - "[data-testid=sparkline]"
   - id: fleet-location
     path: /web/locations/east
-    alt: "A place holding no system of its own: its card with its type and tags, its tabs, and the outline of what is beneath it, counted by systems."
+    alt: "A location holding no system of its own: its card with its type and tags, its tabs, and the outline of what is beneath it, counted by systems."
     # Nothing on a folder's view moves with the clock: no mask.
   # A room holding two systems keeps a view of its own: a brief card per
   # system.
-  - id: fleet-place-systems
+  - id: fleet-location-systems
     path: /web/locations/media-lab
     alt: "A room holding two systems: its card, then a brief card per system with its verdict, standard and size, each opening that system's view."
     # Each card's since line ages with the capture. The mask DECLARES its
@@ -106,7 +107,7 @@ screenshots:
       - selector: "[data-testid=summary-since]"
         width: 208
   # Opened down to one room so the shot shows every rule at once: folded
-  # chains, contents lines, health counts, and a place wearing its system
+  # chains, contents lines, health counts, and a location wearing its system
   # with the components beneath it.
   - id: fleet
     path: /web/explore
@@ -117,13 +118,13 @@ screenshots:
         selector: "role=button[name='Expand Level 2']"
       - action: click
         selector: "role=button[name='Expand Huddle Room']"
-    alt: "Explore: the outline of places, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed place says what it holds and counts its systems by health."
+    alt: "Explore: the outline of locations, Headquarters and West Building folded into one row and opened down to the Huddle Room, which wears its system with the components beneath it; every collapsed location says what it holds and counts its systems by health."
 walkthroughs:
-  - id: find-and-fix-a-place
+  - id: find-and-fix-a-location
 ---
 
-The fleet has one door in the sidebar: **Explore**. It is an outline of every place you
-can read, nested the way your own tree is nested, with each system on the place where it
+The fleet has one door in the sidebar: **Explore**. It is an outline of every location you
+can read, nested the way your own tree is nested, with each system on the location where it
 sits and each component beneath its system. From any row you open a side panel, and from
 the panel the **detail view** at the entity's own address. The old `/fleet`, `/locations`,
 `/systems` and `/components` addresses all land on Explore.
@@ -132,27 +133,27 @@ the panel the **detail view** at the entity's own address. The old `/fleet`, `/l
 
 ::screenshot{#fleet}
 
-Explore opens with only the top-level places showing, every row collapsed, so the first
+Explore opens with only the top-level locations showing, every row collapsed, so the first
 screen is the whole fleet in a handful of lines. You open what you want to look into.
 
-**A place wears its system.** An operator thinks of a room as its system, so a place where
+**A location wears its system.** An operator thinks of a room as its system, so a location where
 one system sits shows that system on its own row: the **Standard** column names the
 [standard](/guides/admin/standards/) it conforms to, and **Health** its verdict. Open it and
 the system's components are directly beneath, each with its product and health, and a
-component's active alarm reads in the **Detail** column. A place holding two systems lists a
+component's active alarm reads in the **Detail** column. A location holding two systems lists a
 row per system, with its components under each. A component two systems share appears under
-both, marked **also in** the other; a component in no system sits directly under its place.
+both, marked **also in** the other; a component in no system sits directly under its location.
 
 **A collapsed row says what it holds.** The Detail column counts what is inside in your
-registry's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
+catalog's own words (**2 buildings, 1 floor**, **19 components**, **Empty**), and the Health
 column counts the systems beneath it by verdict, in four fixed slots: healthy, incomplete,
 degraded, outage. Healthy is a muted green and each kind of trouble wears its full colour, so a
 red count stands out down the page without being read. The counts include everything beneath the row, so a
 collapsed branch cannot hide an outage. They are counts rather than one worst-case colour
-because at any real failure rate almost every large place holds one fault somewhere, and a
+because at any real failure rate almost every large location holds one fault somewhere, and a
 worst-wins light would be red everywhere and say nothing.
 
-**A chain of one folds.** A place whose only content is one child place folds into it:
+**A chain of one folds.** A location whose only content is one child location folds into it:
 **Headquarters / West Building** is one row rather than two levels to click through. Its
 **+** offers each place it joins, so giving that campus a second building is the same click
 as giving the building a room.
@@ -162,14 +163,14 @@ and a fleet of plots, sectors and coordinates, or any hierarchy your
 [location types](/guides/admin/location-types/) allow, nests, folds and counts by the same
 rules and is described in its own words.
 
-**Placed nowhere you can see** collects what has no place on the page: a system at a
-location your grants do not reach, and a component created with no system and no place.
-Nothing disappears because its place is out of view.
+**Placed nowhere you can see** collects what has no location on the page: a system at a
+location your grants do not reach, and a component created with no system and no location.
+Nothing disappears because its location is out of view.
 
 ### Moving around
 
 - A row's chevron opens it, and **Alt**-click opens its whole branch. Clicking the row itself
-  opens its side panel: a place holding one system opens that system, any other place the
+  opens its side panel: a location holding one system opens that system, any other place the
   location, a component itself. The panel's **Expand** opens the detail view.
 - From the keyboard, the arrows move up and down, Right opens a row and Left closes it or
   moves to its parent, `*` opens the whole branch, Enter or Space opens the side panel, and
@@ -177,7 +178,7 @@ Nothing disappears because its place is out of view.
 - What you have opened is remembered in this browser, so coming back lands where you left off.
 - On a narrow window the columns give way in order, **Standard or product**, then **Type**,
   then **Detail**, so the name and its health always fit. A folded row's outer path shortens
-  before the place's own name does, and at the narrowest it steps aside (hover the name for
+  before the location's own name does, and at the narrowest it steps aside (hover the name for
   the whole path).
 
 ### Finding one thing
@@ -221,19 +222,19 @@ glance; monitoring lives on the detail views and, later, the dashboards.
 
 ## One view per system
 
-Omniglass monitors **systems**. A place is a folder and its facts; a component is a piece of
+Omniglass monitors **systems**. A location is a folder and its facts; a component is a piece of
 a system. So the fleet has one detail view per system, and a room does not have a second,
-thinner view of its own: a place holding exactly one system (nearly every room) opens **as
+thinner view of its own: a location holding exactly one system (nearly every room) opens **as
 that system**. Its address lands there, and so does the panel's Expand.
 
 ::screenshot{#fleet-system}
 
 The view reads top-down:
 
-- **The place card**: where the system sits, as context. It names the place's type in your
-  registry's words and its tags, and **Place details** opens the place's own panel (its
-  form, its Edit) without leaving the view. The view is titled by the place, so the card
-  does not name it again, and the breadcrumb ends at the place's parent: the room is named
+- **The location card**: where the system sits, as context. It names the location's type in your
+  catalog's words and its tags, and **Location details** opens the location's own panel (its
+  form, its Edit) without leaving the view. The view is titled by the location, so the card
+  does not name it again, and the breadcrumb ends at the location's parent: the room is named
   once. The breadcrumb's **Explore** goes back up to where you were: the outline, opened down
   to this row and selected.
 - **The system card**: the verdict and **since when** (the last recorded change and its
@@ -242,76 +243,76 @@ The view reads top-down:
 - **Three tabs.** **Overview** is the system itself. **Activity** is what happened to it.
   **Configure** is the [form](/guides/operator/entities/) that edits it in place.
 
-A place holding a system and places beneath it lists those places under the system, as the
+A location holding a system and locations beneath it lists those locations under the system, as the
 outline rooted there.
 
 The system's view refreshes on its own while it is open, every 5 seconds: its verdict, **Why**,
-the roles and who is staffing them, each component's health light, and the data section's latest
-values (the 24 hour sparklines every 30), and on **Activity** the incidents, events and logs. A component going down shows up as the system's new
+the slots and who is staffing them, each component's health light, and the data section's latest
+values (the 24 hour sparklines every 30), and on **Activity** the health history, events and logs. A component going down shows up as the system's new
 verdict and the alarm in Why without a reload, and every age on the page (since when, how long an
 alarm has been raised) keeps counting. It reads only this system and its members, never the whole
 fleet, and stops while the browser tab is hidden.
 
-A system's label is its place's by default, so a room and its system read as one name. A place
-holding several systems names each one's kind ("Media Lab Meeting Room", "Media Lab Signage"),
-and a system with no place reads its kind. Type your own label and it stays yours.
+A system's label is its location's by default, so a room and its system read as one name. A location
+holding several systems names each one's kind ("Media Lab Meeting", "Media Lab Signage"),
+and a system with no location reads its kind. Type your own label and it stays yours.
 
-## A place's own view
+## A location's own view
 
-A place holding no system (a campus, a building, a floor) or more than one keeps a view of
+A location holding no system (a campus, a building, a floor) or more than one keeps a view of
 its own. Its card is the subject, with its own **Overview** and **Configure** tabs.
 
 ::screenshot{#fleet-location}
 
-Overview lists what is beneath the place as the outline rooted there: the same columns,
+Overview lists what is beneath the location as the outline rooted there: the same columns,
 contents lines, health counts, chip filter, **need attention** and **+** as Explore, counted
-over this subtree. A place holding two or more systems shows a brief card per system first
+over this subtree. A location holding two or more systems shows a brief card per system first
 (verdict, since when, standard, size, why), each opening that system's view.
 
-::screenshot{#fleet-place-systems}
+::screenshot{#fleet-location-systems}
 
-A place holding one system has no view of its own even to be configured: its place is
-configured on the system's **Configure** tab, in a **Place** section with its own Edit, so the
-room is one page. An address asking to configure such a place lands there (`?edit=1` on the
-place becomes `?tab=configure&edit=place` on its system).
+A location holding one system has no view of its own even to be configured: its location is
+configured on the system's **Configure** tab, in a **Location** section with its own Edit, so the
+room is one page. An address asking to configure such a location lands there (`?edit=1` on the
+location becomes `?tab=configure&edit=location` on its system).
 
 ## Overview: why, then the components
 
 Cause before arithmetic:
 
 - **Why** leads, worst first: severity, message, the down component (click it to open its
-  panel), the role it impairs, and how long it has been raised.
-- **Components** follow, as rows in the outline's idiom: the component, the **role** it
+  panel), the slot it impairs, and how long it has been raised.
+- **Components** follow, as rows in the outline's idiom: the component, the **slot** it
   fills, its product, the alarm behind a red light, and its health (healthy a muted green,
   trouble in its own colour). Click a row to open its panel.
-- **Role chrome appears only where it says something a column cannot.** A role that wants
+- **Slot chrome appears only where it says something a column cannot.** A slot that wants
   more than one occupant, is short, or is unstaffed heads a group with its arithmetic ("1
   of 2, 1 spare") and its occupants beneath; a seat nobody staffs draws as an **empty
   slot**. A down occupant still holds its seat: that is a failure the alarms explain, not a
   gap.
-- **A deployed system fills every role**, so slot arithmetic appears only while hardware is
-  missing. An unstaffed role reads **incomplete** (a commissioning gap); a short staffed
-  role reads the impact it declared. Same arithmetic, different cause.
+- **A deployed system fills every slot**, so slot arithmetic appears only while hardware is
+  missing. An unstaffed slot reads **incomplete** (a commissioning gap); a short staffed
+  slot reads the impact it declared. Same arithmetic, different cause.
 - The build a system did not choose never renders; choices are the standard editor's
   vocabulary, not an operator's.
-- A shared component is marked **also in** the other system; a member filling no role reads
-  **no role**, and that is a normal state.
+- A shared component is marked **also in** the other system; a member filling no slot reads
+  **no slot**, and that is a normal state.
 
 ## Overview: the map and the data
 
 A standard may declare the system's physical layout (a room, a stage, a vehicle, whatever
-the system occupies): where each role position sits, top-down. Every
+the system occupies): where each slot position sits, top-down. Every
 system built to that standard draws the **map** inside Overview, under the components:
 one marker per declared position. A staffed position shows the component's type icon in
 its health colour (green, amber, red, as in the Health column) with the component's label
-under it; hover or focus a marker for its role, product, health and any alarm, and click it to
-open its panel. A dashed ring is a position nobody staffs, labelled with its role.
+under it; hover or focus a marker for its slot, product, health and any alarm, and click it to
+open its panel. A dashed ring is a position nobody staffs, labelled with its slot.
 
 The map redraws to the width it has. A label never runs past the edge of the map: a marker
 near a side hangs its label inward, one near the bottom puts it above its icon, and a phone
 anchors sooner than a desktop because the same position is fewer pixels from the edge. Where
 two labels would overprint, the later one moves to the other side of its icon, and when
-nothing is clear it collapses to the icon alone; hover or focus it for the same label, role
+nothing is clear it collapses to the icon alone; hover or focus it for the same label, slot
 and health as any other marker.
 
 ::screenshot{#fleet-map}
@@ -331,14 +332,14 @@ nothing to chart yet, and says so.
 
 **Activity** reads the way a status page reads: the window's **uptime** up top (the
 health KPI over time), the timeline beside it with one marker per alarm raise, then
-**incidents**: one entry per contiguous stretch away from healthy, ongoing first, each
+the **health history**: one entry per contiguous stretch away from healthy, ongoing first, each
 expanding to the verdict changes inside it and the alarms that explain them. An alarm the
 system absorbed without going unhealthy lists under **other alarms**. A system that flaps
 weekly and a system that failed once look different here, which is the point.
 
 ::screenshot{#fleet-history}
 
-Under the incidents, the **events** are the system's story on the event lane: the system's
+Under the health history, the **events** are the system's story on the event lane: the system's
 own events and its members', newest first, each row labeled by the owner that raised it;
 and the **logs** are the members' raw lines merged, each naming the component that wrote
 it. Both cover the last 24 hours, capped; both scope to what you can read. A component's
@@ -355,22 +356,22 @@ product is fixed at creation). **Placement** moves a location under a new parent
 permission and its own audit verb; systems and components read where they sit.
 **Tags** edit in place. One save model everywhere: Edit stages drafts, Save commits them
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
-`?edit=1` address lands already editing. A sole system's Configure also carries its place's
-form, in its own section with its own Edit (`?edit=place` opens that one). A place's and a
-component's views carry the same tab. The side panel carries the same form's identity, classification and tags; roles,
+`?edit=1` address lands already editing. A sole system's Configure also carries its location's
+form, in its own section with its own Edit (`?edit=location` opens that one). A location's and a
+component's views carry the same tab. The side panel carries the same form's identity, classification and tags; slots,
 properties and their cascade are configuration, and live here.
 
 ::screenshot{#fleet-configure}
 
-Finding a place and fixing its label runs the whole path: Explore down to the place, its system's
-view, the place's own section under Configure, and the new label read everywhere the place appears.
+Finding a location and fixing its label runs the whole path: Explore down to the location, its system's
+view, the location's own section under Configure, and the new label read everywhere the location appears.
 
-::walkthrough{#find-and-fix-a-place}
+::walkthrough{#find-and-fix-a-location}
 
 ## A component
 
-A component is a piece of a system, so its view opens with its **place card** too, saying
-whether the place is the component's own (**set here**) or its system's standing in for one
+A component is a piece of a system, so its view opens with its **location card** too, saying
+whether the location is the component's own (**set here**) or its system's standing in for one
 it does not have (**from its system**). Then the component card: the verdict and since when
 (a component has no recorded edges, so since-when is what took it down: the worst active
 alarm and its age), its product, and its tabs.
@@ -378,7 +379,7 @@ alarm and its age), its product, and its tabs.
 Overview reads **why** (severity, message, age, and whether anyone has acknowledged it; a
 cleared alarm is history, not a state), **what it is** (product, vendor, driver, and every
 property the contract resolved to a value: model, serial, firmware, the RMA facts), and the
-**systems it serves**, each with the role it fills there and the primary marked when there
+**systems it serves**, each with the slot it fills there and the primary marked when there
 is more than one. **Vitals** lists the effective metrics that carry a value, a dot marking
 the component speaking rather than a contract default standing in. Each value carries its
 metric's unit (an uptime reads `306 s`, a poll duration `0.15 ms`); a decimal is rounded for reading,
@@ -395,15 +396,15 @@ on its label's tooltip.
 transport answers the service, the login answers the credential; each rung teaches itself on
 hover), a held session's state where the endpoint holds one, with why and **Retry** when it was
 rejected, and both keys with **Trust this key** when what changed was the component's host key
-([held sessions](/guides/operator/collection/#held-sessions)), the node, its state, and when
+([held sessions](/guides/operator/collection/#held-sessions)), the outpost, its state, and when
 it was last seen: when the server last
 received anything the endpoint's task delivered, not its last up/down change (hours old on an
-endpoint that never stopped answering) and not a time the node wrote on a sample. Every
+endpoint that never stopped answering) and not a time the outpost wrote on a sample. Every
 endpoint whose transport can probe has a reachability verdict, a driver's included: an SNMP
 endpoint's is its standard get answered, and a udp endpoint's its driver's request answered (a bare
 udp or snmp endpoint has nothing to send, so it needs a driver). A stale sample under a
-healthy node points at the component or the network path, not at collection. An offline node
-says nothing about the component. This card is the one place a node appears on these pages.
+healthy outpost points at the component or the network path, not at collection. An offline outpost
+says nothing about the component. This card is the one place an outpost appears on these pages.
 
 **Identities** appears only on a component that speaks for many owners, a **conduit** (a cloud
 service reporting every room it runs, a controller fronting many components). Each value it reports
@@ -425,14 +426,14 @@ observed, with the conduit named as its source. The picker offers only owners yo
 the button shows only when you may update the conduit, because a binding writes onto both of its
 ends and costs update on both. When the server refuses, the row says why in plain words: **Not
 allowed** (a permission one end lacks, named), **Not found** (the owner is gone, or outside what you
-can see) or **Not a valid binding** (the rules refuse it, such as a place or a node as the owner).
+can see) or **Not a valid binding** (the rules refuse it, such as a location or an outpost as the owner).
 The X on a bound row unbinds it after a confirm, and its next value waits under Heard, not bound
 again. The CLI does the same with `omniglass component identity-binding` (`list`, `update`, `delete`) and `omniglass component unbound-identity list`.
 
 The component's view refreshes on its own while it is open: its Collection, Vitals, and its alarms
-with the verdict they make every 5 seconds, the node behind Collection every 10, so an endpoint you
+with the verdict they make every 5 seconds, the outpost behind Collection every 10, so an endpoint you
 just added, or a component going down, shows up without a reload. It reads only this component and
-its node, never the whole fleet, and stops while the browser tab is hidden.
+its outpost, never the whole fleet, and stops while the browser tab is hidden.
 
 ## Scope
 

@@ -202,7 +202,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const rowAllow = (n: N, action: string) => (n.actions ? n.actions.includes(action) : allow(action));
 
   // The stored value is the visible columns IN ORDER (visibility + reorder in one
-  // client preference; the eventual home is a per-principal user-preferences
+  // client preference; the eventual home is a per-user user-preferences
   // endpoint, a straight read/write swap, not the cascade). parsePref keeps valid
   // keys in stored order, de-dupes, and honors an explicit empty array.
   const readCols = (): string[] => parsePref(localStorage.getItem(`${cfg.storageKey}-cols`), cfg.columnKeys) ?? cfg.defaultCols;

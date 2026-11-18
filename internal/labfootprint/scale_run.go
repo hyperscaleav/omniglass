@@ -89,8 +89,8 @@ type scaleLab struct {
 	project string
 	server  string
 	db      string
-	// nodes maps a node's service name (edge-hq) to its container.
-	nodes map[string]string
+	// outposts maps an outpost's service name (edge-hq) to its container.
+	outposts map[string]string
 	// image is the server's image, for its build label.
 	image string
 	// labels are the server container's labels, which name the fleet the
@@ -102,7 +102,7 @@ type scaleLab struct {
 // lists it under.
 func (l scaleLab) containers() map[string]string {
 	out := map[string]string{"server": l.server, "db": l.db}
-	for name, id := range l.nodes {
+	for name, id := range l.outposts {
 		out[name] = id
 	}
 	return out
@@ -202,7 +202,7 @@ func (h *harness) discoverScale(ctx context.Context) (scaleLab, error) {
 	if err != nil {
 		return scaleLab{}, err
 	}
-	l := scaleLab{project: h.cfg.Project, nodes: map[string]string{}}
+	l := scaleLab{project: h.cfg.Project, outposts: map[string]string{}}
 	for _, c := range cs.Items {
 		if c.Labels[lab.LabelComposeOneOff] == "True" {
 			continue
@@ -217,14 +217,14 @@ func (h *harness) discoverScale(ctx context.Context) (scaleLab, error) {
 		case "db":
 			l.db = c.ID
 		default:
-			l.nodes[svc] = c.ID
+			l.outposts[svc] = c.ID
 		}
 	}
 	switch {
 	case l.server == "" || l.db == "":
 		return scaleLab{}, fmt.Errorf("no scale lab is running (project %s has no server and database): start one with `omniglass lab run --scenario corporate --systems N`", h.cfg.Project)
-	case len(l.nodes) == 0:
-		return scaleLab{}, fmt.Errorf("project %s has no node containers: it is not a scale lab", h.cfg.Project)
+	case len(l.outposts) == 0:
+		return scaleLab{}, fmt.Errorf("project %s has no outpost containers: it is not a scale lab", h.cfg.Project)
 	}
 	return l, nil
 }
@@ -328,7 +328,7 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 	if err != nil {
 		return scaleSession{}, err
 	}
-	run, err := scaleRunOf(l.labels, cfg, len(l.nodes))
+	run, err := scaleRunOf(l.labels, cfg, len(l.outposts))
 	if err != nil {
 		return scaleSession{}, err
 	}
@@ -391,15 +391,15 @@ func (h *harness) prepareScale(ctx context.Context, cfg ScaleConfig) (scaleSessi
 			return scaleSession{}, err
 		}
 	}
-	h.say("ready: %d systems, %d components, %d enabled tasks, %d node containers; warming up for %s",
-		run.Systems, run.Components, run.Tasks, len(l.nodes), cfg.Warmup)
+	h.say("ready: %d systems, %d components, %d enabled tasks, %d outpost containers; warming up for %s",
+		run.Systems, run.Components, run.Tasks, len(l.outposts), cfg.Warmup)
 	return s, nil
 }
 
 // scaleRunOf is the run's conditions: the fleet as the lab's server
 // container is labelled with it (#1719), never as cfg's --scenario and
 // --systems, which only size a lab the run brings up; the windows as cfg
-// gives them; and the sites as the lab's node containers count them.
+// gives them; and the sites as the lab's outpost containers count them.
 func scaleRunOf(serverLabels map[string]string, cfg ScaleConfig, sites int) (ScaleRun, error) {
 	fleet, err := lab.FleetOf(serverLabels)
 	if err != nil {
@@ -413,13 +413,13 @@ func scaleRunOf(serverLabels map[string]string, cfg ScaleConfig, sites int) (Sca
 
 // measureWindow measures one window into run: the readings at its ends, the
 // fleet view and system page loads across it, the database's size at its
-// end, what the server logged in it, each node's endpoint observation around
+// end, what the server logged in it, each outpost's endpoint observation around
 // it and the delivery receipts it reconciles. It returns when the window
 // closed.
 func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSession, run *ScaleRun) (time.Time, error) {
 	l := s.l
 	// The closed loop's marks sit outside the window's own reads. A lab
-	// whose nodes do not answer for their endpoints still measures the rest.
+	// whose outposts do not answer for their endpoints still measures the rest.
 	start, endpointErr := h.markStart(ctx, l)
 	db0, use0, err := h.readScale(ctx, l)
 	if err != nil {
@@ -497,8 +497,8 @@ func (h *harness) measureWindow(ctx context.Context, cfg ScaleConfig, s scaleSes
 	return db1.At, nil
 }
 
-// readWorklist reads each node's worst worklist pull loss over the window
-// (#1868), and the nodes that reported none. Its failure leaves the figure
+// readWorklist reads each outpost's worst worklist pull loss over the window
+// (#1868), and the outposts that reported none. Its failure leaves the figure
 // not measured and every other figure read.
 func (h *harness) readWorklist(ctx context.Context, from, to time.Time) (map[string]float64, []string, error) {
 	out, err := h.psql(ctx, WorklistQuery(from, to))
@@ -546,33 +546,13 @@ func (h *harness) loadPages(ctx context.Context, cfg ScaleConfig, system string)
 	h.say("loading the system page with %d clients, %d loads each", cfg.PageClients, cfg.PageLoads)
 	gap := cfg.Window / time.Duration(max(cfg.PageLoads, 1))
 	base := h.env["LAB_HOST_URL"]
-	var (
-		mu sync.Mutex
-		wg sync.WaitGroup
-	)
-	for c := range cfg.PageClients {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if sleep(ctx, gap*time.Duration(c)/time.Duration(cfg.PageClients)) != nil {
-				return
-			}
-			for range cfg.PageLoads {
-				due := time.Now().Add(gap)
-				load := h.loadSystemPage(ctx, base, system)
-				mu.Lock()
-				run.Loads = append(run.Loads, load)
-				mu.Unlock()
-				if sleep(ctx, time.Until(due)) != nil {
-					return
-				}
-			}
-		}()
-	}
-	return func() PageRun {
-		wg.Wait()
-		return run
-	}
+	done := make(chan PageRun, 1)
+	go func() {
+		done <- RunPageClients(ctx, cfg.PageClients, cfg.PageLoads, gap, func(ctx context.Context) PageLoad {
+			return h.loadSystemPage(ctx, base, system)
+		})
+	}()
+	return func() PageRun { return <-done }
 }
 
 // uptime is how long the server container had been running at t, so a
@@ -757,7 +737,7 @@ func (h *harness) fleetView(ctx context.Context) ([]byte, error) {
 const lagSampleRows = 20000
 
 // ingestLagQuery is the seconds from a sample's probe (its ts, stamped at
-// the node) to its commit, for the observed samples the window landed.
+// the outpost) to its commit, for the observed samples the window landed.
 func ingestLagQuery(from, to time.Time) string {
 	return fmt.Sprintf(`select extract(epoch from pg_xact_commit_timestamp(xmin) - ts) from metric
 		where ts >= to_timestamp(%.3f) and ts < to_timestamp(%.3f) and source_rule is null
@@ -815,7 +795,7 @@ func (h *harness) readDelivery(ctx context.Context, w delivery.Window, bound tim
 	}
 }
 
-// readSchedule adds the schedule hop (#1693) to a settled read: the nodes
+// readSchedule adds the schedule hop (#1693) to a settled read: the outposts
 // report it in the batches the settle waited on.
 func (h *harness) readSchedule(ctx context.Context, d DeliveryRead) DeliveryRead {
 	out, err := h.psql(ctx, ScheduleQuery(d.Window.From, d.Window.To))

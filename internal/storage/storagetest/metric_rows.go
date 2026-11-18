@@ -16,14 +16,14 @@ import (
 // MetricRows is the metric lane read in the wide shape, as a parenthesized
 // subquery to alias: each hot-tier sample and each declared row beside its
 // series' columns (id, ts, owner_kind, component_id, system_id, location_id,
-// node_id, metric_type_id, instance, value, provenance, source, source_rule,
+// outpost_id, metric_type_id, instance, value, provenance, source, source_rule,
 // source_rule_version, source_rule_id, event_id, command_id, source_conduit_id).
-const MetricRows = `(select m.id, m.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.node_id,
+const MetricRows = `(select m.id, m.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.outpost_id,
 		s.metric_type_id, s.instance, m.value, s.provenance, s.source, m.source_rule, m.source_rule_version,
 		m.source_rule_id, null::bigint as event_id, null::bigint as command_id, s.source_conduit_id
 	from metric m join metric_series s on s.id = m.series_id
 	union all
-	select d.id, d.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.node_id,
+	select d.id, d.ts, s.owner_kind, s.component_id, s.system_id, s.location_id, s.outpost_id,
 		s.metric_type_id, s.instance, d.value, s.provenance, s.source, null, null, null, d.event_id, d.command_id,
 		s.source_conduit_id
 	from metric_declared d join metric_series s on s.id = d.series_id)`
@@ -36,7 +36,7 @@ var wideMetricCols = []struct{ name, typ, def string }{
 	{"component_id", "uuid", "null"},
 	{"system_id", "uuid", "null"},
 	{"location_id", "uuid", "null"},
-	{"node_id", "uuid", "null"},
+	{"outpost_id", "uuid", "null"},
 	{"metric_type_id", "uuid", "null"},
 	{"instance", "text", "''"},
 	{"value", "float8", "null"},
@@ -90,14 +90,14 @@ func WideMetricInsert(cols, rows string) string {
 	}
 	return `with w0(` + strings.Join(names, ", ") + `) as (` + body + `),
 	w as (select ` + strings.Join(full, ", ") + ` from w0 where w0.owner_kind is not null),
-	k as (select distinct metric_type_id, owner_kind, component_id, system_id, location_id, node_id, instance, provenance, source,
-		coalesce(component_id, system_id, location_id, node_id) as owner_id from w),
+	k as (select distinct metric_type_id, owner_kind, component_id, system_id, location_id, outpost_id, instance, provenance, source,
+		coalesce(component_id, system_id, location_id, outpost_id) as owner_id from w),
 	known as (select s.id, s.owner_id, s.metric_type_id, s.instance, s.provenance, s.source
 		from k join metric_series s on s.owner_id = k.owner_id and s.metric_type_id = k.metric_type_id
-			and s.instance = k.instance and s.provenance = k.provenance and s.source = k.source and s.collector_node_id is null
+			and s.instance = k.instance and s.provenance = k.provenance and s.source = k.source and s.collector_outpost_id is null
 			and s.source_conduit_id is null),
-	fresh as (insert into metric_series (metric_type_id, owner_kind, component_id, system_id, location_id, node_id, instance, provenance, source)
-		select metric_type_id, owner_kind, component_id, system_id, location_id, node_id, instance, provenance, source from k
+	fresh as (insert into metric_series (metric_type_id, owner_kind, component_id, system_id, location_id, outpost_id, instance, provenance, source)
+		select metric_type_id, owner_kind, component_id, system_id, location_id, outpost_id, instance, provenance, source from k
 		where not exists (select 1 from known n where n.owner_id = k.owner_id and n.metric_type_id = k.metric_type_id
 			and n.instance = k.instance and n.provenance = k.provenance and n.source = k.source)
 		on conflict do nothing
@@ -105,13 +105,13 @@ func WideMetricInsert(cols, rows string) string {
 	series as (select * from known union all select * from fresh),
 	hot as (insert into metric (series_id, ts, value, source_rule, source_rule_version, source_rule_id)
 		select s.id, w.ts, w.value, w.source_rule, w.source_rule_version, w.source_rule_id
-		from w left join series s on s.owner_id = coalesce(w.component_id, w.system_id, w.location_id, w.node_id)
+		from w left join series s on s.owner_id = coalesce(w.component_id, w.system_id, w.location_id, w.outpost_id)
 			and s.metric_type_id = w.metric_type_id and s.instance = w.instance and s.provenance = w.provenance and s.source = w.source
 		where w.provenance <> 'intended'
 		returning id)
 	insert into metric_declared (series_id, ts, value, event_id, command_id)
 	select s.id, w.ts, w.value, w.event_id, w.command_id
-	from w left join series s on s.owner_id = coalesce(w.component_id, w.system_id, w.location_id, w.node_id)
+	from w left join series s on s.owner_id = coalesce(w.component_id, w.system_id, w.location_id, w.outpost_id)
 		and s.metric_type_id = w.metric_type_id and s.instance = w.instance and s.provenance = w.provenance and s.source = w.source
 	where w.provenance = 'intended'`
 }

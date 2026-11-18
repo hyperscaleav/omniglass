@@ -1,14 +1,14 @@
 import { api } from "../api/client";
 
 // The standards data layer: thin typed wrappers over the generated client. A
-// standard is the blueprint a system conforms to, the system-side counterpart of a
+// standard is the contract a system is built to, the system-side counterpart of a
 // product: it names a shape ("Meeting room", "Huddle space") and declares the
 // property contract every system conforming to it exposes. A standard may be a
 // VARIANT of another (parent_standard_id), and a system need not conform to one at
 // all (a one-off system is first class).
 //
 // Official (seed-owned) standards are read-only; custom standards are operator
-// created. This module carries the registry itself; the declared-property contract
+// created. This module carries the catalog itself; the declared-property contract
 // is the classifier-generic layer in lib/classifier_properties.
 export type Standard = {
   id: string;

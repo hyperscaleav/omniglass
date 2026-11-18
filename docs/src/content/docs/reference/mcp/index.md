@@ -21,23 +21,42 @@ Each tool says what a client may assume of it, from one rule over the route's me
 
 A tool that is not read-only and not destructive adds something (a create).
 
-67 tools.
+Each tool also has an **agent class**, the one the install's [agent policy](/guides/agents/#what-an-agent-may-do)
+sets to always, ask or never: **read** (read-only), **destructive**, **credential_destination** (it may bind a
+stored credential to a destination, the most sensitive class, whatever else it does) or **write** (the rest). On
+`tools/list`, each tool's `_meta` carries `omniglass/agent_policy`, its class and the policy the install resolves
+for it: the strictest of the class, the caller's roles and an override on the tool itself.
+
+100 tools.
 
 | Tool | What it does | Gate | Assume |
 |---|---|---|---|
-| [`get-auth-me`](#get-auth-me) | The authenticated principal, its permissions, and grants | authn only | read-only, idempotent |
+| [`list-alarms`](#list-alarms) | List the fleet's active alarms | `component:read` | read-only, idempotent |
+| [`list-audit-log`](#list-audit-log) | List audit-trail events | `audit:read:admin` | read-only, idempotent |
+| [`get-auth-me`](#get-auth-me) | The authenticated user, its permissions, and grants | authn only | read-only, idempotent |
+| [`get-auth-me-agent-policy`](#get-auth-me-agent-policy) | What the install lets an agent do | authn only | read-only, idempotent |
 | [`list-auth-me-notifications`](#list-auth-me-notifications) | List your inbox | `notification:read` | read-only, idempotent |
+| [`list-calc-rule`](#list-calc-rule) | List calc rules | `rule:read` | read-only, idempotent |
+| [`get-calc-rule`](#get-calc-rule) | Get a calc rule | `rule:read` | read-only, idempotent |
+| [`get-calc-rule-state`](#get-calc-rule-state) | Get a calc rule's live state | `rule:read` | read-only, idempotent |
+| [`preview-calc-rule`](#preview-calc-rule) | Preview a calc rule | `rule:read` | read-only, idempotent |
 | [`list-component-types`](#list-component-types) | List component types | `component_type:read` | read-only, idempotent |
 | [`list-components`](#list-components) | List components in scope | `component:read` | read-only, idempotent |
 | [`create-component`](#create-component) | Create a component | `component:create` | adds |
 | [`get-component`](#get-component) | Get a component | `component:read` | read-only, idempotent |
+| [`update-component`](#update-component) | Update a component | `component:update` | destructive |
 | [`list-component-alarms`](#list-component-alarms) | List a component's alarms | `component:read` | read-only, idempotent |
+| [`acknowledge-component-alarm`](#acknowledge-component-alarm) | Acknowledge an alarm | `alarm:acknowledge` | adds |
+| [`snooze-component-alarm`](#snooze-component-alarm) | Snooze an alarm | `alarm:snooze` | adds |
+| [`get-component-alarm-timeline`](#get-component-alarm-timeline) | Read an alarm's timeline | `alarm:read` | read-only, idempotent |
+| [`unsnooze-component-alarm`](#unsnooze-component-alarm) | End an alarm's snooze | `alarm:snooze` | adds |
 | [`list-component-commands`](#list-component-commands) | List a component's commands | `command:read` | read-only, idempotent |
 | [`get-component-command`](#get-component-command) | Read a command | `command:read` | read-only, idempotent |
 | [`issue-component-command`](#issue-component-command) | Issue a command to a component | `command:issue` | destructive, open-world |
 | [`list-component-dependencies`](#list-component-dependencies) | List what a component depends on and what depends on it | `component:read` | read-only, idempotent |
 | [`create-component-dependency`](#create-component-dependency) | Record that a component depends on another | `component:update` | adds |
 | [`delete-component-dependency`](#delete-component-dependency) | Remove a component's dependency on another | `component:update` | destructive, idempotent |
+| [`effective-tags`](#effective-tags) | Effective tags for a component | `component:read` | read-only, idempotent |
 | [`list-component-events`](#list-component-events) | List a component's recent events | `component:read` | read-only, idempotent |
 | [`list-identity-bindings`](#list-identity-bindings) | List the identities a conduit component fans out | `component:read` | read-only, idempotent |
 | [`put-identity-binding`](#put-identity-binding) | Bind an identity a conduit reports to its owner | `component:update` | destructive, idempotent |
@@ -49,12 +68,15 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`list-component-property-series`](#list-component-property-series) | Read one property series' change history | `component:read` | read-only, idempotent |
 | [`get-component-reachability`](#get-component-reachability) | Read a component's per-endpoint reachability | `component:read` | read-only, idempotent |
 | [`list-unbound-identities`](#list-unbound-identities) | List the identities a conduit reported that no binding places | `component:read` | read-only, idempotent |
+| [`list-component-tags`](#list-component-tags) | List tags on a component | `component:read` | read-only, idempotent |
+| [`remove-component-tag`](#remove-component-tag) | Remove a tag value from a component | `component:update` | destructive |
+| [`set-component-tag`](#set-component-tag) | Set a tag value on a component | `component:update` | adds |
 | [`create-component-from-template`](#create-component-from-template) | Start a component from a template | `component:create` | adds |
 | [`list-drivers`](#list-drivers) | List drivers | `driver:read` | read-only, idempotent |
 | [`create-driver`](#create-driver) | Create a driver | `driver:create` | adds |
 | [`get-driver`](#get-driver) | Get a driver | `driver:read` | read-only, idempotent |
 | [`update-driver`](#update-driver) | Update a driver | `driver:update` | destructive |
-| [`preview-driver`](#preview-driver) | Preview a driver spec's polls through a node | `driver:preview` | destructive, open-world |
+| [`preview-driver`](#preview-driver) | Preview a driver spec's polls through an outpost | `driver:preview` | destructive, open-world |
 | [`validate-driver-spec`](#validate-driver-spec) | Check a driver spec without saving it | `driver:read` | read-only, idempotent |
 | [`list-endpoints`](#list-endpoints) | List endpoints in scope | `endpoint:read` | read-only, idempotent |
 | [`create-endpoint`](#create-endpoint) | Create an endpoint | `endpoint:create` | open-world |
@@ -64,70 +86,202 @@ A tool that is not read-only and not destructive adds something (a create).
 | [`run-endpoint-poll`](#run-endpoint-poll) | Run an endpoint's poll now | `endpoint:run` | open-world |
 | [`retry-endpoint`](#retry-endpoint) | Retry an endpoint's gated connections | `endpoint:retry` | destructive, open-world |
 | [`rotate-endpoint-token`](#rotate-endpoint-token) | Rotate a webhook endpoint's token | `endpoint:update` | destructive |
+| [`list-event-rule`](#list-event-rule) | List event rules | `rule:read` | read-only, idempotent |
+| [`get-event-rule`](#get-event-rule) | Get an event rule | `rule:read` | read-only, idempotent |
+| [`get-event-rule-state`](#get-event-rule-state) | Get an event rule's live state | `rule:read` | read-only, idempotent |
+| [`preview-event-rule`](#preview-event-rule) | Preview an event rule | `rule:read` | read-only, idempotent |
+| [`list-event-type`](#list-event-type) | List event types | `event_type:read` | read-only, idempotent |
+| [`validate-expression`](#validate-expression) | Validate an expression | `rule:read` | read-only, idempotent |
 | [`list-locations`](#list-locations) | List locations in scope | `location:read` | read-only, idempotent |
+| [`create-location`](#create-location) | Create a location | `location:create` | adds |
 | [`get-location`](#get-location) | Get a location | `location:read` | read-only, idempotent |
+| [`update-location`](#update-location) | Update a location | `location:update` | destructive |
 | [`get-location-health`](#get-location-health) | Read a location's health | `location:read` | read-only, idempotent |
-| [`create-locations-from-template`](#create-locations-from-template) | Start a subtree of places from a template | `location:create` | adds |
-| [`list-nodes`](#list-nodes) | List nodes | `node:read` | read-only, idempotent |
-| [`get-node`](#get-node) | Get a node | `node:read` | read-only, idempotent |
-| [`list-node-logs`](#list-node-logs) | List a node's recent self-logs | `node:read` | read-only, idempotent |
+| [`list-location-metrics`](#list-location-metrics) | List a location's effective metrics | `location:read` | read-only, idempotent |
+| [`list-location-properties`](#list-location-properties) | List a location's effective properties | `location:read` | read-only, idempotent |
+| [`create-locations-from-template`](#create-locations-from-template) | Start a subtree of locations from a template | `location:create` | adds |
 | [`preview-notification-type`](#preview-notification-type) | Preview a notification type against an alarm | `notification_type:read` | read-only, idempotent |
 | [`list-notification`](#list-notification) | List notifications | `notification:read` | read-only, idempotent |
+| [`list-outposts`](#list-outposts) | List outposts | `outpost:read` | read-only, idempotent |
+| [`get-outpost`](#get-outpost) | Get an outpost | `outpost:read` | read-only, idempotent |
+| [`list-outpost-logs`](#list-outpost-logs) | List an outpost's recent self-logs | `outpost:read` | read-only, idempotent |
 | [`list-products`](#list-products) | List products | `product:read` | read-only, idempotent |
 | [`get-product`](#get-product) | Get a product | `product:read` | read-only, idempotent |
 | [`list-secret-types`](#list-secret-types) | List secret types | `secret:read` | read-only, idempotent |
 | [`list-secrets`](#list-secrets) | List secrets | `secret:read` | read-only, idempotent |
-| [`create-secret`](#create-secret) | Create a secret | `secret:create` | adds |
 | [`create-standard-from-template`](#create-standard-from-template) | Create a standard from a template | `standard:create` | adds |
 | [`list-systems`](#list-systems) | List systems in scope | `system:read` | read-only, idempotent |
 | [`get-system`](#get-system) | Get a system | `system:read` | read-only, idempotent |
+| [`update-system`](#update-system) | Update a system | `system:update` | destructive |
+| [`list-system-alarms`](#list-system-alarms) | List a system's members' alarms | `system:read` | read-only, idempotent |
+| [`list-system-events`](#list-system-events) | List a system's recent events, members included | `system:read` | read-only, idempotent |
 | [`get-system-health`](#get-system-health) | Read a system's health | `system:read` | read-only, idempotent |
+| [`list-system-logs`](#list-system-logs) | List a system's members' recent log lines | `system:read` | read-only, idempotent |
+| [`list-system-members`](#list-system-members) | List the components in a system | `system:read` | read-only, idempotent |
+| [`add-system-member`](#add-system-member) | Put a component in a system | `system:update` | destructive, idempotent |
+| [`list-system-metrics`](#list-system-metrics) | List a system's effective metrics | `system:read` | read-only, idempotent |
 | [`list-system-metric-series`](#list-system-metric-series) | Read one metric series' samples | `system:read` | read-only, idempotent |
+| [`list-system-properties`](#list-system-properties) | List a system's properties and where each stands | `system:read` | read-only, idempotent |
 | [`list-system-property-series`](#list-system-property-series) | Read one property series' change history | `system:read` | read-only, idempotent |
 | [`create-system-from-template`](#create-system-from-template) | Start a whole system from a template | `system:create` | adds |
 | [`list-tasks`](#list-tasks) | List tasks in scope | `task:read` | read-only, idempotent |
 | [`list-templates`](#list-templates) | List templates | `template:read` | read-only, idempotent |
 | [`get-template`](#get-template) | Get a template | `template:read` | read-only, idempotent |
 | [`list-transports`](#list-transports) | List the transports the platform speaks | `endpoint:read` | read-only, idempotent |
-| [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `node:read` | read-only, idempotent |
+| [`list-unclaimed-sources`](#list-unclaimed-sources) | List the sources no endpoint claims | `outpost:read` | read-only, idempotent |
 | [`list-vendors`](#list-vendors) | List vendors | `vendor:read` | read-only, idempotent |
 | [`run-views`](#run-views) | Read the history of one or more view bindings | `view:read` | read-only, idempotent |
 
+## `list-alarms`
+
+List the fleet's active alarms
+
+What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+
+- Route: `GET /api/v1/alarms`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | no | At most this many, the worst first; 0 or absent means 200 |
+| `unacknowledged` | boolean | no | Only the alarms nobody has looked at: the queue an operator, or an agent, works |
+
+## `list-audit-log`
+
+List audit-trail events
+
+Recent audit-trail events, newest first, each with the actor and, for an impersonated action, the real actor behind it. Read-only; gated by audit:read:admin (admin/owner only, since the audit trail is admin-sensitive).
+
+- Route: `GET /api/v1/audit-log`
+- Gate: `audit:read:admin`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `agent` | string | no | Filter to the events one agent took on its person's behalf (the name its agent token was minted with) |
+| `before` | string | no | Only events strictly older than this RFC3339 timestamp (paging backward) |
+| `channel` | string | no | Filter to the events that arrived through one channel; direct is a plain API call, with no channel |
+| `client` | string | no | Filter to the events whose declared MCP client contains this term, case-insensitively |
+| `limit` | integer | no | Max rows to return, newest first (default 100, capped at 500) |
+| `resource` | string | no | Filter to one resource kind (e.g. auth, user_grant) |
+| `verb` | string | no | Filter to one verb (e.g. login, create) |
+
 ## `get-auth-me`
 
-The authenticated principal, its permissions, and grants
+The authenticated user, its permissions, and grants
 
-Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
+Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
 
 - Route: `GET /api/v1/auth/me`
 - Gate: authn only
 - Assume: read-only, idempotent
+- Agent class: read
+- Arguments: none
+
+## `get-auth-me-agent-policy`
+
+What the install lets an agent do
+
+Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. Each class names the layer that set it (platform, role, or tool), and an overridden tool is listed with its own policy; the strictest layer wins. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
+
+- Route: `GET /api/v1/auth/me/agent-policy`
+- Gate: authn only
+- Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-auth-me-notifications`
 
 List your inbox
 
-The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
 
 - Route: `GET /api/v1/auth/me/notifications`
 - Gate: `notification:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `limit` | integer | no | At most this many, newest first (default 100) |
 | `unread` | boolean | no | Only the entries not yet read |
 
+## `list-calc-rule`
+
+List calc rules
+
+Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.
+
+- Route: `GET /api/v1/calc-rules`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Agent class: read
+- Arguments: none
+
+## `get-calc-rule`
+
+Get a calc rule
+
+Returns one calc rule by name (or uuid). Gated by rule:read.
+
+- Route: `GET /api/v1/calc-rules/{name}`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The rule's name (its uuid is accepted too) |
+
+## `get-calc-rule-state`
+
+Get a calc rule's live state
+
+What a calc rule last did on each owner the caller may read (components by the component read scope, systems by the system read scope), each owner named now: the value it computed, when and at which version, the inputs it found no value of, a system's members that held none and the instances it left out as stale (named when the caller may read the component, else counted), an error, since when a system has had no members, and whether the owner is pending (with when a deferred mark is due). Ordered on the server, failing owners first, then pending, then those it wrote nothing for, then those holding a value, each by name, and at most limit of them; total and the pending depth count every owner the caller may read, listed or not. Gated by rule:read.
+
+- Route: `GET /api/v1/calc-rules/{name}/state`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `limit` | integer | no | The most owners to list, in state order: failing, pending, missing an input (or with no members), valued, each by name |
+| `name` | string | yes | The rule's name (its uuid is accepted too) |
+
+## `preview-calc-rule`
+
+Preview a calc rule
+
+Computes a candidate calc rule now, on each owner it selects that the caller may read, with the reduce the tick runs, and writes nothing (a read-only transaction). For each owner it answers the value the rule would write, the output's current value and whether they differ, the inputs with no value, the members skipped and the instances left out as stale (named when the caller may read the component, else counted). An expression that reads one member's value by position (members[1].value.t, or an element of an input's list) over a system with a member the caller may not read is withheld on that system, its error counting the members out of scope; one that folds each input's list whole (avg(t), max(t)) shows the aggregate. A component rule previews the selected components holding one of its inputs, as the tick would mark them. The owners holding a current value of the output are computed first, so the cap never hides one, and the answer lists the owners holding a value or that the rule would write one on first, each by name. At most owner_cap owners are computed, and a bound on total input reads stops a preview over large systems early, a whole owner at a time (owners_judged of owners_total, truncated past either). The candidate is checked as a save would check it: a reduce that does not compile, a cycle in the key graph, an output another enabled rule or a collection writes, or health are each a 422, so the author learns before saving; given a saved rule's name it is judged as an edit of that rule. The selector's names resolve in the caller's read scope: a name that does not exist and one the caller may not read are the same 422, and a name shared in and out of scope means the one in scope. A preview takes no lock a save waits on. Gated by rule:read.
+
+- Route: `POST /api/v1/calc-rules:preview`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `inputs` | array | yes | The keys the rule reads, each by a unique alias its reduce uses |
+| `name` | string | no | A saved rule's name, to preview an edit of it (its stored version is then not a second writer of its key); absent for a new rule |
+| `output_key` | string | yes | The property or metric the rule would write |
+| `owner_kind` | string | yes | What the rule derives a value on |
+| `reduce` | object | yes |  |
+| `selector` | object | no |  |
+
 ## `list-component-types`
 
 List component types
 
-Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
 
 - Route: `GET /api/v1/component-types`
 - Gate: `component_type:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-components`
@@ -139,6 +293,7 @@ Lists the components the caller may read, each filtered to its scope subtree. Ga
 - Route: `GET /api/v1/components`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `create-component`
@@ -150,6 +305,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 - Route: `POST /api/v1/components`
 - Gate: `component:create`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -170,10 +326,28 @@ Fetches a component by name within the caller's read scope. Out of scope is a no
 - Route: `GET /api/v1/components/{name}`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `update-component`
+
+Update a component
+
+Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+
+- Route: `PATCH /api/v1/components/{name}`
+- Gate: `component:update`
+- Assume: destructive
+- Agent class: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `label` | string | no | A new operator-facing label |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `product` | string | no | Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow. |
 
 ## `list-component-alarms`
 
@@ -184,12 +358,78 @@ What is currently wrong with this component, newest first, with the component's 
 - Route: `GET /api/v1/components/{name}/alarms`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `include_cleared` | boolean | no | Include cleared alarms, so the list is the history rather than what is wrong now |
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
-| `unacknowledged` | boolean | no | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended |
+| `unacknowledged` | boolean | no | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended |
+
+## `acknowledge-component-alarm`
+
+Acknowledge an alarm
+
+Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not acknowledge on is a 403.
+
+- Route: `POST /api/v1/components/{name}/alarms/{id}:acknowledge`
+- Gate: `alarm:acknowledge`
+- Assume: adds
+- Agent class: write
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | The alarm id |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `snooze-component-alarm`
+
+Snooze an alarm
+
+Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+
+- Route: `POST /api/v1/components/{name}/alarms/{id}:snooze`
+- Gate: `alarm:snooze`
+- Assume: adds
+- Agent class: write
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `duration` | string | yes | How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer |
+| `id` | string | yes | The alarm id: any alarm of the dedup key to snooze |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `get-component-alarm-timeline`
+
+Read an alarm's timeline
+
+The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
+
+- Route: `GET /api/v1/components/{name}/alarms/{id}:timeline`
+- Gate: `alarm:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | The alarm id |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+
+## `unsnooze-component-alarm`
+
+End an alarm's snooze
+
+Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+
+- Route: `POST /api/v1/components/{name}/alarms/{id}:unsnooze`
+- Gate: `alarm:snooze`
+- Assume: adds
+- Agent class: write
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | The alarm id |
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 
 ## `list-component-commands`
 
@@ -200,6 +440,7 @@ The component's command history, newest first, each command whole (as the single
 - Route: `GET /api/v1/components/{name}/commands`
 - Gate: `command:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -213,11 +454,12 @@ The component's command history, newest first, each command whole (as the single
 
 Read a command
 
-One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, outpost and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
 
 - Route: `GET /api/v1/components/{name}/commands/{id}`
 - Gate: `command:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -233,6 +475,7 @@ Records a command invocation, writes a caused event, and (for a settleable comma
 - Route: `POST /api/v1/components/{name}/commands:issue`
 - Gate: `command:issue`
 - Assume: destructive, open-world
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -253,6 +496,7 @@ This component's dependency edges both ways: its upstreams (what it depends on) 
 - Route: `GET /api/v1/components/{name}/dependencies`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -262,11 +506,12 @@ This component's dependency edges both ways: its upstreams (what it depends on) 
 
 Record that a component depends on another
 
-Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's outpost its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
 
 - Route: `POST /api/v1/components/{name}/dependencies`
 - Gate: `component:update`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -284,12 +529,29 @@ Removes this component's edge of the kind to the upstream. Gated by component:up
 - Route: `DELETE /api/v1/components/{name}/dependencies/{kind}/{upstream}`
 - Gate: `component:update`
 - Assume: destructive, idempotent
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `kind` | string | yes | The edge's kind |
 | `name` | string | yes | Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 | `upstream` | string | yes | Name or uuid of the upstream component, or a dotted address |
+
+## `effective-tags`
+
+Effective tags for a component
+
+Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+
+- Route: `GET /api/v1/components/{name}/effective-tags`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `system` | string | no | Resolve against this system, name or uuid (ADR-0062), which the component must be a member of. Omit to resolve against its primary membership, the default for a caller with no system in hand. |
 
 ## `list-component-events`
 
@@ -300,6 +562,7 @@ Returns the component's recent log occurrences (the log-kind sink), newest first
 - Route: `GET /api/v1/components/{name}/events`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -314,6 +577,7 @@ The identity bindings of this conduit component: each value it reports under a m
 - Route: `GET /api/v1/components/{name}/identity-bindings`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -323,18 +587,19 @@ The identity bindings of this conduit component: each value it reports under a m
 
 Bind an identity a conduit reports to its owner
 
-Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or an outpost owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
 
 - Route: `PUT /api/v1/components/{name}/identity-bindings/{key}/{value}`
 - Gate: `component:update`
 - Assume: destructive, idempotent
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `key` | string | yes | The match key, a registered property type |
 | `name` | string | yes | Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 | `owner` | string | yes | Name or uuid of the owner the identity's values land on, or a dotted address |
-| `owner_kind` | string | yes | What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here |
+| `owner_kind` | string | yes | What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here |
 | `value` | string | yes | The identity value the conduit reports, 1 to 256 characters |
 
 ## `delete-identity-binding`
@@ -346,6 +611,7 @@ Removes the binding of this value, reported by the conduit component under this 
 - Route: `DELETE /api/v1/components/{name}/identity-bindings/{key}/{value}`
 - Gate: `component:update`
 - Assume: destructive, idempotent
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -362,6 +628,7 @@ Returns the component's recent raw log lines (the ingest lane of ADR-0066, disti
 - Route: `GET /api/v1/components/{name}/logs`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -378,6 +645,7 @@ Every metric the component's product declares, resolved to the newest observed o
 - Route: `GET /api/v1/components/{name}/metrics`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -392,6 +660,7 @@ The samples behind the effective read's latest value for one series, newest firs
 - Route: `GET /api/v1/components/{name}/metrics/{metric}/samples`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -406,11 +675,12 @@ The samples behind the effective read's latest value for one series, newest firs
 
 List a component's properties and where each stands
 
-Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 - Route: `GET /api/v1/components/{name}/properties`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -425,6 +695,7 @@ The change history behind the effective value for one property series, newest fi
 - Route: `GET /api/v1/components/{name}/properties/{property}/samples`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -444,6 +715,7 @@ Composes, per endpoint, the latest reachability verdict, the probe-layer signals
 - Route: `GET /api/v1/components/{name}/reachability`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -458,39 +730,90 @@ A component that speaks for many owners (a conduit) lands each value its driver 
 - Route: `GET /api/v1/components/{name}/unbound-identities`
 - Gate: `component:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform) |
 
+## `list-component-tags`
+
+List tags on a component
+
+Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
+
+- Route: `GET /api/v1/components/{name}:listTags`
+- Gate: `component:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token. |
+
+## `remove-component-tag`
+
+Remove a tag value from a component
+
+Removes a key's value from a component. Gated by component:update.
+
+- Route: `POST /api/v1/components/{name}:removeTag`
+- Gate: `component:update`
+- Assume: destructive
+- Agent class: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `key` | string | yes | The tag key to remove |
+| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token. |
+
+## `set-component-tag`
+
+Set a tag value on a component
+
+Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
+
+- Route: `POST /api/v1/components/{name}:setTag`
+- Gate: `component:update`
+- Assume: adds
+- Agent class: write
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `key` | string | yes | The tag key (must exist and apply to this kind) |
+| `name` | string | yes | The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token. |
+| `value` | string | yes | The bound value |
+
 ## `create-component-from-template`
 
 Start a component from a template
 
-Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no outpost a 422.
 
 - Route: `POST /api/v1/components:createFromTemplate`
 - Gate: `component:create`
 - Assume: adds
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `inputs` | object | no | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read |
+| `inputs` | object | no | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind) |
 | `label` | string | no | The component's label |
-| `location` | string | no | The place the component sits in, by name or dotted path |
+| `location` | string | no | The location the component sits in, by name or dotted path |
 | `name` | string | no | The component's name; minted as an unnamed create mints it when empty |
-| `node` | string | no | The node the endpoint is placed on; needed when inputs carry an address |
+| `outpost` | string | no | The outpost the endpoint is placed on; needed when inputs carry an address |
 | `template` | string | yes | The component template, by name |
 
 ## `list-drivers`
 
 List drivers
 
-Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
+Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
 
 - Route: `GET /api/v1/drivers`
 - Gate: `driver:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `create-driver`
@@ -502,6 +825,7 @@ Creates a custom (non-official) driver. Gated by driver:create.
 - Route: `POST /api/v1/drivers`
 - Gate: `driver:create`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -519,6 +843,7 @@ Fetches a driver by id. Gated by driver:read.
 - Route: `GET /api/v1/drivers/{id}`
 - Gate: `driver:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -533,6 +858,7 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 - Route: `PATCH /api/v1/drivers/{id}`
 - Gate: `driver:update`
 - Assume: destructive
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -543,22 +869,23 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 
 ## `preview-driver`
 
-Preview a driver spec's polls through a node
+Preview a driver spec's polls through an outpost
 
-Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+Runs a driver spec's polls once through the outpost named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the outpost holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the outpost and on each secret used. Gated by driver:preview.
 
 - Route: `POST /api/v1/drivers:preview`
 - Gate: `driver:preview`
 - Assume: destructive, open-world
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `driver` | string | no | A stored driver to preview, by name; or give spec |
-| `inputs` | object | no | The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target |
-| `node` | string | yes | The node that runs the preview, by name: the one that reaches the target |
+| `inputs` | object | no | The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target |
+| `outpost` | string | yes | The outpost that runs the preview, by name: the one that reaches the target |
 | `polls` | array | no | The polls to run, by name; absent runs every poll |
 | `spec` | any | no | A driver spec to preview inline, unsaved; or give driver |
-| `timeout_seconds` | integer | no | How long the node may take for the whole preview (default 15, at most 30) |
+| `timeout_seconds` | integer | no | How long the outpost may take for the whole preview (default 15, at most 30) |
 
 ## `validate-driver-spec`
 
@@ -569,6 +896,7 @@ Checks a driver spec by the rules a save applies (the strict parse, then validat
 - Route: `POST /api/v1/drivers:validate`
 - Gate: `driver:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -583,17 +911,19 @@ Lists the endpoints whose owning component the caller may read (the component ca
 - Route: `GET /api/v1/endpoints`
 - Gate: `endpoint:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `create-endpoint`
 
 Create an endpoint
 
-Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.
+Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. A secret input hands that credential to the endpoint's host, so it takes secret:bind on the secret: one the caller cannot read is a 422, one it can read but not bind a 403. The create scope cascades through the owning component. Gated by endpoint:create.
 
 - Route: `POST /api/v1/endpoints`
 - Gate: `endpoint:create`
 - Assume: open-world
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -601,10 +931,10 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | `driver` | string | no | Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions |
 | `inputs` | object | no | The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest |
 | `label` | string | no | What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for |
-| `node` | string | no | Node placement, by name or id |
 | `out_of_band` | boolean | no | Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open |
+| `outpost` | string | no | Outpost placement, by name or id |
 | `params` | any | no | Address/target settings (jsonb); an attach derives them from the inputs instead |
-| `transport` | string | no | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
+| `transport` | string | no | A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
 ## `get-endpoint`
 
@@ -615,6 +945,7 @@ Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An end
 - Route: `GET /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -624,19 +955,20 @@ Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An end
 
 Update an endpoint
 
-Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's outpost placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 - Route: `PATCH /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:update`
 - Assume: destructive, open-world
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
-| `inputs` | object | no | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential |
+| `inputs` | object | no | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it |
 | `label` | string | no | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
-| `node` | string | no | Reassign the node placement, by name or id |
 | `out_of_band` | boolean | no | Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone |
+| `outpost` | string | no | Reassign the outpost placement, by name or id |
 | `params` | any | no | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
 | `transport` | string | no | The transport: a driver-attached endpoint takes only one its driver speaks |
 
@@ -649,6 +981,7 @@ Deletes an endpoint, refused while a task still references it. Gated by endpoint
 - Route: `DELETE /api/v1/endpoints/{endpoint}`
 - Gate: `endpoint:delete`
 - Assume: destructive, idempotent
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -658,33 +991,35 @@ Deletes an endpoint, refused while a task still references it. Gated by endpoint
 
 Run an endpoint's poll now
 
-Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
 
 - Route: `POST /api/v1/endpoints/{endpoint}/polls/{poll}:run`
 - Gate: `endpoint:run`
 - Assume: open-world
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> or its id |
 | `poll` | string | yes | The poll to run, by its function name |
-| `timeout_seconds` | integer | no | How long the node may take (default 15, at most 30) |
+| `timeout_seconds` | integer | no | How long the outpost may take (default 15, at most 30) |
 
 ## `retry-endpoint`
 
 Retry an endpoint's gated connections
 
-Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the outpost recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
 
 - Route: `POST /api/v1/endpoints/{endpoint}:retry`
 - Gate: `endpoint:retry`
 - Assume: destructive, open-world
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `certificate` | string | no | A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged |
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
-| `host_key` | string | no | The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
+| `host_key` | string | no | The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the outpost's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
 
 ## `rotate-endpoint-token`
 
@@ -695,10 +1030,104 @@ Mints a webhook endpoint's token anew (#1024): a post bearing the old one answer
 - Route: `POST /api/v1/endpoints/{endpoint}:rotateToken`
 - Gate: `endpoint:update`
 - Assume: destructive
+- Agent class: destructive
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `endpoint` | string | yes | The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does |
+
+## `list-event-rule`
+
+List event rules
+
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+
+- Route: `GET /api/v1/event-rules`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Agent class: read
+- Arguments: none
+
+## `get-event-rule`
+
+Get an event rule
+
+Returns one event rule by name, with its live state as counts over the components the caller may read. Gated by rule:read.
+
+- Route: `GET /api/v1/event-rules/{name}`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The rule's name |
+
+## `get-event-rule-state`
+
+Get an event rule's live state
+
+What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.
+
+- Route: `GET /api/v1/event-rules/{name}/state`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The rule's name |
+
+## `preview-event-rule`
+
+Preview an event rule
+
+Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+
+- Route: `POST /api/v1/event-rules:preview`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `clear_criteria` | object | no |  |
+| `clear_sustain` | string | no | Accepted and ignored, like fire_sustain |
+| `fire_criteria` | object | yes |  |
+| `fire_sustain` | string | no | Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone |
+| `sample_key` | string | yes | The property or metric the candidate rule reads |
+| `selector` | object | no |  |
+
+## `list-event-type`
+
+List event types
+
+Lists every registered event type (official and custom). The catalog is fleet-wide reference data. Gated by event_type:read.
+
+- Route: `GET /api/v1/event-types`
+- Gate: `event_type:read`
+- Assume: read-only, idempotent
+- Agent class: read
+- Arguments: none
+
+## `validate-expression`
+
+Validate an expression
+
+Compiles an expression against a registered site's environment and answers whether it compiles, with positioned diagnostics, and the site's bindings, admitted builtins and run budget, all generated from the site's declaration. For criteria a sample key is required, and types the value (a metric is a number; a property is text, or a bool for a bool property). For calc the key is the rule's output key, typing the result, and the rule's inputs (and owner_kind, component by default) give the bindings, each input's alias bound to the list of its key's type (a system also binds members, one record per member); an input that is unknown, or an alias that is not an identifier, is reserved or repeats, is a 422; a name the expression uses that no alias binds is a diagnostic carrying that name (unbound); the answer's value_type so reveals a key's lane and data type to a rule:read holder, as the rule list already does. Compiles without the engine's program cache and stores and runs nothing. An unknown site, a missing or unknown key is a 422. Gated by rule:read.
+
+- Route: `POST /api/v1/expressions:validate`
+- Gate: `rule:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `inputs` | array | no | For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid) |
+| `key` | string | no | The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield |
+| `owner_kind` | string | no | For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per slot-bound member with value.<alias> and has.<alias> per input; defaults to component |
+| `site` | string | yes | Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
+| `source` | string | yes | The expression |
 
 ## `list-locations`
 
@@ -709,7 +1138,27 @@ Lists the locations the caller may read, each filtered to its scope subtree. Gat
 - Route: `GET /api/v1/locations`
 - Gate: `location:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
+
+## `create-location`
+
+Create a location
+
+Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
+
+- Route: `POST /api/v1/locations`
+- Gate: `location:create`
+- Assume: adds
+- Agent class: write
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `expected_name` | string | no | The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. |
+| `label` | string | no | What an operator reads; the name is the address |
+| `location_type` | string | yes | The location_type, by name or uuid (campus, building, ...) |
+| `name` | string | no | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule. |
+| `parent` | string | no | Parent location name; omit for a root location |
 
 ## `get-location`
 
@@ -720,20 +1169,69 @@ Fetches a location by name within the caller's read scope. Out of scope is a non
 - Route: `GET /api/v1/locations/{name}`
 - Gate: `location:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
+| `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
+
+## `update-location`
+
+Update a location
+
+Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+
+- Route: `PATCH /api/v1/locations/{name}`
+- Gate: `location:update`
+- Assume: destructive
+- Agent class: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `label` | string | no | A new operator-facing label |
+| `location_type` | string | no | Re-types the location: a location_type, by name or uuid |
 | `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
 
 ## `get-location-health`
 
 Read a location's health
 
-The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
 - Route: `GET /api/v1/locations/{name}/health`
 - Gate: `location:read`
 - Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
+
+## `list-location-metrics`
+
+List a location's effective metrics
+
+Every metric the location's type declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
+
+- Route: `GET /api/v1/locations/{name}/metrics`
+- Gate: `location:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The location's name, or a dotted address (e.g. boi.17c.415a) |
+
+## `list-location-properties`
+
+List a location's effective properties
+
+Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+
+- Route: `GET /api/v1/locations/{name}/properties`
+- Gate: `location:read`
+- Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -741,88 +1239,52 @@ The location's current verdict, worst-wins over every system placed anywhere ben
 
 ## `create-locations-from-template`
 
-Start a subtree of places from a template
+Start a subtree of locations from a template
 
-Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+Creates a subtree of locations from a location template under a parent location (or as a new top), each location's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template puts in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
 
 - Route: `POST /api/v1/locations:createFromTemplate`
 - Gate: `location:create`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `label` | string | no | The subtree root's label |
 | `name` | string | no | The subtree root's name; omitted takes the template's, else its type's name rule mints one |
-| `parent` | string | no | The place the subtree sits under, by name or dotted path; omitted makes it a new top |
-| `template` | string | yes | The place template, by name |
-
-## `list-nodes`
-
-List nodes
-
-Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.
-
-- Route: `GET /api/v1/nodes`
-- Gate: `node:read`
-- Assume: read-only, idempotent
-- Arguments: none
-
-## `get-node`
-
-Get a node
-
-Fetches a node by name. Requires an all-scope read. Gated by node:read.
-
-- Route: `GET /api/v1/nodes/{name}`
-- Gate: `node:read`
-- Assume: read-only, idempotent
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | yes | The node's unique name |
-
-## `list-node-logs`
-
-List a node's recent self-logs
-
-Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.
-
-- Route: `GET /api/v1/nodes/{name}/logs`
-- Gate: `node:read`
-- Assume: read-only, idempotent
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | yes | The node's unique name |
+| `parent` | string | no | The location the subtree sits under, by name or dotted path; omitted makes it a new top |
+| `template` | string | yes | The location template, by name |
 
 ## `preview-notification-type`
 
 Preview a notification type against an alarm
 
-Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
 
 - Route: `POST /api/v1/notification-types/{name}:preview`
 - Gate: `notification_type:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
 | `alarm` | string | no | The alarm's id; absent previews the component's most recently raised alarm |
 | `component` | string | yes | The component the alarm is on, by name or dotted address |
 | `name` | string | yes | The notification type's name or uuid |
-| `subject` | string | no | A draft subject template to render instead of the stored one, so an editor previews before it saves |
-| `text` | string | no | A draft text template to render instead of the stored one |
+| `subject` | string | no | A draft subject to render instead of the stored one, so an editor previews before it saves |
+| `text` | string | no | A draft text to render instead of the stored one |
 | `transition` | string | no | The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) |
 
 ## `list-notification`
 
 List notifications
 
-The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.
 
 - Route: `GET /api/v1/notifications`
 - Gate: `notification:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -831,15 +1293,58 @@ The messages sent, on their way, or failed about alarms, newest first, filtered 
 | `status` | string | no | Only those in this status |
 | `target` | string | no | Only those to this target, by name |
 
+## `list-outposts`
+
+List outposts
+
+Lists the edge outposts. An outpost is fleet-wide, so listing requires an all-scope read. Gated by outpost:read.
+
+- Route: `GET /api/v1/outposts`
+- Gate: `outpost:read`
+- Assume: read-only, idempotent
+- Agent class: read
+- Arguments: none
+
+## `get-outpost`
+
+Get an outpost
+
+Fetches an outpost by name. Requires an all-scope read. Gated by outpost:read.
+
+- Route: `GET /api/v1/outposts/{name}`
+- Gate: `outpost:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The outpost's unique name |
+
+## `list-outpost-logs`
+
+List an outpost's recent self-logs
+
+Returns the outpost's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the outpost), newest first, bounded to the last 24 hours. Gated by outpost:read; an out-of-scope outpost is a non-disclosing 404.
+
+- Route: `GET /api/v1/outposts/{name}/logs`
+- Gate: `outpost:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The outpost's unique name |
+
 ## `list-products`
 
 List products
 
-Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
 
 - Route: `GET /api/v1/products`
 - Gate: `product:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `get-product`
@@ -851,6 +1356,7 @@ Fetches a product by its name or its uuid. Either form resolves, so `omniglass p
 - Route: `GET /api/v1/products/{id}`
 - Gate: `product:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -865,6 +1371,7 @@ Lists the secret_type shapes a secret can take, for the create form. Gated by se
 - Route: `GET /api/v1/secret-types`
 - Gate: `secret:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-secrets`
@@ -876,37 +1383,19 @@ Lists the secrets the caller may see, with masked fields, filtered to the read s
 - Route: `GET /api/v1/secrets`
 - Gate: `secret:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
-
-## `create-secret`
-
-Create a secret
-
-Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).
-
-- Route: `POST /api/v1/secrets`
-- Gate: `secret:create`
-- Assume: adds
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `admin_sensitive` | boolean | no | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
-| `fields` | object | yes | The operator field map, validated against the type shape |
-| `label` | string | no | What an operator reads in lists and pickers (Polling community); omit to fall back to the name |
-| `name` | string | yes | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
-| `owner` | string | no | The owning entity's name; omit for a platform secret |
-| `owner_kind` | string | yes | Which tier owns this secret (the system band is retired, ADR-0052) |
-| `secret_type` | string | yes | A secret_type id |
 
 ## `create-standard-from-template`
 
 Create a standard from a template
 
-Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
+Writes one standard of your own (official false) from a standard template in the catalog: its slots, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
 
 - Route: `POST /api/v1/standards:createFromTemplate`
 - Gate: `standard:create`
 - Assume: adds
+- Agent class: write
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -924,6 +1413,7 @@ Lists the systems the caller may read, each filtered to its scope subtree. Gated
 - Route: `GET /api/v1/systems`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `get-system`
@@ -935,6 +1425,55 @@ Fetches a system by name within the caller's read scope. Out of scope is a non-d
 - Route: `GET /api/v1/systems/{name}`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+
+## `update-system`
+
+Update a system
+
+Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a slot name the system declares itself is a 409 naming the slot, since a slot name must mean one slot in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited slot moves onto the new standard's slot of the same name when it is still a typed match and the slot has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+
+- Route: `PATCH /api/v1/systems/{name}`
+- Gate: `system:update`
+- Assume: destructive
+- Agent class: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `label` | string | no | A new operator-facing label |
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `standard_id` | string | no | A new standard, by handle or uuid; "" clears it (a one-off system) |
+| `system_type_id` | string | no | A new system_type, by name or uuid; "" clears it (an unclassified system) |
+
+## `list-system-alarms`
+
+List a system's members' alarms
+
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/alarms`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+
+## `list-system-events`
+
+List a system's recent events, members included
+
+Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/events`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -944,11 +1483,75 @@ Fetches a system by name within the caller's read scope. Out of scope is a non-d
 
 Read a system's health
 
-The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/health`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+
+## `list-system-logs`
+
+List a system's members' recent log lines
+
+Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/logs`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+| `severity` | string | no | Only lines at this severity or more severe (RFC 5424's eight levels); a line with no severity is left out |
+| `source` | string | no | Only lines that arrived on this channel |
+
+## `list-system-members`
+
+List the components in a system
+
+The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/members`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | Name of the system, or a dotted address (e.g. boi.17c.$sys.av) |
+
+## `add-system-member`
+
+Put a component in a system
+
+Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update, and also needs component:update, because the binding writes onto the component (its primary, its label, the system band of its cascade): each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
+
+- Route: `PUT /api/v1/systems/{name}/members/{component}`
+- Gate: `system:update`
+- Assume: destructive, idempotent
+- Agent class: destructive
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `component` | string | yes | Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
+| `name` | string | yes | Name of the system, or a dotted address (e.g. boi.17c.$sys.av) |
+
+## `list-system-metrics`
+
+List a system's effective metrics
+
+Every metric the system's standard declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/metrics`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -963,6 +1566,7 @@ The samples behind the effective read's latest value for one series, newest firs
 - Route: `GET /api/v1/systems/{name}/metrics/{metric}/samples`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -973,6 +1577,21 @@ The samples behind the effective read's latest value for one series, newest firs
 | `name` | string | yes | The owner's name or uuid |
 | `resolution` | integer | no | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
+## `list-system-properties`
+
+List a system's properties and where each stands
+
+Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+- Route: `GET /api/v1/systems/{name}/properties`
+- Gate: `system:read`
+- Assume: read-only, idempotent
+- Agent class: read
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes | The system's name, or a dotted address (e.g. boi.17c.$sys.av) |
+
 ## `list-system-property-series`
 
 Read one property series' change history
@@ -982,6 +1601,7 @@ The change history behind the effective value for one property series, newest fi
 - Route: `GET /api/v1/systems/{name}/properties/{property}/samples`
 - Gate: `system:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -996,19 +1616,20 @@ The change history behind the effective value for one property series, newest fi
 
 Start a whole system from a template
 
-Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each slot filled to its quorum and assigned, and the declared values. A component whose slot you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the slots.
 
 - Route: `POST /api/v1/systems:createFromTemplate`
 - Gate: `system:create`
 - Assume: adds
+- Agent class: credential_destination
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `attach` | object | no | Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached |
+| `attach` | object | no | Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached |
 | `label` | string | no | The system's label |
-| `location` | string | no | The place the system and its components sit in, by name or dotted path |
+| `location` | string | no | The location the system and its components sit in, by name or dotted path |
 | `name` | string | no | The system's name; minted from its type when empty |
-| `node` | string | no | The node the endpoints are placed on; needed when any component attaches |
+| `outpost` | string | no | The outpost the endpoints are placed on; needed when any component attaches |
 | `standard` | string | no | A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name |
 | `template` | string | yes | The system template, by name |
 
@@ -1021,6 +1642,7 @@ Lists the tasks whose endpoint's owning component the caller may read (the compo
 - Route: `GET /api/v1/tasks`
 - Gate: `task:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-templates`
@@ -1032,6 +1654,7 @@ Lists the template catalog this binary ships, ordered by kind then name, optiona
 - Route: `GET /api/v1/templates`
 - Gate: `template:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1046,6 +1669,7 @@ Reads one template from the catalog by name, whole: its kind and the body that k
 - Route: `GET /api/v1/templates/{template}`
 - Gate: `template:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -1055,33 +1679,36 @@ Reads one template from the catalog by name, whole: its kind and the body that k
 
 List the transports the platform speaks
 
-Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
+Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
 
 - Route: `GET /api/v1/transports`
 - Gate: `endpoint:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-unclaimed-sources`
 
 List the sources no endpoint claims
 
-The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as nodes are.
+The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by outpost:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as outposts are.
 
 - Route: `GET /api/v1/unclaimed-sources`
-- Gate: `node:read`
+- Gate: `outpost:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `list-vendors`
 
 List vendors
 
-Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
+Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
 
 - Route: `GET /api/v1/vendors`
 - Gate: `vendor:read`
 - Assume: read-only, idempotent
+- Agent class: read
 - Arguments: none
 
 ## `run-views`
@@ -1093,6 +1720,7 @@ Reads each binding's history from one snapshot and answers the tail cursor it wa
 - Route: `POST /api/v1/views:run`
 - Gate: `view:read`
 - Assume: read-only, idempotent
+- Agent class: read
 
 | Argument | Type | Required | Description |
 |---|---|---|---|

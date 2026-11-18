@@ -12,7 +12,7 @@ import type { MemberContext } from "../lib/detail";
 
 const decl: StandardMapDecl = { aspect: 1.8, positions: [] };
 
-type Spec = [role: string, roleLabel: string, position: number, x: number, y: number, name?: string];
+type Spec = [slot: string, slotLabel: string, position: number, x: number, y: number, name?: string];
 const SPECS: Spec[] = [
   ["projection", "Projection", 1, 0.5, 0.06, "projector-1"],
   ["confidence-display", "Confidence Display", 1, 0.85, 0.12, "display-2"],
@@ -27,13 +27,13 @@ const SPECS: Spec[] = [
   ["camera", "Camera", 2, 0.65, 0.94, "cam-2"],
   ["touch-control", "Touch Control", 1, 0.08, 0.3, "panel-1"],
 ];
-const markers: MapMarker[] = SPECS.map(([role, roleLabel, position, x, y, name]) => ({
+const markers: MapMarker[] = SPECS.map(([slot, slotLabel, position, x, y, name]) => ({
   x,
   y,
-  role,
-  roleLabel,
+  slot,
+  slotLabel,
   position,
-  occupant: name ? { name, componentId: `c-${role}-${position}`, down: false } : undefined,
+  occupant: name ? { name, componentId: `c-${slot}-${position}`, down: false } : undefined,
 }));
 
 const member: MemberContext = {
@@ -126,5 +126,14 @@ describe("the system map's labels fit and do not collide (#1072)", () => {
     };
     expect(anchorOf(320)).toContain("items-start");
     expect(anchorOf(1280)).toContain("items-center");
+  });
+});
+
+describe("the system map's subject stamp (#2122)", () => {
+  it("stamps each occupied marker as its component, by name, for omnibot", () => {
+    const map = mount(1280);
+    const stamped = [...map.querySelectorAll<HTMLElement>("[data-subject-kind]")];
+    expect(stamped.map((el) => el.dataset.subjectKind)).toEqual(markers.filter((m) => m.occupant).map(() => "component"));
+    expect(stamped.map((el) => el.dataset.subjectRef)).toEqual(markers.filter((m) => m.occupant).map((m) => m.occupant!.name));
   });
 });

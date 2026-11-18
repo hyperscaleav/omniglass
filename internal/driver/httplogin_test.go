@@ -103,7 +103,7 @@ func TestHTTPLoginRefusals(t *testing.T) {
 			s.Commands[0].Request.Headers = map[string]string{"x-session": "x"}
 		}, "is the one the login sends"},
 		{"a re-probe beside the login", func(s *driver.Spec) { s.Session.Reprobe = "10m" }, "reprobe"},
-		// The credential reaches a node only with a task.
+		// The credential reaches an outpost only with a task.
 		{"a login with commands and no poll", func(s *driver.Spec) { s.Polls = nil }, "poll"},
 	}
 	for _, tc := range cases {
