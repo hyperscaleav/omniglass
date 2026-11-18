@@ -812,10 +812,10 @@ func (p *PG) UpdatePersonProfile(ctx context.Context, userID string, patch Perso
 		return fmt.Errorf("storage: begin update person profile: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var beforeUsername, beforeLabel string
+	var beforeUsername, beforeLabel, beforeEmail string
 	if err := tx.QueryRow(ctx,
-		`select username, coalesce(label, '') from person where user_id = $1 for update`,
-		userID).Scan(&beforeUsername, &beforeLabel); err != nil {
+		`select username, coalesce(label, ''), coalesce(email, '') from person where user_id = $1 for update`,
+		userID).Scan(&beforeUsername, &beforeLabel, &beforeEmail); err != nil {
 		return fmt.Errorf("storage: profile before-image: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
@@ -830,8 +830,12 @@ func (p *PG) UpdatePersonProfile(ctx context.Context, userID string, patch Perso
 	if patch.Label != nil {
 		afterLabel = *patch.Label
 	}
-	beforeImage := map[string]any{"username": beforeUsername, "label": beforeLabel}
-	afterImage := map[string]any{"username": beforeUsername, "label": afterLabel}
+	afterEmail := beforeEmail
+	if patch.Email != nil {
+		afterEmail = *patch.Email
+	}
+	beforeImage := map[string]any{"username": beforeUsername, "label": beforeLabel, "email": beforeEmail}
+	afterImage := map[string]any{"username": beforeUsername, "label": afterLabel, "email": afterEmail}
 	if err := writeAuditRes(ctx, tx, userID, "update", "user", userID, beforeImage, afterImage); err != nil {
 		return err
 	}
@@ -1574,7 +1578,7 @@ func (p *PG) PurgeUser(ctx context.Context, actorID, userID string, action scope
 	before := map[string]any{"kind": userKind, "archived": archivedAt != nil}
 	var username, email, label string
 	if err := tx.QueryRow(ctx,
-		`select username, coalesce(email, ''), coalesce(label, '') from person where user_id = $1`,
+		`select username, coalesce(email, ''), coalesce(label, '') from person where user_id = $1 for update`,
 		userID).Scan(&username, &email, &label); err == nil {
 		before["username"] = username
 		if email != "" {

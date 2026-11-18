@@ -533,6 +533,14 @@ func TestPrincipalAuditRowsCarryTheirImages(t *testing.T) {
 	prof.wantHeld(t, "profile", "label", "Alice")
 	prof.wantHeld(t, "profile", "username", "alice")
 
+	newEmail := "a2@example.test"
+	if err := gw.UpdatePersonProfile(ctx, alice.ID, storage.PersonProfilePatch{Email: &newEmail}); err != nil {
+		t.Fatalf("profile email: %v", err)
+	}
+	em := latestAudit(t, dsn, "user", alice.ID, "update")
+	em.wantMoved(t, "profile email", "email")
+	em.wantHeld(t, "profile email", "email", "a@example.test")
+
 	if err := gw.SetUserAvatar(ctx, root.ID, alice.ID, "AAAAavatarbytes", all); err != nil {
 		t.Fatalf("avatar: %v", err)
 	}
@@ -567,7 +575,7 @@ func TestPrincipalAuditRowsCarryTheirImages(t *testing.T) {
 	}
 	purge := latestAudit(t, dsn, "user", alice.ID, "purge")
 	purge.wantHeld(t, "purge", "username", "alice")
-	purge.wantHeld(t, "purge", "email", "a@example.test")
+	purge.wantHeld(t, "purge", "email", "a2@example.test")
 	purge.wantHeld(t, "purge", "label", "Alice Two")
 	purge.wantHeld(t, "purge", "kind", "person")
 	purge.wantHeld(t, "purge", "archived", true)

@@ -215,7 +215,10 @@ func upsertBindingTx(ctx context.Context, tx pgx.Tx, actorID, scope, namespace s
 		return nil, fmt.Errorf("storage: upsert setting binding: %w", err)
 	}
 	o := SettingBinding{Scope: scope, Namespace: namespace, Doc: doc, Locks: locks}
-	if err := writeAuditRes(ctx, tx, actorID, "update", "settings", namespace, before, o); err != nil {
+	// The after image takes the before image's shape: SettingBinding has no json
+	// tags, so the struct itself would image as Doc and Locks.
+	after := map[string]any{"scope": o.Scope, "namespace": o.Namespace, "doc": o.Doc, "locks": o.Locks}
+	if err := writeAuditRes(ctx, tx, actorID, "update", "settings", namespace, before, after); err != nil {
 		return nil, err
 	}
 	return &o, nil
