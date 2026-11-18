@@ -440,6 +440,7 @@ function Row(props: { row: PanelRow; server: PlatformServer; view: PlatformView;
   const chart = (spark: boolean) => (
     <TimeseriesChart
       spark={spark}
+      subject={props.server.component ? { kind: "metric", ref: `${props.server.component}/${props.row.key}` } : undefined}
       buckets={series.data?.buckets ?? []}
       resolutionMs={PANEL_SERIES_RESOLUTION_S * 1000}
       now={now()}

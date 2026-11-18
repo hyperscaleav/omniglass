@@ -223,8 +223,10 @@ export function namePage(name: string | undefined) {
 }
 
 // handOverPage puts the page in the tray when the person has gathered nothing
-// else: what they are looking at is the context.
+// else: what they are looking at is the context. A page handed over earlier
+// and not yet sent is replaced, so the tray never names a page left behind.
 export function handOverPage(pathname: string, search: string) {
+  setSubjects((cur) => cur.filter((s) => s.kind !== "page"));
   if (subjects().length > 0) return;
   const page = pageSubject(pathname, search, pageName());
   if (page) addSubjects([page]);

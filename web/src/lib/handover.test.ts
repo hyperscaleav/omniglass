@@ -108,6 +108,12 @@ describe("the hand-over key", () => {
     expect(tray()).toEqual([{ kind: "alarm", ref: "hq.a/offline" }]);
   });
 
+  it("replaces a page handed over earlier and not yet sent with the page the person is on", () => {
+    handOverPage("/alarms", "?state=active");
+    handOverPage("/systems/auditorium", "");
+    expect(tray()).toEqual([{ kind: "page", ref: "/systems/auditorium" }]);
+  });
+
   it("puts the page in the tray and opens omnibot, and does nothing for anyone without assistant:use", () => {
     const here = () => ({ pathname: "/alarms", search: "?state=active" });
     const press = (may: boolean) => {
