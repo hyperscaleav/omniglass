@@ -74,6 +74,14 @@ func TestAgentStatusSaysAFailedRunStopped(t *testing.T) {
 	}
 }
 
+func TestAgentStatusSaysWhyAFailedRunStopped(t *testing.T) {
+	got, _ := agentStatus(t, "body", `{"workflow":"agent-build","state":"failed","run_url":"`+runURL+`","reason":"It used all 60 of its turns.","summary":"Apply run:dev-gha again to retry."}`)
+	if !strings.Contains(got, "stopped before it finished ([run]("+runURL+")). It used all 60 of its turns. Nothing was pushed.") ||
+		!strings.Contains(got, "> Apply run:dev-gha again to retry.") {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestAgentStatusConclusion(t *testing.T) {
 	for _, c := range []struct{ facts, want string }{
 		{`{"state":"done","pushed":"abc1234"}`, "success"},
@@ -94,5 +102,49 @@ func TestAgentStatusRejectsBadInput(t *testing.T) {
 	}
 	if _, code := agentStatus(t, "nope", `{}`); code != 64 {
 		t.Fatalf("bad mode: exit %d, want 64", code)
+	}
+}
+
+func agentStopReason(t *testing.T, notes string) (string, int) {
+	t.Helper()
+	requireTools(t)
+	cmd := exec.Command("bash", "agent-stop-reason.sh")
+	cmd.Stdin = strings.NewReader(notes)
+	var out, errb bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	err := cmd.Run()
+	code := 0
+	if exit, ok := err.(*exec.ExitError); ok {
+		code = exit.ExitCode()
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(out.String()), code
+}
+
+func TestAgentStopReasonNamesTheTurnCap(t *testing.T) {
+	got, _ := agentStopReason(t, `[
+		{"annotation_level":"warning","message":"Node.js 20 is deprecated."},
+		{"annotation_level":"failure","message":"Process completed with exit code 1."},
+		{"annotation_level":"failure","message":"Action failed with error: SDK execution error: Error: Claude Code returned an error result: Reached maximum number of turns (60)"}]`)
+	if got != "It used all 60 of its turns." {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestAgentStopReasonGivesAnyOtherError(t *testing.T) {
+	got, _ := agentStopReason(t, `[{"annotation_level":"failure","message":"Process completed with exit code 1."},
+		{"annotation_level":"failure","message":"Action failed with error:\n  credit balance too low"}]`)
+	if got != "It failed with: Action failed with error: credit balance too low" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestAgentStopReasonSaysNothingWithoutAnError(t *testing.T) {
+	if got, _ := agentStopReason(t, `[{"annotation_level":"failure","message":"Process completed with exit code 1."}]`); got != "" {
+		t.Fatalf("got %q", got)
+	}
+	if _, code := agentStopReason(t, `{}`); code != 2 {
+		t.Fatalf("object: exit %d, want 2", code)
 	}
 }

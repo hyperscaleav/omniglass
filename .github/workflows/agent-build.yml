@@ -17,6 +17,9 @@ on:
 
 permissions:
   contents: read
+  # Read this job's own errors, so a run that stops can say why.
+  actions: read
+  checks: read
 
 concurrency:
   group: agent-build-${{ github.event.issue.number }}
@@ -129,6 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           cp scripts/agent-status.sh "${RUNNER_TEMP}/agent-status.sh"
+          cp scripts/agent-stop-reason.sh "${RUNNER_TEMP}/agent-stop-reason.sh"
           body=$(jq -cn --arg run "$RUN_URL" '{workflow: "agent-build", state: "working", run_url: $run}' \
             | bash "${RUNNER_TEMP}/agent-status.sh" body)
           # A bare assignment, so a failed post fails this step and the final edit is skipped.
@@ -228,6 +232,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           COMMENT: ${{ steps.status.outputs.comment }}
           JOB: ${{ job.status }}
+          RUN_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
           pr=$(gh api graphql -F n="$NUMBER" -f o="$ORG" -f r="${REPO#*/}" -f query='
@@ -237,10 +242,20 @@ jobs:
               } }
             }' --jq '.data.repository.issue.closedByPullRequestsReferences.nodes[0].url // ""' || echo "")
           state=done; [ "$JOB" = success ] || state=failed
+          # A failed run says why, from the error its job raised (a turn cap, say).
+          reason=""
+          if [ "$state" = failed ]; then
+            job=$(GH_TOKEN="$RUN_TOKEN" gh api "repos/${REPO}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs" \
+              --jq '.jobs[] | select(.name == "build") | .id' | head -n 1 || true)
+            if [ -n "$job" ]; then
+              reason=$(GH_TOKEN="$RUN_TOKEN" gh api "repos/${REPO}/check-runs/${job}/annotations" \
+                | bash "${RUNNER_TEMP}/agent-stop-reason.sh" || true)
+            fi
+          fi
           summary=""; [ -f "${RUNNER_TEMP}/agent-summary.md" ] && summary=$(head -c 4000 "${RUNNER_TEMP}/agent-summary.md")
           if [ "$state" = failed ]; then summary="${summary:+${summary}$'\n\n'}Apply run:dev-gha again to retry."; fi
-          body=$(jq -cn --arg run "$RUN_URL" --arg pr "$pr" --arg state "$state" --arg sum "$summary" \
-            '{workflow: "agent-build", state: $state, run_url: $run, pr_url: $pr, summary: $sum}' \
+          body=$(jq -cn --arg run "$RUN_URL" --arg pr "$pr" --arg state "$state" --arg why "$reason" --arg sum "$summary" \
+            '{workflow: "agent-build", state: $state, run_url: $run, pr_url: $pr, reason: $why, summary: $sum}' \
             | bash "${RUNNER_TEMP}/agent-status.sh" body)
           gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT}" -f body="$body" --silent \
             || echo "::warning::could not update the status comment (${COMMENT}); it still says agent-build is working"

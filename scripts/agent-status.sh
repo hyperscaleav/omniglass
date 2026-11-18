@@ -10,7 +10,8 @@
 #
 # Input is one JSON object on stdin. body reads workflow ("agent-fix" or
 # "agent-build"), state ("working", "done" or "failed"), run_url, pushed (the
-# short SHA the run pushed, or ""), pr_url (the PR a build opened, or "") and
+# short SHA the run pushed, or ""), pr_url (the PR a build opened, or ""),
+# reason (why a failed run stopped, read from the job's error, or "") and
 # summary (the agent's own words, or ""). conclusion reads state and pushed.
 #
 # Exit 0 with the answer on stdout; 2 when the input is not a JSON object;
@@ -46,10 +47,12 @@ printf '%s' "$facts" | jq -r '
 	| (.pushed // "") as $sha
 	| (.pr_url // "") as $pr
 	| (.summary // "" | gsub("^\\s+|\\s+$"; "")) as $sum
+	| (.reason // "" | gsub("^\\s+|\\s+$"; "")) as $why
 	| (if $run == "" then "" else " ([run](\($run)))" end) as $link
 	| "<!-- agent-status -->\n"
 	+ (if .state == "working" then "**\($w)** is working on this\($link)."
 	   elif .state == "failed" then "**\($w)** stopped before it finished\($link)."
+	     + (if $why != "" then " " + $why else "" end)
 	     + (if $sha != "" then " It pushed \($sha) first." else " Nothing was pushed." end)
 	   elif $pr != "" then "**\($w)** opened \($pr)\($link)."
 	   elif $sha != "" then "**\($w)** pushed \($sha)\($link)."

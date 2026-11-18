@@ -92,7 +92,8 @@ An agent run says so where it was started. agent-build posts one comment on the 
 agent-fix posts one on the PR, each saying the agent is working, with a link to the run. When
 the run stops, the same comment is edited to say what happened: the PR a build opened, the commit
 a fix pushed, or that nothing was pushed, followed by the agent's own few lines on why. A run that
-breaks says so in that comment too.
+breaks says so in that comment too, with the reason its job gave (all its turns used, say) and how
+to retry.
 
 agent-fix also puts an `agent-fix` check on the PR's head. It stays in progress while the agent
 works, then finishes as success when the run pushed, neutral when it pushed nothing, and failure
