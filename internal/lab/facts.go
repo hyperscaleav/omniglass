@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -91,18 +90,25 @@ func SetupCommand(apiPath string, body map[string]any) (string, error) {
 	case len(parts) == 3 && collection(parts[0]) && parts[1] != "" && collection(parts[2]):
 		// A sub-collection of one named parent (a component's alarms):
 		// `omniglass component alarm create <parent>`, as the CLI nests it.
-		words = []string{"omniglass", strings.TrimSuffix(parts[0], "s"), strings.TrimSuffix(parts[2], "s"), "create", parts[1]}
+		words = []string{"omniglass", strings.TrimSuffix(parts[0], "s"), strings.TrimSuffix(parts[2], "s"), "create", shellWord(parts[1])}
 	default:
 		return "", refuse
 	}
 	for _, k := range SortedKeys(body) {
-		v := fmt.Sprint(body[k])
-		if strings.ContainsAny(v, " \t\"'$`\\") {
-			v = strconv.Quote(v)
-		}
-		words = append(words, "--"+strings.ReplaceAll(k, "_", "-"), v)
+		words = append(words, "--"+strings.ReplaceAll(k, "_", "-"), shellWord(fmt.Sprint(body[k])))
 	}
 	return strings.Join(words, " "), nil
+}
+
+// shellWord is v as one shell word that a copied command passes through
+// as written: single-quoted when it holds anything a shell would split on
+// or expand (a component address's $comp, a message's space), since double
+// quotes still expand $.
+func shellWord(v string) string {
+	if !strings.ContainsAny(v, " \t\"'$`\\") {
+		return v
+	}
+	return "'" + strings.ReplaceAll(v, "'", `'\''`) + "'"
 }
 
 // FormatLimits names a container's caps as the topology table shows them:

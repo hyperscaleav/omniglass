@@ -5150,6 +5150,12 @@
       "type": "text",
       "nullable": false,
       "default": "'local'::text"
+     },
+     {
+      "name": "sample_window",
+      "type": "interval",
+      "nullable": false,
+      "default": "'00:00:00'::interval"
      }
     ],
     "checks": [
@@ -5172,6 +5178,10 @@
      {
       "name": "event_rule_sample_lane_check",
       "expr": "CHECK ((sample_lane = ANY (ARRAY['property'::text, 'metric'::text])))"
+     },
+     {
+      "name": "event_rule_sample_window_check",
+      "expr": "CHECK (((sample_window \u003e= '00:00:00'::interval) AND (sample_window \u003c= '7 days'::interval)))"
      }
     ],
     "uniques": [

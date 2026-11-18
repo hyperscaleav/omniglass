@@ -168,6 +168,11 @@ metric_types:
     data_type: int
     label: Open Files
     description: File descriptors the Omniglass process holds open, sockets included; absent where the platform does not expose them.
+  - name: process-uptime
+    data_type: float
+    unit: s
+    label: Uptime
+    description: Seconds since the Omniglass process started; a rule's age on a process key runs from it, so the refill after a restart does not read as growth.
   # The retention pass's figures (#1629): the server writes them on its own
   # platform component after each pass. A lane's instance is its name as the
   # pass keys it (metric, property, metric_trend, log_line/info, an override's
@@ -226,11 +231,14 @@ metric_types:
     unit: bytes
     label: Table Size
     description: On-disk bytes of one stored table with its indexes and toast; the metric table's is the sum of its day partitions.
-  - name: database-bytes
+  # The database's size (#1985), landed by the server on its own component
+  # every report window, not by the hourly retention pass: db-size-growing
+  # reads its growth over a day.
+  - name: db-size
     data_type: int
     unit: bytes
     label: Database Size
-    description: On-disk bytes of the whole Omniglass database.
+    description: On-disk bytes of the whole Omniglass database, as pg_database_size reads it, sampled each report window.
   # The server's data directory disk (#1707): how full the filesystem holding
   # the server's data directory is, landed on the server's own component every
   # report window. disk-nearly-full reads it.

@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/expression"
 )
@@ -22,6 +23,34 @@ type MetricInput struct {
 	Key       string    `expr:"key" doc:"The sample key the rule reads: a property or a metric, by name"`
 	Instance  string    `expr:"instance" doc:"The sample's instance (an endpoint), empty when it has none"`
 	Component Component `expr:"component" doc:"The component the sample is about"`
+	Window    []Point   `expr:"window" doc:"The series' samples over the rule's sample_window, oldest first, each a record of value and at (unix seconds), in at most 360 even buckets, each the mean of its newest 4 samples; empty for a rule with no sample_window. Read it with slope, growth and span"`
+	Age       float64   `expr:"age" doc:"How long the series has run, in seconds: since the process last started for a process's own key (process-uptime), else since the series' oldest sample still kept; gate a trend on it so a fill from empty or a refill after a restart is not growth"`
+}
+
+// Point is one point of the series a windowed rule reads (#1985): a value,
+// and when it was taken, in unix seconds (an expression environment holds no
+// time.Time). A window's points are bucket means (WindowBucket).
+type Point struct {
+	Value float64 `expr:"value" doc:"The bucket's mean value"`
+	At    float64 `expr:"at" doc:"The bucket's mean time, in unix seconds"`
+}
+
+// Window bounds (#1985).
+const (
+	// MaxSampleWindow is the longest window a rule reads: a week, past any
+	// trend worth alarming on and inside the metric lane's raw retention.
+	MaxSampleWindow = 7 * 24 * time.Hour
+	// MaxWindowPoints is the most points a window binds, whatever the
+	// series' cadence: the window is this many even buckets, each the mean
+	// of a bounded few samples, so a run's cost is bounded by the site's
+	// budget and not by how often the key is written.
+	MaxWindowPoints = 360
+)
+
+// WindowBucket is the width of one point of a window: the window over
+// MaxWindowPoints, kept to the microsecond a store's interval holds.
+func WindowBucket(window time.Duration) time.Duration {
+	return (window / MaxWindowPoints).Truncate(time.Microsecond)
 }
 
 // TextInput is the prepared input for a property whose data type is string
@@ -49,10 +78,12 @@ var (
 	boolEnv   = expression.MustEnv[BoolInput](expression.Bool, criteriaOptions()...)
 )
 
-// criteriaOptions are the criteria site's declaration: its builtins, and
-// its name, so the diagnostic rules for criteria run on its expressions.
+// criteriaOptions are the criteria site's declaration: its builtins and the
+// list functions (a metric's window is a list, #1985), and its name, so the
+// diagnostic rules for criteria run on its expressions.
 func criteriaOptions() []expression.Option {
-	return []expression.Option{expression.WithBuiltins(expression.CriteriaBuiltins()...), expression.WithSite("criteria")}
+	return []expression.Option{expression.WithBuiltins(expression.CriteriaBuiltins()...),
+		expression.WithListFunctions(expression.ListFunctions()...), expression.WithSite("criteria")}
 }
 
 // CriteriaEnv is the environment a criterion compiles against: the lane,
@@ -67,12 +98,16 @@ func CriteriaEnv(lane Lane, dataType string) expression.Env {
 	return textEnv
 }
 
-// Sample is one sample as a rule judges it.
+// Sample is one sample as a rule judges it, with its series' window and age
+// when the rule reads them (the window oldest first, the age in seconds; the
+// store reads both, Decide stays pure).
 type Sample struct {
 	Value     any
 	Key       string
 	Instance  string
 	Component Component
+	Window    []Point
+	Age       float64
 }
 
 // CriteriaError is a criterion refused at compile time, naming which
@@ -164,6 +199,24 @@ func (j *Judge) Warnings() []FieldDiagnostic {
 	return append(warningsOf("fire_criteria", j.fireProg), warningsOf("clear_criteria", j.clearProg)...)
 }
 
+// The metric criteria's series bindings, by name: the window and the age.
+const (
+	windowBinding = "window"
+	ageBinding    = "age"
+)
+
+// ReadsWindow reports whether either criterion reads the series' window, so
+// a store reads one only for a rule that asks for it.
+func (j *Judge) ReadsWindow() bool { return j.reads(windowBinding) }
+
+// ReadsAge reports whether either criterion reads the series' age, so a
+// store reads one only for a rule that asks for it.
+func (j *Judge) ReadsAge() bool { return j.reads(ageBinding) }
+
+func (j *Judge) reads(binding string) bool {
+	return j.fireProg.Reads(binding) || (j.clearProg != nil && j.clearProg.Reads(binding))
+}
+
 // Fire is the fire criterion, lowered.
 func (j *Judge) Fire() Criteria { return j.fire }
 
@@ -225,7 +278,7 @@ func (j *Judge) input(s Sample) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return MetricInput{Value: f, Key: s.Key, Instance: s.Instance, Component: s.Component}, nil
+		return MetricInput{Value: f, Key: s.Key, Instance: s.Instance, Component: s.Component, Window: s.Window, Age: s.Age}, nil
 	case j.dataType == "bool":
 		var b bool
 		switch v := s.Value.(type) {

@@ -6,7 +6,7 @@ summary: "The `component_type` registry returns as a nested taxonomy classifying
 ---
 
 - **Date:** 2026-08-07 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [storage](/architecture/storage/), [Products guide](/guides/admin/products/)
+  [storage](/architecture/storage/), [Products guide](/admin/products/)
 - **Decision:** The **`component_type`** registry returns: a seeded-plus-custom device-class taxonomy
   (`display`, `projector`, `screen`, `presentation-switcher`, `video-bar`, `dsp`, `amplifier`, `mic`,
   `camera`, `codec`, `control-processor`, `touch-panel`, ...) that **nests by `parent_id`** (`mic` over

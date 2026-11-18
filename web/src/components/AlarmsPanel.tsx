@@ -18,6 +18,7 @@ import { useSeverity } from "../lib/severity";
 import { entityLabel } from "../lib/entities";
 import SeverityBadge from "./SeverityBadge";
 import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
+import TroubleshootButton from "./TroubleshootButton";
 
 // AlarmsPanel: what is wrong with this component, and what was.
 //
@@ -206,6 +207,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                     />
                   </Show>
                   <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
+                  <TroubleshootButton alarm={a} />
                   {timelines.button(a.id, a.message)}
                 </div>
                 <Show when={timelines.isOpen(a.id)}>

@@ -1,0 +1,32 @@
+# Troubleshoot an alarm (#2164): one click from an alarm row hands omnibot that
+# alarm, by its component and when it was raised, and runs the triage-alarm
+# skill the server ships. The lab's server plays a recording
+# (internal/lab/omnibot-replay.yaml) that answers a triage run with a triage of
+# the meeting 405 video bar, so the alarm is raised there, off camera, and every
+# run goes the same way.
+title: Troubleshoot an alarm
+description: Hand an alarm to omnibot from its row and read where it says the fault is.
+setup:
+  - post: '/components/hq.west.level-4.meeting-405.$comp.videobar-1/alarms'
+    body: { severity: high, message: Video feed lost, dedup_key: walkthrough-troubleshoot }
+steps:
+  - goto: /explore
+    caption: Explore is the outline of every location in the fleet. Meeting 405 is on the fourth floor of the West Building.
+  - click: { role: button, name: Expand Headquarters }
+    caption: Open the campus.
+  - click: { role: button, name: Expand West Building }
+    caption: Then the building.
+  - click: { role: button, name: Expand Level 4 }
+    caption: Then the floor.
+  - click: { role: treeitem, name: Meeting 405 }
+    caption: Meeting 405 holds one system. Its panel says why it reads as it does.
+  - wait: { text: Video feed lost }
+    caption: The video bar has a High alarm. Its row offers omnibot, for a person who may ask it.
+  - click: { role: button, name: Troubleshoot Video feed lost with omnibot }
+    caption: Troubleshoot hands omnibot this alarm by its component and when it was raised, never what the screen shows.
+  - wait: { selector: '[data-testid=omnibot-step] >> nth=2', timeout: 30000 }
+    caption: Omnibot runs the triage skill. It reads the component, its alarms and its reachability, under your grants.
+  - wait: { text: the fault is on the device, timeout: 30000 }
+    caption: It says where the fault is and what it would do next, and asks before it runs anything.
+    poster: true
+    hold: 2500

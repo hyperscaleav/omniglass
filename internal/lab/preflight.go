@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -86,9 +87,17 @@ func PortFree(listen string, port int) error {
 	return ln.Close()
 }
 
-// ProcessAlive reports whether a process with the pid runs on this host: the
-// reaper's check that a lab's owner is gone.
-func ProcessAlive(pid int) bool { return processAlive(pid) }
+// ProcessAlive reports whether the process with the pid and start time runs on
+// this host: the reaper's check that a lab's owner is gone. A pid a different
+// process now holds reads as gone; an empty start asks about the pid alone.
+func ProcessAlive(pid int, start string) bool { return processAlive(pid, start) }
+
+// CurrentOwner is this process as a lab's owner: its pid, start time and PID
+// namespace, which together tell it from any other process that ever held
+// the pid.
+func CurrentOwner(host string) Owner {
+	return Owner{Host: host, PID: os.Getpid(), PIDNS: currentPIDNS(), Start: currentStart()}
+}
 
 // CurrentPIDNS names this process's PID namespace, recorded beside its pid as
 // a lab's owner.
