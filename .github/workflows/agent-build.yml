@@ -59,7 +59,10 @@ jobs:
         run: |
           set -euo pipefail
           teams=$(scripts/agent-trust.sh teams "$ORG")
-          issue=$(gh issue view "$NUMBER" --repo "$REPO" --json author,labels,locked)
+          # gh issue view has no locked field, so read the issue from the REST API
+          # in the same shape: author.login, labels[].name and locked.
+          issue=$(gh api "repos/${REPO}/issues/${NUMBER}" \
+            --jq '{author: {login: .user.login}, labels: [.labels[] | {name}], locked}')
           open_prs=$(gh api graphql -F n="$NUMBER" -f o="$ORG" -f r="${REPO#*/}" -f query='
             query($o: String!, $r: String!, $n: Int!) {
               repository(owner: $o, name: $r) { issue(number: $n) {
