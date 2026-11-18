@@ -143,6 +143,14 @@ func Get(key string) string {
 	return os.Getenv(key)
 }
 
+// Named reads a variable the operator names on the command line, as
+// omniglass lab run --omnibot-key-env does (#2109): its name is the operator's
+// choice, so it has no Registry entry, and the flag that names it is the
+// documentation. Every other read goes through Get.
+func Named(key string) string {
+	return os.Getenv(key)
+}
+
 // FactsJSON renders the registry as the generated env-var reference. The
 // trailing newline makes the committed file POSIX-clean.
 func FactsJSON() ([]byte, error) {

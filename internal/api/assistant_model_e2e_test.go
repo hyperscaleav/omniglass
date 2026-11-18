@@ -3,6 +3,7 @@ package api_test
 import (
 	"crypto/x509"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -78,7 +79,9 @@ func TestOmnibotRunsOnTheConfiguredModel(t *testing.T) {
 	defer srv1.Close()
 	defer srv2.Close()
 	refusing := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// A server that echoes the key it was sent, as some do.
+		// A server that echoes the key it was sent, as some do. Reading the
+		// request first keeps the client from seeing a reset instead of the 401.
+		_, _ = io.Copy(io.Discard, r.Body)
 		http.Error(w, `{"error":{"message":"bad credentials: `+strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")+`"}}`, http.StatusUnauthorized)
 	}))
 	defer refusing.Close()

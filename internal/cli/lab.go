@@ -377,7 +377,7 @@ func runLab(ctx context.Context, out io.Writer, version string, f labFlags) erro
 		return fmt.Errorf("--keep keeps a scale lab scenario's data (%s); %q is a seeded fleet, whose lab keeps its data already",
 			strings.Join(labscenario.Names(), ", "), f.scenario)
 	}
-	omnibotKey, err := labOmnibotKey(f.omnibotKeyEnv, os.Getenv)
+	omnibotKey, err := labOmnibotKey(f.omnibotKeyEnv, config.Named)
 	if err != nil {
 		return err
 	}
