@@ -23,6 +23,8 @@ type fakeSelfStore struct {
 	pool          storage.PoolStat
 	outbox        storage.OutboxStatus
 	outboxErr     error
+	connections   storage.ConnectionStatus
+	connectionErr error
 	dbSize        int64
 	dbSizeErr     error
 	written       []storage.PlatformMetric
@@ -45,6 +47,10 @@ func (f *fakeSelfStore) PoolStat() storage.PoolStat { return f.pool }
 
 func (f *fakeSelfStore) OutboxStatus(context.Context) (storage.OutboxStatus, error) {
 	return f.outbox, f.outboxErr
+}
+
+func (f *fakeSelfStore) ConnectionStatus(context.Context) (storage.ConnectionStatus, error) {
+	return f.connections, f.connectionErr
 }
 
 func (f *fakeSelfStore) DatabaseSize(context.Context) (int64, error) { return f.dbSize, f.dbSizeErr }
@@ -96,10 +102,12 @@ func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 	ctx := context.Background()
 	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
 	gw := &fakeSelfStore{database: settings.DatabaseSettings{SlowQueryMS: 900},
-		outbox: storage.OutboxStatus{Queued: 7, DueAge: 45 * time.Second}, dbSize: 1 << 30}
+		outbox:      storage.OutboxStatus{Queued: 7, DueAge: 45 * time.Second},
+		connections: storage.ConnectionStatus{Held: 31, Limit: 97, IdleInTransaction: 2, OldestTransactionAge: 90 * time.Second},
+		dbSize:      1 << 30}
 	sampled := false
 	rp := m.reporter(gw, "server-1", t.TempDir(), nil, func(context.Context, *platformmetric.Recorder) { sampled = true })
-	gw.pool = storage.PoolStat{Acquired: 3, Max: 12, EmptyAcquireCount: 4}
+	gw.pool = storage.PoolStat{Acquired: 3, Max: 12, AcquireCount: 80, EmptyAcquireCount: 4}
 	if err := rp.Report(ctx); err != nil {
 		t.Fatalf("report: %v", err)
 	}
@@ -118,6 +126,10 @@ func TestServerReporterGaugesThePoolAndReReadsTheSetting(t *testing.T) {
 	}
 	if got[writerclass.OutboxQueuedDepth] != 7 || got[writerclass.OutboxDueAge] != 45 {
 		t.Errorf("outbox gauges = %v, want depth 7 and due age 45 s", got)
+	}
+	if got[writerclass.DBConnectionCount] != 31 || got[writerclass.DBConnectionLimit] != 97 ||
+		got[writerclass.DBConnectionIdleInTransactionCount] != 2 || got[writerclass.DBTransactionOldestAge] != 90 {
+		t.Errorf("database connection gauges = %v, want 31 held of 97, 2 idle in a transaction, the oldest 90 s", got)
 	}
 	// The database's size is a figure of every window, not the retention
 	// pass's hour (#1985).
@@ -148,6 +160,24 @@ func TestServerReporterSaysNothingOfAnUnreadOutbox(t *testing.T) {
 	for _, r := range gw.written {
 		if r.Key == writerclass.OutboxQueuedDepth || r.Key == writerclass.OutboxDueAge || r.Key == writerclass.DBSize {
 			t.Errorf("an unread read reported %s = %v", r.Key, r.Value)
+		}
+	}
+}
+
+// TestServerReporterSaysNothingOfAnUnreadDatabase: a connection read that
+// fails costs its window's database-side figures, not a zero that was never
+// read (a database out of connections is the one that cannot answer).
+func TestServerReporterSaysNothingOfAnUnreadDatabase(t *testing.T) {
+	t.Parallel()
+	m := newServerMetrics(slog.New(slog.NewTextHandler(io.Discard, nil)), time.Now)
+	gw := &fakeSelfStore{connectionErr: errors.New("down")}
+	if err := m.reporter(gw, "server-1", t.TempDir(), nil).Report(context.Background()); err != nil {
+		t.Fatalf("report: %v", err)
+	}
+	for _, r := range gw.written {
+		switch r.Key {
+		case writerclass.DBConnectionCount, writerclass.DBConnectionLimit, writerclass.DBConnectionIdleInTransactionCount, writerclass.DBTransactionOldestAge:
+			t.Errorf("an unread database reported %s = %v", r.Key, r.Value)
 		}
 	}
 }

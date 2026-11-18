@@ -44,7 +44,7 @@ make                      # builds bin/omniglass and the omniglass:dev image, wi
 `make lab` is the short form of the last two. With a
 [release binary](https://github.com/hyperscaleav/omniglass/releases), run `omniglass lab run`.
 The console is at `http://127.0.0.1:8080/web`, signed in as `dev` / `dev`.
-[Try omniglass in five minutes](https://docs.omniglass.hyperscaleav.com/guides/lab/) is the guide:
+[Your first ten minutes](https://docs.omniglass.hyperscaleav.com/start/first-ten-minutes/) is the guide:
 what runs, the guided walkthroughs to follow, and why Docker is required.
 
 ## Repository layout
@@ -69,7 +69,7 @@ web/              the operator SPA
 
 The architecture, concepts, and contributor guide live in [`docs/`](docs/) and are
 published at [docs.omniglass.hyperscaleav.com](https://docs.omniglass.hyperscaleav.com).
-Start with the architecture spine.
+Start with [Start here](https://docs.omniglass.hyperscaleav.com/start/).
 
 ## Contributing
 

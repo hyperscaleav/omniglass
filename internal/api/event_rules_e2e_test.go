@@ -120,8 +120,8 @@ func TestEventRuleAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(viewer, http.MethodGet, "/event-rules", nil, http.StatusOK), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list.EventRules) != 10 {
-		t.Fatalf("listed %d rules, want 10 (the authored one and the official reachability-lost, ingest-lag-high, outpost-silent, worklist-stale, disk-nearly-full, retention-behind, process-heap-growing, process-goroutines-growing and db-size-growing)", len(list.EventRules))
+	if len(list.EventRules) != 11 {
+		t.Fatalf("listed %d rules, want 11 (the authored one and the official reachability-lost, ingest-lag-high, outpost-silent, worklist-stale, rule-sweep-stalled, disk-nearly-full, retention-behind, process-heap-growing, process-goroutines-growing and db-size-growing)", len(list.EventRules))
 	}
 	for _, r := range list.EventRules {
 		if r.OpenAlarms == nil || r.Pending == nil {
@@ -203,8 +203,8 @@ func TestEventRuleAPI(t *testing.T) {
 		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/event-rules", nil, http.StatusOK), &list); err != nil {
 			t.Fatal(err)
 		}
-		if len(list.EventRules) != 10 {
-			t.Fatalf("a scoped viewer lists %d rules, want all 10 (both here and the official ingest-lag-high, outpost-silent, worklist-stale, disk-nearly-full, retention-behind, process-heap-growing, process-goroutines-growing and db-size-growing)", len(list.EventRules))
+		if len(list.EventRules) != 11 {
+			t.Fatalf("a scoped viewer lists %d rules, want all 11 (both here and the official ingest-lag-high, outpost-silent, worklist-stale, rule-sweep-stalled, disk-nearly-full, retention-behind, process-heap-growing, process-goroutines-growing and db-size-growing)", len(list.EventRules))
 		}
 		for _, r := range list.EventRules {
 			if r.Name == "reach-lost" && *r.Pending != len(want) {

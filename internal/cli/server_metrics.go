@@ -23,6 +23,7 @@ type serverMetricsStore interface {
 	DatabaseSettings(ctx context.Context) (settings.DatabaseSettings, error)
 	PoolStat() storage.PoolStat
 	OutboxStatus(ctx context.Context) (storage.OutboxStatus, error)
+	ConnectionStatus(ctx context.Context) (storage.ConnectionStatus, error)
 	DatabaseSize(ctx context.Context) (int64, error)
 }
 
@@ -69,7 +70,7 @@ func serverReportWindow(ctx context.Context, gw serverMetricsStore) time.Duratio
 }
 
 // reporter lands the recorder's windows on the server's component: each
-// window it gauges the pool, the outbox, the database's size (#1985), the
+// window it gauges the pool, the database's own connections, the outbox, the database's size (#1985), the
 // process's runtime and the disk holding dataDir (#1707), runs the samplers it is handed (the bus's, #1628),
 // and re-reads the slow-query setting, so a change to it takes within a
 // window without a restart.
@@ -79,6 +80,7 @@ func (m *serverMetrics) reporter(gw serverMetricsStore, componentID, dataDir str
 		platformmetric.RuntimeSampler(platformmetric.ReadProcess),
 		platformmetric.DiskSampler(dataDir, platformmetric.ReadDisk, log),
 		outboxSampler(gw),
+		connectionSampler(gw),
 		dbSizeSampler(gw),
 		func(ctx context.Context, _ *platformmetric.Recorder) { m.applySlowQuery(ctx, gw) },
 	}, samplers...)
@@ -100,6 +102,26 @@ func outboxSampler(gw serverMetricsStore) platformmetric.Sampler {
 		}
 		r.Gauge(writerclass.OutboxQueuedDepth, "", float64(st.Queued))
 		r.Gauge(writerclass.OutboxDueAge, "", st.DueAge.Seconds())
+	}
+}
+
+// connectionSampler gauges the database's side of its connections each window
+// (#1980): the backends held against the limit that admits clients, the ones
+// idle in a transaction, and the oldest open transaction's age in seconds. A
+// read that fails says nothing that window: a database out of connections is
+// the one that cannot answer, and a zero would read as healthy.
+func connectionSampler(gw serverMetricsStore) platformmetric.Sampler {
+	return func(ctx context.Context, r *platformmetric.Recorder) {
+		ctx, cancel := context.WithTimeout(ctx, settingsReadTimeout)
+		defer cancel()
+		st, err := gw.ConnectionStatus(ctx)
+		if err != nil {
+			return
+		}
+		r.Gauge(writerclass.DBConnectionCount, "", float64(st.Held))
+		r.Gauge(writerclass.DBConnectionLimit, "", float64(st.Limit))
+		r.Gauge(writerclass.DBConnectionIdleInTransactionCount, "", float64(st.IdleInTransaction))
+		r.Gauge(writerclass.DBTransactionOldestAge, "", st.OldestTransactionAge.Seconds())
 	}
 }
 

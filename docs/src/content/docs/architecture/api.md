@@ -1,6 +1,9 @@
 ---
 title: API
 description: "The API contract: AIP-style resources and :verb methods, cursor lists, a problem+json error envelope, idempotent writes, and long-running operations carried by the action row."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 The contract is **two typed surfaces, one source of truth**. The **public HTTP / OpenAPI contract**
@@ -1267,6 +1270,10 @@ fields, new optional params, new resources, never a removal or a meaning change;
 new major version. Because the [OpenAPI 3.1 document is generated](/contributing/api-first/) from the Go
 structs and the clients from that, the contract cannot drift from the implementation: a drift check fails
 the PR on an unregenerated route change.
+
+The CLI holds the same line at its edge: a command group takes no arguments of its own, so an unknown
+verb under any group is a non-zero exit with `unknown command "raise" for "omniglass component alarm"`
+on stderr, never help text and a green exit.
 
 ## Also an MCP surface
 

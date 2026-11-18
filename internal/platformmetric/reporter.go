@@ -81,8 +81,10 @@ func (rp *Reporter) Report(ctx context.Context) error {
 
 // PoolReadings are a database pool's platform metrics over the window between
 // prev and cur: its connections in use, idle and open and its most as they
-// stand at cur, and the acquires that waited on it exhausted and the time
-// they waited as what the window added to the pool's running totals. A total
+// stand at cur, and its acquires, the acquires that waited on it exhausted
+// and the time they waited as what the window added to the pool's running
+// totals. The waits are read against the acquires: a share of the requests
+// for a connection, which a bare count of waits is not. A total
 // that went backwards (a pool rebuilt between reads) reads zero, never less.
 func PoolReadings(prev, cur storage.PoolStat) []Reading {
 	return []Reading{
@@ -90,6 +92,7 @@ func PoolReadings(prev, cur storage.PoolStat) []Reading {
 		{Key: writerclass.DBPoolIdle, Value: float64(cur.Idle)},
 		{Key: writerclass.DBPoolTotal, Value: float64(cur.Total)},
 		{Key: writerclass.DBPoolMax, Value: float64(cur.Max)},
+		{Key: writerclass.DBPoolAcquireCount, Value: float64(max(cur.AcquireCount-prev.AcquireCount, 0))},
 		{Key: writerclass.DBPoolWaitCount, Value: float64(max(cur.EmptyAcquireCount-prev.EmptyAcquireCount, 0))},
 		{Key: writerclass.DBPoolWaitDuration, Value: Millis(max(cur.EmptyAcquireWait-prev.EmptyAcquireWait, 0))},
 	}

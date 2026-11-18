@@ -1,6 +1,6 @@
 import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
-import { gatherer, handOverer, requestTriage } from "./lib/handover";
+import { pageHere } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
@@ -47,22 +47,15 @@ const App: ParentComponent = (props) => {
   });
   createEffect(() => localStorage.setItem("og-collapsed", collapsed() ? "1" : "0"));
 
-  // Global ⌘K / Ctrl-K toggles the command palette; ⌘J / Ctrl-J hands omnibot
-  // the page (#2122) and opens it.
-  const onHandOver = handOverer(mayAsk, () => location, openOmnibot);
+  // Global ⌘K / Ctrl-K toggles the command palette.
   const onKey = (e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();
       setPaletteOpen((o) => !o);
-    } else onHandOver(e);
+    }
   };
   window.addEventListener("keydown", onKey);
   onCleanup(() => window.removeEventListener("keydown", onKey));
-
-  // Alt-click on a stamped row gathers it into omnibot's tray (#2122).
-  const onGather = gatherer(mayAsk, () => setOmnibotOpen(true));
-  window.addEventListener("click", onGather, true);
-  onCleanup(() => window.removeEventListener("click", onGather, true));
 
   return (
     <>
@@ -77,9 +70,9 @@ const App: ParentComponent = (props) => {
         </main>
       </div>
     </div>
-    <CommandPalette open={paletteOpen()} onClose={() => setPaletteOpen(false)} onAsk={openOmnibot} onTriage={(alarm) => (requestTriage(alarm), openOmnibot())} />
+    <CommandPalette open={paletteOpen()} onClose={() => setPaletteOpen(false)} onAsk={openOmnibot} />
     <Show when={mayAsk()}>
-      <OmnibotPanel open={omnibotOpen()} onClose={() => setOmnibotOpen(false)} prompt={omnibotPrompt()} />
+      <OmnibotPanel open={omnibotOpen()} onClose={() => setOmnibotOpen(false)} prompt={omnibotPrompt()} page={pageHere(location.pathname, location.search)} />
     </Show>
     <Toaster />
     </>

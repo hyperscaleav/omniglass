@@ -1,6 +1,9 @@
 ---
 title: Audit
 description: The who-did-what record, written once in the same transaction as the change it describes.
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 The audit log answers "who changed this, and to what?": every mutation is recorded once, at the source.
