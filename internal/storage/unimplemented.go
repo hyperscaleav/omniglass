@@ -838,6 +838,22 @@ func (UnimplementedGateway) AgentSettings(context.Context) (settings.AgentSettin
 func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMetric) error {
 	return nil
 }
+func (UnimplementedGateway) StampRuleSweep(context.Context, string) error   { return nil }
+func (UnimplementedGateway) MarkServerSeen(context.Context, string) error   { return nil }
+func (UnimplementedGateway) ReleaseRuleSweep(context.Context, string) error { return nil }
+func (UnimplementedGateway) ServerSweepAges(context.Context, time.Duration) ([]ServerSweepAge, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) HeartbeatSettings(context.Context) (settings.HeartbeatSettings, error) {
+	return settings.HeartbeatSettings{}, nil
+}
+func (UnimplementedGateway) HeartbeatTarget(context.Context, string) (*TargetSend, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) PlatformAlarmCount(context.Context) (int, error) { return 0, nil }
+func (UnimplementedGateway) AuditHeartbeat(context.Context, string, bool, int, string) error {
+	return nil
+}
 func (UnimplementedGateway) OutpostCheckins(context.Context) ([]OutpostCheckin, error) {
 	return nil, nil
 }
