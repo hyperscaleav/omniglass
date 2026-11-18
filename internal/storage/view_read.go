@@ -144,20 +144,29 @@ func (p *PG) ViewTail() *tail.Hub { return p.tail }
 // mark (ADR-1830).
 func (p *PG) ReadViews(ctx context.Context, bindings []ViewBinding) (ViewSnapshot, error) {
 	var out ViewSnapshot
-	var tx pgx.Tx
-	cursor, err := p.tail.Mark(func() error {
-		var err error
-		tx, err = p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-		if err != nil {
-			return fmt.Errorf("storage: begin view read: %w", err)
-		}
-		// The first statement takes a REPEATABLE READ transaction's
-		// snapshot: inside the mark, so no commit lands between them.
-		return tx.QueryRow(ctx, `select now()`).Scan(&out.Now)
-	})
-	if tx != nil {
-		defer func() { _ = tx.Rollback(ctx) }()
+	// The connection and the transaction are taken before the mark, never
+	// inside it: a sample writer already holds its pooled connection when it
+	// waits on the fence, so a mark waiting on the pool would wait on the
+	// writer it fences out. Only the snapshot statement runs fenced.
+	conn, err := p.pool.Acquire(ctx)
+	if err != nil {
+		return out, fmt.Errorf("storage: acquire view read: %w", err)
 	}
+	defer conn.Release()
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return out, fmt.Errorf("storage: begin view read: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	cursor, err := p.tail.Mark(func() error {
+		// A REPEATABLE READ transaction takes its snapshot at its first
+		// statement, not at begin: inside the mark, so no commit lands
+		// between the snapshot and the cursor.
+		if err := tx.QueryRow(ctx, `select now()`).Scan(&out.Now); err != nil {
+			return fmt.Errorf("storage: view read snapshot: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
 		return out, err
 	}

@@ -249,3 +249,58 @@ func TestReadViewsOpenRangeKeepsAheadOfClockRows(t *testing.T) {
 		t.Fatalf("an ahead-of-clock event is missing from an open range's history: %+v", e)
 	}
 }
+
+// A view read never holds the tail's fence while it waits on the pool: a
+// sample writer holds its connection when it reaches the fence, so a read
+// fencing first and then waiting for a connection would wait on the writer it
+// fences out. With one connection, a writer parked between its begin and its
+// commit, and a read queued behind it, the commit still lands and the read
+// then answers from after it.
+func TestReadViewsDoesNotFenceIngestWhileWaitingOnThePool(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t)+"&pool_max_conns=1")
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	commit, err := gw.ExportBeginSampleWrite(ctx)
+	if err != nil {
+		t.Fatalf("begin write: %v", err)
+	}
+	readCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	type read struct {
+		snap storage.ViewSnapshot
+		err  error
+	}
+	reads := make(chan read, 1)
+	go func() {
+		snap, err := gw.ReadViews(readCtx, nil)
+		reads <- read{snap, err}
+	}()
+	// The read is queued on the one connection the writer holds.
+	time.Sleep(300 * time.Millisecond)
+	committed := make(chan error, 1)
+	go func() {
+		committed <- commit([]tail.Row{{Lane: tail.LaneMetric, OwnerKind: "component", OwnerID: "x", Key: "k", TS: time.Now()}})
+	}()
+	select {
+	case err := <-committed:
+		if err != nil {
+			t.Fatalf("commit: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the writer's commit is blocked behind a view read waiting on the pool")
+	}
+	r := <-reads
+	if r.err != nil {
+		t.Fatalf("read views: %v", r.err)
+	}
+	if want := gw.ViewTail().Cursor(); r.snap.Cursor != want {
+		t.Fatalf("the read's cursor %q, want %q: it was taken after the commit", r.snap.Cursor, want)
+	}
+}
