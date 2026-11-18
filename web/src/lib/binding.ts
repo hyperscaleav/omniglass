@@ -41,6 +41,23 @@ export async function runView(b: ViewBinding): Promise<ViewResult> {
   return result;
 }
 
+// laterCursor is the later of a binding's cursor and a stream position. A
+// cursor is "<boot>.<sequence>", ordered by its sequence on one boot; the
+// stream starts at its slowest binding, so its position can sit below a
+// binding's own cursor, and moving that binding back would resend rows its
+// history already holds. A position from another boot wins: the server resets
+// a cursor it cannot order.
+export function laterCursor(cursor: string, position: string): string {
+  const seq = (c: string) => {
+    const dot = c.lastIndexOf(".");
+    return { boot: c.slice(0, dot), n: /^\d+$/.test(c.slice(dot + 1)) ? BigInt(c.slice(dot + 1)) : undefined };
+  };
+  const a = seq(cursor);
+  const b = seq(position);
+  if (a.boot !== b.boot || a.n === undefined || b.n === undefined) return position;
+  return a.n > b.n ? cursor : position;
+}
+
 export type SseEvent = { id: string; event: string; data: string };
 
 // sseParser frames a Server-Sent Events body pushed to it in chunks of any
@@ -152,10 +169,10 @@ export class ViewHub {
       if (ev.event === "rows") {
         const body = JSON.parse(ev.data) as ViewRowsEvent;
         for (const t of body.bindings ?? []) for (const l of list[t.binding]?.listeners ?? []) l.rows(t);
-        for (const e of list) e.cursor = body.cursor;
+        for (const e of list) e.cursor = laterCursor(e.cursor, body.cursor);
       } else if (ev.event === "mark") {
         const body = JSON.parse(ev.data) as ViewMarkEvent;
-        for (const e of list) e.cursor = body.cursor;
+        for (const e of list) e.cursor = laterCursor(e.cursor, body.cursor);
       } else if (ev.event === "reset") {
         reset = true;
         for (const i of (JSON.parse(ev.data) as ViewResetEvent).bindings ?? []) {

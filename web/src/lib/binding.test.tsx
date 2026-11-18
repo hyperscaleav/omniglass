@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import type { JSX } from "solid-js";
-import { ViewHub, bindingKey, createViewBinding, foldMetricBuckets, sseParser, type ViewBinding, type ViewTail } from "./binding";
+import { ViewHub, bindingKey, createViewBinding, foldMetricBuckets, laterCursor, sseParser, type ViewBinding, type ViewTail } from "./binding";
 import type { ChartBucket } from "./chart";
 
 const metric = (keys: string[]): ViewBinding => ({ primitive: "metric", kind: "component", refs: ["server"], keys, window_seconds: 3600, step_seconds: 60 });
@@ -150,6 +150,32 @@ describe("ViewHub", () => {
     hub.subscribe(metric(["a"]), "boot.4", { rows: () => {}, reset: () => {} });
     await settle();
     expect(live()[0].bindings().map((x) => x.cursor)).toEqual(["boot.9", "boot.4"]);
+  });
+
+  it("never moves a binding's cursor back to a stream position below it, so a reconnect resends nothing its history holds", async () => {
+    hub.subscribe(metric(["a"]), "boot.4", { rows: () => {}, reset: () => {} });
+    hub.subscribe(metric(["b"]), "boot.9", { rows: () => {}, reset: () => {} });
+    await settle();
+    // The stream starts at the slowest binding: its first positions are
+    // below b's history.
+    live()[0].send("mark", { cursor: "boot.5" }, "boot.5");
+    live()[0].send("rows", { cursor: "boot.6", bindings: [{ binding: 0, metric: [] }] }, "boot.6");
+    await settle(0);
+    hub.subscribe(metric(["c"]), "boot.6", { rows: () => {}, reset: () => {} });
+    await settle();
+    expect(live()).toHaveLength(1);
+    expect(live()[0].bindings().map((x) => [x.keys, x.cursor])).toEqual([[["a"], "boot.6"], [["b"], "boot.9"], [["c"], "boot.6"]]);
+    live()[0].send("mark", { cursor: "boot.12" }, "boot.12");
+    await settle(0);
+    live()[0].end();
+    await settle(1000);
+    expect(live()[0].bindings().map((x) => x.cursor)).toEqual(["boot.12", "boot.12", "boot.12"]);
+  });
+
+  it("orders cursors by their sequence, not their text", () => {
+    expect(laterCursor("boot.9", "boot.10")).toBe("boot.10");
+    expect(laterCursor("boot.10", "boot.9")).toBe("boot.10");
+    expect(laterCursor("old.40", "new.2")).toBe("new.2");
   });
 
   it("on a reset, tells the reset binding to re-read its history and reconnects the others at once", async () => {

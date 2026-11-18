@@ -289,7 +289,7 @@ type viewLogBody struct {
 }
 
 type viewResultBody struct {
-	Cursor      string                   `json:"cursor" doc:"The tail cursor this history was read at: /views:watch from it carries exactly what the history does not"`
+	Cursor      string                   `json:"cursor" doc:"The tail cursor this history was read at: /views:watch from it carries exactly what the history does not. A cursor is <boot>.<sequence>; two from one server boot order by the sequence"`
 	Entities    []viewEntityBody         `json:"entities" doc:"The entities the selector resolved to, in scope"`
 	From        time.Time                `json:"from" doc:"The range read"`
 	To          time.Time                `json:"to"`
