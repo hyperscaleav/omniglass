@@ -968,12 +968,17 @@ func sameAuthoredRule(a, b EventRule) bool {
 // rule of the same name is left exactly as it is, and the shipped rule is
 // neither compiled nor written. A re-seed that changes
 // nothing writes nothing (no version bump); one that inserts or changes the
-// rule settles its live state as an operator's create or edit does.
+// rule settles its live state as an operator's create or edit does. The
+// spec's Enabled (nil is on) is the shipped state, authoritative like the
+// rest: an operator runs a rule that ships off by authoring their own (#1985).
 func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	r := EventRule{Name: spec.Name, Label: spec.Label, Description: spec.Description, Selector: spec.Selector,
 		SampleKey: spec.SampleKey, FireCriteria: spec.Fire, ClearCriteria: spec.Clear, FireSustain: spec.FireSustain,
 		ClearSustain: spec.ClearSustain, SampleWindow: spec.SampleWindow, Severity: spec.Severity, FireEventType: spec.FireEventType,
 		ClearEventType: spec.ClearEventType, Message: spec.Message, Enabled: true, resolveIn: NamespaceOG}
+	if spec.Enabled != nil {
+		r.Enabled = *spec.Enabled
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin upsert event rule: %w", err)
@@ -1003,18 +1008,18 @@ func (p *PG) UpsertEventRule(ctx context.Context, spec EventRuleSpec) error {
 	upserted, err := scanEventRule(tx.QueryRow(ctx, `insert into event_rule (namespace, name, label, description, selector, sample_key, sample_lane,
 		fire_criteria, clear_criteria, fire_sustain, clear_sustain, severity, message, enabled, official,
 		fire_event_type_id, clear_event_type_id, sample_window)
-		values ('og', $1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, true, true,
+		values ('og', $1, $2, $3, $4, $5, $6, $7, $8, make_interval(secs => $9::float8 / 1000000), make_interval(secs => $10::float8 / 1000000), $11, $12, $16, true,
 		$13::uuid, $14::uuid, make_interval(secs => $15::float8 / 1000000))
 		on conflict (namespace, name) do update set label = excluded.label, description = excluded.description, selector = excluded.selector,
 			sample_key = excluded.sample_key, sample_lane = excluded.sample_lane, fire_criteria = excluded.fire_criteria,
 			clear_criteria = excluded.clear_criteria, fire_sustain = excluded.fire_sustain, clear_sustain = excluded.clear_sustain,
 			severity = excluded.severity, message = excluded.message, fire_event_type_id = excluded.fire_event_type_id,
-			clear_event_type_id = excluded.clear_event_type_id, sample_window = excluded.sample_window,
+			clear_event_type_id = excluded.clear_event_type_id, sample_window = excluded.sample_window, enabled = excluded.enabled,
 			version = event_rule.version + 1, updated_at = now()
 		returning `+eventRuleCols,
 		r.Name, labelOrNull(r.Label), r.Description, sel, r.SampleKey, string(r.SampleLane), fire, clear,
 		r.FireSustain.Microseconds(), r.ClearSustain.Microseconds(), nullIfEmpty(r.Severity), r.Message,
-		r.fireTypeID, nullIfEmpty(r.clearTypeID), r.SampleWindow.Microseconds()))
+		r.fireTypeID, nullIfEmpty(r.clearTypeID), r.SampleWindow.Microseconds(), r.Enabled))
 	if err != nil {
 		return mapRuleWriteErr(err, r.Name)
 	}

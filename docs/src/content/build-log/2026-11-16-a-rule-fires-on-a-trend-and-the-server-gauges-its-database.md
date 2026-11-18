@@ -16,10 +16,13 @@ a process's own key (every process now reports `process-uptime`), else from the 
 (`pg_database_size`) every report window on its platform component, shown on the platform health page,
 replacing the retention pass's hourly `database-bytes`. Three official rules ship at `average`:
 `process-heap-growing` and `process-goroutines-growing` (a quarter's fitted rise over 6 hours, held an
-hour, after ten hours of uptime) and `db-size-growing` (a quarter over a day, held 6 hours, once its series
-is a week old). `TestTheShippedTrendRulesFireOnASteadyRise`
+hour, after a day of uptime) and `db-size-growing` (a quarter over a day, held 6 hours, once its series
+is a week old), which ships disabled: a fleet onboarded on days 4 to 6 grows the database past the
+quarter after day 7, which `db-size` alone cannot tell from bloat, so an operator authors it when their
+fleet has settled. A seeded rule can now say `enabled: false`. `TestTheShippedTrendRulesFireOnASteadyRise`
 judges each shipped rule on a fixed rising series (fires), a flat noisy one (clears), a warm-up (holds) and
-the retention sawtooth (clears), then walks a process's restart and a fresh database's first three weeks
-(never fires); `TestWindowedRuleFiresOnATrend` proves the same against Postgres through
+the retention sawtooth (clears), then walks a process's restart refilling over 4 to 18 hours and a fresh
+database's first three weeks, its fleet there from day one or onboarded on days 4 to 6: a rule ships on
+only if no walk fires it, off only if one does; `TestWindowedRuleFiresOnATrend` proves the same against Postgres through
 the prime, the ingest and the reconcile. The decision is ADR-1985. A week of corporate soak opening none
 of the three is pending.

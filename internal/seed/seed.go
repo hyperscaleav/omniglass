@@ -370,7 +370,7 @@ func seedEventRules(ctx context.Context, gw storage.Gateway) error {
 	for _, r := range doc.Rules {
 		spec := storage.EventRuleSpec{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
 			Fire: rules.Criteria{Expr: r.Fire}, Severity: r.Severity, Message: r.Message,
-			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
+			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Enabled: r.Enabled}
 		if r.Clear != "" {
 			spec.Clear = &rules.Criteria{Expr: r.Clear}
 		}
@@ -394,15 +394,17 @@ func seedEventRules(ctx context.Context, gw storage.Gateway) error {
 // eventRulesDoc is event_rules.yaml, read by the seeder and the facts render.
 type eventRulesDoc struct {
 	Rules []struct {
-		Name           string `yaml:"name"`
-		Label          string `yaml:"label"`
-		Description    string `yaml:"description"`
-		SampleKey      string `yaml:"sample_key"`
-		Fire           string `yaml:"fire"`
-		Clear          string `yaml:"clear"`
-		FireSustain    string `yaml:"fire_sustain"`
-		ClearSustain   string `yaml:"clear_sustain"`
-		SampleWindow   string `yaml:"sample_window"`
+		Name         string `yaml:"name"`
+		Label        string `yaml:"label"`
+		Description  string `yaml:"description"`
+		SampleKey    string `yaml:"sample_key"`
+		Fire         string `yaml:"fire"`
+		Clear        string `yaml:"clear"`
+		FireSustain  string `yaml:"fire_sustain"`
+		ClearSustain string `yaml:"clear_sustain"`
+		SampleWindow string `yaml:"sample_window"`
+		// Enabled, absent for on, ships a rule off (#1985).
+		Enabled        *bool  `yaml:"enabled"`
 		Severity       string `yaml:"severity"`
 		Message        string `yaml:"message"`
 		FireEventType  string `yaml:"fire_event_type"`

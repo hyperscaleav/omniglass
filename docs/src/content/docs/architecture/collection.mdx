@@ -532,7 +532,7 @@ the outpost's platform component, and the next heartbeat clears it. The webhook 
 ([storage](/architecture/storage/#what-a-retention-pass-reports)). The database's whole size,
 `db-size`, is not: the server reads `pg_database_size` every report window beside its pool and
 outbox figures, so a trend rule reads its growth at the window's grain rather than the pass's hour
-(#1985), and the seeded `db-size-growing` rule watches it.
+(#1985), and the seeded `db-size-growing` rule, shipped disabled, watches it once an operator runs it.
 
 **How an outpost samples.** Two shapes, as collection telemetry has. The each-tick figures (the
 dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's
@@ -607,7 +607,8 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
 - **`db-size`**: the whole database's on-disk bytes, as `pg_database_size(current_database())`
   reads it at the window's close (#1985). A healthy database grows while retention fills its window
   and then holds level, a day's partition dropped as the next one fills; the seeded
-  `db-size-growing` rule raises an `average` alarm when it keeps growing across a day past that
+  `db-size-growing` rule (shipped disabled, since a fleet onboarded in the first week grows it as bloat
+  would) raises an `average` alarm when it keeps growing across a day past that
   ([alarms and actions](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)). A
   window whose read fails carries no value.
 - **The `process-*` figures**: the goroutines, heap, garbage-collection pause, CPU time and open

@@ -51,10 +51,25 @@ behind its window for 5 minutes ([storage](/architecture/storage/#what-a-retenti
 Three judge a trend rather than a level ([write a trend rule](#write-a-trend-rule), below), each an
 average alarm: `process-heap-growing` and `process-goroutines-growing` open on a process's platform
 component when its heap or goroutine count has risen steadily by more than a quarter over six hours,
-held an hour, once the process has run ten hours (so a restart's refill is not read as a leak), and
+held an hour, once the process has run a day (so a restart's refill is not read as a leak), and
 `db-size-growing` on the server's component when the database has grown by more than a quarter over
 a day, held six hours, once `db-size` has a week of history (so a fresh install filling its retention
-windows is not read as bloat). `reachability-lost` is what makes an unplugged component move its system: unplug a
+windows is not read as bloat).
+
+`db-size-growing` **ships disabled**, the one official rule that does: `db-size` alone cannot tell bloat
+from a fleet that grew, and an install that onboards most of its devices on days 4 to 6 is still filling
+its retention window past day 7, when a day's fill is more than a quarter of the database. An official
+rule is read-only, so to run it, author your own from its criteria once your fleet has settled (it runs
+beside the shipped one, which stays off):
+
+```sh
+omniglass event-rule create --name db-growing --label "Database growing" --sample-key db-size \
+  --sample-window 24h --fire-criteria '{"expr":"age >= 604800 && span(window) >= 72000 && growth(window) > 0.25"}' \
+  --fire-sustain 6h --clear-criteria '{"expr":"growth(window) <= 0.1"}' --severity average \
+  --fire-event-type rule-fired --clear-event-type rule-cleared
+```
+
+`reachability-lost` is what makes an unplugged component move its system: unplug a
 simulated component ([simulate a fleet](/guides/operator/simulation/#break-it-on-purpose)) and, once
 its endpoint has read `down` for the rule's fire sustain (above), the rule's row on the Event rules page
 shows **1 open**, its blade lists the component and the endpoint, and the component and its system
@@ -204,7 +219,7 @@ steadily without anything being wrong. The shipped heap rule reads:
 ```yaml
 sample_key: process-heap-size
 sample_window: 6h
-fire_criteria: { expr: 'age >= 36000 && span(window) >= 18000 && growth(window) > 0.25' }
+fire_criteria: { expr: 'age >= 86400 && span(window) >= 18000 && growth(window) > 0.25' }
 clear_criteria: { expr: 'growth(window) <= 0.1' }
 fire_sustain: 1h
 ```

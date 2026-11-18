@@ -239,13 +239,14 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		// The retention pass's lane behind past its catch-up passes (#1629).
 		{Name: "retention-behind", SampleKey: "retention-behind", Fire: "value == 1", Clear: "value == 0", FireSustain: "5m", Severity: "warning"},
 		// A process's heap or goroutines, or the database, growing steadily
-		// across a window (#1985).
-		{Name: "process-heap-growing", SampleKey: "process-heap-size", SampleWindow: "6h", Fire: "age >= 36000 && span(window) >= 18000 && growth(window) > 0.25",
+		// across a window (#1985); the database's rule ships disabled, since
+		// a fleet onboarded in its first week grows it as bloat would.
+		{Name: "process-heap-growing", SampleKey: "process-heap-size", SampleWindow: "6h", Fire: "age >= 86400 && span(window) >= 18000 && growth(window) > 0.25",
 			Clear: "growth(window) <= 0.1", FireSustain: "1h", Severity: "average"},
-		{Name: "process-goroutines-growing", SampleKey: "process-goroutine-count", SampleWindow: "6h", Fire: "age >= 36000 && span(window) >= 18000 && growth(window) > 0.25",
+		{Name: "process-goroutines-growing", SampleKey: "process-goroutine-count", SampleWindow: "6h", Fire: "age >= 86400 && span(window) >= 18000 && growth(window) > 0.25",
 			Clear: "growth(window) <= 0.1", FireSustain: "1h", Severity: "average"},
 		{Name: "db-size-growing", SampleKey: "db-size", SampleWindow: "24h", Fire: "age >= 604800 && span(window) >= 72000 && growth(window) > 0.25",
-			Clear: "growth(window) <= 0.1", FireSustain: "6h", Severity: "average"},
+			Clear: "growth(window) <= 0.1", FireSustain: "6h", Severity: "average", Disabled: true},
 	} {
 		w.FireEventType, w.ClearEventType = "rule-fired", "rule-cleared"
 		r := rules[w.Name]

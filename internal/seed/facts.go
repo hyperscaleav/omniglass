@@ -175,7 +175,7 @@ type factsSeverityLevel struct {
 
 // factsEventRule is one official event rule (#920, #948) as the docs render
 // it: the criteria as their expressions (#957), the severity absent for an
-// informational rule.
+// informational rule, Disabled for one that ships off (#1985).
 type factsEventRule struct {
 	Name           string `json:"name"`
 	Label          string `json:"label,omitempty"`
@@ -186,6 +186,7 @@ type factsEventRule struct {
 	FireSustain    string `json:"fire_sustain,omitempty"`
 	ClearSustain   string `json:"clear_sustain,omitempty"`
 	SampleWindow   string `json:"sample_window,omitempty"`
+	Disabled       bool   `json:"disabled,omitempty"`
 	Severity       string `json:"severity,omitempty"`
 	FireEventType  string `json:"fire_event_type"`
 	ClearEventType string `json:"clear_event_type,omitempty"`
@@ -441,7 +442,7 @@ func FactsJSON() ([]byte, error) {
 	for _, r := range ers.Rules {
 		fr := factsEventRule{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
 			Fire: r.Fire, Clear: r.Clear, FireSustain: r.FireSustain, ClearSustain: r.ClearSustain, SampleWindow: r.SampleWindow, Severity: r.Severity,
-			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
+			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Disabled: r.Enabled != nil && !*r.Enabled}
 		doc.EventRules = append(doc.EventRules, fr)
 	}
 

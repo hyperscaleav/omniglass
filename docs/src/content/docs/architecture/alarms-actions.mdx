@@ -407,10 +407,12 @@ Three are
 [trend rules](#a-trend-rule-reads-a-window-not-a-sample), each an `average` alarm on the platform
 component of what it measures: `process-heap-growing` and `process-goroutines-growing` fire when a
 process's `process-heap-size` or `process-goroutine-count` has risen by more than a quarter of its
-level across six hours, held for an hour (a leak's shape), once the process has run ten hours, and
+level across six hours, held for an hour (a leak's shape), once the process has run a day, and
 `db-size-growing` when the server's `db-size` has risen by more than a quarter across a day, held for
 six hours (growth past what retention trims), once its series is a week old. Each clears once the rise
-is back under a tenth.
+is back under a tenth. `db-size-growing` ships disabled, since a fleet onboarded in a database's first
+week grows it as bloat would ([below](#a-trend-rule-reads-a-window-not-a-sample)); an operator runs it
+by authoring a rule from its criteria.
 
 Criteria are [expressions](/architecture/expressions/) (#957), stored as `{"expr": "..."}` and
 evaluated against a prepared input of four bindings: **`value`** (a metric's number, or a property's
@@ -508,13 +510,13 @@ event_rule:
   name: process-heap-growing
   sample_key: process-heap-size
   sample_window: 6h
-  fire_criteria: { expr: 'age >= 36000 && span(window) >= 18000 && growth(window) > 0.25' }
+  fire_criteria: { expr: 'age >= 86400 && span(window) >= 18000 && growth(window) > 0.25' }
   clear_criteria: { expr: 'growth(window) <= 0.1' }
   fire_sustain: 1h
 ```
 
 That is a heap whose fitted line rose by more than a quarter of its level over six hours, judged only once
-five hours of samples are there and the process has run ten hours. A fit, not the newest point less the oldest: the noise of a flat series averages to near zero, and one
+five hours of samples are there and the process has run a day. A fit, not the newest point less the oldest: the noise of a flat series averages to near zero, and one
 outlier at either end does not read as a rise. The gap between fire and clear keeps a series on the
 line from flapping, and the sustain absorbs a load step that a fit reads as a slope for a while.
 
@@ -527,8 +529,18 @@ runtime figures) the age is the process's uptime, read from the newest `process-
 on the same component plus the time since; a restart sets it back to zero though the series runs on.
 On any other key it is the time since the series' oldest sample still kept, so it never passes the
 key's lane retention (the metric lane's `metric_days`, 14 by default). The shipped process rules wait
-ten hours (the six-hour window clear of a four-hour refill), and `db-size-growing` a week, by when a
-day's fill is a seventh of the database, under the quarter; with `metric_days` under 7 it never judges.
+a day of uptime (the six-hour window clear of a refill of up to 18 hours; a leak is the failure a week
+of running surfaces, so a day costs little), and `db-size-growing` a week, by when a day's steady fill
+is a seventh of the database, under the quarter; with `metric_days` under 7 it never judges.
+
+An age cannot tell bloat from a fleet that grew, though. An install that onboards most of its devices
+on days 4 to 6 is still filling its retention window past day 7, and a day's fill is then more than a
+quarter of the database, so `db-size-growing` **ships disabled**: the seed marks it `enabled: false`,
+and, since an official rule is read-only, an operator who wants it authors their own rule from its
+criteria (it runs beside the shipped one, which stays off). The shipped-rule test walks each trend rule
+through the healthy growths it must not alarm on (a restart's refill of 4 to 18 hours; a fresh install
+with its fleet there from day one, or onboarded on days 4 to 6), and a rule ships enabled only if none
+of them fires it, disabled only if one does.
 
 The window is read by the store, not by the expression: the evaluator stays a pure function of what
 it is handed, so a trend is unit-testable on a fixed series. A rule whose criteria read `window` gets

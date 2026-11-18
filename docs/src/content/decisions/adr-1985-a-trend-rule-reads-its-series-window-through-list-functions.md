@@ -2,7 +2,7 @@
 title: "A trend rule reads its series window through list functions"
 date: 2026-11-16
 status: Accepted
-summary: "An event rule on a metric may name a sample_window (up to a week); its criteria then bind the series' points over it as window, oldest first and averaged into at most 360 buckets, and the generic list functions slope, span and growth fold it; age (the series' run, a process key's from its uptime) gates a fill or a restart's refill. The store reads both, so the evaluator stays pure. Preview refuses them, and the reconcile scan rejudges their series after the drifted ones, capped. Settles the trend half of ADR-0050's design window."
+summary: "An event rule on a metric may name a sample_window (up to a week); its criteria then bind the series' points over it as window, oldest first and averaged into at most 360 buckets, and the generic list functions slope, span and growth fold it; age (the series' run, a process key's from its uptime) gates a fill or a restart's refill, and a seeded rule may ship disabled, as db-size-growing does. The store reads both, so the evaluator stays pure. Preview refuses them, and the reconcile scan rejudges their series after the drifted ones, capped. Settles the trend half of ADR-0050's design window."
 refs: [1985, 1623, 957, 1142]
 ---
 
@@ -37,11 +37,18 @@ refs: [1985, 1623, 957, 1142]
      missed sample. A preview, which judges each sample alone, refuses criteria that read `window` or
      `age` (a 422) rather than answer that a trend never fires.
   6. **The shipped thresholds.** `process-heap-growing` and `process-goroutines-growing` read 6 hours,
-     fire on `age >= 36000 && span(window) >= 18000 && growth(window) > 0.25` held 1 hour (ten hours of
-     uptime: the window clear of a four-hour refill), and clear at `growth(window) <= 0.1`;
-     `db-size-growing` reads 24 hours, gates on `age >= 604800` (a week, by when a day's fill is a
-     seventh), needs 20 hours of span, holds 6 hours. All three raise `average`, the seed's middle
+     fire on `age >= 86400 && span(window) >= 18000 && growth(window) > 0.25` held 1 hour (a day of
+     uptime: the window clear of a refill of up to 18 hours), and clear at `growth(window) <= 0.1`;
+     `db-size-growing` reads 24 hours, gates on `age >= 604800` (a week, by when a day's steady fill is
+     a seventh), needs 20 hours of span, holds 6 hours. All three raise `average`, the seed's middle
      level.
+  7. **A rule can ship off; `db-size-growing` does.** A seeded rule may say `enabled: false`, and the
+     seed is authoritative over that state as over the rest of an official row. `db-size` alone cannot
+     tell bloat from a fleet that grew: an install that onboards most of its devices on days 4 to 6 is
+     still filling its retention window past day 7, a day's fill then over a quarter of it, so the rule
+     fires on healthy growth. It ships disabled; an operator who wants it authors a rule from its
+     criteria. The shipped-rule test enforces the pairing: a rule ships on only if none of its healthy
+     growth walks fires it, and off only if one does.
 - **Context:** the self-alarming epic needs alarms on a slow leak (a heap or goroutine count, the
   database's size) that no level threshold catches without either firing on a healthy large install
   or missing a leak on a small one. A trend is relative to the series' own level. ADR-0050 left a
@@ -51,17 +58,26 @@ refs: [1985, 1623, 957, 1142]
   - A trend rule is unit-testable on a fixed series: the shipped rules' test judges a steady rise
     (fires), a flat noisy series (clears), a process's warm-up (holds) and a database at its retention
     window dropping a day's partition at any point (clears), and walks each through the growth it must
-    not alarm on: a process's half day after a restart, a fresh database's first three weeks.
+    not alarm on: a process's two days after a restart whose refill takes 4 to 18 hours, a fresh
+    database's first three weeks with its fleet there from day one or onboarded on days 4 to 6.
   - A trend fires on a sustained relative rise, not a step: a load step of over a quarter of the level
     reads as a slope for a while, which the sustain absorbs only partly.
   - `db-size-growing` cannot judge where the metric lane keeps under a week (`metric_days` < 7): its
     age never reaches the gate. A shorter gate there would read a day's fill as bloat.
-  - A process that restarts more often than every ten hours is never judged for a leak; a crash loop
-    is its own alarm.
+  - A process that restarts more often than once a day is never judged for a leak (a nightly restart
+    hides one); a crash loop is its own alarm.
+  - A fresh install raises no database-growth alarm at all until an operator authors one: the price of
+    not alarming every install, and the public demo, through its first weeks.
   - The console's rule drawer does not yet edit `sample_window`, and a windowed rule has no preview.
   - `slope`, `growth` and `span` are now reserved, so a calc rule input may not take one as its alias; a
     one-time backfill disables a rule that did, as the first reserving backfill did, until it is renamed.
 - **Not chosen:**
+  - **A ten-hour uptime gate** (the window clear of a four-hour refill): a heap or a session count
+    that takes 8 to 12 hours to come back fires at about 10 hours of uptime, and there is no soak
+    evidence yet that every process refills in under six. A day costs a leak a day's delay.
+  - **A database age gate long enough for onboarding** (the full 14-day retention): it still fires
+    for an onboarding after day 14, needs `metric_days` of 14 to judge at all, and only moves the
+    false alarm; disabling it says plainly that the signal needs an operator's judgement.
   - **Gating on the window's shape alone** (a span the series has filled): a restart's series spans
     the restart, so its window is full and its refill reads as growth; only the process knows it
     restarted.

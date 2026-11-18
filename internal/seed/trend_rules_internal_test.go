@@ -1,6 +1,7 @@
 package seed
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -53,8 +54,10 @@ func jitter(x float64) float64 {
 // a database at its retention window, climbing through the window and
 // dropping a fourteenth (a day's partition), clears wherever the drop falls.
 // Then each is walked through the growth it must not alarm on: a process's
-// heap and goroutines refilling after an ordinary restart, and a fresh
-// database filling to its retention window.
+// heap and goroutines refilling over up to 18 hours after an ordinary
+// restart, and a fresh database filling to its retention window, with its
+// fleet there from day one or onboarded on days 4 to 6. A rule that one of
+// those alarms ships disabled.
 func TestTheShippedTrendRulesFireOnASteadyRise(t *testing.T) {
 	var doc eventRulesDoc
 	if err := yaml.Unmarshal(eventRulesYAML, &doc); err != nil {
@@ -119,42 +122,84 @@ func TestTheShippedTrendRulesFireOnASteadyRise(t *testing.T) {
 				t.Errorf("%s on %s: %v, want %v", r.Name, tc.name, got, tc.want)
 			}
 		}
-		walk := func(name string, start float64, hours int, level func(t float64) float64, age func(t float64) float64) {
-			t.Helper()
+		// walk judges the rule hourly across a growth it must not alarm on,
+		// and reports the first hour it fires (0 for none).
+		walk := func(start float64, hours int, level func(t float64) float64, age func(t float64) float64) int {
 			for h := 1; h <= hours; h++ {
 				now := float64(h) * 3600
 				w := seriesWindow(window, now, start, level)
 				got, err := j.Decide(rules.Sample{Value: level(now), Key: r.SampleKey, Window: w, Age: age(now)})
-				if err != nil || got == rules.Fire {
-					t.Errorf("%s on %s at hour %d: %v, %v; want no fire", r.Name, name, h, got, err)
-					return
+				if err != nil {
+					t.Fatalf("%s at hour %d: %v", r.Name, h, err)
+				}
+				if got == rules.Fire {
+					return h
 				}
 			}
+			return 0
 		}
+		type growth struct {
+			name  string
+			fired int
+		}
+		var walks []growth
 		switch {
 		case writerclass.ProcessSelf(r.SampleKey):
 			// An ordinary restart at second 0 of a process that held its
 			// level for days: the series spans the restart, so it reads the
-			// level, the drop to a fifth, and the four hours its caches take
-			// to refill, then the level again; its age is the new process's
-			// uptime. Walked for half a day.
-			walk("a restart", -7*24*3600, 12, func(t float64) float64 {
-				if t < 0 {
-					return base
-				}
-				return base * (0.2 + 0.8*min(1, t/(4*3600)))
-			}, func(t float64) float64 { return t })
+			// level, the drop to a fifth, and the hours its caches and
+			// sessions take to come back, then the level again; its age is
+			// the new process's uptime. A refill of up to 18 hours, walked
+			// for two days.
+			for _, refill := range []float64{4, 8, 12, 18} {
+				fired := walk(-7*24*3600, 48, func(t float64) float64 {
+					if t < 0 {
+						return base
+					}
+					return base * (0.2 + 0.8*min(1, t/(refill*3600)))
+				}, func(t float64) float64 { return t })
+				walks = append(walks, growth{fmt.Sprintf("a restart refilling over %vh", refill), fired})
+			}
 		case r.SampleKey == writerclass.DBSize:
-			// A fresh database: its schema, then a day's samples a day until
-			// the metric lane's 14-day retention starts dropping a day as the
-			// next fills, then level; its age is its oldest kept sample's,
-			// so at most the 14 days. Walked for three weeks.
-			const retained = 14 * 24 * 3600
-			walk("a fresh install", 0, 21*24, func(t float64) float64 {
-				return base * (0.02 + min(t, retained)/retained)
-			}, func(t float64) float64 { return min(t, retained) })
+			// A database's size is its schema and the last 14 days of its
+			// fill (the metric lane's retention), its age its oldest kept
+			// sample's, so at most the 14 days. Walked for three weeks.
+			const day, retained = 24 * 3600.0, 14 * 24 * 3600.0
+			// size is the database at second t filling at rate(t) a day.
+			size := func(rate func(t float64) float64) func(t float64) float64 {
+				return func(t float64) float64 {
+					sum := 0.0
+					for at := max(0, t-retained); at < t; at += 600 {
+						sum += rate(at) * 600 / day
+					}
+					return base * (0.02 + sum/14)
+				}
+			}
+			age := func(t float64) float64 { return min(t, retained) }
+			// A fresh install whose fleet is all there from its first day.
+			steady := size(func(float64) float64 { return 1 })
+			walks = append(walks, growth{"a fresh install", walk(0, 21*24, steady, age)})
+			// A fresh install that onboards most of its fleet on days 4 to
+			// 6, its fill rising to three times its first days'.
+			onboard := size(func(t float64) float64 { return 1 + 2*min(1, max(0, t-4*day)/(2*day)) })
+			walks = append(walks, growth{"a fleet onboarded on days 4 to 6", walk(0, 21*24, onboard, age)})
 		default:
 			t.Errorf("%s has no growth walk it must not alarm on", r.Name)
+		}
+		// A rule ships on only if none of the healthy growths alarms it, and
+		// off only for one that does: the walk is the reason it ships off.
+		shippedOff := r.Enabled != nil && !*r.Enabled
+		var alarmed []string
+		for _, g := range walks {
+			if g.fired != 0 {
+				alarmed = append(alarmed, fmt.Sprintf("%s (fired at hour %d)", g.name, g.fired))
+			}
+		}
+		switch {
+		case !shippedOff && len(alarmed) > 0:
+			t.Errorf("%s ships enabled yet alarms on healthy growth: %v", r.Name, alarmed)
+		case shippedOff && len(alarmed) == 0:
+			t.Errorf("%s ships disabled though no healthy growth alarms it: enable it", r.Name)
 		}
 	}
 	for _, name := range []string{"process-heap-growing", "process-goroutines-growing", "db-size-growing"} {
