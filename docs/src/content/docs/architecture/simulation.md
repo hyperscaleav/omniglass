@@ -37,7 +37,7 @@ webhook endpoint, and a simulated booking service pushes through `POST /telemetr
 built: [what an endpoint observed](#what-an-endpoint-observed) (#1639), every simulated endpoint
 counting what reached it and how it answered, read beside the outpost's own tally so a scale lab
 closes the loop. Also built: the same loop on a running server (#1647), bracketed into a sliding
-window per outpost and read on [Platform health](/guides/operator/platform-health/#with-a-simulator). Also
+window per outpost and read on [Platform health](/operator/platform-health/#with-a-simulator). Also
 built: the [push face](#a-pusher-pushes-on-its-own-cadence) (#1743), an outside actor that reports by
 pushing as an emulator device of its profile, declared by a scenario as it declares devices, so the
 dev lab and the scale lab push through the same path. Also built: the webhook sender (#1747), a
@@ -366,7 +366,7 @@ every component the outpost simulates. A scale lab reconciles it hop by hop
 ([measuring a scale lab](/guides/lab/#measuring-a-scale-lab)), and a running server does the same
 continuously: `internal/closedloop` holds the reconcile, and its ring brackets each outpost with a
 connected simulator once a minute (faster on a lab) and reads the last ten brackets as a sliding
-window, shown on [Platform health](/guides/operator/platform-health/#with-a-simulator). The counters
+window, shown on [Platform health](/operator/platform-health/#with-a-simulator). The counters
 never reset, so a window is a difference of two reads, never a total since start.
 
 A difference only compares over one fleet, so each read also carries the simulator's
@@ -667,4 +667,4 @@ collector reaches it, and adds a simulated component or a whole simulated system
 standard's plan); the simulation drawer carries its status, its impairment controls and its
 API surface, with a form to fire any operation; and a simulated component's own page carries a
 Simulation section that opens the same drawer. The walk-through is the
-[simulation guide](/guides/operator/simulation/).
+[simulation guide](/operator/simulation/).

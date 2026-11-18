@@ -133,7 +133,7 @@ terminal and `session.exec` runs a command as the channel instead of a shell. Th
 on first use and kept as the endpoint's `ssh-host-key`; when it changes the session reads `rejected`
 naming both keys, which the gate carries as data (the refusal's entry in `endpoint-rejection` ends with the pinned and the
 offered key). The console's **Trust this key** on the session's notice trusts the offered one after
-a confirm ([held sessions](/guides/operator/collection/#a-changed-key)), and so does
+a confirm ([held sessions](/operator/collection/#a-changed-key)), and so does
 `omniglass endpoint retry <component>/ssh --host-key <the offered key>`. While the refusal holds, the key must be
 the offered one it names (any other is refused, 409, and changes nothing; retry without a key first
 to have the outpost read a key the component presents since); with no refusal held, `--host-key`
@@ -185,6 +185,8 @@ A udp driver speaks the line protocol as datagrams ([udp](/architecture/collecti
 udp port cannot be detected, so it must name its request rung, and it may declare a `listen-port`
 input, the local port its endpoint binds, which its requests leave from and the component's pushes
 arrive on (unset, the outpost picks one, which suits a component that answers to a request's source).
+A datagram counts as the component's when it comes from the component's address, from any port, so gear
+that answers from a separate send socket works; one from any other address is dropped and logged.
 Every udp request declares its reply's shape (`reply`), since a datagram's answer is told from a
 late reply to another ask only by it. A request may declare `retries` (udp only, 0 to 5), how many
 times a lost datagram is re-sent within
@@ -416,7 +418,7 @@ A row without a spec is a **stub** and cannot be attached; specs are
 authored over the API or CLI (`omniglass driver create --spec ...`) and **validate at write**,
 so a spec that references an unregistered sample name, an unknown secret shape, or a broken
 template refuses with the fault named (422). Attaching a driver to a component happens on the
-component's own detail ([outposts and reachability](/guides/operator/collection/)): the spec
+component's own detail ([outposts and reachability](/operator/collection/)): the spec
 derives the endpoint and its tasks. Its inputs (the host, the port, an attached secret's name) then
 edit in place on the endpoint's blade or with `omniglass endpoint update <component>/<endpoint> --inputs ...`, checked
 against the spec's declared inputs; no re-attach. Clearing an optional input restores its default;

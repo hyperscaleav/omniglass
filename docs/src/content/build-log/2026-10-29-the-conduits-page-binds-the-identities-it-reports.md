@@ -18,4 +18,4 @@ identity heard for the first time appears without a reload.
 
 In the lab, binding the one identity the simulated UCC platform reports unbound (`zr-boardroom-b`) from the card made the
 next poll land its call state on the chosen system, observed, its source naming the conduit and its
-endpoint ([the component guide](/guides/operator/fleet/#a-component)).
+endpoint ([the component guide](/operator/fleet/#a-component)).

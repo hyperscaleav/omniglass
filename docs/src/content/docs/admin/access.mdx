@@ -1,6 +1,11 @@
 ---
 title: Roles, groups, and grants
 description: "Giving a user access: the built-in roles, user groups as shared grant anchors, and the grant builder that assigns a role at a scope."
+sidebar:
+  order: 2
+  badge:
+    text: Partial
+    variant: note
 screenshots:
   - id: grant-builder
     path: /web/users
@@ -12,9 +17,9 @@ screenshots:
         selector: "role=button[name=/edit/i]"
 ---
 
-import SeededSet from '../../../../components/SeededSet.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
-Access is a **grant**: a role at a scope. You assign a grant to a [user](/guides/admin/users/)
+Access is a **grant**: a role at a scope. You assign a grant to a [user](/admin/users/)
 directly, or to a **group** the user belongs to; the scope decides which slice of the fleet the
 grant reaches. This page is the three parts of that: the **roles** you can assign, the **groups**
 that share a grant across a team, and the **grant builder** that stages and commits both. The
@@ -39,8 +44,13 @@ dimmed, listed one per line in alphabetical order. Held is resolved the same way
 (inheritance, wildcards, and the read floor applied), so `viewer` holds only the reads it can reach (no
 `secret:read`, no admin-tier reads), `admin` holds nearly everything, `owner` holds all of it, and an
 admin-sensitive permission like `audit:read:admin` is tinted for its `:admin` tier. It is a teaching surface: it
-renders the real seeded roles against the real routed capabilities, not a static table. Custom-role creation and
-editing are coming; today the built-in roles are read-only.
+renders the real seeded roles against the real routed capabilities, not a static table. Today the built-in
+roles are read-only.
+
+:::design[Target design, tracked in #527]
+Custom roles: an admin creates an `official: false` role with a chosen permission set, inheriting from any
+role, and edits it on the same blade ([custom roles](/architecture/identity-access/#custom-roles)).
+:::
 
 The same matrix, rendered here from the seed itself (`make gen`) with inheritance, wildcards, and
 the read floor resolved exactly as the authorizer resolves them at runtime:

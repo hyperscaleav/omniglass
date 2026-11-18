@@ -6,7 +6,7 @@ summary: "Accepted: the push lane's publisher reports every turn it grants or re
 refs: [1746, 1696, 1641, 1628, 1623]
 ---
 
-- **Date:** 2026-11-11 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), [lab](/guides/lab/#reading-the-push-lanes-turn), [platform health](/guides/operator/platform-health/#ingest)
+- **Date:** 2026-11-11 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/#accounting-every-item-the-loss-ratio), [lab](/guides/lab/#reading-the-push-lanes-turn), [platform health](/operator/platform-health/#ingest)
 - **Decision:** (#1746, under #1623, extending [ADR-1696](#adr-1696-the-push-lanes-batches-carry-a-ledger-minted-by-the-server-and-read-as-their-own-ingest-row).)
   1. **The publisher reports each turn.** `delivery.Publisher` hands an observer every turn as it
      ends: how long the caller waited and whether the wait ran out. The bus server's pipeline
