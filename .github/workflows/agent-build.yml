@@ -117,6 +117,22 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: scripts/board.sh set "$NUMBER" "In Progress"
 
+      # Say on the issue that the agent is at work: one comment, edited in
+      # place when the run stops. The status script is copied out now, while
+      # the workspace is still main, since the agent checks out its own branch.
+      - name: Show that the agent is working
+        id: status
+        if: steps.gate.outputs.decision == 'run'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          cp scripts/agent-status.sh "${RUNNER_TEMP}/agent-status.sh"
+          body=$(jq -cn --arg run "$RUN_URL" '{workflow: "agent-build", state: "working", run_url: $run}' \
+            | bash "${RUNNER_TEMP}/agent-status.sh" body)
+          echo "comment=$(gh api "repos/${REPO}/issues/${NUMBER}/comments" -f body="$body" --jq .id)" >> "$GITHUB_OUTPUT"
+
       # The model reads the ticket from this file, never from the issue page:
       # the body and only the comments written by the two teams.
       - name: Write the ticket the agent reads
@@ -198,14 +214,33 @@ jobs:
             If you cannot finish, push what you have, leave the PR a draft, and say in its
             body exactly what is left.
 
-      - name: Report a run that opened no PR
-        if: always() && steps.gate.outputs.decision == 'run' && steps.agent.outcome != 'success'
+            Last, write a few lines to ${{ runner.temp }}/agent-summary.md saying what you
+            built, or why you opened no PR: the workflow posts them on the issue.
+
+      # Edit the status comment to what the run did: the PR it opened, or
+      # that it opened none, with the agent's own summary.
+      - name: Show what the agent did
+        if: always() && steps.status.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMENT: ${{ steps.status.outputs.comment }}
+          JOB: ${{ job.status }}
         run: |
-          gh issue comment "$NUMBER" --repo "$REPO" \
-            --body "agent-build: the run stopped before it finished (${RUN_URL}). Apply run:dev-gha again to retry."
+          set -uo pipefail
+          pr=$(gh api graphql -F n="$NUMBER" -f o="$ORG" -f r="${REPO#*/}" -f query='
+            query($o: String!, $r: String!, $n: Int!) {
+              repository(owner: $o, name: $r) { issue(number: $n) {
+                closedByPullRequestsReferences(first: 5, includeClosedPrs: false) { nodes { url } }
+              } }
+            }' --jq '.data.repository.issue.closedByPullRequestsReferences.nodes[0].url // ""' || echo "")
+          state=done; [ "$JOB" = success ] || state=failed
+          summary=""; [ -f "${RUNNER_TEMP}/agent-summary.md" ] && summary=$(head -c 4000 "${RUNNER_TEMP}/agent-summary.md")
+          if [ "$state" = failed ]; then summary="${summary:+${summary}$'\n\n'}Apply run:dev-gha again to retry."; fi
+          body=$(jq -cn --arg run "$RUN_URL" --arg pr "$pr" --arg state "$state" --arg sum "$summary" \
+            '{workflow: "agent-build", state: $state, run_url: $run, pr_url: $pr, summary: $sum}' \
+            | bash "${RUNNER_TEMP}/agent-status.sh" body)
+          gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT}" -f body="$body" --silent
 
       - name: Unlock the conversation
         if: always() && steps.gate.outputs.decision == 'run' && steps.gate.outputs.was_locked != 'true'
