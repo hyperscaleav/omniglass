@@ -131,7 +131,9 @@ jobs:
           cp scripts/agent-status.sh "${RUNNER_TEMP}/agent-status.sh"
           body=$(jq -cn --arg run "$RUN_URL" '{workflow: "agent-build", state: "working", run_url: $run}' \
             | bash "${RUNNER_TEMP}/agent-status.sh" body)
-          echo "comment=$(gh api "repos/${REPO}/issues/${NUMBER}/comments" -f body="$body" --jq .id)" >> "$GITHUB_OUTPUT"
+          # A bare assignment, so a failed post fails this step and the final edit is skipped.
+          comment=$(gh api "repos/${REPO}/issues/${NUMBER}/comments" -f body="$body" --jq .id)
+          echo "comment=$comment" >> "$GITHUB_OUTPUT"
 
       # The model reads the ticket from this file, never from the issue page:
       # the body and only the comments written by the two teams.
