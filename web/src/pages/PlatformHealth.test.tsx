@@ -142,7 +142,7 @@ function refuse() {
 describe("PlatformHealth page", () => {
   it("keeps a long version on one line inside its tile and carries the full text as a tooltip", () => {
     const long = "fbb3d54eb-dirty-20261117T233000Z";
-    mount({ ...full, servers: [{ ...full.servers[0], version: long }] });
+    mount({ ...full, servers: [{ ...full.servers![0], version: long }] });
     const tile = screen.getByTestId("platform-version");
     expect(tile).toHaveAttribute("title", long);
     for (const c of ["min-w-0", "overflow-hidden", "whitespace-nowrap", "text-ellipsis"]) expect(tile).toHaveClass(c);
