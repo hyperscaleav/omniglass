@@ -1,4 +1,5 @@
 // @ts-check
+import { unified } from '@astrojs/markdown-remark';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import starlight from '@astrojs/starlight';
@@ -22,15 +23,25 @@ export default defineConfig({
   // lint suite keys on. remarkFragments splices the build log's and the decision
   // log's entries (one file each under src/content/build-log/ and
   // src/content/decisions/) into their pages before the parse (#1095).
+  //
+  // Astro 7 defaults to the Sätteri pipeline; these are remark plugins, so the
+  // site keeps the unified (remark/rehype) processor, which .mdx inherits too.
   markdown: {
-    remarkPlugins: [
-      [remarkFragments, { contentDir: fileURLToPath(new URL('./src/content', import.meta.url)) }],
-      remarkDirective,
-      remarkScreenshots,
-      [remarkWalkthroughs, { publicDir: fileURLToPath(new URL('./public', import.meta.url)) }],
-      remarkDesignFence,
-    ],
+    processor: unified({
+      remarkPlugins: [
+        [remarkFragments, { contentDir: fileURLToPath(new URL('./src/content', import.meta.url)) }],
+        remarkDirective,
+        remarkScreenshots,
+        [remarkWalkthroughs, { publicDir: fileURLToPath(new URL('./public', import.meta.url)) }],
+        remarkDesignFence,
+      ],
+    }),
   },
+  // Astro 7 changed the default to 'jsx' whitespace handling; keep v6's output.
+  compressHTML: true,
+  // Starlight 0.41 stopped forcing the ':where()' scoping strategy; keep it, so
+  // component styles keep the specificity custom.css was written against.
+  scopedStyleStrategy: 'where',
   // The monolithic "the console" guide was split into per-flow operator pages.
   // Keep its old URL alive for external links and bookmarks.
   redirects: {
