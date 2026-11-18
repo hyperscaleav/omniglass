@@ -1,6 +1,12 @@
 ---
 title: Simulate a fleet
 description: "Running the simulator beside an outpost, watching the collector reach its simulated components, exercising one's API, adding one, and breaking one on purpose to watch monitoring react."
+sidebar:
+  label: Simulate a fleet
+  order: 10
+  badge:
+    text: Built
+    variant: success
 walkthroughs:
   - id: sample-simulation
 ---
@@ -11,7 +17,7 @@ each on its own loopback address, speaking the protocols the real product speaks
 from those simulated components exactly as it would from hardware, so the whole monitoring loop runs with no gear
 at all, and an operator can break one on purpose to see what monitoring makes of it. The model
 behind it is [simulation](/architecture/simulation/); every action here passes the same
-[scope](/guides/operator/#what-you-see-is-your-scope) and permission checks as the rest of the
+[scope](/operator/#what-you-see-is-your-scope) and permission checks as the rest of the
 console.
 
 ## Run it
@@ -46,7 +52,7 @@ restart.
 
 While a simulator is connected, **Simulation** appears in the sidebar (with `simulation:read`, which
 viewers hold). You see each simulator that serves a component in your scope, and only those
-components: a technician scoped to a building sees that building's simulated components. The page has a card per outpost with a simulator, saying whether it is connected, its total
+components: a technician scoped to one location sees the simulated components under it. The page has a card per outpost with a simulator, saying whether it is connected, its total
 hits and components, what it may do where it runs (**Low ports**: bind ports below 1024; **Port offset**:
 the lift it applies when it cannot; **NET_ADMIN**), and whether it can apply impairments (and if not,
 why). Under it, a table lists every simulated component with its product, address, status, hits and
@@ -158,7 +164,7 @@ out, as the slot's impact says). **Catalog > Actions > Event rules** shows the r
 lasts. Repair it and the next `up` reading clears the alarm and the verdict recovers. The
 [rules guide](/guides/admin/rules/) walks the same loop with a rule of your own.
 
-Loss shows from the far end too. [Platform health](/guides/operator/platform-health/#with-a-simulator)
+Loss shows from the far end too. [Platform health](/operator/platform-health/#with-a-simulator)
 sets what each simulated device saw beside what the outpost sent and the server collected: drop an snmp
 device's packets and the outpost's **sent, not received** gap for snmp opens, read as impaired rather than
 lost, while the device's received count falls; repair it and the attribution clears once the window

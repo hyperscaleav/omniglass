@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "`allowed_parent_types` constrains where a location may be placed"
 ---
 
-- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core-entities](/architecture/core-entities/), [Types guide](/guides/admin/types/), [Work with an entity](/guides/operator/entities/)
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core-entities](/architecture/core-entities/), [Types guide](/guides/admin/types/), [Work with an entity](/operator/entities/)
 - **Decision:** `location_type` gains `allowed_parent_types` (`text[]`, default `{}`): a set whose
   members are `location_type` ids and/or the reserved `root` sentinel (a placement at the top,
   no parent). An empty set is unconstrained (the default, and every existing custom type until an

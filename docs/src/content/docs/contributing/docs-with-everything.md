@@ -364,7 +364,6 @@ A new home is a line in the guard's list with the reason it exists, plus a line 
 ## Style
 
 - No em dashes. Use commas, colons, periods, or parentheses.
-- No AI/assistant attribution.
 - Write for someone learning the system, not someone who already built it. The same page
   serves the operator using the product and the contributor extending it.
 

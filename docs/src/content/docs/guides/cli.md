@@ -786,7 +786,7 @@ omniglass action-rule update platform-alarms-to-admins --targets '["platform-adm
 
 A noisy alarm is snoozed for `1m` to `7d`, and the snooze carries to the alarm raised again after
 it: every notification about it is written `suppressed` until then, and an alarm still raised when
-the snooze ends is announced again ([snoozing](/guides/operator/entities/#snoozing-silencing-a-noisy-alarm-for-a-while)).
+the snooze ends is announced again ([snoozing](/operator/alarms/#snoozing-silencing-a-noisy-alarm-for-a-while)).
 
 ```sh
 a=$(omniglass component alarm list panel-2 | jq -r '.alarms[0].id')
@@ -837,7 +837,7 @@ omniglass metric-type get tcp-connect-time | jq .retention_days
 ## Platform health
 
 `omniglass platform health` answers one question from a terminal: is Omniglass keeping up? It reads
-the platform view (the read behind the console's [Platform health](/guides/operator/platform-health/)
+the platform view (the read behind the console's [Platform health](/operator/platform-health/)
 page) through the API alone, with `--server` and `--token`, so it reads any deployment you hold a
 token for, and it reduces that view to one table:
 
