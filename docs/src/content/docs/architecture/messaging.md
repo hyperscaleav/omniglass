@@ -426,7 +426,7 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   whole wait included, and so is the wait of a pusher that gave up before either. A refusal is a share of the publishes, healthy 0; a p99 rising toward the
   bound is a push lane whose pushers queue behind one another.
 
-[Platform health](/guides/operator/platform-health/#where-work-is-lost) reads the delivery keys hop
+[Platform health](/operator/platform-health/#where-work-is-lost) reads the delivery keys hop
 by hop, the outpost's spool then this ingest, each hop's loss over its components' summed counts and the
 end to end as one minus the product of each hop's survival (#1646).
 

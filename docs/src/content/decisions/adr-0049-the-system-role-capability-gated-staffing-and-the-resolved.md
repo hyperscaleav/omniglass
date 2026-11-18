@@ -8,7 +8,7 @@ summary: "A **`system_role`** is a slot a system needs filled (a table microphon
 - **Date:** 2026-07-21 | **Status:** Superseded by [ADR-0087](#adr-0087-capability-gated-staffing-retires-an-alarm-impairs-its-component-not-a-named-capability) | **Pages:** [core entities](/architecture/core-entities/),
   [API](/architecture/api/), [glossary](/architecture/glossary/), [templates](/architecture/templates/),
   [health](/architecture/health/), [Standards guide](/guides/admin/standards/),
-  [Capabilities guide](/guides/admin/capabilities/), [Work with an entity](/guides/operator/entities/)
+  [Capabilities guide](/guides/admin/capabilities/), [Work with an entity](/operator/entities/)
 - **Decision:** A system says **what it needs filled**, and the platform **refuses** a component that cannot
   fill it. Four tables and two resolvers carry that.
 

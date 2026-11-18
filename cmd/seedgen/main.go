@@ -4,6 +4,11 @@
 // in-process, resolving effective role permissions through the same rbac path
 // the live authorizer uses. The committed JSON is reviewed like any generated
 // code; the drift test in internal/seed fails when it goes stale.
+//
+// The output is merge-friendly by construction (#1492): one entry per line,
+// map keys sorted by encoding/json, list entries in the order their source
+// YAML lists them, so two branches that each add a row at different places
+// merge without a conflict in the derived file. main_test.go holds that.
 package main
 
 import (
@@ -17,15 +22,20 @@ import (
 const dst = "docs/src/generated/seed.json"
 
 func main() {
-	facts, err := seed.FactsJSON()
-	if err != nil {
+	if err := run(dst); err != nil {
 		log.Fatalf("seedgen: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		log.Fatalf("seedgen: mkdir: %v", err)
-	}
-	if err := os.WriteFile(dst, facts, 0o644); err != nil {
-		log.Fatalf("seedgen: write %s: %v", dst, err)
-	}
 	log.Printf("wrote seed facts to %s", dst)
+}
+
+// run renders the seed facts and writes them to path, creating its directory.
+func run(path string) error {
+	facts, err := seed.FactsJSON()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, facts, 0o644)
 }

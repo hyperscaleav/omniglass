@@ -145,7 +145,7 @@ const cases: {
   },
   {
     name: "the entity blade's since-line",
-    page: "guides/operator/entities.md",
+    page: "operator/entities.md",
     shot: "entity-blade",
     value: "[data-testid=blade-since]",
     markup: bladeRow,
@@ -155,7 +155,7 @@ const cases: {
   },
   {
     name: "a system summary card's since-line",
-    page: "guides/operator/fleet.md",
+    page: "operator/fleet.md",
     shot: "fleet-location-systems",
     value: "[data-testid=summary-since]",
     markup: summaryCard,

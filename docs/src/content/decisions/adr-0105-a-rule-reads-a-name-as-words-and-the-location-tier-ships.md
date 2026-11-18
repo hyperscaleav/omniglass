@@ -6,7 +6,7 @@ summary: "`words` joins the closed FuncMap (a run of `-` or `_` becomes one spac
 ---
 
 - **Date:** 2026-08-11 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [find things in your estate](/guides/operator/fleet/#finding-one-thing), [location types](/guides/admin/location-types/)
+  [find things in your estate](/operator/fleet/#finding-one-thing), [location types](/guides/admin/location-types/)
 - **Context:** epic [#657](https://github.com/hyperscaleav/omniglass/issues/657) shipped a label engine
   ([ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)) and an operator-owned
   acronym dictionary ([ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions))

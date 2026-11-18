@@ -8,7 +8,7 @@ import SeededSet from '../../../../components/SeededSet.astro';
 **Catalog, under Systems: Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
 is the directory of **standards**: the contracts your systems are built to. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
-[system](/guides/operator/fleet/) that **conforms** to one. Each row shows the **name** (the
+[system](/operator/fleet/) that **conforms** to one. Each row shows the **name** (the
 operator-facing name, for example `huddle-room`), the **label**, its **parent
 standard** if it is a variant, and its **origin**. A standard also carries an `id`, a uuid minted
 by the database, the internal address the handle resolves to
@@ -61,7 +61,7 @@ examples you create a standard of your own from
 In the console, the **New standard** drawer offers **From scratch** (the form above) or **From a
 template**: pick one of the standard templates, read the slots and choices it would write, give the
 standard a name if you want one of your own, and **Create standard** lands on your new standard's panel
-with a note that it is yours now ([starting from a template](/guides/operator/templates/)). Creating one from a template (with
+with a note that it is yours now ([starting from a template](/operator/templates/)). Creating one from a template (with
 `standard:create`, `POST /standards:createFromTemplate`) writes one
 standard, **not official and not read-only**, carrying the template's slots, choices, property and
 metric contract lines and map, in one write:
@@ -183,12 +183,12 @@ From the CLI: `omniglass standard slot list meeting-room`,
 ## Staff a system against its standard
 
 Declaring the slot is half of it; the other half happens on the system. Open a system from
-[Explore](/guides/operator/fleet/) and its detail carries a **Slots** panel showing **every slot it
+[Explore](/operator/fleet/) and its detail carries a **Slots** panel showing **every slot it
 needs filled**: the ones inherited from its standard and any declared on the system itself, each marked
 with where it came from.
 
 1. **Conform the system to the standard.** A system's **Standard** field is what makes it inherit;
-   a [one-off system](/guides/operator/entities/) that conforms to nothing sees only slots declared
+   a [one-off system](/operator/entities/) that conforms to nothing sees only slots declared
    directly on it.
 2. **Assign a component to the slot.** Each slot lists the components filling it and lets you add
    another. The picker is scoped to what you can see, and assignment is idempotent. Staffing a slot
@@ -197,7 +197,7 @@ with where it came from.
    refused with the scope named, and the same holds for unassigning one.
 3. **Read the understaffed count.** A slot wanting two components with one assigned reads as short by
    one, immediately, without any monitoring running: staffing is a fact about what you have entered. The
-   room's **[health](/guides/operator/entities/#health-on-a-system-or-location)** asks the second question,
+   room's **[health](/operator/alarms/#health-on-a-system-or-location)** asks the second question,
    of the components that **are** assigned, how many can currently do the job, and routes the answer up
    through the slot's impact.
 4. **Unassign when a component moves out.** The slot goes back to understaffed until something else
@@ -242,4 +242,4 @@ and `omniglass system slot assignment delete <name> <slot> <component>`.
 
 Once the slots are declared and staffed, the whole loop (raise an alarm, watch the room go degraded, find
 the cause, clear it, read the history) is on
-[Work with an entity](/guides/operator/entities/#health-on-a-system-or-location).
+[Work with an entity](/operator/alarms/#health-on-a-system-or-location).
