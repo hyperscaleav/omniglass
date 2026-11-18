@@ -96,7 +96,8 @@ breaks says so in that comment too.
 
 agent-fix also puts an `agent-fix` check on the PR's head. It stays in progress while the agent
 works, then finishes as success when the run pushed, neutral when it pushed nothing, and failure
-when the run broke. The check is not required; it is there to be seen.
+when the run broke. A run that pushed shows the finished check on the new head as well, since a
+PR lists only its head's checks. The check is not required; it is there to be seen.
 
 ## Who can start what
 

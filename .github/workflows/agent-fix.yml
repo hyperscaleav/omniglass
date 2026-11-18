@@ -228,4 +228,12 @@ jobs:
             gh api -X PATCH "repos/${REPO}/check-runs/${CHECK}" -f status=completed -f conclusion="$conclusion" \
               -f "output[title]=agent-fix: ${state}" -f "output[summary]=${summary:-Nothing to report.}" --silent \
               || echo "::warning::could not close the agent-fix check (${CHECK}); it stays in progress"
+            # The PR shows checks on its head only, so a run that pushed repeats
+            # its finished check on the new head.
+            if [ -n "$pushed" ]; then
+              gh api "repos/${REPO}/check-runs" -f name=agent-fix -f head_sha="$after" -f status=completed \
+                -f conclusion="$conclusion" -f details_url="$RUN_URL" \
+                -f "output[title]=agent-fix: ${state}" -f "output[summary]=${summary:-Nothing to report.}" --silent \
+                || echo "::warning::could not show the agent-fix check on the pushed head (${pushed})"
+            fi
           fi

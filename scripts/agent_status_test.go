@@ -80,6 +80,7 @@ func TestAgentStatusConclusion(t *testing.T) {
 		{`{"state":"done","pushed":""}`, "neutral"},
 		{`{"state":"done"}`, "neutral"},
 		{`{"state":"failed","pushed":"abc1234"}`, "failure"},
+		{`{"state":"failed","pushed":""}`, "failure"},
 	} {
 		if got, _ := agentStatus(t, "conclusion", c.facts); got != c.want {
 			t.Fatalf("%s: got %q, want %q", c.facts, got, c.want)
