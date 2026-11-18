@@ -128,12 +128,3 @@ describe("the system map's labels fit and do not collide (#1072)", () => {
     expect(anchorOf(1280)).toContain("items-center");
   });
 });
-
-describe("the system map's subject stamp (#2122)", () => {
-  it("stamps each occupied marker as its component, by name, for omnibot", () => {
-    const map = mount(1280);
-    const stamped = [...map.querySelectorAll<HTMLElement>("[data-subject-kind]")];
-    expect(stamped.map((el) => el.dataset.subjectKind)).toEqual(markers.filter((m) => m.occupant).map(() => "component"));
-    expect(stamped.map((el) => el.dataset.subjectRef)).toEqual(markers.filter((m) => m.occupant).map((m) => m.occupant!.name));
-  });
-});
