@@ -17,7 +17,7 @@ per approved definition) while this lifecycle holds inside each slice: see
 |---|---|---|
 | **Define** | a [feature issue](https://github.com/hyperscaleav/omniglass/issues/new/choose) under an epic: the outcome, the thin cut, the deferrals, the test plan, and the permission and scope it touches | **hard gate**: issue filed and scope approved before any branch |
 | **Design** | read the capability's page, rebuilt or not yet (the docs are the spec); locate the seam; name the thin cut | the cut is explicit |
-| **Branch** | a git worktree off `origin/main` under `.claude/worktrees/`, never a commit on `main` | only after Define is approved |
+| **Branch** | a git worktree off `origin/main` under `.claude/worktrees/`, never a commit on `main`; a `PreToolUse` hook in `.claude/settings.json` enforces this by blocking `git commit`, `merge`, `rebase`, and `push` while on `main`, and any force push to `main` from any branch | only after Define is approved |
 | **Build** | [test-first](/contributing/test-driven/): the failing test, then the feature, committing each increment. A slice cuts every entry point it touches, **API + CLI + UI**: the CLI command is generated from the OpenAPI (`make gen`); the UI view is built where the entity is live, or rendered as an honest stub where its backend does not exist yet | RED then GREEN; all three surfaces present (stub allowed) |
 | **Document** | the teaching [docs ship with it](/contributing/docs-with-everything/): the **architecture** page (the model) and, when the slice ships or changes an operator surface, its **operator guide** in `/guides/` (the how-to); plus a build-progress note on the status page, a rebuilt page's **status badge advanced** to its new floor, and a [decision-log](/architecture/decisions/) entry for any divergence | docs in the same PR; badge advanced; divergence logged |
 | **Validate** | `make test` green (run fresh), `make gen` clean, no drift | green, fresh |
@@ -37,7 +37,9 @@ Not a vibe at each gate, a check:
   the deferred items (each its own issue), and the authorization surface (the permission checked
   and the scope injected). **No worktree or branch is created until the issue exists and the
   architect has approved its scope,** so the boundary is agreed before any code, not discovered
-  at review. The one carve-out is the [autopilot](/contributing/autopilot/)
+  at review. The session hook (`.claude/hooks/guard-main-branch.sh`) enforces the branch rule
+  mechanically: `git commit`, `merge`, `rebase`, and `push` on `main`, and any force push
+  targeting `main`, are blocked with a redirect message. The one carve-out is the [autopilot](/contributing/autopilot/)
   ([ADR-0138](/architecture/decisions/#adr-0138-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate)):
   a slice it scopes for itself files the marked definition and proceeds, and the architect's
   approval is paid at the PR instead; what it may self-scope is bounded on that page.
