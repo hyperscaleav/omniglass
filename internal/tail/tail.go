@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 )
 
 // Lane names the primitive a row belongs to, the view binding's primitive.
@@ -79,17 +80,33 @@ type Hub struct {
 	boot string
 	seq  uint64
 	ring []Commit
-	wake chan struct{}
+	// sizes is each held commit's RowBytes total, slotted as ring is; held
+	// is their sum, and oldest the sequence of the oldest commit held.
+	sizes    []int
+	held     int
+	oldest   uint64
+	maxBytes int
+	wake     chan struct{}
 }
 
-// New returns a hub whose ring holds the last size commits.
-func New(size int) *Hub {
-	if size < 1 {
-		size = 1
+// New returns a hub whose ring holds the last commits commits, and of those
+// only as many of the newest as fit in maxBytes of rows (zero is no byte
+// bound). The newest commit is held whatever its size.
+func New(commits, maxBytes int) *Hub {
+	if commits < 1 {
+		commits = 1
 	}
 	var b [6]byte
 	_, _ = rand.Read(b[:])
-	return &Hub{boot: hex.EncodeToString(b[:]), ring: make([]Commit, size), wake: make(chan struct{})}
+	return &Hub{boot: hex.EncodeToString(b[:]), ring: make([]Commit, commits), sizes: make([]int, commits),
+		oldest: 1, maxBytes: maxBytes, wake: make(chan struct{})}
+}
+
+// RowBytes is what a row weighs against the ring's byte bound: the row
+// itself and the bytes its strings and attributes carry.
+func RowBytes(r Row) int {
+	return int(unsafe.Sizeof(r)) + len(r.OwnerKind) + len(r.OwnerID) + len(r.Key) + len(r.Instance) + len(r.Text) +
+		len(r.Origin) + len(r.Message) + len(r.Attributes) + len(r.Severity) + len(r.Facility) + len(r.Channel)
 }
 
 // Commit runs commit and, when it succeeds, publishes rows as the next
@@ -107,14 +124,35 @@ func (h *Hub) Commit(commit func() error, rows []Row) error {
 	if len(rows) == 0 {
 		return nil
 	}
+	size := 0
+	for _, r := range rows {
+		size += RowBytes(r)
+	}
 	h.mu.Lock()
 	h.seq++
-	h.ring[h.seq%uint64(len(h.ring))] = Commit{Cursor: h.cursor(h.seq), Rows: rows}
+	slots := uint64(len(h.ring))
+	if h.seq-h.oldest >= slots {
+		h.drop()
+	}
+	h.ring[h.seq%slots] = Commit{Cursor: h.cursor(h.seq), Rows: rows}
+	h.sizes[h.seq%slots] = size
+	h.held += size
+	for h.maxBytes > 0 && h.held > h.maxBytes && h.oldest < h.seq {
+		h.drop()
+	}
 	wake := h.wake
 	h.wake = make(chan struct{})
 	h.mu.Unlock()
 	close(wake)
 	return nil
+}
+
+// drop lets the oldest held commit go. The caller holds mu.
+func (h *Hub) drop() {
+	slot := h.oldest % uint64(len(h.ring))
+	h.held -= h.sizes[slot]
+	h.ring[slot], h.sizes[slot] = Commit{}, 0
+	h.oldest++
 }
 
 // Mark runs open with every commit fenced out and returns the cursor of the
@@ -160,10 +198,10 @@ func (h *Hub) Read(cursor string, max int) ([]Commit, string, error) {
 	if !ok || after > h.seq {
 		return nil, "", ErrExpired
 	}
-	size := uint64(len(h.ring))
-	if h.seq > size && after < h.seq-size {
+	if after+1 < h.oldest {
 		return nil, "", ErrExpired
 	}
+	size := uint64(len(h.ring))
 	n := h.seq - after
 	if max > 0 && n > uint64(max) {
 		n = uint64(max)

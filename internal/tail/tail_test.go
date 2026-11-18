@@ -17,7 +17,7 @@ func metric(key string, v float64) tail.Row {
 // the next sequence number, and Read returns every commit after a cursor in
 // order.
 func TestCommitPublishesOnlyWhatCommitted(t *testing.T) {
-	h := tail.New(8)
+	h := tail.New(8, 0)
 	c0, err := h.Mark(func() error { return nil })
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +50,7 @@ func TestCommitPublishesOnlyWhatCommitted(t *testing.T) {
 
 // A commit with no rows advances nothing: the tail is what landed.
 func TestCommitWithoutRowsPublishesNothing(t *testing.T) {
-	h := tail.New(8)
+	h := tail.New(8, 0)
 	c0, _ := h.Mark(func() error { return nil })
 	if err := h.Commit(func() error { return nil }, nil); err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestCommitWithoutRowsPublishesNothing(t *testing.T) {
 // Read caps how many commits it returns; the cursor it hands back resumes
 // right after the last one returned.
 func TestReadPagesByMax(t *testing.T) {
-	h := tail.New(8)
+	h := tail.New(8, 0)
 	c0, _ := h.Mark(func() error { return nil })
 	for i := 0; i < 5; i++ {
 		_ = h.Commit(func() error { return nil }, []tail.Row{metric("k", float64(i))})
@@ -82,7 +82,7 @@ func TestReadPagesByMax(t *testing.T) {
 // A cursor older than the ring holds, or from another boot of the hub, or
 // that does not parse, is expired: the reader re-reads history.
 func TestReadExpiresWhatTheRingNoLongerHolds(t *testing.T) {
-	h := tail.New(2)
+	h := tail.New(2, 0)
 	c0, _ := h.Mark(func() error { return nil })
 	for i := 0; i < 3; i++ {
 		_ = h.Commit(func() error { return nil }, []tail.Row{metric("k", float64(i))})
@@ -90,7 +90,7 @@ func TestReadExpiresWhatTheRingNoLongerHolds(t *testing.T) {
 	if _, _, err := h.Read(c0, 0); !errors.Is(err, tail.ErrExpired) {
 		t.Fatalf("a cursor the ring dropped: %v", err)
 	}
-	other := tail.New(2)
+	other := tail.New(2, 0)
 	foreign, _ := other.Mark(func() error { return nil })
 	if _, _, err := h.Read(foreign, 0); !errors.Is(err, tail.ErrExpired) {
 		t.Fatalf("another boot's cursor: %v", err)
@@ -110,7 +110,7 @@ func TestReadExpiresWhatTheRingNoLongerHolds(t *testing.T) {
 // open is where the reader takes its database snapshot, so no commit can
 // land in the snapshot and above the cursor, or outside it and below.
 func TestMarkFencesCommits(t *testing.T) {
-	h := tail.New(64)
+	h := tail.New(64, 0)
 	inOpen := make(chan struct{})
 	release := make(chan struct{})
 	var cursor string
@@ -146,7 +146,7 @@ func TestMarkFencesCommits(t *testing.T) {
 
 // Wait wakes on the next commit, so a watcher never polls.
 func TestWaitWakesOnCommit(t *testing.T) {
-	h := tail.New(8)
+	h := tail.New(8, 0)
 	woke := h.Wait()
 	select {
 	case <-woke:
@@ -179,7 +179,7 @@ func TestNilHubCommitsThrough(t *testing.T) {
 // different cursors knows which commits each one has already seen; a cursor
 // it cannot read is expired.
 func TestSeqOrdersCursors(t *testing.T) {
-	h := tail.New(8)
+	h := tail.New(8, 0)
 	c0, _ := h.Mark(func() error { return nil })
 	_ = h.Commit(func() error { return nil }, []tail.Row{metric("k", 1)})
 	c1 := h.Cursor()
@@ -188,10 +188,61 @@ func TestSeqOrdersCursors(t *testing.T) {
 	if err0 != nil || err1 != nil || s1 != s0+1 {
 		t.Fatalf("seq %d %v, %d %v", s0, err0, s1, err1)
 	}
-	if _, err := tail.New(8).Seq(c1); !errors.Is(err, tail.ErrExpired) {
+	if _, err := tail.New(8, 0).Seq(c1); !errors.Is(err, tail.ErrExpired) {
 		t.Fatalf("another boot's cursor: %v", err)
 	}
 	if _, err := h.Seq(c1[:len(c1)-1] + "9"); !errors.Is(err, tail.ErrExpired) {
 		t.Fatalf("a cursor ahead of the hub: %v", err)
+	}
+}
+
+// The ring is bounded by the bytes its rows hold as well as by its commits:
+// a burst of large commits drops the oldest until it fits, so a cursor into
+// them expires and the reader re-reads history, while the newest commit is
+// always held whatever its size.
+func TestRingDropsTheOldestCommitsPastItsByteBudget(t *testing.T) {
+	line := func(msg string) tail.Row {
+		return tail.Row{Lane: tail.LaneLog, OwnerKind: "component", OwnerID: "c1", Message: msg, TS: time.Unix(0, 0)}
+	}
+	big := string(make([]byte, 1000))
+	one := tail.RowBytes(line(big))
+	h := tail.New(64, 3*one)
+	c0, _ := h.Mark(func() error { return nil })
+	var cursors []string
+	for i := 0; i < 4; i++ {
+		if err := h.Commit(func() error { return nil }, []tail.Row{line(big)}); err != nil {
+			t.Fatal(err)
+		}
+		cursors = append(cursors, h.Cursor())
+	}
+	if _, _, err := h.Read(c0, 0); !errors.Is(err, tail.ErrExpired) {
+		t.Fatalf("a cursor before the dropped commit: %v, want ErrExpired", err)
+	}
+	commits, _, err := h.Read(cursors[0], 0)
+	if err != nil || len(commits) != 3 {
+		t.Fatalf("the three commits the budget holds: %v, %d", err, len(commits))
+	}
+
+	if err := h.Commit(func() error { return nil }, []tail.Row{line(big), line(big), line(big), line(big)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := h.Read(cursors[3], 0); err != nil {
+		t.Fatalf("the newest commit, past the budget alone: %v, want it held", err)
+	}
+	if _, _, err := h.Read(cursors[2], 0); !errors.Is(err, tail.ErrExpired) {
+		t.Fatalf("a cursor behind the oversized commit: %v, want ErrExpired", err)
+	}
+}
+
+// A row's bytes count what it carries, so a long log line weighs more than a
+// sample.
+func TestRowBytesCountsWhatTheRowCarries(t *testing.T) {
+	empty := tail.RowBytes(tail.Row{})
+	long := tail.RowBytes(tail.Row{Lane: tail.LaneLog, Message: string(make([]byte, 500)), Attributes: make([]byte, 300)})
+	if long-empty != 800 {
+		t.Fatalf("a row with 800 bytes of message and attributes weighs %d over an empty row, want 800", long-empty)
+	}
+	if tail.RowBytes(metric("a", 1)) <= empty {
+		t.Fatal("a sample's owner and key weigh nothing")
 	}
 }

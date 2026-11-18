@@ -1364,7 +1364,7 @@ func WithQueryTracer(tracer pgx.QueryTracer) Option {
 // the pool-derived default (the pgblobs store) is filled in afterwards only
 // where WithBlobStore left none.
 func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
-	p := &PG{tail: tail.New(tailCommits)}
+	p := &PG{tail: tail.New(tailCommits, tailBytes)}
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -1502,5 +1502,10 @@ func pgParseReason(err error) string {
 }
 
 // tailCommits is how many sample-write commits the tail keeps for a view
-// watch to resume through; a cursor older than that re-reads history.
-const tailCommits = 4096
+// watch to resume through, and tailBytes the most their rows may hold (a
+// burst of long log lines fills it before the commit count does); a cursor
+// older than the ring re-reads history.
+const (
+	tailCommits = 4096
+	tailBytes   = 64 << 20
+)
