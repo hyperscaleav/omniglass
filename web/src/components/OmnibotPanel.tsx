@@ -114,8 +114,7 @@ export default function OmnibotPanel(props: {
     end?.scrollIntoView?.({ block: "end" });
   });
 
-  const busy = () =>
-    state().status === "working" || state().status === "pending";
+  const busy = () => state().status === "working" || state().status === "pending";
 
   async function run(input: RunInput) {
     controller = new AbortController();
@@ -232,21 +231,10 @@ export default function OmnibotPanel(props: {
         }}
       />
       <div class="flex items-center justify-between gap-2">
-        <Button
-          intent="quiet"
-          size="sm"
-          icon={Key}
-          title="Create a secret and give omnibot its name, never its value"
-          onClick={() => setCredential(true)}
-        >
+        <Button intent="quiet" size="sm" icon={Key} title="Create a secret and give omnibot its name, never its value" onClick={() => setCredential(true)}>
           Add a credential
         </Button>
-        <Button
-          intent="action"
-          size="sm"
-          type="submit"
-          disabled={busy() || !draft().trim()}
-        >
+        <Button intent="action" size="sm" type="submit" disabled={busy() || !draft().trim()}>
           Send
         </Button>
       </div>
@@ -267,13 +255,7 @@ export default function OmnibotPanel(props: {
         }
         headerExtra={
           <Show when={state().items.length > 0}>
-            <Button
-              intent="quiet"
-              size="sm"
-              icon={Plus}
-              disabled={busy()}
-              onClick={restart}
-            >
+            <Button intent="quiet" size="sm" icon={Plus} disabled={busy()} onClick={restart}>
               New conversation
             </Button>
           </Show>
@@ -282,20 +264,14 @@ export default function OmnibotPanel(props: {
       >
         <div class="flex flex-col gap-3">
           <Show when={state().items.length === 0}>
-            <div
-              data-testid="omnibot-empty"
-              class="flex flex-col gap-2 text-sm text-base-content/70"
-            >
+            <div data-testid="omnibot-empty" class="flex flex-col gap-2 text-sm text-base-content/70">
               <p>
-                Omnibot acts as you, through the same API you use: it reads what
-                you may read and changes what you may change, and the audit log
-                records each call as omnibot's, on your behalf.
+                Omnibot acts as you, through the same API you use: it reads what you may read and changes what you may change, and the
+                audit log records each call as omnibot's, on your behalf.
               </p>
               <p>
-                Your agent policy decides each write: always, ask, or never. A
-                write it asks about waits here for you to confirm. Omnibot never
-                sees a secret's value; give it a credential with Add a
-                credential, and it gets only the secret's name.
+                Your agent policy decides each write: always, ask, or never. A write it asks about waits here for you to confirm. Omnibot
+                never sees a secret's value; give it a credential with Add a credential, and it gets only the secret's name.
               </p>
             </div>
           </Show>
@@ -348,36 +324,20 @@ export default function OmnibotPanel(props: {
           </For>
           <Show when={state().interrupt}>
             {(i) => (
-              <div
-                data-testid="omnibot-ask"
-                class="rounded-box border border-warning/50 bg-warning/5 p-3 text-sm"
-              >
-                <p class="font-medium">
-                  Omnibot asks before it runs {i().title}
-                </p>
+              <div data-testid="omnibot-ask" class="rounded-box border border-warning/50 bg-warning/5 p-3 text-sm">
+                <p class="font-medium">Omnibot asks before it runs {i().title}</p>
                 <div class="mt-1.5">
                   <StepArgs args={i().arguments} testid="omnibot-ask-args" />
                 </div>
                 <Show when={i().destructive}>
                   <p class="mt-1 text-xs text-error">This cannot be undone.</p>
                 </Show>
-                <p class="mt-1 text-xs text-base-content/60">
-                  Your agent policy asks about this call. It runs as omnibot, on
-                  your behalf.
-                </p>
+                <p class="mt-1 text-xs text-base-content/60">Your agent policy asks about this call. It runs as omnibot, on your behalf.</p>
                 <div class="mt-2 flex gap-2">
-                  <Button
-                    intent={i().destructive ? "danger" : "action"}
-                    size="sm"
-                    onClick={() => decide(true)}
-                  >
+                  <Button intent={i().destructive ? "danger" : "action"} size="sm" onClick={() => decide(true)}>
                     Confirm
                   </Button>
-                  <Button
-                    intent="quiet"
-                    size="sm"
-                    onClick={() => decide(false)}
-                  >
+                  <Button intent="quiet" size="sm" onClick={() => decide(false)}>
                     Decline
                   </Button>
                 </div>
@@ -386,43 +346,22 @@ export default function OmnibotPanel(props: {
           </Show>
           <Switch>
             <Match when={state().status === "working"}>
-              <div
-                data-testid="omnibot-working"
-                class="flex items-center gap-2 text-xs text-base-content/60"
-              >
+              <div data-testid="omnibot-working" class="flex items-center gap-2 text-xs text-base-content/60">
                 <span class="loading loading-dots loading-xs" /> Working
               </div>
             </Match>
             <Match when={state().status === "stopped"}>
-              <div
-                data-testid="omnibot-status"
-                data-status="stopped"
-                role="status"
-                class="alert alert-soft py-1.5 text-xs"
-              >
-                <span>
-                  Stopped after {state().steps} steps without an answer. Ask
-                  again to carry on from here.
-                </span>
+              <div data-testid="omnibot-status" data-status="stopped" role="status" class="alert alert-soft py-1.5 text-xs">
+                <span>Stopped after {state().steps} steps without an answer. Ask again to carry on from here.</span>
               </div>
             </Match>
             <Match when={state().status === "refused"}>
-              <div
-                data-testid="omnibot-status"
-                data-status="refused"
-                role="alert"
-                class="alert alert-warning alert-soft py-1.5 text-xs"
-              >
+              <div data-testid="omnibot-status" data-status="refused" role="alert" class="alert alert-warning alert-soft py-1.5 text-xs">
                 <span>Omnibot cannot run here: {state().error}</span>
               </div>
             </Match>
             <Match when={state().status === "error"}>
-              <div
-                data-testid="omnibot-status"
-                data-status="error"
-                role="alert"
-                class="alert alert-error alert-soft py-1.5 text-xs"
-              >
+              <div data-testid="omnibot-status" data-status="error" role="alert" class="alert alert-error alert-soft py-1.5 text-xs">
                 <span>{state().error}</span>
               </div>
             </Match>
@@ -437,8 +376,7 @@ export default function OmnibotPanel(props: {
         title="Add a credential"
       >
         <p class="mb-4 text-xs text-base-content/60">
-          The secret is sealed on the server. Omnibot gets its name, to use
-          where a call takes a secret, and never its value.
+          The secret is sealed on the server. Omnibot gets its name, to use where a call takes a secret, and never its value.
         </p>
         <Show when={credential()}>
           <CreateSecretForm onCreated={(s) => useSecret(s.name)} />

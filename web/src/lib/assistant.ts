@@ -41,8 +41,7 @@ export type Ask = {
 // idle: nothing asked yet; working: a run streams; pending: a call waits on
 // the person; done: answered; stopped: the step limit ended it unanswered;
 // refused: this person may not run omnibot here; error: it failed.
-export type RunStatus =
-  "idle" | "working" | "pending" | "done" | "stopped" | "refused" | "error";
+export type RunStatus = "idle" | "working" | "pending" | "done" | "stopped" | "refused" | "error";
 
 export type RunState = {
   items: Item[];
@@ -94,15 +93,11 @@ export function fail(s: RunState, message: string, refused = false): RunState {
 // finished (a dropped connection, a server gone mid-run), so it ends in an
 // error rather than leaving the panel busy for good.
 export function closed(s: RunState): RunState {
-  return s.status === "working"
-    ? fail(s, "The run ended before it finished. Ask again to carry on.")
-    : s;
+  return s.status === "working" ? fail(s, "The run ended before it finished. Ask again to carry on.") : s;
 }
 
 function objectOf(v: unknown): Record<string, unknown> {
-  return v && typeof v === "object" && !Array.isArray(v)
-    ? (v as Record<string, unknown>)
-    : {};
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
 function parseArgs(delta: unknown): Record<string, unknown> {
@@ -196,8 +191,7 @@ export function reduce(s: RunState, ev: AguiEvent): RunState {
         };
       }
       const result = objectOf(ev.result);
-      if (result.stopped === "step_limit")
-        return { ...s, status: "stopped", steps: Number(result.steps) };
+      if (result.stopped === "step_limit") return { ...s, status: "stopped", steps: Number(result.steps) };
       return { ...s, status: "done" };
     }
   }
@@ -293,9 +287,7 @@ export async function runOmnibot(
       // Not JSON: the reason is the body's text.
     }
     const message = typeof err === "string" && err ? err : describeError(err);
-    throw response.status === 403
-      ? new RunRefused(message)
-      : new Error(message);
+    throw response.status === 403 ? new RunRefused(message) : new Error(message);
   }
   for await (const ev of readEvents(response.body)) onEvent(ev);
 }

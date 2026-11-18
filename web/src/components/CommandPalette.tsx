@@ -67,9 +67,7 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
 
 // matches is the palette filter: label, group, or section.
 export const matches = (c: Command, q: string): boolean =>
-  c.label.toLowerCase().includes(q) ||
-  (c.group ?? "").toLowerCase().includes(q) ||
-  (c.section ?? "").toLowerCase().includes(q);
+  c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q) || (c.section ?? "").toLowerCase().includes(q);
 
 // An ask row hands the palette's query to omnibot (#1167) instead of jumping;
 // a triage row runs the triage-alarm skill on an alarm gathered into omnibot's
@@ -134,8 +132,7 @@ export default function CommandPalette(props: {
     }
   });
   createEffect(() => {
-    if (active() >= results().length)
-      setActive(Math.max(0, results().length - 1));
+    if (active() >= results().length) setActive(Math.max(0, results().length - 1));
   });
 
   const go = (c: Row | undefined) => {
@@ -176,9 +173,7 @@ export default function CommandPalette(props: {
                 aria-expanded={results().length > 0}
                 aria-controls={listId}
                 aria-autocomplete="list"
-                aria-activedescendant={
-                  results().length ? optId(active()) : undefined
-                }
+                aria-activedescendant={results().length ? optId(active()) : undefined}
                 onInput={(e) => setQuery(e.currentTarget.value)}
                 onKeyDown={onKey}
                 autofocus
@@ -186,14 +181,7 @@ export default function CommandPalette(props: {
               <kbd class="kbd kbd-sm">esc</kbd>
             </div>
             <ul id={listId} role="listbox" class="max-h-80 overflow-y-auto p-2">
-              <Show
-                when={results().length > 0}
-                fallback={
-                  <li class="px-3 py-6 text-center text-sm text-base-content/40">
-                    No matches
-                  </li>
-                }
-              >
+              <Show when={results().length > 0} fallback={<li class="px-3 py-6 text-center text-sm text-base-content/40">No matches</li>}>
                 <For each={results()}>
                   {(c, i) => (
                     <li>
@@ -212,9 +200,7 @@ export default function CommandPalette(props: {
                           <Bot size={14} />
                         </Show>
                         <Show when={"group" in c && c.group}>
-                          <span class="text-xs text-base-content/40">
-                            {"group" in c && c.group}
-                          </span>
+                          <span class="text-xs text-base-content/40">{"group" in c && c.group}</span>
                           <span class="text-base-content/30">/</span>
                         </Show>
                         <span class="flex-1">{c.label}</span>
