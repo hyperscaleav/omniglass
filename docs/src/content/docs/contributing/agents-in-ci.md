@@ -91,13 +91,13 @@ A lens posts nothing. It returns its surviving findings as JSON, and the `agent-
 which waits for every lens, posts them as one review: a finding on a diff line becomes an inline
 comment, any other goes in the review's body. One blocking finding from any lens makes it
 request changes, so agent-fix still sees one review per round and the five-round cap still
-counts rounds, not lenses.
+counts rounds, not lenses. A lens that fails or times out fails the check rather than passing
+without its part; rerunning the failed jobs retries it.
 
 The review posts as a second GitHub App, `hyperscale-reviewer`, when one is set up. GitHub lets
 no App request changes on a PR it wrote, and the agents' App writes most PRs here, so without
 the second App a blocking review on one of those can only comment. The check still fails, since
-the verdict reads the blocking count at the top of the comment, but agent-fix does not start. A lens that fails or times out fails the check rather than passing
-without its part; rerunning the failed jobs retries it.
+the verdict reads the blocking count at the top of the comment, but agent-fix does not start.
 
 In the merge queue the check reports without reviewing again: it reads the verdict already
 given on the queued PR's head, so `agent-review` can be made required without holding the queue.

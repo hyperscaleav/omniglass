@@ -25,8 +25,8 @@
 # ("comment" or "review"), sender, review_state, mentions (bool: the body
 # carries @hyperscale-agent or @claude), fork (bool), app_bot (the agents' App bot login),
 # reviewer_bot (the reviewer App's bot login, empty when there is none),
-# auto_rounds (the reviewer's Changes-requested reviews on the PR, this one
-# included), maintainers and contributors. verdict reads app_bot (the login
+# auto_rounds (the Changes-requested reviews on the PR from the reviewer App
+# or the agents' App, this one included), maintainers and contributors. verdict reads app_bot (the login
 # that posts agent-review's reviews), head_sha and reviews ([{user, state,
 # commit_id, body}] in the order GitHub lists them). A COMMENTED review whose
 # body opens "agent-review: N blocking" with N above 0 blocks too: that is
