@@ -1,6 +1,7 @@
 # The lab's omnibot (#2121): a recorded model the lab's server plays in place
-# of a live one, by position in each conversation, so every conversation runs
-# the same way. It reads the meeting 405 video bar, asks to tag it, and reports.
+# of a live one, by position in each run, so every run goes the same way. A run
+# whose message holds a conversation's match plays that conversation; any other
+# reads the meeting 405 video bar, asks to tag it, and reports.
 turns:
   - tool_calls:
       - name: get-component
@@ -9,3 +10,20 @@ turns:
       - name: set-component-tag
         arguments: {name: hq.west.level-4.meeting-405.$comp.videobar-1, key: asset-id, value: AV-0415}
   - text: Tagged the meeting 405 video bar as AV-0415.
+conversations:
+  # The triage-alarm skill's run (#2163): read the component, its alarms and
+  # its reachability, then assess, changing nothing.
+  - match: "# Triage an alarm"
+    turns:
+      - tool_calls:
+          - name: get-component
+            arguments: {name: hq.west.level-4.meeting-405.$comp.videobar-1}
+          - name: list-component-alarms
+            arguments: {name: hq.west.level-4.meeting-405.$comp.videobar-1}
+      - tool_calls:
+          - name: get-component-reachability
+            arguments: {name: hq.west.level-4.meeting-405.$comp.videobar-1}
+      - text: >-
+          The meeting 405 video bar's alarm is still active and the bar answers its
+          polls, so the fault is on the device, not the path to it. Next step: a fresh
+          poll to confirm a fix takes. I will ask before running it.
