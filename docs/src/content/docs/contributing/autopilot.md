@@ -66,7 +66,8 @@ it deadlocks. ADR-0138 resolves it without weakening the boundary:
 4. **Ship.** The full `/ship-slice` pass, then the PR: conventional title, the
    ship-review as the body, `closes #NNN`, and the marker line last. The session
    subscribes to the PR's activity and arms an hourly check-in until merge or close. It
-   never enables auto-merge: the architect's merge is the approval
+   never enables auto-merge or queues its own PR: the architect's merge, made by putting the PR
+   in the [merge queue](/contributing/release-ci/#merging-through-the-queue), is the approval
    ([ADR-0859](/architecture/decisions/#adr-0859-the-autopilot-never-arms-auto-merge-the-architects-merge-is-the-approval)).
    The slice's issue goes In Review on the board as the PR opens.
 5. **Report.** A closing comment on the slice issue and a day report: what shipped,
