@@ -2,19 +2,20 @@
 // without a build step; shotmask.spec.ts imports it through this surface).
 import type { Locator, Page } from "@playwright/test";
 
-export type MaskEntry = string | { selector: string; width: number; align?: "right" };
+export type MaskEntry = string | { selector: string; width: number; align?: "right" } | { selector: string; pad: number };
 export type MaskBox = { x: number; y: number; width: number; height: number };
 export type PlannedMask = {
   selector: string;
   width?: number;
   align?: "right";
+  pad?: number;
   locator: Locator;
   rects: (MaskBox & { tag: string })[];
 };
 
 export const MASK_COLOR: string;
-export const STANDING_MASKS: { selector: string; width: number; align: "right" }[];
-export function normalizeMask(entry: MaskEntry): { selector: string; width?: number; align?: "right" };
+export const STANDING_MASKS: ({ selector: string; width: number; align: "right" } | { selector: string; pad: number })[];
+export function normalizeMask(entry: MaskEntry): { selector: string; width?: number; align?: "right"; pad?: number };
 export function planMasks(page: Page, entries: MaskEntry[]): Promise<PlannedMask[]>;
 export function planStandingMasks(page: Page): Promise<PlannedMask[]>;
 export function paintedBoxes(plan: PlannedMask[]): MaskBox[];
