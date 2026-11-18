@@ -13,6 +13,10 @@ name: demo-tag
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  # `lint` is a required check, so it must report on each merge queue entry
+  # (#2181). A queue entry has no PR body to read; the tag was linted on the PR
+  # before it could be queued, so the job passes there without reading one.
+  merge_group:
 
 permissions:
   contents: read
@@ -22,22 +26,30 @@ jobs:
     # Dependabot's version bumps (#66) carry a body it writes itself, which never
     # tags a demo, and a bump has none to tag. Skipped by author at the job, so
     # the check reads as passed for them while every human PR is still held to
-    # the tag.
+    # the tag. On merge_group there is no pull_request, so the condition holds
+    # and the job runs its one merge-queue step.
     if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Pass in the merge queue (the tag was linted on the PR)
+        if: github.event_name == 'merge_group'
+        run: echo "The demo tag was linted on the pull request before it was queued."
+
+      - if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - if: github.event_name == 'pull_request'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
 
       - name: Check the PR body's demo tag
+        if: github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: node web/e2e/walkthrough-pr.mjs tag

@@ -1,6 +1,7 @@
 package build
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -75,7 +76,7 @@ func mergeGroupGaps(workflows map[string][]byte, required []string) ([]string, e
 	for file, body := range workflows {
 		var wf workflowFile
 		if err := yaml.Unmarshal(body, &wf); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", file, err)
 		}
 		mergeGroup := false
 		for _, e := range workflowEvents(wf.On) {
