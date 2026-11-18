@@ -13,7 +13,7 @@ ruleset, and none can merge ([ADR-2175](/architecture/decisions/#adr-2175-agent-
 | --- | --- | --- |
 | `agent-build.yml` | `run:dev-gha` on an issue | builds the ticket into a draft PR that closes it, and marks it ready when done |
 | `agent-review.yml` | every same-repo PR that is opened, pushed, reopened or marked ready | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only, posts findings, and passes its check only when it says ship |
-| `agent-fix.yml` | `@claude` on a PR, a review that requests changes, or agent-review's own Changes requested | pushes a fix to the PR's branch |
+| `agent-fix.yml` | `@hyperscale-agent` (or `@claude`) on a PR, a review that requests changes, or agent-review's own Changes requested | pushes a fix to the PR's branch |
 
 ## The flow
 
@@ -73,17 +73,17 @@ ruleset yet; making it required is the architect's call. Opus reviews PRs that c
 
 ## Asking for a fix
 
-Mention `@claude` in a PR comment or a review comment, or submit a review that requests changes,
-and an agent addresses that feedback and pushes to the PR's branch. It reads only the comment or
-review that started it. Write the ask the way you would to a colleague:
+Mention `@hyperscale-agent` in a PR comment or a review comment, or submit a review that requests
+changes, and an agent addresses that feedback and pushes to the PR's branch. `@claude` still works
+too. The agent reads only the comment or review that started it. Write the ask the way you would to a colleague:
 
 ```text
-@claude the retry in poller.go never backs off; add the backoff and a test for it
+@hyperscale-agent the retry in poller.go never backs off; add the backoff and a test for it
 ```
 
 When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
 PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a
-person to request changes, mention `@claude` or take it over. Fork PRs
+person to request changes, mention `@hyperscale-agent` or take it over. Fork PRs
 are skipped.
 
 ## Who can start what
@@ -94,7 +94,7 @@ are skipped.
 | `contributors` team | fixes, and their comments reach a building agent |
 | anyone else | nothing; their comments never reach a model |
 
-A team member also needs write access to the repo for `@claude` to run, because the action
+A team member also needs write access to the repo for a mention to run, because the action
 itself refuses anyone without it. The gate is `scripts/agent-trust.sh`, tested in
 `go test ./scripts/`.
 

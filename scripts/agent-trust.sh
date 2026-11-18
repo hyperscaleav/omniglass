@@ -22,13 +22,13 @@
 # blockers_unreadable (bool: the workflow could not read them), maintainers and
 # contributors (logins). fix reads event
 # ("comment" or "review"), sender, review_state, mentions (bool: the body
-# carries @claude), fork (bool), app_bot (the agents' App bot login),
+# carries @hyperscale-agent or @claude), fork (bool), app_bot (the agents' App bot login),
 # auto_rounds (the App's Changes-requested reviews on the PR, this one
 # included), maintainers and contributors. verdict reads app_bot, head_sha and
 # reviews ([{user, state, commit_id}] in the order GitHub lists them). actors
-# reads maintainers and contributors. A comment reaches fix only when it mentions @claude, so a
+# reads maintainers and contributors. A comment reaches fix only when it mentions @hyperscale-agent or @claude, so a
 # comment needs only a team member as sender; a review runs when it requests
-# changes or mentions @claude.
+# changes or mentions either name.
 #
 # build and fix print "run", or "refuse: <reason>" / "skip: <reason>"; fix
 # prints "park: <reason>" when the reviewer's automatic rounds are used up, so
@@ -113,7 +113,7 @@ case "$mode" in
         elif member($sender) | not then
           "skip: @\($sender) is not on the maintainers or contributors team"
         elif .event == "review" and ((.review_state // "") | ascii_downcase) != "changes_requested" and ((.mentions // false) | not) then
-          "skip: a review starts a fix only when it requests changes or mentions @claude"
+          "skip: a review starts a fix only when it requests changes or mentions @hyperscale-agent"
         else "run" end'
     ;;
 
