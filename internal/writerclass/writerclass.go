@@ -111,6 +111,7 @@ const (
 // Omniglass process reports them of itself.
 const (
 	CheckinAge            = "checkin-age"
+	RuleSweepAge          = "rule-sweep-age"
 	WorklistTaskCount     = "worklist-task-count"
 	WorklistPullLossRatio = "worklist-pull-loss-ratio"
 	TickDuration          = "tick-duration"
@@ -169,8 +170,22 @@ const (
 	DBPoolIdle             = "db-pool-idle"
 	DBPoolTotal            = "db-pool-total"
 	DBPoolMax              = "db-pool-max"
+	DBPoolAcquireCount     = "db-pool-acquire-count"
 	DBPoolWaitCount        = "db-pool-wait-count"
 	DBPoolWaitDuration     = "db-pool-wait-duration"
+)
+
+// The database's own side of its connections (#1980), read from Postgres each
+// report window: every backend held against the limit that admits clients
+// (max_connections less the superuser reserve), the ones idle in a
+// transaction, and the oldest open transaction's age. They see what the
+// server's pool cannot: a migrate, a psql session, a lab measure or a second
+// server holding connections the pool never opened.
+const (
+	DBConnectionCount                  = "db-connection-count"
+	DBConnectionLimit                  = "db-connection-limit"
+	DBConnectionIdleInTransactionCount = "db-connection-idle-in-transaction-count"
+	DBTransactionOldestAge             = "db-transaction-oldest-age"
 )
 
 // The server's pipeline keys (#1628): how far behind ingest is, how deep the
@@ -305,6 +320,7 @@ var platform = map[string]string{
 	WebhookPostCount:      "the webhook receiver",
 	WebhookRefusalCount:   "the webhook receiver",
 	CheckinAge:            "the server's check-in timer",
+	RuleSweepAge:          "the server's sweep age timer (a server's own, and each peer's)",
 	WorklistTaskCount:     outpostSelfWriter,
 	WorklistPullLossRatio: outpostSelfWriter,
 	TickDuration:          outpostSelfWriter,
@@ -348,8 +364,15 @@ var platform = map[string]string{
 	DBPoolIdle:             serverSelfWriter,
 	DBPoolTotal:            serverSelfWriter,
 	DBPoolMax:              serverSelfWriter,
+	DBPoolAcquireCount:     serverSelfWriter,
 	DBPoolWaitCount:        serverSelfWriter,
 	DBPoolWaitDuration:     serverSelfWriter,
+
+	// The database's side of its connections (#1980).
+	DBConnectionCount:                  serverSelfWriter,
+	DBConnectionLimit:                  serverSelfWriter,
+	DBConnectionIdleInTransactionCount: serverSelfWriter,
+	DBTransactionOldestAge:             serverSelfWriter,
 
 	// The server's pipeline (#1628).
 	IngestLag:                   serverPipelineWriter,

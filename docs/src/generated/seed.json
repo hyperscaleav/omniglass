@@ -627,6 +627,13 @@
    "description": "Seconds since the outpost's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the outpost is silent."
   },
   {
+   "name": "rule-sweep-age",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Rule Sweep Age",
+   "description": "Seconds since the server's event rule sweep last completed, on the server's platform component; written every report window by the server itself and, from the shared database, by each peer server, so it keeps growing while the sweep is stalled."
+  },
+  {
    "name": "worklist-task-count",
    "data_type": "int",
    "label": "Worklist Tasks",
@@ -896,10 +903,16 @@
    "description": "The most connections the server's pool may open; db-pool-total reaching it means a new query waits."
   },
   {
+   "name": "db-pool-acquire-count",
+   "data_type": "int",
+   "label": "Pool Acquires",
+   "description": "Connections the server's pool handed out over the report window, the denominator db-pool-wait-count is a share of; a pool that waited 40 times of 50 acquires is starved, of 50,000 it is not."
+  },
+  {
    "name": "db-pool-wait-count",
    "data_type": "int",
    "label": "Pool Waits",
-   "description": "Connection acquires that found the pool exhausted and waited for a connection, over the report window."
+   "description": "Connection acquires that found the pool exhausted and waited for a connection, over the report window; read against db-pool-acquire-count, 0 is healthy."
   },
   {
    "name": "db-pool-wait-duration",
@@ -907,6 +920,31 @@
    "unit": "ms",
    "label": "Pool Wait Time",
    "description": "Total time acquires spent waiting on an exhausted pool for a connection to free up or open, over the report window."
+  },
+  {
+   "name": "db-connection-count",
+   "data_type": "int",
+   "label": "Database Connections Held",
+   "description": "Client connections open on the database from every source (the server's pool, migrate, psql, a lab measure, a second server) at the end of the report window, read against db-connection-limit; at the limit the database refuses the next client whatever headroom the server's pool shows."
+  },
+  {
+   "name": "db-connection-limit",
+   "data_type": "int",
+   "label": "Database Connection Limit",
+   "description": "The connections the database admits an ordinary role, max_connections less superuser_reserved_connections."
+  },
+  {
+   "name": "db-connection-idle-in-transaction-count",
+   "data_type": "int",
+   "label": "Idle In Transaction",
+   "description": "Database connections sitting idle inside an open transaction at the end of the report window, read against db-connection-count; 0 is healthy. Each holds a connection and its locks and blocks vacuum from reclaiming rows, a leak that shows nowhere until something fails."
+  },
+  {
+   "name": "db-transaction-oldest-age",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Oldest Transaction",
+   "description": "How long the oldest open transaction on the database has been open at the end of the report window, whatever state it is in; a figure that only climbs is a transaction nothing is finishing."
   },
   {
    "name": "ingest-lag",
@@ -4186,6 +4224,17 @@
    "clear_event_type": "rule-cleared"
   },
   {
+   "name": "rule-sweep-stalled",
+   "label": "Rule sweep stalled",
+   "description": "The server's event rule sweep has not completed for more than 30 seconds, so rules that depend on time are not firing or clearing.",
+   "sample_key": "rule-sweep-age",
+   "fire": "value \u003e 30",
+   "clear": "value \u003c= 30",
+   "severity": "high",
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
+  },
+  {
    "name": "worklist-stale",
    "label": "Worklist stale",
    "description": "Every worklist pull the outpost made for two minutes was refused, so it is running its last worklist and misses every change since.",
@@ -4303,6 +4352,26 @@
    "exemption": "no rule yet, #1984"
   },
   {
+   "key": "db-pool-wait-duration",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "db-connection-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "db-connection-idle-in-transaction-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "db-transaction-oldest-age",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
    "key": "ingest-lag",
    "group": "Ingest",
    "exemption": "read beside ingest-lag-max, which the ingest-lag-high rule watches"
@@ -4383,6 +4452,13 @@
    "key": "sweep-failure-count",
    "group": "Queues",
    "exemption": "no rule yet, #1982"
+  },
+  {
+   "key": "rule-sweep-age",
+   "group": "Queues",
+   "rules": [
+    "rule-sweep-stalled"
+   ]
   },
   {
    "key": "retention-behind",

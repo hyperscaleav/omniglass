@@ -1,6 +1,9 @@
 ---
 title: API
 description: "The API contract: AIP-style resources and :verb methods, cursor lists, a problem+json error envelope, idempotent writes, and long-running operations carried by the action row."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 The contract is **two typed surfaces, one source of truth**. The **public HTTP / OpenAPI contract**

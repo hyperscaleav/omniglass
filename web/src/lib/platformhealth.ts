@@ -343,10 +343,13 @@ export function panelSections(panel: PlatformPanel): PanelSection[] {
     list.push(f);
     byKey.set(f.key, list);
   }
+  // A pair's second key folds into the first, unless it is itself a first key:
+  // connections held is idle-in-transaction's denominator and the limit's numerator.
   const seconds = new Set(keys.map((k) => k.of).filter((o): o is string => !!o));
+  const hasPair = new Set(keys.filter((k) => k.of).map((k) => k.name));
   const keyByName = new Map(keys.map((k) => [k.name, k]));
   return keys
-    .filter((k) => !seconds.has(k.name))
+    .filter((k) => !seconds.has(k.name) || hasPair.has(k.name))
     .map((k) => {
       const of = k.of ? keyByName.get(k.of) : undefined;
       const ofFigures = k.of ? (byKey.get(k.of) ?? []) : [];

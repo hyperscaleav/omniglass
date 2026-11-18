@@ -994,6 +994,22 @@ type Gateway interface {
 	// OutpostCheckins reads every claimed outpost's platform component and the time
 	// it last spoke, the check-in age's input (#1625).
 	OutpostCheckins(ctx context.Context) ([]OutpostCheckin, error)
+	// StampRuleSweep records a completed event rule sweep on the server's
+	// platform component, MarkServerSeen that the server is alive,
+	// ReleaseRuleSweep clears both on a clean stop, and ServerSweepAges reads
+	// the stamp of every server seen within a window as an age, a peer's view
+	// of a stalled sweep (#1986).
+	StampRuleSweep(ctx context.Context, componentID string) error
+	MarkServerSeen(ctx context.Context, componentID string) error
+	ReleaseRuleSweep(ctx context.Context, componentID string) error
+	ServerSweepAges(ctx context.Context, seenWithin time.Duration) ([]ServerSweepAge, error)
+	// The heartbeat's reads and audit (#1986): its settings, the webhook
+	// target it names, the open alarms on the platform system, and one
+	// outcome recorded.
+	HeartbeatSettings(ctx context.Context) (settings.HeartbeatSettings, error)
+	HeartbeatTarget(ctx context.Context, name string) (*TargetSend, error)
+	PlatformAlarmCount(ctx context.Context) (int, error)
+	AuditHeartbeat(ctx context.Context, targetID string, ok bool, status int, reason string) error
 	// CommandQueueHealth reads every outpost's command queue (#1626): the
 	// pending, oldest and stuck now, and the redelivered and expired since the
 	// previous read's Now (none for a zero since).
@@ -1396,13 +1412,15 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 func (p *PG) PoolSize() int { return int(p.pool.Config().MaxConns) }
 
 // PoolStat is the gateway pool at a moment (#1627): its connections in use,
-// idle and open against its most, and its running totals of acquires that
-// found it exhausted and the time they waited.
+// idle and open against its most, and its running totals of acquires, of the
+// acquires that found it exhausted and of the time they waited. The acquires
+// are the denominator the waits are a share of (#1980).
 type PoolStat struct {
 	Acquired          int
 	Idle              int
 	Total             int
 	Max               int
+	AcquireCount      int64
 	EmptyAcquireCount int64
 	EmptyAcquireWait  time.Duration
 }
@@ -1415,6 +1433,7 @@ func (p *PG) PoolStat() PoolStat {
 		Idle:              int(s.IdleConns()),
 		Total:             int(s.TotalConns()),
 		Max:               int(s.MaxConns()),
+		AcquireCount:      s.AcquireCount(),
 		EmptyAcquireCount: s.EmptyAcquireCount(),
 		EmptyAcquireWait:  s.EmptyAcquireWaitTime(),
 	}

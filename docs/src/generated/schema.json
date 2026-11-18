@@ -1178,6 +1178,16 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "rule_swept_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "seen_at",
+      "type": "timestamp with time zone",
+      "nullable": true
      }
     ],
     "uniques": [

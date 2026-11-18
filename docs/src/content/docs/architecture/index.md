@@ -1,7 +1,17 @@
 ---
 title: Architecture
 description: "The architecture told as one journey, following a single reading from the gear through its whole life to the answer and the action on it."
+sidebar:
+  label: Overview
+  order: 0
 ---
+
+**For:** contributors and evaluators who want to know how Omniglass is built: one page per
+subsystem, each rebuilt page badged with its status, the architecture of record. **In this section:** this
+overview, the [implementation status](/architecture/status/) grid, the
+[roadmap](/architecture/roadmap/), the [decision log](/architecture/decisions/) and the
+[build log](/architecture/build-log/). The subsystem pages are being rebuilt (#2161); until then the
+current ones sit under **Being rebuilt** in the sidebar.
 
 Monitoring, stripped down, is one shape: **collect the data, evaluate it, see it, act on it.** The
 point is to **know your systems**, and the question that matters most:

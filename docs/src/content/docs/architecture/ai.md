@@ -1,6 +1,9 @@
 ---
 title: AI
 description: "AI as a governed capability acting through the same API, permission, and scope seams as any caller, marked and audited, with human-in-the-loop gating."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 :::note[Partial]
