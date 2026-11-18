@@ -12,6 +12,10 @@ name: test
 
 on:
   pull_request:
+  # The merge queue (#2181) runs the required checks on each queue entry: the
+  # PR on top of current main. A queue entry has its own ref, so the
+  # concurrency group below keeps one run per entry.
+  merge_group:
   push:
     branches: [main, "release/**"]
 
