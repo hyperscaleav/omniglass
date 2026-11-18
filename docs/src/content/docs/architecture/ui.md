@@ -99,22 +99,12 @@ A detail view accepts a name-shaped address as an operator convenience, resolved
 
 ## Handing the console to omnibot
 
-A person hands [omnibot](/architecture/ai/) what they are looking at as references, never as what
-the console rendered (#2122). A row says what it is with a **subject stamp**, `data-subject-kind` and
-`data-subject-ref` (a component's dotted address, a system's name, an alarm's `component/rule`), and
-the shared primitives set it from their row: `FlatList`, `Outline`, the entity blades, the alarm
-rows, the system card, the system map's markers and `TimeseriesChart` (a metric, as
-`owner/metric`). One console-wide handler reads it, so a page built from those primitives is gatherable with no
-code of its own: alt-click adds a row to omnibot's tray, shift-alt-click every stamped row from the
-last one gathered, and a control inside a row keeps its own meaning. ⌘J hands over the page itself, as
-its route and arguments; a detail page names its entity by name or address (the `Page` primitive's
-`name`) in place of the uuid its route holds. A uuid is never a subject.
-
-:::note[Divergence: the stamp is on the list primitives, not ViewResult]
-The renderer contract above would let a view's column declare what a row is. It is not built, so the
-stamp rides the primitives the console has ([ADR-2122](/architecture/decisions/#adr-2122-a-console-subject-is-a-stamp-on-the-shared-primitives-gathered-by-one-modifier-click-handler));
-when `ViewResult` lands, its rows carry the same stamp and the handler does not change.
-:::
+Each prompt hands [omnibot](/architecture/ai/) the page the person is on, as a reference, never as
+what the console rendered (#2162): its route and arguments, with a detail page's uuid replaced by its
+entity's name or address (the `Page` primitive's `name`). The panel shows it above the composer and
+reads it at send time, so a prompt follows the person; dismissing it leaves it out of one prompt. A uuid
+is never a subject. The per-row gathering this replaced (alt-click stamps, a tray, a hand-over key) is
+retired ([ADR-2162](/architecture/decisions/#adr-2162-omnibot-is-handed-the-page-not-what-the-person-gathers)).
 
 ## One renderer library, two composition modes
 

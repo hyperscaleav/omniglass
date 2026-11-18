@@ -4,7 +4,6 @@ import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
 import { entryHref, visibleGroups } from "../lib/catalog";
 import { useMe, can } from "../lib/auth";
-import { tray, triageCall, type Subject } from "../lib/handover";
 import { Search, ArrowRight, Bot } from "./icons";
 
 // The ⌘K command palette: a global jump across the whole app (distinct from a
@@ -52,25 +51,17 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
 export const matches = (c: Command, q: string): boolean =>
   c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q) || (c.section ?? "").toLowerCase().includes(q);
 
-// An ask row hands the palette's query to omnibot (#1167) instead of jumping;
-// a triage row runs the triage-alarm skill on an alarm gathered into omnibot's
-// tray (#2122).
+// An ask row hands the palette's query to omnibot (#1167) instead of jumping.
 export type AskRow = { label: string; ask: true };
-export type TriageRow = { label: string; triage: Subject };
-export type Row = Command | AskRow | TriageRow;
+export type Row = Command | AskRow;
 
-// withAsk ends the results with a triage row for each gathered alarm the query
-// matches, then the ask row, for a person who may run omnibot.
-export function withAsk(results: Command[], q: string, allowed: boolean, gathered: Subject[] = []): Row[] {
+// withAsk ends the results with the ask row, for a person who may run omnibot.
+export function withAsk(results: Command[], q: string, allowed: boolean): Row[] {
   if (!allowed) return results;
-  const triage = gathered
-    .filter((s) => triageCall(s))
-    .map((s) => ({ label: `Triage alarm ${s.ref}`, triage: s }))
-    .filter((r) => r.label.toLowerCase().includes(q.toLowerCase()));
-  return [...results, ...triage, { label: q ? `Ask omnibot: ${q}` : "Ask omnibot", ask: true }];
+  return [...results, { label: q ? `Ask omnibot: ${q}` : "Ask omnibot", ask: true }];
 }
 
-export default function CommandPalette(props: { open: boolean; onClose: () => void; onAsk?: (prompt: string) => void; onTriage?: (alarm: Subject) => void }) {
+export default function CommandPalette(props: { open: boolean; onClose: () => void; onAsk?: (prompt: string) => void }) {
   const navigate = useNavigate();
   const me = useMe();
   const commands = createMemo(() => buildCommands((tokens) => can(me.data, ...tokens)));
@@ -83,7 +74,7 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
     const raw = query().trim();
     const q = raw.toLowerCase();
     const found = q ? commands().filter((c) => matches(c, q)) : commands();
-    return withAsk(found, raw, !!props.onAsk && can(me.data, "assistant", "use"), props.onTriage ? tray() : []);
+    return withAsk(found, raw, !!props.onAsk && can(me.data, "assistant", "use"));
   });
 
   // Reset query + selection each time it opens; keep active in range as results change.
@@ -101,7 +92,6 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
     if (!c) return;
     props.onClose();
     if ("ask" in c) props.onAsk?.(query().trim());
-    else if ("triage" in c) props.onTriage?.(c.triage);
     else navigate(c.path);
   };
 
@@ -156,7 +146,7 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
                         onMouseEnter={() => setActive(i())}
                         onClick={() => go(c)}
                       >
-                        <Show when={"ask" in c || "triage" in c}>
+                        <Show when={"ask" in c}>
                           <Bot size={14} />
                         </Show>
                         <Show when={"group" in c && c.group}>

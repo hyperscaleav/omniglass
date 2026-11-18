@@ -118,12 +118,6 @@
       "setup": []
     },
     {
-      "id": "hand-omnibot-the-console",
-      "title": "Hand omnibot the console",
-      "description": "Hand omnibot the page with Ctrl-J, alt-click an alarm into its tray, and see the one-click Triage beside it.",
-      "setup": []
-    },
-    {
       "id": "issue-a-command",
       "title": "Issue a command and follow it",
       "description": "Tell a video bar its volume from its Activity tab, watch the toast follow the command until the bar's reply settles it, and open the command to read its reply and timing.",
@@ -145,6 +139,12 @@
       "id": "omnibot-panel",
       "title": "Ask omnibot from the console",
       "description": "Open omnibot from the top bar, ask it to tag a video bar, watch its reads arrive as cards, and confirm the write it asks about.",
+      "setup": []
+    },
+    {
+      "id": "omnibot-reads-the-page",
+      "title": "Omnibot reads the page",
+      "description": "Open omnibot on a system page, see the page it will be handed, and ask about it without pointing at anything.",
       "setup": []
     },
     {
