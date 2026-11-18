@@ -703,41 +703,29 @@ func TestTheUDPRequestRungFollowsAMovedName(t *testing.T) {
 }
 
 // A listen port is part of what the socket depends on: changing only it (the
-// target and the terminal rules unchanged) binds a new socket (#1104).
+// target and the terminal rules unchanged) closes the held socket for a new
+// one (#1104). The endpoint starts with no listen port, so the outpost picks
+// one; the change then names that same port, which differs from the key (unset)
+// though the bound port does not, so only a rebind on the key can tell.
 func TestAUDPSocketRebindsWhenOnlyTheListenPortChanges(t *testing.T) {
 	t.Parallel()
 	peer := newComponent(t, nvpAnswers)
 	m := newDatagramManager(t, newCapture())
-	freePort := func() int {
-		free, err := net.ListenUDP("udp4", &net.UDPAddr{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer free.Close()
-		return free.LocalAddr().(*net.UDPAddr).Port
+	m.reconcile([]collection.TaskSpec{udpListenTask("l1", "ep-1", udpParams(peer.addr()))})
+	held := m.datagrams["ep-1"]
+	if held == nil {
+		t.Fatalf("no socket: %v", m.datagramRefused)
 	}
-	// A port picked and released can be taken before the bind, by a
-	// concurrent run: pick again until the endpoint binds the one asked.
-	bind := func(params func(port int) string) (*collection.DatagramConn, int) {
-		for try := 0; try < 6; try++ {
-			port := freePort()
-			m.reconcile([]collection.TaskSpec{udpListenTask("l1", "ep-1", params(port))})
-			if h := m.datagrams["ep-1"]; h != nil && h.sock.LocalAddr().(*net.UDPAddr).Port == port {
-				return h.sock, port
-			}
-		}
-		t.Fatalf("no socket bound to a fresh listen port in 6 tries (refused: %v)", m.datagramRefused)
-		return nil, 0
+	port := held.sock.LocalAddr().(*net.UDPAddr).Port
+	m.reconcile([]collection.TaskSpec{udpListenTask("l1", "ep-1", udpParams(peer.addr(), fmt.Sprintf(`,"listen-port":"%d"`, port)))})
+	// The port the old socket held is free the moment it closes, so a
+	// concurrent run can take it before the new bind: that leaves no socket,
+	// which is as much a rebind as a new one.
+	if now := m.datagrams["ep-1"]; now == held || (now != nil && now.sock == held.sock) {
+		t.Fatal("a changed listen port kept the old socket")
 	}
-	first, port := bind(func(port int) string {
-		return udpParams(peer.addr(), fmt.Sprintf(`,"listen-port":"%d"`, port))
-	})
-	// Only the listen port differs from the held socket's.
-	second, next := bind(func(port int) string {
-		return udpParams(peer.addr(), fmt.Sprintf(`,"listen-port":"%d"`, port))
-	})
-	if next == port || second == first {
-		t.Fatalf("a new listen port kept the old socket (port %d, then %d)", port, next)
+	if held.sock.Err() == nil {
+		t.Fatal("a changed listen port left the old socket open")
 	}
 }
 
