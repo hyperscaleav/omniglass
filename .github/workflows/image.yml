@@ -1,14 +1,15 @@
 name: image
 
 # Build the single container image (console embedded) and publish it to GHCR.
-# On main it tags `latest` + the commit sha; on a PR it tags `pr-<n>` + the
-# commit sha so the preview pipeline can pin a deploy to an exact build. A
+# On main it tags `latest` + the commit sha; on a release branch, the commit
+# sha alone; on a PR it tags `pr-<n>` + the commit sha so the preview pipeline
+# can pin a deploy to an exact build. A
 # release's `v<version>` image is not built here: release.yml builds it inline
 # before the binaries and stamps its digest into them (#1257).
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   pull_request:
 
 # Least privilege: read the repo, write packages (GHCR). Fork PRs get a
@@ -57,7 +58,7 @@ jobs:
   # The lab smoke (#1194): the user's path end to end, on a runner with only
   # Docker doing the work. `make` builds the image and the host binary from
   # this tree with one build id; ./bin/omniglass lab run brings up Postgres,
-  # the server (which migrates and applies the boot seed) and the node with its
+  # the server (which migrates and applies the boot seed) and the outpost with its
   # simulator; the smoke waits for the ready banner, proves the console and the
   # lab flag answer on the printed URL, stops it with Ctrl-C, and proves it
   # left nothing behind (scripts/lab-smoke.sh). It replaces the boot smoke: the
