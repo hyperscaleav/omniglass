@@ -109,7 +109,7 @@ func newLabRunCmd(version, imageDigest string) *cobra.Command {
 	cmd.Flags().StringVar(&image, "image", "", "run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about")
 	// A live omnibot (#2109): the key stays in the host's env, named here,
 	// and only the seed is handed it, to seal as a secret.
-	cmd.Flags().StringVar(&keyEnv, "omnibot-key-env", "", "run omnibot on a live model (GitHub Models by default) with the key in this environment variable, e.g. GITHUB_TOKEN; without it omnibot plays a recording")
+	cmd.Flags().StringVar(&keyEnv, "omnibot-key-env", "", "run omnibot on a live model (OpenRouter by default) with the key in this environment variable, e.g. OPENROUTER_API_KEY; without it omnibot plays a recording")
 	cmd.Flags().StringVar(&project, "project", lab.DefaultProject, "the Docker compose project name")
 	_ = cmd.Flags().MarkHidden("project")
 	// For scripts, not learners (the demo pipeline's recorders and the

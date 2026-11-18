@@ -146,7 +146,7 @@ command itself; here is when you would reach for each:
   whose server and binary disagree is yours to debug. A build-keyed `make` image needs no flag; reach
   for it for an image that is not the one this binary's `make` built, such as a private build.
 - `--omnibot-key-env <VAR>` runs omnibot on a live model: the lab stores that variable's value as its
-  model key and points omnibot at GitHub Models (`--omnibot-key-env GITHUB_TOKEN`), so the panel and
+  model key and points omnibot at OpenRouter (`--omnibot-key-env OPENROUTER_API_KEY`), so the panel and
   `omniglass omnibot` answer for real ([pointing omnibot at a model](/guides/agents/#pointing-omnibot-at-a-model)).
   The key travels to the lab's seed in its environment, visible to `docker inspect` on this machine
   while the seed runs, as the outpost's token is. Without the flag omnibot plays the lab's recording,

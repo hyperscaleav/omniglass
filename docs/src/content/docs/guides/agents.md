@@ -280,17 +280,17 @@ omniglass assistant conversation run lobby --messages '[]' \
 ### Pointing omnibot at a model
 
 omnibot's model is an install setting, the `assistant` namespace, set by an admin. One adapter speaks
-the OpenAI-compatible chat completions API, so it reaches GitHub Models (the default), OpenAI, or a
+the OpenAI-compatible chat completions API, so it reaches OpenRouter (the default), OpenAI, or a
 model you run yourself (Ollama, vLLM, LM Studio) by its base URL. Store the key as a platform secret
 of type `api-key`, then name it:
 
 ```bash
 omniglass secret create --name models-key --owner-kind platform --secret-type api-key \
-  --fields "{\"key\":\"$GITHUB_TOKEN\"}"
+  --fields "{\"key\":\"$OPENROUTER_API_KEY\"}"
 omniglass setting update assistant --body '{"provider":"openai","key_secret":"models-key"}'
 ```
 
-That runs `openai/gpt-4.1-mini` on GitHub Models; `model` names another, and `base_url` another
+That runs `openai/gpt-4.1-mini` on OpenRouter; `model` names another, and `base_url` another
 server (`http://ollama.internal:11434/v1`, say). The server reads these at the start of each run, so a
 change is the next run's, with no restart. It unseals the key for each run and sends it only to the
 model; no setting, route, event or log line shows it, and omnibot never sees it. A server on an
@@ -299,8 +299,8 @@ the notification settings' `egress_allow` names it. A run whose provider fails (
 server down) ends on an error that names the cause; a configured key secret that is gone refuses the
 run, naming it, rather than playing the recording. `{"provider":"none"}` turns the model off.
 
-A lab runs omnibot on a live model with one flag: `omniglass lab run --omnibot-key-env GITHUB_TOKEN`
-stores that variable's value as the lab's key and points `assistant` at GitHub Models. Without the
+A lab runs omnibot on a live model with one flag: `omniglass lab run --omnibot-key-env OPENROUTER_API_KEY`
+stores that variable's value as the lab's key and points `assistant` at OpenRouter. Without the
 flag the lab plays its recording, and a lab started without it again forgets the key.
 
 ### Giving omnibot a credential

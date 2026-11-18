@@ -61,7 +61,7 @@ func TestTheModelKeyIsBoundLikeAnyCredential(t *testing.T) {
 		t.Fatalf("changing only the model = %v, want no bind needed", err)
 	}
 	m, err = gw.OmnibotModel(ctx)
-	if err != nil || m == nil || m.Provider != "openai" || m.Model != "openai/gpt-4.1" || m.BaseURL != "https://models.github.ai/inference" || m.Key != "ghp-real" {
+	if err != nil || m == nil || m.Provider != "openai" || m.Model != "openai/gpt-4.1" || m.BaseURL != "https://openrouter.ai/api/v1" || m.Key != "ghp-real" {
 		t.Fatalf("the configured model = %+v, %v", m, err)
 	}
 	if err := gw.DeleteSecret(ctx, "", "models-key", all, all, true, true); err != nil {

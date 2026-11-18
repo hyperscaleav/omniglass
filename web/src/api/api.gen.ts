@@ -693,7 +693,7 @@ export type AssistantConversationOutputBody = {
 };
 
 /**
- * The model omnibot runs on: openai (any OpenAI-compatible chat completions server, GitHub Models by default) or none, which leaves the server's recording, if any
+ * The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any
  */
 export type AssistantSettingsProvider = typeof AssistantSettingsProvider[keyof typeof AssistantSettingsProvider];
 
@@ -714,9 +714,9 @@ export type AssistantSettings = {
   conversation_days: number;
   /** A platform api-key secret, by name, sent as the bearer on every model call; empty calls without a key (a local server). Setting it takes secret:bind on it. The key never leaves the server */
   key_secret: string;
-  /** The model's name on that server (openai/gpt-4.1-mini on GitHub Models, llama3.1 on Ollama) */
+  /** The model's name on that server (openai/gpt-4.1-mini on OpenRouter, llama3.1 on Ollama) */
   model: string;
-  /** The model omnibot runs on: openai (any OpenAI-compatible chat completions server, GitHub Models by default) or none, which leaves the server's recording, if any */
+  /** The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any */
   provider: AssistantSettingsProvider;
 };
 

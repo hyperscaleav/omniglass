@@ -8,9 +8,9 @@ refs: [2109, 2121, 1166]
 
 - **Date:** 2026-11-18 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [settings](/architecture/settings/), [connect an agent](/guides/agents/#pointing-omnibot-at-a-model)
 - **Decision:** (#2109, on the server-run loop of [ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui).)
-  1. **One adapter, chosen by URL.** OpenAI-compatible chat completions with tool calls, GitHub
-     Models by default; OpenAI, Ollama, vLLM and LM Studio are the same adapter at another
-     `base_url`. The call leaves through the egress guard like any outbound call.
+  1. **One adapter, chosen by URL.** OpenAI-compatible chat completions with tool calls, OpenRouter
+     by default; OpenAI, Ollama, vLLM and LM Studio are the same adapter at another `base_url`. The
+     call leaves through the egress guard like any outbound call.
   2. **The key is a secret by name.** `assistant.key_secret` names a `$platform` api-key secret, as
      `mail_secret` names the mail relay's. The server unseals it at the start of each run and sends it
      only as the model call's bearer; a provider error that echoes it is redacted before it reaches
@@ -30,5 +30,8 @@ refs: [2109, 2121, 1166]
     to spend it, outside the run's permission, policy and audit.
   - **A key per person.** Each person bringing a key spreads a credential the install could hold
     once; a person-scoped key can come later if budgets need it.
+  - **GitHub Models as the default.** #2109 first named it, but GitHub retired it on 2026-07-30,
+    inference API included. OpenRouter takes its place: the same publisher-prefixed model ids, so
+    `openai/gpt-4.1-mini` stays the default model, and one key reaches many publishers.
   - **Falling back to the recording on a broken key.** An operator would see canned answers and
     take them for the model's.

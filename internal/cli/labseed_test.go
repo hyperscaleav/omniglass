@@ -568,8 +568,8 @@ func TestLabSeedPointsOmnibotAtTheKeyItIsGiven(t *testing.T) {
 		}
 		return m
 	}
-	if m := seed("first-key"); m == nil || m.Provider != "openai" || m.Key != "first-key" || m.BaseURL != "https://models.github.ai/inference" {
-		t.Fatalf("seeded with a key: model = %+v, want openai on GitHub Models with that key", m)
+	if m := seed("first-key"); m == nil || m.Provider != "openai" || m.Key != "first-key" || m.BaseURL != "https://openrouter.ai/api/v1" {
+		t.Fatalf("seeded with a key: model = %+v, want openai on OpenRouter with that key", m)
 	}
 	if m := seed("second-key"); m == nil || m.Key != "second-key" {
 		t.Fatalf("seeded with a new key: model = %+v, want the new key", m)

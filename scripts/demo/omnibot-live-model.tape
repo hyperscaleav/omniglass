@@ -27,7 +27,7 @@ Wait
 Type "# Seal a model key as a platform secret and point omnibot at it, by name"
 Enter
 Wait
-Type `omniglass secret create --name models-key --owner-kind platform --secret-type api-key --fields '{"key":"github_pat_demo"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'`
+Type `omniglass secret create --name models-key --owner-kind platform --secret-type api-key --fields '{"key":"sk-or-demo"}' | jq -c '{name, fields: [.fields[] | {name, value}]}'`
 Enter
 Wait
 Type `omniglass setting update assistant --body '{"provider":"openai","key_secret":"models-key"}' | jq -c '.values.assistant | {provider, model, key_secret}'`

@@ -13,9 +13,9 @@ import (
 	"time"
 )
 
-// DefaultOpenAIBaseURL is GitHub Models, the install's model when it names
+// DefaultOpenAIBaseURL is OpenRouter, the install's model when it names
 // no other OpenAI-compatible server (#2109).
-const DefaultOpenAIBaseURL = "https://models.github.ai/inference"
+const DefaultOpenAIBaseURL = "https://openrouter.ai/api/v1"
 
 // DefaultSystemPrompt frames every live turn: who omnibot is and how it
 // reaches the fleet.
@@ -25,7 +25,7 @@ const DefaultSystemPrompt = "You are omnibot, the assistant inside Omniglass, an
 	"A credential is never yours to see: a tool tells you only whether one is present."
 
 // OpenAI is a live model behind any OpenAI-compatible chat completions
-// server: GitHub Models by default, or OpenAI, Ollama, vLLM and LM Studio by
+// server: OpenRouter by default, or OpenAI, Ollama, vLLM and LM Studio by
 // base URL. Key is the bearer the server is called with; it is never part of
 // an error.
 type OpenAI struct {

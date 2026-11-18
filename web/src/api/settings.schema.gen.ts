@@ -63,11 +63,11 @@ export const settingsSchema = {
       "type": "string"
     },
     "model": {
-      "description": "The model's name on that server (openai/gpt-4.1-mini on GitHub Models, llama3.1 on Ollama)",
+      "description": "The model's name on that server (openai/gpt-4.1-mini on OpenRouter, llama3.1 on Ollama)",
       "type": "string"
     },
     "provider": {
-      "description": "The model omnibot runs on: openai (any OpenAI-compatible chat completions server, GitHub Models by default) or none, which leaves the server's recording, if any",
+      "description": "The model omnibot runs on: openai (any OpenAI-compatible chat completions server, OpenRouter by default) or none, which leaves the server's recording, if any",
       "type": "string",
       "enum": [
         "none",

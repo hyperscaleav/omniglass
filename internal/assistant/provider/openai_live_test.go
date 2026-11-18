@@ -7,17 +7,29 @@ import (
 	"time"
 )
 
-// GitHub Models answers a real tool-calling turn (#2109). It runs only with
-// OMNIGLASS_TEST_GITHUB_MODELS_TOKEN set (a GitHub token with models:read,
-// such as gh auth token), and is run before a merge that touches the adapter.
-func TestOpenAILiveGitHubModels(t *testing.T) {
-	key := os.Getenv("OMNIGLASS_TEST_GITHUB_MODELS_TOKEN")
+// A real OpenAI-compatible server answers a tool-calling turn (#2109). It runs
+// only with OMNIGLASS_TEST_MODEL_KEY set, and is run before a merge that
+// touches the adapter. OMNIGLASS_TEST_MODEL_BASE_URL and
+// OMNIGLASS_TEST_MODEL_NAME pick the server and model, the install's
+// defaults when unset, so any provider the adapter claims can be proven:
+// Bedrock's gpt-oss is base URL
+// https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1 and model
+// openai.gpt-oss-20b-1:0, with a Bedrock API key.
+func TestOpenAILive(t *testing.T) {
+	key := os.Getenv("OMNIGLASS_TEST_MODEL_KEY")
 	if key == "" {
-		t.Skip("OMNIGLASS_TEST_GITHUB_MODELS_TOKEN is not set")
+		t.Skip("OMNIGLASS_TEST_MODEL_KEY is not set")
+	}
+	baseURL, model := os.Getenv("OMNIGLASS_TEST_MODEL_BASE_URL"), os.Getenv("OMNIGLASS_TEST_MODEL_NAME")
+	if baseURL == "" {
+		baseURL = DefaultOpenAIBaseURL
+	}
+	if model == "" {
+		model = "openai/gpt-4.1-mini"
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	p := &OpenAI{BaseURL: DefaultOpenAIBaseURL, Model: "openai/gpt-4.1-mini", Key: key, System: DefaultSystemPrompt}
+	p := &OpenAI{BaseURL: baseURL, Model: model, Key: key, System: DefaultSystemPrompt}
 	tools := []Tool{{
 		Name:        "get-component",
 		Description: "Read one component of the fleet by name",
