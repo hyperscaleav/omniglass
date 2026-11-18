@@ -53,7 +53,7 @@ export async function markAllRead(): Promise<number> {
 }
 
 // useUnreadCount is the shell's badge query: polled, and never asked by a
-// principal the server would refuse.
+// user the server would refuse.
 export function useUnreadCount() {
   const me = useMe();
   return useQuery(() => ({

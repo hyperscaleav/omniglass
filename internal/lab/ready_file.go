@@ -80,7 +80,7 @@ func ReadyVars(lab *Lab, token string) [][2]string {
 		{"LAB_DSN", DSN},
 		{"LAB_DB", s.DB.Container},
 		{"LAB_SERVER", s.Server.Container},
-		{"LAB_NODE", s.Node.Container},
+		{"LAB_OUTPOST", s.Outpost.Container},
 		{"LAB_LABELS", strings.Join(pairs, " ")},
 		{"LAB_OWNER_PID", strconv.Itoa(s.Owner.PID)},
 	}

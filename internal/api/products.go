@@ -9,11 +9,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// productBody is the wire shape of a product registry row. A product ties the
+// productBody is the wire shape of a product catalog row. A product ties the
 // classification catalogs together: a vendor (who makes it), a driver (what
 // talks to it), a kind, the component_type it is classified under (the
 // taxonomy above product), an optional icon override, and an optional parent
-// product. The registry lists alphabetically by label.
+// product. The catalog lists alphabetically by label.
 type productBody struct {
 	ID              string `json:"id" doc:"The product's uuid, the stable handle that survives a rename"`
 	Name            string `json:"name" doc:"The name an operator reads and types; renameable"`
@@ -26,7 +26,7 @@ type productBody struct {
 	ComponentType   string `json:"component_type" doc:"The component_type this product is classified under (mic, camera, ...); the taxonomy above product"`
 	ComponentTypeID string `json:"component_type_id" doc:"The component_type's uuid; the stable form of component_type"`
 	Icon            string `json:"icon,omitempty" doc:"A product-level icon override; unset inherits the component_type's icon"`
-	LabelRule       string `json:"label_rule,omitempty" doc:"The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule"`
+	LabelRule       string `json:"label_rule,omitempty" doc:"The label rule instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule"`
 	ParentProduct   string `json:"parent_product,omitempty" doc:"The parent product's handle"`
 	ParentProductID string `json:"parent_product_id,omitempty" doc:"The parent product's uuid; the stable form of parent_product"`
 	Official        bool   `json:"official"`
@@ -94,9 +94,9 @@ type createProductInput struct {
 		VendorID        string `json:"vendor_id,omitempty" doc:"The vendor, by handle or uuid"`
 		DriverID        string `json:"driver_id,omitempty" doc:"The driver that talks to it, by handle or uuid"`
 		Kind            string `json:"kind" enum:"device,app,service" doc:"What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly."`
-		ComponentType   string `json:"component_type" minLength:"1" doc:"The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically."`
+		ComponentType   string `json:"component_type" minLength:"1" doc:"The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to a type in that tree. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically."`
 		Icon            string `json:"icon,omitempty" doc:"A product-level icon override; unset inherits the component_type's icon"`
-		LabelRule       string `json:"label_rule,omitempty" doc:"A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422."`
+		LabelRule       string `json:"label_rule,omitempty" doc:"A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422."`
 		ParentProductID string `json:"parent_product_id,omitempty" doc:"The parent product, by handle or uuid"`
 	}
 }
@@ -110,7 +110,7 @@ type updateProductInput struct {
 		Kind            *string `json:"kind,omitempty" enum:"device,app,service" doc:"A new product class"`
 		ComponentType   *string `json:"component_type,omitempty" doc:"Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears"`
 		Icon            *string `json:"icon,omitempty" doc:"A new icon override; an empty string clears it, so the product inherits its component_type's icon"`
-		LabelRule       *string `json:"label_rule,omitempty" doc:"A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse."`
+		LabelRule       *string `json:"label_rule,omitempty" doc:"A new label rule; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse."`
 		ParentProductID *string `json:"parent_product_id,omitempty" doc:"A new parent product, by handle or uuid; an empty string clears it"`
 	}
 }
@@ -132,7 +132,7 @@ func validProductKind(kind string) bool {
 
 // mapProductErr translates the product storage sentinels into HTTP status. An
 // unknown vendor/driver/parent/component_type reference and an out-of-set
-// kind are 422s; everything else falls through to the shared type-registry
+// kind are 422s; everything else falls through to the shared type-catalog
 // mapping (not-found 404, duplicate 409, official read-only 422, in-use 409).
 func mapProductErr(err error) error {
 	switch {
@@ -145,7 +145,7 @@ func mapProductErr(err error) error {
 	}
 }
 
-// registerProductRoutes wires the product registry CRUD surface, on the same
+// registerProductRoutes wires the product catalog CRUD surface, on the same
 // pattern as the vendor/driver catalogs. Gated by
 // product:read|create|update|delete: product:read sits in the viewer read-floor
 // (*:read), the mutations at the admin tier, exactly like vendor:*.
@@ -156,7 +156,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/products",
 		Summary:     "List products",
-		Description: "Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
+		Description: "Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
 	}, "product", "read"), func(ctx context.Context, _ *struct{}) (*listProductsOutput, error) {
 		items, err := gw.ListProducts(ctx)
 		if err != nil {

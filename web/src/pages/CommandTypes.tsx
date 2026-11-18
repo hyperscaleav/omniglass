@@ -23,7 +23,7 @@ import {
 import { PROPERTIES_KEY, listProperties, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY, listMetricTypes, type MetricRow } from "../lib/metric_types";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -291,7 +291,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "command_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeCommandType }
         : undefined,
-    locked: () => registryLock(row(), me.data, "command_type"),
+    locked: () => catalogLock(row(), me.data, "command_type"),
   });
 
   return (

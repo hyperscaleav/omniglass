@@ -98,7 +98,7 @@ func writeLeaf(b *bytes.Buffer, cmd *cobra.Command, depth int) {
 	if cmd.Short != "" {
 		b.WriteString(cmd.Short + "\n\n")
 	}
-	// A runnable group's own run takes what its Use names (`node simulation
+	// A runnable group's own run takes what its Use names (`outpost simulation
 	// <name>`); its subcommands are listed beneath it, so no [command] here.
 	use := strings.Replace(cmd.UseLine(), " [command]", "", 1)
 	b.WriteString("```\n" + use + "\n```\n\n")

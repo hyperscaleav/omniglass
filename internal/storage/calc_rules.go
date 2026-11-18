@@ -41,19 +41,19 @@ type CalcRule struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	// CalcError is why the stored reduce does not compile against the
-	// registries as they are now (an input key deleted or retyped, a row
+	// catalogs as they are now (an input key deleted or retyped, a row
 	// written outside the gateway); nil when it compiles. Read beside the
 	// rule, never stored or audited.
 	CalcError *CalcFault `json:"-"`
 	// CalcWarnings are the warnings the stored reduce compiles with
 	// (#1021): notes, never a fault; the rule computes all the same.
 	CalcWarnings []CalcFault `json:"-"`
-	// outputType is the output's value type, from the registry row the rule
+	// outputType is the output's value type, from the catalog row the rule
 	// holds by id on its recorded lane, never re-resolved by name; outputID
 	// is that row's id.
 	outputType string
 	outputID   string
-	// inputTypes are the inputs' value types, in order, from the registry
+	// inputTypes are the inputs' value types, in order, from the catalog
 	// rows the rule holds them by.
 	inputTypes []string
 	// candidate is a preview's unsaved rule: compiled each time, never
@@ -146,7 +146,7 @@ func invalidCalc(field, format string, a ...any) error {
 
 // calcRuleSelect reads a rule with its inputs (each key's name, id, lane and
 // data type, read now from the row the input holds by id) and its output
-// key's name and id, from whichever registry its lane names.
+// key's name and id, from whichever catalog its lane names.
 const calcRuleSelect = `select c.id, c.name, coalesce(c.label, ''), c.description, c.owner_kind, c.selector,
 	(select coalesce(jsonb_agg(jsonb_build_object('alias', i.alias, 'key', coalesce(ipt.name, imt.name),
 			'key_id', coalesce(i.property_type_id, i.metric_type_id), 'lane', i.lane, 'data_type', coalesce(ipt.data_type, ''),
@@ -213,7 +213,7 @@ func readCalcRuleSQL(ctx context.Context, q querier, sql, ref string) (CalcRule,
 	return r, nil
 }
 
-// ListCalcRules lists every rule, by name. Rules read like a registry, so
+// ListCalcRules lists every rule, by name. Rules read like a catalog, so
 // every rule is listed whatever the caller's scope.
 func (p *PG) ListCalcRules(ctx context.Context) ([]CalcRule, error) {
 	rows, err := p.pool.Query(ctx, calcRuleSelect+` order by c.name`)
@@ -238,7 +238,7 @@ func (p *PG) ListCalcRules(ctx context.Context) ([]CalcRule, error) {
 	return out, nil
 }
 
-// withCalcFault sets r's CalcError from the registries as they are now (the
+// withCalcFault sets r's CalcError from the catalogs as they are now (the
 // key types its read resolved).
 func (p *PG) withCalcFault(_ context.Context, r *CalcRule) (*CalcRule, error) {
 	p.withCalcNotes(r)
@@ -254,8 +254,8 @@ func (p *PG) GetCalcRule(ctx context.Context, ref string) (*CalcRule, error) {
 	return p.withCalcFault(ctx, &r)
 }
 
-// sampleKey is a key resolved in the registries: its lane, its value type,
-// its id in its lane's registry, and its name now.
+// sampleKey is a key resolved in the catalogs: its lane, its value type,
+// its id in its lane's catalog, and its name now.
 type sampleKey struct {
 	lane      rules.Lane
 	valueType string
@@ -264,7 +264,7 @@ type sampleKey struct {
 	name      string
 }
 
-// resolveSampleKey finds a key by name, in the catalog the ingest registry
+// resolveSampleKey finds a key by name, in the catalog the ingest catalog
 // resolves the name to (the same rule resolveRuleLane takes: an operator's row
 // shadows an official one, #1307), or by id in either.
 func resolveSampleKey(ctx context.Context, q querier, ref string) (sampleKey, bool, error) {
@@ -310,7 +310,7 @@ func resolveSampleKey(ctx context.Context, q querier, ref string) (sampleKey, bo
 	return k, true, nil
 }
 
-// SampleKeyRef is a sample key as the registries hold it: its lane, data
+// SampleKeyRef is a sample key as the catalogs hold it: its lane, data
 // type (a property's), id and name.
 type SampleKeyRef struct {
 	Lane         rules.Lane
@@ -319,7 +319,7 @@ type SampleKeyRef struct {
 }
 
 // ResolveSampleKey finds a key by name (a property first, then a metric) or
-// by id; ErrSampleKeyNotFound when neither registry holds it.
+// by id; ErrSampleKeyNotFound when neither catalog holds it.
 func (p *PG) ResolveSampleKey(ctx context.Context, ref string) (SampleKeyRef, error) {
 	k, ok, err := resolveSampleKey(ctx, p.pool, ref)
 	if err != nil {
@@ -332,9 +332,9 @@ func (p *PG) ResolveSampleKey(ctx context.Context, ref string) (SampleKeyRef, er
 }
 
 // resolveCalcInputs resolves each input's key (by its id once held, else by
-// the name or id the author gave) to the registry row it reads, setting its
+// the name or id the author gave) to the catalog row it reads, setting its
 // name, id and lane and the rule's input value types. health is refused by
-// its name; a key neither registry holds is refused on its field.
+// its name; a key neither catalog holds is refused on its field.
 func resolveCalcInputs(ctx context.Context, q querier, r *CalcRule) error {
 	r.inputTypes = make([]string, len(r.Inputs))
 	for i, in := range r.Inputs {
@@ -404,7 +404,7 @@ func prepareCalcRule(ctx context.Context, q txQuerier, r *CalcRule, check calcCh
 		return err
 	}
 	// A calc rule's output is a key it owns, never one of the reserved
-	// family's (ADR-0161): a native probe key is the node's observation, and
+	// family's (ADR-0161): a native probe key is the outpost's observation, and
 	// health is the rollup's (#525 decision 3).
 	if c, ok := writerclass.Reserved(r.OutputKey); ok {
 		return invalidCalc("output_key", "%s", writerclass.Refusal(c, strings.TrimSpace(r.OutputKey), writerclass.CalcRule, ""))
@@ -476,7 +476,7 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 	}
 	rows, err := q.Query(ctx, `select c.id::text, c.name,
 			c.output_lane || ':' || coalesce(c.output_property_type_id, c.output_metric_type_id)::text, coalesce(pt.name, mt.name, ''),
-			(select coalesce(jsonb_agg(jsonb_build_object('node', i.lane || ':' || coalesce(i.property_type_id, i.metric_type_id)::text,
+			(select coalesce(jsonb_agg(jsonb_build_object('outpost', i.lane || ':' || coalesce(i.property_type_id, i.metric_type_id)::text,
 				'name', coalesce(ipt.name, imt.name)) order by i.position), '[]'::jsonb)
 				from calc_rule_input i left join property_type ipt on ipt.id = i.property_type_id
 				left join metric_type imt on imt.id = i.metric_type_id where i.rule_id = c.id)
@@ -488,9 +488,9 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 		return fmt.Errorf("storage: read the calc graph: %w", err)
 	}
 	defer rows.Close()
-	// The graph's nodes are keys by lane and id, so a rename moves nothing
+	// The graph's outposts are keys by lane and id, so a rename moves nothing
 	// and a property and a metric of one name are two keys; names says each
-	// node's name now, for the chain a refusal reads.
+	// outpost's name now, for the chain a refusal reads.
 	names := map[string]string{}
 	var graph []rules.CalcEdge
 	for rows.Next() {
@@ -502,14 +502,14 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 		if id == r.ID {
 			continue
 		}
-		var inputs []struct{ Node, Name string }
+		var inputs []struct{ Outpost, Name string }
 		if err := json.Unmarshal(raw, &inputs); err != nil {
 			return fmt.Errorf("storage: calc rule %q inputs: %w", name, err)
 		}
 		e := rules.CalcEdge{Rule: name, Output: output}
 		for _, in := range inputs {
-			e.Inputs = append(e.Inputs, in.Node)
-			names[in.Node] = in.Name
+			e.Inputs = append(e.Inputs, in.Outpost)
+			names[in.Outpost] = in.Name
 		}
 		names[output] = outputName
 		graph = append(graph, e)
@@ -520,9 +520,9 @@ func checkCalcGraph(ctx context.Context, q txQuerier, r CalcRule, outIDs [2]any)
 	candidate := rules.CalcEdge{Rule: r.Name, Output: string(r.OutputLane) + ":" + r.outputID}
 	names[candidate.Output] = r.OutputKey
 	for _, in := range r.Inputs {
-		node := string(in.Lane) + ":" + in.KeyID
-		candidate.Inputs = append(candidate.Inputs, node)
-		names[node] = in.Key
+		outpost := string(in.Lane) + ":" + in.KeyID
+		candidate.Inputs = append(candidate.Inputs, outpost)
+		names[outpost] = in.Key
 	}
 	if c := rules.CalcCycle(graph, candidate); c != nil {
 		for i, k := range c.Keys {
@@ -608,7 +608,7 @@ func writeCalcInputs(ctx context.Context, tx pgx.Tx, r CalcRule) error {
 // intended value and its reply. The reverse order is held too (ADR-0161): a
 // driver created or edited to emit a key a rule already outputs is refused at
 // its spec write, a command type targeting one at its target (the key is of
-// the calc class), and a node lane or a push carrying one at the gateway.
+// the calc class), and an outpost lane or a push carrying one at the gateway.
 func collectedBy(ctx context.Context, q querier, key string) error {
 	var driver string
 	err := q.QueryRow(ctx, `select d.name from driver d
@@ -896,7 +896,7 @@ func (p *PG) DeleteCalcRule(ctx context.Context, actorID, ref string, action sco
 }
 
 // resolveSystemSelector checks a system rule's selector against the
-// registries and resolves its systems to ids, as resolveSelector does for
+// catalogs and resolves its systems to ids, as resolveSelector does for
 // components: an entry kept already holds is carried over, and only an
 // entry new to the rule must exist.
 func resolveSystemSelector(ctx context.Context, q querier, sel *CalcRuleSelector, kept CalcRuleSelector) error {

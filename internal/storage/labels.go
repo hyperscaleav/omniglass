@@ -27,7 +27,7 @@ import (
 //
 // Sort, filter and search stay in SQL rather than becoming a permanent
 // limitation the moment a list paginates, one mechanism covers both generated
-// fields instead of two models for one concept, and no template executes across
+// fields instead of two models for one concept, and no rule executes across
 // 15,000 rows on every read. The staleness that buys is paid for by the
 // recompute-and-compare invariant test derived data already owes in this repo.
 //
@@ -50,7 +50,7 @@ import (
 // of its primary system's TYPE; a system's map carries the label of the
 // location it sits at. That is the worked example this epic exists to serve:
 //
-//	Boardroom 204B Display   from   {{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}
+//	Board Meeting 204B Display   from   {{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}
 //
 // The keys are FLAT, never dotted. The map is a closed map[string]string and
 // that flatness is half the sandbox argument in ADR-0098: a value that is a
@@ -79,7 +79,7 @@ import (
 // every fact its map held was the labelled row's own. That argument is void
 // now, and it was weaker than it looked even then: TypeName, ProductName,
 // VendorName, Stem and TypeAbbrev were already columns on OTHER rows (a
-// registry's), and so was the rule itself. What placement changes is that the
+// catalog's), and so was the rule itself. What placement changes is that the
 // other row is now an FLEET row an operator edits daily rather than a catalog
 // row they edit rarely.
 //
@@ -121,7 +121,7 @@ var ErrLabelRuleKindUnknown = errors.New("storage: unknown label rule entity kin
 // dictionary changes is what `title` DOES when the compiled rule executes, which
 // only the render path cares about.
 //
-// The corollary is a rule this file keeps: a template compiled here is thrown
+// The corollary is a rule this file keeps: a rule compiled here is thrown
 // away. Rendering with it would render with an empty dictionary, and the failure
 // would be a quietly mis-cased label rather than an error.
 var grammarEngine = label.Basic
@@ -151,7 +151,7 @@ func (p *PG) labelEngine(ctx context.Context, q querier) (*label.Engine, error) 
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve the acronym dictionary: %w", err)
 	}
-	s, err := settings.Typed(p.settings.ResolveOverride(doc, locks).Values)
+	s, err := settings.Typed(p.settings.ResolveBinding(doc, locks).Values)
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve the acronym dictionary: %w", err)
 	}
@@ -159,7 +159,7 @@ func (p *PG) labelEngine(ctx context.Context, q querier) (*label.Engine, error) 
 }
 
 // LabelRuleKinds are the entity kinds that carry a global label rule, matching
-// the label_rule table's CHECK. Node is deliberately absent: its name is a NATS
+// the label_rule table's CHECK. Outpost is deliberately absent: its name is a NATS
 // subject kept globally unique, it has no type and no parent, so it is not a
 // labelled entity in this sense.
 var LabelRuleKinds = []string{"component", "system", "location"}
@@ -193,7 +193,7 @@ func validateLabelRule(rule *string) error {
 // state to decide about and a reader a difference to misinterpret.
 //
 // It started life on the label rule and generalized with #716, which put the
-// same sentinel on the three other inherited registry facts (stem, icon,
+// same sentinel on the three other inherited catalog facts (stem, icon,
 // abbrev). The columns differ; the decoding does not, so it is one function.
 func nilIfEmpty(s *string) *string {
 	if s != nil && *s == "" {
@@ -210,7 +210,7 @@ func nilIfEmpty(s *string) *string {
 // So it degrades: an unrenderable rule yields no label, the row's pen keeps
 // pointing at the platform, and the read ladder falls through to the entity's
 // name. It never propagates, because the alternative is a create that fails on
-// a template typo, or a bulk recompute that stops at whichever row first
+// a rule typo, or a bulk recompute that stops at whichever row first
 // tripped it.
 // The engine is passed in rather than fetched, because it carries the acronym
 // dictionary and the dictionary is a setting: resolving it here would put a
@@ -236,44 +236,44 @@ func renderLabel(eng *label.Engine, rule string, data label.Data) string {
 // kind when neither its type nor its specific artifact has an opinion.
 //
 // Default is boot-seed space, rewritten authoritatively on every start so a
-// later release can improve the shipped rule. Template is operator space, nil
+// later release can improve the shipped rule. Rule is operator space, nil
 // until an operator overrides it. Effective is which one wins, resolved here
 // rather than left for each caller to coalesce.
 type LabelRule struct {
 	EntityKind string
 	Default    string
-	Template   *string
+	Rule       *string
 	Effective  string
 }
 
-const labelRuleCols = `entity_kind, default_template, template, coalesce(template, default_template)`
+const labelRuleCols = `entity_kind, default_rule, rule, coalesce(rule, default_rule)`
 
 func scanLabelRule(row pgx.Row) (*LabelRule, error) {
 	var r LabelRule
-	if err := row.Scan(&r.EntityKind, &r.Default, &r.Template, &r.Effective); err != nil {
+	if err := row.Scan(&r.EntityKind, &r.Default, &r.Rule, &r.Effective); err != nil {
 		return nil, err
 	}
 	return &r, nil
 }
 
 // UpsertLabelRuleDefault installs the rule this release ships for an entity
-// kind, the boot-seed phase's write. Authoritative on default_template and
-// deliberately blind to template: re-seeding restates what we ship and never
+// kind, the boot-seed phase's write. Authoritative on default_rule and
+// deliberately blind to rule: re-seeding restates what we ship and never
 // reaches an operator's override, which is the whole reason the two are
 // separate columns.
-func (p *PG) UpsertLabelRuleDefault(ctx context.Context, kind, template string) error {
+func (p *PG) UpsertLabelRuleDefault(ctx context.Context, kind, rule string) error {
 	if !validLabelRuleKind(kind) {
 		return fmt.Errorf("%w: %q", ErrLabelRuleKindUnknown, kind)
 	}
-	if _, err := grammarEngine.Parse(template); err != nil {
+	if _, err := grammarEngine.Parse(rule); err != nil {
 		return fmt.Errorf("%w: shipped rule for %s: %s", ErrInvalidLabelRule, kind, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into label_rule (entity_kind, default_template)
+		insert into label_rule (entity_kind, default_rule)
 		values ($1, $2)
 		on conflict (entity_kind) do update
-			set default_template = excluded.default_template,
-			    updated_at       = now()`, kind, template); err != nil {
+			set default_rule = excluded.default_rule,
+			    updated_at   = now()`, kind, rule); err != nil {
 		return fmt.Errorf("storage: upsert label rule %q: %w", kind, err)
 	}
 	return nil
@@ -313,18 +313,18 @@ func (p *PG) GetLabelRule(ctx context.Context, kind string) (*LabelRule, error) 
 }
 
 // SetLabelRule writes an operator's override of a kind's global rule, or clears
-// it back to the shipped default when template is empty. Refuses a rule that
+// it back to the shipped default when rule is empty. Refuses a rule that
 // does not compile (ErrInvalidLabelRule, a 422) before it is stored, and audits
 // the change.
 //
 // Clearing is restore-to-defaults, and it needs no verb of its own the way
 // :resetName does: unlike a name, a rule HAS a representable unset state, so
 // the empty string says it.
-func (p *PG) SetLabelRule(ctx context.Context, actorID, entityKind, template string) (*LabelRule, error) {
+func (p *PG) SetLabelRule(ctx context.Context, actorID, entityKind, rule string) (*LabelRule, error) {
 	if !validLabelRuleKind(entityKind) {
 		return nil, fmt.Errorf("%w: %q", ErrLabelRuleKindUnknown, entityKind)
 	}
-	if err := validateLabelRule(&template); err != nil {
+	if err := validateLabelRule(&rule); err != nil {
 		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -341,9 +341,9 @@ func (p *PG) SetLabelRule(ctx context.Context, actorID, entityKind, template str
 		return nil, fmt.Errorf("storage: load label rule %q: %w", entityKind, err)
 	}
 	after, err := scanLabelRule(tx.QueryRow(ctx, `
-		update label_rule set template = $2, updated_at = now()
+		update label_rule set rule = $2, updated_at = now()
 		where entity_kind = $1
-		returning `+labelRuleCols, entityKind, nilIfEmpty(&template)))
+		returning `+labelRuleCols, entityKind, nilIfEmpty(&rule)))
 	if err != nil {
 		return nil, fmt.Errorf("storage: set label rule %q: %w", entityKind, err)
 	}
@@ -363,7 +363,7 @@ func (p *PG) SetLabelRule(ctx context.Context, actorID, entityKind, template str
 // answer.
 func globalLabelRule(ctx context.Context, q querier, kind string) (string, error) {
 	var rule string
-	err := q.QueryRow(ctx, `select coalesce(template, default_template) from label_rule where entity_kind = $1`, kind).Scan(&rule)
+	err := q.QueryRow(ctx, `select coalesce(rule, default_rule) from label_rule where entity_kind = $1`, kind).Scan(&rule)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
@@ -418,16 +418,16 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 	var global string
 	err := q.QueryRow(ctx, `
 		-- p.label coalesces for the same reason v.label does (#805): a label is
-		-- nullable on every registry, an absent one is renderable as absent, and
+		-- nullable on every catalog, an absent one is renderable as absent, and
 		-- the direct-gateway lane seed, devseed and the tests use accepts a
 		-- product with no label even though the API's minLength refuses one.
 		select coalesce(p.label, ''), coalesce(v.label, ''), p.label_rule, p.component_type_id,
 		       coalesce(s.image->>'label', ct.label),
-		       coalesce(lr.template, lr.default_template, '')
+		       coalesce(lr.rule, lr.default_rule, '')
 		from product p
 		join component_type ct on ct.id = p.component_type_id
 		left join vendor v on v.id = p.vendor_id
-		left join registry_shadow s on s.registry = '`+componentTypeRegistry+`' and s.row_id = ct.id
+		left join catalog_shadow s on s.catalog = '`+componentTypeCatalog+`' and s.row_id = ct.id
 		left join label_rule lr on lr.entity_kind = 'component'
 		where p.id = $1`, productID).
 		Scan(&in.productName, &in.vendorName, &prodRule, &typeID, &in.typeName, &global)

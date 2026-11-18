@@ -86,7 +86,7 @@ func TestSelfSetAndReadAvatar(t *testing.T) {
 	c.do(ownerTok, "GET", "/auth/me/avatar", nil, http.StatusNotFound)
 }
 
-// TestGetAvatar_404WhenAbsent proves the read endpoint is a 404 for a principal
+// TestGetAvatar_404WhenAbsent proves the read endpoint is a 404 for a user
 // that has never set a picture (not an empty 200). Skipped under -short.
 func TestGetAvatar_404WhenAbsent(t *testing.T) {
 	t.Parallel()
@@ -128,7 +128,7 @@ func TestSelfSetAvatar_RejectsGarbage(t *testing.T) {
 }
 
 // TestAdminSetAvatar_GatedByPermission proves the admin avatar routes are gated by
-// principal:set-avatar: a viewer (which lacks it) is a 403, while an owner sets
+// user:set-avatar: a viewer (which lacks it) is a 403, while an owner sets
 // another human's picture (204) and the directory then reports has_avatar true, and
 // a remove (204) clears it. Skipped under -short.
 func TestAdminSetAvatar_GatedByPermission(t *testing.T) {
@@ -144,11 +144,11 @@ func TestAdminSetAvatar_GatedByPermission(t *testing.T) {
 	defer srv.Close()
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
-	viewerTok := principalWithGrants(t, ctx, dsn, "viewer-only", []grant{{role: "viewer", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "viewer-only", []grant{{role: "viewer", scopeKind: "all"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Owner creates a human target.
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "bob"}, http.StatusCreated)
+	created := c.do(ownerTok, "POST", "/users", map[string]string{"username": "bob"}, http.StatusCreated)
 	var bob struct {
 		ID string `json:"id"`
 	}
@@ -156,16 +156,16 @@ func TestAdminSetAvatar_GatedByPermission(t *testing.T) {
 		t.Fatalf("create bob: %v (%s)", err, created)
 	}
 
-	// A viewer lacks principal:set-avatar: a capability fast-reject 403.
-	c.do(viewerTok, "POST", "/principals/"+bob.ID+":setAvatar", map[string]string{"image_base64": onePxPNGB64}, http.StatusForbidden)
+	// A viewer lacks user:set-avatar: a capability fast-reject 403.
+	c.do(viewerTok, "POST", "/users/"+bob.ID+":setAvatar", map[string]string{"image_base64": onePxPNGB64}, http.StatusForbidden)
 
 	// The owner sets it; the directory then shows has_avatar true.
-	c.do(ownerTok, "POST", "/principals/"+bob.ID+":setAvatar", map[string]string{"image_base64": onePxPNGB64}, http.StatusNoContent)
-	if _, body := c.send(ownerTok, "GET", "/principals/"+bob.ID, nil); !bytes.Contains(body, []byte(`"has_avatar":true`)) {
+	c.do(ownerTok, "POST", "/users/"+bob.ID+":setAvatar", map[string]string{"image_base64": onePxPNGB64}, http.StatusNoContent)
+	if _, body := c.send(ownerTok, "GET", "/users/"+bob.ID, nil); !bytes.Contains(body, []byte(`"has_avatar":true`)) {
 		t.Fatalf("bob has_avatar not set after admin upload: %s", body)
 	}
 	// The owner reads it back through the admin route: a 200 with a non-empty picture.
-	read := c.do(ownerTok, "GET", "/principals/"+bob.ID+"/avatar", nil, http.StatusOK)
+	read := c.do(ownerTok, "GET", "/users/"+bob.ID+"/avatar", nil, http.StatusOK)
 	var got struct {
 		ImageBase64 string `json:"image_base64"`
 	}
@@ -174,20 +174,20 @@ func TestAdminSetAvatar_GatedByPermission(t *testing.T) {
 	}
 
 	// The owner removes it; the flag clears and the read route becomes a 404.
-	c.do(ownerTok, "POST", "/principals/"+bob.ID+":removeAvatar", nil, http.StatusNoContent)
-	if _, body := c.send(ownerTok, "GET", "/principals/"+bob.ID, nil); bytes.Contains(body, []byte(`"has_avatar":true`)) {
+	c.do(ownerTok, "POST", "/users/"+bob.ID+":removeAvatar", nil, http.StatusNoContent)
+	if _, body := c.send(ownerTok, "GET", "/users/"+bob.ID, nil); bytes.Contains(body, []byte(`"has_avatar":true`)) {
 		t.Fatalf("bob has_avatar still set after admin remove: %s", body)
 	}
-	c.do(ownerTok, "GET", "/principals/"+bob.ID+"/avatar", nil, http.StatusNotFound)
+	c.do(ownerTok, "GET", "/users/"+bob.ID+"/avatar", nil, http.StatusNotFound)
 }
 
-// TestGetPrincipalAvatar_ScopedReaderForbidden proves the admin avatar read route
-// enforces ABAC scope, not just the principal:read capability. A location-scoped
-// admin HOLDS principal:read (via the admin role) so it clears the capability gate,
+// TestGetUserAvatar_ScopedReaderForbidden proves the admin avatar read route
+// enforces ABAC scope, not just the user:read capability. A location-scoped
+// admin HOLDS user:read (via the admin role) so it clears the capability gate,
 // but the gateway's all-scope invariant must still refuse it (403) on another
-// principal's avatar, exactly as GET /principals/{id} does. An all-scope owner reads
+// user's avatar, exactly as GET /users/{id} does. An all-scope owner reads
 // the same picture (200). Skipped under -short.
-func TestGetPrincipalAvatar_ScopedReaderForbidden(t *testing.T) {
+func TestGetUserAvatar_ScopedReaderForbidden(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -200,24 +200,24 @@ func TestGetPrincipalAvatar_ScopedReaderForbidden(t *testing.T) {
 	defer srv.Close()
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
-	// A location-scoped admin holds principal:read (via the admin role) but only at a
+	// A location-scoped admin holds user:read (via the admin role) but only at a
 	// narrow scope, so it passes the capability gate yet must be refused by the
-	// gateway's all-scope invariant, exactly as on GET /principals/{id}.
-	scopedTok := principalWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
+	// gateway's all-scope invariant, exactly as on GET /users/{id}.
+	scopedTok := userWithGrants(t, ctx, dsn, "hq-admin", []grant{{role: "admin", scopeKind: "location", scopeID: "HQ"}})
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Owner creates a human target and sets its picture.
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "carol"}, http.StatusCreated)
+	created := c.do(ownerTok, "POST", "/users", map[string]string{"username": "carol"}, http.StatusCreated)
 	var carol struct {
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(created, &carol); err != nil || carol.ID == "" {
 		t.Fatalf("create carol: %v (%s)", err, created)
 	}
-	c.do(ownerTok, "POST", "/principals/"+carol.ID+":setAvatar", map[string]string{"image_base64": onePxPNGB64}, http.StatusNoContent)
+	c.do(ownerTok, "POST", "/users/"+carol.ID+":setAvatar", map[string]string{"image_base64": onePxPNGB64}, http.StatusNoContent)
 
 	// The all-scope owner reads it back: a 200 with a non-empty picture.
-	read := c.do(ownerTok, "GET", "/principals/"+carol.ID+"/avatar", nil, http.StatusOK)
+	read := c.do(ownerTok, "GET", "/users/"+carol.ID+"/avatar", nil, http.StatusOK)
 	var got struct {
 		ImageBase64 string `json:"image_base64"`
 	}
@@ -225,7 +225,7 @@ func TestGetPrincipalAvatar_ScopedReaderForbidden(t *testing.T) {
 		t.Fatalf("owner read carol avatar: err=%v body=%s", err, read)
 	}
 
-	// The scoped admin passes the principal:read capability but is refused by the
+	// The scoped admin passes the user:read capability but is refused by the
 	// gateway's all-scope invariant: a 403, never a 200 leaking the picture.
-	c.do(scopedTok, "GET", "/principals/"+carol.ID+"/avatar", nil, http.StatusForbidden)
+	c.do(scopedTok, "GET", "/users/"+carol.ID+"/avatar", nil, http.StatusForbidden)
 }

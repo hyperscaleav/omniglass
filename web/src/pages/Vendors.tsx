@@ -19,11 +19,11 @@ import {
   deleteVendor,
 } from "../lib/vendors";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Vendors: the vendor registry (the vendor picker on the product form), on the
+// Vendors: the vendor catalog (the vendor picker on the product form), on the
 // flat FlatList surface. A vendor is addressed by its kebab name (ADR-0062:
 // the uuid is identity, the name is what an operator reads and types);
 // official rows are read-only, same as the Types catalog's
@@ -181,7 +181,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "vendor", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeVendor }
         : undefined,
-    locked: () => registryLock(row(), me.data, "vendor"),
+    locked: () => catalogLock(row(), me.data, "vendor"),
   });
 
   return (

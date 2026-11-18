@@ -14,7 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// The touch panel speaks the newtron-nvp driver's line protocol on 51325,
+// The touch panel speaks the newtron-panel-nvp driver's line protocol on 51325,
 // as the collector's own line client asks it: GET INPUT reports the video
 // input, SET INPUT selects one of the inputs the video-input property
 // allows, and the next GET sees it.

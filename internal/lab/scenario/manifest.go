@@ -2,7 +2,7 @@
 // a vertical environment described once, as site archetypes (one headquarters
 // and the kinds of office repeated around it), each archetype's location tree,
 // the standards placed at its sites as ratios, and the catalog product filling
-// each role of each standard. A size knob turns it into a concrete plan of
+// each slot of each standard. A size knob turns it into a concrete plan of
 // sites, systems and components (Resolve), the number of sites growing with
 // the size between the bounds the manifest declares. Pure: the manifest, the catalog and the
 // size come in, the plan goes out, the same plan every time.
@@ -46,7 +46,7 @@ type Manifest struct {
 // Pusher is one outside actor a scenario places at every site, PerSite of
 // them a site, each scoped to Systems of the site's systems, or to every one
 // when Systems is omitted. Its profile's face says what kind it is: a push
-// face (a booking service, say) makes a token pusher, whose principal the
+// face (a booking service, say) makes a token pusher, whose user the
 // lab seeds and whose token it mints per run, granted telemetry:push on its
 // systems; a webhook face (the meeting platform's account, #1747) makes a
 // signed-webhook sender, a component the lab seeds with a webhook endpoint
@@ -79,7 +79,7 @@ type SiteBounds struct {
 
 // Standard is one system type the scenario places: a standard from the
 // template catalog, the system type its systems are classified under, and the
-// product filling each role it staffs.
+// product filling each slot it staffs.
 type Standard struct {
 	Name       Ref            `yaml:"name"`
 	SystemType Ref            `yaml:"system_type"`
@@ -87,8 +87,8 @@ type Standard struct {
 	Line       int            `yaml:"-"`
 }
 
-// Archetype is one kind of site, each site a campus with its own node (one
-// node per site, #1357): the buildings its rooms are spread over, the ratio of
+// Archetype is one kind of site, each site a campus with its own outpost (one
+// outpost per site, #1357): the buildings its rooms are spread over, the ratio of
 // each standard among its systems, and how many systems a site of it
 // typically has (TypicalSystems), which weighs its share of the size. The
 // headquarters is placed exactly once; every other archetype is repeated, its
@@ -189,8 +189,8 @@ func (b *Building) UnmarshalYAML(n *yaml.Node) error {
 	return decodeKnown(n, (*plain)(b), "name", "floors")
 }
 
-// decodeKnown decodes a mapping node refusing a key it does not list: a
-// misspelt key is a refusal, not a silently empty field. It decodes the node
+// decodeKnown decodes a mapping outpost refusing a key it does not list: a
+// misspelt key is a refusal, not a silently empty field. It decodes the outpost
 // itself, so the lines nested names keep are the file's own.
 func decodeKnown(n *yaml.Node, v any, keys ...string) error {
 	if n.Kind != yaml.MappingNode {

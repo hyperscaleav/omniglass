@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// HopInstance is the instance a hop the node measures besides its own spool
+// HopInstance is the instance a hop the outpost measures besides its own spool
 // writes under: the hop and the kind, "schedule/metric" (#1693). The bare
-// kind stays the spool's (the node hop's), so the two never share a series.
+// kind stays the spool's (the outpost hop's), so the two never share a series.
 func HopInstance(h Hop, k Kind) string { return string(h) + "/" + string(k) }
 
 // ParseHopInstance reads a HopInstance back, ok false for anything that is not
@@ -31,7 +31,7 @@ func (c *Counts) Scheduled(kinds []Kind, made, skipped int) {
 }
 
 // HopReadings is Readings under hop h's instances, HopInstance(h, kind), for a
-// hop the node measures beside its spool.
+// hop the outpost measures beside its spool.
 func (c Counts) HopReadings(h Hop) []Reading {
 	rs := c.Readings()
 	for i := range rs {

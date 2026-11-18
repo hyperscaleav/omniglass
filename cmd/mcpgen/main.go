@@ -4,8 +4,9 @@
 // x-omniglass-mcp extension in Go becomes one tool; the builder and renderers
 // live in internal/mcp/mcpgen so the drift test can run them too. It writes the
 // Go catalog the server serves (internal/mcp/catalog_gen.go) and the docs
-// reference page (docs/src/content/docs/reference/mcp/index.md), both committed
-// and reviewed like code.
+// reference page (docs/src/content/docs/reference/mcp/index.md), and the skills
+// reference page (reference/mcp/skills.md) from the embedded skills, all
+// committed and reviewed like code.
 package main
 
 import (
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 
 	"github.com/hyperscaleav/omniglass/internal/mcp/mcpgen"
+	"github.com/hyperscaleav/omniglass/internal/mcp/skills"
 )
 
 func main() {
@@ -40,5 +42,9 @@ func main() {
 	if err := os.WriteFile(page, mcpgen.RenderDoc(defs), 0o644); err != nil {
 		log.Fatalf("mcpgen: write docs page: %v", err)
 	}
-	log.Printf("wrote %s and %s (%d tools)", catalog, page, len(defs))
+	const skillsPage = "docs/src/content/docs/reference/mcp/skills.md"
+	if err := os.WriteFile(skillsPage, mcpgen.RenderSkills(defs, skills.All()), 0o644); err != nil {
+		log.Fatalf("mcpgen: write skills page: %v", err)
+	}
+	log.Printf("wrote %s, %s and %s (%d tools, %d skills)", catalog, page, skillsPage, len(defs), len(skills.All()))
 }

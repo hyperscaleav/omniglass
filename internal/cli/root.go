@@ -1,6 +1,6 @@
 // Package cli is the single binary's command surface: the run modes (server,
 // migrate) for the walking skeleton. Operator/dev subcommands (thin API
-// clients, never direct Postgres) and the node run mode arrive in later slices.
+// clients, never direct Postgres) and the outpost run mode arrive in later slices.
 package cli
 
 import (
@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newRoot(version string) *cobra.Command {
+func newRoot(version, imageDigest string) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "omniglass",
 		Short:         "Omniglass control plane (walking skeleton)",
@@ -32,8 +32,10 @@ func newRoot(version string) *cobra.Command {
 		newSetPasswordCmd(),
 		newSeedDevCmd(),
 		newSimCmd(),
-		newLabCmd(version),
+		newLabCmd(version, imageDigest),
+		newPlatformCmd(),
 		newMCPCmd(version),
+		newOmnibotCmd(version),
 	)
 	// Generated commands: one per API operation, sharing the connection flags.
 	// The two sets compose on the same root; regeneration touches only the
@@ -41,13 +43,13 @@ func newRoot(version string) *cobra.Command {
 	addClientFlags(root)
 	root.AddCommand(generatedCommands()...)
 
-	// The edge run mode hangs off the generated `node` group rather than the
-	// root, so `node run` sits beside `node list`. Attached after generation
-	// because the group is generated; if the API ever stops exposing node
-	// routes the mode would vanish silently, which TestNodeRunIsReachable
+	// The edge run mode hangs off the generated `outpost` group rather than the
+	// root, so `outpost run` sits beside `outpost list`. Attached after generation
+	// because the group is generated; if the API ever stops exposing outpost
+	// routes the mode would vanish silently, which TestOutpostRunIsReachable
 	// catches.
-	if g, _, err := root.Find([]string{"node"}); err == nil && g != root {
-		g.AddCommand(newNodeRunCmd())
+	if g, _, err := root.Find([]string{"outpost"}); err == nil && g != root {
+		g.AddCommand(newOutpostRunCmd())
 	}
 
 	rejectUnknownVerbs(root)
@@ -88,12 +90,14 @@ func rejectUnknownVerbs(parent *cobra.Command) {
 // Root returns the fully assembled command tree without executing it. It is the
 // seam the docs generator (cmd/docsgen) walks to render the CLI reference, so the
 // reference is always the real command surface, never a hand-maintained copy.
-func Root(version string) *cobra.Command { return newRoot(version) }
+func Root(version string) *cobra.Command { return newRoot(version, "") }
 
 // Execute runs the root command. version is the build-time-injected release
-// tag (or "dev" for local builds), surfaced via `omniglass --version`.
-func Execute(version string) {
-	if err := newRoot(version).Execute(); err != nil {
+// tag (or "dev" for local builds), surfaced via `omniglass --version`;
+// imageDigest is the release image's digest, injected beside it (empty for
+// any other build), which `lab run` pulls by.
+func Execute(version, imageDigest string) {
+	if err := newRoot(version, imageDigest).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}

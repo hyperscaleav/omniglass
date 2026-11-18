@@ -2,7 +2,7 @@
 # embedded. Stage `web` builds the Vite SPA into internal/webui/dist; stage
 # `build` compiles the Go binary with -tags web so go:embed picks the SPA up;
 # the final stage is a distroless static image running the binary as nonroot.
-# One image is the whole app: server, node, migrate, bootstrap, and token modes.
+# One image is the whole app: server, outpost, migrate, bootstrap, and token modes.
 #
 # Multi-arch: the two builder stages pin to $BUILDPLATFORM so they always run
 # natively on the host (no QEMU), and the Go stage cross-compiles to the target

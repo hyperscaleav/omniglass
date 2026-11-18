@@ -16,12 +16,12 @@ import (
 func TestAnHTTPSEndpointPinsItsCertificateKey(t *testing.T) {
 	t.Parallel()
 	f := newTLSFixture(t)
-	plain, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "http", Component: &f.component, Node: &f.node,
+	plain, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "http", Component: &f.component, Outpost: &f.outpost,
 		Params: []byte(`{"target":"10.0.0.9:80"}`)}, f.all)
 	if err != nil {
 		t.Fatalf("an http endpoint: %v", err)
 	}
-	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "https", Component: &f.component, Node: &f.node,
+	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "https", Component: &f.component, Outpost: &f.outpost,
 		Params: []byte(`{"target":"10.0.0.9:443","tls-mode":"pin"}`)}, f.all)
 	if err != nil {
 		t.Fatalf("an https endpoint beside the http one: %v", err)
@@ -51,7 +51,7 @@ func TestAnHTTPSEndpointPinsItsCertificateKey(t *testing.T) {
 	if got := f.task(t, plain.ID).CertificatePin; got != "" {
 		t.Fatalf("a plain http endpoint carries a pin %q", got)
 	}
-	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "https", Component: &f.component, Node: &f.node,
+	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "https", Component: &f.component, Outpost: &f.outpost,
 		Params: []byte(`{"target":"10.0.0.9:8443","tls-mode":"trusting"}`)}, f.all); !errors.Is(err, storage.ErrEndpointParamsInvalid) {
 		t.Fatalf("a bare https endpoint with a mode that is not one = %v, want ErrEndpointParamsInvalid", err)
 	}

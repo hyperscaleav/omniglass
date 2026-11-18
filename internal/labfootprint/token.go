@@ -1,7 +1,9 @@
 package labfootprint
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -57,33 +59,74 @@ func (h *harness) token() string {
 // token source behind it mints a fresh token and retries once. Any status
 // is returned with its body; only a transport failure is an error.
 func (h *harness) fetch(ctx context.Context, u string) (int, string, []byte, error) {
+	return h.do(ctx, http.MethodGet, u, nil)
+}
+
+// do sends method to u with the bearer token and body (JSON, when there is
+// one), retrying once on a 401 as fetch does.
+func (h *harness) do(ctx context.Context, method, u string, body []byte) (int, string, []byte, error) {
 	tok := h.token()
-	code, status, body, err := h.fetchWith(ctx, u, tok)
+	code, status, out, err := h.fetchWith(ctx, method, u, tok, body)
 	if err != nil || code != http.StatusUnauthorized || h.tokens == nil {
-		return code, status, body, err
+		return code, status, out, err
 	}
 	if tok, err = h.tokens.refresh(ctx, tok); err != nil {
 		return 0, "", nil, err
 	}
-	return h.fetchWith(ctx, u, tok)
+	return h.fetchWith(ctx, method, u, tok, body)
 }
 
-func (h *harness) fetchWith(ctx context.Context, u, tok string) (int, string, []byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+// send marshals in as the request body (none when nil), sends it, and
+// decodes a 2xx answer into out (when not nil). A non-2xx answer is an
+// error carrying its status, which is also returned so a caller can tell a
+// conflict from a failure.
+func (h *harness) send(ctx context.Context, method, u string, in, out any) (int, error) {
+	var body []byte
+	if in != nil {
+		b, err := json.Marshal(in)
+		if err != nil {
+			return 0, err
+		}
+		body = b
+	}
+	code, status, resp, err := h.do(ctx, method, u, body)
+	if err != nil {
+		return 0, err
+	}
+	if code < 200 || code > 299 {
+		return code, statusError(status, resp)
+	}
+	if out != nil {
+		if err := json.Unmarshal(resp, out); err != nil {
+			return code, fmt.Errorf("decode %s %s: %w", method, u, err)
+		}
+	}
+	return code, nil
+}
+
+func (h *harness) fetchWith(ctx context.Context, method, u, tok string, body []byte) (int, string, []byte, error) {
+	var rd io.Reader
+	if body != nil {
+		rd = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, rd)
 	if err != nil {
 		return 0, "", nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	resp, err := h.http.Do(req)
 	if err != nil {
 		return 0, "", nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	out, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return 0, "", nil, err
 	}
-	return resp.StatusCode, resp.Status, body, nil
+	return resp.StatusCode, resp.Status, out, nil
 }
 
 // statusError is a non-2xx answer as an error: its status and the start of

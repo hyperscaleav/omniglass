@@ -27,11 +27,12 @@
    "type": "string"
   },
   "transition": {
-   "description": "The alarm edge the message is about; test for a target's :test send, which is about no alarm",
+   "description": "The alarm edge the message is about; test for a target's :test send and heartbeat for the server's own heartbeat, which are about no alarm",
    "enum": [
     "raised",
     "cleared",
-    "test"
+    "test",
+    "heartbeat"
    ],
    "type": "string"
   },

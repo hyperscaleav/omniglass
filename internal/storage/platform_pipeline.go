@@ -21,11 +21,11 @@ import (
 // summed counts, never summed or averaged, and the end to end is #1641's
 // survival composition (delivery.EndToEnd).
 
-// The component classes a hop is recorded on: a node's platform component or
+// The component classes a hop is recorded on: an outpost's platform component or
 // a server's.
 const (
-	PlatformClassNode   = "node"
-	PlatformClassServer = "server"
+	PlatformClassOutpost = "outpost"
+	PlatformClassServer  = "server"
 )
 
 // pipelineKindToken is the place a hop's instance form holds the kind.
@@ -67,14 +67,14 @@ func (h PlatformPipelineHop) kindOf(instance string) (delivery.Kind, bool) {
 
 // PlatformPipelineHops is the pipeline's hops in the order an item crosses
 // them: the one place the page's hop list is written. A hop is here once a
-// producer records it. A node records the schedule hop at schedule/{kind}
+// producer records it. An outpost records the schedule hop at schedule/{kind}
 // since #1693, and the page draws it with #1739; until then only one hop per
 // class may use the bare kind (TestPlatformPipelineHopsAreSeeded).
 var PlatformPipelineHops = []PlatformPipelineHop{
 	{
-		ID: delivery.Node, Label: "Node",
-		Description:    "The node's spool, from a run's output to the stream. An item settles when the stream acks its batch (out), or when the spool drops it at a cap, the bus refuses it, it never encodes, or (a self-log line) the bounded log buffer drops it (lost).",
-		ComponentClass: PlatformClassNode, InstanceForm: pipelineKindToken,
+		ID: delivery.Outpost, Label: "Outpost",
+		Description:    "The outpost's spool, from a run's output to the stream. An item settles when the stream acks its batch (out), or when the spool drops it at a cap, the bus refuses it, it never encodes, or (a self-log line) the bounded log buffer drops it (lost).",
+		ComponentClass: PlatformClassOutpost, InstanceForm: pipelineKindToken,
 	},
 	{
 		ID: delivery.Ingest, Label: "Ingest",
@@ -83,12 +83,12 @@ var PlatformPipelineHops = []PlatformPipelineHop{
 	},
 }
 
-// nodeLossHops is the hops a node's own platform component records, the ones
+// outpostLossHops is the hops an outpost's own platform component records, the ones
 // its Loss composes, in pipeline order.
-func nodeLossHops() []delivery.Hop {
+func outpostLossHops() []delivery.Hop {
 	var out []delivery.Hop
 	for _, h := range PlatformPipelineHops {
-		if h.ComponentClass == PlatformClassNode {
+		if h.ComponentClass == PlatformClassOutpost {
 			out = append(out, h.ID)
 		}
 	}
@@ -373,13 +373,13 @@ func composeRatios(cells []PlatformPipelineCell, pick func(PlatformPipelineCell)
 	return &v
 }
 
-// nodeLoss is one node's Loss: the last hour's end to end over the hops its
+// outpostLoss is one outpost's Loss: the last hour's end to end over the hops its
 // own platform component records, every kind summed per hop, nil when the
 // component has a ratio on none of them.
-func nodeLoss(p PlatformPipeline, componentID string) *float64 {
+func outpostLoss(p PlatformPipeline, componentID string) *float64 {
 	var cells []PlatformPipelineCell
 	for _, hf := range p.Hops {
-		if hf.Hop.ComponentClass != PlatformClassNode {
+		if hf.Hop.ComponentClass != PlatformClassOutpost {
 			continue
 		}
 		for _, c := range hf.ByComponent {
@@ -396,7 +396,7 @@ func nodeLoss(p PlatformPipeline, componentID string) *float64 {
 const pipelineHour = time.Hour
 
 // platformPipeline reads the pipeline in one statement over the series of the
-// three keys on every node's and every server's platform component: each
+// three keys on every outpost's and every server's platform component: each
 // series' newest sample (metricNewestSQL, the read EffectiveMetrics makes) and
 // the sum of its samples over the last hour, bucketed on the report window's
 // grid as the series read buckets (metricReadSQL, so a folded day sums as its
@@ -424,7 +424,7 @@ func (p *PG) platformPipeline(ctx context.Context) (*PlatformPipeline, error) {
 	read := metricReadSQL("s.id", bucketFloorSQL, bucketHiSQL, "$2")
 	rows, err := p.pool.Query(ctx, `
 		with comps as (
-			select n.platform_component_id as id, '`+PlatformClassNode+`' as class from node n
+			select n.platform_component_id as id, '`+PlatformClassOutpost+`' as class from outpost n
 			where n.platform_component_id is not null
 			union
 			select ps.platform_component_id, '`+PlatformClassServer+`' from platform_server ps

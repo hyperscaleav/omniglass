@@ -1,6 +1,6 @@
 // Shared inline-validation helpers for the IAM forms. These mirror the server's
 // constraints (the Huma `pattern` / `format` on the create and update bodies, see
-// internal/api/principals.go and principal_groups.go) so a form catches an invalid
+// internal/api/users.go and user_groups.go) so a form catches an invalid
 // value before the round-trip: the source of truth is still the server, this is the
 // same rule expressed for immediate feedback. Each returns an error message for an
 // invalid value, or null when the value is acceptable (including empty, so callers
@@ -25,7 +25,7 @@ export function handleError(value: string): string | null {
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function emailError(value: string): string | null {
-  if (!value) return null; // email is optional on a principal
+  if (!value) return null; // email is optional on a user
   if (!EMAIL_RE.test(value)) return "Enter a valid email address (name@example.com).";
   return null;
 }
