@@ -1,6 +1,9 @@
 package storage_test
 
 import (
+	"context"
+	"fmt"
+	"net/url"
 	"testing"
 	"time"
 
@@ -68,5 +71,60 @@ func TestConnectionStatusReadsTheDatabasesOwnSide(t *testing.T) {
 
 	if _, err := conn.Exec(ctx, "rollback"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestConnectionStatusCountsOtherRolesWithoutPgMonitor: a server role that is
+// not a member of pg_monitor reads other roles' pg_stat_activity rows with
+// their backend_type null, so a filter on it would count only the server's own
+// sessions. Held must still count every client: connections opened by another
+// role are counted when the gateway reads as a plain role.
+func TestConnectionStatusCountsOtherRolesWithoutPgMonitor(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	dsn := storagetest.NewDSN(t)
+	admin, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer admin.Close(ctx)
+
+	// Roles are cluster-wide and the container is shared, so the name is this
+	// test's own.
+	role := fmt.Sprintf("plain_%d", time.Now().UnixNano())
+	if _, err := admin.Exec(ctx, fmt.Sprintf(`create role %s login password 'plain'`, role)); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = admin.Exec(context.Background(), fmt.Sprintf(`drop role if exists %s`, role))
+	})
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.User = url.UserPassword(role, "plain")
+	gw, err := storage.NewPG(ctx, u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(gw.Close)
+
+	// Three connections held by the admin role, which the plain role cannot see
+	// the backend_type of.
+	for range 3 {
+		c, err := pgx.Connect(ctx, dsn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close(ctx)
+	}
+
+	st, err := gw.ConnectionStatus(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The three above, the admin connection and the gateway's own.
+	if st.Held < 5 {
+		t.Errorf("held = %d read as a role without pg_monitor, want at least the 5 open here", st.Held)
 	}
 }

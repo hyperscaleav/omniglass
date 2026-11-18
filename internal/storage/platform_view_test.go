@@ -869,6 +869,33 @@ func TestPlatformServerGroupsReadConnectionsAsRatios(t *testing.T) {
 	}
 }
 
+// TestPlatformHealthKeysKeepAChainedRatio: a key that is another key's
+// denominator and is itself read against one is a health figure in its own
+// row, so the coverage gate (#1983) holds it to a rule or an exemption. Only
+// a pure denominator, a key that is some ratio's Of and has no Of of its own,
+// is left off: it is the scale a figure is read against, not a figure.
+func TestPlatformHealthKeysKeepAChainedRatio(t *testing.T) {
+	t.Parallel()
+	got := map[string]bool{}
+	for _, k := range storage.PlatformHealthKeys() {
+		got[k.Key] = true
+	}
+	for _, key := range []string{
+		writerclass.DBConnectionCount, // idle-in-transaction's Of, and read against the limit
+		writerclass.DBConnectionIdleInTransactionCount,
+		writerclass.DBPoolWaitCount,
+	} {
+		if !got[key] {
+			t.Errorf("%s is missing from PlatformHealthKeys, want it held to the coverage gate", key)
+		}
+	}
+	for _, key := range []string{writerclass.DBConnectionLimit, writerclass.DBPoolAcquireCount} {
+		if got[key] {
+			t.Errorf("%s is a pure denominator, want it left off PlatformHealthKeys", key)
+		}
+	}
+}
+
 // TestPlatformPageListsEveryPlatformKey (#1763): every key the server or a
 // outpost writes of itself is on the Platform health page or kept off it with a
 // reason, so a new gauge cannot land silently absent. A kept-off key that

@@ -4334,6 +4334,26 @@
    "exemption": "no rule yet, #1984"
   },
   {
+   "key": "db-pool-wait-duration",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "db-connection-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "db-connection-idle-in-transaction-count",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
+   "key": "db-transaction-oldest-age",
+   "group": "Requests",
+   "exemption": "no rule yet, #1984"
+  },
+  {
    "key": "ingest-lag",
    "group": "Ingest",
    "exemption": "read beside ingest-lag-max, which the ingest-lag-high rule watches"
