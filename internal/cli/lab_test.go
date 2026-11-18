@@ -158,6 +158,8 @@ func TestLabRunScenarioRefusals(t *testing.T) {
 		{[]string{"--scenario", "corporate", "--systems", "20", "--keep", "--ephemeral"}, "--keep and --ephemeral"},
 		{[]string{"--scenario", "nope", "--plan"}, "scale lab scenarios: corporate"},
 		{[]string{"--scenario", "dev", "--induce-unregistered"}, "--induce-unregistered is a scale lab's"},
+		{[]string{"--scenario", "dev", "--omnibot-key-env", "OMNIGLASS_TEST_NO_SUCH_KEY"}, "OMNIGLASS_TEST_NO_SUCH_KEY is not set"},
+		{[]string{"--scenario", "corporate", "--systems", "20", "--omnibot-key-env", "HOME"}, "--omnibot-key-env is a seeded fleet's"},
 	} {
 		root := newRoot("test", "")
 		var out strings.Builder

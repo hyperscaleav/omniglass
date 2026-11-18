@@ -16,7 +16,27 @@ type turns struct {
 	conv *assistant.Conversation
 	// kept is how many of the conversation's messages the server has.
 	kept int
+	// stdout is where each answer is printed.
+	stdout io.Writer
 }
+
+// runner is omnibot's conversation as the chat drives it: a prompt, answered
+// on stdout, and a note told to the model ahead of the next one.
+type runner interface {
+	prompt(ctx context.Context, text string) (stopped bool, err error)
+	tell(note string)
+}
+
+func (t *turns) prompt(ctx context.Context, text string) (bool, error) {
+	out, err := t.run(ctx, text)
+	if err != nil {
+		return false, err
+	}
+	fmt.Fprintln(t.stdout, out.Text)
+	return out.Stopped, nil
+}
+
+func (t *turns) tell(note string) { t.loop.Tell(note) }
 
 // resume picks up the named conversation, starting it when there is none. A
 // call a paused run left waiting is decided first, put to the person as any

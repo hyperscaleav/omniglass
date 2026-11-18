@@ -157,7 +157,7 @@ func TestOmnibotInterruptedWhileConnectingRevokesItsToken(t *testing.T) {
 
 // omnibotTestHandler is a real server over a seeded database, and its owner's
 // token.
-func omnibotTestHandler(t *testing.T) (http.Handler, string) {
+func omnibotTestHandler(t *testing.T, opts ...api.Option) (http.Handler, string) {
 	t.Helper()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -177,7 +177,7 @@ func omnibotTestHandler(t *testing.T) (http.Handler, string) {
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix, ExpiresAt: &future}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	return api.NewHandler(gw), tok
+	return api.NewHandler(gw, opts...), tok
 }
 
 func omnibotTokens(t *testing.T, server, tok string) int {
