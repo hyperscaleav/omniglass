@@ -152,9 +152,6 @@ func TestARetentionPassReportsOnItsPlatformComponent(t *testing.T) {
 	if got := values(writerclass.TableBytes, "metric"); len(got) != 1 || got[0] <= 0 {
 		t.Errorf("metric sized %v, want its partitions' bytes", got)
 	}
-	if got := values(writerclass.DatabaseBytes, ""); len(got) != 1 || got[0] <= 0 {
-		t.Errorf("database sized %v, want one positive read", got)
-	}
 	parts, err := gw.MetricPartitions(ctx)
 	if err != nil {
 		t.Fatal(err)

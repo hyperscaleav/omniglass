@@ -40,7 +40,7 @@ func TestSetupCommandIsTheCLICreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `omniglass component create --label "Bay 2 Display" --location bay-2 --name bay-2-display --product acme-panel`
+	want := `omniglass component create --label 'Bay 2 Display' --location bay-2 --name bay-2-display --product acme-panel`
 	if got != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}
@@ -50,6 +50,15 @@ func TestSetupCommandIsTheCLICreate(t *testing.T) {
 	}
 	if want := `omniglass component alarm create panel-2 --dedup-key walkthrough --severity high`; nested != want {
 		t.Fatalf("got  %s\nwant %s", nested, want)
+	}
+	// A copied command runs as written: an address's $ and a message's quote
+	// reach the CLI rather than being expanded or ending the word.
+	quoted, err := SetupCommand("/components/hq.west.$comp.videobar-1/alarms", map[string]any{"message": "Video's $feed lost"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `omniglass component alarm create 'hq.west.$comp.videobar-1' --message 'Video'\''s $feed lost'`; quoted != want {
+		t.Fatalf("got  %s\nwant %s", quoted, want)
 	}
 	for _, bad := range []string{"components", "/components/x", "/", "/auth/me/tokens", "/components//alarms", "/a/b/c/d"} {
 		if _, err := SetupCommand(bad, map[string]any{"name": "x"}); err == nil {

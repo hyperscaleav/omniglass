@@ -86,6 +86,20 @@ PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, 
 person to request changes, mention `@hyperscale-agent` or take it over. Fork PRs
 are skipped.
 
+## Seeing an agent at work
+
+An agent run says so where it was started. agent-build posts one comment on the issue and
+agent-fix posts one on the PR, each saying the agent is working, with a link to the run. When
+the run stops, the same comment is edited to say what happened: the PR a build opened, the commit
+a fix pushed, or that nothing was pushed, followed by the agent's own few lines on why. A run that
+breaks says so in that comment too, with the reason its job gave (all its turns used, say) and how
+to retry.
+
+agent-fix also puts an `agent-fix` check on the PR's head. It stays in progress while the agent
+works, then finishes as success when the run pushed, neutral when it pushed nothing, and failure
+when the run broke. A run that pushed shows the finished check on the new head as well, since a
+PR lists only its head's checks. The check is not required; it is there to be seen.
+
 ## Who can start what
 
 | Who | Can start |
@@ -124,8 +138,9 @@ org owner:
 - adds the secret `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`; switching to an API key
   or Bedrock later is one input per workflow);
 - adds the variable `AGENT_APP_CLIENT_ID` and the secret `AGENT_APP_PRIVATE_KEY` for the agents'
-  GitHub App, which needs Contents, Pull requests and Issues write, Projects write (for the
-  board), org Members read (for the team checks), and no Workflows permission;
+  GitHub App, which needs Contents, Pull requests and Issues write, Checks write (for the
+  `agent-fix` check), Projects write (for the board), org Members read (for the team checks),
+  and no Workflows permission;
 - creates the `contributors` team (`maintainers` exists), and creates the `run:dev-gha` label.
 
 Every run draws on the subscription the token belongs to, and parallel runs share its limits. A

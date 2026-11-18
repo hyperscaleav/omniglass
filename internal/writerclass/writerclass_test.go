@@ -282,8 +282,8 @@ func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
 // server's checkin-age, so an outpost cannot speak for another writer.
 func TestTheOutpostSelfKeysArePlatformKeys(t *testing.T) {
 	keys := OutpostSelfKeys()
-	if len(keys) != 20 {
-		t.Fatalf("outpost-self keys %v, want the 20 an outpost reports of itself", keys)
+	if len(keys) != 21 {
+		t.Fatalf("outpost-self keys %v, want the 21 an outpost reports of itself", keys)
 	}
 	for _, key := range append(keys, CheckinAge) {
 		if strings.Contains(key, ".") || strings.HasPrefix(key, "platform") || strings.HasPrefix(key, "outpost-") {
@@ -313,12 +313,12 @@ func TestTheOutpostSelfKeysArePlatformKeys(t *testing.T) {
 // a key an outpost reports of itself.
 func TestTheRetentionKeysArePlatformKeys(t *testing.T) {
 	keys := RetentionKeys()
-	want := []string{DatabaseBytes, MetricBlockMarkLag, MetricOldestDayAge, MetricPartitionCount,
+	want := []string{MetricBlockMarkLag, MetricOldestDayAge, MetricPartitionCount,
 		MetricPartitionCreatedCount, MetricPartitionDroppedCount, MetricTrendMarkLag, RetentionBehind,
 		RetentionDeletedCount, RetentionPassDuration, RetentionPassFailureCount, RetentionWindowDays, TableBytes}
 	slices.Sort(want)
 	if !slices.Equal(keys, want) {
-		t.Fatalf("retention keys %v, want the 13 the pass reports %v", keys, want)
+		t.Fatalf("retention keys %v, want the 12 the pass reports %v", keys, want)
 	}
 	for _, key := range keys {
 		if c, ok := Reserved(key); !ok || c != Platform {
@@ -339,7 +339,7 @@ func TestTheRetentionKeysArePlatformKeys(t *testing.T) {
 func TestServerKeysAreTheProcesssAlone(t *testing.T) {
 	keys := []string{HTTPRequestCount, HTTPRequestDuration, HTTPRequestDurationMax, DBSlowQueryCount,
 		DBPoolAcquired, DBPoolIdle, DBPoolTotal, DBPoolMax, DBPoolAcquireCount, DBPoolWaitCount, DBPoolWaitDuration,
-		DBConnectionCount, DBConnectionLimit, DBConnectionIdleInTransactionCount, DBTransactionOldestAge}
+		DBConnectionCount, DBConnectionLimit, DBConnectionIdleInTransactionCount, DBTransactionOldestAge, DBSize}
 	for _, key := range keys {
 		if c, ok := Reserved(key); !ok || c != Platform {
 			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
@@ -373,9 +373,26 @@ func TestServerPipelineKeysAreTheProcesssAlone(t *testing.T) {
 			t.Errorf("the outpost-self lane admits %s", key)
 		}
 	}
-	for _, key := range []string{ProcessCPUSeconds, ProcessFDCount} {
+	for _, key := range []string{ProcessCPUSeconds, ProcessFDCount, ProcessUptime} {
 		if !OutpostSelf(key) {
 			t.Errorf("%s is a generic process key an outpost reports of itself", key)
+		}
+	}
+}
+
+// TestProcessSelfIsTheProcessKeysAlone: a process's own keys restart with it
+// (#1985), so a rule's age on one runs from the process's start; an outpost's
+// self-report that is not a process key, and a server key, do not.
+func TestProcessSelfIsTheProcessKeysAlone(t *testing.T) {
+	t.Parallel()
+	for _, key := range []string{ProcessGoroutineCount, ProcessHeapSize, ProcessGCPause, ProcessCPUSeconds, ProcessFDCount, ProcessUptime} {
+		if !ProcessSelf(key) {
+			t.Errorf("%s is a process's own key", key)
+		}
+	}
+	for _, key := range []string{TickDuration, DeliveryInCount, DBSize, "temperature"} {
+		if ProcessSelf(key) {
+			t.Errorf("%s is not a process's own key", key)
 		}
 	}
 }

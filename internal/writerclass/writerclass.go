@@ -128,6 +128,7 @@ const (
 	ProcessGCPause        = "process-gc-pause"
 	ProcessCPUSeconds     = "process-cpu-seconds"
 	ProcessFDCount        = "process-fd-count"
+	ProcessUptime         = "process-uptime"
 )
 
 // The retention pass's figures (#1629), landed by the process on the
@@ -136,7 +137,8 @@ const (
 // keyed by the lane's name as the instance); per pass, its duration, its
 // failed steps and its partition roll; the trend and block compactions' lag
 // behind now; and the storage read after it, the partitions held, the oldest
-// day's age and each stored table's and the database's bytes.
+// day's age and each stored table's bytes. The database's own size is the
+// server's figure of every window (DBSize), not the pass's.
 const (
 	RetentionDeletedCount       = "retention-deleted-count"
 	RetentionBehind             = "retention-behind"
@@ -150,7 +152,6 @@ const (
 	MetricTrendMarkLag          = "metric-trend-mark-lag"
 	MetricBlockMarkLag          = "metric-block-mark-lag"
 	TableBytes                  = "table-bytes"
-	DatabaseBytes               = "database-bytes"
 )
 
 // retentionWriter is what writes the retention figures.
@@ -160,7 +161,8 @@ const retentionWriter = "the server's retention pass"
 // surface served and how its database pool held up, over a report window,
 // landed by the server on its own platform component. An http-request-* key
 // is per instance, the request's method, route template and status class; the
-// db-* keys have no instance.
+// db-* keys have no instance. DBSize is the database's on-disk bytes, as
+// pg_database_size reads it (#1985).
 const (
 	HTTPRequestCount       = "http-request-count"
 	HTTPRequestDuration    = "http-request-duration"
@@ -173,6 +175,7 @@ const (
 	DBPoolAcquireCount     = "db-pool-acquire-count"
 	DBPoolWaitCount        = "db-pool-wait-count"
 	DBPoolWaitDuration     = "db-pool-wait-duration"
+	DBSize                 = "db-size"
 )
 
 // The database's own side of its connections (#1980), read from Postgres each
@@ -337,6 +340,7 @@ var platform = map[string]string{
 	ProcessGCPause:        processSelfWriter,
 	ProcessCPUSeconds:     processSelfWriter,
 	ProcessFDCount:        processSelfWriter,
+	ProcessUptime:         processSelfWriter,
 	DeliveryInCount:       deliveryWriter,
 	DeliveryOutCount:      deliveryWriter,
 	DeliveryLossRatio:     deliveryWriter,
@@ -353,7 +357,6 @@ var platform = map[string]string{
 	MetricTrendMarkLag:          retentionWriter,
 	MetricBlockMarkLag:          retentionWriter,
 	TableBytes:                  retentionWriter,
-	DatabaseBytes:               retentionWriter,
 
 	// The server, of itself (#1627).
 	HTTPRequestCount:       serverSelfWriter,
@@ -367,6 +370,7 @@ var platform = map[string]string{
 	DBPoolAcquireCount:     serverSelfWriter,
 	DBPoolWaitCount:        serverSelfWriter,
 	DBPoolWaitDuration:     serverSelfWriter,
+	DBSize:                 serverSelfWriter,
 
 	// The database's side of its connections (#1980).
 	DBConnectionCount:                  serverSelfWriter,
@@ -426,6 +430,11 @@ var platform = map[string]string{
 // outpost's self-report never speaks for another writer's key: an outpost naming
 // health or checkin-age on the lane is refused like any undeclared key.
 func OutpostSelf(key string) bool { return outpostSelf(platform[key]) }
+
+// ProcessSelf reports whether key is one any Omniglass process reports of
+// itself (the process-* keys): a series that restarts with the process, so
+// a rule's age on it runs from the process's start, ProcessUptime (#1985).
+func ProcessSelf(key string) bool { return platform[key] == processSelfWriter }
 
 // outpostSelf reports a writer whose keys an outpost reports of itself.
 func outpostSelf(by string) bool {

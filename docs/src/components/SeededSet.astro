@@ -96,7 +96,7 @@ if (nested && tree.length !== rows.length) {
       <tbody>
         {rows.map((r) => (
           <tr>
-            <td><code>{r.name}</code> ({r.label})</td>
+            <td><code>{r.name}</code> ({r.label}){r.disabled ? ', shipped disabled' : ''}</td>
             <td><code>{r.sample_key}</code></td>
             <td><code>{r.fire}</code>{r.fire_sustain ? ` for ${r.fire_sustain}` : ''}</td>
             <td>{r.clear ? <code>{r.clear}</code> : 'the opposite'}{r.clear_sustain ? ` after ${r.clear_sustain}` : ''}</td>
