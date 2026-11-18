@@ -105,6 +105,10 @@ export const Eye: Component<P> = (p) => (
 export const Key: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3 20 3" /><path d="m17 6 2 2" /><path d="m14 9 2 2" /></Svg>
 );
+// Bot is omnibot (#1167).
+export const Bot: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" /></Svg>
+);
 // ShieldCheck is trusting a key (#1078): a decision about who the outpost may
 // talk to, not a retry.
 export const ShieldCheck: Component<P> = (p) => (

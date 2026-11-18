@@ -136,6 +136,12 @@
       "setup": []
     },
     {
+      "id": "omnibot-panel",
+      "title": "Ask omnibot from the console",
+      "description": "Open omnibot from the top bar, ask it to tag a video bar, watch its reads arrive as cards, and confirm the write it asks about.",
+      "setup": []
+    },
+    {
       "id": "open-status-under-admin",
       "title": "Open Outposts and Status from Admin",
       "description": "From Home, find Outposts and Status under Admin in the sidebar, open Outposts where a new outpost is set up, then open Status and read the build the server runs.",

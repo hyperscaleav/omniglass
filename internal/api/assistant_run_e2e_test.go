@@ -368,3 +368,28 @@ func TestOmnibotRunIsTheOwnersAlone(t *testing.T) {
 		t.Errorf("a server with no model = %d %v, want 503", status, evs)
 	}
 }
+
+// A run that reaches the loop's step ceiling without an answer finishes in
+// success, but its RUN_FINISHED result says it stopped at the step limit, so
+// the console tells a stopped run from an answered one.
+func TestOmnibotRunSaysItStoppedAtTheStepLimit(t *testing.T) {
+	t.Parallel()
+	rec := "turns:\n" + strings.Repeat("  - tool_calls: [{name: list-components}]\n", 10)
+	r, err := provider.ParseReplay([]byte(rec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := newPeople(t, api.WithOmnibotModel(r.Positioned()))
+	p.person("olga", "operator", "all", "")
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "busy"}, http.StatusCreated)
+	status, evs := p.run(p.toks["olga"], "busy", prompt("look around"))
+	if status != http.StatusOK || len(evs) == 0 {
+		t.Fatalf("run = %d %v", status, evs)
+	}
+	last := evs[len(evs)-1]
+	outcome, _ := last["outcome"].(map[string]any)
+	result, _ := last["result"].(map[string]any)
+	if last["type"] != "RUN_FINISHED" || outcome["type"] != "success" || result["stopped"] != "step_limit" || result["steps"] != float64(10) {
+		t.Fatalf("finished = %v, want success with a step_limit result of 10 steps", last)
+	}
+}
