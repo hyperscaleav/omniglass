@@ -3,7 +3,7 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-twice gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
 # it builds the image and exports this machine's own binary to
@@ -148,6 +148,24 @@ gen: gen-proto
 	go run ./cmd/labgen
 	cd web && npm ci && npm run gen:api
 
+# Run make gen twice and require the second run to leave the tree byte-identical
+# to the first (#1492): a generator that leaks map order, a timestamp or any
+# other run-to-run noise fails here instead of churning every PR that regenerates.
+# The snapshot is the whole working tree (tracked changes plus untracked files).
+# CI makes the same comparison across machines: gen-drift's make gen is a second
+# run held byte-identical to the author's committed first; this is the local,
+# whole-tree form of it.
+TREE_SNAPSHOT = { git diff --binary HEAD; git ls-files -z -o --exclude-standard | xargs -0 -r sha256sum; }
+GEN_SNAPSHOT  = $(shell git rev-parse --git-dir)/gen-twice
+gen-twice:
+	$(MAKE) gen
+	@$(TREE_SNAPSHOT) > $(GEN_SNAPSHOT).first
+	$(MAKE) gen
+	@$(TREE_SNAPSHOT) > $(GEN_SNAPSHOT).second
+	@diff $(GEN_SNAPSHOT).first $(GEN_SNAPSHOT).second | head -40; \
+	cmp -s $(GEN_SNAPSHOT).first $(GEN_SNAPSHOT).second; status=$$?; rm -f $(GEN_SNAPSHOT).first $(GEN_SNAPSHOT).second; \
+	if [ $$status -ne 0 ]; then echo 'make gen is not deterministic: the second run changed the tree (diff above)' >&2; exit 1; fi
+
 # Regenerate the protobuf telemetry wire (proto/og/v1/telemetry.pb.go) from its
 # .proto source. protoc 34.1 must be on PATH and protoc-gen-go v1.36.11 installed
 # (go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11). The
@@ -246,13 +264,13 @@ GO_PKGS_REST = $(filter-out $(GO_PKGS_STORAGE) $(GO_PKGS_DEVSEED),$(shell go lis
 GO_TEST_SHARD = go run ./cmd/gotestreport -n 20 -- -p $(TEST_PARALLEL)
 
 test-go-storage: test-go-shards-check
-	$(GO_TEST_SHARD) $(GO_PKGS_STORAGE)
+	TESTCONTAINERS_RYUK_DISABLED=true $(GO_TEST_SHARD) $(GO_PKGS_STORAGE)
 
 test-go-devseed: test-go-shards-check
-	$(GO_TEST_SHARD) $(GO_PKGS_DEVSEED)
+	TESTCONTAINERS_RYUK_DISABLED=true $(GO_TEST_SHARD) $(GO_PKGS_DEVSEED)
 
 test-go-rest: test-go-shards-check
-	$(GO_TEST_SHARD) $(GO_PKGS_REST)
+	TESTCONTAINERS_RYUK_DISABLED=true $(GO_TEST_SHARD) $(GO_PKGS_REST)
 
 # Fails if any package go list reports is in no shard or in two. The rest is
 # derived, so this guards the day someone hand-lists it or names a shard that
@@ -283,7 +301,7 @@ test-web:
 # Fast iteration: unit/pure tests only. -short skips anything that needs a
 # Postgres container or builds the binary.
 test-short:
-	go test -short ./...
+	TESTCONTAINERS_RYUK_DISABLED=true go test -short ./...
 
 # Wall-clock benchmarks over the real Storage Gateway, at two estate sizes.
 # DIAGNOSTIC, never a gate: nothing here runs in `make test` (a Go benchmark is

@@ -1,6 +1,8 @@
 ---
 title: Roadmap
 description: "The directional layer: the epics and the architectural arc ahead, and how forward-looking work converges into the spine as it ships."
+sidebar:
+  order: 2
 ---
 
 The design is written as one timeless description and converges **in place** as the code catches up:

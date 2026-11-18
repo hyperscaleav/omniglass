@@ -48,6 +48,7 @@ func newPeople(t *testing.T, opts ...api.Option) *people {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec(ctx, `insert into role (name, permissions, inherits) values ('target-admin', '{"notification_target:*"}', '{}'),
+		('target-user-admin', '{"notification_target:*","user:read:admin"}', '{}'),
 		('settings-admin', '{"settings:*","platform:*","secret:read"}', '{}'),
 		('settings-binder', '{"settings:*","platform:*","secret:read,bind"}', '{}'),
 		('reader', '{"*:read"}', '{}')`); err != nil {

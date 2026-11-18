@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
@@ -14,7 +14,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { OFFICIAL_LOCK } from "../lib/catalog";
 import { uuidFor } from "../lib/testids";
 import { EVENT_TYPES_KEY, type EventTypeRow } from "../lib/event_types";
-import { expressionText, typeExpression } from "../components/ExpressionField.testing";
+import { expressionText, typeExpression, warmExpressionEditor } from "../components/ExpressionField.testing";
 
 // The Rules page (#921): a FlatList over /event-rules, each row reading its
 // criteria in words and its live state (open alarms, pending streaks); a row
@@ -26,14 +26,14 @@ const reach: EventRule = {
   id: uuidFor("rule-reachability-lost"), name: "reachability-lost", label: "Reachability lost",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { expr: 'value == "down"' }, clear_criteria: { expr: 'value == "up"' },
-  fire_sustain: "15s", clear_sustain: "0s", severity: "high",
+  fire_sustain: "15s", clear_sustain: "0s", sample_window: "0s", severity: "high",
   fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, official: true, version: 1,
   open_alarms: 1, pending_streaks: 1, firing: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
 };
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
-  fire_criteria: { expr: "value > 40.0" }, clear_criteria: { expr: "value < 35.0" }, fire_sustain: "1m0s", clear_sustain: "30s",
+  fire_criteria: { expr: "value > 40.0" }, clear_criteria: { expr: "value < 35.0" }, fire_sustain: "1m0s", clear_sustain: "30s", sample_window: "0s",
   severity: "average", fire_event_type: "rule-fired", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0, firing: 0,
 };
 // A rule whose component type and component were deleted after it was written:
@@ -79,7 +79,7 @@ const eventTypes: EventTypeRow[] = [
 const watch: EventRule = {
   id: uuidFor("rule-input-watch"), name: "input-watch", label: "Input watch",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
-  fire_criteria: { expr: 'value == "down"' }, fire_sustain: "0s", clear_sustain: "0s",
+  fire_criteria: { expr: 'value == "down"' }, fire_sustain: "0s", clear_sustain: "0s", sample_window: "0s",
   fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, official: false, version: 1,
   open_alarms: 0, pending_streaks: 0, firing: 1,
 };
@@ -96,9 +96,12 @@ const blade = () =>
     return el as HTMLElement;
   });
 
-// The expression editor loads CodeMirror lazily; until it mounts, "Fires when"
-// labels a host div, so under a loaded full run the default 1s wait is too short.
-const firesWhen = () => screen.findByLabelText("Fires when", {}, { timeout: 3000 });
+// Until the editor mounts, "Fires when" labels a non-labellable host div; the
+// chunk is loaded once, before any test, so a test's wait covers only the
+// mount and not a cold load (see warmExpressionEditor).
+beforeAll(warmExpressionEditor);
+
+const firesWhen = () => screen.findByLabelText("Fires when");
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });

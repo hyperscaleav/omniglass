@@ -1,6 +1,9 @@
 ---
 title: Health, KPIs, and service levels
 description: "Health as a verdict rolled up from alarms through the slots its components occupy, recorded as a transition so the edges are accurate, plus the KPIs every fleet should track and SLI / SLO / SLA."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 Health answers "is this system working right now?" and "since when?". It is a **first-class
@@ -469,5 +472,5 @@ hall's head-end) relates to its subsystems' verdicts is decided with the groupin
 Related: [core entities](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
 (the slot, the typed-slot guard, the quorum), [alarms and actions](/architecture/alarms-actions/) (the
 detection tier), [samples](/architecture/properties/) (the `property` lane and the owner arc), and
-the [Standards](/guides/admin/standards/) and [Work with an entity](/guides/operator/entities/)
+the [Standards](/admin/standards/) and [Work with an entity](/operator/entities/)
 guides for the operator loop.

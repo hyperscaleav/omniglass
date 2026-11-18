@@ -132,8 +132,8 @@ describe("Drawer action rail", () => {
     expect(body.nextElementSibling?.contains(box)).toBe(true);
   });
 
-  // Omnibot opens over whatever the person gathered from, a blade included
-  // (#2122): a drawer marked above sits over the blade stack, whose blades
+  // Omnibot opens over whatever page the person is on, a blade included
+  // (#2162): a drawer marked above sits over the blade stack, whose blades
   // stack upward from z-index 61.
   it("sits over the blade stack when marked above", () => {
     render(() => (

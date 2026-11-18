@@ -20,7 +20,7 @@ Every decision that needs no judgment is made by `web/e2e/explorer.mjs` (pure lo
 - **Act as the persona.** Use the mission's `user` (its token is in `stack.env`), never the
   owner token, unless the step is impossible for that user and the impossibility is itself the
   finding.
-- **House style** in everything filed: no em dashes, no AI or assistant attribution.
+- **House style** in everything filed: no em dashes.
 - **Budgets** (the daily ceiling, enforced by these caps since a session cannot read its own
   token count): at most 2 lenses, 6 repro replays, 10 images opened, 12 findings filed. Reaching
   a cap ends exploring: file what you have and say in the report which cap stopped you.

@@ -49,6 +49,9 @@ var notificationTypesYAML []byte
 //go:embed command_types.yaml
 var commandTypesYAML []byte
 
+//go:embed action_rules.yaml
+var actionRulesYAML []byte
+
 //go:embed vendors.yaml
 var vendorsYAML []byte
 
@@ -252,6 +255,11 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedNotificationTypes(ctx, gw); err != nil {
 		return err
 	}
+	// The shipped routing after the roles its targets name and the types its
+	// rule sends.
+	if err := seedActionRules(ctx, gw); err != nil {
+		return err
+	}
 	// The official event rules after the catalogs their keys and levels
 	// name.
 	if err := seedEventRules(ctx, gw); err != nil {
@@ -362,7 +370,7 @@ func seedEventRules(ctx context.Context, gw storage.Gateway) error {
 	for _, r := range doc.Rules {
 		spec := storage.EventRuleSpec{Name: r.Name, Label: r.Label, Description: r.Description, SampleKey: r.SampleKey,
 			Fire: rules.Criteria{Expr: r.Fire}, Severity: r.Severity, Message: r.Message,
-			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType}
+			FireEventType: r.FireEventType, ClearEventType: r.ClearEventType, Enabled: r.Enabled}
 		if r.Clear != "" {
 			spec.Clear = &rules.Criteria{Expr: r.Clear}
 		}
@@ -372,6 +380,9 @@ func seedEventRules(ctx context.Context, gw storage.Gateway) error {
 		}
 		if spec.ClearSustain, err = parseSeedDuration(r.ClearSustain); err != nil {
 			return fmt.Errorf("seed: event rule %s clear_sustain: %w", r.Name, err)
+		}
+		if spec.SampleWindow, err = parseSeedDuration(r.SampleWindow); err != nil {
+			return fmt.Errorf("seed: event rule %s sample_window: %w", r.Name, err)
 		}
 		if err := gw.UpsertEventRule(ctx, spec); err != nil {
 			return err
@@ -383,14 +394,17 @@ func seedEventRules(ctx context.Context, gw storage.Gateway) error {
 // eventRulesDoc is event_rules.yaml, read by the seeder and the facts render.
 type eventRulesDoc struct {
 	Rules []struct {
-		Name           string `yaml:"name"`
-		Label          string `yaml:"label"`
-		Description    string `yaml:"description"`
-		SampleKey      string `yaml:"sample_key"`
-		Fire           string `yaml:"fire"`
-		Clear          string `yaml:"clear"`
-		FireSustain    string `yaml:"fire_sustain"`
-		ClearSustain   string `yaml:"clear_sustain"`
+		Name         string `yaml:"name"`
+		Label        string `yaml:"label"`
+		Description  string `yaml:"description"`
+		SampleKey    string `yaml:"sample_key"`
+		Fire         string `yaml:"fire"`
+		Clear        string `yaml:"clear"`
+		FireSustain  string `yaml:"fire_sustain"`
+		ClearSustain string `yaml:"clear_sustain"`
+		SampleWindow string `yaml:"sample_window"`
+		// Enabled, absent for on, ships a rule off (#1985).
+		Enabled        *bool  `yaml:"enabled"`
 		Severity       string `yaml:"severity"`
 		Message        string `yaml:"message"`
 		FireEventType  string `yaml:"fire_event_type"`
@@ -525,6 +539,49 @@ func seedNotificationTypes(ctx context.Context, gw storage.Gateway) error {
 			Subject: t.Subject, Text: t.Text, Official: true,
 		}); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// actionRulesDoc is the action_rules.yaml shape: the shipped targets, then
+// the rules that name them.
+type actionRulesDoc struct {
+	NotificationTargets []struct {
+		Name     string   `yaml:"name"`
+		Label    string   `yaml:"label"`
+		Kind     string   `yaml:"kind"`
+		Role     string   `yaml:"role"`
+		Channels []string `yaml:"channels"`
+	} `yaml:"notification_targets"`
+	ActionRules []struct {
+		Name        string   `yaml:"name"`
+		Label       string   `yaml:"label"`
+		Description string   `yaml:"description"`
+		On          []string `yaml:"on"`
+		When        string   `yaml:"when"`
+		Targets     []string `yaml:"targets"`
+	} `yaml:"action_rules"`
+}
+
+// seedActionRules installs the shipped alarm routing (#1987).
+func seedActionRules(ctx context.Context, gw storage.Gateway) error {
+	var doc actionRulesDoc
+	if err := yaml.Unmarshal(actionRulesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse action_rules: %w", err)
+	}
+	for _, t := range doc.NotificationTargets {
+		if err := gw.UpsertNotificationTarget(ctx, storage.NotificationTargetSpec{
+			Name: t.Name, Label: t.Label, Kind: t.Kind, Role: t.Role, Channels: t.Channels,
+		}); err != nil {
+			return fmt.Errorf("seed: notification_target %s: %w", t.Name, err)
+		}
+	}
+	for _, r := range doc.ActionRules {
+		if err := gw.UpsertActionRule(ctx, storage.ActionRuleSpec{
+			Name: r.Name, Label: r.Label, Description: r.Description, On: r.On, When: r.When, Targets: r.Targets,
+		}); err != nil {
+			return fmt.Errorf("seed: action_rule %s: %w", r.Name, err)
 		}
 	}
 	return nil

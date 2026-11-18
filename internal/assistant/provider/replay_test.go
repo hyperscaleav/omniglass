@@ -98,3 +98,62 @@ func TestPositionedReplayPlaysFromTheConversation(t *testing.T) {
 		t.Errorf("past the end = %v, want an error naming the recording", err)
 	}
 }
+
+const scripted = `
+turns:
+  - text: The default answer.
+conversations:
+  - match: Triage an alarm
+    turns:
+      - tool_calls:
+          - name: get-component
+            arguments: {name: lobby-display}
+      - text: The alarm is real.
+`
+
+// A positioned replay plays the conversation whose match the person's latest
+// message holds, and the default turns for any other message; the position
+// counts from that message, so a second prompt starts its own script.
+func TestPositionedReplaySelectsByTheLatestMessage(t *testing.T) {
+	t.Parallel()
+	r, err := ParseReplay([]byte(scripted))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := r.Positioned()
+	ctx := context.Background()
+
+	other := []Message{{Role: RoleUser, Text: "what is down"}}
+	if got, err := p.Next(ctx, other, nil); err != nil || got.Text != "The default answer." {
+		t.Fatalf("other input = %+v, %v, want the default", got, err)
+	}
+
+	triage := append(other,
+		Message{Role: RoleAssistant, Text: "The default answer."},
+		Message{Role: RoleUser, Text: "# Triage an alarm\n\nThe component: lobby-display"},
+	)
+	first, err := p.Next(ctx, triage, nil)
+	if err != nil || len(first.ToolCalls) != 1 || first.ToolCalls[0].Name != "get-component" || first.ToolCalls[0].ID != "call-1" {
+		t.Fatalf("triage first turn = %+v, %v, want get-component as call-1", first, err)
+	}
+	held := append(triage,
+		Message{Role: RoleAssistant, ToolCalls: first.ToolCalls},
+		Message{Role: RoleTool, ToolCallID: "call-1", Text: "{}"},
+	)
+	if got, err := p.Next(ctx, held, nil); err != nil || got.Text != "The alarm is real." {
+		t.Fatalf("triage second turn = %+v, %v", got, err)
+	}
+}
+
+// A conversation with no match or no turns is refused when it is read.
+func TestParseReplayRefusesMalformedConversations(t *testing.T) {
+	t.Parallel()
+	for name, doc := range map[string]string{
+		"no match": "turns:\n  - text: hi\nconversations:\n  - turns:\n      - text: x",
+		"no turns": "turns:\n  - text: hi\nconversations:\n  - match: x",
+	} {
+		if _, err := ParseReplay([]byte(doc)); err == nil {
+			t.Errorf("%s: parsed, want an error", name)
+		}
+	}
+}

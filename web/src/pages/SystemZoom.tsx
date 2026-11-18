@@ -52,7 +52,6 @@ import TimeseriesChart from "../components/TimeseriesChart";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
-import { metricSubject } from "../lib/handover";
 
 // The system's detail view (#636, reoriented in #872). Systems are the unit
 // Omniglass monitors; locations are folders and metadata; components are the
@@ -635,7 +634,7 @@ export default function SystemZoom() {
                         >
                           <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
                           <td>
-                            <TimeseriesChart spark subject={metricSubject(system()?.name, m.metric_type_name)} buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
+                            <TimeseriesChart spark buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
                           </td>
                           <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
                           <td class="text-right text-[10px] text-base-content/45">
@@ -647,7 +646,7 @@ export default function SystemZoom() {
                         <Show when={seriesPick() === m.metric_type_name}>
                           <tr>
                             <td colspan="4" class="bg-base-200/40">
-                              <TimeseriesChart subject={metricSubject(system()?.name, m.metric_type_name)} buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
+                              <TimeseriesChart buckets={metricSeriesData()[i()]?.buckets ?? []} resolutionMs={SERIES_RESOLUTION_S * 1000} now={historyNow()} windowMs={SERIES_HOURS * 3600_000} />
                             </td>
                           </tr>
                         </Show>

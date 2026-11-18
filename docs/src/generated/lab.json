@@ -70,7 +70,7 @@
       "title": "Declare a first slot",
       "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",
       "setup": [
-        "omniglass system create --label \"Lectern cart\" --location media-lab --name lectern-cart"
+        "omniglass system create --label 'Lectern cart' --location media-lab --name lectern-cart"
       ]
     },
     {
@@ -108,19 +108,13 @@
       "title": "Fix an endpoint in place",
       "description": "Attach the SNMP driver with its host typed one octet short, then correct the host on the endpoint itself and watch samples arrive, with no re-attach.",
       "setup": [
-        "omniglass component create --label \"Bay 2 Display\" --location bay-2 --name bay-2-display --product boreal-edge-55"
+        "omniglass component create --label 'Bay 2 Display' --location bay-2 --name bay-2-display --product boreal-edge-55"
       ]
     },
     {
       "id": "fix-an-expression-with-a-quick-fix",
       "title": "Fix an expression with a quick fix",
       "description": "Write a calc rule's expression with a common mistake, read the plain-words diagnostic the field gives on the spot, apply its one-click fix, and save the rule.",
-      "setup": []
-    },
-    {
-      "id": "hand-omnibot-the-console",
-      "title": "Hand omnibot the console",
-      "description": "Hand omnibot the page with Ctrl-J, alt-click an alarm into its tray, and see the one-click Triage beside it.",
       "setup": []
     },
     {
@@ -148,6 +142,12 @@
       "setup": []
     },
     {
+      "id": "omnibot-reads-the-page",
+      "title": "Omnibot reads the page",
+      "description": "Open omnibot on a system page, see the page it will be handed, and ask about it without pointing at anything.",
+      "setup": []
+    },
+    {
       "id": "open-status-under-admin",
       "title": "Open Outposts and Status from Admin",
       "description": "From Home, find Outposts and Status under Admin in the sidebar, open Outposts where a new outpost is set up, then open Status and read the build the server runs.",
@@ -158,8 +158,8 @@
       "title": "Preview a notification",
       "description": "Open an operator's notification type, preview it against Touch Panel 2's open alarm, and try a draft subject before saving it.",
       "setup": [
-        "omniglass component alarm create panel-2 --dedup-key walkthrough-notification --message \"No touch input\" --severity high",
-        "omniglass notification-type create --description \"A terse page for the on-call phone\" --label \"Page on-call\" --name page-oncall --subject \"{{.SeverityLabel | upper}} {{.ComponentLabel}}\" --text \"{{.Message}} since {{.RaisedAt}}\""
+        "omniglass component alarm create panel-2 --dedup-key walkthrough-notification --message 'No touch input' --severity high",
+        "omniglass notification-type create --description 'A terse page for the on-call phone' --label 'Page on-call' --name page-oncall --subject '{{.SeverityLabel | upper}} {{.ComponentLabel}}' --text '{{.Message}} since {{.RaisedAt}}'"
       ]
     },
     {
@@ -191,7 +191,7 @@
       "title": "Set up monitoring on a component",
       "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge outpost, and watch reachability and samples arrive.",
       "setup": [
-        "omniglass component create --label \"Bay 2 Display\" --location bay-2 --name bay-2-confidence-display --product boreal-edge-55"
+        "omniglass component create --label 'Bay 2 Display' --location bay-2 --name bay-2-confidence-display --product boreal-edge-55"
       ]
     },
     {
@@ -199,7 +199,7 @@
       "title": "Snooze an alarm",
       "description": "Silence a noisy alarm's notifications for an hour from its component's page, read the snooze on its timeline, and end it early.",
       "setup": [
-        "omniglass component alarm create panel-2 --dedup-key walkthrough-snooze --message \"Touch controller resetting\" --severity high"
+        "omniglass component alarm create panel-2 --dedup-key walkthrough-snooze --message 'Touch controller resetting' --severity high"
       ]
     },
     {
@@ -213,7 +213,15 @@
       "title": "Subscribe to alarms",
       "description": "Write a personal alarm subscription and test it against your own recent alarms before saving it.",
       "setup": [
-        "omniglass component alarm create panel-2 --dedup-key walkthrough-subscribe --message \"Touch input lost\" --severity high"
+        "omniglass component alarm create panel-2 --dedup-key walkthrough-subscribe --message 'Touch input lost' --severity high"
+      ]
+    },
+    {
+      "id": "troubleshoot-an-alarm",
+      "title": "Troubleshoot an alarm",
+      "description": "Hand an alarm to omnibot from its row and read where it says the fault is.",
+      "setup": [
+        "omniglass component alarm create 'hq.west.level-4.meeting-405.$comp.videobar-1' --dedup-key walkthrough-troubleshoot --message 'Video feed lost' --severity high"
       ]
     },
     {

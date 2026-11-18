@@ -74,6 +74,9 @@ var listFuncs = map[string]listFunc{
 		Name: anyList, Func: anyAllFunc(true), Validate: oneArg("any", reflect.TypeFor[bool]())}},
 	"all": {cost: "one list of bools: one pass over the charged list, output a bool (the predicate form is the builtin's)", fn: &builtin.Function{
 		Name: allList, Func: anyAllFunc(false), Validate: oneArg("all", reflect.TypeFor[bool]())}},
+	"slope":  {cost: trendCost, fn: trendFunc("slope", slopeOf)},
+	"growth": {cost: trendCost, fn: trendFunc("growth", growthOf)},
+	"span":   {cost: trendCost, fn: trendFunc("span", spanOf)},
 }
 
 // ListFunctions names every vetted list function, sorted, a fresh slice each
@@ -583,6 +586,14 @@ func listCheck(node ast.Node, fail func(n ast.Node, format string, args ...any))
 		}
 	case "avg":
 		listOf(args[0], isNumberKind, "one list of numbers")
+	case "slope", "growth", "span":
+		if len(args) != 1 {
+			return
+		}
+		t := typ(args[0])
+		if el, ok := listElem(t); !ok || (!unknownElem(t) && el.Kind() != reflect.Map && !isSampleType(el)) {
+			fail(unwrapCharge(args[0]), "%s takes one list of samples (records with a numeric value and at), not %s", name, typeWords(t))
+		}
 	case "majority":
 		listOf(args[0], func(k reflect.Kind) bool { return k == reflect.String || k == reflect.Bool }, "one list of text or bools")
 	case "any", "all":
@@ -603,11 +614,26 @@ func listCheck(node ast.Node, fail func(n ast.Node, format string, args ...any))
 // wholeListFolds are the calls that read a list only as a whole, into one
 // value: the one-list functions and the folds without a predicate.
 var wholeListFolds = map[string]bool{"max": true, "min": true, "avg": true, "majority": true,
-	anyList: true, allList: true, sumList: true, "len": true, "count": true}
+	anyList: true, allList: true, sumList: true, "len": true, "count": true,
+	"slope": true, "growth": true, "span": true}
+
+// Reads reports whether the program reads the named binding anywhere (a let
+// may not shadow a binding, so the name is always the binding's).
+func (p *Program) Reads(name string) bool {
+	root := p.prog.Node()
+	reads := false
+	ast.Walk(&root, visitFunc(func(node *ast.Node) {
+		if id, ok := (*node).(*ast.IdentifierNode); ok && id.Value == name {
+			reads = true
+		}
+	}))
+	return reads
+}
 
 // WholeListsOnly reports whether the program reads each of the named
 // bindings only as a whole list folded into one value (the one argument of
-// max, min, avg, sum, majority, any, all, len or count), never an element of
+// max, min, avg, sum, majority, any, all, slope, growth, span, len or
+// count), never an element of
 // it by position, through a predicate, or as a value of its own. A caller
 // that may show an expression's result over a list some of whose elements
 // the reader may not see uses it to tell an aggregate from a read of one

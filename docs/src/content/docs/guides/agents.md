@@ -8,19 +8,14 @@ screenshots:
     steps:
       - { action: click, selector: 'button[aria-label="Ask omnibot"]' }
       - { action: wait, selector: '[data-testid="omnibot-empty"]' }
-  - id: omnibot-tray
+  - id: omnibot-page
     path: /web/systems/auditorium
-    alt: "An alarm alt-clicked from a component's Why into omnibot's tray: its chip names the component and when the alarm was raised, with a Triage button beside it."
+    alt: "Omnibot open over the auditorium's page: above the prompt, a Looking at chip names the page it will be handed, the system by its name."
     steps:
-      - { action: click, selector: "[data-testid=alarm-strip] button" }
-      - { action: click, selector: '[data-testid=blade-why] [data-subject-kind="alarm"] [data-severity]', modifiers: [Alt] }
-      - { action: wait, selector: 'button[aria-label^="Triage alarm"]' }
-    # The seeded alarm has no rule, so its chip names it by when it was raised,
-    # which moves every seed: the tray row is masked whole, a full-width box
-    # that holds still whatever the chip says. The system's since line behind
-    # the drawer ages with the clock.
+      - { action: click, selector: 'button[aria-label="Ask omnibot"]' }
+      - { action: wait, selector: "[data-testid=omnibot-page]" }
+    # The system's since line behind the drawer ages with the clock.
     mask:
-      - "[data-testid=omnibot-tray]"
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
 ---
 
@@ -239,6 +234,23 @@ refused. The server runs omnibot only with a model: until a live provider lands,
 recording `OMNIGLASS_OMNIBOT_REPLAY` names, and without one a run is a 503. The lab's server plays one
 that tags the meeting 405 video bar, so the commands above run there as written.
 
+A recording for the server can hold `conversations` beside its turns, each a `match` and turns of its
+own. A run plays the first conversation whose match its message contains, else the top-level turns,
+and counts its turns from that message, so each prompt in a conversation starts a script of its own.
+The lab's recording triages the video bar's alarm for a [triage-alarm](#skills) skill run, matching
+the skill's heading:
+
+```yaml
+turns:
+  - tool_calls: [{name: get-component, arguments: {name: 'hq.west.level-4.meeting-405.$comp.videobar-1'}}]
+  # ...
+conversations:
+  - match: "# Triage an alarm"
+    turns:
+      - tool_calls: [{name: list-component-alarms, arguments: {name: 'hq.west.level-4.meeting-405.$comp.videobar-1'}}]
+      - text: The meeting 405 video bar's alarm is still active ...
+```
+
 A run can carry what you are looking at as AG-UI `context`: references, a kind and a name or address,
 never a value (#2122). omnibot reads them as data ahead of your message and looks each up with its
 tools, under your grants. At most 20 entries, each value at most 2000 characters:
@@ -282,7 +294,7 @@ model.
 ### Omnibot in the console
 
 The console runs omnibot too, on the server, as above. **Ask omnibot** in the top bar opens it in a
-panel, and so does the [command palette](/guides/operator/#getting-around)'s last row, which carries
+panel, and so does the [command palette](/operator/#getting-around)'s last row, which carries
 what you typed there as a draft for you to send. Each prompt runs on one conversation, kept on the
 server like any other; **New conversation** starts another.
 
@@ -299,21 +311,19 @@ asking again carries on from there; one the server refuses (an agent or imperson
 run omnibot) or that fails names the reason. A run whose connection closes before it finished says
 that it ended early, rather than looking busy for good; ask again to carry on.
 
-**Hand omnibot what you are looking at.** Alt-click a row (a component, a system, a location, an
-alarm, in a list, a tree or a blade), a system card, a marker on a system's map or a chart, and its
-name drops into a tray above the composer (a chart is its metric, by its owner's name and the
-metric's); shift-alt-click another row in the same list adds every row between, which is how a set
-goes in. ⌘J (Ctrl-J) hands over the page itself, its route and filters, when nothing else is gathered,
-and replaces a page handed over earlier and not yet sent; a system, location or component page
-is named by its name or address, never its uuid. Gathering sends nothing: type your question, and
-that prompt carries the tray as context and clears it, as does signing out. It holds references, never what the screen showed, so omnibot looks each thing
-up itself and sees only what you may. Alt rather than ⌘ or Ctrl, which still open a link in a new tab;
-a button inside a row keeps its own meaning. An alarm in the tray has a **Triage** button that runs
-the `triage-alarm` skill on it in one click, and the [command palette](/guides/operator/#getting-around)
-offers the same for each gathered alarm. An alarm no rule raised is known by its component and
-when it was raised, so its triage starts from the component alone.
+**Omnibot reads the page you are on.** Every prompt carries the page as context, shown as a
+**Looking at** chip above the composer: its route and filters, and a system, location or component
+page by its name or address, never its uuid. It is read when you send, so a prompt sent after you
+move on carries the new page. It is a reference, never what the screen showed, so omnibot looks the
+page up itself and sees only what you may. Dismiss the chip to leave the page out of your next prompt;
+the one after carries it again (#2162).
 
-::screenshot{#omnibot-tray}
+**Troubleshoot an alarm in one click.** The bot button on an active alarm row runs the triage-alarm
+[skill](#skills) on that alarm, handed by its component and rule, never its message: the panel opens
+and omnibot reads the alarm, its component and its reachability before it says anything (#2164). The
+[alarms guide](/operator/alarms/#troubleshooting-an-alarm-with-omnibot) has the rest.
+
+::screenshot{#omnibot-page}
 
 **Add a credential** is the console's `/secret`: it creates the secret with your token through the
 same form as Values > Secrets, and puts only `secret <name>` in your draft, so omnibot learns the
@@ -419,7 +429,7 @@ answer: a sample's text, labels and identity, the faults, and a refusal's text.
 
 ## Seeing what it did
 
-An agent's writes are yours in the [audit trail](/guides/admin/audit/), with how they arrived beside
+An agent's writes are yours in the [audit trail](/admin/audit/), with how they arrived beside
 them. In the console, Admin > Audit marks each with an `mcp` pill over its client and, for an agent
 token, an `agent <name>` tag beside you; type `channel:mcp` to see only what came through an agent. An
 admin reads the same from the CLI with:

@@ -28,7 +28,7 @@ import { contentsOf, isRoomOf, slotsOf, systemsAtLocation } from "../lib/detail"
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
-import { alarmSubject, stamped, type Subject } from "../lib/handover";
+import TroubleshootButton from "./TroubleshootButton";
 
 // EntityBlade (#799, refit in #826, the glance since #872): ONE blade per
 // fleet kind, and it is where an operator lands from a row. Verdict and
@@ -109,7 +109,7 @@ function useDelete(opts: {
 // one raised it. A row that names its alarm (timeline) opens the alarm's
 // timeline in place (#950).
 function Why(props: {
-  rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element; timeline?: { component: string; alarmId: string }; subject?: Subject }[];
+  rows: { severity: string; message: string; component?: string; onOpen?: () => void; rule?: string; ack?: JSX.Element; timeline?: { component: string; alarmId: string }; troubleshoot?: { component: string; raised_by_rule?: string | null; raised_at: string; message?: string } }[];
 }) {
   const timelines = createTimelineToggles();
   return (
@@ -118,7 +118,7 @@ function Why(props: {
         <span class={eyebrow}>Why</span>
         <For each={props.rows}>
           {(a) => (
-            <div class="flex flex-col gap-1.5" data-subject-kind={stamped(a.subject)?.kind} data-subject-ref={stamped(a.subject)?.ref}>
+            <div class="flex flex-col gap-1.5">
               <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <SeverityBadge name={a.severity} size="xs" />
                 <Show when={a.component}>
@@ -131,6 +131,7 @@ function Why(props: {
                   {(rule) => <span class="shrink-0 text-[11px] text-base-content/45">by rule <span class="font-data">{rule()}</span></span>}
                 </Show>
                 {a.ack}
+                <Show when={a.troubleshoot}>{(t) => <TroubleshootButton alarm={t()} />}</Show>
                 <Show when={a.timeline}>{(tl) => timelines.button(tl().alarmId, a.message)}</Show>
               </div>
               <Show when={a.timeline && timelines.isOpen(a.timeline.alarmId)}>
@@ -174,7 +175,7 @@ function SystemBody(props: { id: string }) {
   });
 
   return (
-    <div class="flex flex-col gap-4 text-sm" data-subject-kind={stamped({ kind: "system", ref: row()?.name ?? "" })?.kind} data-subject-ref={stamped({ kind: "system", ref: row()?.name ?? "" })?.ref}>
+    <div class="flex flex-col gap-4 text-sm">
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
@@ -188,8 +189,8 @@ function SystemBody(props: { id: string }) {
           message: a.message,
           component: a.component,
           onOpen: a.componentId ? () => blades.push({ kind: "component", id: a.componentId! }) : undefined,
-          subject: alarmSubject({ component: a.component, raised_at: a.raisedAt }),
           timeline: a.componentId ? { component: a.componentId, alarmId: a.id } : undefined,
+          troubleshoot: { component: a.component, raised_at: a.raisedAt, message: a.message },
         }))}
       />
       {/* The room's only system is the room: the title already names it. */}
@@ -259,7 +260,7 @@ function ComponentBody(props: { id: string }) {
   });
 
   return (
-    <div class="flex flex-col gap-4 text-sm" data-subject-kind={stamped({ kind: "component", ref: row()?.name ?? "" })?.kind} data-subject-ref={stamped({ kind: "component", ref: row()?.name ?? "" })?.ref}>
+    <div class="flex flex-col gap-4 text-sm">
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
@@ -280,7 +281,7 @@ function ComponentBody(props: { id: string }) {
             </>
           ),
           timeline: { component: props.id, alarmId: a.id },
-          subject: alarmSubject(a),
+          troubleshoot: a,
         }))}
       />
       {/* Where its location is the room a system it serves makes, Serves names
@@ -333,7 +334,7 @@ function LocationBody(props: { id: string }) {
   });
 
   return (
-    <div class="flex flex-col gap-4 text-sm" data-subject-kind={stamped({ kind: "location", ref: row()?.name ?? "" })?.kind} data-subject-ref={stamped({ kind: "location", ref: row()?.name ?? "" })?.ref}>
+    <div class="flex flex-col gap-4 text-sm">
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>

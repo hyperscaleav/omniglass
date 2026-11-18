@@ -216,7 +216,8 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		names = append(names, r.Name)
 		rules[r.Name] = r
 	}
-	want := []string{"reachability-lost", "ingest-lag-high", "outpost-silent", "worklist-stale", "disk-nearly-full", "retention-behind"}
+	want := []string{"reachability-lost", "ingest-lag-high", "outpost-silent", "rule-sweep-stalled", "worklist-stale", "disk-nearly-full", "retention-behind",
+		"process-heap-growing", "process-goroutines-growing", "db-size-growing"}
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		t.Fatalf("event_rules = %v, want the official rules %v in file order", names, want)
 	}
@@ -232,8 +233,20 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		// The data directory's disk past 90 percent used, cleared below 85 so
 		// a disk hovering at the line does not flap (#1707).
 		{Name: "disk-nearly-full", SampleKey: "data-dir-disk-used-ratio", Fire: "value > 0.9", Clear: "value <= 0.85", FireSustain: "2m", Severity: "warning"},
+		// A server's event rule sweep stalled past several sweep periods
+		// (#1986); no sustain, the age is already a stretch of time.
+		{Name: "rule-sweep-stalled", SampleKey: "rule-sweep-age", Fire: "value > 30", Clear: "value <= 30", Severity: "high"},
 		// The retention pass's lane behind past its catch-up passes (#1629).
 		{Name: "retention-behind", SampleKey: "retention-behind", Fire: "value == 1", Clear: "value == 0", FireSustain: "5m", Severity: "warning"},
+		// A process's heap or goroutines, or the database, growing steadily
+		// across a window (#1985); the database's rule ships disabled, since
+		// a fleet onboarded in its first week grows it as bloat would.
+		{Name: "process-heap-growing", SampleKey: "process-heap-size", SampleWindow: "6h", Fire: "age >= 86400 && span(window) >= 18000 && growth(window) > 0.25",
+			Clear: "growth(window) <= 0.1", FireSustain: "1h", Severity: "average"},
+		{Name: "process-goroutines-growing", SampleKey: "process-goroutine-count", SampleWindow: "6h", Fire: "age >= 86400 && span(window) >= 18000 && growth(window) > 0.25",
+			Clear: "growth(window) <= 0.1", FireSustain: "1h", Severity: "average"},
+		{Name: "db-size-growing", SampleKey: "db-size", SampleWindow: "24h", Fire: "age >= 604800 && span(window) >= 72000 && growth(window) > 0.25",
+			Clear: "growth(window) <= 0.1", FireSustain: "6h", Severity: "average", Disabled: true},
 	} {
 		w.FireEventType, w.ClearEventType = "rule-fired", "rule-cleared"
 		r := rules[w.Name]

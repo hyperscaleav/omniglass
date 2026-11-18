@@ -6,6 +6,8 @@ import AlarmsPanel from "./AlarmsPanel";
 import { componentAlarmsKey, type Alarm } from "../lib/alarms";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 import type { SeverityLevel } from "../lib/severity";
+import { ME_KEY, type Me } from "../lib/auth";
+import { pendingTriage, requestTriage } from "../lib/handover";
 
 // The alarms panel is where fleet health starts: an alarm on this component
 // that impairs its own verdict wholesale (#626). Rows are seeded into the query
@@ -58,8 +60,10 @@ function json(body: unknown, status = 200, type = "application/json") {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": type } });
 }
 
-function mount(opts: { rows?: Alarm[]; canUpdate?: boolean; canAcknowledge?: boolean; canSnooze?: boolean; levels?: SeverityLevel[] } = {}) {
+function mount(opts: { rows?: Alarm[]; canUpdate?: boolean; canAcknowledge?: boolean; canSnooze?: boolean; levels?: SeverityLevel[]; me?: Me } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+  // The signed-in person; a default with no permissions keeps useMe from fetching.
+  qc.setQueryData([...ME_KEY], opts.me ?? { user: { id: "u-0", kind: "person" }, person: { username: "op" }, permissions: [], grants: [] });
   qc.setQueryData([...componentAlarmsKey("disp-1")], opts.rows ?? alarms);
   seedSeverityLevels(qc, opts.levels ?? SEEDED_LEVELS);
   return render(() => (
@@ -150,22 +154,28 @@ describe("AlarmsPanel", () => {
     expect(within(row).getByText(/raised 1h ago/)).toBeTruthy();
   });
 
+  // One click hands omnibot the alarm to troubleshoot (#2164): each active
+  // row offers it to a person who may ask omnibot, by component and rule.
+  it("offers each active alarm to omnibot to troubleshoot, for a person who may ask it", () => {
+    const asker: Me = { user: { id: "u-1", kind: "person" }, person: { username: "jo" }, permissions: ["assistant:use"], grants: [] };
+    const { getByText, getAllByRole } = mount({ me: asker });
+    expect(getAllByRole("button", { name: /with omnibot$/ })).toHaveLength(2);
+    expect(within(alarmRow(getByText("Firmware mismatch"))).queryByRole("button", { name: /with omnibot$/ })).toBeNull();
+    fireEvent.click(within(alarmRow(getByText("Lamp hours exceeded"))).getByRole("button", { name: "Troubleshoot Lamp hours exceeded with omnibot" }));
+    expect(pendingTriage()).toEqual({ kind: "alarm", ref: "disp-1/lamp-life" });
+    requestTriage(undefined);
+  });
+
+  it("offers no troubleshooting to a person who may not ask omnibot", () => {
+    const reader: Me = { user: { id: "u-2", kind: "person" }, person: { username: "lee" }, permissions: ["component:read"], grants: [] };
+    const { queryAllByRole } = mount({ me: reader });
+    expect(queryAllByRole("button", { name: /with omnibot$/ })).toHaveLength(0);
+  });
+
   it("names the event rule that raised an alarm, and says nothing for one an operator raised", () => {
     const { getByText } = mount();
     expect(within(alarmRow(getByText("Lamp hours exceeded"))).getByText(/by rule/).textContent).toContain("lamp-life");
     expect(within(alarmRow(getByText("HDMI board failed"))).queryByText(/by rule/)).toBeNull();
-  });
-
-  // The subject stamp (#2122): an alarm is handed to omnibot by its
-  // component's name and the rule that raised it, or when it was raised, never
-  // by its message, which a device may write.
-  it("stamps each alarm, active or cleared, by component and rule, never its message", () => {
-    const { getByText } = mount();
-    const byRule = alarmRow(getByText("Lamp hours exceeded"));
-    expect(byRule).toHaveAttribute("data-subject-kind", "alarm");
-    expect(byRule).toHaveAttribute("data-subject-ref", "disp-1/lamp-life");
-    expect(alarmRow(getByText("HDMI board failed")).getAttribute("data-subject-ref")).toBe(`disp-1@${alarms[1].raised_at}`);
-    expect(alarmRow(getByText("Firmware mismatch"))).toHaveAttribute("data-subject-kind", "alarm");
   });
 
   it("puts the worst alarm first, since that is the one that explains the room", () => {

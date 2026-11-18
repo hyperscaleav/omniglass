@@ -381,7 +381,7 @@ still, so nothing moves for a reader whose system asks for reduced motion until 
 and that still again inside it for a browser that plays no video. The docs carry no animated
 preview: a page that plays the video has no use for it, so the preview stays PR evidence. Below the
 video come the title,
-the description, a link to the mp4, and every step's caption over its still, folded under a disclosure. [Simulate a fleet](/guides/operator/simulation/#see-it) carries the first one.
+the description, a link to the mp4, and every step's caption over its still, folded under a disclosure. [Simulate a fleet](/operator/simulation/#see-it) carries the first one.
 
 The assets reach the site by a copy, committed like the screenshots:
 

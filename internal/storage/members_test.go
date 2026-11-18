@@ -437,10 +437,17 @@ func TestListSystemAlarmsIsTheMembersAlarmsWindowed(t *testing.T) {
 	if err := f.gw.ClearAlarm(ctx, "", "mic-a", old.ID); err != nil {
 		t.Fatalf("clear: %v", err)
 	}
-	time.Sleep(300 * time.Millisecond)
+	// Set old alarm's cleared_at to 300ms ago (outside the 200ms window).
+	if err := f.gw.SetAlarmClearedAtOffset(ctx, old.ID, 300*time.Millisecond); err != nil {
+		t.Fatalf("timestamp old alarm: %v", err)
+	}
 	recent := raise("mic-a", "cleared just now")
 	if err := f.gw.ClearAlarm(ctx, "", "mic-a", recent.ID); err != nil {
 		t.Fatalf("clear: %v", err)
+	}
+	// Set recent alarm's cleared_at to 50ms ago (well inside the 200ms window).
+	if err := f.gw.SetAlarmClearedAtOffset(ctx, recent.ID, 50*time.Millisecond); err != nil {
+		t.Fatalf("timestamp recent alarm: %v", err)
 	}
 	active := raise("dsp", "no route to host")
 	raise("mic-b", "not a member") // mic-b is in no system

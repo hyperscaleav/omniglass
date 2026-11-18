@@ -623,5 +623,5 @@ form and console, driving the surfaces as a user would per the
 
 This page is the **build and dev guide** for the console: the stack, the generated client, the
 `ListShell` and its primitives, and the build-and-embed pipeline. The **architecture** (the
-information architecture, the read-side BFF, the live-update model) is [UI](/architecture/ui/) on
-the architecture spine. Build mechanics live here; the model lives there.
+information architecture, the read-side BFF, the live-update model) is [UI](/architecture/ui/) in
+the architecture section. Build mechanics live here; the model lives there.

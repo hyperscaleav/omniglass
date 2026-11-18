@@ -9,4 +9,4 @@ computation to a component any `screenshots:` frontmatter path renders, with no 
 `mask:` selector in that page's entry. Fix: a stable hook (`data-testid`) on the moving
 region and a mask line in the frontmatter that paints a box the text cannot resize (see
 `text-sized-mask` below), per the entity blade's declared-box since-line mask
-(docs/src/content/docs/guides/operator/entities.md).
+(docs/src/content/docs/operator/entities.md).

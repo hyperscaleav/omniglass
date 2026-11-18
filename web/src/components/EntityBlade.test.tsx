@@ -15,6 +15,7 @@ import { LOCATIONS_KEY } from "../lib/locations";
 import { componentAlarmsKey } from "../lib/alarms";
 import { componentSystemsKey } from "../lib/members";
 import { ME_KEY, type Me } from "../lib/auth";
+import { pendingTriage, requestTriage } from "../lib/handover";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { STANDARDS_KEY } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
@@ -143,6 +144,10 @@ describe("the system blade", () => {
     fireEvent.click(within(why).getByRole("button", { name: "mic-1" }));
     expect(controller().stack().at(-1)).toEqual({ kind: "component", id: uuidFor("eb-c-mic") });
     expect(within(why).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
+    // A system's alarm reaches omnibot by its component and when it was raised.
+    fireEvent.click(within(why).getByRole("button", { name: "Troubleshoot No route to host with omnibot" }));
+    expect(pendingTriage()?.ref).toMatch(/^mic-1@/);
+    requestTriage(undefined);
   });
 
   // Each fact once (#872 drawer audit). The room's only system IS the room,
@@ -209,6 +214,10 @@ describe("the component blade", () => {
     expect(within(why).getByText("High")).toBeTruthy();
     expect(within(why).getByText("No route to host")).toBeTruthy();
     expect(within(why).getByText(/by rule/).textContent).toContain("icmp-unreachable");
+    // Each alarm is one click from omnibot's triage (#2164).
+    fireEvent.click(within(why).getByRole("button", { name: "Troubleshoot No route to host with omnibot" }));
+    expect(pendingTriage()).toEqual({ kind: "alarm", ref: "mic-1/icmp-unreachable" });
+    requestTriage(undefined);
     // The component's alarm row opens its timeline in place (#950).
     expect(within(why).getAllByRole("button", { name: /^Timeline of / }).length).toBeGreaterThan(0);
     const serves = within(blade).getByTestId("blade-serves");
@@ -355,34 +364,5 @@ describe("a failed save in the component blade", () => {
     expect(within(footer).getByRole("button", { name: "Save" })).toBeTruthy();
     // One alert, not the footer's and the form's both.
     expect(within(blade).getAllByRole("alert").length).toBe(1);
-  });
-});
-
-// The subject stamp (#2122): a blade is its entity by name, and each alarm in
-// its Why strip is that alarm by component and rule, or when it was raised,
-// never by its message, so alt-click hands omnibot a reference.
-describe("the blade's subject stamp", () => {
-  const stamp = (el: Element | null) => el && [el.getAttribute("data-subject-kind"), el.getAttribute("data-subject-ref")];
-
-  it("stamps a system blade by name, and its alarms by component and when raised", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const blade = await screen.findByRole("dialog");
-    const why = within(blade).getByTestId("blade-why");
-    expect(stamp(why.closest("[data-subject-kind='system']"))).toEqual(["system", "boardroom"]);
-    expect(stamp(within(why).getByText("No route to host").closest("[data-subject-kind]"))).toEqual(["alarm", "mic-1@2026-08-15T14:20:00Z"]);
-  });
-
-  it("stamps a component blade by name, and its alarms by component and rule", async () => {
-    mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
-    const blade = await screen.findByRole("dialog");
-    const why = within(blade).getByTestId("blade-why");
-    expect(stamp(why.closest("[data-subject-kind='component']"))).toEqual(["component", "mic-1"]);
-    expect(stamp(within(why).getByText("No route to host").closest("[data-subject-kind]"))).toEqual(["alarm", "mic-1/icmp-unreachable"]);
-  });
-
-  it("stamps a location blade by name", async () => {
-    mountBlade({ kind: "location", id: uuidFor("eb-room") });
-    const blade = await screen.findByRole("dialog");
-    expect(stamp(within(blade).getByTestId("blade-systems").closest("[data-subject-kind]"))).toEqual(["location", "boardroom-a"]);
   });
 });

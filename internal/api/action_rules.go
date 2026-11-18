@@ -30,7 +30,7 @@ type actionRuleBody struct {
 	Targets            []string  `json:"targets" doc:"The notification targets it sends to, by name"`
 	OptOutAllowed      bool      `json:"opt_out_allowed" doc:"Whether a member of a group it targets may opt out of it for themselves (:optOut); false by default, so an on-call page cannot be opted out of unless an admin allows it"`
 	Enabled            bool      `json:"enabled"`
-	Official           bool      `json:"official"`
+	Official           bool      `json:"official" doc:"Shipped with Omniglass by the boot seed: only its enabled switch, its opt-out allowance and the targets added to it are the operator's, and it cannot be deleted"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
@@ -63,7 +63,7 @@ type createActionRuleInput struct {
 		Label            string   `json:"label,omitempty" required:"false" doc:"A human label"`
 		Description      string   `json:"description,omitempty" required:"false" doc:"What it is for"`
 		On               []string `json:"on" minItems:"1" doc:"The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one"`
-		When             string   `json:"when,omitempty" required:"false" doc:"A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column"`
+		When             string   `json:"when,omitempty" required:"false" doc:"A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, platform, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column"`
 		NotificationType string   `json:"notification_type,omitempty" required:"false" doc:"The notification type to send, by name or uuid; absent sends the official one for the transition"`
 		Targets          []string `json:"targets" minItems:"1" doc:"The notification targets to send to, by name or uuid"`
 		OptOutAllowed    bool     `json:"opt_out_allowed,omitempty" required:"false" doc:"Let a member of a group it targets opt out of it for themselves (default false)"`
@@ -142,7 +142,7 @@ func registerActionRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPatch,
 		Path:        "/action-rules/{name}",
 		Summary:     "Update an action rule",
-		Description: "Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.",
+		Description: "Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. A shipped (official) rule takes only enabled, opt_out_allowed and targets that keep the shipped ones; anything else is a 409. Audited. Gated by rule:update, with an all-scope grant.",
 	}, "rule", "update"), func(ctx context.Context, in *updateActionRuleInput) (*actionRuleOutput, error) {
 		r, err := gw.UpdateActionRule(ctx, actorID(ctx), in.Name, storage.ActionRulePatch{
 			Label: in.Body.Label, Description: in.Body.Description, On: in.Body.On, When: in.Body.When,
@@ -160,7 +160,7 @@ func registerActionRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/action-rules/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete an action rule",
-		Description:   "Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.",
+		Description:   "Removes a rule; the notifications it queued keep its name. A shipped (official) rule is a 409: disable it instead. Audited. Gated by rule:delete, with an all-scope grant.",
 	}, "rule", "delete"), func(ctx context.Context, in *actionRuleRefInput) (*struct{}, error) {
 		if err := gw.DeleteActionRule(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "rule", "delete")); err != nil {
 			return nil, mapActionRuleErr(err)
@@ -178,6 +178,8 @@ func mapActionRuleErr(err error) error {
 		return huma.Error404NotFound("action rule not found")
 	case errors.Is(err, storage.ErrActionRuleExists):
 		return huma.Error409Conflict("an action rule with this name already exists")
+	case errors.Is(err, storage.ErrActionRuleOfficial):
+		return huma.Error409Conflict("a shipped action rule is read-only but for its enabled switch, its opt-out allowance and the targets added to it, and cannot be deleted; disable it instead")
 	case errors.Is(err, storage.ErrActionRuleForbidden):
 		return huma.Error403Forbidden("writing an action rule needs an all-scope grant: a rule watches the whole fleet")
 	case errors.Is(err, storage.ErrActionRuleInvalid):

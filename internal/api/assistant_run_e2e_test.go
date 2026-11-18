@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -501,5 +502,68 @@ func TestOmnibotRunTakesASkill(t *testing.T) {
 		if status, _ := p.run(p.toks["olga"], name, bad); status != http.StatusUnprocessableEntity {
 			t.Errorf("%s: :run = %d, want 422", name, status)
 		}
+	}
+}
+
+// The server's recorded model chooses its script by the run's message
+// (#2163): a triage-alarm skill run plays the triage conversation through the
+// real tools, and a plain prompt after it, in the same conversation, plays the
+// default from its first turn.
+func TestOmnibotReplayChoosesTheSkillsConversation(t *testing.T) {
+	t.Parallel()
+	r, err := provider.ParseReplay([]byte(`
+turns:
+  - text: Nothing to triage.
+conversations:
+  - match: "# Triage an alarm"
+    turns:
+      - tool_calls: [{name: list-component-alarms, arguments: {name: mic-1}}]
+      - text: The alarm is real.
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := newPeople(t, api.WithOmnibotModel(r.Positioned()))
+	p.person("olga", "operator", "all", "")
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "triage"}, http.StatusCreated)
+
+	in := prompt("")
+	in["messages"] = []any{}
+	in["forwardedProps"] = map[string]any{"skill": map[string]any{"name": "triage-alarm", "arguments": map[string]any{"component": "mic-1"}}}
+	if status, evs := p.run(p.toks["olga"], "triage", in); status != http.StatusOK {
+		t.Fatalf("skill :run = %d %v", status, evs)
+	}
+	if status, evs := p.run(p.toks["olga"], "triage", prompt("and now?")); status != http.StatusOK {
+		t.Fatalf("plain :run = %d %v", status, evs)
+	}
+	var conv struct {
+		Messages []struct {
+			Role string `json:"role"`
+			Body struct {
+				Text      string `json:"text"`
+				ToolCalls []struct {
+					Name string `json:"name"`
+				} `json:"tool_calls"`
+			} `json:"body"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(p.c.do(p.toks["olga"], http.MethodGet, "/assistant/conversations/triage", nil, http.StatusOK), &conv); err != nil {
+		t.Fatal(err)
+	}
+	var said []string
+	for _, m := range conv.Messages {
+		if m.Role != "assistant" {
+			continue
+		}
+		for _, c := range m.Body.ToolCalls {
+			said = append(said, "call "+c.Name)
+		}
+		if m.Body.Text != "" {
+			said = append(said, m.Body.Text)
+		}
+	}
+	want := []string{"call list-component-alarms", "The alarm is real.", "Nothing to triage."}
+	if !slices.Equal(said, want) {
+		t.Errorf("the model said %q, want %q", said, want)
 	}
 }

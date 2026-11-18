@@ -1,10 +1,9 @@
 ---
 title: Views
 description: "The read side for consumers no typed endpoint was written for: a view binding reads samples inside the caller's scope, history then the live tail from one cursor, for dashboards, agents and scripts."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
 sidebar:
-  badge:
-    text: Partial
-    variant: note
+  hidden: true
 ---
 
 :::note[Partial]
@@ -98,7 +97,7 @@ not a generic `{columns, rows}`, are the result shape a named view answers
 hand-written composed reads (reachability, events, the component and outpost log
 reads, the fleet projection at `GET /views/fleet`, the first route actually served under
 `/views/`, and the platform projection at `GET /views/platform`, the second, behind
-[Platform health](/guides/operator/platform-health/), with its closed-loop read at
+[Platform health](/operator/platform-health/), with its closed-loop read at
 `GET /views/platform/simulation`) that stand in until this framework lands,
 which the [API](/architecture/api/) page's views-exception note covers.
 :::

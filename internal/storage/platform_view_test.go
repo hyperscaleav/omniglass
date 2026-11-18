@@ -316,7 +316,7 @@ func TestPlatformViewReadsEachRetentionLane(t *testing.T) {
 		{ComponentID: f.server, Key: writerclass.RetentionBehind, Instance: "metric", Value: 0, TS: newer},
 		{ComponentID: f.server, Key: writerclass.RetentionBehind, Instance: "event", Value: 1, TS: newer},
 		{ComponentID: f.server, Key: writerclass.RetentionBehind, Instance: "metric_trend compaction", Value: 0, TS: older},
-		{ComponentID: f.server, Key: writerclass.DatabaseBytes, Value: 4096, TS: newer},
+		{ComponentID: f.server, Key: writerclass.DBSize, Value: 4096, TS: newer},
 	}); err != nil {
 		t.Fatalf("record platform metrics: %v", err)
 	}
@@ -341,8 +341,8 @@ func TestPlatformViewReadsEachRetentionLane(t *testing.T) {
 			t.Errorf("retention-behind %q = %v (present %v), want %v", lane, got, ok, val)
 		}
 	}
-	if got := figuresOf(p, writerclass.DatabaseBytes); len(got) != 1 || got[0].Value != 4096 || got[0].Instance != "" {
-		t.Errorf("database-bytes = %+v, want one unsplit 4096", got)
+	if got := figuresOf(p, writerclass.DBSize); len(got) != 1 || got[0].Value != 4096 || got[0].Instance != "" {
+		t.Errorf("db-size = %+v, want one unsplit 4096", got)
 	}
 	if got := figuresOf(serverPanel(t, v, "queues"), writerclass.OutboxQueuedDepth); len(got) != 0 {
 		t.Errorf("outbox-queued-depth = %+v, want none: the server never sampled it", got)
@@ -815,13 +815,15 @@ var platformKeysOffPage = map[string]string{
 	writerclass.ProcessGCPause:        offProcess,
 	writerclass.ProcessCPUSeconds:     offProcess,
 	writerclass.ProcessFDCount:        offProcess,
+	// A rule's age on a process key runs from it (#1985); the panel reads the
+	// figures it gates, not the gate.
+	writerclass.ProcessUptime: offProcess,
 
 	// The panels rank the slowest routes by their max; the mean is the
 	// component page's.
 	writerclass.HTTPRequestDuration:      offServerDetail,
 	writerclass.DBPoolIdle:               offServerDetail,
 	writerclass.DBPoolTotal:              offServerDetail,
-	writerclass.DBPoolWaitDuration:       offServerDetail,
 	writerclass.BusConsumerRedelivered:   offServerDetail,
 	writerclass.BusWorklistPullCount:     offServerDetail,
 	writerclass.BusWorklistReplyBytesMax: offServerDetail,
@@ -840,6 +842,61 @@ var platformKeysOffPage = map[string]string{
 	writerclass.MetricPartitionCount:        offRetention,
 	writerclass.MetricTrendMarkLag:          offRetention,
 	writerclass.MetricBlockMarkLag:          offRetention,
+}
+
+// TestPlatformServerGroupsReadConnectionsAsRatios (#1980): the page reads a
+// pool's waits against the acquires they were a share of, the database's
+// connections held against its limit, and the ones idle in a transaction
+// against those held, each a pair in one panel so a ratio is never a bare
+// count: 40 waits is a different thing at 50 acquires than at 50,000.
+func TestPlatformServerGroupsReadConnectionsAsRatios(t *testing.T) {
+	t.Parallel()
+	pairs := map[string]string{
+		writerclass.DBPoolWaitCount:                    writerclass.DBPoolAcquireCount,
+		writerclass.DBConnectionCount:                  writerclass.DBConnectionLimit,
+		writerclass.DBConnectionIdleInTransactionCount: writerclass.DBConnectionCount,
+	}
+	of := map[string]string{}
+	for _, g := range storage.PlatformServerGroups {
+		for _, k := range g.Keys {
+			of[k.Name] = k.Of
+		}
+	}
+	for key, want := range pairs {
+		if got, ok := of[key]; !ok || got != want {
+			t.Errorf("%s is read against %q (on a panel: %v), want %q", key, got, ok, want)
+		}
+	}
+	if _, ok := of[writerclass.DBTransactionOldestAge]; !ok {
+		t.Errorf("%s is on no server panel", writerclass.DBTransactionOldestAge)
+	}
+}
+
+// TestPlatformHealthKeysKeepAChainedRatio: a key that is another key's
+// denominator and is itself read against one is a health figure in its own
+// row, so the coverage gate (#1983) holds it to a rule or an exemption. Only
+// a pure denominator, a key that is some ratio's Of and has no Of of its own,
+// is left off: it is the scale a figure is read against, not a figure.
+func TestPlatformHealthKeysKeepAChainedRatio(t *testing.T) {
+	t.Parallel()
+	got := map[string]bool{}
+	for _, k := range storage.PlatformHealthKeys() {
+		got[k.Key] = true
+	}
+	for _, key := range []string{
+		writerclass.DBConnectionCount, // idle-in-transaction's Of, and read against the limit
+		writerclass.DBConnectionIdleInTransactionCount,
+		writerclass.DBPoolWaitCount,
+	} {
+		if !got[key] {
+			t.Errorf("%s is missing from PlatformHealthKeys, want it held to the coverage gate", key)
+		}
+	}
+	for _, key := range []string{writerclass.DBConnectionLimit, writerclass.DBPoolAcquireCount} {
+		if got[key] {
+			t.Errorf("%s is a pure denominator, want it left off PlatformHealthKeys", key)
+		}
+	}
 }
 
 // TestPlatformPageListsEveryPlatformKey (#1763): every key the server or a

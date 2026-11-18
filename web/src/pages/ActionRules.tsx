@@ -54,7 +54,7 @@ export const ACTION_RULE_HINTS = {
   optOut: "Whether a member of a user group this rule targets may opt themselves out of it. Off by default, so an on-call page cannot be opted out of. Turning it off withdraws every opt-out, and turning it back on does not restore them.",
   enabled: "A disabled rule queues nothing on a transition; what it queued before still delivers. Enabled again, it acts from the next transition.",
   recent: "What this rule sent lately, newest first, about components you can read, picked from the newest 500 notifications.",
-  official: "Official rules ship with Omniglass and update with it, so they are read-only.",
+  official: "Official rules ship with Omniglass and update with it, so they are read-only but for the enabled switch, which is yours: a disable survives a restart.",
 } as const;
 
 const LIST_POLL_MS = 10_000;
@@ -217,9 +217,10 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
     }
   }
 
-  // An official rule is read-only for everyone; a custom one offers Edit (the
-  // Drawer), the Disable / Enable switch and a kebab Delete, each on its own
-  // all-scope permission (the Rules page's footer).
+  // A custom rule offers Edit (the Drawer), the Disable / Enable switch and a
+  // kebab Delete, each on its own all-scope permission (the Rules page's
+  // footer). An official rule (the shipped routing, #1987) offers only the
+  // switch, the one part of it the seed leaves to the operator; Edit greys.
   edit.bind({
     primary: () => {
       const r = row();
@@ -227,7 +228,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
     },
     destructive: () => {
       const r = row();
-      if (!r || r.official || !canUpdate()) return undefined;
+      if (!r || !canUpdate()) return undefined;
       return r.enabled
         ? { label: "Disable", tone: "warn", onClick: () => void toggleEnabled(r) }
         : { label: "Enable", tone: "ok", onClick: () => void toggleEnabled(r) };
@@ -240,7 +241,7 @@ function ActionRuleBladeBody(p: { name: string }): JSX.Element {
     locked: () => {
       const r = row();
       if (!r) return null;
-      if (r.official) return OFFICIAL_LOCK;
+      if (r.official) return canUpdate() ? { edit: OFFICIAL_LOCK, delete: null } : OFFICIAL_LOCK;
       return canUpdate() ? null : catalogLock(r, fleetView(me.data), "rule");
     },
   });

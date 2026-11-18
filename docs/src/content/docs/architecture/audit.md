@@ -1,6 +1,9 @@
 ---
 title: Audit
 description: The who-did-what record, written once in the same transaction as the change it describes.
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 The audit log answers "who changed this, and to what?": every mutation is recorded once, at the source.
@@ -56,7 +59,7 @@ drawer. See [implementation status](/architecture/status/).
   the credential (an agent token held to the `omnibot` channel), never from what the client declares
   ([ADR-1166](/architecture/decisions/#adr-1166-omnibot-is-an-mcp-client-on-its-own-agent-token-confirming-in-its-client)).
   `GET /audit-log` returns and filters on both ([reading the trail](#reading-the-trail)), and the
-  console's [audit page](/guides/admin/audit/) shows them: a Channel column with a pill over the
+  console's [audit page](/admin/audit/) shows them: a Channel column with a pill over the
   declared client (empty on a direct row), the agent tagged beside the person, `channel`, `client`
   and `agent` facets, and a drawer that names the client as the agent reported it.
 - **An AI-taken action is one row.** An AI tool acts with a bearer token as a person or a machine

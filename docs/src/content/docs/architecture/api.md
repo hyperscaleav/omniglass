@@ -1,6 +1,9 @@
 ---
 title: API
 description: "The API contract: AIP-style resources and :verb methods, cursor lists, a problem+json error envelope, idempotent writes, and long-running operations carried by the action row."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 The contract is **two typed surfaces, one source of truth**. The **public HTTP / OpenAPI contract**
@@ -904,7 +907,7 @@ A **contract** is the set of properties a classifier's instances expose
 ([core entities](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows)).
 Each contract is a **sub-collection of its classifier**, addressed by property name, so the line is
 idempotent: `PUT` declares it or revises it in place. Type and validation come from the
-[property catalog](/guides/admin/properties/), not the body. Three classifiers carry a contract, on
+[property catalog](/admin/properties/), not the body. Three classifiers carry a contract, on
 identical route shapes:
 
 - `GET /products/{id}/properties`, `PUT` / `DELETE /products/{id}/properties/{property}`, gated
@@ -1183,7 +1186,7 @@ earns its own tier only when composing the entity reads in the browser would be 
   components the caller may read, which is the Home Open alarms tile. It is absent, never zero,
   for a caller with no component read.
 - `GET /views/platform` (`outpost:read`) is the read behind
-  [Platform health](/guides/operator/platform-health/): the platform system's verdict, each
+  [Platform health](/operator/platform-health/): the platform system's verdict, each
   server's build and start time with its panel groups (each key's current figure, a key written
   only for a window that saw something only while that window is current, a ranked key's
   instances as the server cut its newest window, and the alarms open on the server's keys, #1645),
@@ -1199,7 +1202,7 @@ earns its own tier only when composing the entity reads in the browser would be 
   and each outpost's `loss`, the end to end of the hops `loss_hops` names (#1646); a hop, kind or
   outpost with nothing in has no loss, never 0.
 - `GET /views/platform/simulation` (`simulation:read`) is the read behind Platform health's
-  [simulation section](/guides/operator/platform-health/#with-a-simulator): one row per outpost with a
+  [simulation section](/operator/platform-health/#with-a-simulator): one row per outpost with a
   connected simulator, read over a sliding window the server holds in memory (`internal/closedloop`'s
   ring, ten brackets of `bracket_seconds`). Each gap is a loss ratio (null when nothing went into the
   hop), its masking term and its reading (`loss`, `impaired`, `restarted`); beside them each
@@ -1268,6 +1271,10 @@ fields, new optional params, new resources, never a removal or a meaning change;
 new major version. Because the [OpenAPI 3.1 document is generated](/contributing/api-first/) from the Go
 structs and the clients from that, the contract cannot drift from the implementation: a drift check fails
 the PR on an unregenerated route change.
+
+The CLI holds the same line at its edge: a command group takes no arguments of its own, so an unknown
+verb under any group is a non-zero exit with `unknown command "raise" for "omniglass component alarm"`
+on stderr, never help text and a green exit.
 
 ## Also an MCP surface
 

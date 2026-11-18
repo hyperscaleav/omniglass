@@ -3,9 +3,11 @@
 Open observability and control plane for AV/IT fleets, and a learning tool for monitoring
 itself. Single Go binary (run modes: server, outpost, migrate), BYO PostgreSQL. The
 architecture of record is the docs site under [docs/](docs/) (published at
-docs.omniglass.hyperscaleav.com), being rebuilt by audience (#2153): the rebuilt pages carry the status
-badges, and the old pages stay the reference until their section lands. Read the
-[architecture spine](docs/src/content/docs/architecture/index.md) before non-trivial changes.
+docs.omniglass.hyperscaleav.com), laid out by audience (#2153): Start here, Operator, Admin,
+Developer, Deployment, Architecture (badged, the architecture of record) and Reference
+(generated). The old pages sit under **Being rebuilt** and stay the reference until their
+section lands. Read [the model in one pass](docs/src/content/docs/start/the-model.md)
+before non-trivial changes.
 
 This repo is **public from the first commit** and built **one vertical slice per PR**.
 Treat every change as portfolio-quality and externally visible.
@@ -93,8 +95,11 @@ cd .claude/worktrees/<type>+<short-name>
 - Branch prefix and PR title use the conventional-commit type (`feat`, `fix`, `docs`,
   `ci`, `chore`, `refactor`, `test`, `perf`). PR title is `<type>: <description>`; CI
   enforces it and the release notes list it.
-- Squash-merge. Releases are cut from a `release/<major>.<minor>` branch, whose name sets
-  the version; a fix reaches a release branch by cherry-pick from `main`.
+- Squash-merge, through the merge queue: the architect queues a green PR and the queue reruns
+  the required checks on top of `main` before it merges
+  ([release CI](docs/src/content/docs/contributing/release-ci.md#merging-through-the-queue)).
+  Releases are cut from a `release/<major>.<minor>` branch, whose name sets the version; a fix
+  reaches a release branch by cherry-pick from `main`.
 - Validate locally: `make test-short` to iterate, `make test` before the PR.
 - No `--no-verify` without explicit approval.
 
@@ -104,7 +109,7 @@ approval contract are [docs/contributing/slice-workflow.md](docs/src/content/doc
 **Every slice runs `/ship-slice` before its PR is proposed for merge: a required gate, not
 optional.** Build to PR-ready, then run `/ship-slice`; its emitted ship-review becomes the PR
 body and runs the pre-ship checks (fresh `make test` with the output pasted, `make gen` drift,
-em-dash and attribution scan, docs-with-everything, and **live screenshots for any
+em-dash scan, docs-with-everything, and **live screenshots for any
 operator-facing surface**). A UI PR with no screenshots, or any PR whose `/ship-slice` has not
 been run, is not ready for review. Re-run it after addressing findings.
 
@@ -133,7 +138,6 @@ on close), and never set Priority or the iteration: those are the architect's al
 
 ## House style
 
-- No AI/assistant attribution in commits, PRs, code comments, or any visible artifact.
 - No em dashes in written artifacts; use commas, colons, periods, or parentheses.
 - Head-noun-last naming (`<qualifier>_<genus>`); match the architecture glossary.
 - Any change that alters an operator-facing (UI) surface ships **live screenshots** in the PR
@@ -142,13 +146,15 @@ on close), and never set Priority or the iteration: those are the architect's al
   session cookie; `gh image check-token` verifies it), or commit under `.github/screenshots/` and
   embed by immutable commit SHA. No UI surface, write "n/a".
 
-## Pre-deployment stance
+## Compatibility
 
-Omniglass has no external deployment, no installed base, and no operator data outside dev, CI and the lab. Until the first external deployment:
+Omniglass has external deployments and an installed base. Before changing a released API route, CLI command, schema element, or config key:
 
-- When the correct fix is destructive (renaming seeded keys or fixtures, reshaping schema, removing or renaming an API field, deleting a compatibility shim), make it. Do not add back-compat paths, deprecation periods, or data-migration machinery for data that does not exist.
-- Migration mechanics are unchanged: never edit an applied migration; express schema changes as new migrations.
-- Remove this section in the PR that prepares the first external deployment.
+- Use `BREAKING CHANGE:` in the PR footer (or `!` after the type in the PR title) so the release notes surface it, and note the change in the docs page that documents the surface.
+- If a smooth upgrade path exists (a deprecation period, an alias, a forward migration), prefer it over a hard cut.
+- Migrations stay forward-only: never edit an applied migration; express every schema change as a new migration.
+
+A change is released once it ships in a final release tag, not a release candidate.
 
 ## Migrations and seeding
 
@@ -178,7 +184,7 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
   the path (`/file-bug`, `/define-work`, `/scope-protocol`, `/run-feature-loop`, or a single slice) and
   holds the gates between them (approved issue before a branch, dedupe first, never merge).
 - **`/ship-slice`** - the pre-ship validation pass (fresh `make test`, `make gen` drift check,
-  em-dash and attribution scan, a reviewer pass, docs-with-everything) and the ship-review report
+  em-dash scan, a reviewer pass, docs-with-everything) and the ship-review report
   the architect approves from. Run at PR-ready.
 - **`/autopilot`** - the unattended daily run (ADR-0138): reconcile the standing autopilot PRs,
   pick one thin slice (an in-progress loop, an approved definition, a priority bug, else a

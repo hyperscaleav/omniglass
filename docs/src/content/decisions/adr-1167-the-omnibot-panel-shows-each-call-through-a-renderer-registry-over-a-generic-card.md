@@ -6,7 +6,7 @@ summary: "The console's omnibot panel reads the :run AG-UI stream with a small r
 refs: [1167, 2121, 2134, 2135, 2111, 1168]
 ---
 
-- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [connect an agent](/guides/agents/#omnibot-in-the-console), [console](/guides/operator/#getting-around)
+- **Date:** 2026-11-17 | **Status:** Accepted | **Pages:** [AI](/architecture/ai/), [connect an agent](/guides/agents/#omnibot-in-the-console), [console](/operator/#getting-around)
 - **Decision:** (#1167, over the run of [ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui).)
   1. **One panel, two doors.** A drawer opened from the top bar or the command palette's last row,
      shown only to a person who may use the assistant. The palette's query arrives as a draft, sent

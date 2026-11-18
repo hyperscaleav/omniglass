@@ -137,6 +137,7 @@ var namespacedCatalogs = map[string]bool{
 	"component_type": true, "system_type": true, "location_type": true, "secret_type": true,
 	"notification_type": true, "event_rule": true, "action_rule": true, "calc_rule": true,
 	"vendor": true, "product": true, "driver": true, "standard": true, "role": true,
+	"notification_target": true,
 }
 
 // resolveRefIn turns a catalog ref (a name or a uuid) into the row's uuid:

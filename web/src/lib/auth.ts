@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/solid-query";
 import { api, setToken, clearToken } from "../api/client";
-import { clearTray } from "./handover";
 
 // Auth for the SPA. Authentication is an httpOnly session cookie set by
 // POST /auth/login; GET /auth/me resolves the user (200) or rejects (401).
@@ -91,13 +90,12 @@ export function useTokenLogin() {
 }
 
 // useLogout posts /auth/logout (revoking the session and clearing the cookie),
-// drops any stored token and anything gathered for omnibot, and resets the cache.
+// drops any stored token, and resets the cache.
 export function useLogout() {
   const qc = useQueryClient();
   return async () => {
     await api.POST("/auth/logout");
     clearToken();
-    clearTray();
     qc.setQueryData(ME_KEY, null);
     await qc.invalidateQueries({ queryKey: ME_KEY });
   };

@@ -1,12 +1,12 @@
 ---
 title: "A console subject is a stamp on the shared primitives, gathered by one modifier-click handler"
 date: 2026-11-18
-status: "Accepted"
+status: "Accepted; superseded in part by [ADR-2162](#adr-2162-omnibot-is-handed-the-page-not-what-the-person-gathers)"
 summary: "What a person hands omnibot from the console is references and the page as a query, never what the console rendered. A row says what it is by a subject stamp (data-subject-kind and data-subject-ref) that the shared list, tree, blade and alarm primitives set, read by one console-wide alt-click handler, rather than by the ViewResult renderer, which is still Design. A run takes the gathered subjects as AG-UI context and, for one-click triage, an embedded skill by name the server renders"
 refs: [2122, 523, 2121, 2026, 1167]
 ---
 
-- **Date:** 2026-11-18 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/#handing-the-console-to-omnibot), [AI](/architecture/ai/), [connect an agent](/guides/agents/#handing-omnibot-the-console)
+- **Date:** 2026-11-18 | **Status:** Accepted; superseded in part by [ADR-2162](#adr-2162-omnibot-is-handed-the-page-not-what-the-person-gathers) | **Pages:** [UI](/architecture/ui/#handing-the-console-to-omnibot), [AI](/architecture/ai/), [connect an agent](/guides/agents/#omnibot-in-the-console)
 - **Decision:** (#2122, on the server run of [ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui).)
   1. **Context is references, not renders.** A subject is a kind and a name, dotted address or rule
      (`alarm` is `component/rule`, else `component@raised_at`), or the page as its route and

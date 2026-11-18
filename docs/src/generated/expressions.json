@@ -74,6 +74,11 @@
        "name": "link",
        "type": "string",
        "doc": "The component's page in the console; empty while notification.console_url is unset"
+      },
+      {
+       "name": "platform",
+       "type": "bool",
+       "doc": "Whether the component is one of Omniglass's own parts (a server's or an outpost's), a member of the reserved platform system"
       }
      ]
     }
@@ -135,6 +140,7 @@
     "count",
     "filter",
     "floor",
+    "growth",
     "len",
     "lower",
     "majority",
@@ -143,6 +149,8 @@
     "none",
     "one",
     "round",
+    "slope",
+    "span",
     "sum",
     "trim",
     "trimPrefix",
@@ -163,6 +171,10 @@
      "cost": "one list of numbers: one pass over the charged list, output a number"
     },
     {
+     "name": "growth",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
      "name": "majority",
      "cost": "one list of text or bools: one pass over the charged list, its strings charged their bytes, counting into a map no larger than the list, output one of its values"
     },
@@ -173,6 +185,14 @@
     {
      "name": "min",
      "cost": "numbers, or one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "slope",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
+     "name": "span",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
     },
     {
      "name": "sum",
@@ -217,6 +237,7 @@
     "fromPairs",
     "get",
     "groupBy",
+    "growth",
     "has",
     "hasPrefix",
     "hasSuffix",
@@ -250,8 +271,10 @@
     "replace",
     "reverse",
     "round",
+    "slope",
     "sort",
     "sortBy",
+    "span",
     "split",
     "splitAfter",
     "startsWith",
@@ -312,6 +335,26 @@
        "name": "component.type",
        "type": "string",
        "doc": "The component's type, by name; empty when its product names none"
+      },
+      {
+       "name": "window",
+       "type": "[]record",
+       "doc": "The series' samples over the rule's sample_window, oldest first, each a record of value and at (unix seconds), in at most 360 even buckets, each the mean of its newest 4 samples; empty for a rule with no sample_window. Read it with slope, growth and span"
+      },
+      {
+       "name": "window[].value",
+       "type": "float64",
+       "doc": "The bucket's mean value"
+      },
+      {
+       "name": "window[].at",
+       "type": "float64",
+       "doc": "The bucket's mean time, in unix seconds"
+      },
+      {
+       "name": "age",
+       "type": "float64",
+       "doc": "How long the series has run, in seconds: since the process last started for a process's own key (process-uptime), else since the series' oldest sample still kept; gate a trend on it so a fill from empty or a refill after a restart is not growth"
       }
      ]
     },
@@ -382,21 +425,69 @@
     "abs",
     "all",
     "any",
+    "avg",
     "ceil",
     "count",
     "filter",
     "floor",
+    "growth",
     "len",
     "lower",
+    "majority",
     "max",
     "min",
     "none",
     "one",
     "round",
+    "slope",
+    "span",
+    "sum",
     "trim",
     "trimPrefix",
     "trimSuffix",
     "upper"
+   ],
+   "functions": [
+    {
+     "name": "all",
+     "cost": "one list of bools: one pass over the charged list, output a bool (the predicate form is the builtin's)"
+    },
+    {
+     "name": "any",
+     "cost": "one list of bools: one pass over the charged list, output a bool (the predicate form is the builtin's)"
+    },
+    {
+     "name": "avg",
+     "cost": "one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "growth",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
+     "name": "majority",
+     "cost": "one list of text or bools: one pass over the charged list, its strings charged their bytes, counting into a map no larger than the list, output one of its values"
+    },
+    {
+     "name": "max",
+     "cost": "numbers, or one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "min",
+     "cost": "numbers, or one list of numbers: one pass over the charged list, output a number"
+    },
+    {
+     "name": "slope",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
+     "name": "span",
+     "cost": "one list of samples (records with a value and an at): one pass over the charged list, output a number"
+    },
+    {
+     "name": "sum",
+     "cost": "one list of numbers, or a list and a predicate yielding one: one pass over the charged list, output a number; a predicate may not nest another"
+    }
    ],
    "budget": {
     "iterations": 10000,

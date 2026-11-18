@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import type { JSX } from "solid-js";
 import { useLogin, useTokenLogin, useLogout, useUpdateProfile, useChangePassword, can, type Me } from "./auth";
 import { getToken, setToken } from "../api/client";
-import { addSubjects, tray } from "./handover";
 
 // can() is a pure UI hint over the flattened permissions. The server joins a
 // resource's actions into one string ("create,update,delete"), so can() must
@@ -137,9 +136,8 @@ describe("auth hooks", () => {
     expect(getToken()).toBe(""); // a rejected token is not left behind
   });
 
-  it("useLogout posts logout, drops the stored token and empties omnibot's tray", async () => {
+  it("useLogout posts logout, drops the stored token", async () => {
     setToken("ogp_session_token");
-    addSubjects([{ kind: "component", ref: "hq.lobby.display-1" }]);
     const calls: { url: string; method: string }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const req = input as Request;
@@ -151,7 +149,6 @@ describe("auth hooks", () => {
 
     expect(calls.some((c) => c.url.endsWith("/auth/logout") && c.method === "POST")).toBe(true);
     expect(getToken()).toBe("");
-    expect(tray()).toEqual([]); // the next person to sign in does not inherit it
   });
 
   it("useUpdateProfile PATCHes the label", async () => {

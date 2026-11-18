@@ -7,7 +7,6 @@ import { verdictHue } from "../lib/health";
 import type { MemberContext } from "../lib/detail";
 import { CircleDashed, resolveIcon } from "./icons";
 import Eyebrow from "./Eyebrow";
-import { stamped } from "../lib/handover";
 
 // The room, top-down (#791, ADR-0128): the standard's declared positions
 // rendered at their normalized coordinates, each marker the join of "where
@@ -141,8 +140,6 @@ export default function SystemMap(props: {
                       <Tooltip.Trigger
                         type="button"
                         data-testid={testid()}
-                        data-subject-kind={stamped({ kind: "component", ref: occ().name })?.kind}
-                        data-subject-ref={stamped({ kind: "component", ref: occ().name })?.ref}
                         aria-label={`${label()}, ${slot()}, ${health()}`}
                         class={`${place()} cursor-pointer hover:bg-base-content/10`}
                         style={at()}

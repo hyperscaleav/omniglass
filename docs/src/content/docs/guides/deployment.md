@@ -4,7 +4,7 @@ description: "Standing an Omniglass platform up: the single binary, the containe
 ---
 
 This is the how-to for **standing the platform up**, a different job from
-[operating the fleet](/guides/operator/) or [administering it](/guides/admin/). Omniglass is a
+[operating the fleet](/operator/) or [administering it](/admin/). Omniglass is a
 single self-contained Go binary with the operator console compiled in and a BYO PostgreSQL
 database, so a deployment is that one binary in one of its run modes (`server`, `outpost run`, `migrate`)
 plus a database. How it scales and the deploy model behind these pages is
@@ -27,7 +27,7 @@ Pick the path that fits where you are running it:
 
 Once a server is up, the first owner is minted with the trusted direct-database lane
 (`omniglass bootstrap`), covered in [the CLI guide](/guides/cli/#authentication); from there,
-managing accounts and access moves to the [admin guide](/guides/admin/).
+managing accounts and access moves to the [Admin section](/admin/).
 
 ## Sizing PostgreSQL
 

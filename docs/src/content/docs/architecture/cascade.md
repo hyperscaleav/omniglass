@@ -1,6 +1,9 @@
 ---
 title: Cascade
 description: How effective settings (declared values, variables, tags, rule-sets) are resolved for any entity and how the resolve view explains why a given value won.
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 :::note[Partial]

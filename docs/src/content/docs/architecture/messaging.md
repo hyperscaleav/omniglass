@@ -1,6 +1,9 @@
 ---
 title: Messaging
 description: "The internal and edge NATS subject contract, the sibling to the public API: JetStream streams and consumers, the two lanes, request-reply, KV, the live UI relay, and per-tenant subject isolation."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 :::note[Implementation status]
@@ -133,6 +136,11 @@ The canonical triple is built on `OG_TELEMETRY`
   redelivers the whole batch. Every value the database could refuse is cleaned first (a NUL in any
   lane's text or jsonb becomes U+FFFD), so one stray byte cannot lose the rows that rode with it
   after a `202`.
+
+A publisher lets go of a batch at the stream's ack, so the ack is only as durable as the stream's
+store. The embedded server keeps it under `OMNIGLASS_NATS_STORE_DIR`, a temporary directory removed at
+shutdown unless one is set; the lab and the Helm chart set it onto a persistent volume, so a batch the
+stream acknowledged before a restart lands after it ([Helm: durable state](/guides/helm/#durable-state), #1286).
 
 The property lane's transition guard is the insert's own condition, held per series by a lock, so two
 batches landing at once never write one value twice. The guard is right only if a series lands in
@@ -418,7 +426,7 @@ failure count has its attempts beside it, so each loss reads as a ratio where 0 
   whole wait included, and so is the wait of a pusher that gave up before either. A refusal is a share of the publishes, healthy 0; a p99 rising toward the
   bound is a push lane whose pushers queue behind one another.
 
-[Platform health](/guides/operator/platform-health/#where-work-is-lost) reads the delivery keys hop
+[Platform health](/operator/platform-health/#where-work-is-lost) reads the delivery keys hop
 by hop, the outpost's spool then this ingest, each hop's loss over its components' summed counts and the
 end to end as one minus the product of each hop's survival (#1646).
 

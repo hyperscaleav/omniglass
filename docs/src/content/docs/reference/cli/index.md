@@ -43,7 +43,7 @@ Adds a rule that, on an alarm's raise or clear, when its predicate holds over th
 | `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one |
 | `--opt-out-allowed` | bool | `false` | Let a member of a group it targets opt out of it for themselves (default false) |
 | `--targets` | string | (none) | The notification targets to send to, by name or uuid |
-| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
+| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, platform, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
 
 Example:
 
@@ -59,7 +59,7 @@ Delete an action rule
 omniglass action-rule delete <name>
 ```
 
-Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.
+Removes a rule; the notifications it queued keep its name. A shipped (official) rule is a 409: disable it instead. Audited. Gated by rule:delete, with an all-scope grant.
 
 Example:
 
@@ -139,7 +139,7 @@ Update an action rule
 omniglass action-rule update <name> [flags]
 ```
 
-Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.
+Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. A shipped (official) rule takes only enabled, opt_out_allowed and targets that keep the shipped ones; anything else is a 409. Audited. Gated by rule:update, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2718,7 +2718,7 @@ Create an event rule
 omniglass event-rule create [flags]
 ```
 
-Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a metric rule with a sample_window also reads window, the series' points over that span, oldest first, so slope, growth and span can fire it on a sustained trend (criteria that read window need a sample_window, and a sample_window needs criteria that read it), and any metric rule may read age, how long the series has run in seconds (a process's own key, since the process started), to hold a trend until a fill or a restart's refill is past; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2734,6 +2734,7 @@ Authors a rule that fires on each component it watches when its sample key meets
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
 | `--name` | string | (none) | The rule's name (lowercase kebab) |
 | `--sample-key` | string | (none) | The property or metric the rule reads |
+| `--sample-window` | string | (none) | A metric rule's trend window, a Go duration up to 168h: the criteria read window, the series' points over it, oldest first; empty is 0s, no window |
 | `--selector` | string | (none) | The components the rule watches (component types and components); absent is every component |
 | `--severity` | string | (none) | The severity level the alarm is raised at, by name; absent or empty, the rule is informational and raises no alarm |
 
@@ -2799,7 +2800,7 @@ Preview an event rule
 omniglass event-rule preview [flags]
 ```
 
-Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column. Gated by rule:read.
+Judges a candidate rule (sample key, selector, criteria) without writing anything, as the ingest would have with no sustains (the answer says they are ignored): over each series it selects on components the caller may read, from the state its newest deciding sample in the 7 days before the window set (state_unknown when there is none), through every sample in the last 24 hours that the ingest would have judged (a late sample older than one before it decides nothing). Answers the edges it would have written and the series it would hold in force now. Its reads are index probes per series, capped at row_cap window samples taken a whole series at a time: series_judged of series_total, and truncated when the cap stopped it. A selector naming a component the caller cannot read is the same 422 as one that does not exist. Criteria take {expr} or {op, value}; one that does not compile is a 422 naming the criteria, line and column, and criteria that read window or age (a trend rule's) are a 422, since each sample is judged alone. Gated by rule:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2880,6 +2881,7 @@ Patches a rule (an absent field is unchanged), bumping its version; disabling it
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
 | `--sample-key` | string | (none) | The property or metric the rule reads |
+| `--sample-window` | string | (none) | How far back the criteria's window reads the metric's series, a Go duration up to 168h; empty is 0s, no window |
 | `--selector` | string | (none) | Replace the components the rule watches; absent leaves them unchanged, and an empty selector watches every component |
 | `--severity` | string | (none) | The severity level the alarm is raised at, by name; empty makes the rule informational (no alarm) |
 
@@ -4236,16 +4238,17 @@ Create a notification target
 omniglass notification-target create [flags]
 ```
 
-Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition), one user, or a role (every person holding it, directly or through a group grant, read at each alarm transition), on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin, binding a person user:read:admin, and binding a role role:read:admin and user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--addresses` | string | (none) | An email target's recipient addresses |
-| `--channels` | string | (none) | A group or person target's channels: inbox, email |
+| `--channels` | string | (none) | A group, person or role target's channels: inbox, email |
 | `--enabled` | bool | `false` | Whether deliveries go to it (default true) |
 | `--kind` | string | (none) | The target kind |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The target's name (lowercase kebab) |
+| `--role` | string | (none) | A role target's role, by name or uuid; binding one takes role:read:admin and user:read:admin, since it reaches whoever holds the role |
 | `--secret` | string | (none) | A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) |
 | `--url` | string | (none) | A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
 | `--user` | string | (none) | A user target's person, by username or uuid; binding one takes user:read:admin |
@@ -4265,7 +4268,7 @@ Delete a notification target
 omniglass notification-target delete <name>
 ```
 
-Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.
+Removes a target. One an action rule still sends to is a 409, and so is a shipped (official) one, which is disabled instead. Audited. Gated by notification_target:delete with an all-scope grant.
 
 Example:
 
@@ -4329,7 +4332,7 @@ Send a test notification to a target
 omniglass notification-target test <name>
 ```
 
-Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group, person or role target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
 
 Example:
 
@@ -4345,12 +4348,12 @@ Update a notification target
 omniglass notification-target update <name> [flags]
 ```
 
-Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. A shipped (official) target takes only its label and enabled flag; any other field is a 409. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--addresses` | string | (none) | An email target's recipient addresses |
-| `--channels` | string | (none) | A group or person target's channels: inbox, email |
+| `--channels` | string | (none) | A group, person or role target's channels: inbox, email; refused on a shipped (official) target |
 | `--enabled` | bool | `false` | Whether deliveries go to it |
 | `--label` | string | (none) | A human label (empty clears it) |
 | `--secret` | string | (none) | A platform secret by name or uuid; empty unbinds it |
@@ -8033,7 +8036,7 @@ Creates a custom (non-official) vendor. Gated by vendor:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--icon` | string | (none) | A glyph key, e.g. crestron-logo |
+| `--icon` | string | (none) | A glyph key, e.g. boreal-logo |
 | `--kind` | string | (none) | The role the organization plays |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |

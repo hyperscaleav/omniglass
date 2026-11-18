@@ -19,7 +19,7 @@ import {
 const at = "2026-10-29T00:00:00Z";
 const hook: NotificationTarget = {
   id: uuidFor("t1"), name: "ops-chat", label: "Ops chat", kind: "webhook", url: "https://chat.example.com/…", auth: "hmac",
-  secret: "ops-chat-signing", enabled: true, created_at: at, updated_at: at,
+  secret: "ops-chat-signing", official: false, enabled: true, created_at: at, updated_at: at,
 };
 
 describe("targetDraftErrors", () => {
@@ -78,6 +78,11 @@ describe("updateTargetBody", () => {
     expect(updateTargetBody(targetDraftFrom(g), g)).toEqual({});
     expect(updateTargetBody({ ...targetDraftFrom(g), channels: ["inbox", "email"] }, g)).toEqual({ channels: ["inbox", "email"] });
   });
+  it("sends a role target's channels only when they changed (#1987)", () => {
+    const r: NotificationTarget = { ...hook, kind: "role", url: undefined, secret: undefined, role: "admin", channels: ["inbox", "email"] };
+    expect(updateTargetBody(targetDraftFrom(r), r)).toEqual({});
+    expect(updateTargetBody({ ...targetDraftFrom(r), channels: ["inbox"] }, r)).toEqual({ channels: ["inbox"] });
+  });
 });
 
 describe("the small readers", () => {
@@ -86,11 +91,13 @@ describe("the small readers", () => {
     expect(testable("email")).toBe(true);
     expect(testable("user_group")).toBe(false);
     expect(testable("user")).toBe(false);
+    expect(testable("role")).toBe(false);
   });
   it("says where each kind sends", () => {
     expect(destination(hook)).toBe("https://chat.example.com/…");
     expect(destination({ ...hook, kind: "email", addresses: ["a@x.io", "b@x.io"] })).toBe("a@x.io, b@x.io");
     expect(destination({ ...hook, kind: "user", user: "ada" })).toBe("ada");
+    expect(destination({ ...hook, kind: "role", role: "admin" })).toBe("admin");
   });
   it("parses addresses, dropping empties", () => {
     expect(parseAddresses(" a@x.io, ,b@x.io ")).toEqual(["a@x.io", "b@x.io"]);

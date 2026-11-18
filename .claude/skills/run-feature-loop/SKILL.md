@@ -89,8 +89,8 @@ A fork that can wait goes to the ship-review's "Decisions I need from you" line 
 ## Rollup
 
 1. When the queue is empty, run `/ship-slice` over the **whole integration diff** against
-   `main`: fresh full `make test` with output pasted, `make gen` drift, the em-dash and
-   attribution scan, docs-with-everything across every slice, screenshots for any operator
+   `main`: fresh full `make test` with output pasted, `make gen` drift, the em-dash
+   scan, docs-with-everything across every slice, screenshots for any operator
    surface, and the demo: tag every slice's demo in the rollup PR body's Demo section
    (`demo: <id> <id> ...`), then apply `run:demo`, which records each tagged demo (and any the
    integration diff adds or changes) in parallel into one comment and writes their clips into

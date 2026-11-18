@@ -25,7 +25,7 @@ export default function Drawer(props: {
   wide?: boolean;
   footer?: JSX.Element;
   // Over the blade stack (z-index 61 and up), for a panel opened from inside a
-  // blade: omnibot, when an alt-click there gathers a subject (#2122).
+  // blade: omnibot, opened over whatever page the person is on.
   above?: boolean;
   children: JSX.Element;
 }) {

@@ -84,6 +84,9 @@ var (
 	ErrActionRuleExists    = errors.New("storage: an action rule with this name already exists")
 	ErrActionRuleInvalid   = errors.New("storage: action rule is invalid")
 	ErrActionRuleForbidden = errors.New("storage: writing an action rule needs an all-scope grant")
+	// ErrActionRuleOfficial is deleting a shipped rule, changing what the
+	// seed owns on it, or dropping a shipped target from it (#1987).
+	ErrActionRuleOfficial = errors.New("storage: a shipped action rule is read-only but for its enabled switch, its opt-out allowance and the targets added to it")
 )
 
 // officialTypeFor is the official notification type a rule naming none sends
@@ -203,21 +206,28 @@ func resolveRuleType(ctx context.Context, q querier, ref string) (*string, error
 	return &t.ID, nil
 }
 
-func resolveRuleTargets(ctx context.Context, q querier, refs []string) ([]string, error) {
+// resolveRuleTargets turns a rule's target refs into uuids: a name along the
+// search path, or in the one namespace given (og when the boot seed links a
+// shipped rule's targets, so an operator's target of a shipped name is never
+// linked in its place, #1432).
+func resolveRuleTargets(ctx context.Context, q querier, refs []string, namespace string) ([]string, error) {
 	if len(refs) == 0 {
 		return nil, fmt.Errorf("%w: targets: name at least one notification target", ErrActionRuleInvalid)
 	}
 	ids := make([]string, 0, len(refs))
 	for _, ref := range refs {
-		t, err := getNotificationTarget(ctx, q, ref, false)
-		if errors.Is(err, ErrNotificationTargetNotFound) {
+		if err := RejectAddressForm("notification_target", ref); err != nil {
+			return nil, err
+		}
+		id, err := resolveRefIn(ctx, q, "notification_target", ref, namespace)
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("%w: target %q is not a notification target", ErrActionRuleInvalid, ref)
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("storage: resolve target %q: %w", ref, err)
 		}
-		if !slices.Contains(ids, t.ID) {
-			ids = append(ids, t.ID)
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
 		}
 	}
 	return ids, nil
@@ -261,7 +271,7 @@ func (p *PG) CreateActionRule(ctx context.Context, actorID string, spec ActionRu
 	if err != nil {
 		return nil, err
 	}
-	targetIDs, err := resolveRuleTargets(ctx, tx, spec.Targets)
+	targetIDs, err := resolveRuleTargets(ctx, tx, spec.Targets, "")
 	if err != nil {
 		return nil, err
 	}
@@ -291,6 +301,62 @@ func (p *PG) CreateActionRule(ctx context.Context, actorID string, spec ActionRu
 	return r, nil
 }
 
+// UpsertActionRule installs an official platform rule from the boot seed
+// (#1987), in the og namespace: authoritative on what it ships (label, description, transitions,
+// when, type) and on its shipped targets being linked, while enabled, the
+// opt-out allowance and any target an operator added are theirs, so a rule
+// they disabled stays disabled across restarts.
+func (p *PG) UpsertActionRule(ctx context.Context, spec ActionRuleSpec) error {
+	if err := ValidateName("action_rule", spec.Name); err != nil {
+		return fmt.Errorf("%w: %w", ErrActionRuleInvalid, err)
+	}
+	on, err := checkTransitions(spec.On)
+	if err != nil {
+		return err
+	}
+	if err := checkWhen(spec.When); err != nil {
+		return err
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: begin upsert action rule: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	typeID, err := resolveRuleType(ctx, tx, spec.NotificationType)
+	if err != nil {
+		return err
+	}
+	targetIDs, err := resolveRuleTargets(ctx, tx, spec.Targets, NamespaceOG)
+	if err != nil {
+		return err
+	}
+	var id string
+	// The shipped rule's own og row; an operator's rule of the same name is a
+	// different row (it shadows this one by the search path, #1432).
+	err = tx.QueryRow(ctx, `insert into action_rule (namespace, name, label, description, on_transitions, when_expr, notification_type_id, official, opt_out_allowed)
+		values ('og', $1, $2, $3, $4, $5, $6::uuid, true, $7)
+		on conflict (namespace, name) where owner_user_id is null do update set label = excluded.label, description = excluded.description,
+			on_transitions = excluded.on_transitions, when_expr = excluded.when_expr,
+			notification_type_id = excluded.notification_type_id, official = true,
+			updated_at = case when (action_rule.label, action_rule.description, action_rule.on_transitions, action_rule.when_expr,
+					action_rule.notification_type_id, action_rule.official)
+				is distinct from (excluded.label, excluded.description, excluded.on_transitions, excluded.when_expr,
+					excluded.notification_type_id, true) then now() else action_rule.updated_at end
+		returning id::text`,
+		spec.Name, labelOrNull(spec.Label), spec.Description, on, spec.When, typeID, spec.OptOutAllowed).Scan(&id)
+	if err != nil {
+		return fmt.Errorf("storage: upsert action rule %q: %w", spec.Name, err)
+	}
+	if _, err := tx.Exec(ctx, `insert into action_rule_target (rule_id, target_id) select $1, unnest($2::uuid[])
+		on conflict do nothing`, id, targetIDs); err != nil {
+		return fmt.Errorf("storage: link action rule %q targets: %w", spec.Name, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: commit upsert action rule: %w", err)
+	}
+	return nil
+}
+
 // UpdateActionRule patches a rule, audited; an all-scope write.
 func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch ActionRulePatch, action scope.Set) (*ActionRule, error) {
 	if !action.All {
@@ -316,6 +382,9 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 	before, err := getActionRule(ctx, tx, ref, "", true)
 	if err != nil {
 		return nil, err
+	}
+	if before.Official && (patch.Label != nil || patch.Description != nil || patch.On != nil || patch.When != nil || patch.NotificationType != nil) {
+		return nil, ErrActionRuleOfficial
 	}
 	setType := patch.NotificationType != nil
 	var typeID *string
@@ -348,9 +417,14 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 		withdrawn = tag.RowsAffected()
 	}
 	if patch.Targets != nil {
-		ids, err := resolveRuleTargets(ctx, tx, *patch.Targets)
+		ids, err := resolveRuleTargets(ctx, tx, *patch.Targets, "")
 		if err != nil {
 			return nil, err
+		}
+		if before.Official {
+			if err := keepsShippedTargets(ctx, tx, before.ID, ids); err != nil {
+				return nil, err
+			}
 		}
 		if err := setRuleTargets(ctx, tx, before.ID, ids); err != nil {
 			return nil, err
@@ -373,6 +447,21 @@ func (p *PG) UpdateActionRule(ctx context.Context, actorID, ref string, patch Ac
 	return after, nil
 }
 
+// keepsShippedTargets refuses a target list for a shipped rule that drops one
+// of the shipped targets it sends to: the next boot would only link it again.
+func keepsShippedTargets(ctx context.Context, q querier, ruleID string, ids []string) error {
+	var dropped bool
+	if err := q.QueryRow(ctx, `select exists (select 1 from action_rule_target rt
+			join notification_target t on t.id = rt.target_id
+		where rt.rule_id = $1 and t.official and not rt.target_id = any($2::uuid[]))`, ruleID, ids).Scan(&dropped); err != nil {
+		return fmt.Errorf("storage: read shipped targets: %w", err)
+	}
+	if dropped {
+		return ErrActionRuleOfficial
+	}
+	return nil
+}
+
 // DeleteActionRule removes a rule, audited; its notifications keep its name.
 func (p *PG) DeleteActionRule(ctx context.Context, actorID, ref string, action scope.Set) error {
 	if !action.All {
@@ -386,6 +475,9 @@ func (p *PG) DeleteActionRule(ctx context.Context, actorID, ref string, action s
 	before, err := getActionRule(ctx, tx, ref, "", true)
 	if err != nil {
 		return err
+	}
+	if before.Official {
+		return ErrActionRuleOfficial
 	}
 	if _, err := tx.Exec(ctx, `delete from action_rule where id = $1`, before.ID); err != nil {
 		return fmt.Errorf("storage: delete action rule %q: %w", ref, err)

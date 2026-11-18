@@ -1,6 +1,9 @@
 ---
 title: Data collection
 description: "Data collection is built from drivers: a declarative spec of inputs, polls, listeners and command bindings, attached to a component's endpoint and run at the edge, which parses on the spot."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -310,7 +313,7 @@ endpoint holding no session whose reachability probe was refused (a tls certific
 reply, an snmp `authorizationError`, the ssh probe's params credential) carries the gate with its
 reason, `endpoint-rejection-reason`, which the outpost publishes beside it, so the notice, its reason
 and **Retry** read the same with no session pill beside them, the retry waiting on the gate rather
-than on a session ([ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). The [collection guide](/guides/operator/collection/#held-sessions)
+than on a session ([ADR-1110](/architecture/decisions/#adr-1110-a-gate-says-why-it-holds-and-the-console-shows-it-whatever-met-the-refusal)). The [collection guide](/operator/collection/#held-sessions)
 teaches it, and the `fix-a-rejected-session` walkthrough drives it against the simulated panel.
 A refusal of a changed key (#1078) names both keys, the pinned and the offered, which the gate
 carries as data, and offers **Trust this key**: a confirm that teaches why a key changes, then
@@ -525,8 +528,11 @@ its claim, before its first). It keeps growing while an outpost is silent, which
 seeded `outpost-silent` rule reads: an age past 90 s, three missed heartbeats, opens a `high` alarm on
 the outpost's platform component, and the next heartbeat clears it. The webhook counts are the receiver's
 ([above](#collection-telemetry-every-endpoints-account-of-itself)), and the `retention-*`,
-`metric-*`, `table-bytes` and `database-bytes` figures are the retention pass's
-([storage](/architecture/storage/#what-a-retention-pass-reports)).
+`metric-*` and `table-bytes` figures are the retention pass's
+([storage](/architecture/storage/#what-a-retention-pass-reports)). The database's whole size,
+`db-size`, is not: the server reads `pg_database_size` every report window beside its pool and
+outbox figures, so a trend rule reads its growth at the window's grain rather than the pass's hour
+(#1985), and the seeded `db-size-growing` rule, shipped disabled, watches it once an operator runs it.
 
 **How an outpost samples.** Two shapes, as collection telemetry has. The each-tick figures (the
 dispatcher's longest pass, the worst lateness and gap excess of the runs it dispatched, the spool's
@@ -586,20 +592,48 @@ window (`collection.report_seconds`, the same window collection telemetry uses):
   secrets. The count says how often; the log line says which statement. 0 is healthy.
 - **`db-pool-acquired`, `db-pool-idle`, `db-pool-total`, `db-pool-max`**: the database pool's
   connections in use, idle and open and its cap, as they stand at the window's close.
+  **`db-pool-acquire-count`** is the connections the pool handed out in the window.
   **`db-pool-wait-count`** and **`db-pool-wait-duration`** are the window's acquires that found the
-  pool exhausted and waited, and how long they waited in all. A wait count is a loss count, 0
-  healthy; a nonzero one beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
+  pool exhausted and waited, and how long they waited in all. The health page reads the waits as a
+  share of the acquires, since a bare count of waits is not a loss ratio; 0 is healthy, and a nonzero
+  share beside `db-pool-acquired` at `db-pool-max` says requests queue on the cap.
+- **`db-connection-count`, `db-connection-limit`, `db-connection-idle-in-transaction-count`,
+  `db-transaction-oldest-age`** (#1980): the database's own side of its connections, read from
+  `pg_stat_activity` each window. The server's pool counts only what it opened; these count every
+  client backend (a `migrate`, a lab measure, a `psql` session, a second server) against
+  `max_connections` less `superuser_reserved_connections`, the connections left idle inside an open
+  transaction against those held (0 healthy), and the age in seconds of the oldest open
+  transaction. A read the database cannot answer writes nothing for that window.
+- **`db-size`**: the whole database's on-disk bytes, as `pg_database_size(current_database())`
+  reads it at the window's close (#1985). A healthy database grows while retention fills its window
+  and then holds level, a day's partition dropped as the next one fills; the seeded
+  `db-size-growing` rule (shipped disabled, since a fleet onboarded in the first week grows it as bloat
+  would) raises an `average` alarm when it keeps growing across a day past that
+  ([alarms and actions](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)). A
+  window whose read fails carries no value.
 - **The `process-*` figures**: the goroutines, heap, garbage-collection pause, CPU time and open
   files of the server process, read by the one runtime sampler an outpost reports its own through. The
   server's `process-cpu-seconds` is the CPU time since the previous window, as the Go runtime
   estimates it rather than the kernel's account, so over the window's length it is the cores the
-  server kept busy.
+  server kept busy. The seeded `process-heap-growing` and `process-goroutines-growing` rules raise an
+  `average` alarm on a heap or goroutine count that climbs steadily for six hours, the shape of a
+  leak.
 - **The pipeline**: ingest lag and throughput, the telemetry consumer's backlog, the server hop's
   `delivery-in-count`, `delivery-out-count` and `delivery-loss-ratio` per item kind, the bus
   request-reply paths' failures ([messaging](/architecture/messaging/#measuring-the-pipeline)), and
   the calc, notification and settlement ticks' depth, pace and failures
   ([workers](/architecture/workers/#measuring-the-ticks)). The seeded `ingest-lag-high` rule raises a
   warning alarm on this component when the server falls 30 s behind its samples for 2 minutes.
+- **`rule-sweep-age`**: the seconds since the server's event rule sweep last completed (#1986). The
+  sweep goroutine stamps a clock each time it finishes and the report window reads that clock, so the
+  figure does not depend on the goroutine it measures: a stalled sweep stops stamping and the age grows.
+  Each server also stamps the shared database on the database's clock, and every 10 s, apart from the
+  sweep, marks itself seen there and writes its live **peers'** ages onto their components, so a live
+  server raises the alarm for a stalled one. The seeded `rule-sweep-stalled` rule raises a `high` alarm
+  on the stalled server's component when the age passes 30 s, six missed sweeps, and clears when the
+  sweep resumes. A peer is judged only while it was seen in the last 20 s, so a server that dies
+  drops out of the read before its stamp ages past 30 s, and one that stops cleanly releases its
+  stamps so a rolling deploy does not alarm.
 - **`data-dir-disk-used-ratio`**: how full the filesystem holding the server's data directory
   (`OMNIGLASS_DATA_DIR`, where the bus keeps its stream) is, its used bytes over its total, 0 empty
   and 1 full, read with a `statfs` at each window's close. The blocks a filesystem reserves for root
@@ -626,6 +660,21 @@ succeeds (it still re-reads `database.slow_query_ms` each window): self-monitori
 server down. The decisions are
 [ADR-1627](/architecture/decisions/#adr-1627-a-server-reports-its-request-and-query-timing-by-route-template-and-statement-fingerprint)
 and [ADR-1671](/architecture/decisions/#adr-1671-a-server-whose-platform-component-cannot-be-ensured-boots-and-reports-nothing).
+
+#### What an alarm inside the platform cannot see
+
+An alarm raised by the thing it reports on cannot report that thing's death. `rule-sweep-stalled`
+catches a **stalled sweep, not a dead server**: a server that has crashed or lost its database writes
+no age and stops marking itself seen, so its peers stop judging it too, and a lone server has no peer
+to read its stamp. The server's optional outbound **heartbeat**
+(`heartbeat.target` and `heartbeat.interval_seconds`, platform settings) covers the rest: a signed
+request to a webhook notification target every interval, through the same egress allow list and audit
+as a notification (never unsigned: a target with no `hmac-key` secret bound is refused and audited),
+carrying the server's name, build and count of open platform alarms. A receiver
+outside the install alarms on its absence, the one signal an in-platform alarm cannot give
+([alarms and actions](/architecture/alarms-actions/#the-heartbeat-what-an-alarm-inside-the-platform-cannot-see),
+[ADR-1986](/architecture/decisions/#adr-1986-the-heartbeat-is-a-signed-request-through-a-notification-target-and-the-sweep-age-is-read-from-a-shared-stamp)).
+It is off by default, and hosting the receiver is out of scope.
 
 **One component, not a bus, a database and a worker pool.** #1094 designed the bus, the database
 and the worker pool as platform components of their own. Their figures land on the server's
@@ -1108,9 +1157,10 @@ of sources to keep. The operator configures the component to send to the outpost
 endpoint's port (and opens the outpost's firewall for it); a shared outpost port routed by source address
 was rejected, since two endpoints behind one address (the IP-to-serial gateway shape) would be
 indistinguishable. The listen port is derived into the endpoint's params as `host` and `port` are,
-so editing it moves the connection fingerprint. A datagram from any source but the endpoint's
+so editing it moves the connection fingerprint. A datagram from any address but the endpoint's
 component is counted, self-logged once per tick (`foreign datagrams dropped`, with the count and the
-last source), and dropped, never published.
+last source), and dropped, never published; the component's address on any port is the component,
+so gear that answers from a separate send socket or an ephemeral port still reads responsive.
 
 An open udp port cannot be detected, so the **transport rung is the driver's named request
 answered** (`ladder.transport.request`, which a udp driver must name): an answer reads responsive, a
@@ -1194,7 +1244,7 @@ a line protocol like any other ([ADR-0153](/architecture/decisions/#adr-0153-the
 
 The `raw-tcp` endpoint type an earlier design tabled here is the built `tcp` transport: a line protocol held as a session, driven by its driver's polls and emits rather than per-task `command` and `extract` params ([ADR-0153](/architecture/decisions/#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)).
 
-`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with transport registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/guides/admin/metrics/) and [properties](/guides/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
+`icmp`/`tcp` are inline probes (config on `endpoint.params`); `snmp` is built as its own stateless transport, configured by its driver's inputs ([snmp](#snmp)), and `http` and `https` as request transports configured by their driver's spec, a declared stream held as a session ([http and https](#http-and-https)); the rest, in the design model, are held connections: the connection lives on the endpoint, the task names what to read. The ship-with transport registry seeds the probe built-ins above, the endpoint verdicts, and `session-state` (`internal/seed/metric_types.yaml`, `internal/seed/property_types.yaml`; the [metrics](/admin/metrics/) and [properties](/admin/properties/) guides render each set from the seed); the wider per-transport set (`<proto>-reachable`/`<proto>-response-time` for the remaining text family; an http answer's status is a poll fault's reason, never a sample of its own; `telnet-response-time`, `udp-response-time` and `snmp-response-time` are seeded, and there is no `udp-open`, since an open udp port cannot be detected) is Design, and unregistered names would be reject-not-project dropped at ingest.
 
 Built for every transport above: a driver's spec, not the task, declares what to read; the lane is
 decided by catalog membership, baked into each emit at attach, never by the value's type (an snmp

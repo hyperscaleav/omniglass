@@ -32,7 +32,14 @@ type udpPeer struct {
 
 func newUDPPeer(t *testing.T, answer func(string) []string) *udpPeer {
 	t.Helper()
-	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	return newUDPPeerAt(t, net.IPv4(127, 0, 0, 1), answer)
+}
+
+// newUDPPeerAt is a peer on its own loopback address: a datagram's address,
+// not its port, is what tells the component from a stranger.
+func newUDPPeerAt(t *testing.T, ip net.IP, answer func(string) []string) *udpPeer {
+	t.Helper()
+	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: ip})
 	if err != nil {
 		t.Fatalf("peer listen: %v", err)
 	}
@@ -241,7 +248,7 @@ func TestDatagramToAClosedPortReadsRefused(t *testing.T) {
 	}
 	// The refusal is consumed, not left to fail every later read: the
 	// socket still reads (a stranger's datagram is counted).
-	other := newUDPPeer(t, func(string) []string { return nil })
+	other := newUDPPeerAt(t, net.IPv4(127, 0, 0, 2), func(string) []string { return nil })
 	other.push(t, c.LocalAddr(), "hello")
 	eventually(t, "the socket reading on", func() bool { return c.ForeignCount() == 1 })
 }
@@ -251,7 +258,7 @@ func TestDatagramFromAnotherSourceIsCountedAndDropped(t *testing.T) {
 		t.Skip("real-socket integration test")
 	}
 	peer := newUDPPeer(t, func(string) []string { return nil })
-	stranger := newUDPPeer(t, func(string) []string { return nil })
+	stranger := newUDPPeerAt(t, net.IPv4(127, 0, 0, 2), func(string) []string { return nil })
 	in := &claimer{prefix: "EVT "}
 	c := listenDatagram(t, collection.DatagramConfig{Target: peer.addr(), Inbound: in})
 	stranger.push(t, c.LocalAddr(), "EVT INPUT spoofed")
@@ -271,6 +278,53 @@ func TestDatagramFromAnotherSourceIsCountedAndDropped(t *testing.T) {
 	cl, uncl := in.seen()
 	if len(cl) != 1 || cl[0] != "EVT INPUT hdmi2" || len(uncl) != 0 {
 		t.Fatalf("claimed %v unclaimed %v: a stranger's datagram reaches nobody", cl, uncl)
+	}
+}
+
+// A component that receives on one port and answers from another (a separate
+// send socket, or an ephemeral source port) is still the component: the
+// socket is the endpoint's own, so the address alone tells it from a stranger
+// (#1103).
+func TestDatagramFromTheComponentsAddressOnAnotherPortIsItsAnswer(t *testing.T) {
+	if testing.Short() {
+		t.Skip("real-socket integration test")
+	}
+	recv, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("peer listen: %v", err)
+	}
+	t.Cleanup(func() { _ = recv.Close() })
+	send, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatalf("peer send socket: %v", err)
+	}
+	t.Cleanup(func() { _ = send.Close() })
+	if recv.LocalAddr().(*net.UDPAddr).Port == send.LocalAddr().(*net.UDPAddr).Port {
+		t.Fatal("the peer's two sockets must differ in port")
+	}
+	go func() {
+		buf := make([]byte, 2048)
+		for {
+			_, from, err := recv.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			_, _ = send.WriteToUDP([]byte("INPUT hdmi1\r\n"), from)
+		}
+	}()
+	in := &claimer{prefix: "EVT "}
+	c := listenDatagram(t, collection.DatagramConfig{Target: recv.LocalAddr().String(), Inbound: in})
+	ans, err := c.Exchange(context.Background(), "GET INPUT", &driver.Reply{Prefix: "INPUT "}, time.Second, 0)
+	if err != nil || ans.Line != "INPUT hdmi1" {
+		t.Fatalf("exchange = %q, %v; want the answer from the component's other port", ans.Line, err)
+	}
+	// A push from the send socket is the component's too.
+	if _, err := send.WriteToUDP([]byte("EVT INPUT hdmi2\r\n"), c.LocalAddr().(*net.UDPAddr)); err != nil {
+		t.Fatalf("peer push: %v", err)
+	}
+	eventually(t, "the push claimed", func() bool { cl, _ := in.seen(); return len(cl) == 1 })
+	if n := c.ForeignCount(); n != 0 {
+		t.Fatalf("foreign = %d, want 0: the component's address on any port is the component", n)
 	}
 }
 

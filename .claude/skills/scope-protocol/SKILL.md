@@ -91,5 +91,5 @@ carries, in prose:
   endpoint's connection fingerprint (ADR-0158).
 - **Out of scope**, each with its home.
 
-No em dashes, no attribution, head-noun-last names. Report the issue number and the
+No em dashes, head-noun-last names. Report the issue number and the
 transport-or-driver verdict with the one-line reason.

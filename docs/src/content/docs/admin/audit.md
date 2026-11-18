@@ -1,0 +1,88 @@
+---
+title: The audit trail
+description: "The read-only record of every privileged action and every sign-in, including who acted behind an impersonation."
+sidebar:
+  order: 3
+  badge:
+    text: Built
+    variant: success
+screenshots:
+  - id: audit
+    path: /web/audit
+    alt: "The audit trail: every privileged action and sign-in, newest first, with who, what, and the resource; the newest row, an agent's tag set over MCP, carries an mcp pill and an agent tag. Each When cell is a flat panel because the seed-time timestamps are masked at capture."
+    # Mask the timestamp and id columns: both regenerate every seed (a v7 uuid
+    # embeds the seed time), so masking keeps the image byte-stable for the gate.
+    #
+    # The When mask names the CELL (`xpath=ancestor::td[1]`), not the text inside
+    # it. Playwright paints a mask over whatever the selector resolves to, and a
+    # `text=` selector resolves to the innermost span, so a mask on the text is
+    # the size of the text: `toLocaleString` does not zero-pad the hour, so the
+    # box is 7px narrower before 10 o'clock and a clock rollover repaints it
+    # (#773). The cell is pinned at 190px by the column descriptor.
+    #
+    # The Id mask stays on the text: a uuid is a fixed 36 characters in a
+    # monospace face, so its box does not move, and the enclosing cell is the
+    # Id column, which no descriptor pins.
+    mask:
+      - "text=/\\d+\\/\\d+\\/\\d{4}/ >> xpath=ancestor::td[1]"
+      - "text=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/"
+      # The capture's MCP row declares its client as the CLI at this build's
+      # version, whose length changes with the build. The client line stretches
+      # to the Channel column's pinned 170px, so its box, and the mask, do not.
+      - "text=/^omniglass-cli\\//"
+---
+
+**Admin > Audit** (with `audit:read:admin`, so **administrators and owners** only) is the read-only audit trail:
+every privileged action and every sign-in, newest first, each with when it happened, who did it, the action,
+and the resource. An action taken while impersonating shows the **real administrator** as the actor, with an
+`as <account>` tag naming the user whose identity they assumed (for example `admin as bob`), so
+accountability lands on the human who acted and impersonation never hides them. A read-only user (a viewer) does not
+see this page: the audit trail is admin-level information, so a plain "read everything" grant does not open it.
+Failed sign-ins on a real account show as **login failed** (and a sign-in to a disabled account as **login
+denied**), so you can spot a brute-force attempt; attempts on usernames that do not exist are not recorded.
+
+::screenshot{#audit}
+
+The page uses the same faceted search as the fleet lists: filter by **who**, **action**, **resource**,
+**id**, **channel**, **client**, or **agent** (type a term for a quick actor search, or `action:login` to pin a facet), and combine chips to narrow.
+Filtering runs over the rows already loaded; **Load older** pages further back in time, so a search that comes
+up short is a cue to load older and look deeper. The rows scroll inside the list's card, so the count and
+**Load older** stay at its foot however many pages you have loaded.
+
+The **Id** column shows the resource's **name** (a user's username), resolved from the row's own
+change images; hovering it reveals the stable uuid the trail actually stores, which is what keeps a row
+attributable after a rename. `resource_id` is always the resource's primary key, so a row whose images
+carry no name (an older catalog delete) falls back to that raw uuid.
+
+Pick a row to open its **detail drawer**: who acted (and, for an impersonated action, who was behind
+it), when, and the **field-level before/after diff** of the change itself. Changed fields highlight
+both sides, an added field only its After, a removed one only its Before, and unchanged fields dim. A
+create shows only an After column and a delete only a Before. A value that is JSON (an endpoint's params
+and inputs, a driver's spec) reads as indented JSON, and a long value wraps inside its own column, so
+both sides of a change stay on screen however long either is. Rows written before that shipped carried
+those JSON columns as base64 and still read that way: the trail keeps each row as it was written. Catalog mutations record the full row on
+both sides (an update carries the row as it stood and as it became, a delete the whole row it
+removed); rows written before that shipped carried only an id, so an old row can still read
+one-sided. Auth events (sign-ins, password changes)
+record no row images at all, and the drawer says so. Sealed material never appears: a secret's audit
+row carries its metadata only, and password changes record that the credential changed, never a value.
+
+An action an AI agent took through the [MCP server](/guides/agents/) is the user's own row, and the
+trail also records how it arrived. The **Channel** column marks such a row with an `mcp` pill and, under
+it, the client the agent declared about itself (`claude-code/2.1.0`); a direct API call carries no pill.
+An agent acting on its own token adds an `agent <name>` tag beside the person it acted for in **Who**:
+the person is accountable, the agent is what acted. Filter with `channel:mcp` (or `channel:direct` for
+everything that did not come through an agent's tool call), `client:claude`, or `agent:<name>`. The
+drawer's **Channel** entry carries an info tip on what the channel proves and what it does not: the
+server stamps it, so no caller can claim one, but it says how a call arrived, not what held the token, so
+a script holding a person's own token still reads as direct. The **Client** entry reads "as the agent
+reported it" because the client is the agent's own claim, recorded as asserted.
+
+The same filters are on the API: `GET /audit-log?channel=mcp&client=claude` (and
+`omniglass audit-log list --channel mcp --client claude`) returns `"channel": "mcp"` and the `client`
+on such a row, and neither on a direct call. Minting
+and revoking an API token each write a row too (resource `credential`), naming the token by its prefix
+and description, never its secret.
+
+The model behind the trail, what is recorded and the dual-actor rule for impersonation, is
+[identity and access](/architecture/identity-access/) and [audit](/architecture/audit/).

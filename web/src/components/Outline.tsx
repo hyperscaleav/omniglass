@@ -4,7 +4,6 @@ import { Popover } from "@kobalte/core/popover";
 import { ChevronRight, CircleCheck, CircleDashed, LayoutDashboard, OctagonX, Plus, TriangleAlert, resolveIcon } from "./icons";
 import type { ComponentGroup, ComponentRow, Lights, LocationNode } from "../lib/outline";
 import { VERDICT_HUE, type Verdict } from "../lib/health";
-import { stamped, type Subject } from "../lib/handover";
 
 // The outline (#867): every location in the fleet as one tree, drawn as aligned
 // columns. A location wears its system (standard and health on its own row) and
@@ -42,15 +41,6 @@ export type Row =
   | { kind: "location"; key: string; depth: number; node: LocationNode; parent: string | null }
   | { kind: "group"; key: string; depth: number; group: ComponentGroup; location: LocationNode; parent: string }
   | { kind: "component"; key: string; depth: number; row: ComponentRow; location: LocationNode; parent: string };
-
-// rowSubject is what a row is when the person hands it to omnibot (#2122): a
-// location, a system or a component, by name.
-export function rowSubject(r: Row): Subject | undefined {
-  if (r.kind === "component") return { kind: "component", ref: r.row.name };
-  if (r.kind === "group") return r.group.system ? { kind: "system", ref: r.group.system.name } : undefined;
-  const name = r.node.chain[r.node.chain.length - 1].name;
-  return name ? { kind: "location", ref: name } : undefined;
-}
 
 const VERDICTS: Verdict[] = ["healthy", "incomplete", "degraded", "outage"];
 const WORDS: Record<Verdict, string> = { healthy: "healthy", incomplete: "incomplete", degraded: "degraded", outage: "outage" };
@@ -235,8 +225,6 @@ export default function Outline(props: {
             <div
               role="treeitem"
               data-key={key}
-              data-subject-kind={stamped(rowSubject(r()))?.kind}
-              data-subject-ref={stamped(rowSubject(r()))?.ref}
               aria-level={r().depth + 1}
               aria-expanded={expandable(r()) ? (isOpen() ? "true" : "false") : undefined}
               aria-selected={isSel() ? "true" : "false"}

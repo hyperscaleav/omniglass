@@ -299,7 +299,7 @@ func TestLatestPerInstanceIsAnIndexWalk(t *testing.T) {
 		{"property", "property_series_idx"},
 		{"metric", "metric_series_ts_idx"},
 	} {
-		rows, err := conn.Query(ctx, "explain "+storage.ExportLatestPerInstanceSQL(tc.lane), "component", uuid.NewString(), "video-input", []string{"tcp", "ssh"})
+		rows, err := conn.Query(ctx, "explain "+storage.ExportLatestPerInstanceSQL(tc.lane), "component", uuid.NewString(), "video-input", []string{"tcp", "ssh"}, []string{"tcp-open"})
 		if err != nil {
 			t.Fatalf("explain %s: %v", tc.lane, err)
 		}

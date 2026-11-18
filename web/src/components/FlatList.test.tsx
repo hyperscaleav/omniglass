@@ -2,7 +2,6 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect } from "vitest";
 import { render, fireEvent, screen, waitFor } from "@solidjs/testing-library";
 import FlatList from "./FlatList";
-import { uuidFor } from "../lib/testids";
 import type { BladeDef } from "../lib/blades";
 
 // The blades config's per-row kind: a mixed-kind surface maps each row to its
@@ -105,51 +104,5 @@ describe("FlatList loading placeholder", () => {
   it("drops the skeleton once loading ends", () => {
     render(() => <FlatList<R> config={cfg(false, 6)} />);
     expect(screen.queryAllByTestId("list-loading-row")).toHaveLength(0);
-  });
-});
-
-// The subject stamp (#2122): a row carries what omnibot is handed for it, a
-// kind and a name, so the console's alt-click gathers it. A blade page's row is
-// its blade kind and its name by default; a uuid is never a reference.
-describe("FlatList subject stamp", () => {
-  type N = { id: string; name?: string };
-  const UUID = "3f2b8c1e-9a4d-4e6f-8b2a-1c5d7e9f0a3b";
-
-  function mountNamed(rs: N[], subject?: (r: N) => { kind: string; ref: string } | undefined, blades = true) {
-    render(() => (
-      <FlatList<N>
-        config={{
-          entity: { name: "vendor", plural: "vendors" },
-          rows: () => rs,
-          filterKeys: [{ key: "name", type: "string", hint: "substring", get: (r) => r.id, values: () => [] }],
-          columns: [{ key: "id", label: "Id", cell: (r) => <span>{r.name ?? r.id}</span> }],
-          rowId: (r) => r.id,
-          ...(blades ? { blades: { registry, rootKind: "vendor" } } : {}),
-          ...(subject ? { subject } : {}),
-        }}
-      />
-    ));
-  }
-
-  it("stamps a blade row with its kind and name", () => {
-    mountNamed([{ id: UUID, name: "crestron" }]);
-    const tr = screen.getByText("crestron").closest("tr")!;
-    expect(tr).toHaveAttribute("data-subject-kind", "vendor");
-    expect(tr).toHaveAttribute("data-subject-ref", "crestron");
-  });
-
-  it("leaves a row with no name, or only a uuid, unstamped", () => {
-    mountNamed([{ id: UUID }]);
-    expect(screen.getByText(UUID).closest("tr")).not.toHaveAttribute("data-subject-kind");
-  });
-
-  it("takes the page's own subject, and stamps nothing without blades or one", () => {
-    mountNamed([{ id: uuidFor("a"), name: "audit-1" }], (r) => ({ kind: "audit", ref: r.name! }), false);
-    expect(screen.getByText("audit-1").closest("tr")).toHaveAttribute("data-subject-ref", "audit-1");
-  });
-
-  it("stamps nothing on a table with neither", () => {
-    mountNamed([{ id: uuidFor("plain"), name: "plain" }], undefined, false);
-    expect(screen.getByText("plain").closest("tr")).not.toHaveAttribute("data-subject-kind");
   });
 });

@@ -96,15 +96,25 @@ func retentionLaneNames() []string {
 // TestPlatformHistoryCoversEveryServerPanelKey.
 var platformHistory = func() map[string][]historySeries {
 	h := map[string][]historySeries{
-		writerclass.DBPoolAcquired:            count(0.3, 1),
-		writerclass.DBPoolMax:                 count(12, 0),
-		writerclass.DBPoolWaitCount:           zero(),
-		writerclass.BusConsumerPending:        zero(),
-		writerclass.BusConsumerAckPending:     zero(),
-		writerclass.CalcPendingDepth:          zero(),
-		writerclass.OutboxQueuedDepth:         zero(),
-		writerclass.OutboxDueAge:              zero(),
-		writerclass.IngestLaneBusy:            zero(),
+		writerclass.DBPoolAcquired:     count(0.3, 1),
+		writerclass.DBPoolMax:          count(12, 0),
+		writerclass.DBPoolAcquireCount: count(120, 0.3),
+		writerclass.DBPoolWaitCount:    zero(),
+		writerclass.DBPoolWaitDuration: zero(),
+		// The database's side: the lab's server and a few sessions against
+		// a stock 100 connections less the 3 reserved, nothing left open.
+		writerclass.DBConnectionCount:                  count(9, 0.15),
+		writerclass.DBConnectionLimit:                  count(97, 0),
+		writerclass.DBConnectionIdleInTransactionCount: zero(),
+		writerclass.DBTransactionOldestAge:             {{base: 0.2, swing: 0.5}},
+		writerclass.BusConsumerPending:                 zero(),
+		writerclass.BusConsumerAckPending:              zero(),
+		writerclass.CalcPendingDepth:                   zero(),
+		writerclass.OutboxQueuedDepth:                  zero(),
+		writerclass.OutboxDueAge:                       zero(),
+		writerclass.IngestLaneBusy:                     zero(),
+		// The sweep ticks every 5 s, so a healthy lab's age runs 0 to 5.
+		writerclass.RuleSweepAge:              one(2.5, 0.4),
 		writerclass.RetentionPassFailureCount: zero(),
 		writerclass.RetentionWindowDays:       {{instance: "metric", base: 14, whole: true}},
 	}
@@ -135,7 +145,7 @@ var platformHistory = func() map[string][]historySeries {
 // next pass writes and draws no cliff into it.
 var platformHistoryMeasured = map[string]bool{
 	writerclass.MetricOldestDayAge: true,
-	writerclass.DatabaseBytes:      true,
+	writerclass.DBSize:             true,
 	writerclass.TableBytes:         true,
 }
 
@@ -175,7 +185,7 @@ var platformHistoryExempt = map[string]string{
 // the age is read off the oldest partition at each minute.
 func measuredHistory(status storage.RetentionStatus, end time.Time) map[string][]historySeries {
 	h := map[string][]historySeries{
-		writerclass.DatabaseBytes: {{base: float64(status.DatabaseBytes), climb: 0.1, whole: true}},
+		writerclass.DBSize: {{base: float64(status.DatabaseBytes), climb: 0.1, whole: true}},
 	}
 	for _, table := range slices.Sorted(maps.Keys(status.TableBytes)) {
 		h[writerclass.TableBytes] = append(h[writerclass.TableBytes],

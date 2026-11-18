@@ -67,7 +67,7 @@ func (p *PG) emailSend(ctx context.Context, q querier, targetID, ruleID, recipie
 		if err != nil || refused != "" {
 			return nil, refused, err
 		}
-		if t.Kind == TargetUserGroup && ruleID != nil {
+		if expandsToPeople(t.Kind) && ruleID != nil {
 			var opted bool
 			if err := q.QueryRow(ctx, `select exists (select 1 from action_rule_opt_out o join action_rule r on r.id = o.rule_id
 				where o.rule_id = $1::uuid and o.user_id = $2::uuid and r.opt_out_allowed)`, *ruleID, *recipientID).Scan(&opted); err != nil {
@@ -133,19 +133,23 @@ func (p *PG) personalEmailSend(ctx context.Context, q querier, ruleID, recipient
 
 // recheckRecipient judges a person's email row again at send, as the queue
 // judged them (ADR-1341), and resolves their directory email: they are still
-// an active human, still a member of the group the row came through (or
-// still the person the target names), and their component read scope, as it
-// stands now, still admits the alarm's component.
+// an active human, still a member of the group the row came through (still
+// a holder of the role it came through, or still the person the target
+// names), and their component read scope, as it stands now, still admits the
+// alarm's component.
 func recheckRecipient(ctx context.Context, q querier, t *NotificationTarget, recipientID *string, componentID string) (string, string, error) {
 	if recipientID == nil {
 		return "", "the recipient was deleted", nil
 	}
 	var email string
-	var active, member bool
+	var active, member, holder bool
 	err := q.QueryRow(ctx, `select coalesce(h.email, ''), pr.active and pr.archived_at is null,
-			$2::uuid is null or exists (select 1 from user_group_member m where m.group_id = $2::uuid and m.user_id = pr.id)
+			$2::uuid is null or exists (select 1 from user_group_member m where m.group_id = $2::uuid and m.user_id = pr.id),
+			$3::uuid is null or exists (select 1 from user_grant g where g.role_id = $3::uuid and g.user_id = pr.id)
+				or exists (select 1 from user_grant g join user_group_member m on m.group_id = g.group_id
+				            where g.role_id = $3::uuid and m.user_id = pr.id)
 		from users pr join person h on h.user_id = pr.id where pr.id = $1::uuid`,
-		*recipientID, nullIfEmpty(t.UserGroupID)).Scan(&email, &active, &member)
+		*recipientID, nullIfEmpty(t.UserGroupID), nullIfEmpty(t.RoleID)).Scan(&email, &active, &member, &holder)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "the recipient was deleted", nil
 	}
@@ -159,6 +163,8 @@ func recheckRecipient(ctx context.Context, q querier, t *NotificationTarget, rec
 		// The group is not named: a reason is read by whoever reads the
 		// alarm, and the group directory is admin-tier.
 		return "", "the recipient is no longer a member of the target's group", nil
+	case !holder:
+		return "", "the recipient no longer holds the target's role", nil
 	case t.Kind == TargetUser && t.UserID != *recipientID:
 		return "", "the target no longer names the recipient", nil
 	}

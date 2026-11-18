@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/metrictime"
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"github.com/jackc/pgx/v5"
 )
@@ -353,7 +354,7 @@ func (p *PG) markDispatched(ctx context.Context, delivered []dispatch) error {
 		}
 		for _, f := range firsts {
 			p.recordCommandLatency(ctx, tx, f.id, PlatformMetric{ComponentID: f.platform, Key: writerclass.CommandDispatchLatency,
-				Value: f.latencyMS, TS: MetricTime(f.at)})
+				Value: f.latencyMS, TS: metrictime.MetricTime(f.at)})
 		}
 		return nil
 	})

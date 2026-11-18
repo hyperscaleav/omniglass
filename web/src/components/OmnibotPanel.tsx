@@ -18,7 +18,7 @@ import {
   type RunState,
 } from "../lib/assistant";
 import { describeError } from "../lib/format";
-import { clearTray, contextEntries, pendingTriage, removeSubject, requestTriage, tray, triageCall, type Subject } from "../lib/handover";
+import { contextEntries, pendingTriage, requestTriage, triageCall, type Subject } from "../lib/handover";
 
 // OmnibotPanel is omnibot in the console (#1167): a drawer over one of the
 // person's conversations, run on the server (#2121). A prompt streams back as
@@ -28,33 +28,22 @@ import { clearTray, contextEntries, pendingTriage, removeSubject, requestTriage,
 // audited as its own, and it never sees a secret's value. The credential
 // button creates a secret through the secrets route and puts only its name in
 // the prompt, so a credential the person types never reaches the model.
-// What the person gathered from the console (#2122) waits in a tray above the
-// composer and goes with the next prompt as references, never as what the
-// console rendered. An alarm in the tray triages in one click: the run is the
+// Every prompt carries the page the person is on (#2162), shown above the
+// composer, as a reference: its route and arguments, a detail page by its
+// entity's name, never what the console rendered. The person can leave it out
+// of the next prompt. A triage asked for from outside the panel runs the
 // embedded triage-alarm skill, its text the server's, on that alarm with the
-// rest of the tray as context.
+// page as context.
 
 // SubjectChip is one handed-over subject: its kind and its name, address or
-// page, with a remove button while it waits in the tray, and a triage button
-// for an alarm there.
-function SubjectChip(props: { subject: Subject; onRemove?: () => void; onTriage?: () => void }) {
+// page, with a button that leaves it out of the next prompt.
+function SubjectChip(props: { subject: Subject; onRemove?: () => void }) {
   return (
     <span class="badge badge-sm gap-1 max-w-full">
       <span class="text-base-content/60">{props.subject.kind}</span>
       <span class="font-data truncate min-w-0">{props.subject.ref}</span>
-      <Show when={props.onTriage}>
-        <button
-          type="button"
-          class="cursor-pointer text-primary font-medium"
-          aria-label={`Triage alarm ${props.subject.ref}`}
-          title="Run the triage-alarm skill on this alarm"
-          onClick={() => props.onTriage?.()}
-        >
-          Triage
-        </button>
-      </Show>
       <Show when={props.onRemove}>
-        <button type="button" class="cursor-pointer" aria-label={`Remove ${props.subject.kind} ${props.subject.ref}`} onClick={() => props.onRemove?.()}>
+        <button type="button" class="cursor-pointer" aria-label={`Leave out ${props.subject.kind} ${props.subject.ref}`} onClick={() => props.onRemove?.()}>
           <X size={12} />
         </button>
       </Show>
@@ -62,11 +51,15 @@ function SubjectChip(props: { subject: Subject; onRemove?: () => void; onTriage?
   );
 }
 
-export default function OmnibotPanel(props: { open: boolean; onClose: () => void; prompt?: string }) {
+export default function OmnibotPanel(props: { open: boolean; onClose: () => void; prompt?: string; page?: Subject }) {
   const [state, setState] = createSignal<RunState>(initialRun);
   const [conversation, setConversation] = createSignal<string>();
   const [draft, setDraft] = createSignal("");
   const [credential, setCredential] = createSignal(false);
+  // The page the person left out of the next prompt; a new page, or a sent
+  // prompt, brings the page back.
+  const [leftOut, setLeftOut] = createSignal<string>();
+  const page = () => (props.page && props.page.ref !== leftOut() ? props.page : undefined);
   let controller: AbortController | undefined;
   let end: HTMLDivElement | undefined;
   let composer: HTMLTextAreaElement | undefined;
@@ -106,25 +99,27 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   function send() {
     const text = draft().trim();
     if (!text || busy()) return;
-    const context = contextEntries(tray());
+    const p = page();
+    const context = contextEntries(p ? [p] : []);
     setDraft("");
-    clearTray();
+    setLeftOut(undefined);
     setState((s) => ask(s, text, context));
     void run({ prompt: text, context });
   }
 
-  // triage runs the triage-alarm skill on an alarm, the whole tray going with
-  // it as context.
+  // triage runs the triage-alarm skill on an alarm, the page going with it as
+  // context.
   function triage(s: Subject) {
     const skill = triageCall(s);
     if (!skill || busy()) return;
-    const context = contextEntries([s, ...tray()]);
-    clearTray();
+    const p = page();
+    const context = contextEntries(p ? [s, p] : [s]);
+    setLeftOut(undefined);
     setState((st) => ask(st, `Triage alarm ${s.ref}`, context));
     void run({ skill, context });
   }
 
-  // A triage asked for from the palette runs once the panel is open.
+  // A triage asked for from outside the panel runs once the panel is open.
   createEffect(() => {
     const s = pendingTriage();
     if (!props.open || !s || busy()) return;
@@ -159,13 +154,13 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
         send();
       }}
     >
-      <Show when={tray().length > 0}>
-        <div data-testid="omnibot-tray" class="flex flex-wrap items-center gap-1.5" aria-label="Handed to omnibot with your next prompt">
-          <span class="text-xs text-base-content/60">With your prompt</span>
-          <For each={tray()}>
-            {(s) => <SubjectChip subject={s} onRemove={() => removeSubject(s)} onTriage={triageCall(s) && !busy() ? () => triage(s) : undefined} />}
-          </For>
-        </div>
+      <Show when={page()}>
+        {(p) => (
+          <div data-testid="omnibot-page" class="flex flex-wrap items-center gap-1.5" aria-label="Handed to omnibot with your next prompt">
+            <span class="text-xs text-base-content/60">Looking at</span>
+            <SubjectChip subject={p()} onRemove={() => setLeftOut(p().ref)} />
+          </div>
+        )}
       </Show>
       <textarea
         ref={composer}
