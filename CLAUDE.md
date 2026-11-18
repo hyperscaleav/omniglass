@@ -90,8 +90,9 @@ cd .claude/worktrees/<type>+<short-name>
 
 - Branch prefix and PR title use the conventional-commit type (`feat`, `fix`, `docs`,
   `ci`, `chore`, `refactor`, `test`, `perf`). PR title is `<type>: <description>`; CI
-  enforces it and semantic-release reads it on merge.
-- Squash-merge. `feat:` = minor, `fix:`/`perf:` = patch, `BREAKING CHANGE:` = major.
+  enforces it and the release notes list it.
+- Squash-merge. Releases are cut from a `release/<major>.<minor>` branch, whose name sets
+  the version; a fix reaches a release branch by cherry-pick from `main`.
 - Validate locally: `make test-short` to iterate, `make test` before the PR.
 - No `--no-verify` without explicit approval.
 
