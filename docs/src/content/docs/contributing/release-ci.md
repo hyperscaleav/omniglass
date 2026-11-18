@@ -32,8 +32,8 @@ Thirteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-dri
   jobs also run on `main` after merge and on every push to a release branch.
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
   because the repo squash-merges: the squash subject *is* the PR title, and a release's
-  generated notes list it. A malformed title would muddy the history and the notes, so it is
-  blocked at the PR. The version itself comes from the release branch, not the titles.
+  notes group it by its type. A malformed title would muddy the history and land in the
+  notes' Other changes, so it is blocked at the PR. The version itself comes from the release branch, not the titles.
 - **`gen-drift.yml`** runs `make gen` and fails the PR on any diff in the committed generated
   artifacts (the OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA client,
   the protobuf wire), the drift gate [API first](/contributing/api-first/) promises.
@@ -96,8 +96,21 @@ first step.
 
 The version comes from the branch name and the tags already cut
 (`cmd/releaseversion`), never from commit subjects, so the first `0.x` release cannot number
-itself `1.0.0` from an old breaking change. The notes are GitHub's generated notes since the
-previous final release, one line per merged PR title.
+itself `1.0.0` from an old breaking change.
+
+**The notes** cover every commit since the previous final release, so a candidate's notes are
+cumulative, and group each PR title by its type (`cmd/releasenotes`, #2142): Breaking changes
+(a `!` after the type, or a `BREAKING CHANGE:` footer), Features (`feat`), Fixes (`fix`),
+Performance (`perf`), then Other changes, with a compare link to the previous final release. A
+`dry_run` dispatch shows them in the run's summary. To preview them locally:
+
+```bash
+go run ./cmd/releasenotes -repo hyperscaleav/omniglass -tag v0.1.0-rc.1 -previous v0.0.0
+```
+
+**A final release comments** "Released in" with a link to the Release on each PR it ships and
+each issue that PR closed, once per release. Candidates comment nothing. A release that ships
+more than 100 PRs, as the first does, skips the comments and says so in the run's summary.
 
 Every push to a release branch runs the same CI as `main` (`test`, `image`, `gen-drift`,
 `migrations`, `docs-build`, `docs-shots`), and `image` publishes the commit's sha image, so a
@@ -125,7 +138,7 @@ make release-plan FINAL=1    # the final release of the newest candidate
 ```
 
 No changelog is ever committed back, so a release never writes to `main` or the branch. The
-generated notes live on the GitHub Release.
+notes live on the GitHub Release.
 
 ## The soak gate
 
