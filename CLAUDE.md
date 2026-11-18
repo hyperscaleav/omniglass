@@ -3,9 +3,11 @@
 Open observability and control plane for AV/IT fleets, and a learning tool for monitoring
 itself. Single Go binary (run modes: server, outpost, migrate), BYO PostgreSQL. The
 architecture of record is the docs site under [docs/](docs/) (published at
-docs.omniglass.hyperscaleav.com), being rebuilt by audience (#2153): the rebuilt pages carry the status
-badges, and the old pages stay the reference until their section lands. Read the
-[architecture spine](docs/src/content/docs/architecture/index.md) before non-trivial changes.
+docs.omniglass.hyperscaleav.com), laid out by audience (#2153): Start here, Operator, Admin,
+Developer, Deployment, Architecture (badged, the architecture of record) and Reference
+(generated). The old pages sit under **Being rebuilt** and stay the reference until their
+section lands. Read the [architecture spine](docs/src/content/docs/architecture/index.md)
+before non-trivial changes.
 
 This repo is **public from the first commit** and built **one vertical slice per PR**.
 Treat every change as portfolio-quality and externally visible.
