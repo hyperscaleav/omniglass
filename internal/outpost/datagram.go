@@ -347,8 +347,9 @@ func (m *sessionManager) datagramOf(endpointID string) collection.DatagramExchan
 // retargetDatagram follows a named udp target to the address it has now,
 // once per tick (the request rung's, not each datagram's): a move updates
 // the socket's peer in place and logs once; a failed resolve keeps the last
-// address and logs once per distinct error.
-func (m *sessionManager) retargetDatagram(endpointID string) {
+// address and logs once per distinct error. The resolve is bound by budget,
+// so a hung resolver cannot stall the tick.
+func (m *sessionManager) retargetDatagram(ctx context.Context, endpointID string, budget time.Duration) {
 	if m == nil {
 		return
 	}
@@ -358,7 +359,9 @@ func (m *sessionManager) retargetDatagram(endpointID string) {
 	if !ok {
 		return
 	}
-	from, to, moved, err := h.sock.Retarget()
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	from, to, moved, err := h.sock.Retarget(ctx)
 	taskID, endpoint := h.publishTo()
 	h.mu.Lock()
 	failed := ""
@@ -473,13 +476,18 @@ func collectDatagramRung(ctx context.Context, task collection.TaskSpec, req *dri
 	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok {
 		return []collection.Sample{responsive(collection.VerdictDown, rejectedReason+gt.class)}, nil
 	}
-	sessions.retargetDatagram(task.EndpointID)
 	var timeout time.Duration
 	var p endpointParams
 	_ = json.Unmarshal(task.EndpointParams, &p) // desiredDatagrams has read it already
 	if p.Timeout != "" {
 		timeout, _ = time.ParseDuration(p.Timeout)
 	}
+	// The tick lasts the endpoint's timeout: a named target's re-resolve
+	// takes at most half, and the exchange the rest.
+	timeout = collection.SessionTimeout(timeout)
+	resolveStart := time.Now()
+	sessions.retargetDatagram(ctx, task.EndpointID, timeout/2)
+	timeout -= time.Since(resolveStart)
 	ans, err := sock.Exchange(ctx, req.Line, req.Reply, timeout, req.RetriesOr(driver.DefaultPollRetries))
 	var refused *collection.RefusedError
 	if err == nil || errors.As(err, &refused) {

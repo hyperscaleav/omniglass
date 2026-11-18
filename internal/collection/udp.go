@@ -47,9 +47,9 @@ type DatagramConfig struct {
 	// Terminal classifies an answer, or the component's refusal, as a
 	// refusal retrying cannot fix (the driver's terminal rules).
 	Terminal Classifier
-	// Resolve turns the target into an address (nil: net.ResolveUDPAddr). A
-	// seam for tests; a literal IP target never calls it after the bind.
-	Resolve func(network, target string) (*net.UDPAddr, error)
+	// Resolve turns a named target into an address within ctx (nil: the
+	// system resolver). A seam for tests; a literal IP target never calls it.
+	Resolve func(ctx context.Context, network, target string) (*net.UDPAddr, error)
 }
 
 // DatagramAnswer is an answered exchange: the reply, the time from the send
@@ -129,14 +129,18 @@ type DatagramConn struct {
 // ListenDatagram binds an endpoint's socket and starts its reader.
 func ListenDatagram(cfg DatagramConfig) (*DatagramConn, error) {
 	if cfg.Resolve == nil {
-		cfg.Resolve = func(network, target string) (*net.UDPAddr, error) { return net.ResolveUDPAddr(network, target) }
+		cfg.Resolve = resolveUDPAddr
 	}
 	literal := literalTarget(cfg.Target)
-	resolve := cfg.Resolve
+	var peer *net.UDPAddr
+	var err error
 	if literal {
-		resolve = func(network, target string) (*net.UDPAddr, error) { return net.ResolveUDPAddr(network, target) }
+		peer, err = net.ResolveUDPAddr("udp", cfg.Target)
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultSessionTimeout)
+		defer cancel()
+		peer, err = cfg.Resolve(ctx, "udp", cfg.Target)
 	}
-	peer, err := resolve("udp", cfg.Target)
 	if err != nil {
 		return nil, fmt.Errorf("collection: udp target %s: %w", cfg.Target, err)
 	}
@@ -168,19 +172,54 @@ func literalTarget(target string) bool {
 	return err == nil
 }
 
-// Retarget re-resolves a named target and moves the peer to the address it
-// now has, so the next send goes there and a reply from it is the
+// resolveUDPAddr is the system resolver bound by ctx, which net.ResolveUDPAddr
+// is not: a slow or hung resolver ends with the context. As it does, a name
+// with both families answers its IPv4 address when the network is "udp".
+func resolveUDPAddr(ctx context.Context, network, target string) (*net.UDPAddr, error) {
+	host, service, err := net.SplitHostPort(target)
+	if err != nil {
+		return nil, err
+	}
+	port, err := net.DefaultResolver.LookupPort(ctx, network, service)
+	if err != nil {
+		return nil, err
+	}
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip"+strings.TrimPrefix(network, "udp"), host)
+	if err != nil {
+		return nil, err
+	}
+	addr := ips[0]
+	for _, ip := range ips {
+		if ip.Is4() {
+			addr = ip
+			break
+		}
+	}
+	return net.UDPAddrFromAddrPort(netip.AddrPortFrom(addr, uint16(port))), nil
+}
+
+// SessionTimeout is the timeout an endpoint's exchange runs under: the
+// endpoint's own, or the default when it sets none.
+func SessionTimeout(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		return defaultSessionTimeout
+	}
+	return timeout
+}
+
+// Retarget re-resolves a named target, within ctx, and moves the peer to the
+// address it now has, so the next send goes there and a reply from it is the
 // component's. The socket stays bound: it is unconnected, so a new peer
 // needs no rebind. It is called once per tick by the request rung, as the
 // tcp-family transports resolve on every dial. A literal ip target never
-// resolves. A failed resolve keeps the last address and returns the error
-// (a dns failure to classify); the name is resolved within the socket's own
-// family, so a name that moved to the other one reads as a failed resolve.
-func (c *DatagramConn) Retarget() (from, to string, moved bool, err error) {
+// resolves. A failed or timed-out resolve keeps the last address and returns
+// the error; the name is resolved within the socket's own family, so a name
+// that moved to the other one reads as a failed resolve.
+func (c *DatagramConn) Retarget(ctx context.Context) (from, to string, moved bool, err error) {
 	if c.literal {
 		return "", "", false, nil
 	}
-	next, err := c.cfg.Resolve(c.network, c.cfg.Target)
+	next, err := c.cfg.Resolve(ctx, c.network, c.cfg.Target)
 	if err != nil {
 		return "", "", false, fmt.Errorf("collection: udp target %s: %w", c.cfg.Target, err)
 	}

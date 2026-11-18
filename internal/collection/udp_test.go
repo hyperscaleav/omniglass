@@ -29,7 +29,7 @@ func (s *stubResolver) set(addr string, err error) {
 	}
 }
 
-func (s *stubResolver) resolve(network, target string) (*net.UDPAddr, error) {
+func (s *stubResolver) resolve(_ context.Context, network, target string) (*net.UDPAddr, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.calls++
@@ -66,7 +66,7 @@ func TestDatagramRetargetFollowsTheNameToItsNewAddress(t *testing.T) {
 	}
 
 	res.set(y.addr(), nil)
-	from, to, moved, err := c.Retarget()
+	from, to, moved, err := c.Retarget(context.Background())
 	if err != nil || !moved {
 		t.Fatalf("retarget: moved=%v err=%v, want a move", moved, err)
 	}
@@ -79,7 +79,7 @@ func TestDatagramRetargetFollowsTheNameToItsNewAddress(t *testing.T) {
 	}
 
 	// Unmoved: no move reported, so nothing is logged.
-	if _, _, moved, err := c.Retarget(); moved || err != nil {
+	if _, _, moved, err := c.Retarget(context.Background()); moved || err != nil {
 		t.Fatalf("retarget of an unmoved name: moved=%v err=%v", moved, err)
 	}
 }
@@ -92,7 +92,7 @@ func TestDatagramRetargetKeepsTheLastAddressWhenResolveFails(t *testing.T) {
 	bound := c.LocalAddr().String()
 
 	res.set("", &net.DNSError{Err: "no such host", Name: "component.test", IsNotFound: true})
-	_, _, moved, err := c.Retarget()
+	_, _, moved, err := c.Retarget(context.Background())
 	if moved || err == nil {
 		t.Fatalf("a failed resolve: moved=%v err=%v, want an error and no move", moved, err)
 	}
@@ -119,7 +119,7 @@ func TestDatagramLiteralIPTargetNeverResolves(t *testing.T) {
 	res := &stubResolver{}
 	res.set(x.addr(), nil)
 	c := listenDatagram(t, collection.DatagramConfig{Target: x.addr(), Resolve: res.resolve})
-	if _, _, moved, err := c.Retarget(); moved || err != nil {
+	if _, _, moved, err := c.Retarget(context.Background()); moved || err != nil {
 		t.Fatalf("retarget of a literal ip: moved=%v err=%v", moved, err)
 	}
 	if n := res.count(); n != 0 {
@@ -135,7 +135,7 @@ func TestDatagramRetargetAcceptsOnlyTheNewAddressAsTheComponent(t *testing.T) {
 	res.set(x.addr(), nil)
 	c := listenDatagram(t, collection.DatagramConfig{Target: "component.test:5000", Resolve: res.resolve})
 	res.set(y.addr(), nil)
-	if _, _, moved, _ := c.Retarget(); !moved {
+	if _, _, moved, _ := c.Retarget(context.Background()); !moved {
 		t.Fatal("no move")
 	}
 	// The old address is now foreign: counted, never taken as the component's.

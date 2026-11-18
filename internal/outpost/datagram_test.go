@@ -4,6 +4,7 @@ package outpost
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -648,7 +649,7 @@ func TestTheUDPRequestRungFollowsAMovedName(t *testing.T) {
 	current := x.conn.LocalAddr().(*net.UDPAddr)
 	var failure error
 	m := newDatagramManager(t, newCapture())
-	m.datagramResolve = func(network, target string) (*net.UDPAddr, error) {
+	m.datagramResolve = func(_ context.Context, network, target string) (*net.UDPAddr, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		return current, failure
@@ -698,6 +699,88 @@ func TestTheUDPRequestRungFollowsAMovedName(t *testing.T) {
 	m.reconcile([]collection.TaskSpec{task})
 	if m.datagrams["ep-1"] != held {
 		t.Fatal("a moved name rebound the socket: the target string is the key, and it did not change")
+	}
+}
+
+// A listen port is part of what the socket depends on: changing only it (the
+// target and the terminal rules unchanged) binds a new socket (#1104).
+func TestAUDPSocketRebindsWhenOnlyTheListenPortChanges(t *testing.T) {
+	t.Parallel()
+	peer := newComponent(t, nvpAnswers)
+	m := newDatagramManager(t, newCapture())
+	freePort := func() int {
+		free, err := net.ListenUDP("udp4", &net.UDPAddr{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer free.Close()
+		return free.LocalAddr().(*net.UDPAddr).Port
+	}
+	// A port picked and released can be taken before the bind, by a
+	// concurrent run: pick again until the endpoint binds the one asked.
+	bind := func(params func(port int) string) (*collection.DatagramConn, int) {
+		for try := 0; try < 6; try++ {
+			port := freePort()
+			m.reconcile([]collection.TaskSpec{udpListenTask("l1", "ep-1", params(port))})
+			if h := m.datagrams["ep-1"]; h != nil && h.sock.LocalAddr().(*net.UDPAddr).Port == port {
+				return h.sock, port
+			}
+		}
+		t.Fatalf("no socket bound to a fresh listen port in 6 tries (refused: %v)", m.datagramRefused)
+		return nil, 0
+	}
+	first, port := bind(func(port int) string {
+		return udpParams(peer.addr(), fmt.Sprintf(`,"listen-port":"%d"`, port))
+	})
+	// Only the listen port differs from the held socket's.
+	second, next := bind(func(port int) string {
+		return udpParams(peer.addr(), fmt.Sprintf(`,"listen-port":"%d"`, port))
+	})
+	if next == port || second == first {
+		t.Fatalf("a new listen port kept the old socket (port %d, then %d)", port, next)
+	}
+}
+
+// A resolver that never answers cannot stall the tick: the re-resolve is bound
+// by half the endpoint's timeout, the last address is kept, and the request
+// goes to it, so the whole tick still ends within the endpoint's timeout
+// (#1104).
+func TestTheUDPRequestRungBoundsAHungResolve(t *testing.T) {
+	t.Parallel()
+	x := newComponent(t, nvpAnswers)
+	var hang atomic.Bool
+	cancelled := make(chan struct{})
+	m := newDatagramManager(t, newCapture())
+	m.datagramResolve = func(ctx context.Context, network, target string) (*net.UDPAddr, error) {
+		if !hang.Load() {
+			return x.conn.LocalAddr().(*net.UDPAddr), nil
+		}
+		<-ctx.Done()
+		close(cancelled)
+		return nil, ctx.Err()
+	}
+	task := udpProbeTask("r1", "ep-1", udpParams("component.test:5000")) // timeout 600ms
+	m.reconcile([]collection.TaskSpec{task})
+	if m.datagrams["ep-1"] == nil {
+		t.Fatalf("no socket: %v", m.datagramRefused)
+	}
+	hang.Store(true)
+	start := time.Now()
+	dps, err := collectProbe(t.Context(), &collection.Runner{}, task, m)
+	took := time.Since(start)
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if r := samplesByName(dps)[collection.SignalEndpointResponsive]; r.Text != "up" || x.requests.Load() != 1 {
+		t.Fatalf("hung resolve: %+v, x got %d requests, want the last address kept and asked", r, x.requests.Load())
+	}
+	select {
+	case <-cancelled:
+	default:
+		t.Fatal("the hung resolve was never cancelled")
+	}
+	if took > 600*time.Millisecond+200*time.Millisecond {
+		t.Fatalf("the tick took %s, want it within the 600ms endpoint timeout", took)
 	}
 }
 

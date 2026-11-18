@@ -1,6 +1,7 @@
 package outpost
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -653,7 +654,7 @@ type sessionManager struct {
 	datagramRefused map[string]string
 	// datagramResolve resolves a udp endpoint's named target (nil: the
 	// system resolver); a seam for tests.
-	datagramResolve func(network, target string) (*net.UDPAddr, error)
+	datagramResolve func(ctx context.Context, network, target string) (*net.UDPAddr, error)
 	// leftPushes is the claimed and unclaimed counts of the routers torn
 	// down since the collection report last drained them (#1369), by
 	// endpoint. Touched on the run loop only.

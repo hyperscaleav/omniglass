@@ -187,9 +187,10 @@ input, the local port its endpoint binds, which its requests leave from and the 
 arrive on (unset, the outpost picks one, which suits a component that answers to a request's source).
 Every udp request declares its reply's shape (`reply`), since a datagram's answer is told from a
 late reply to another ask only by it. An endpoint whose `host` is a DNS name follows the name when it
-moves: the node re-resolves it once per tick and keeps the socket, so a component that changes
-address is found again without a restart (a literal IP is never resolved). A request may declare `retries` (udp only, 0 to 5), how many
-times a lost datagram is re-sent within
+moves: the outpost re-resolves it once per tick, within the endpoint's timeout, and keeps the
+socket, so a component that changes address is found again without a restart (a literal IP is never
+resolved). A request may declare `retries` (udp only, 0 to 5), how many times a lost datagram is
+re-sent within
 the endpoint's timeout: a poll and the request rung default to 2, and a **command to none**, so
 declare them only on a command that is safe to send twice (one that names its value, never a
 relative step):

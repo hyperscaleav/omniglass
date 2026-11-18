@@ -1154,8 +1154,10 @@ dial (#1104): the request rung re-resolves the target once per tick (not per dat
 the address changed, moves the socket's peer in place and self-logs the move once (`udp target
 moved`, with the old and new address). The socket stays bound, since it is unconnected, so a moved
 name needs no rebind and the connection key is still the target string. A reply from the new address
-is the component's and one from the old address is foreign. A failed resolve keeps the last
-address (self-logged once per distinct error, never every tick); the name is resolved within the
+is the component's and one from the old address is foreign. The re-resolve is bound by half the
+endpoint's timeout, and the request takes what remains, so a hung resolver never stretches the tick
+past the endpoint's timeout. A failed or timed-out resolve keeps the last address (self-logged once
+per distinct error, never every tick); the name is resolved within the
 socket's address family, so a name that moves to the other family reads as a failed resolve until
 the endpoint rebinds. A literal IP target never resolves. DNS TTLs are not honoured: per tick is
 the cadence.
