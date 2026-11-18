@@ -26,7 +26,7 @@ Show
 Type "# The pass the boot ran landed its figures on that component"
 Enter
 Wait
-Type `omniglass component metric list server | jq -c '[.metrics[].metric_type_name | select(test("^(retention-|metric-|table-bytes|database-bytes)"))] | unique'`
+Type `omniglass component metric list server | jq -c '[.metrics[].metric_type_name | select(test("^(retention-|metric-|table-bytes)"))] | unique'`
 Enter
 Wait
 Type "# Behind per lane: 0 is a lane that reached its window, the healthy reading"

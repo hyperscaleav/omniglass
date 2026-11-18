@@ -8,13 +8,29 @@ import (
 	"syscall"
 )
 
-// processAlive reports whether a process with the pid exists on this host.
-func processAlive(pid int) bool {
+// processAlive reports whether the process with the pid and start time runs
+// on this host. A pid held by a process that started at another time is a
+// reused one, so it reads as gone; an empty start asks about the pid alone,
+// and so does a start the platform cannot read for a process that exists.
+func processAlive(pid int, start string) bool {
 	if pid <= 0 {
 		return false
 	}
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
+	if err := syscall.Kill(pid, 0); err != nil && !errors.Is(err, syscall.EPERM) {
+		return false
+	}
+	if start == "" {
+		return true
+	}
+	got, ok := processStart(pid)
+	return !ok || got == start
+}
+
+// currentStart is this process's start time, empty where the platform has
+// none to read.
+func currentStart() string {
+	start, _ := processStart(os.Getpid())
+	return start
 }
 
 // currentPIDNS names this process's PID namespace (on Linux, the target of

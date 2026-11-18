@@ -48,5 +48,5 @@ history and the evidence and gets no Issue button.
 
 From the CLI: `omniglass component command issue <name> --command-type <type> [--value <v>] [--wait]`,
 `omniglass component command list <name> [--status <s>]`, and `omniglass component command get <name> <id>`
-([commands](/guides/admin/commands/#read-a-command-back)).
+([commands](/admin/commands/#read-a-command-back)).
 

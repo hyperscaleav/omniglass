@@ -155,7 +155,7 @@ var PlatformServerGroups = []PlatformServerGroup{
 		{Name: writerclass.RetentionPassFailureCount},
 		{Name: writerclass.MetricOldestDayAge, Of: writerclass.RetentionWindowDays},
 		{Name: writerclass.RetentionWindowDays},
-		{Name: writerclass.DatabaseBytes},
+		{Name: writerclass.DBSize},
 		{Name: writerclass.TableBytes},
 	}},
 }
@@ -294,7 +294,6 @@ var PlatformRuleExemptions = map[string]string{
 	writerclass.RetentionDeletedCount:     exThroughput,
 	writerclass.RetentionPassFailureCount: exBesideBehind,
 	writerclass.MetricOldestDayAge:        exNoRule,
-	writerclass.DatabaseBytes:             exNoRule,
 	writerclass.TableBytes:                exNoRule,
 
 	// The pipeline.

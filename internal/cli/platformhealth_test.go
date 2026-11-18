@@ -47,9 +47,9 @@ const healthyPlatformView = `{
                    {"key": "bus-stream-last-seq", "instance": "", "value": 1004, "observed_at": "2026-11-17T11:59:30Z"},
                    {"key": "ingest-lane-busy", "instance": "", "value": 0.125, "observed_at": "2026-11-17T11:59:30Z"}]},
       {"name": "retention", "label": "Retention",
-       "keys": [{"name": "database-bytes", "label": "Database Size", "unit": "bytes"},
+       "keys": [{"name": "db-size", "label": "Database Size", "unit": "bytes"},
                 {"name": "table-bytes", "label": "Table Size", "unit": "bytes"}],
-       "figures": [{"key": "database-bytes", "instance": "", "value": 2147483648, "observed_at": "2026-11-17T11:59:00Z"},
+       "figures": [{"key": "db-size", "instance": "", "value": 2147483648, "observed_at": "2026-11-17T11:59:00Z"},
                    {"key": "table-bytes", "instance": "metric_sample", "value": 1048576, "observed_at": "2026-11-17T11:59:00Z"}]}
     ],
     "alarms": []
@@ -150,7 +150,7 @@ func TestPlatformHealthReadsAHealthyPlatform(t *testing.T) {
 	for _, f := range s.Figures {
 		got[f.Key] = f.Value
 	}
-	for key, want := range map[string]float64{"ingest-lag": 0.25, "ingest-lag-max": 1.5, "ingest-lane-busy": 0.125, "bus-consumer-pending": 3, "database-bytes": 2147483648, "db-pool-wait-count": 0} {
+	for key, want := range map[string]float64{"ingest-lag": 0.25, "ingest-lag-max": 1.5, "ingest-lane-busy": 0.125, "bus-consumer-pending": 3, "db-size": 2147483648, "db-pool-wait-count": 0} {
 		if v, ok := got[key]; !ok || v != want {
 			t.Errorf("figure %s = %v (present %v), want %v", key, v, ok, want)
 		}
@@ -294,7 +294,7 @@ func TestPlatformWindowDeltasAndRates(t *testing.T) {
 			f := &end.Servers[0].Groups[gi].Figures[fi]
 			f.ObservedAt = f.ObservedAt.Add(2 * time.Minute)
 			switch f.Key {
-			case "database-bytes":
+			case "db-size":
 				f.Value += 2 * 1048576
 			case "bus-stream-last-seq":
 				f.Value += 600
@@ -309,9 +309,9 @@ func TestPlatformWindowDeltasAndRates(t *testing.T) {
 	for _, f := range w.Figures {
 		got[f.Key+"|"+f.Instance] = f
 	}
-	db := got["database-bytes|"]
+	db := got["db-size|"]
 	if db.Delta != 2*1048576 || db.PerMinute == nil || *db.PerMinute != 1048576 {
-		t.Fatalf("database-bytes = %+v, want delta 2 MiB at 1 MiB a minute", db)
+		t.Fatalf("db-size = %+v, want delta 2 MiB at 1 MiB a minute", db)
 	}
 	seq := got["bus-stream-last-seq|"]
 	if seq.Delta != 600 || seq.PerMinute == nil || *seq.PerMinute != 300 {
