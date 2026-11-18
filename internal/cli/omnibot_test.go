@@ -9,16 +9,6 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/assistant"
 )
 
-// `omniglass omnibot` runs on a recording until a live model lands (#1166
-// slice 1): with no --replay it refuses before it connects anywhere.
-func TestOmnibotNeedsARecording(t *testing.T) {
-	t.Setenv("OMNIGLASS_TOKEN", "ogp_00000000_unused")
-	out, err := runCLI(t, "omnibot", "--server", "http://127.0.0.1:9", "add a display")
-	if err == nil || !strings.Contains(err.Error(), "--replay") {
-		t.Fatalf("omnibot without --replay = %v (%s), want a refusal naming --replay", err, out)
-	}
-}
-
 // The person answers each ask on the terminal: only a yes runs the call, an
 // empty line or the end of input is a no, and the question names the tool,
 // what it does and its arguments, flagging a destructive one.
