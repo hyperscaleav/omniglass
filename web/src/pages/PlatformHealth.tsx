@@ -14,16 +14,17 @@ import { fmtTime } from "../lib/format";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { verdictOf } from "../lib/health";
-import type { NodeStatus } from "../lib/nodes";
+import type { OutpostStatus } from "../lib/outposts";
 import { SERIES_POLL_MS, metricBuckets, metricBucketsKey } from "../lib/series";
 import {
   NOT_REPORTED,
   PLATFORM_VIEW_KEY,
   figureText,
+  figureTinted,
   lossTinted,
-  nodeLossHint,
-  nodeLossText,
-  nodePill,
+  outpostLossHint,
+  outpostLossText,
+  outpostPill,
   PANEL_SERIES_HOURS,
   PANEL_SERIES_RESOLUTION_S,
   panelAlarms,
@@ -37,7 +38,7 @@ import {
   serverUptime,
   type PanelRow,
   type PanelSection,
-  type PlatformNode,
+  type PlatformOutpost,
   type PlatformPanel,
   type PlatformPanelKey,
   type PlatformServer,
@@ -45,10 +46,10 @@ import {
 } from "../lib/platformhealth";
 
 // Platform health (#1644): whether Omniglass itself is well. Every figure here
-// is a sample on a platform component the fleet already has (each node and each
+// is a sample on a platform component the fleet already has (each outpost and each
 // server is a component of the platform system), so the page is a reading of
 // the same model an operator monitors their own fleet with, turned on the
-// monitor. That is the teaching point: a row opens onto the node's platform
+// monitor. That is the teaching point: a row opens onto the outpost's platform
 // component, the ordinary component detail, where each figure has its history.
 //
 // Each server gets a panel set (#1645): Requests, Ingest, Queues and Retention,
@@ -64,7 +65,7 @@ import {
 // the pill and the uptime are both judged at the view's read_at.
 
 const NEUTRAL_PILL = "bg-base-content/10 text-base-content/70 border-transparent";
-const PILL: Record<NodeStatus, string> = {
+const PILL: Record<OutpostStatus, string> = {
   up: "badge-soft badge-success",
   down: "badge-soft badge-error",
   never: NEUTRAL_PILL,
@@ -83,7 +84,7 @@ export default function PlatformHealth() {
   return (
     <Page
       title="Platform health"
-      subtitle="Omniglass watching itself: the build running and how long it has been up, how each server is serving, ingesting, queueing and keeping its retention, and whether each node is checking in, keeping its schedule and draining its command queue."
+      subtitle="Omniglass watching itself: the build running and how long it has been up, how each server is serving, ingesting, queueing and keeping its retention, and whether each outpost is checking in, keeping its schedule and draining its command queue."
       actions={
         <Show when={view.data?.lab}>
           <span class="badge badge-info badge-sm font-semibold uppercase tracking-wide" data-testid="platform-lab">Lab instance</span>
@@ -105,14 +106,14 @@ export default function PlatformHealth() {
             <Header view={v()} />
             <Show when={!v().figures_read}>
               <div role="note" class="alert text-sm" data-testid="platform-reach">
-                Platform figures need a fleet-wide read: your component read does not reach the platform components, so each node shows only its check-in.
+                Platform figures need a fleet-wide read: your component read does not reach the platform components, so each outpost shows only its check-in.
               </div>
             </Show>
             <Show when={v().pipeline}>{(p) => <PipelineFlow pipeline={p()} />}</Show>
             <KeyedFor each={v().servers} by={(s) => s.component}>
               {(s, i) => <ServerPanels server={s()} view={v()} open={i() === 0} />}
             </KeyedFor>
-            <NodeTable view={v()} />
+            <OutpostTable view={v()} />
             <PlatformSimulation />
           </>
         )}
@@ -140,7 +141,7 @@ function Header(props: { view: PlatformView }) {
         {(s) => (
           <>
             <Fact label="Version" sub={s().name}>
-              <span class="tnum" data-testid="platform-version" classList={{ "text-base-content/30": !s().version }}>{s().version ?? NOT_REPORTED}</span>
+              <span class="tnum block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={s().version ?? undefined} data-testid="platform-version" classList={{ "text-base-content/30": !s().version }}>{s().version ?? NOT_REPORTED}</span>
             </Fact>
             <Fact label="Up for" sub={s().started_at ? `since ${fmtTime(s().started_at!)}` : "no start time written yet"}>
               <span class="tnum" data-testid="platform-uptime">{serverUptime(props.view.read_at, s().started_at) ?? NOT_REPORTED}</span>
@@ -154,10 +155,10 @@ function Header(props: { view: PlatformView }) {
 
 function Fact(props: { label: string; sub: string; children: JSX.Element }) {
   return (
-    <div class="card border border-base-300 bg-base-200">
-      <div class="card-body gap-1 p-5">
+    <div class="card min-w-0 border border-base-300 bg-base-200">
+      <div class="card-body min-w-0 gap-1 p-5">
         <div class="eyebrow">{props.label}</div>
-        <div class="text-2xl font-semibold leading-none">{props.children}</div>
+        <div class="min-w-0 overflow-hidden text-2xl font-semibold leading-none">{props.children}</div>
         <div class="text-xs text-base-content/50">{props.sub}</div>
       </div>
     </div>
@@ -168,7 +169,7 @@ function Fact(props: { label: string; sub: string; children: JSX.Element }) {
 // the description is a keyboard focus away.
 const HEAD_TIP = "cursor-help whitespace-nowrap underline decoration-base-content/30 decoration-dotted underline-offset-4 focus-visible:outline-none focus-visible:text-primary";
 
-function NodeTable(props: { view: PlatformView }) {
+function OutpostTable(props: { view: PlatformView }) {
   const columns = () => platformColumns(props.view);
   const groups = () => (props.view.groups ?? []).filter((g) => (g.keys ?? []).length > 0);
   // The Loss group (#1646) is a composed figure, not a key: the view says which
@@ -177,7 +178,7 @@ function NodeTable(props: { view: PlatformView }) {
   const width = () => columns().length + 3 + (lossShown() ? 1 : 0);
   return (
     <div class="overflow-x-auto rounded-box border border-base-300">
-      <table class="table table-sm" data-testid="platform-nodes">
+      <table class="table table-sm" data-testid="platform-outposts">
         <thead>
           <tr>
             <th colSpan={2} />
@@ -190,7 +191,7 @@ function NodeTable(props: { view: PlatformView }) {
             <th />
           </tr>
           <tr>
-            <th>Node</th>
+            <th>Outpost</th>
             <th>Status</th>
             <KeyedFor each={columns()} by={(c) => c.key}>
               {(c) => (
@@ -205,8 +206,8 @@ function NodeTable(props: { view: PlatformView }) {
             </KeyedFor>
             <Show when={lossShown()}>
               <th class="text-right">
-                <InfoTip text={nodeLossHint(props.view)} label="Node Loss" class={HEAD_TIP}>
-                  Node Loss
+                <InfoTip text={outpostLossHint(props.view)} label="Outpost Loss" class={HEAD_TIP}>
+                  Outpost Loss
                 </InfoTip>
               </th>
             </Show>
@@ -214,8 +215,8 @@ function NodeTable(props: { view: PlatformView }) {
           </tr>
         </thead>
         <tbody>
-          <KeyedFor each={props.view.nodes} by={(n) => n.name} fallback={<tr><td colSpan={width()} class="text-base-content/50">No nodes yet.</td></tr>}>
-            {(n) => <NodeRow node={n()} view={props.view} />}
+          <KeyedFor each={props.view.outposts} by={(n) => n.name} fallback={<tr><td colSpan={width()} class="text-base-content/50">No outposts yet.</td></tr>}>
+            {(n) => <OutpostRow outpost={n()} view={props.view} />}
           </KeyedFor>
         </tbody>
       </table>
@@ -223,27 +224,27 @@ function NodeTable(props: { view: PlatformView }) {
   );
 }
 
-function NodeRow(props: { node: PlatformNode; view: PlatformView }) {
+function OutpostRow(props: { outpost: PlatformOutpost; view: PlatformView }) {
   const navigate = useNavigate();
-  const pill = () => nodePill(props.node, props.view.read_at);
-  const verdict = () => verdictOf(props.node.verdict);
-  const title = () => entityLabel(props.node);
-  const open = () => props.node.component && navigate(`/components/${props.node.component}`);
+  const pill = () => outpostPill(props.outpost, props.view.read_at);
+  const verdict = () => verdictOf(props.outpost.verdict);
+  const title = () => entityLabel(props.outpost);
+  const open = () => props.outpost.component && navigate(`/components/${props.outpost.component}`);
   return (
     <tr
-      data-testid={`platform-node-${props.node.name}`}
+      data-testid={`platform-outpost-${props.outpost.name}`}
       data-verdict={verdict() ?? undefined}
       class={ROW_TONE[verdict() ?? ""] ?? ""}
-      classList={{ "cursor-pointer hover:bg-base-200": !!props.node.component }}
+      classList={{ "cursor-pointer hover:bg-base-200": !!props.outpost.component }}
       onClick={open}
     >
       <td class="whitespace-nowrap">
         <div class="flex flex-col">
-          <Show when={props.node.component} fallback={<span class="font-medium">{title()}</span>}>
-            <A href={`/components/${props.node.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{title()}</A>
+          <Show when={props.outpost.component} fallback={<span class="font-medium">{title()}</span>}>
+            <A href={`/components/${props.outpost.component}`} class="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>{title()}</A>
           </Show>
-          <Show when={props.node.label && props.node.label !== props.node.name}>
-            <span class="text-xs text-base-content/50">{props.node.name}</span>
+          <Show when={props.outpost.label && props.outpost.label !== props.outpost.name}>
+            <span class="text-xs text-base-content/50">{props.outpost.name}</span>
           </Show>
         </div>
       </td>
@@ -255,9 +256,9 @@ function NodeRow(props: { node: PlatformNode; view: PlatformView }) {
       </td>
       <KeyedFor each={platformColumns(props.view)} by={(c) => c.key}>
         {(c) => {
-          const text = () => figureText(props.node, c());
+          const text = () => figureText(props.outpost, c());
           return (
-            <td class="tnum whitespace-nowrap text-right" data-figure={c().key} classList={{ "text-base-content/30": text() === NOT_REPORTED }}>{text()}</td>
+            <td class="tnum whitespace-nowrap text-right" data-figure={c().key} classList={{ "text-base-content/30": text() === NOT_REPORTED, "font-semibold text-error": figureTinted(props.outpost, c()) }}>{text()}</td>
           );
         }}
       </KeyedFor>
@@ -265,13 +266,13 @@ function NodeRow(props: { node: PlatformNode; view: PlatformView }) {
         <td
           class="tnum whitespace-nowrap text-right"
           data-figure="loss"
-          classList={{ "text-base-content/30": props.node.loss === undefined, "font-semibold text-error": lossTinted(props.node.loss) }}
+          classList={{ "text-base-content/30": props.outpost.loss === undefined, "font-semibold text-error": lossTinted(props.outpost.loss) }}
         >
-          {nodeLossText(props.node)}
+          {outpostLossText(props.outpost)}
         </td>
       </Show>
       <td class="text-right">
-        <A href={`/nodes?n=${encodeURIComponent(props.node.name)}`} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.node.name} in Nodes`} title="Open this node's blade on the Nodes page" onClick={(e) => e.stopPropagation()}>
+        <A href={`/outposts?n=${encodeURIComponent(props.outpost.name)}`} class="btn btn-quiet btn-xs btn-square" aria-label={`Open ${props.outpost.name} in Outposts`} title="Open this outpost's blade on the Outposts page" onClick={(e) => e.stopPropagation()}>
           <ArrowUpRight size={14} />
         </A>
       </td>

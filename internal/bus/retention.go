@@ -58,9 +58,12 @@ type retentionStore interface {
 	PruneSamplesOfType(ctx context.Context, lane, typeID string, days int, before time.Time, limit int) (int64, error)
 	EnsureMetricPartitions(ctx context.Context) ([]string, error)
 	DropMetricPartitions(ctx context.Context, before time.Time) ([]string, error)
+	SummarizeMetricPartitions(ctx context.Context) ([]string, error)
 	CompactMetricTrends(ctx context.Context, maxHours, laneDays int) (storage.TrendCompaction, error)
 	PruneMetricTrends(ctx context.Context, before time.Time, limit int) (int64, error)
 	CompactMetricBlocks(ctx context.Context, f storage.BlockFold) (storage.BlockCompaction, error)
+	AssistantSettings(ctx context.Context) (settings.AssistantSettings, error)
+	PruneAssistantConversations(ctx context.Context, before time.Time, limit int) (int64, error)
 }
 
 // retentionLane is one thing a pass prunes to one window: a sample lane, or a
@@ -75,8 +78,10 @@ type retentionLane struct {
 // samples, each type with a window of its own (#417, named <lane>/<type>; the
 // lane's own prune skips it), then each log table's bands
 // (logline.RetentionBands), least severe first: log_line by the shared band
-// window, node_log by the node override where an admin set one (#1350).
-func retentionLanes(store retentionStore, w settings.RetentionSettings, overrides []storage.TypeRetention) []retentionLane {
+// window, outpost_log by the outpost override where an admin set one (#1350),
+// then the stored omnibot conversations by conversationDays (#2113), left out
+// when it is zero (its settings read failed).
+func retentionLanes(store retentionStore, w settings.RetentionSettings, overrides []storage.TypeRetention, conversationDays int) []retentionLane {
 	lanes := []retentionLane{}
 	for _, l := range []struct {
 		name string
@@ -93,16 +98,19 @@ func retentionLanes(store retentionStore, w settings.RetentionSettings, override
 			return store.PruneSamplesOfType(ctx, o.Lane, o.TypeID, o.Days, before, limit)
 		}})
 	}
-	for _, table := range []string{"log_line", "node_log"} {
+	for _, table := range []string{"log_line", "outpost_log"} {
 		for _, band := range logline.RetentionBands() {
 			days := w.LogDays(band)
-			if table == "node_log" {
-				days = w.NodeLogDays(band) // a node override when set (#1350)
+			if table == "outpost_log" {
+				days = w.OutpostLogDays(band) // an outpost override when set (#1350)
 			}
 			lanes = append(lanes, retentionLane{table + "/" + band, days, func(ctx context.Context, before time.Time, limit int) (int64, error) {
 				return store.PruneLogs(ctx, table, band, before, limit)
 			}})
 		}
+	}
+	if conversationDays != 0 {
+		lanes = append(lanes, retentionLane{"assistant_conversation", conversationDays, store.PruneAssistantConversations})
 	}
 	return lanes
 }
@@ -113,8 +121,9 @@ type retentionReport struct {
 	Deleted map[string]int64
 	Behind  []string
 	// Created and Dropped are the metric partitions the pass's roll made
-	// and the days it dropped whole (#420, #1527).
-	Created, Dropped []string
+	// and the days it dropped whole (#420, #1527); Summarized the finished
+	// days whose block range indexes it summarized (#1929).
+	Created, Dropped, Summarized []string
 	// Trends is what the pass's trend compaction did (#1276).
 	Trends storage.TrendCompaction
 	// Blocks is what the pass's block fold did (#1528).
@@ -159,8 +168,10 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 	var errs []error
 	// The metric table's roll (#420, #1527): the next days' partitions made,
 	// then each day wholly past the metric window (and past every longer
-	// window of a type it holds a sample of) dropped, before the lanes'
-	// chunked prune keeps the window exact inside the rest.
+	// window of a type it holds a sample of) dropped. The lanes' chunked prune
+	// works only inside a day a longer type holds (#1957), so the drop is the
+	// only way out of every other day: a failed one is retried at the
+	// catch-up cadence.
 	pctx, pdone := bounded()
 	created, err := store.EnsureMetricPartitions(pctx)
 	rep.Created = created
@@ -172,9 +183,19 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 		rep.Dropped = dropped
 		if err != nil {
 			errs = append(errs, fmt.Errorf("drop metric partitions: %w", err))
+			rep.Behind = append(rep.Behind, "metric partition drop")
 		}
 	}
 	pdone()
+	// Each finished day left (#1929), on a deadline of its own so a slow
+	// roll does not starve it, and after the drop so no day about to go is
+	// summarized: a day that fails is named and the rest still summarized.
+	sctx, sdone := bounded()
+	rep.Summarized, err = store.SummarizeMetricPartitions(sctx)
+	sdone()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("summarize metric partitions: %w", err))
+	}
 	// The hours past the late-data horizon close into trends (#1276) before
 	// any prune, which never removes a sample of an hour still open.
 	if w.MetricDays > 0 && w.MetricDays <= settings.RetentionMaxDays {
@@ -210,7 +231,14 @@ func retentionPass(ctx context.Context, store retentionStore, now time.Time, chu
 	if err != nil {
 		errs = append(errs, fmt.Errorf("read type retention overrides: %w", err))
 	}
-	for _, lane := range retentionLanes(store, w, overrides) {
+	// The omnibot conversations' window. A failed read loses only their lane.
+	actx, adone := bounded()
+	assistant, err := store.AssistantSettings(actx)
+	adone()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("read assistant settings: %w", err))
+	}
+	for _, lane := range retentionLanes(store, w, overrides, assistant.ConversationDays) {
 		if lane.days <= 0 || lane.days > settings.RetentionMaxDays {
 			errs = append(errs, fmt.Errorf("prune %s: a window of %d days is outside 1 to %d; not pruned", lane.name, lane.days, settings.RetentionMaxDays))
 			continue

@@ -49,7 +49,7 @@ func TestPreviewEventRule(t *testing.T) {
 
 	counts := func() map[string]int {
 		out := map[string]int{}
-		for _, tbl := range []string{"event", "alarm", "event_rule_condition", "event_rule_state", "audit_log", "event_rule"} {
+		for _, tbl := range []string{"event", "alarm", "event_rule_firing", "event_rule_state", "audit_log", "event_rule"} {
 			out[tbl] = count(t, f.conn, `select count(*) from `+tbl)
 		}
 		return out

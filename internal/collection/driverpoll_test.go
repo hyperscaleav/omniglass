@@ -126,7 +126,7 @@ func TestCollectDriverPollLine(t *testing.T) {
 		Transport: "tcp",
 		Target:    "10.20.4.50:51325",
 		Fn: &driver.BakedFunction{
-			Driver: "newtron-nvp", Function: "status",
+			Driver: "newtron-panel-nvp", Function: "status",
 			Request: &driver.Request{Line: "GET INPUT"},
 			Emits: []driver.BakedEmit{
 				{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},
@@ -160,7 +160,7 @@ func (f *fakeHeld) Exchange(_ context.Context, line string, reply *driver.Reply,
 // rather than falling back to a dial of its own.
 func TestCollectDriverPollLineOverHeldSession(t *testing.T) {
 	fn := &driver.BakedFunction{
-		Driver: "newtron-nvp", Function: "status",
+		Driver: "newtron-panel-nvp", Function: "status",
 		Request: &driver.Request{Line: "GET INPUT", Reply: &driver.Reply{Prefix: "INPUT "}},
 		Emits: []driver.BakedEmit{
 			{Name: "video-input", Lane: "property", Extract: driver.Extract{Regex: `^INPUT (\S+)$`}},
@@ -288,7 +288,7 @@ func TestCollectDriverPollHTTP(t *testing.T) {
 }
 
 func TestCollectDriverPollHTTPRefusedAndFaulted(t *testing.T) {
-	// A refused credential: a terminal auth the node gates on, authenticated no.
+	// A refused credential: a terminal auth the outpost gates on, authenticated no.
 	r := &collection.Runner{HTTPFetch: &fakeHTTPFetcher{ans: collection.HTTPAnswer{Status: 401}}}
 	dps, faults := r.CollectDriverPoll(context.Background(), httpPollTask())
 	if len(faults) != 1 {

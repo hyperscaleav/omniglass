@@ -1,5 +1,5 @@
-# The ship-with event_type registry (ADR-0063): the occurrence keyspace, the twin
-# of the property_type registry. An event is a discrete, semantic happening, a
+# The ship-with event_type catalog (ADR-0063): the occurrence keyspace, the twin
+# of the property_type catalog. An event is a discrete, semantic happening, a
 # component published it natively or a rule derived it (ADR-0066), not a sampled
 # value and not a raw log line (raw logs are a separate ingest lane).
 event_types:
@@ -32,7 +32,7 @@ event_types:
     description: >-
       A command's settle window closed with no evidence either way: no reply that
       decided it and no observation of its target. Its message says where it
-      stopped (never taken by a node, delivered with no report, or answered with
+      stopped (never taken by an outpost, delivered with no report, or answered with
       nothing observed after).
   - name: call-ended
     label: Call Ended
@@ -56,16 +56,16 @@ event_types:
       A collection task could not use what it had: an unusable config or a
       payload that did not parse. Carries the task identity in its payload, so
       the failure names its work; the alternative is a silent skip nobody sees.
-  - name: condition-started
-    label: Condition Started
+  - name: rule-fired
+    label: Rule Fired
     description: >-
-      An event rule's condition came into force on a component: the generic
-      fire event for a rule that needs no semantic type of its own. Written
-      once at the edge, after the rule's fire sustain, never per sample while
-      the condition holds.
-  - name: condition-ended
-    label: Condition Ended
+      An event rule fired on a component and endpoint: the generic fire event
+      for a rule that needs no semantic type of its own. Written once at the
+      edge, after the rule's fire sustain, never per sample while the rule
+      stays fired.
+  - name: rule-cleared
+    label: Rule Cleared
     description: >-
-      An event rule's condition left force: condition-started's closing half,
+      An event rule cleared where it had fired: rule-fired's closing half,
       written once when the rule's clear criteria has held for its clear
-      sustain. The pair brackets how long the condition held.
+      sustain. The pair brackets how long the firing lasted.

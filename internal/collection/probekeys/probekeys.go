@@ -1,9 +1,9 @@
-// Package probekeys declares the keys a node's own collection writes: the
+// Package probekeys declares the keys an outpost's own collection writes: the
 // samples the native probes write (tcp, icmp, http, ssh, tls, udp, snmp, the
 // endpoint verdicts they roll up into, and a held session's state), the event
 // a task lands when it cannot collect, and who may write each.
 // A leaf, so the probes (internal/collection), the writer-class ruling
-// (internal/writerclass, the node-probe class the Storage Gateway enforces on
+// (internal/writerclass, the outpost-probe class the Storage Gateway enforces on
 // every write and the driver spec's emit check reads, ADR-0161) and the push
 // lane read this one declaration. A driver's keys are declared in its spec
 // instead.
@@ -16,7 +16,7 @@ import (
 )
 
 // The probe metrics and verdict properties. Each is a seeded metric_type or
-// property_type (internal/seed); the ingest drops a name the registries lack.
+// property_type (internal/seed); the ingest drops a name the catalogs lack.
 const (
 	TCPOpen               = "tcp-open"
 	TCPConnectTime        = "tcp-connect-time"
@@ -29,7 +29,7 @@ const (
 	EndpointResponsive    = "endpoint-responsive"
 	EndpointAuthenticated = "endpoint-authenticated"
 	// SessionState is a held session's state per endpoint (#816), written
-	// by the node's session machine on each transition.
+	// by the outpost's session machine on each transition.
 	SessionState = "session-state"
 	// SessionReason is why a held session is in its state (#1049), the
 	// reason of its latest transition: `<class>: <device text>` when
@@ -65,24 +65,33 @@ const (
 	// fingerprint it holds for ("authenticated auth <fingerprint>"), or
 	// "none"; a refusal of a changed key appends the pinned and the offered
 	// key (#1078, ADR-0159; internal/collection/rejection reads the shape).
-	// The worklist carries it back, so a restarted node honours it.
+	// The worklist carries it back, so a restarted outpost honours it.
 	EndpointRejection = "endpoint-rejection"
 	// EndpointRejectionReason is why a gate holds (#1110): the refusal's
 	// class and the component's own text (`auth: <device text>`), published
-	// beside endpoint-rejection whenever the node records a gate, so an
+	// beside endpoint-rejection whenever the outpost records a gate, so an
 	// endpoint with no held session (a probe's gate) still says why it was
 	// refused. A gate adopted from the worklist publishes none.
 	EndpointRejectionReason = "endpoint-rejection-reason"
-	// CollectionFailed is the event a node lands when a task cannot collect
+	// CollectionFailed is the event an outpost lands when a task cannot collect
 	// (#1086): an unusable config, a payload that did not parse, a driver
-	// emit that did not extract. Its message is the node's account of its
-	// own task, so it is node-only like every key above.
+	// emit that did not extract. Its message is the outpost's account of its
+	// own task, so it is outpost-only like every key above.
 	CollectionFailed = "collection-failed"
 	// PollDuration is the mean time of an endpoint's driver poll runs over
 	// a report window (#1369), in milliseconds: every run of the endpoint's
 	// polls, scheduled or run now, answered or failed, from its request to
 	// its last emit. A window with no run lands none.
 	PollDuration = "poll-duration"
+	// PollCPUTime is the mean CPU the kernel charged an endpoint's driver
+	// poll runs over a report window (#1870), in milliseconds: each run's
+	// thread CPU clock, user plus system, read across the run on a thread
+	// locked to it, so time blocked on the device is not in it. Work a run
+	// hands to another goroutine (a held session's reader, the HTTP client's
+	// connection goroutines) and the collector's background workers are not
+	// either. A window with no run, or on a platform with no thread clock,
+	// lands none.
+	PollCPUTime = "poll-cpu-time"
 	// PollFailureCount is how many of an endpoint's polls failed in a report
 	// window (#1369): a run that faulted and landed nothing, or a due poll
 	// the endpoint's gate refused, as the scheduler books a failure. Landed
@@ -107,7 +116,7 @@ const (
 	// dues included. Landed only when nonzero. It is the denominator of the
 	// endpoint's schedule loss.
 	PollDueCount = "poll-due-count"
-	// PollSkippedCount is how many of those dues the node skipped because
+	// PollSkippedCount is how many of those dues the outpost skipped because
 	// the poll's last run was still in flight (#1634): counted, never
 	// queued behind it. Landed only when nonzero; skipped over due is the
 	// endpoint's schedule loss.
@@ -118,56 +127,56 @@ const (
 	// included, so a quiet device shows as quiet rather than as missing.
 	PushMessageCount = "push-message-count"
 	// PushUnclaimedCount is how many delivered messages no listener claimed
-	// in a report window (#1369), the count the node's self-log already
+	// in a report window (#1369), the count the outpost's self-log already
 	// tells per tick. Landed only when nonzero.
 	PushUnclaimedCount = "push-unclaimed-count"
 )
 
-// Every constant above is ruled exactly once, in nodeOnly or in pushable
+// Every constant above is ruled exactly once, in outpostOnly or in pushable
 // (TestEveryKeyRuled reads them from this file and fails on a key in neither),
 // so a new key cannot ship pushable by omission.
 
-// nodeOnly are the native keys whose value only a node's own probe can know
+// outpostOnly are the native keys whose value only an outpost's own probe can know
 // (#1080): the reachability verdicts and their rungs, the probe metrics and
-// their timings, the node's account of its own collection (its polls' times
-// and failures and its listeners' message counts, #1369), and the node's
+// their timings, the outpost's account of its own collection (its polls' times
+// and failures and its listeners' message counts, #1369), and the outpost's
 // account of its own connection (a held
 // session's state and reason, the host key it trusted, the gate it
 // publishes and why, a tls endpoint's pin and certificate facts). The console reads
-// each as the node's observation, and the gate and the pins (the ssh host key,
-// the tls certificate's public key) steer what the node attempts (ADR-0158,
+// each as the outpost's observation, and the gate and the pins (the ssh host key,
+// the tls certificate's public key) steer what the outpost attempts (ADR-0158,
 // ADR-0160), so the push lane refuses every one by name: a push may not forge
 // a verdict or a timing, plant or lift a gate, or read a rejected session up.
-var nodeOnly = []string{
+var outpostOnly = []string{
 	TCPOpen, TCPConnectTime, ICMPReachable, ICMPRTTAvg, HTTPResponseTime, SSHHandshakeTime, TelnetResponseTime,
 	EndpointReachable, EndpointResponsive, EndpointAuthenticated, SessionState, SessionReason, SSHHostKey, EndpointRejection, EndpointRejectionReason,
 	TLSHandshakeTime, TLSCertificate, TLSCertificateExpiry, TLSCertificateDaysLeft, UDPResponseTime, SNMPResponseTime,
-	CollectionFailed, PollDuration, PollFailureCount, PollHeldCount, PollDueCount, PollSkippedCount, PushMessageCount, PushUnclaimedCount,
+	CollectionFailed, PollDuration, PollCPUTime, PollFailureCount, PollHeldCount, PollDueCount, PollSkippedCount, PushMessageCount, PushUnclaimedCount,
 	HoldExpiryCount,
 }
 
 // pushable are the native keys a push may write too, each mapped to the
 // one-line reason it may. None today: every native value is one only the
-// probing node observes. A key moves here from nodeOnly only with its reason,
+// probing outpost observes. A key moves here from outpostOnly only with its reason,
 // and TestTelemetryPushRefusesNativeKeys then proves the push lane accepts it.
 var pushable = map[string]string{}
 
 // native is every key a native probe writes, whoever else may write it.
-var native = slices.Concat(nodeOnly, slices.Collect(maps.Keys(pushable)))
+var native = slices.Concat(outpostOnly, slices.Collect(maps.Keys(pushable)))
 
-// IsNodeOnly reports a native key only a node's own collection may write,
+// IsOutpostOnly reports a native key only an outpost's own collection may write,
 // which the push lane refuses. It matches case-insensitively and ignores
-// surrounding space, failing closed: a variant the registry would refuse as
-// unregistered today is refused as node-only should that lookup ever loosen.
-func IsNodeOnly(key string) bool {
+// surrounding space, failing closed: a variant the catalog would refuse as
+// unregistered today is refused as outpost-only should that lookup ever loosen.
+func IsOutpostOnly(key string) bool {
 	key = strings.TrimSpace(key)
-	return slices.ContainsFunc(nodeOnly, func(k string) bool { return strings.EqualFold(k, key) })
+	return slices.ContainsFunc(outpostOnly, func(k string) bool { return strings.EqualFold(k, key) })
 }
 
-// NodeOnly is every node-only key, sorted, a fresh slice each call: the
-// node-probe writer class (internal/writerclass).
-func NodeOnly() []string {
-	out := slices.Clone(nodeOnly)
+// OutpostOnly is every outpost-only key, sorted, a fresh slice each call: the
+// outpost-probe writer class (internal/writerclass).
+func OutpostOnly() []string {
+	out := slices.Clone(outpostOnly)
 	slices.Sort(out)
 	return out
 }

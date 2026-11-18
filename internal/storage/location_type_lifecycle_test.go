@@ -95,7 +95,7 @@ func TestShippedLocationTypeForksAndRestores(t *testing.T) {
 		}
 	}
 	if seen != 1 {
-		t.Fatalf("the registry lists campus %d times, want 1: a shadow is an overlay, not a second row", seen)
+		t.Fatalf("the catalog lists campus %d times, want 1: a shadow is an overlay, not a second row", seen)
 	}
 
 	// A shipped row stays undeletable, forked or not: a fork is an overlay, not
@@ -149,7 +149,7 @@ func TestOperatorLocationTypeIsUntouchedByTheFork(t *testing.T) {
 
 	conn := connectDSN(t, dsn)
 	var shadows int
-	if err := conn.QueryRow(ctx, `select count(*) from registry_shadow where registry = 'location_type'`).Scan(&shadows); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from catalog_shadow where catalog = 'location_type'`).Scan(&shadows); err != nil {
 		t.Fatalf("count shadows: %v", err)
 	}
 	if shadows != 0 {
@@ -286,8 +286,8 @@ func TestClearNameRuleOnBothTypeKinds(t *testing.T) {
 // TestShippedLocationTypeContractStaysWritable guards a capability the
 // ownership flip would otherwise have withdrawn silently. A location type's
 // property and metric contracts are rows in their own tables, not columns of
-// the registry row the fork covers, and nothing seeds one: every line is an
-// operator's. The official read-only guard was dormant on this registry (no row
+// the catalog row the fork covers, and nothing seeds one: every line is an
+// operator's. The official read-only guard was dormant on this catalog (no row
 // was official), and activating it would have taken the contract editor away
 // for the four types a fleet actually uses.
 func TestShippedLocationTypeContractStaysWritable(t *testing.T) {

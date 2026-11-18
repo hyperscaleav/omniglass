@@ -13,7 +13,7 @@ import (
 // The component property surface: the properties read (every property the
 // component has, declared, calculated, observed or told, each row carrying its
 // want/told/is reconciliation, #1297) and the two writes that set and clear one
-// declared override. Gated by component:read / component:update and
+// declared value. Gated by component:read / component:update and
 // scope-injected on the component arc, so an out-of-scope component is a
 // non-disclosing 404 rather than a forbidden.
 
@@ -28,11 +28,11 @@ type effectivePropertyBody struct {
 	Label            string              `json:"label,omitempty" doc:"The property's human label; omitted when unset"`
 	DataType         string              `json:"data_type" doc:"The declared value type, from the property catalog"`
 	Required         bool                `json:"required" doc:"Whether the product contract requires a value; always false off-contract"`
-	IsSet            bool                `json:"is_set" doc:"True when the component overrides the contract default"`
+	IsSet            bool                `json:"is_set" doc:"True when the component declares its own value over the contract default"`
 	FromContract     bool                `json:"from_contract" doc:"True when the component's product declares the property; false for one set directly on the component"`
 	DefaultValue     json.RawMessage     `json:"default_value,omitempty" doc:"The contract default; omitted when the contract sets none"`
-	SetValue         json.RawMessage     `json:"set_value,omitempty" doc:"The component's override; omitted when the property is unset"`
-	Value            json.RawMessage     `json:"value,omitempty" doc:"The effective value: the override, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation"`
+	SetValue         json.RawMessage     `json:"set_value,omitempty" doc:"The component's declared value; omitted when the property is unset"`
+	Value            json.RawMessage     `json:"value,omitempty" doc:"The effective value: the declared value, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation"`
 	ValueID          string              `json:"value_id,omitempty" doc:"The stored value's id when set; omitted when the property is unset"`
 	SourceRule       string              `json:"source_rule,omitempty" required:"false" doc:"The calc rule whose calculated sample is the value, by the name it was written under; absent when the value is a declared one or a default"`
 	SourceRuleID     string              `json:"source_rule_id,omitempty" required:"false" doc:"That calc rule's uuid, the stable form of source_rule"`
@@ -84,7 +84,7 @@ type componentPropertyOutput struct {
 	Body componentPropertyBody
 }
 
-// componentPropertyBody is the write reply: the stored override, echoed back
+// componentPropertyBody is the write reply: the stored declared value, echoed back
 // so a client that just set a value holds its id without re-reading the list.
 type componentPropertyBody struct {
 	Component        string          `json:"component"`
@@ -109,7 +109,7 @@ type setComponentPropertyInput struct {
 }
 
 // registerComponentPropertyRoutes wires the per-component property surface: the
-// effective read and the set/clear of one declared override. The read is gated by
+// effective read and the set/clear of one declared value. The read is gated by
 // component:read and the writes by component:update, each carrying the matching
 // scope so the gateway resolves the component within it.
 func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -119,7 +119,7 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/properties",
 		Summary:     "List a component's properties and where each stands",
-		Description: "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Description: "Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*componentPropertiesOutput, error) {
 		eff, err := gw.EffectiveProperties(ctx, "component", in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {

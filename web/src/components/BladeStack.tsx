@@ -3,6 +3,7 @@ import { Dynamic, Portal } from "solid-js/web";
 import { Ban, ChevronLeft, MoreHorizontal, Pencil, RotateCcw, Save, Trash, X } from "./icons";
 import Button from "./Button";
 import PanelFooter from "./PanelFooter";
+import SaveError from "./SaveError";
 import { type BladeController, type BladeDef, BladeEditContext, createEditSlot } from "../lib/blades";
 
 // BladeStack: the Azure-style right-hand blade stack, lifted out of TreeList so
@@ -46,6 +47,22 @@ export default function BladeStack(props: {
   };
   window.addEventListener("keydown", onKey);
   onCleanup(() => window.removeEventListener("keydown", onKey));
+
+  // The shell root (App.tsx marks it data-app-shell) is inert while any blade is
+  // open: the Tab trap, the accessibility tree and pointer hit-testing then agree
+  // that the top blade is the only live surface. The blades, the toasts and the
+  // palette portal to the body, outside that root, so they stay live. The Tab trap
+  // below stays as the fallback for a browser without `inert`.
+  const setShellInert = (on: boolean) =>
+    document.querySelector("[data-app-shell]")?.toggleAttribute("inert", on);
+  createEffect(() => {
+    const on = stack().length > 0;
+    setShellInert(on);
+    // A deep-linked blade opens while the page is still mounting, before the
+    // shell is in the document; apply again once it is.
+    if (on) queueMicrotask(() => stack().length > 0 && setShellInert(true));
+  });
+  onCleanup(() => setShellInert(false));
 
   // Focus management: when the stack opens, remember the focused element and move
   // focus into the top blade; when it closes, restore focus to that element.
@@ -165,7 +182,7 @@ export default function BladeStack(props: {
                         tooltip when the wrapper itself is focus-visible, the keyboard
                         path. */}
                     <Show when={edit.editable() || !!edit.destructive() || edit.secondary().length > 0 || !!edit.primary() || editLock() != null || deleteLock() != null}>
-                      <PanelFooter dimmed={!isTop()}>
+                      <PanelFooter dimmed={!isTop()} notice={<SaveError slot={edit} />}>
                         <Show
                           when={deleteLock()}
                           fallback={
@@ -220,7 +237,7 @@ export default function BladeStack(props: {
                                   fallback={<Button intent="action" icon={Pencil} label="Edit" onClick={() => edit.begin()}>Edit</Button>}
                                 >
                                   <Button icon={X} onClick={() => edit.cancel()} disabled={edit.saving()}>Cancel</Button>
-                                  <Button intent="action" icon={Save} onClick={() => { edit.save().catch(() => {}); }} loading={edit.saving()} disabled={!edit.valid()}>Save</Button>
+                                  <Button intent="action" icon={Save} onClick={() => { edit.save().catch(() => { /* the slot keeps the reason; SaveError shows it in this footer */ }); }} loading={edit.saving()} disabled={!edit.valid()}>Save</Button>
                                 </Show>
                               </Show>
                             }

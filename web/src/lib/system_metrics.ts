@@ -2,9 +2,9 @@
 // tiles consume (#790). The standard's contract resolved to the latest
 // sample or the declared default; the server does the resolving.
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { EffectiveMetricBody } from "../api/api.gen";
 
-export type EffectiveMetric = components["schemas"]["EffectiveMetricBody"];
+export type EffectiveMetric = EffectiveMetricBody;
 
 export const systemMetricsKey = (system: string) => ["system-metrics", system] as const;
 

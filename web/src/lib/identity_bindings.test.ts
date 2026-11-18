@@ -5,8 +5,8 @@ import type { Me } from "./auth";
 import type { System } from "./systems";
 import type { Component } from "./components";
 
-const admin: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
-const componentOnly: Me = { principal: { id: "p", kind: "human" }, permissions: ["*:read", "component:update"], grants: [] };
+const admin: Me = { user: { id: "p", kind: "person" }, permissions: [">"], grants: [] };
+const componentOnly: Me = { user: { id: "p", kind: "person" }, permissions: ["*:read", "component:update"], grants: [] };
 
 const systems: System[] = [
   { id: uuidFor("sys-b"), name: "briefing", label: "Briefing", member_count: 1, actions: ["update"] },
@@ -50,8 +50,8 @@ describe("refusalWords", () => {
     );
   });
   it("says a 422 is a binding the rules refuse, then why", () => {
-    expect(refusalWords({ status: 422, detail: "a place or a node owns no observed sample" })).toBe(
-      "Not a valid binding: a place or a node owns no observed sample",
+    expect(refusalWords({ status: 422, detail: "a location or an outpost owns no observed sample" })).toBe(
+      "Not a valid binding: a location or an outpost owns no observed sample",
     );
   });
   it("falls back to the server's words for anything else", () => {

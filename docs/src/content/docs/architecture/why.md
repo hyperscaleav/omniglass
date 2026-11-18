@@ -1,6 +1,9 @@
 ---
 title: Why Omniglass
 description: "What Omniglass is, what it is for, and why AV needs its own observability platform instead of an IT monitoring tool."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 Run AV at scale and you know the feeling. You find out a room is broken when someone walks out
@@ -70,7 +73,7 @@ room is a first-class system, not a tag, so health, alarms, and config attach at
 operate.
 
 **It runs the health model.** Signals roll up the tree into "is the room working," and the rollup is
-role-aware: a *required* display down takes the room down, a *redundant* mic only degrades it, an
+slot-aware: a *required* display down takes the room down, a *redundant* mic only degrades it, an
 *informational* sensor does not touch it. That turns a wall of red dots into one honest answer, and
 makes a real uptime SLA possible.
 
@@ -121,12 +124,12 @@ Each stop is a page:
    it, and parses it at the edge.
 2. **[Properties](/architecture/properties/)** type every reading into one owned, canonical signal,
    the same measurement across vendors.
-3. **[Config](/architecture/variables/)** holds what a device *should* be, so drift becomes
+3. **[Declared values](/architecture/variables/)** hold what a device *should* be, so drift becomes
    a signal you can see and a fix you can push.
 4. **[Health](/architecture/health/)** rolls the signals up the system tree into the one answer that
    matters.
-5. **[Alarms and actions](/architecture/alarms-actions/)** detect a condition, hold it until it
-   resolves, and respond.
+5. **[Alarms and actions](/architecture/alarms-actions/)** detect a fault, hold an alarm until it
+   clears, and respond.
 
 The [overview](/architecture/) is the map of the whole journey.
 

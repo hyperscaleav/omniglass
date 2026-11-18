@@ -4,7 +4,7 @@ import Button from "./Button";
 import BladeField from "./BladeField";
 import LabelPenField, { seedLabelPen } from "./LabelPenField";
 import TagAdder from "./TagAdder";
-import RolesPanel from "./RolesPanel";
+import SlotsPanel from "./SlotsPanel";
 import PropertiesPanel, { ownerPropertyBladeId, propertyBladeId } from "./PropertiesPanel";
 import ReconciliationPanel from "./ReconciliationPanel";
 import ResolutionPanel from "./ResolutionPanel";
@@ -52,7 +52,7 @@ import { pathTo, type TreeNode } from "../lib/treeselect";
 // rename LAST (it alone can 409 past the advisory precheck; last means a
 // refusal leaves the rest saved), the invalidation in a finally.
 //
-// The kind panels (roles, properties, reconciliation, reachability, alarms)
+// The kind panels (slots, properties, reconciliation, reachability, alarms)
 // wire their drills through the ambient blade stack (useBlades), so any host
 // that provides one renders them; fleetRegistry carries the blades they push.
 
@@ -151,7 +151,7 @@ export default function EntityForm(props: {
   const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes, enabled: props.kind === "system" }));
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes, enabled: props.kind === "location" }));
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: props.kind === "component" }));
-  // A handle reads as its registry row's label (#870): the operator's word for
+  // A handle reads as its catalog row's label (#870): the operator's word for
   // a type, a standard or a product, never the machine identifier behind it.
   const labelIn = (list: { name: string; label?: string }[] | undefined, handle: string) => {
     const hit = (list ?? []).find((x) => x.name === handle);
@@ -211,7 +211,20 @@ export default function EntityForm(props: {
       : "None of the systems you can see is inside your system:update scope; the memberships stay as they are.";
   };
 
+  // What the drafts held when seeded, so the slot can say whether the operator
+  // has changed anything (the Configure tab asks before dropping them). The
+  // staged memberships count: a primary picked back to the server's own is no
+  // change, and an untouched primary never reads as one when the server's lands.
+  const stagedPrimary = () => {
+    const p = primaryDraft();
+    return p === undefined || p === serverPrimary() ? null : p;
+  };
+  const draftState = () =>
+    JSON.stringify([pen.overridden(), pen.value(), name(), standard(), systemType(), locationType(), parentName(), stagedPrimary(), [...removedMembers()].sort()]);
+  let seeded = "";
+
   slot.bind({
+    dirty: () => draftState() !== seeded,
     // Editing begins on the update verb alone; a rename-only grant reads. The
     // rename call inside save keeps its own gate and still goes last.
     editable: () => canUpdate() && !!raw(),
@@ -236,6 +249,7 @@ export default function EntityForm(props: {
         setParentName(parentID);
         setInitialParent(parentID);
       }
+      seeded = draftState();
     },
     save: async () => {
       setErr(null);
@@ -268,7 +282,8 @@ export default function EntityForm(props: {
           else await renameComponent(r.id, name().trim());
         }
       } catch (e) {
-        setErr(describeError(e));
+        // The slot records the reason and the host shows it beside Save
+        // (SaveError), where the operator is, not at the top of the form.
         throw e; // keep the slot editing so the operator can retry
       } finally {
         // The kind's list AND the fleet view: Explore's cards, the blade's own
@@ -345,7 +360,7 @@ export default function EntityForm(props: {
     if (props.kind === "system") {
       return (
         <>
-          <RolesPanel system={id} canUpdate={slot.editing() && canUpdate()} />
+          <SlotsPanel system={id} canUpdate={slot.editing() && canUpdate()} />
           <ReconciliationPanel system={id} />
           <PropertiesPanel system={id} edit={slot} onOpen={(property) => blades.push({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: id }, property) })} />
         </>
@@ -416,7 +431,7 @@ export default function EntityForm(props: {
               ) : undefined}
             />
             <BladeField label="Standard" edit={slot} value={() => (row()?.standard ? labelIn(standards.data, row()!.standard as string) : "None (a one-off system)")}
-              info="The blueprint this system is built to. Clearing it makes the system a one-off."
+              info="The contract this system is built to. Clearing it makes the system a one-off."
               children={slot.editing() ? (
                 <select ref={bindSelectValue(standard, () => standards.data)} class="select select-bordered w-full" onChange={(e) => setStandard(e.currentTarget.value)}>
                   <option value="">None (a one-off system)</option>
@@ -441,8 +456,8 @@ export default function EntityForm(props: {
           </Show>
         </div>
 
-        {/* A system's or component's place is the blade's own place card
-            (#872); only a location's parent, which is the place's own to
+        {/* A system's or component's location is the blade's own location card
+            (#872); only a location's parent, which is the location's own to
             move, stays in the blade's form. */}
         <Show when={props.host !== "blade" || props.kind === "location"}>
         <div class={SECTION}>
@@ -495,7 +510,7 @@ export default function EntityForm(props: {
           </div>
         </Show>
 
-        {/* The kind's panels are configuration (roles, properties and their
+        {/* The kind's panels are configuration (slots, properties and their
             cascade, reconciliation, endpoints): the page host's Configure tab
             carries them, and the blade stays the glance an operator landed on
             from a row (#872). */}
@@ -552,8 +567,8 @@ export function EntityCreateForm(props: {
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: isComponent() }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards, enabled: isSystem() }));
   const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes, enabled: isSystem() }));
-  // Every create reads the registry: a location's type list, and every kind's
-  // placement picker, which orders sibling places by their type's rank in the
+  // Every create reads the catalog: a location's type list, and every kind's
+  // placement picker, which orders sibling locations by their type's rank in the
   // customer's hierarchy (never by a table of the shipped type names).
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   const typeRank = createMemo(() => typeRanks(locationTypes.data ?? []));
@@ -588,10 +603,14 @@ export function EntityCreateForm(props: {
   // The name and the label the platform would write, both rendered by the one
   // engine on the server (ADR-0098, #702) from the same body this form posts.
   // Asked only once the classification is chosen where the classification is
-  // what names it; a system is always asked, since the global rule may still
-  // render something and the refusal to name one is the answer the field needs.
+  // what names it. A system is also asked once its name is typed, since the
+  // global rule may still render a label for an unclassified one; with neither,
+  // the answer is a known 422 and the browser would log it as a failed request
+  // (#1548), so the form states the refusal itself (unclassifiedSystem below).
+  const unclassifiedSystem = () => isSystem() && !systemType() && namePen.value().trim() === "";
   const labelDraft = useLabelDraft(() => {
     if (isSystem()) {
+      if (unclassifiedSystem()) return null;
       return { kind: "system" as const, body: { system_type_id: systemType() || undefined, standard_id: standard() || undefined, name: namePen.value().trim() || undefined, parent: parent() || undefined, location: location() || undefined } };
     }
     if (isLocation()) {
@@ -664,10 +683,10 @@ export function EntityCreateForm(props: {
         <span class={EYEBROW}>Classification</span>
         <div class="flex flex-col gap-3">
           <Show when={isSystem()}>
-            <FieldRow label="Type" hint="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard: the type is what it IS, the standard is what it is built to. It is also where a generated name's stem comes from.">
+            <FieldRow label="Type" hint="What this system is for (meeting, teaching, signage). Separate from the standard: the type is what it IS, the standard is what it is built to. It is also where a generated name's stem comes from.">
               <SystemTypeSelect types={systemTypes.data ?? []} value={systemType()} onChange={setSystemType} emptyLabel="Unclassified" />
             </FieldRow>
-            <FieldRow label="Standard" hint="The blueprint this system conforms to. Optional.">
+            <FieldRow label="Standard" hint="The contract this system is built to. Optional.">
               <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
                 <option value="">None (a one-off system)</option>
                 <For each={standardOptions()}>{(st) => <option value={st.name}>{st.label}</option>}</For>
@@ -675,7 +694,7 @@ export function EntityCreateForm(props: {
             </FieldRow>
           </Show>
           <Show when={isLocation()}>
-            <FieldRow label="Location type" hint="What kind of place this is. It decides which parents are legal, and whether the platform can name it.">
+            <FieldRow label="Location type" hint="What kind of location this is. It decides which parents are legal, and whether the platform can name it.">
               <select class="select select-bordered w-full" value={locationType()} onChange={(e) => setLocationType(e.currentTarget.value)}>
                 <option value="" disabled>Select a type…</option>
                 <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
@@ -750,7 +769,7 @@ export function EntityCreateForm(props: {
         kind={props.kind}
         draft={() => labelDraft.data}
         pending={() => labelDraft.isFetching}
-        nameRefused={() => nameRefused(labelDraft.error)}
+        nameRefused={() => unclassifiedSystem() || nameRefused(labelDraft.error)}
         bucket={bucketText}
         namePen={namePen}
         displayPen={displayPen}

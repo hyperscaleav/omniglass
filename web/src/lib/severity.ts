@@ -1,11 +1,11 @@
 import { createMemo } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { CreateSeverityLevelInputBody, SeverityLevelBody, UpdateSeverityLevelInputBody } from "../api/api.gen";
 import { entityLabel } from "./entities";
 import { entityNameError } from "./names";
 
-// The severity registry (#917): how bad an alarm is, as a list of named levels the
+// The severity catalog (#917): how bad an alarm is, as a list of named levels the
 // server owns rather than a fixed set the console hardcodes. Each level carries a
 // rank (higher is worse), a color token, and whether an active alarm at it puts
 // its component in outage. Every console surface that colors, orders or explains
@@ -17,7 +17,7 @@ import { entityNameError } from "./names";
 // list as an argument, so the alarm sorters stay unit-testable; the hook is the
 // one place that reads it off the wire.
 
-export type SeverityLevel = components["schemas"]["SeverityLevelBody"];
+export type SeverityLevel = SeverityLevelBody;
 export type SeverityColor = SeverityLevel["color"];
 
 export const severityLevelsKey = ["severity-levels"] as const;
@@ -42,7 +42,7 @@ export const SEVERITY_BADGE: Record<SeverityColor, string> = {
   darkred: "badge-disaster",
 };
 
-// The look for a name the registry does not (yet) know: while the levels load, or
+// The look for a name the catalog does not (yet) know: while the levels load, or
 // for a level deleted since the alarm was raised. The raw name in a neutral chip,
 // never a throw and never a guessed hue.
 const NEUTRAL = "badge-ghost";
@@ -51,7 +51,7 @@ export type SeverityLook = {
   name: string;
   label: string;
   badge: string;
-  // null when the registry does not know the name.
+  // null when the catalog does not know the name.
   rank: number | null;
   outage: boolean;
   known: boolean;
@@ -62,7 +62,7 @@ export function severityBadge(color: string | undefined): string {
 }
 
 export type SeverityScale = {
-  // Least to most severe, the registry's own order.
+  // Least to most severe, the catalog's own order.
   levels: SeverityLevel[];
   look: (name: string) => SeverityLook;
   // Higher is worse; -Infinity for an unknown name, so it sorts last.
@@ -98,7 +98,7 @@ export function compareSeverity(levels?: SeverityLevel[] | null): (a: string, b:
   };
 }
 
-// useSeverity reads the registry once per session-ish (levels change rarely and
+// useSeverity reads the catalog once per session-ish (levels change rarely and
 // only by an admin) and hands back the scale. Before the read lands the scale is
 // empty, so every name falls back to the neutral look.
 export function useSeverity(): () => SeverityScale {
@@ -119,8 +119,8 @@ export function useSeverity(): () => SeverityScale {
 // rule names cannot be deleted); the draft below is checked here first, so the
 // form can say why before it sends.
 
-export type CreateSeverityLevel = components["schemas"]["CreateSeverityLevelInputBody"];
-export type UpdateSeverityLevel = components["schemas"]["UpdateSeverityLevelInputBody"];
+export type CreateSeverityLevel = CreateSeverityLevelInputBody;
+export type UpdateSeverityLevel = UpdateSeverityLevelInputBody;
 
 // The palette, mildest hue first: the order the color picker offers.
 export const SEVERITY_COLORS: SeverityColor[] = ["gray", "blue", "green", "yellow", "orange", "red", "darkred"];
@@ -178,7 +178,7 @@ export function validateLevelDraft(d: LevelDraft, levels: SeverityLevel[], editi
   else if (rest.some((l) => l.name === name)) e.name = `A level is already named ${name}.`;
   if (!d.color) e.color = "The hue its alarms wear.";
   const rank = readRank(d.rank);
-  if (d.rank.trim() === "") e.rank = "Its place among the levels.";
+  if (d.rank.trim() === "") e.rank = "Its position among the levels.";
   else if (rank === null) e.rank = "A whole number above zero.";
   else {
     const taken = rest.find((l) => l.rank === rank);

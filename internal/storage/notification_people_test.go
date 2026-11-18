@@ -15,11 +15,11 @@ import (
 )
 
 // People as notification targets (#1341, #1352), against a real Postgres: a
-// group target expands to its human members at the transition, each kept only
+// group target expands to its members who are people at the transition, each kept only
 // when their own component read scope admits the alarm's component; an inbox
 // row is delivered by its commit; the inbox reads only the caller's rows,
 // scope-filtered again at read; a recipient's name is withheld from everyone
-// but the recipient and the principal directory's admins; and a group or a
+// but the recipient and the user directory's admins; and a group or a
 // person a target binds cannot be deleted from under it.
 
 type peopleFixture struct {
@@ -28,10 +28,10 @@ type peopleFixture struct {
 	ctx   context.Context
 	all   scope.Set
 	comps map[string]string // component name -> uuid
-	ids   map[string]string // username -> principal uuid
+	ids   map[string]string // username -> user uuid
 }
 
-var bindAll = storage.PeopleUse{Groups: true, Principals: true}
+var bindAll = storage.PeopleUse{Groups: true, Users: true}
 
 func newPeopleFixture(t *testing.T) *peopleFixture {
 	t.Helper()
@@ -71,7 +71,7 @@ func newPeopleFixture(t *testing.T) *peopleFixture {
 
 func (f *peopleFixture) human(t *testing.T, username string, grants ...storage.GrantSpec) string {
 	t.Helper()
-	pr, err := f.gw.CreateHumanPrincipal(f.ctx, "", storage.HumanSpec{Username: username, Email: username + "@example.com"}, f.all)
+	pr, err := f.gw.CreatePerson(f.ctx, "", storage.PersonSpec{Username: username, Email: username + "@example.com"}, f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,8 +86,8 @@ func (f *peopleFixture) human(t *testing.T, username string, grants ...storage.G
 
 func (f *peopleFixture) groupRule(t *testing.T) {
 	t.Helper()
-	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "on-call-page", Kind: storage.TargetPrincipalGroup,
-		PrincipalGroup: "on-call", Channels: []string{storage.DeliveryInbox}}, f.all, storage.SecretUse{}, bindAll); err != nil {
+	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "on-call-page", Kind: storage.TargetUserGroup,
+		UserGroup: "on-call", Channels: []string{storage.DeliveryInbox}}, f.all, storage.SecretUse{}, bindAll); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.CreateActionRule(f.ctx, "", storage.ActionRuleSpec{Name: "page-on-call", On: []string{"raised", "cleared"},
@@ -117,9 +117,9 @@ func TestAGroupTargetQueuesOneRowPerMemberWhoCanReadTheAlarm(t *testing.T) {
 	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
-	// A service account in the group is skipped at expansion: recipients are
+	// A machine user in the group is skipped at expansion: recipients are
 	// people.
-	if _, err := f.gw.ExportServicePrincipal(f.ctx, "ingest-bot", "on-call"); err != nil {
+	if _, err := f.gw.ExportMachine(f.ctx, "ingest-bot", "on-call"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,7 +145,7 @@ func TestAGroupTargetQueuesOneRowPerMemberWhoCanReadTheAlarm(t *testing.T) {
 		t.Fatalf("display-2's raise queued %v, want one row each for alice and bob", got)
 	}
 
-	// A re-raise of the open condition writes no person rows.
+	// A re-raise of the open alarm writes no person rows.
 	if _, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no audio"}); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestGroupMembershipIsReadAtTheTransition(t *testing.T) {
 		t.Fatalf("after the membership change the raise queued %v, want carol alone", got)
 	}
 	// An archived member is told nothing.
-	if err := f.gw.ArchivePrincipal(f.ctx, "", f.ids["carol"], f.all); err != nil {
+	if err := f.gw.ArchiveUser(f.ctx, "", f.ids["carol"], f.all); err != nil {
 		t.Fatal(err)
 	}
 	b, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no audio"})
@@ -200,8 +200,8 @@ func TestAPersonReachedTwiceByOneRuleIsToldOnce(t *testing.T) {
 	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
-	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "alice-direct", Kind: storage.TargetPrincipal,
-		Principal: "alice", Channels: []string{storage.DeliveryInbox}}, f.all, storage.SecretUse{}, bindAll); err != nil {
+	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "alice-direct", Kind: storage.TargetUser,
+		User: "alice", Channels: []string{storage.DeliveryInbox}}, f.all, storage.SecretUse{}, bindAll); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.UpdateActionRule(f.ctx, "", "page-on-call", storage.ActionRulePatch{Targets: &[]string{"on-call-page", "alice-direct"}}, f.all); err != nil {
@@ -235,7 +235,7 @@ func TestTheRecipientFilterCostDoesNotGrowWithTheGroup(t *testing.T) {
 		}
 		for i := range members {
 			u := fmt.Sprintf("member-%d", i)
-			pr, err := gw.CreateHumanPrincipal(ctx, "", storage.HumanSpec{Username: u}, all)
+			pr, err := gw.CreatePerson(ctx, "", storage.PersonSpec{Username: u}, all)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -246,8 +246,8 @@ func TestTheRecipientFilterCostDoesNotGrowWithTheGroup(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if _, err := gw.CreateNotificationTarget(ctx, "", storage.NotificationTargetSpec{Name: "on-call-page", Kind: storage.TargetPrincipalGroup,
-			PrincipalGroup: "on-call", Channels: []string{storage.DeliveryInbox}}, all, storage.SecretUse{}, bindAll); err != nil {
+		if _, err := gw.CreateNotificationTarget(ctx, "", storage.NotificationTargetSpec{Name: "on-call-page", Kind: storage.TargetUserGroup,
+			UserGroup: "on-call", Channels: []string{storage.DeliveryInbox}}, all, storage.SecretUse{}, bindAll); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := gw.CreateActionRule(ctx, "", storage.ActionRuleSpec{Name: "page", On: []string{"raised"}, Targets: []string{"on-call-page"}}, all); err != nil {
@@ -377,8 +377,8 @@ func TestABoundGroupOrPersonCannotBeDeletedFromUnderATarget(t *testing.T) {
 	t.Parallel()
 	f := newPeopleFixture(t)
 	f.groupRule(t)
-	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "bob-direct", Kind: storage.TargetPrincipal,
-		Principal: "bob", Channels: []string{storage.DeliveryInbox}}, f.all, storage.SecretUse{}, bindAll); err != nil {
+	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "bob-direct", Kind: storage.TargetUser,
+		User: "bob", Channels: []string{storage.DeliveryInbox}}, f.all, storage.SecretUse{}, bindAll); err != nil {
 		t.Fatal(err)
 	}
 	var bound *storage.TargetBindingError
@@ -386,10 +386,10 @@ func TestABoundGroupOrPersonCannotBeDeletedFromUnderATarget(t *testing.T) {
 	if !errors.As(err, &bound) || bound.Target != "on-call-page" {
 		t.Fatalf("deleting a bound group = %v, want a refusal naming on-call-page", err)
 	}
-	if err := f.gw.ArchivePrincipal(f.ctx, "", f.ids["bob"], f.all); err != nil {
+	if err := f.gw.ArchiveUser(f.ctx, "", f.ids["bob"], f.all); err != nil {
 		t.Fatal(err)
 	}
-	err = f.gw.PurgePrincipal(f.ctx, "", f.ids["bob"], f.all)
+	err = f.gw.PurgeUser(f.ctx, "", f.ids["bob"], f.all)
 	if !errors.As(err, &bound) || bound.Target != "bob-direct" {
 		t.Fatalf("purging a bound person = %v, want a refusal naming bob-direct", err)
 	}
@@ -398,7 +398,7 @@ func TestABoundGroupOrPersonCannotBeDeletedFromUnderATarget(t *testing.T) {
 func TestAPersonTargetIsValidatedWhenWritten(t *testing.T) {
 	t.Parallel()
 	f := newPeopleFixture(t)
-	if _, err := f.gw.ExportServicePrincipal(f.ctx, "ingest-bot", ""); err != nil {
+	if _, err := f.gw.ExportMachine(f.ctx, "ingest-bot", ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []struct {
@@ -407,21 +407,21 @@ func TestAPersonTargetIsValidatedWhenWritten(t *testing.T) {
 		use  storage.PeopleUse
 		want error
 	}{
-		{"binding a group without the directory's read", storage.NotificationTargetSpec{Kind: storage.TargetPrincipalGroup, PrincipalGroup: "on-call", Channels: []string{"inbox"}},
-			storage.PeopleUse{Principals: true}, storage.ErrNotificationTargetPeopleForbidden},
-		{"binding a person without the directory's read", storage.NotificationTargetSpec{Kind: storage.TargetPrincipal, Principal: "alice", Channels: []string{"inbox"}},
+		{"binding a group without the directory's read", storage.NotificationTargetSpec{Kind: storage.TargetUserGroup, UserGroup: "on-call", Channels: []string{"inbox"}},
+			storage.PeopleUse{Users: true}, storage.ErrNotificationTargetPeopleForbidden},
+		{"binding a person without the directory's read", storage.NotificationTargetSpec{Kind: storage.TargetUser, User: "alice", Channels: []string{"inbox"}},
 			storage.PeopleUse{Groups: true}, storage.ErrNotificationTargetPeopleForbidden},
-		{"an unknown group", storage.NotificationTargetSpec{Kind: storage.TargetPrincipalGroup, PrincipalGroup: "nobody", Channels: []string{"inbox"}},
+		{"an unknown group", storage.NotificationTargetSpec{Kind: storage.TargetUserGroup, UserGroup: "nobody", Channels: []string{"inbox"}},
 			bindAll, storage.ErrNotificationTargetInvalid},
-		{"a service account", storage.NotificationTargetSpec{Kind: storage.TargetPrincipal, Principal: "ingest-bot", Channels: []string{"inbox"}},
+		{"a machine user", storage.NotificationTargetSpec{Kind: storage.TargetUser, User: "ingest-bot", Channels: []string{"inbox"}},
 			bindAll, storage.ErrNotificationTargetInvalid},
-		{"no channel", storage.NotificationTargetSpec{Kind: storage.TargetPrincipalGroup, PrincipalGroup: "on-call"},
+		{"no channel", storage.NotificationTargetSpec{Kind: storage.TargetUserGroup, UserGroup: "on-call"},
 			bindAll, storage.ErrNotificationTargetInvalid},
-		{"an unknown channel", storage.NotificationTargetSpec{Kind: storage.TargetPrincipalGroup, PrincipalGroup: "on-call", Channels: []string{"sms"}},
+		{"an unknown channel", storage.NotificationTargetSpec{Kind: storage.TargetUserGroup, UserGroup: "on-call", Channels: []string{"sms"}},
 			bindAll, storage.ErrNotificationTargetInvalid},
-		{"a URL on a group", storage.NotificationTargetSpec{Kind: storage.TargetPrincipalGroup, PrincipalGroup: "on-call", Channels: []string{"inbox"}, URL: "https://hooks.example.com/x"},
+		{"a URL on a group", storage.NotificationTargetSpec{Kind: storage.TargetUserGroup, UserGroup: "on-call", Channels: []string{"inbox"}, URL: "https://hooks.example.com/x"},
 			bindAll, storage.ErrNotificationTargetInvalid},
-		{"a group on a webhook", storage.NotificationTargetSpec{Kind: storage.ChannelWebhook, URL: "https://hooks.example.com/x", PrincipalGroup: "on-call"},
+		{"a group on a webhook", storage.NotificationTargetSpec{Kind: storage.ChannelWebhook, URL: "https://hooks.example.com/x", UserGroup: "on-call"},
 			bindAll, storage.ErrNotificationTargetInvalid},
 	} {
 		c.spec.Name = "t-1"
@@ -429,12 +429,12 @@ func TestAPersonTargetIsValidatedWhenWritten(t *testing.T) {
 			t.Errorf("%s: %v, want %v", c.name, err, c.want)
 		}
 	}
-	tg, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "on-call-page", Kind: storage.TargetPrincipalGroup,
-		PrincipalGroup: "on-call", Channels: []string{"inbox", "inbox"}}, f.all, storage.SecretUse{}, bindAll)
+	tg, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "on-call-page", Kind: storage.TargetUserGroup,
+		UserGroup: "on-call", Channels: []string{"inbox", "inbox"}}, f.all, storage.SecretUse{}, bindAll)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tg.PrincipalGroup != "on-call" || fmt.Sprint(tg.Channels) != "[inbox]" || tg.URL != "" {
+	if tg.UserGroup != "on-call" || fmt.Sprint(tg.Channels) != "[inbox]" || tg.URL != "" {
 		t.Fatalf("a group target reads as %+v", tg)
 	}
 }

@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { CreateNotificationTargetInputBody, NotificationTargetBody, TestNotificationTargetOutputBody, UpdateNotificationTargetInputBody } from "../api/api.gen";
 import { entityNameError } from "./names";
 import { EMAIL_RE } from "./validate";
 
@@ -11,23 +11,23 @@ import { EMAIL_RE } from "./validate";
 // is admin-only (notification_target:*, all-scope): a target is an egress
 // destination holding a credential.
 
-export type NotificationTarget = components["schemas"]["NotificationTargetBody"];
+export type NotificationTarget = NotificationTargetBody;
 export type TargetKind = NotificationTarget["kind"];
-export type TargetTest = components["schemas"]["TestNotificationTargetOutputBody"];
+export type TargetTest = TestNotificationTargetOutputBody;
 
 export const NOTIFICATION_TARGETS_KEY = ["notification_targets"] as const;
 
-export const TARGET_KINDS: readonly TargetKind[] = ["webhook", "email", "principal_group", "principal"];
+export const TARGET_KINDS: readonly TargetKind[] = ["webhook", "email", "user_group", "user"];
 export const PEOPLE_CHANNELS = ["inbox", "email"] as const;
 export type PeopleChannel = (typeof PEOPLE_CHANNELS)[number];
 
-// The words a kind reads as on the page: an operator picks "Group", the wire
-// says principal_group.
+// The words a kind reads as on the page: an operator picks "User group", the wire
+// says user_group.
 export const KIND_WORDS: Record<TargetKind, string> = {
   webhook: "Webhook",
   email: "Email",
-  principal_group: "Group",
-  principal: "Person",
+  user_group: "User group",
+  user: "Person",
 };
 
 // testable says whether :test can reach a kind: a webhook or a mailbox takes a
@@ -46,10 +46,10 @@ export function destination(t: NotificationTarget): string {
       return t.url ?? "";
     case "email":
       return (t.addresses ?? []).join(", ");
-    case "principal_group":
-      return t.principal_group ?? "";
-    case "principal":
-      return t.principal ?? "";
+    case "user_group":
+      return t.user_group ?? "";
+    case "user":
+      return t.user ?? "";
   }
 }
 
@@ -66,14 +66,14 @@ export type TargetDraft = {
   secret: string;
   // An email target's addresses, as typed (commas, spaces or new lines).
   addresses: string;
-  principalGroup: string;
-  principal: string;
+  userGroup: string;
+  user: string;
   channels: PeopleChannel[];
   enabled: boolean;
 };
 
 export function emptyTargetDraft(): TargetDraft {
-  return { name: "", label: "", kind: "webhook", url: "", secret: "", addresses: "", principalGroup: "", principal: "", channels: ["inbox"], enabled: true };
+  return { name: "", label: "", kind: "webhook", url: "", secret: "", addresses: "", userGroup: "", user: "", channels: ["inbox"], enabled: true };
 }
 
 export function targetDraftFrom(t: NotificationTarget): TargetDraft {
@@ -84,8 +84,8 @@ export function targetDraftFrom(t: NotificationTarget): TargetDraft {
     url: "",
     secret: t.secret ?? "",
     addresses: (t.addresses ?? []).join(", "),
-    principalGroup: t.principal_group ?? "",
-    principal: t.principal ?? "",
+    userGroup: t.user_group ?? "",
+    user: t.user ?? "",
     channels: (t.channels ?? []).filter((c): c is PeopleChannel => (PEOPLE_CHANNELS as readonly string[]).includes(c)),
     enabled: t.enabled,
   };
@@ -97,7 +97,7 @@ export function parseAddresses(s: string): string[] {
   return s.split(/[\s,;]+/).map((a) => a.trim()).filter(Boolean);
 }
 
-export type TargetDraftErrors = Partial<Record<"name" | "url" | "addresses" | "principalGroup" | "principal" | "channels", string>>;
+export type TargetDraftErrors = Partial<Record<"name" | "url" | "addresses" | "userGroup" | "user" | "channels", string>>;
 
 // targetDraftErrors is the form's rule (ADR-0113: TypeScript, never a native
 // attribute). Whether a URL is one the egress contract admits is the server's
@@ -129,20 +129,20 @@ export function targetDraftErrors(d: TargetDraft, editing = false): TargetDraftE
       }
       break;
     }
-    case "principal_group":
-      if (!editing && !d.principalGroup) out.principalGroup = "Pick the group it tells.";
+    case "user_group":
+      if (!editing && !d.userGroup) out.userGroup = "Pick the user group it tells.";
       if (d.channels.length === 0) out.channels = "Pick at least one way to tell them.";
       break;
-    case "principal":
-      if (!editing && !d.principal) out.principal = "Pick the person it tells.";
+    case "user":
+      if (!editing && !d.user) out.user = "Pick the person it tells.";
       if (d.channels.length === 0) out.channels = "Pick at least one way to tell them.";
       break;
   }
   return out;
 }
 
-export type CreateTarget = components["schemas"]["CreateNotificationTargetInputBody"];
-export type UpdateTarget = components["schemas"]["UpdateNotificationTargetInputBody"];
+export type CreateTarget = CreateNotificationTargetInputBody;
+export type UpdateTarget = UpdateNotificationTargetInputBody;
 
 // createTargetBody sends only the fields the kind reads, so a webhook URL typed
 // before switching to Group never travels.
@@ -157,12 +157,12 @@ export function createTargetBody(d: TargetDraft): CreateTarget {
     case "email":
       body.addresses = parseAddresses(d.addresses);
       break;
-    case "principal_group":
-      body.principal_group = d.principalGroup;
+    case "user_group":
+      body.user_group = d.userGroup;
       body.channels = d.channels;
       break;
-    case "principal":
-      body.principal = d.principal;
+    case "user":
+      body.user = d.user;
       body.channels = d.channels;
       break;
   }
@@ -187,8 +187,8 @@ export function updateTargetBody(d: TargetDraft, was: NotificationTarget): Updat
       if (as.join(",") !== (was.addresses ?? []).join(",")) body.addresses = as;
       break;
     }
-    case "principal_group":
-    case "principal":
+    case "user_group":
+    case "user":
       if (d.channels.join(",") !== (was.channels ?? []).join(",")) body.channels = d.channels;
       break;
   }

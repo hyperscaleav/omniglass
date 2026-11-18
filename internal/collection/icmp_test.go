@@ -64,7 +64,7 @@ func TestCollectICMPUnreachable(t *testing.T) {
 	}
 }
 
-// TestCollectICMPInconclusive: a node that cannot attempt ICMP at all (err from
+// TestCollectICMPInconclusive: an outpost that cannot attempt ICMP at all (err from
 // the probe) is inconclusive, surfaced as an error so the caller records no
 // false down.
 func TestCollectICMPInconclusive(t *testing.T) {

@@ -4,7 +4,7 @@ description: "A demo is a recording of a PR's feature working, made on the lab (
 ---
 
 A **demo** is a short recording of a pull request's feature working, made on the
-[lab](/guides/lab/) (the server, and a node collecting from the simulator in its own process, all in
+[lab](/guides/lab/) (the server, and an outpost collecting from the simulator in its own process, all in
 Docker: the same lab a learner runs, "lab instance" banner and all) and posted on the PR, so a reviewer watches the feature work rather than
 reading a transcript of it. A demo is one concept with two recorders, one for each way the product
 is driven:
@@ -103,11 +103,32 @@ makes the shell a test and gives a tape two helpers. Write it the way a reviewer
   `demo_until <seconds> '<code>'` retries code until it succeeds (and fails the demo if it never
   does), and `demo_hush '<code>'` runs a lookup unseen; each erases its own line, so the screen
   shows nothing of the block when `Show` resumes. A wait never costs the GIF any frames.
-- **Read the lab's logs.** The server's and the node's logs are files (`/stack/logs/server.log`,
-  `/stack/logs/node.log`; the node's carries its in-process simulator's lines too): grep them for
+- **Answer a command's own question.** A command that asks (a `[y/N]` before it runs a step) is
+  answered after a `Wait+Screen /<the question>/`, with a `Type` and an `Enter`, and still ends on
+  a plain `Wait`. The pattern has to be one that nothing typed since the last prompt matches, or
+  it could fire on the command line itself; the rules refuse the answer otherwise
+  (`scripts/demo/omnibot.tape` answers two).
+- **Read the lab's logs.** The server's and the outpost's logs are files (`/stack/logs/server.log`,
+  `/stack/logs/outpost.log`; the outpost's carries its in-process simulator's lines too): grep them for
   what the API does not show, keeping to the stable part of each line.
 - **Expect a failure out loud.** A command the tape types that exits non-zero fails the demo. One
   that is meant to fail says so on screen, with `|| true`.
+
+**A tape that needs a database says so.** A behavior that depends on what the database holds (a
+server refusing a schema a newer release migrated) cannot be staged through the API, so the tape
+declares a `# demo-needs: database` comment line, anywhere in the file (the header is read by
+`NEEDS` in the same module, and an unknown need is refused naming the line). For such a tape the
+recorder makes a database of its own on the lab's Postgres (`tape_<id>`, hyphens as underscores)
+before it plays, hands the tape `OMNIGLASS_DSN` pointing at it, so the direct-database commands
+(`omniglass migrate`, `omniglass server`) run against it, and drops it when the tape ends, passed or
+failed. The recorder image carries `psql` (the lab's Postgres client, pinned by digest at the lab's
+major) to stage a row in it. It is never the lab's own database: a tape may stamp a schema no
+later tape could migrate. A tape that declares nothing is handed no DSN. A tape that needs the
+Docker socket (`# demo-needs: docker-socket`, opt-in as above) does not combine with `database`,
+since it runs on the host's network, which cannot reach the lab's Postgres.
+[`scripts/demo/schema-ahead.tape`](https://github.com/hyperscaleav/omniglass/blob/main/scripts/demo/schema-ahead.tape)
+is the first: it migrates its database, stamps a version past this build's head, and shows the
+server refusing it (#1289).
 
 `make test-web` holds every tape in the tree to the rules, so a malformed one fails before a lab
 starts. [`scripts/demo/http-logins.tape`](https://github.com/hyperscaleav/omniglass/blob/main/scripts/demo/http-logins.tape)
@@ -132,7 +153,7 @@ Write it the way an operator would work:
   the console shows in answer (the drawer open, the tooltip shown, the row added, the status changed). That wait is
   the assertion that makes the walkthrough a test.
 - **Captions teach.** Say why the operator takes the step, in the product's vocabulary
-  (component, place, system), short enough to read in the caption bar.
+  (component, location, system), short enough to read in the caption bar.
 - **Mark the payoff.** `poster: true` on the step the walkthrough builds to makes its still the
   poster, the still that stands for the whole flow (the docs video's poster frame, and the PR
   comment's still below its animated preview); without it the last step is the poster.
@@ -141,6 +162,15 @@ Write it the way an operator would work:
   in Bay 2 that nothing collects from yet), a `setup` list makes it through the API before the
   title card, with the lab's owner token; one that already exists counts as made, so a replay on a
   lab the walkthrough already ran on works. Keep it to the scene: the flow itself stays on camera.
+- **Give your setup a component and alarms of its own.** The recorder plays each walkthrough on a lab
+  of its own, but [the probe](/contributing/synthetic-user/#the-probe-and-its-digest) replays all of
+  them, in alphabetical order, on one shared stack, where that "already exists counts as made" rule
+  hands one walkthrough the state another left behind. Two walkthroughs whose setups create the same
+  component, or raise the same alarm (the component and the dedup key), and whose steps click, type,
+  select or press anything, fail `make test-web` (`setupCollisions` in `web/e2e/walkthroughlib.mjs`).
+  Two alarms on one component are fine, but then a step names its own: give the alarm a message no
+  other walkthrough's alarm shares, and target the control by the name the console gives it for that
+  alarm (the leaf's buttons read "Snooze" followed by the alarm's message), never by a bare "Snooze".
 - **Wait for a filling console off camera with `ready`.** When the scene is only there once the lab
   has run for a while (read-platform-health's Requests panel fills after the server's first report
   window), a `ready` block (`goto` a console path, `wait` for a target, with its own `timeout` up to
@@ -165,6 +195,15 @@ and a recording with no preview fails too. A recording at or over a limit fails,
 only one that passed carries the budget mark in its manifest (`demo.json`, `walkthrough.json`),
 which is what the PR comment, and the docs copy of a walkthrough, refuse to go without. A demo that
 will not fit is two demos: split it.
+
+A walkthrough's animated preview also has to open on the painted title card, not the blank or
+half-painted lead-in the video starts with. The opening frame is chosen from the recording, not by a
+fixed beat after the paint: the recorder notes when the card was painted, and the preview opens on
+the first frame at or after that, within the card's hold, whose brightest luma
+(`signalstats` YMAX) reaches `PREVIEW_MIN_YMAX` (`previewStartFromLumas`). A loaded runner whose
+video lags the page only moves the start later. The gate fails only when no frame in that window
+qualifies, which means the card never painted, and it names the window scanned and the brightest
+luma it found.
 
 ## Record it locally
 
@@ -192,7 +231,7 @@ The browser e2e tier (`make test-e2e`) and the docs screenshots (`make docs-shot
 `make docs-shots-check`) ride the same throwaway lab, through the same `lab.sh` (#1267), so the repo
 stands omniglass up in Docker one way. Each fits the lab to what it checks: the e2e tier's is
 seeded with the `empty` scenario, so its CRUD round-trips start from a fresh install, and the
-screenshots' runs with `--no-node`, the dev fleet without the simulated wiring and with no node
+screenshots' runs with `--no-outpost`, the dev fleet without the simulated wiring and with no outpost
 collecting from it, so a page photographed twice is the same page, and with `--platform-history`, an
 hour of made-up server figures, so platform health's sparklines draw full lines (#1790). The lab's banner is a fact about
 the lab rather than the product the docs teach, so the screenshot capture hides it.
@@ -275,7 +314,8 @@ of it into main, and a default clone never fetches it (a clone fetches branches 
 refs). The ref was chosen over an orphan branch for that last reason: GitHub's raw host and
 jsDelivr serve a commit on any ref of a public repository by its SHA, the workflow token can push
 the ref, and an orphan branch would sit in every clone and in the branch list. Each run commits a
-fresh tree on top of the ref's last commit, so an older comment's links keep resolving. The record
+fresh tree on top of the ref's last commit, so an older comment's links keep resolving. A run in
+which no demo recorded commits an empty tree, so its comment and clip still say what happened. The record
 jobs that run the PR's code (both recorders, every command a tape types, and the script that
 stages the evidence, the comment and the clip) hold only a read-only token; a separate publish job,
 which checks nothing out and runs nothing from the PR, builds the evidence commit in a fresh

@@ -12,7 +12,7 @@ import { routeAllowed } from "../lib/nav";
 // This is UX and defence-in-depth, not the security boundary: the server gates
 // every route and injects scope on every query, so it already refuses. The guard
 // stops the console from rendering a page the caller cannot use and, under
-// impersonation, from painting the previous principal's cached rows before the
+// impersonation, from painting the previous user's cached rows before the
 // refetch is refused. It renders inside AuthGuard's authenticated Show, so
 // me.data is set here; the loading gap is AuthGuard's to cover.
 export const RouteGuard: ParentComponent = (props) => {

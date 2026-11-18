@@ -1,28 +1,28 @@
 // The system zoom's view model (#636): the typed slots a system needs filled.
 //
-// Two reads each carry half the story and this module merges them by role
+// Two reads each carry half the story and this module merges them by slot
 // name. The HEALTH read has the figures and the grouping facts (satisfying,
-// short, down, choice, alternate, active); the ROLES read has the declaration
+// short, down, choice, alternate, active); the SLOTS read has the declaration
 // (accepted types, pinned products, positions and their labels). Nothing here
 // computes a figure: every number and every verdict on a card is the server's
 // own, which is the console-computes-no-verdict rule the health module states.
 //
-// The occupant wire carries names, not ids (a role's assigned_to is the
+// The occupant wire carries names, not ids (a slot's assigned_to is the
 // component's name within this system), so the shared-with chip resolves an
 // occupant to its dot BY NAME within this system's own dots. Two members of
 // one system sharing a name across rooms would collide here; the wire has no
 // id to offer, and the first dot wins, which is the honest limit until the
 // assignment wire grows one.
 
-import type { components } from "../api/schema.gen";
+import type { EffectiveSlotBody, FleetHealthOutputBody, HealthSlotBody } from "../api/api.gen";
 import type { FleetView } from "./fleet";
 import { entityLabel } from "./entities";
 import { sortAlarms } from "./alarms";
 import type { SeverityLevel } from "./severity";
 
-export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
-export type HealthRole = components["schemas"]["HealthRoleBody"];
-export type EffectiveRole = components["schemas"]["EffectiveRoleBody"];
+export type FleetHealth = FleetHealthOutputBody;
+export type HealthSlot = HealthSlotBody;
+export type EffectiveSlot = EffectiveSlotBody;
 
 export type SlotOccupant = {
   name: string;
@@ -37,10 +37,10 @@ export type SlotOccupant = {
   // The labels of the OTHER systems this occupant also serves, empty for an
   // unshared component.
   sharedWith: string[];
-  // The declared position label, where the role labels its positions.
+  // The declared position label, where the slot labels its positions.
   positionLabel?: string;
   // The declared 1-based slot number this occupant holds, defaulting to its
-  // assignment order when the role declares none: the map join key (#791).
+  // assignment order when the slot declares none: the map join key (#791).
   position: number;
 };
 
@@ -60,30 +60,30 @@ export type SlotVM = {
   acceptedTypes: string[];
   pinnedProducts: string[];
   occupants: SlotOccupant[];
-  // The kind of gap a short role has: unstaffed (nobody assigned enough, a
+  // The kind of gap a short slot has: unstaffed (nobody assigned enough, a
   // commissioning gap, reads incomplete) or occupant-down (assigned hardware
-  // failing, the role's declared impact applies). none when whole.
+  // failing, the slot's declared impact applies). none when whole.
   gap: "none" | "unstaffed" | "occupant-down";
 };
 
-export type AlternateVM = { name: string; active: boolean; roles: SlotVM[] };
+export type AlternateVM = { name: string; active: boolean; slots: SlotVM[] };
 export type ChoiceVM = { name: string; activeAlternate?: string; alternates: AlternateVM[] };
 
 export type SystemZoomVM = {
   unconditional: SlotVM[];
   // choices carries only the ANSWERING build per choice. The alternate a
   // system did not choose is a configuration fact, not an operational one: a
-  // room does not change build without an edit, so the losing build's roles
+  // room does not change build without an edit, so the losing build's slots
   // are the standard editor's to show, and rendering them here as outstanding
   // work was the noise the operator-clarity ruling removed. `activeAlternate`
   // names the build so the card can say which.
   choices: ChoiceVM[];
-  // Members filling no role: in the system and accounted for, which is a
+  // Members filling no slot: in the system and accounted for, which is a
   // legitimate state, never an error.
-  noRole: { componentId: string; name: string; sharedWith: string[] }[];
+  noSlot: { componentId: string; name: string; sharedWith: string[] }[];
 };
 
-export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], view: FleetView, systemId: string): SystemZoomVM {
+export function systemZoomVM(health: FleetHealth, declared: EffectiveSlot[], view: FleetView, systemId: string): SystemZoomVM {
   const declaredByName = new Map(declared.map((r) => [r.name, r]));
   const self = (view.systems ?? []).find((s) => s.id === systemId);
   const dotsByName = new Map((self?.dots ?? []).map((d) => [d.name, d]));
@@ -94,7 +94,7 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
       .filter((s) => s.id !== systemId && (s.dots ?? []).some((d) => d.component === componentId))
       .map((s) => entityLabel(s));
 
-  const toSlot = (r: HealthRole): SlotVM => {
+  const toSlot = (r: HealthSlot): SlotVM => {
     const decl = declaredByName.get(r.name);
     const positions = decl?.positions ?? [];
     const labels = decl?.position_labels ?? [];
@@ -132,7 +132,7 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
     };
   };
 
-  const slots = (health.roles ?? []).map(toSlot);
+  const slots = (health.slots ?? []).map(toSlot);
   const unconditional = slots.filter((s) => !s.choice);
 
   const choices: ChoiceVM[] = [];
@@ -147,28 +147,28 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
     }
     let alt = choice.alternates.find((a) => a.name === slot.alternate);
     if (!alt) {
-      alt = { name: slot.alternate, active: slot.active, roles: [] };
+      alt = { name: slot.alternate, active: slot.active, slots: [] };
       choice.alternates.push(alt);
     }
-    alt.roles.push(slot);
+    alt.slots.push(slot);
     if (slot.active) choice.activeAlternate = slot.alternate;
   }
   // The answering build leads; the builds this room did not choose follow.
   for (const c of choices) c.alternates.sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name));
 
-  // Members filling no role: the system's dots minus every occupant name.
+  // Members filling no slot: the system's dots minus every occupant name.
   const occupied = new Set(slots.flatMap((s) => s.occupants.map((o) => o.name)));
-  const noRole = (self?.dots ?? [])
+  const noSlot = (self?.dots ?? [])
     .filter((d) => !occupied.has(d.name))
     .map((d) => ({ componentId: d.component, name: d.name, sharedWith: sharedWith(d.component) }));
 
-  return { unconditional, choices, noRole };
+  return { unconditional, choices, noSlot };
 }
 
 // One active alarm on the system, joined for the strip (#785): the health
-// read already carries every alarm on a down occupant per role; this flattens
-// the ACTIVE roles' alarms (an inactive alternate's alarms did not move the
-// verdict, and rendering one would contradict the header), joins the role's
+// read already carries every alarm on a down occupant per slot; this flattens
+// the ACTIVE slots' alarms (an inactive alternate's alarms did not move the
+// verdict, and rendering one would contradict the header), joins the slot's
 // label and the component's uuid (the wire's component_id; names repeat
 // across rooms), and orders worst first.
 export type AlarmRow = {
@@ -177,7 +177,7 @@ export type AlarmRow = {
   message: string;
   component: string;
   componentId: string | null;
-  roleLabel: string;
+  slotLabel: string;
   raisedAt: string;
   // The acknowledgement the health read carries (#990), orthogonal to cleared.
   acknowledged: boolean;
@@ -190,7 +190,7 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
   // text an operator recognises, and by uuid (component_id), the identity the
   // link opens. Names repeat across rooms, so nothing matches on the name.
   const rows: AlarmRow[] = [];
-  for (const r of health.roles ?? []) {
+  for (const r of health.slots ?? []) {
     if (!r.active) continue;
     for (const a of r.alarms ?? []) {
       rows.push({
@@ -199,7 +199,7 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
         message: a.message,
         component: a.component,
         componentId: a.component_id || null,
-        roleLabel: entityLabel(r),
+        slotLabel: entityLabel(r),
         raisedAt: a.raised_at,
         acknowledged: a.acknowledged ?? false,
         acknowledgedAt: a.acknowledged_at ?? null,
@@ -207,8 +207,8 @@ export function alarmRows(health: FleetHealth, levels?: SeverityLevel[] | null):
       });
     }
   }
-  // The wire repeats an alarm under every role its down component staffs;
-  // the strip is a list of alarms, not of role pairings, so the first
+  // The wire repeats an alarm under every slot its down component staffs;
+  // the strip is a list of alarms, not of slot pairings, so the first
   // occurrence after the worst-first sort wins.
   const sorted = sortAlarms(rows.map((r) => ({ ...r, raised_at: r.raisedAt })), levels).map(({ raised_at: _, ...r }) => r as AlarmRow);
   const seen = new Set<string>();
@@ -227,20 +227,20 @@ export function sinceOf(health: FleetHealth, now: number): { ts: string; ms: num
 
 // The components-first body (#790): the operator's question is "what is in
 // this room and is it fine", so the unit of the page is the COMPONENT, its
-// role a badge on the card. Role-level structure appears only where it says
-// something a badge cannot: a role that wants more than one occupant, a role
-// that is short, or a role nobody staffed. In the 99% case (one role, one
+// slot a badge on the card. Slot-level structure appears only where it says
+// something a badge cannot: a slot that wants more than one occupant, a slot
+// that is short, or a slot nobody staffed. In the 99% case (one slot, one
 // healthy occupant) the room is a flat row of cards.
-export type CardRole = { label: string; position?: string };
+export type CardSlot = { label: string; position?: string };
 export type ComponentCard = {
   componentId: string;
   name: string;
   down: boolean;
   shared: string[];
-  roles: CardRole[];
-  noRole: boolean;
+  slots: CardSlot[];
+  noSlot: boolean;
 };
-export type RoleGroup = {
+export type SlotGroup = {
   name: string;
   label: string;
   quorum: number;
@@ -248,28 +248,28 @@ export type RoleGroup = {
   short: number;
   spare: number;
   impact: string;
-  // The occupant names, in position order; empty for an unstaffed role.
+  // The occupant names, in position order; empty for an unstaffed slot.
   members: string[];
   // The occupants' full cards, badges included: a grouped component has ONE
   // home on the page (inside its group), so a bar that also answers an
-  // ungrouped role renders here wearing both badges.
+  // ungrouped slot renders here wearing both badges.
   memberCards: ComponentCard[];
 };
-export type SystemBody = { cards: ComponentCard[]; groups: RoleGroup[] };
+export type SystemBody = { cards: ComponentCard[]; groups: SlotGroup[] };
 
 export function componentCards(vm: SystemZoomVM): SystemBody {
   // Active slots only: the build not in use stays in the standard editor.
   const activeSlots: SlotVM[] = [
     ...vm.unconditional.filter((s) => s.active),
-    ...vm.choices.flatMap((c) => c.alternates.filter((a) => a.active).flatMap((a) => a.roles.filter((r) => r.active))),
+    ...vm.choices.flatMap((c) => c.alternates.filter((a) => a.active).flatMap((a) => a.slots.filter((r) => r.active))),
   ];
 
-  const groups: RoleGroup[] = [];
+  const groups: SlotGroup[] = [];
   const byComponent = new Map<string, ComponentCard>();
   const card = (o: { componentId: string; name: string; down?: boolean; sharedWith?: string[] }): ComponentCard => {
     let c = byComponent.get(o.name);
     if (!c) {
-      c = { componentId: o.componentId, name: o.name, down: o.down ?? false, shared: o.sharedWith ?? [], roles: [], noRole: false };
+      c = { componentId: o.componentId, name: o.name, down: o.down ?? false, shared: o.sharedWith ?? [], slots: [], noSlot: false };
       byComponent.set(o.name, c);
     }
     return c;
@@ -277,7 +277,7 @@ export function componentCards(vm: SystemZoomVM): SystemBody {
 
   for (const slot of activeSlots) {
     // Grouping earns its chrome: quorum beyond one, or anything short of
-    // whole (an unstaffed or short role is outstanding work the badge
+    // whole (an unstaffed or short slot is outstanding work the badge
     // cannot carry).
     const grouped = slot.quorum > 1 || slot.short > 0 || slot.occupants.length === 0;
     if (grouped) {
@@ -297,16 +297,16 @@ export function componentCards(vm: SystemZoomVM): SystemBody {
       const c = card(o);
       c.down = c.down || o.down;
       c.shared = [...new Set([...c.shared, ...o.sharedWith])];
-      c.roles.push({ label: slot.label, position: o.positionLabel });
+      c.slots.push({ label: slot.label, position: o.positionLabel });
     }
   }
-  for (const m of vm.noRole) {
+  for (const m of vm.noSlot) {
     const c = card(m);
-    c.noRole = true;
+    c.noSlot = true;
   }
-  // A grouped role's occupants render inside the group, full card and all
-  // badges; the flat row holds only components whose every role is ungrouped
-  // (plus the no-role members).
+  // A grouped slot's occupants render inside the group, full card and all
+  // badges; the flat row holds only components whose every slot is ungrouped
+  // (plus the no-slot members).
   const groupedNames = new Set(groups.flatMap((g) => g.members));
   for (const g of groups) g.memberCards = g.members.map((n) => byComponent.get(n)!).filter(Boolean);
   const cards = [...byComponent.values()].filter((c) => !groupedNames.has(c.name));

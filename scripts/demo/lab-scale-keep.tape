@@ -3,7 +3,7 @@
 # A scale lab is throwaway unless it is asked to keep its data: omniglass lab run with --keep keeps
 # the database and data volumes when it stops, and says the command that brings it back. Run again,
 # the seed finds the fleet it laid down last time, checks it is this plan's, re-enrolls each site
-# node and keeps it rather than seeding again, which is what lets a soak run for days through
+# outpost and keeps it rather than seeding again, which is what lets a soak run for days through
 # restarts and upgrades (#1633).
 
 # demo-needs: docker-socket

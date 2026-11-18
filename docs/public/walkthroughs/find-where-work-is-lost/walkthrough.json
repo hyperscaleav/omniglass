@@ -1,7 +1,7 @@
 {
   "id": "find-where-work-is-lost",
   "title": "Find where work is lost",
-  "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the node hop stays at 0, then follow a component's row to its delivery series.",
+  "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.",
   "steps": [
     {
       "n": 1,
@@ -78,19 +78,19 @@
     {
       "n": 13,
       "kind": "click",
-      "caption": "Open the node hop. Each node's own share is a row.",
+      "caption": "Open the outpost hop. Each outpost's own share is a row.",
       "still": "step-13.png"
     },
     {
       "n": 14,
       "kind": "click",
-      "caption": "Follow the node's row to its platform component.",
+      "caption": "Follow the outpost's row to its platform component.",
       "still": "step-14.png"
     },
     {
       "n": 15,
       "kind": "wait",
-      "caption": "The node's delivery series live on its component, one per kind, like any other metric.",
+      "caption": "The outpost's delivery series live on its component, one per kind, like any other metric.",
       "still": "step-15.png"
     }
   ],
@@ -98,7 +98,7 @@
   "preview": "preview.webp",
   "budget": {
     "seconds": 52.4,
-    "bytes": 961247,
-    "previewBytes": 684008
+    "bytes": 989215,
+    "previewBytes": 650260
   }
 }

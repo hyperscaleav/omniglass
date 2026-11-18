@@ -14,7 +14,7 @@ import (
 // The group rename leg, which shipped unproved.
 //
 // Every sibling renameable entity has one of these (components_rename_test.go,
-// locations_rename_test.go, systems_rename_test.go) and principal_group did not,
+// locations_rename_test.go, systems_rename_test.go) and user_group did not,
 // because until now the only gate on a group name was the Huma pattern on the
 // request body. The gateway accepted anything at all, including a uuid, for any
 // caller that was not the HTTP route.
@@ -92,9 +92,9 @@ func TestGroupRenameObeysTheNameRule(t *testing.T) {
 
 	// Group management is all-scope admin work, exactly as UpdateGroup is: a
 	// narrower scope is refused before anything is read.
-	if _, err := gw.RenameGroup(ctx, "", g.ID, "narrow-scope", scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
-		t.Fatalf("rename without an all scope = %v, want ErrPrincipalForbidden", err)
+	if _, err := gw.RenameGroup(ctx, "", g.ID, "narrow-scope", scope.Set{}); !errors.Is(err, storage.ErrUserForbidden) {
+		t.Fatalf("rename without an all scope = %v, want ErrUserForbidden", err)
 	}
 
-	assertOneRenameAudit(t, ctx, gw, "principal_group", g.ID)
+	assertOneRenameAudit(t, ctx, gw, "user_group", g.ID)
 }

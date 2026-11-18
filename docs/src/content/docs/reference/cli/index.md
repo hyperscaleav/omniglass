@@ -43,7 +43,7 @@ Adds a rule that, on an alarm's raise or clear, when its predicate holds over th
 | `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one |
 | `--opt-out-allowed` | bool | `false` | Let a member of a group it targets opt out of it for themselves (default false) |
 | `--targets` | string | (none) | The notification targets to send to, by name or uuid |
-| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
+| `--when` | string | (none) | A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column |
 
 Example:
 
@@ -158,6 +158,155 @@ Example:
 omniglass action-rule update <name>
 ```
 
+## `omniglass alarm`
+
+Commands for the alarm resource
+
+### `omniglass alarm list`
+
+List the fleet's active alarms
+
+```
+omniglass alarm list [flags]
+```
+
+What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | int | `0` | At most this many, the worst first; 0 or absent means 200 |
+| `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at: the queue an operator, or an agent, works |
+
+Example:
+
+```sh
+omniglass alarm list
+```
+
+## `omniglass assistant`
+
+Commands for the assistant resource
+
+### `omniglass assistant conversation`
+
+Commands for the conversation resource
+
+#### `omniglass assistant conversation append`
+
+Append a turn to one of your omnibot conversations
+
+```
+omniglass assistant conversation append <name> [flags]
+```
+
+Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. While a server run holds the conversation, an append is a 409. Anyone else's is a 404. Audited without content. Gated by assistant:use.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--after` | int | `0` | The seq of the last message you saw (0 for an empty conversation); anything else is a 409 |
+| `--messages` | string | (none) | The new messages, in order |
+| `--pending` | string | (none) | The write the run paused on, waiting on you; absent clears it |
+| `--usage` | string | (none) | The tokens this turn spent, added to the total |
+
+Example:
+
+```sh
+omniglass assistant conversation append <name> --after <int> --messages <json>
+```
+
+#### `omniglass assistant conversation create`
+
+Start an omnibot conversation
+
+```
+omniglass assistant conversation create [flags]
+```
+
+Creates an empty conversation of your own, named or named for you. A name you already use is a 409. Audited. Gated by assistant:use.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | A name (lowercase kebab), unique among your own conversations; absent names it for you |
+
+Example:
+
+```sh
+omniglass assistant conversation create
+```
+
+#### `omniglass assistant conversation delete`
+
+Delete one of your omnibot conversations
+
+```
+omniglass assistant conversation delete <name>
+```
+
+Deletes one of your own conversations and its transcript. Anyone else's is a 404. Audited. Gated by assistant:use.
+
+Example:
+
+```sh
+omniglass assistant conversation delete <name>
+```
+
+#### `omniglass assistant conversation get`
+
+Get one of your omnibot conversations
+
+```
+omniglass assistant conversation get <name>
+```
+
+One of your own conversations with its transcript, its pending write if a run paused on one, and the tokens it has spent. Anyone else's is a 404. Gated by assistant:use.
+
+Example:
+
+```sh
+omniglass assistant conversation get <name>
+```
+
+#### `omniglass assistant conversation list`
+
+List your omnibot conversations
+
+```
+omniglass assistant conversation list
+```
+
+Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+
+Example:
+
+```sh
+omniglass assistant conversation list
+```
+
+#### `omniglass assistant conversation run`
+
+Run omnibot on one of your conversations
+
+```
+omniglass assistant conversation run <name> [flags]
+```
+
+Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--context` | string | (none) | What the person handed over with the prompt, read as data ahead of it; ignored on a resume |
+| `--forwardedProps` | string | (none) | An embedded skill to run; ignored on a resume |
+| `--messages` | string | (none) | The client's view of the conversation; only its last user message is read, as the prompt |
+| `--resume` | string | (none) | The answer to the interrupt the last run ended on |
+| `--runId` | string | (none) | The run's id, echoed in its events |
+| `--threadId` | string | (none) | Ignored: the conversation is the thread |
+
+Example:
+
+```sh
+omniglass assistant conversation run <name>
+```
+
 ## `omniglass audit-log`
 
 Commands for the audit-log resource
@@ -174,9 +323,12 @@ Recent audit-trail events, newest first, each with the actor and, for an imperso
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--agent` | string | (none) | Filter to the events one agent took on its person's behalf (the name its agent token was minted with) |
 | `--before` | string | (none) | Only events strictly older than this RFC3339 timestamp (paging backward) |
+| `--channel` | string | (none) | Filter to the events that arrived through one channel; direct is a plain API call, with no channel |
+| `--client` | string | (none) | Filter to the events whose declared MCP client contains this term, case-insensitively |
 | `--limit` | int | `0` | Max rows to return, newest first (default 100, capped at 500) |
-| `--resource` | string | (none) | Filter to one resource kind (e.g. auth, principal_grant) |
+| `--resource` | string | (none) | Filter to one resource kind (e.g. auth, user_grant) |
 | `--verb` | string | (none) | Filter to one verb (e.g. login, create) |
 
 Example:
@@ -188,6 +340,22 @@ omniglass audit-log list
 ## `omniglass auth`
 
 Commands for the auth resource
+
+### `omniglass auth agent-policy`
+
+What the install lets an agent do
+
+```
+omniglass auth agent-policy
+```
+
+Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. Each class names the layer that set it (platform, role, or tool), and an overridden tool is listed with its own policy; the strictest layer wins. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
+
+Example:
+
+```sh
+omniglass auth agent-policy
+```
 
 ### `omniglass auth avatar`
 
@@ -213,7 +381,7 @@ Change your own password
 omniglass auth change-password [flags]
 ```
 
-Verifies the current password and sets a new one. Requires authentication; self-scoped.
+Verifies the current password and sets a new one. Requires authentication; self-scoped. Refused (403) to an agent token.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -234,12 +402,15 @@ Create one of your own API tokens
 omniglass auth create-token [flags]
 ```
 
-Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.
+Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it. Naming an agent mints an agent token instead: it acts on your behalf, holds only what its optional roles AND you hold (each role must be one you cover, else 403), is accepted only on its optional channels, needs an explicit ttl_days, never holds a reveal or use action, cannot mint a token, change your password or impersonate, and every row it writes names the agent. An agent token cannot call this route.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--agent` | string | (none) | Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate. |
+| `--channels` | string | (none) | The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp. |
 | `--description` | string | (none) | What the token is for (required) |
-| `--ttl-days` | int | `0` | Days until the token expires (default 90, maximum 365) |
+| `--roles` | string | (none) | An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling. |
+| `--ttl-days` | int | `0` | Days until the token expires (default 90, maximum 365; required for an agent token) |
 
 Example:
 
@@ -286,13 +457,13 @@ omniglass auth logout
 
 ### `omniglass auth me`
 
-The authenticated principal, its permissions, and grants
+The authenticated user, its permissions, and grants
 
 ```
 omniglass auth me
 ```
 
-Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
+Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
 
 Example:
 
@@ -324,7 +495,7 @@ Creates a personal action rule: on which alarm transitions, when, what to send, 
 | `--notification-type` | string | (none) | The notification type to send, by name or uuid; absent sends the official one for the transition |
 | `--on` | string | (none) | The alarm transitions it fires on: raised, cleared, or both |
 | `--targets` | string | (none) | Refused when set (a 422): a personal rule tells you alone and names no target |
-| `--when` | string | (none) | A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read |
+| `--when` | string | (none) | A predicate over the alarm facts (component, location, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read |
 
 Example:
 
@@ -462,7 +633,7 @@ List your inbox
 omniglass auth me notification list [flags]
 ```
 
-The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -505,6 +676,52 @@ Example:
 
 ```sh
 omniglass auth me notification markRead <id>
+```
+
+### `omniglass auth oauth-client`
+
+Commands for the oauth-client resource
+
+#### `omniglass auth oauth-client authorize`
+
+Approve or deny an OAuth client
+
+```
+omniglass auth oauth-client authorize <id> [flags]
+```
+
+Answers an OAuth client's authorization request as you. Approved, it issues a one-time code (good for five minutes) the client exchanges for an agent token accepted on the MCP channel only and holding only the roles you chose, each one whose capabilities you hold (else 403); denied, it sends the client back with access_denied. Returns where to send the browser back to. Requires authentication; an agent token or an impersonated session cannot answer.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--approved` | bool | `false` | Whether you approve the client; false sends it back with access_denied |
+| `--code-challenge` | string | (none) | The PKCE challenge from the authorization request |
+| `--code-challenge-method` | string | (none) | The PKCE method; S256 only |
+| `--redirect-uri` | string | (none) | The redirect URI from the authorization request; one the client registered |
+| `--resource` | string | (none) | The resource the token is for: this server's MCP endpoint |
+| `--roles` | string | (none) | The roles to approve; each must be one whose capabilities you hold. Required when approved |
+| `--state` | string | (none) | The client's state, echoed back |
+
+Example:
+
+```sh
+omniglass auth oauth-client authorize <id> --approved <bool> --code-challenge code_challenge --code-challenge-method code_challenge_method --redirect-uri redirect_uri --resource resource
+```
+
+#### `omniglass auth oauth-client get`
+
+Read an OAuth client asking for your consent
+
+```
+omniglass auth oauth-client get <id>
+```
+
+Returns a registered OAuth client (the name it gave, its redirect URIs) and the roles you may approve for it, for the console's consent page. Requires authentication; the client is the one named in the authorization request.
+
+Example:
+
+```sh
+omniglass auth oauth-client get <id>
 ```
 
 ### `omniglass auth remove-avatar`
@@ -587,7 +804,7 @@ Update your own profile
 omniglass auth update-profile [flags]
 ```
 
-Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
+Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own user).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -636,7 +853,7 @@ Authors a rule that derives its output key on each owner (each component its sel
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The rule's name (lowercase letters, digits, hyphens) |
 | `--output-key` | string | (none) | The property or metric the rule writes: its type pins the reduce's result. Not a reserved key (a native probe key, health), not a key a driver's emits or a command type write, and not one another enabled rule writes |
-| `--owner-kind` | string | (none) | What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create |
+| `--owner-kind` | string | (none) | What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create |
 | `--reduce` | string | (none) | An expression over the inputs by alias |
 | `--selector` | string | (none) | The owners the rule derives for: a component rule's component_types and components, or a system rule's system_types and systems; absent is every owner of its kind |
 
@@ -686,7 +903,7 @@ List calc rules
 omniglass calc-rule list
 ```
 
-Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.
 
 Example:
 
@@ -806,7 +1023,7 @@ Registers a custom command type (official=false). The name must be a single keba
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
-| `--disruptive` | bool | `false` | The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again |
+| `--disruptive` | bool | `false` | The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering outpost until each reads up again |
 | `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The command type name (lowercase kebab) |
@@ -879,7 +1096,7 @@ Update a command type
 omniglass command-type update <name> [flags]
 ```
 
-Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm (a nil field is unchanged; an empty target clears it; a non-empty arm clears the other). The name is fixed at creation. Official types are read-only. Gated by command_type:update.
+Patches a custom command type's label, description, params schema, settle window, disruption (disruptive, quiet_seconds, hold_seconds, power_outlet_param, checked together on the merged row), or target on either arm. Partial by default: the fields present in the body change and the rest are left alone (an empty target clears it; a non-empty arm clears the other). params_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; a mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official types are read-only. Gated by command_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -887,12 +1104,13 @@ Patches a custom command type's label, description, params schema, settle window
 | `--disruptive` | bool | `false` | Whether the command takes its device down; checked with quiet_seconds and hold_seconds on the merged row |
 | `--hold-seconds` | int | `0` | A disruptive type's backstop in seconds, greater than quiet_seconds; not the settle window |
 | `--label` | string | (none) | A human label |
-| `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name params_schema in update_mask with no value here to CLEAR it |
 | `--power-outlet-param` | string | (none) | The param that carries a power command's outlet (empty clears it); only on a disruptive type, checked on the merged row |
 | `--quiet-seconds` | int | `0` | A disruptive type's quiet period in seconds |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately) |
 | `--target-metric-type` | string | (none) | The metric this command sets (empty clears it; a non-empty arm clears the other) |
 | `--target-property-type` | string | (none) | The property this command sets (empty clears it; a non-empty arm clears the other) |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (params_schema back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
 
 Example:
 
@@ -918,6 +1136,9 @@ omniglass component alarm acknowledge <name> <id>
 
 Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not acknowledge on is a 403.
 
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -932,11 +1153,14 @@ Raise an alarm on a component
 omniglass component alarm create <name> [flags]
 ```
 
-Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--dedup-key` | string | (none) | The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition |
+| `--dedup-key` | string | (none) | What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing |
 | `--message` | string | (none) | What is wrong, for the operator reading it later |
 | `--severity` | string | (none) | How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage |
 
@@ -956,6 +1180,9 @@ omniglass component alarm delete <name> <id>
 
 Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -972,10 +1199,13 @@ omniglass component alarm list <name> [flags]
 
 What is currently wrong with this component, newest first, with the component's own verdict those alarms make. Pass include_cleared for the history rather than the active set. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--include-cleared` | bool | `false` | Include cleared alarms, so the list is the history rather than what is wrong now |
-| `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended |
+| `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended |
 
 Example:
 
@@ -985,17 +1215,20 @@ omniglass component alarm list <name>
 
 #### `omniglass component alarm snooze`
 
-Snooze an alarm's condition
+Snooze an alarm
 
 ```
 omniglass component alarm snooze <name> <id> [flags]
 ```
 
-Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--duration` | string | (none) | How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer |
+| `--duration` | string | (none) | How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer |
 
 Example:
 
@@ -1013,6 +1246,9 @@ omniglass component alarm timeline <name> <id>
 
 The alarm's history in one list, oldest first: the events that carry it (an event rule's fire event, which opened it, and its clear event, which resolved it) merged by time with its audit rows (the raise, each acknowledgement, the clear, each snooze, unsnooze and snooze-end, and a rule edit that opened or resolved it, naming the editor) and the notifications its transitions queued, each at the moment it was queued with its status as it stands (#618). At one instant an event comes before the audit row it caused, and that before a notification. Gated by alarm:read; a component outside the caller's component read scope, and an alarm not on the component, are a non-disclosing 404.
 
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -1021,13 +1257,16 @@ omniglass component alarm timeline <name> <id>
 
 #### `omniglass component alarm unsnooze`
 
-End an alarm's condition's snooze
+End an alarm's snooze
 
 ```
 omniglass component alarm unsnooze <name> <id>
 ```
 
-Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1069,7 +1308,10 @@ Read a command
 omniglass component command get <name> <id>
 ```
 
-One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, outpost and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1086,6 +1328,9 @@ omniglass component command issue <name> [flags]
 ```
 
 Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Answers with the command as it stands (as the command read returns it) and the computed settlement verdict; with wait, once it settles, fails or times out, or wait_timeout passes. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1112,6 +1357,9 @@ omniglass component command list <name> [flags]
 
 The component's command history, newest first, each command whole (as the single read returns it), narrowed by recorded status and by when it was issued, a page at a time. status=issued is what is in flight now. Gated by command:read, resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but whose commands it may not is a 403.
 
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--limit` | int | `0` | How many to return, newest first (1 to 500) |
@@ -1133,7 +1381,7 @@ Create a component
 omniglass component create [flags]
 ```
 
-Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
+Creates a component, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped component:create grant; a root with no location needs the all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1159,15 +1407,15 @@ Start a component from a template
 omniglass component createFromTemplate [flags]
 ```
 
-Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no outpost a 422.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--inputs` | string | (none) | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read |
+| `--inputs` | string | (none) | Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind) |
 | `--label` | string | (none) | The component's label |
-| `--location` | string | (none) | The place the component sits in, by name or dotted path |
+| `--location` | string | (none) | The location the component sits in, by name or dotted path |
 | `--name` | string | (none) | The component's name; minted as an unnamed create mints it when empty |
-| `--node` | string | (none) | The node the endpoint is placed on; needed when inputs carry an address |
+| `--outpost` | string | (none) | The outpost the endpoint is placed on; needed when inputs carry an address |
 | `--template` | string | (none) | The component template, by name |
 
 Example:
@@ -1184,7 +1432,10 @@ Delete a component
 omniglass component delete <name>
 ```
 
-Deletes a component, refused (409) while it still has child components or is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1204,7 +1455,10 @@ Record that a component depends on another
 omniglass component dependency create <name> [flags]
 ```
 
-Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's outpost its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+
+Arguments:
+  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1228,6 +1482,10 @@ omniglass component dependency delete <name> <kind> <upstream>
 
 Removes this component's edge of the kind to the upstream. Gated by component:update on the dependent (read but not writable, a 403). An upstream outside the caller's component:read is a 404, as an edge that does not exist is: the list does not name it either.
 
+Arguments:
+  <name>  Name of the dependent component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <upstream>  Name or uuid of the upstream component, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -1243,6 +1501,9 @@ omniglass component dependency list <name>
 ```
 
 This component's dependency edges both ways: its upstreams (what it depends on) and its dependents (what depends on it), each of kind power (fed from an outlet of the upstream), host (hosted by it) or path (reached through it). A disruptive command follows host edges down from its target and a power command follows the power edges from its outlet, so these edges are what a reboot or an outlet cycle holds; a path edge holds the dependent's in-band endpoints while its upstream's gate is closed. Containment (a component's parent) is a different fact and never appears here. An edge whose other end is outside the caller's component:read is counted in hidden, never named. Gated by component:read; a component outside it is a non-disclosing 404.
+
+Arguments:
+  <name>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1264,6 +1525,9 @@ omniglass component effective-secret list <name>
 
 Resolves the secrets that cascade onto a component (platform -> location -> component), with the winner and the shadowed candidates it overrode. There is NO system band: a secret is device-facing, and the room a component happens to serve is the wrong owner for a credential the device itself answers with. Fields are masked, as in the directory; plaintext is only ever the audited reveal. Gated by secret:read, which the viewer floor does not carry, and admin-sensitive secrets appear only to the admin tier.
 
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -1282,7 +1546,10 @@ Effective tags for a component
 omniglass component effective-tag list <name> [flags]
 ```
 
-Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1306,7 +1573,10 @@ Effective variables for a component
 omniglass component effective-variable list <name>
 ```
 
-Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.
+Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union and the most specific binding shadows the rest, with the winner and the shadowed candidates. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1328,6 +1598,9 @@ omniglass component event list <name>
 
 Returns the component's recent log occurrences (the log-kind sink), newest first, bounded to the last 24 hours. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -1343,6 +1616,9 @@ omniglass component get <name>
 ```
 
 Fetches a component by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by component:read.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1364,10 +1640,13 @@ omniglass component identity-binding delete <name> <key> <value>
 
 Removes the binding of this value, reported by the conduit component under this match key, so its samples no longer land on the owner it named. Unbinding writes onto both ends, so it costs a write on both: gated by component:update on the conduit, and it also needs update on the binding's owner (component:update, or system:update for a system), a 403 naming it when the caller reads the owner but cannot write it. A binding whose owner the caller cannot read is a 404, as one that does not exist is: the list does not name it either.
 
+Arguments:
+  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
-omniglass component identity-binding delete ucc-service-1 ucc-room-id room-17c-415a
+omniglass component identity-binding delete ucc-platform ucc-room-id room-17c-415a
 ```
 
 #### `omniglass component identity-binding list`
@@ -1380,10 +1659,13 @@ omniglass component identity-binding list <name>
 
 The identity bindings of this conduit component: each value it reports under a match key (a registered property type, such as ucc-room-id) and the one system or component that value's samples land on. A component that speaks for many owners (a cloud service, a controller fronting many components) is the conduit, the path rather than the owner. Each binding is named only when its owner is inside the caller's read on its tier (system:read for a system owner, component:read for a component owner); the rest are counted in hidden, never named. Gated by component:read; a conduit outside it is a non-disclosing 404.
 
+Arguments:
+  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
-omniglass component identity-binding list ucc-service-1
+omniglass component identity-binding list ucc-platform
 ```
 
 #### `omniglass component identity-binding update`
@@ -1394,17 +1676,20 @@ Bind an identity a conduit reports to its owner
 omniglass component identity-binding update <name> <key> <value> [flags]
 ```
 
-Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or an outpost owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+
+Arguments:
+  <name>  Name of the conduit component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--owner` | string | (none) | Name or uuid of the owner the identity's values land on, or a dotted address |
-| `--owner-kind` | string | (none) | What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here |
+| `--owner-kind` | string | (none) | What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here |
 
 Example:
 
 ```sh
-omniglass component identity-binding update ucc-service-1 ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind
+omniglass component identity-binding update ucc-platform ucc-room-id room-17c-415a --owner owner --owner-kind owner_kind
 ```
 
 ### `omniglass component impairment`
@@ -1419,7 +1704,10 @@ Get what is broken on a simulated device
 omniglass component impairment get <name>
 ```
 
-The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its outpost when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+
+Arguments:
+  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1435,7 +1723,10 @@ Break or repair a simulated device
 omniglass component impairment set <name> [flags]
 ```
 
-Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's outpost applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+
+Arguments:
+  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1477,6 +1768,9 @@ omniglass component listTags <name>
 
 Lists the tags bound directly on a component (not the resolved cascade). Gated by component:read.
 
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -1496,6 +1790,9 @@ omniglass component log list <name> [flags]
 ```
 
 Returns the component's recent raw log lines (the ingest lane of ADR-0066, distinct from typed events), newest first, bounded to the last 24 hours, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1522,6 +1819,9 @@ omniglass component membership list <name>
 
 The systems this component is bound into, ordered by name. A component may belong to several: a rack DSP serving three rooms is a member of all three, and each of them depends on it. Exactly one membership may be marked primary, the default for a question asked without a system in hand. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
+Arguments:
+  <name>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -1541,6 +1841,9 @@ omniglass component metric list <name>
 ```
 
 Every metric the component's product declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1583,7 +1886,10 @@ Move a component
 omniglass component move <name> [flags]
 ```
 
-Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1626,6 +1932,9 @@ omniglass component property delete <name> <property>
 
 Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -1640,7 +1949,10 @@ List a component's properties and where each stands
 omniglass component property list <name>
 ```
 
-Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1660,12 +1972,12 @@ Read one property series' change history
 omniglass component property sample list <name> <property> [flags]
 ```
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
@@ -1684,6 +1996,9 @@ omniglass component property update <name> <property> [flags]
 ```
 
 Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1708,6 +2023,9 @@ omniglass component reachability list <name>
 ```
 
 Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1741,6 +2059,9 @@ omniglass component removeTag <name> [flags]
 
 Removes a key's value from a component. Gated by component:update.
 
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--key` | string | (none) | The tag key to remove |
@@ -1760,6 +2081,9 @@ omniglass component rename <name> [flags]
 ```
 
 Moves the component's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by component:rename; read and rename scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The component's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1805,6 +2129,9 @@ omniglass component resetName <name>
 
 Hands the pen back to the platform: regenerates the name from the component's current type and placement (the same "<stem>-<n>" rule a nameless create applies) and marks it name_generated, whether or not it already was. Gated by component:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.
 
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -1820,6 +2147,9 @@ omniglass component setTag <name> [flags]
 ```
 
 Binds a value for a key on a component. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by component:update.
+
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1844,7 +2174,10 @@ Fire an operation at a simulated component
 omniglass component simulation fire <name> [flags]
 ```
 
-Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+Asks the simulator beside the component's outpost to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+
+Arguments:
+  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1869,7 +2202,10 @@ Get a component's simulation
 omniglass component simulation get <name>
 ```
 
-Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
+Whether a component is simulated (it has an endpoint on an outpost and a product a simulator profile simulates) and, when it is, its outpost, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
+
+Arguments:
+  <name>  The simulated component's name, or a dotted address; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -1891,10 +2227,13 @@ omniglass component unbound-identity list <name>
 
 A component that speaks for many owners (a conduit) lands each value its driver identifies on the owner an identity binding names; a value naming an identity it has no binding for lands on no owner and is kept here, one row per match key and value (a count, first and last heard, the keys it carried), bounded at 1024 per conduit with the least recently heard evicted, and aged out after seven days. Binding one (PUT .../identity-bindings/{key}/{value}) makes the next value naming it land on its owner. Gated by component:read; an out-of-scope conduit is a non-disclosing 404.
 
+Arguments:
+  <name>  The conduit component's name, or a dotted address (e.g. hq.$comp.ucc-platform); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
-omniglass component unbound-identity list 'hq.$comp.meetings-cloud'
+omniglass component unbound-identity list 'hq.$comp.ucc-platform'
 ```
 
 ### `omniglass component update`
@@ -1906,6 +2245,9 @@ omniglass component update <name> [flags]
 ```
 
 Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1938,7 +2280,7 @@ Creates a custom (non-official) component_type, optionally under a parent. Gated
 | `--default-tags` | string | (none) | Tags every instance of this type starts with |
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
-| `--label-rule` | string | (none) | A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. |
+| `--label-rule` | string | (none) | A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent component_type, by name or uuid; omit for a root type |
 | `--stem` | string | (none) | The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens. |
@@ -1973,7 +2315,7 @@ List component types
 omniglass component-type list
 ```
 
-Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
 
 Example:
 
@@ -2013,7 +2355,7 @@ Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tag
 | `--default-tags` | string | (none) | Replaces the default-tag set; omit to leave unchanged |
 | `--icon` | string | (none) | A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--label` | string | (none) | A new operator-facing label |
-| `--label-rule` | string | (none) | A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. |
+| `--label-rule` | string | (none) | A new label rule; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. |
 | `--stem` | string | (none) | A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). |
 
 Example:
@@ -2089,7 +2431,7 @@ List drivers
 omniglass driver list
 ```
 
-Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
+Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
 
 Example:
 
@@ -2099,27 +2441,27 @@ omniglass driver list
 
 ### `omniglass driver preview`
 
-Preview a driver spec's polls through a node
+Preview a driver spec's polls through an outpost
 
 ```
 omniglass driver preview [flags]
 ```
 
-Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
+Runs a driver spec's polls once through the outpost named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the outpost holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the outpost and on each secret used. Gated by driver:preview.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--driver` | string | (none) | A stored driver to preview, by name; or give spec |
-| `--inputs` | string | (none) | The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target |
-| `--node` | string | (none) | The node that runs the preview, by name: the one that reaches the target |
+| `--inputs` | string | (none) | The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target |
+| `--outpost` | string | (none) | The outpost that runs the preview, by name: the one that reaches the target |
 | `--polls` | string | (none) | The polls to run, by name; absent runs every poll |
 | `--spec` | string | (none) | A driver spec to preview inline, unsaved; or give driver |
-| `--timeout-seconds` | int | `0` | How long the node may take for the whole preview (default 15, at most 30) |
+| `--timeout-seconds` | int | `0` | How long the outpost may take for the whole preview (default 15, at most 30) |
 
 Example:
 
 ```sh
-omniglass driver preview --node node
+omniglass driver preview --outpost outpost
 ```
 
 ### `omniglass driver rename`
@@ -2134,7 +2476,7 @@ Moves a custom driver's name, the handle an operator types, addressed by its cur
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -2196,7 +2538,7 @@ Create an endpoint
 omniglass endpoint create [flags]
 ```
 
-Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.
+Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. A secret input hands that credential to the endpoint's host, so it takes secret:bind on the secret: one the caller cannot read is a 422, one it can read but not bind a 403. The create scope cascades through the owning component. Gated by endpoint:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2204,10 +2546,10 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | `--driver` | string | (none) | Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions |
 | `--inputs` | string | (none) | The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest |
 | `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for |
-| `--node` | string | (none) | Node placement, by name or id |
 | `--out-of-band` | bool | `false` | Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open |
+| `--outpost` | string | (none) | Outpost placement, by name or id |
 | `--params` | string | (none) | Address/target settings (jsonb); an attach derives them from the inputs instead |
-| `--transport` | string | (none) | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
+| `--transport` | string | (none) | A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
 Example:
 
@@ -2225,6 +2567,9 @@ omniglass endpoint delete <endpoint>
 
 Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
 
+Arguments:
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -2240,6 +2585,9 @@ omniglass endpoint get <endpoint>
 ```
 
 Fetches an endpoint by its address (<component>/<endpoint name>) or uuid. An endpoint whose component is out of the caller's read scope is a non-disclosing 404, and a name no endpoint the caller can see answers to is a 404 naming what was looked up (listing each match when more than one does). Gated by endpoint:read.
+
+Arguments:
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -2275,11 +2623,11 @@ Run an endpoint's poll now
 omniglass endpoint poll run <endpoint> <poll> [flags]
 ```
 
-Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--timeout-seconds` | int | `0` | How long the node may take (default 15, at most 30) |
+| `--timeout-seconds` | int | `0` | How long the outpost may take (default 15, at most 30) |
 
 Example:
 
@@ -2295,12 +2643,15 @@ Retry an endpoint's gated connections
 omniglass endpoint retry <endpoint> [flags]
 ```
 
-Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the outpost recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+
+Arguments:
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--certificate` | string | (none) | A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged |
-| `--host-key` | string | (none) | The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
+| `--host-key` | string | (none) | The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the outpost's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged |
 
 Example:
 
@@ -2318,6 +2669,9 @@ omniglass endpoint rotateToken <endpoint>
 
 Mints a webhook endpoint's token anew (#1024): a post bearing the old one answers 404 at once, exactly as a token that never existed, and the new one is revealed through the endpoint's secret, to give the sender. A token deleted with its secret is minted again. A dialed endpoint has no token, a 422. Audited on the endpoint and the secret. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
+Arguments:
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -2332,14 +2686,17 @@ Update an endpoint
 omniglass endpoint update <endpoint> [flags]
 ```
 
-Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an endpoint's outpost placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+
+Arguments:
+  <endpoint>  The endpoint, as <component>/<endpoint name> (the component by name, dotted address or uuid) or by its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--inputs` | string | (none) | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential |
+| `--inputs` | string | (none) | A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it |
 | `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
-| `--node` | string | (none) | Reassign the node placement, by name or id |
 | `--out-of-band` | bool | `false` | Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone |
+| `--outpost` | string | (none) | Reassign the outpost placement, by name or id |
 | `--params` | string | (none) | Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs |
 | `--transport` | string | (none) | The transport: a driver-attached endpoint takes only one its driver speaks |
 
@@ -2361,17 +2718,17 @@ Create an event rule
 omniglass event-rule create [flags]
 ```
 
-Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--clear-criteria` | string | (none) | The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) |
-| `--clear-event-type` | string | (none) | The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none |
+| `--clear-event-type` | string | (none) | The event type the rule writes when it clears, by name (rule-cleared is the generic one); absent, it writes none |
 | `--clear-sustain` | string | (none) | A Go duration; empty is 0s |
 | `--description` | string | (none) | What the rule watches for and why |
 | `--enabled` | bool | `false` | Defaults to true |
-| `--fire-criteria` | string | (none) | The criteria that starts the condition: {expr}, or the short form {op, value} |
-| `--fire-event-type` | string | (none) | The event type the rule writes when its condition starts, by name (condition-started is the generic one) |
+| `--fire-criteria` | string | (none) | The criteria the rule fires on: {expr}, or the short form {op, value} |
+| `--fire-event-type` | string | (none) | The event type the rule writes when it fires, by name (rule-fired is the generic one) |
 | `--fire-sustain` | string | (none) | A Go duration; empty is 0s |
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
@@ -2426,7 +2783,7 @@ List event rules
 omniglass event-rule list
 ```
 
-Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
 
 Example:
 
@@ -2446,9 +2803,9 @@ Judges a candidate rule (sample key, selector, criteria) without writing anythin
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--clear-criteria` | string | (none) | The criteria it ends on; absent, the negation of fire_criteria |
+| `--clear-criteria` | string | (none) | The criteria it clears on; absent, the negation of fire_criteria |
 | `--clear-sustain` | string | (none) | Accepted and ignored, like fire_sustain |
-| `--fire-criteria` | string | (none) | The criteria its condition starts on: {expr}, or the short form {op, value} |
+| `--fire-criteria` | string | (none) | The criteria it fires on: {expr}, or the short form {op, value} |
 | `--fire-sustain` | string | (none) | Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone |
 | `--sample-key` | string | (none) | The property or metric the candidate rule reads |
 | `--selector` | string | (none) | The components it watches; absent or empty, every component |
@@ -2467,7 +2824,7 @@ Rename an event rule
 omniglass event-rule rename <name> [flags]
 ```
 
-Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
+Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2491,7 +2848,7 @@ Get an event rule's live state
 omniglass event-rule state list <name>
 ```
 
-What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.
+What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.
 
 Example:
 
@@ -2512,13 +2869,13 @@ Patches a rule (an absent field is unchanged), bumping its version; disabling it
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--clear-criteria` | string | (none) | The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) |
-| `--clear-event-type` | string | (none) | The event type the rule writes when its condition ends, by name; empty writes none |
+| `--clear-event-type` | string | (none) | The event type the rule writes when it clears, by name; empty writes none |
 | `--clear-negates` | bool | `false` | Drop the clear criteria, so the rule clears on the negation of its fire criteria |
 | `--clear-sustain` | string | (none) | How long the clear criteria must hold, a Go duration; empty is 0s |
 | `--description` | string | (none) | What the rule watches for and why |
 | `--enabled` | bool | `false` | Whether the rule evaluates; defaults to true on create |
-| `--fire-criteria` | string | (none) | The criteria that starts the condition: {expr}, or the short form {op, value} |
-| `--fire-event-type` | string | (none) | The event type the rule writes when its condition starts, by name; it cannot be emptied |
+| `--fire-criteria` | string | (none) | The criteria the rule fires on: {expr}, or the short form {op, value} |
+| `--fire-event-type` | string | (none) | The event type the rule writes when it fires, by name; it cannot be emptied |
 | `--fire-sustain` | string | (none) | How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s |
 | `--label` | string | (none) | A human label; also the alarm message when message is empty |
 | `--message` | string | (none) | The alarm message; empty uses the label or the name |
@@ -2615,13 +2972,14 @@ Update an event type
 omniglass event-type update <name> [flags]
 ```
 
-Patches a custom event type's label, description, or payload schema (a nil field is unchanged). The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
+Patches a custom event type's label, description, or payload schema. Partial by default: the fields present in the body change and the rest are left alone. payload_schema is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. The name is fixed at creation. Official event types are read-only. Gated by event_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the occurrence means |
 | `--label` | string | (none) | A human label |
-| `--payload-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--payload-schema` | string | (none) | A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name payload_schema in update_mask with no value here to CLEAR it |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (payload_schema back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
 
 Example:
 
@@ -2647,7 +3005,7 @@ Compiles an expression against a registered site's environment and answers wheth
 |---|---|---|---|
 | `--inputs` | string | (none) | For calc (required there), the rule's inputs: each bound by its alias, typed by its key (by name or uuid) |
 | `--key` | string | (none) | The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield |
-| `--owner-kind` | string | (none) | For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component |
+| `--owner-kind` | string | (none) | For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per slot-bound member with value.<alias> and has.<alias> per input; defaults to component |
 | `--site` | string | (none) | Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria |
 | `--source` | string | (none) | The expression |
 
@@ -2770,19 +3128,19 @@ A working omniglass on Docker, to learn on
 
 ### `omniglass lab measure`
 
-Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the consumer lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval
+Measure a running scale lab: rows a minute, growth, WAL a sample, CPU and memory, ingest lag, redeliveries, the busiest ingest lane's busy fraction, fleet view and system page times, the retention drain and each kind's delivery loss, once or sampled on an interval
 
 ```
 omniglass lab measure [flags]
 ```
 
-Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the ingest consumer lane's busy fraction and service time a batch, the console's fleet view response times, the retention pass's drain rate, each telemetry kind's delivery loss across the node hop and the ingest hop (in, out, loss, deduplicated and the cause of any loss), the node lane and the push lane apart, each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the replies that reached the node), and the node lane's end-to-end loss a kind. It writes the same figures as JSON so two runs compare.
+Measures a scale lab (`omniglass lab run --scenario corporate --systems N`) over a stated window and prints one table: rows a minute per lane, table and WAL growth a day extrapolated from the window, CPU and memory per container, WAL bytes a sample, ingest lag from probe to row (p50, p95, p99), consumer redeliveries, the busiest ingest lane's busy fraction and service time a batch, the console's fleet view response times, the retention pass's drain rate, each telemetry kind's delivery loss across the outpost hop and the ingest hop (in, out, loss, deduplicated and the cause of any loss), the outpost lane and the push lane apart, each polled protocol's loss across the sim hop (the requests the simulated endpoints settled against the replies that reached the outpost), and the outpost lane's end-to-end loss a kind. It writes the same figures as JSON so two runs compare.
 
 With no --systems it measures the scale lab already running. With --systems it brings up a throwaway scale lab of that size, measures it, and removes it, so the one command is the whole run.
 
-When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the reason and the age of the newest landed sample under the table, and every other figure still prints. The consumer lane row is read from the server's periodic `ingest lane` log line and needs two tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.
+When no sample probed in the window had landed by its end, the ingest lag cell reads not measured, with the reason and the age of the newest landed sample under the table, and every other figure still prints. The consumer lane row is read from the server's periodic `ingest lane` log line, a line a lane, and needs two of a lane's tallies, 30 s apart, inside the window; a window too short to hold them reads not measured, with the reason under the table.
 
-The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each node's, and the server's for the push lane) has landed one minted after it and the server's telemetry consumer has acknowledged, landed or dropped at the bound, every batch the stream held once all of those were published (its ack floor past the stream's last sequence), so a consumer that never empties under steady load still settles; then it reconciles each batch's ledger against what landed. The node hop is what each node minted against what its spool shipped: a batch its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them (self-log overflow, encode failure) read under their cause. The ingest hop is what the node (or the server, for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; a boot that did not settle prints unsettled with its node (or as the push lane), and no ratio is read from it. A boot its node followed with another boot (the node restarted with batches still spooled) is read as far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.
+The delivery read waits, up to --settle-timeout, until every boot that minted a batch in the window (each outpost's, and the server's for the push lane) has landed one minted after it and the server's ingest lanes have acknowledged, landed or dropped at the bound, every batch the stream held once all of those were published (its ack floor past the stream's last sequence), so a consumer that never empties under steady load still settles; then it reconciles each batch's ledger against what landed. The outpost hop is what each outpost minted against what its spool shipped: a batch its spool dropped (overflow, age, refused by the bus) and items it lost before any batch carried them (self-log overflow, encode failure) read under their cause. The ingest hop is what the outpost (or the server, for the push lane) shipped against what was stored. A healthy lab reads loss 0 for every kind on both hops; a boot that did not settle prints unsettled with its outpost (or as the push lane), and no ratio is read from it. A boot its outpost followed with another boot (the outpost restarted with batches still spooled) is read as far as it landed and prints unshipped: what it held never shipped, and nothing landed says how much.
 
 Every database read the measure makes runs under what its run has left, and never longer than ten minutes: the database itself stops a read at that bound, and a run that is interrupted cancels the read in flight, so no measure leaves a query running against the lab it measured.
 
@@ -2805,14 +3163,14 @@ The retention probe plants a backlog of aged property rows and restarts the serv
 | `--page-system` | string | (none) | the system whose page the clients load, by name; empty loads the fleet view's first |
 | `--samples` | int | `0` | stop after this many samples; 0 samples until interrupted |
 | `--scenario` | string | `corporate` | the scale scenario a --systems lab runs |
-| `--settle-timeout` | duration | `5m0s` | how long the delivery read waits for every node's and the push lane's batches from the window to land before naming a boot unsettled; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
+| `--settle-timeout` | duration | `5m0s` | how long the delivery read waits for every outpost's and the push lane's batches from the window to land before naming a boot unsettled; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
 | `--systems` | int | `0` | bring up a throwaway scale lab of this many systems, measure it and remove it; 0 measures the one already running |
 | `--warmup` | duration | `2m0s` | how long the lab runs before the window starts (once, before the first sample) |
 | `--window` | duration | `5m0s` | the window the rates, growth and usage are read over |
 
 ### `omniglass lab perf`
 
-Check a fresh scale lab against the committed performance baseline, or regenerate it
+Check a fresh scale lab against the committed performance baseline, regenerate it, or measure each driver's cost
 
 #### `omniglass lab perf baseline`
 
@@ -2853,7 +3211,7 @@ Brings up --runs throwaway scale labs one after another, each measured with the 
 
 The exact figures (every closed-loop gap, an ingest lag not measured, redeliveries, each kind's delivery loss) fail at any value but 0. The host-independent figures (rows a minute, growth and WAL per system, samples a batch) gate on any host. The host-dependent figures (latency, CPU, memory, fleet view time) gate only on the host the baseline was generated on; on another they read reported. A gated figure is the median of the runs, and fails only past its tolerance and past the runs' combined spread. Runs that spread past the tolerance read noisy, which does not fail. A figure better than its tolerance reads improved: refresh the baseline.
 
-Runs are invalid, and no figure is compared, when they measured another fleet, window or device set than the baseline's, or a node restarted or carried an impairment during the window.
+Runs are invalid, and no figure is compared, when they measured another fleet, window or device set than the baseline's, or an outpost restarted, changed fleet or carried an impairment during the window.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2867,15 +3225,37 @@ Runs are invalid, and no figure is compared, when they measured another fleet, w
 | `--settle-timeout` | duration | `5m0s` | how long each run's delivery read waits for its window's batches to land; at the platform's 60s report window the settle can take four of them: a batch proving the window lands within one, the server reads the stream's last sequence after it within two more, and the ack floor passes that within one more |
 | `--size` | string | `300` | the gated size, its rung on the ladder: 300 (corporate at 300 systems) or 1000 (corporate at 1000) |
 
+#### `omniglass lab perf drivers`
+
+Measure what each shipped driver's polls cost an outpost, and write the table the docs render
+
+```
+omniglass lab perf drivers [flags]
+```
+
+Brings up a throwaway lab with no fleet and, for each shipped driver in turn, an outpost of its own with the simulator beside it in its network namespace, so the outpost's cgroup holds only the outpost's work. Each driver is measured idle, then at one, two and three times --step-tasks poll tasks; the table is the slope of the outpost's CPU over every step and of its memory over the loaded steps (the jump from idle is a one-off warm cost), with the threads' own CPU per run from poll-cpu-time beside it. A driver whose memory does not fit a line is swept again on a fresh outpost at four times the step, up to --max-step-tasks, since a cheap driver's few KiB a task is inside the noise at a small step. A figure that still does not fit is listed as not measured, with why. The sweep takes hours: each step's window holds the driver's slowest poll.
+
+The table is a host's: run it on the host class it describes, then run `go run ./cmd/labgen` and commit both files in a reviewed change.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--image` | string | (none) | the omniglass image the lab and the sweep's outposts run (lab run's --image); empty is this binary's own build |
+| `--max-step-tasks` | int | `6400` | the biggest step a driver whose memory does not show is swept again at; 0 sweeps each driver once |
+| `--only` | stringSlice | `[]` | sweep only these drivers; empty sweeps every shipped one |
+| `--out` | string | `internal/labfootprint/drivercost/shipped.json` | where to write the table, relative to the working directory: run it from the repository's root |
+| `--step-tasks` | int | `400` | about how many poll tasks each step adds |
+| `--warmup` | duration | `2m0s` | how long each step runs before it is measured |
+| `--window` | duration | `2m0s` | each step's measured window; a driver's slowest poll lengthens it |
+
 ### `omniglass lab run`
 
-Bring up a lab: omniglass, its database and a node collecting from a simulated fleet, until Ctrl-C
+Bring up a lab: omniglass, its database and an outpost collecting from a simulated fleet, until Ctrl-C
 
 ```
 omniglass lab run [flags]
 ```
 
-Brings up a working omniglass on this machine's Docker as one compose project of three containers: Postgres, the server, and the edge node edge-hq running the simulator in its own process, serving the seeded dev fleet. The node collects from the fleet for real, and impairments work. It prints what it is doing while it comes up, then the console's address and the login, and holds until Ctrl-C, which removes the containers and the network and keeps the data for the next run.
+Brings up a working omniglass on this machine's Docker as one compose project of three containers: Postgres, the server, and the edge outpost edge-hq running the simulator in its own process, serving the seeded dev fleet. The outpost collects from the fleet for real, and impairments work. It prints what it is doing while it comes up, then the console's address and the login, and holds until Ctrl-C, which removes the containers and the network and keeps the data for the next run.
 
 Docker is the only requirement. Only the console is published, on 127.0.0.1 (--listen moves it, and says what that exposes). A binary built by make runs the image the same make built; a release binary runs its release's image. The lab's database is marked as a lab's, and a lab and a real server refuse each other's database.
 
@@ -2889,6 +3269,31 @@ Docker is the only requirement. Only the console is published, on 127.0.0.1 (--l
 | `--port` | int | `8080` | the console's port on this machine; 0 lets Docker pick a free one, printed when the lab is ready |
 | `--scenario` | string | `dev` | the fleet the lab seeds on its first run (the seed-dev command lists them), or a scale lab scenario (corporate) sized by --systems |
 | `--systems` | int | `0` | how many systems a scale lab scenario resolves to |
+
+### `omniglass lab soak`
+
+Judge a 3,000-system soak from the platform's own alarm history
+
+#### `omniglass lab soak verdict`
+
+Print pass or fail for a soak: no platform alarm left open or open too long, every loss ratio at 0
+
+```
+omniglass lab soak verdict [flags]
+```
+
+Judges a soak from what the platform says about itself, and nothing else: it reads, through the API (--server and --token, or $OMNIGLASS_SERVER and $OMNIGLASS_TOKEN), the platform system's alarm history and the Platform health page, and prints pass or fail with every reason. The token needs read over outposts, systems and components, all of them, since a verdict from part of the page would pass what it could not see.
+
+Pass: the soak ran at least 7 days (--since to --until), no platform alarm is still open, none raised in the window was open longer than --tolerance, and every loss ratio on the page (each hop, kind and outpost, the newest window and the last hour, the end to end, the worklist pull) is 0. A reading that cannot answer fails: no build reported, no loss ratio on the page, an alarm history the API cut short, or two builds among the servers.
+
+With --record-dir it also writes the release record, one file named for the build, which the release commits: docs/src/content/soak-records from the repository's root. The exit status is 1 on a fail.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--record-dir` | string | (none) | also write the release record into this directory, one file named for the build (docs/src/content/soak-records is where releases keep them) |
+| `--since` | string | (none) | when the soak started, an RFC 3339 timestamp; required |
+| `--tolerance` | duration | `30m0s` | the longest a platform alarm may stay open and still pass |
+| `--until` | string | (none) | when the soak ended, an RFC 3339 timestamp; empty is now |
 
 ## `omniglass location`
 
@@ -2942,20 +3347,20 @@ omniglass location create --location-type location_type
 
 ### `omniglass location createFromTemplate`
 
-Start a subtree of places from a template
+Start a subtree of locations from a template
 
 ```
 omniglass location createFromTemplate [flags]
 ```
 
-Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+Creates a subtree of locations from a location template under a parent location (or as a new top), each location's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template puts in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--label` | string | (none) | The subtree root's label |
 | `--name` | string | (none) | The subtree root's name; omitted takes the template's, else its type's name rule mints one |
-| `--parent` | string | (none) | The place the subtree sits under, by name or dotted path; omitted makes it a new top |
-| `--template` | string | (none) | The place template, by name |
+| `--parent` | string | (none) | The location the subtree sits under, by name or dotted path; omitted makes it a new top |
+| `--template` | string | (none) | The location template, by name |
 
 Example:
 
@@ -2973,6 +3378,9 @@ omniglass location delete <name>
 
 Deletes a location, refused (409) while it still has child locations or is still referenced elsewhere. Gated by location:delete; read and delete scopes drive the 404 versus 403 split.
 
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -2988,6 +3396,9 @@ omniglass location get <name>
 ```
 
 Fetches a location by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by location:read.
+
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3007,7 +3418,10 @@ Read a location's health
 omniglass location health list <name>
 ```
 
-The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3041,6 +3455,9 @@ omniglass location listTags <name>
 
 Lists the tags bound directly on a location (not the resolved cascade). Gated by location:read.
 
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -3061,6 +3478,9 @@ omniglass location metric list <name>
 
 Every metric the location's type declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the location (from_contract false). Gated by location:read; an out-of-scope location is a non-disclosing 404.
 
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -3076,6 +3496,9 @@ omniglass location move <name> [flags]
 ```
 
 Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. A move can RENAME the location: a platform-generated name is scoped to its parent bucket, so a move that changes the parent re-mints the name and the ordinal under the new parent, from the same location_type name rule. A move that re-states the current parent leaves the name alone, and an operator-typed name is never touched. Gated by location:move; the read and move scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3117,6 +3540,9 @@ omniglass location property delete <name> <property>
 
 Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; read and update scopes drive the 404 versus 403 split.
 
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -3131,7 +3557,10 @@ List a location's effective properties
 omniglass location property list <name>
 ```
 
-Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3148,6 +3577,9 @@ omniglass location property update <name> <property> [flags]
 ```
 
 Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3185,6 +3617,9 @@ omniglass location removeTag <name> [flags]
 
 Removes a key's value from a location. Gated by location:update.
 
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--key` | string | (none) | The tag key to remove |
@@ -3204,6 +3639,9 @@ omniglass location rename <name> [flags]
 ```
 
 Moves the location's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by location:rename; the read and rename scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The location's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3245,7 +3683,10 @@ Regenerate a location's name
 omniglass location resetName <name>
 ```
 
-Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
+Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of location, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
+
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -3262,6 +3703,9 @@ omniglass location setTag <name> [flags]
 ```
 
 Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
+
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3283,6 +3727,9 @@ omniglass location update <name> [flags]
 ```
 
 Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The location's name, or a dotted address (e.g. boi.17c.415a); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3314,7 +3761,7 @@ Creates a custom (non-official) location_type, optionally with the label_rule lo
 | `--allowed-parent-types` | string | (none) | location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
-| `--label-rule` | string | (none) | The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile |
+| `--label-rule` | string | (none) | The label rule locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name (e.g. wing); "root" is reserved |
 | `--name-rule` | string | (none) | How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name |
 
@@ -3348,7 +3795,7 @@ List location types
 omniglass location-type list
 ```
 
-Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
+Lists the location_type catalog (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
 
 Example:
 
@@ -3482,7 +3929,7 @@ Moves a custom location type's name, the handle an operator types, addressed by 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -3521,7 +3968,7 @@ Patches a location_type's label, icon, allowed parents, label_rule or name_rule.
 | `--allowed-parent-types` | string | (none) | Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained |
 | `--icon` | string | (none) | A new glyph key; the console falls back to map-pin when empty |
 | `--label` | string | (none) | A new operator-facing label |
-| `--label-rule` | string | (none) | A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels |
+| `--label-rule` | string | (none) | A new label rule for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels |
 | `--name-rule` | string | (none) | A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row |
 | `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
 
@@ -3559,6 +4006,22 @@ Example:
 
 ```sh
 omniglass mcp call get-component-reachability --args '{"name":"panel-1"}'
+```
+
+### `omniglass mcp skill`
+
+List the agent skills, or print one as its SKILL.md
+
+```
+omniglass mcp skill [name]
+```
+
+Lists the skills the omniglass MCP server serves as prompts (workflows such as triaging an alarm), or prints one as an Agent Skills SKILL.md, for an agent that reads skill files. The skills ship in the binary, so this needs no server.
+
+Example:
+
+```sh
+omniglass mcp skill triage-alarm > .claude/skills/triage-alarm/SKILL.md
 ```
 
 ### `omniglass mcp tools`
@@ -3676,14 +4139,15 @@ Update a metric type
 omniglass metric-type update <name> [flags]
 ```
 
-Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
+Patches a custom metric type's label, description, unit, or precision. Partial by default: the fields present in the body change and the rest are left alone. precision is a nullable integer with no empty value, so it clears by being named in update_mask with no value in the body; label, description and unit clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the series measures |
 | `--label` | string | (none) | A human label |
-| `--precision` | int | `0` | Decimal places a rendered value keeps |
+| `--precision` | int | `0` | Decimal places a rendered value keeps; omit to leave unchanged, or name precision in update_mask with no value here to CLEAR it back to unset |
 | `--unit` | string | (none) | The display unit of the series |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (precision back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
 
 Example:
 
@@ -3700,281 +4164,6 @@ omniglass migrate
 ```
 
 Applies every embedded migration the database has not run. Migrations only move forward, so a database a newer release migrated is refused, naming its newest migration and the newest this binary knows: run that release or a later one.
-
-## `omniglass node`
-
-Commands for the node resource
-
-### `omniglass node claim`
-
-Claim a node identity in exchange for its NATS credential
-
-```
-omniglass node claim [flags]
-```
-
-The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--name` | string | (none) | The node name the enrollment was minted for |
-| `--token` | string | (none) | The one-time enrollment token from node create, exchanged here for the node's NATS credential |
-
-Example:
-
-```sh
-omniglass node claim --name name --token token
-```
-
-### `omniglass node create`
-
-Create a node
-
-```
-omniglass node create [flags]
-```
-
-Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--description` | string | (none) | Free-form operator notes about the node |
-| `--label` | string | (none) | Operator label; falls back to the name when empty |
-| `--location` | string | (none) | Optional location the node sits in, by name or id (descriptive placement, not scope) |
-| `--name` | string | (none) | Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot |
-
-Example:
-
-```sh
-omniglass node create --name name
-```
-
-### `omniglass node delete`
-
-Delete a node
-
-```
-omniglass node delete <name>
-```
-
-Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
-
-Example:
-
-```sh
-omniglass node delete <name>
-```
-
-### `omniglass node enroll`
-
-Mint a node's enrollment token
-
-```
-omniglass node enroll <name>
-```
-
-Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
-
-Example:
-
-```sh
-omniglass node enroll <name>
-```
-
-### `omniglass node get`
-
-Get a node
-
-```
-omniglass node get <name>
-```
-
-Fetches a node by name. Requires an all-scope read. Gated by node:read.
-
-Example:
-
-```sh
-omniglass node get <name>
-```
-
-### `omniglass node list`
-
-List nodes
-
-```
-omniglass node list
-```
-
-Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.
-
-Example:
-
-```sh
-omniglass node list
-```
-
-### `omniglass node listTags`
-
-List tags on a node
-
-```
-omniglass node listTags <name>
-```
-
-Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
-
-Example:
-
-```sh
-omniglass node listTags <name>
-```
-
-### `omniglass node log`
-
-Commands for the log resource
-
-#### `omniglass node log list`
-
-List a node's recent self-logs
-
-```
-omniglass node log list <name>
-```
-
-Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass node log list <name>
-```
-
-### `omniglass node removeTag`
-
-Remove a tag value from a node
-
-```
-omniglass node removeTag <name> [flags]
-```
-
-Removes a key's value from a node. Gated by node:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--key` | string | (none) | The tag key to remove |
-
-Example:
-
-```sh
-omniglass node removeTag <name> --key key
-```
-
-### `omniglass node run`
-
-Run the edge node: claim, pull the worklist, and heartbeat over NATS
-
-```
-omniglass node run [flags]
-```
-
-Runs the edge node: claims its NATS credential with the enrollment token, pulls its worklist, collects, and heartbeats until interrupted. Outbound-only: the node dials the server, never the reverse.
-
---simulate also runs the simulator in the same process, serving the simulated components placed on this node on its own loopback (each on its 127.x address), with this node's identity: one process, one enrollment, nothing to arrange between them. --impairments, --port-offset and --poll are the simulator's and are refused without --simulate. `omniglass sim run` is the same simulator as a process of its own, beside a node.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--heartbeat` | duration | `30s` | heartbeat interval |
-| `--impairments` | bool | `false` | with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the node's own (a container) |
-| `--lane-workers` | int | `16` | how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled (env OMNIGLASS_LANE_WORKERS) |
-| `--name` | string | (none) | this node's registered name (env OMNIGLASS_NODE_NAME) |
-| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
-| `--poll` | duration | `10s` | with --simulate: how often the simulator re-pulls its component list |
-| `--port-offset` | int | `0` | with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
-| `--probe-every` | duration | `30s` | how often each reachability probe runs, on the node's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
-| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--session-dials` | int | `16` | how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_NODE_SESSION_DIALS) |
-| `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this node on its own loopback |
-| `--token` | string | (none) | enrollment token from POST /nodes/{name}:enroll (env OMNIGLASS_NODE_TOKEN) |
-| `--worklist-every` | duration | `30s` | how often the node pulls its worklist, apart from the heartbeat; a change made on the server reaches the node at its next pull |
-
-### `omniglass node setTag`
-
-Set a tag value on a node
-
-```
-omniglass node setTag <name> [flags]
-```
-
-Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
-| `--value` | string | (none) | The bound value |
-
-Example:
-
-```sh
-omniglass node setTag <name> --key key --value value
-```
-
-### `omniglass node simulation`
-
-Get a node's simulator
-
-```
-omniglass node simulation <name>
-```
-
-The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
-
-Example:
-
-```sh
-omniglass node simulation <name>
-```
-
-#### `omniglass node simulation observation`
-
-Commands for the observation resource
-
-##### `omniglass node simulation observation list`
-
-Get a node's endpoint observation
-
-```
-omniglass node simulation observation list <name>
-```
-
-What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.
-
-Example:
-
-```sh
-omniglass node simulation observation list <name>
-```
-
-### `omniglass node update`
-
-Update a node
-
-```
-omniglass node update <name> [flags]
-```
-
-Patches a node's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--description` | string | (none) | New free-form operator notes |
-| `--label` | string | (none) | A new operator-facing label |
-| `--location` | string | (none) | Set the node's location by name or id, or "" to clear it |
-
-Example:
-
-```sh
-omniglass node update <name>
-```
 
 ## `omniglass notification`
 
@@ -4004,7 +4193,7 @@ List notifications
 omniglass notification list [flags]
 ```
 
-The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
+The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4027,7 +4216,7 @@ Retry a failed notification
 omniglass notification retry <id>
 ```
 
-Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
 
 Example:
 
@@ -4047,7 +4236,7 @@ Create a notification target
 omniglass notification-target create [flags]
 ```
 
-Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4057,10 +4246,10 @@ Adds a destination a notification can be sent to: a webhook, its URL and, option
 | `--kind` | string | (none) | The target kind |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The target's name (lowercase kebab) |
-| `--principal` | string | (none) | A principal target's person, by username or uuid; binding one takes principal:read:admin |
-| `--principal-group` | string | (none) | A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin |
 | `--secret` | string | (none) | A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) |
 | `--url` | string | (none) | A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is |
+| `--user` | string | (none) | A user target's person, by username or uuid; binding one takes user:read:admin |
+| `--user-group` | string | (none) | A user_group target's group, by name or uuid; binding one takes user_group:read:admin |
 
 Example:
 
@@ -4156,7 +4345,7 @@ Update a notification target
 omniglass notification-target update <name> [flags]
 ```
 
-Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4185,15 +4374,15 @@ Create a notification type
 omniglass notification-type create [flags]
 ```
 
-Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+Registers an operator notification type (official=false). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the message is for |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The type's name (lowercase kebab) |
-| `--subject` | string | (none) | The one-line subject template |
-| `--text` | string | (none) | The body text template |
+| `--subject` | string | (none) | The one-line subject, written in the rule language |
+| `--text` | string | (none) | The body text, written in the rule language |
 
 Example:
 
@@ -4257,14 +4446,14 @@ Preview a notification type against an alarm
 omniglass notification-type preview <name> [flags]
 ```
 
-Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--alarm` | string | (none) | The alarm's id; absent previews the component's most recently raised alarm |
 | `--component` | string | (none) | The component the alarm is on, by name or dotted address |
-| `--subject` | string | (none) | A draft subject template to render instead of the stored one, so an editor previews before it saves |
-| `--text` | string | (none) | A draft text template to render instead of the stored one |
+| `--subject` | string | (none) | A draft subject to render instead of the stored one, so an editor previews before it saves |
+| `--text` | string | (none) | A draft text to render instead of the stored one |
 | `--transition` | string | (none) | The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) |
 
 Example:
@@ -4285,7 +4474,7 @@ Moves a custom notification type's name, the handle an operator types, addressed
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -4301,14 +4490,14 @@ Update a notification type
 omniglass notification-type update <name> [flags]
 ```
 
-Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+Patches an operator type's label, description, subject or text (an absent field is unchanged). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the message is for |
 | `--label` | string | (none) | A human label (empty clears it) |
-| `--subject` | string | (none) | The one-line subject template |
-| `--text` | string | (none) | The body text template |
+| `--subject` | string | (none) | The one-line subject, written in the rule language |
+| `--text` | string | (none) | The body text, written in the rule language |
 
 Example:
 
@@ -4316,596 +4505,356 @@ Example:
 omniglass notification-type update <name>
 ```
 
-## `omniglass principal`
+## `omniglass omnibot`
 
-Commands for the principal resource
-
-### `omniglass principal archive`
-
-Archive a principal
+Run omnibot, the built-in assistant, on a prompt or in a chat
 
 ```
-omniglass principal archive <id>
+omniglass omnibot [prompt...] [flags]
 ```
 
-Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.
-
-Example:
-
-```sh
-omniglass principal archive <id>
-```
-
-### `omniglass principal avatar`
-
-Commands for the avatar resource
-
-#### `omniglass principal avatar list`
-
-Get a principal's profile picture
-
-```
-omniglass principal avatar list <id>
-```
-
-Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
-
-Example:
-
-```sh
-omniglass principal avatar list <id>
-```
-
-### `omniglass principal create`
-
-Create a human principal
-
-```
-omniglass principal create [flags]
-```
-
-Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.
+Runs omnibot, the built-in assistant, against the server's MCP tools as the person whose token it is given. It mints a one-day agent token of its own for the omnibot channel, so the audit log shows its actions as omnibot's acting for that person, and revokes the token when it finishes. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks for a credential without echo, stores it as a secret with your own token, and tells omnibot only its name, so the value never reaches the model. --resume <name> keeps the conversation on the server under that name, for you alone, and picks it up where it was left; a call a paused run left waiting is put to you first. The model is a recording (--replay) until a live provider lands.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--email` | string | (none) | Contact email for the account |
-| `--label` | string | (none) | What an operator reads in lists; falls back to the username |
-| `--password` | string | (none) | Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in |
-| `--username` | string | (none) | Unique sign-in name (lowercase letters, digits, and . _ -) |
+| `--max-steps` | int | `10` | the most model turns the run takes before it stops |
+| `--replay` | string | (none) | a recorded model to drive the run (YAML turns) |
+| `--resume` | string | (none) | keep the conversation on the server under this name, picking it up if it exists |
 
 Example:
 
 ```sh
-omniglass principal create --username username
+omniglass omnibot --replay lobby.yaml "add a display to the lobby"
+  omniglass omnibot --replay lobby.yaml
+  omniglass omnibot --replay lobby.yaml --resume lobby-refit
 ```
 
-### `omniglass principal disable`
+## `omniglass outpost`
 
-Disable a principal
+Commands for the outpost resource
 
-```
-omniglass principal disable <id>
-```
+### `omniglass outpost claim`
 
-Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
-
-Example:
-
-```sh
-omniglass principal disable <id>
-```
-
-### `omniglass principal enable`
-
-Enable a principal
+Claim an outpost identity in exchange for its NATS credential
 
 ```
-omniglass principal enable <id>
+omniglass outpost claim [flags]
 ```
 
-Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
-
-Example:
-
-```sh
-omniglass principal enable <id>
-```
-
-### `omniglass principal get`
-
-Get a principal
-
-```
-omniglass principal get <id>
-```
-
-Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
-
-Example:
-
-```sh
-omniglass principal get <id>
-```
-
-### `omniglass principal grant`
-
-Commands for the grant resource
-
-#### `omniglass principal grant create`
-
-Grant a role to a principal
-
-```
-omniglass principal grant create <id> [flags]
-```
-
-Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
+The outpost-facing exchange: an outpost presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
-| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
-| `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
+| `--name` | string | (none) | The outpost name the enrollment was minted for |
+| `--token` | string | (none) | The one-time enrollment token from outpost create, exchanged here for the outpost's NATS credential |
 
 Example:
 
 ```sh
-omniglass principal grant create <id> --role role --scope-kind scope_kind
+omniglass outpost claim --name name --token token
 ```
 
-#### `omniglass principal grant delete`
+### `omniglass outpost create`
 
-Revoke a grant
-
-```
-omniglass principal grant delete <id> <grantId>
-```
-
-Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
-
-Example:
-
-```sh
-omniglass principal grant delete <id> <grantId>
-```
-
-### `omniglass principal impersonate`
-
-Impersonate a principal (view-as or act-as)
+Create an outpost
 
 ```
-omniglass principal impersonate <id> [flags]
+omniglass outpost create [flags]
 ```
 
-Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
+Registers an edge outpost server-side (day-one enrollment: create, then :enroll to mint its token). Gated by outpost:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--duration-minutes` | int | `0` | Session lifetime in minutes (default 30, max 1440) |
-| `--mode` | string | (none) | view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal |
+| `--description` | string | (none) | Free-form operator notes about the outpost |
+| `--label` | string | (none) | Operator label; falls back to the name when empty |
+| `--location` | string | (none) | Optional location the outpost sits in, by name or id (descriptive placement, not scope) |
+| `--name` | string | (none) | Globally unique outpost name (lowercase letters, digits, and hyphens); it is also the outpost's NATS subject token, which is why the rule forbids a dot |
 
 Example:
 
 ```sh
-omniglass principal impersonate <id> --mode mode
+omniglass outpost create --name name
 ```
 
-### `omniglass principal list`
+### `omniglass outpost delete`
 
-List principals
+Delete an outpost
 
 ```
-omniglass principal list [flags]
+omniglass outpost delete <name>
 ```
 
-Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
+Decommissions an outpost: a hard delete that cascades its endpoints, their derived tasks, its outpost-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by outpost:delete.
+
+Example:
+
+```sh
+omniglass outpost delete <name>
+```
+
+### `omniglass outpost enroll`
+
+Mint an outpost's enrollment token
+
+```
+omniglass outpost enroll <name>
+```
+
+Mints (or re-mints) the outpost's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by outpost:enroll.
+
+Example:
+
+```sh
+omniglass outpost enroll <name>
+```
+
+### `omniglass outpost get`
+
+Get an outpost
+
+```
+omniglass outpost get <name>
+```
+
+Fetches an outpost by name. Requires an all-scope read. Gated by outpost:read.
+
+Example:
+
+```sh
+omniglass outpost get <name>
+```
+
+### `omniglass outpost list`
+
+List outposts
+
+```
+omniglass outpost list
+```
+
+Lists the edge outposts. An outpost is fleet-wide, so listing requires an all-scope read. Gated by outpost:read.
+
+Example:
+
+```sh
+omniglass outpost list
+```
+
+### `omniglass outpost listTags`
+
+List tags on a outpost
+
+```
+omniglass outpost listTags <name>
+```
+
+Lists the tags bound directly on a outpost (not the resolved cascade). Gated by outpost:read.
+
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+Example:
+
+```sh
+omniglass outpost listTags <name>
+```
+
+### `omniglass outpost log`
+
+Commands for the log resource
+
+#### `omniglass outpost log list`
+
+List an outpost's recent self-logs
+
+```
+omniglass outpost log list <name>
+```
+
+Returns the outpost's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the outpost), newest first, bounded to the last 24 hours. Gated by outpost:read; an out-of-scope outpost is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass outpost log list <name>
+```
+
+### `omniglass outpost removeTag`
+
+Remove a tag value from a outpost
+
+```
+omniglass outpost removeTag <name> [flags]
+```
+
+Removes a key's value from a outpost. Gated by outpost:update.
+
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--include-archived` | bool | `false` | Include archived (soft-deleted) principals, hidden by default |
-| `--kind` | string | (none) | Optionally filter by principal kind |
+| `--key` | string | (none) | The tag key to remove |
 
 Example:
 
 ```sh
-omniglass principal list
+omniglass outpost removeTag <name> --key key
 ```
 
-### `omniglass principal purge`
+### `omniglass outpost run`
 
-Purge a principal
-
-```
-omniglass principal purge <id>
-```
-
-Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
-
-Example:
-
-```sh
-omniglass principal purge <id>
-```
-
-### `omniglass principal removeAvatar`
-
-Remove a principal's profile picture
+Run the edge outpost: claim, pull the worklist, and heartbeat over NATS
 
 ```
-omniglass principal removeAvatar <id>
+omniglass outpost run [flags]
 ```
 
-Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+Runs the edge outpost: claims its NATS credential with the enrollment token, pulls its worklist, collects, and heartbeats until interrupted. Outbound-only: the outpost dials the server, never the reverse.
 
-Example:
-
-```sh
-omniglass principal removeAvatar <id>
-```
-
-### `omniglass principal resetPassword`
-
-Reset a principal's password
-
-```
-omniglass principal resetPassword <id> [flags]
-```
-
-Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
+--simulate also runs the simulator in the same process, serving the simulated components placed on this outpost on its own loopback (each on its 127.x address), with this outpost's identity: one process, one enrollment, nothing to arrange between them. --impairments, --port-offset and --poll are the simulator's and are refused without --simulate. `omniglass sim run` is the same simulator as a process of its own, beside an outpost.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--password` | string | (none) | The new password (at least 12 characters, not a common password, not containing the username) |
+| `--heartbeat` | duration | `30s` | heartbeat interval |
+| `--impairments` | bool | `false` | with --simulate: apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the outpost's own (a container) |
+| `--lane-workers` | string | `auto` | how many endpoint lanes run at once, each sending one request to its endpoint at a time, an operator's ahead of the scheduled; auto sizes them from the CPU and memory the outpost may use (env OMNIGLASS_LANE_WORKERS) |
+| `--name` | string | (none) | this outpost's registered name (env OMNIGLASS_OUTPOST_NAME) |
+| `--once` | bool | `false` | run a single claim + pull + heartbeat cycle and exit |
+| `--poll` | duration | `10s` | with --simulate: how often the simulator re-pulls its component list |
+| `--port-offset` | int | `0` | with --simulate: lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
+| `--probe-every` | duration | `30s` | how often each reachability probe runs, on the outpost's own timer, apart from the heartbeat. Keep it under the console's 150s staleness window, past which a probe-only endpoint reads stale between probes |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--session-dials` | int | `16` | how many held sessions make their first dial and handshake at once (a redial takes no slot); a session waiting for a slot reads establishing (env OMNIGLASS_OUTPOST_SESSION_DIALS) |
+| `--simulate` | bool | `false` | also run the simulator in this process, serving the simulated components placed on this outpost on its own loopback |
+| `--token` | string | (none) | enrollment token from POST /outposts/{name}:enroll (env OMNIGLASS_OUTPOST_TOKEN) |
+| `--worklist-every` | duration | `30s` | how often the outpost pulls its worklist, apart from the heartbeat; a change to the outpost's worklist nudges it to pull at once, and only a lost nudge waits for this pull |
 
-Example:
+### `omniglass outpost setTag`
 
-```sh
-omniglass principal resetPassword <id> --password password
-```
-
-### `omniglass principal restore`
-
-Restore a principal
-
-```
-omniglass principal restore <id>
-```
-
-Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).
-
-Example:
-
-```sh
-omniglass principal restore <id>
-```
-
-### `omniglass principal session`
-
-Commands for the session resource
-
-#### `omniglass principal session list`
-
-List a principal's sessions
+Set a tag value on a outpost
 
 ```
-omniglass principal session list <id>
+omniglass outpost setTag <name> [flags]
 ```
 
-Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
+Binds a value for a key on a outpost. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by outpost:update.
 
-Example:
-
-```sh
-omniglass principal session list <id>
-```
-
-#### `omniglass principal session revoke`
-
-Revoke a principal's session
-
-```
-omniglass principal session revoke <id> <sid>
-```
-
-Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
-
-Example:
-
-```sh
-omniglass principal session revoke <id> <sid>
-```
-
-#### `omniglass principal session revokeAll`
-
-Revoke all of a principal's sessions or tokens
-
-```
-omniglass principal session revokeAll <id> [flags]
-```
-
-Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--purpose` | string | (none) | Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens |
+| `--key` | string | (none) | The tag key (must exist and apply to this kind) |
+| `--value` | string | (none) | The bound value |
 
 Example:
 
 ```sh
-omniglass principal session revokeAll <id> --purpose purpose
+omniglass outpost setTag <name> --key key --value value
 ```
 
-### `omniglass principal setAvatar`
+### `omniglass outpost simulation`
 
-Set a principal's profile picture
+Get an outpost's simulator
 
 ```
-omniglass principal setAvatar <id> [flags]
+omniglass outpost simulation <name>
 ```
 
-Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.
+
+Example:
+
+```sh
+omniglass outpost simulation <name>
+```
+
+#### `omniglass outpost simulation observation`
+
+Commands for the observation resource
+
+##### `omniglass outpost simulation observation list`
+
+Get an outpost's endpoint observation
+
+```
+omniglass outpost simulation observation list <name>
+```
+
+What the simulated endpoints beside an outpost saw arrive and how each request settled, and what the outpost tallied sending, read in that order: the simulator, then the outpost, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the outpost simulates. An outpost that does not exist is a 404; no simulator answering, or the outpost not answering, a 503.
+
+Example:
+
+```sh
+omniglass outpost simulation observation list <name>
+```
+
+### `omniglass outpost update`
+
+Update an outpost
+
+```
+omniglass outpost update <name> [flags]
+```
+
+Patches an outpost's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by outpost:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--image-base64` | string | (none) | The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG |
+| `--description` | string | (none) | New free-form operator notes |
+| `--label` | string | (none) | A new operator-facing label |
+| `--location` | string | (none) | Set the outpost's location by name or id, or "" to clear it |
 
 Example:
 
 ```sh
-omniglass principal setAvatar <id> --image-base64 image_base64
+omniglass outpost update <name>
 ```
 
-### `omniglass principal update`
+## `omniglass platform`
 
-Update a principal
+Read Omniglass's own health from a running server
+
+### `omniglass platform health`
+
+Read whether the platform is keeping up, and exit nonzero when it is not
 
 ```
-omniglass principal update <id> [flags]
+omniglass platform health [flags]
 ```
 
-Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
+Reads the platform view (the read behind the console's Platform health page) and reduces it to
+whether Omniglass is keeping up: the system and server verdicts, open alarms, each pipeline
+hop's in, out and loss with the end to end, the outposts with loss or not healthy, ingest lag,
+the queues, the database and retention, and every failure figure above zero. It exits nonzero
+when a verdict is not healthy, an alarm is open, or the newest windows lost work end to end.
+
+It reads through the API alone with --server and --token, so it works against any deployment.
+The view is gated by outpost:read; a part the token cannot read prints as not visible to you,
+never as zero. --window reads twice and adds the database's and the telemetry stream's growth
+and rates; --every samples on an interval and writes one JSON line a sample, to --append or
+stdout; --page-clients times the console's system page under concurrent clients.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--email` | string | (none) | Email; empty clears it |
-| `--label` | string | (none) | Label; empty clears it |
-| `--username` | string | (none) | Sign-in name (lowercase letters, digits, and . _ -); renaming is safe |
+| `--append` | string | (none) | append each sample's line to this file (with --every) |
+| `--every` | duration | `0s` | sample on this interval, one JSON line a sample (0 reads once) |
+| `--json` | bool | `false` | print the reading as JSON |
+| `--page-clients` | int | `0` | time the console's system page with this many concurrent clients (0 skips it) |
+| `--page-loads` | int | `1` | timed system page loads a client, spread across --window |
+| `--page-system` | string | (none) | the system whose page to load (default the fleet view's first) |
+| `--samples` | int | `0` | stop after this many samples (with --every; 0 runs until interrupted) |
+| `--window` | duration | `0s` | read twice this far apart and add the growth and rates between (0 reads once) |
 
 Example:
 
 ```sh
-omniglass principal update <id>
-```
-
-## `omniglass principal-group`
-
-Commands for the principal-group resource
-
-### `omniglass principal-group create`
-
-Create a principal group
-
-```
-omniglass principal-group create [flags]
-```
-
-Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--description` | string | (none) | Free-form notes on what the group is for |
-| `--label` | string | (none) | What an operator reads in lists |
-| `--name` | string | (none) | Unique group name (lowercase letters, digits, and hyphens) |
-
-Example:
-
-```sh
-omniglass principal-group create --name name
-```
-
-### `omniglass principal-group delete`
-
-Delete a principal group
-
-```
-omniglass principal-group delete <group>
-```
-
-Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).
-
-Example:
-
-```sh
-omniglass principal-group delete night-shift
-```
-
-### `omniglass principal-group get`
-
-Get a principal group
-
-```
-omniglass principal-group get <group>
-```
-
-One principal group, by name or uuid. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass principal-group get night-shift
-```
-
-### `omniglass principal-group grant`
-
-Commands for the grant resource
-
-#### `omniglass principal-group grant create`
-
-Grant a role to a group
-
-```
-omniglass principal-group grant create <group> [flags]
-```
-
-Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
-| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
-| `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
-
-Example:
-
-```sh
-omniglass principal-group grant create night-shift --role role --scope-kind scope_kind
-```
-
-#### `omniglass principal-group grant delete`
-
-Revoke a group grant
-
-```
-omniglass principal-group grant delete <group> <grantId>
-```
-
-Removes one grant from a group. Gated by principal_grant:delete (all-scope).
-
-Example:
-
-```sh
-omniglass principal-group grant delete night-shift <grantId>
-```
-
-#### `omniglass principal-group grant list`
-
-List a group's grants
-
-```
-omniglass principal-group grant list <group>
-```
-
-The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass principal-group grant list night-shift
-```
-
-### `omniglass principal-group list`
-
-List principal groups
-
-```
-omniglass principal-group list
-```
-
-Every principal group. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass principal-group list
-```
-
-### `omniglass principal-group member`
-
-Commands for the member resource
-
-#### `omniglass principal-group member create`
-
-Add a member to a group
-
-```
-omniglass principal-group member create <group> [flags]
-```
-
-Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--principal-id` | string | (none) | The principal to add: a human's username, a service account's name, or its uuid |
-
-Example:
-
-```sh
-omniglass principal-group member create night-shift --principal-id principal_id
-```
-
-#### `omniglass principal-group member delete`
-
-Remove a member from a group
-
-```
-omniglass principal-group member delete <group> <principal>
-```
-
-Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
-
-Example:
-
-```sh
-omniglass principal-group member delete night-shift alice
-```
-
-#### `omniglass principal-group member list`
-
-List a group's members
-
-```
-omniglass principal-group member list <group>
-```
-
-The principals in a group. Gated by principal_group:read:admin.
-
-Example:
-
-```sh
-omniglass principal-group member list night-shift
-```
-
-### `omniglass principal-group rename`
-
-Rename a principal group
-
-```
-omniglass principal-group rename <group> [flags]
-```
-
-Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--name` | string | (none) | The new unique group name (lowercase letters, digits, hyphens) |
-
-Example:
-
-```sh
-omniglass principal-group rename night-shift --name name
-```
-
-### `omniglass principal-group update`
-
-Update a principal group
-
-```
-omniglass principal-group update <group> [flags]
-```
-
-Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--description` | string | (none) | Description; empty clears it |
-| `--label` | string | (none) | Label; empty clears it |
-
-Example:
-
-```sh
-omniglass principal-group update night-shift
+omniglass platform health
+  omniglass platform health --json
+  omniglass platform health --window 1m --page-clients 4
+  omniglass platform health --every 5m --window 1m --append health.jsonl
 ```
 
 ## `omniglass product`
@@ -4924,12 +4873,12 @@ Creates a custom (non-official) product, classified under a component_type. kind
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
+| `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to a type in that tree. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
 | `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
 | `--icon` | string | (none) | A product-level icon override; unset inherits the component_type's icon |
 | `--kind` | string | (none) | What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly. |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
-| `--label-rule` | string | (none) | A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. |
+| `--label-rule` | string | (none) | A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name; renameable |
 | `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | The vendor, by handle or uuid |
@@ -4980,7 +4929,7 @@ List products
 omniglass product list
 ```
 
-Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
 
 Example:
 
@@ -5114,7 +5063,7 @@ Moves a custom product's name, the handle an operator types, addressed by its cu
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -5139,7 +5088,7 @@ Patches a custom product's label, vendor, driver, kind, component_type, icon, la
 | `--icon` | string | (none) | A new icon override; an empty string clears it, so the product inherits its component_type's icon |
 | `--kind` | string | (none) | A new product class |
 | `--label` | string | (none) | A new operator-facing label |
-| `--label-rule` | string | (none) | A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. |
+| `--label-rule` | string | (none) | A new label rule; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. |
 | `--parent-product-id` | string | (none) | A new parent product, by handle or uuid; an empty string clears it |
 | `--vendor-id` | string | (none) | A new vendor, by handle or uuid; an empty string clears it |
 
@@ -5253,13 +5202,14 @@ Update a property
 omniglass property-type update <name> [flags]
 ```
 
-Patches a custom property's label, description, or validation (a nil field is unchanged). Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
+Patches a custom property's label, description, or validation. Partial by default: the fields present in the body change and the rest are left alone. validation is a nullable object with no empty value, so it clears by being named in update_mask with no value in the body; label and description clear with an explicit empty string. A mask naming a field this resource does not patch is a 422. Data type is fixed at creation. Official properties are read-only. Gated by property_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the property means |
 | `--label` | string | (none) | A human label |
-| `--validation` | string | (none) | A JSON Schema fragment (replaces wholesale) |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (validation back to unset); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
+| `--validation` | string | (none) | A JSON Schema fragment (replaces wholesale); omit to leave unchanged, or name validation in update_mask with no value here to CLEAR it |
 
 Example:
 
@@ -5300,6 +5250,9 @@ omniglass secret copy <secret>
 ```
 
 Decrypts and returns a secret's field values for a clipboard copy, audited under the copy verb (distinct from an on-screen reveal). Same exposure and the same secret:reveal gate as reveal.
+
+Arguments:
+  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -5343,6 +5296,9 @@ omniglass secret delete <secret>
 
 Removes a secret, by name or uuid. Gated by secret:delete, plus platform:delete when the secret sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
 
+Arguments:
+  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -5375,6 +5331,9 @@ omniglass secret reveal <secret>
 
 Decrypts and returns a secret's field values, auditing the decrypt. Gated by secret:reveal at the caller's scope; an admin-sensitive secret additionally needs the admin tier (secret:reveal:admin), so a scoped operator reveals device secrets but never a platform credential.
 
+Arguments:
+  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -5390,6 +5349,9 @@ omniglass secret update <secret> [flags]
 ```
 
 Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
+
+Arguments:
+  <secret>  The secret: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -5441,7 +5403,7 @@ Populate a fresh dev database with a small example fleet so a dev stack comes up
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--scenario` | string | `dev` | the fleet to seed (see the list above) |
-| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev node for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (a lab's node collects from them) |
+| `--sim-fleet` | bool | `true` | wire the simulated fleet: addresses and endpoints on the dev outpost for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (a lab's outpost collects from them) |
 | `--sim-port-offset` | int | `0` | the lift the simulator applies to ports below 1024, which the simulated fleet's endpoints target: 0 for one that binds the real ports (in a container, as the lab's does), or the --port-offset of a simulator run unprivileged on a host |
 
 ## `omniglass server`
@@ -5452,7 +5414,7 @@ Run the control-plane server (HTTP API)
 omniglass server
 ```
 
-Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP API on OMNIGLASS_ADDR and hosts the embedded NATS bus nodes connect to on OMNIGLASS_NATS_ADDR. Either address may name port 0, which binds whatever free port the kernel hands out; set OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to nodes). A file already at that path is cleared first thing at boot, and the server removes its own at a graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather than picking one and hoping it stays free. Configured by environment; see the deployment guides.
+Runs the control plane: applies pending migrations and the boot seed, then serves the HTTP API on OMNIGLASS_ADDR and hosts the embedded NATS bus outposts connect to on OMNIGLASS_NATS_ADDR. Either address may name port 0, which binds whatever free port the kernel hands out; set OMNIGLASS_READY_FILE to a path and, once both listeners are bound, the server writes the addresses it got there as JSON (addr, nats_addr, and the nats_url it advertises to outposts). A file already at that path is cleared first thing at boot, and the server removes its own at a graceful shutdown (SIGINT or SIGTERM). A supervisor or a test reads the ports from that file rather than picking one and hoping it stays free. Configured by environment; see the deployment guides.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -5469,7 +5431,7 @@ List your own sessions and tokens
 omniglass session list
 ```
 
-Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another user's). The token secret is never returned.
 
 Example:
 
@@ -5539,7 +5501,7 @@ Restore a settings namespace to defaults
 omniglass setting delete <namespace>
 ```
 
-Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
+Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
 
 Example:
 
@@ -5575,7 +5537,7 @@ Get the caller's effective settings
 omniglass setting me list
 ```
 
-The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
 
 Example:
 
@@ -5591,7 +5553,7 @@ Restore all settings to defaults
 omniglass setting restoreDefaults
 ```
 
-Removes every platform override (a factory reset). Gated by settings:update and platform:update.
+Removes every platform binding (a factory reset). Gated by settings:update and platform:update.
 
 Example:
 
@@ -5604,15 +5566,22 @@ omniglass setting restoreDefaults
 Update a settings namespace
 
 ```
-omniglass setting update <namespace>
+omniglass setting update <namespace> [flags]
 ```
 
-Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it. Gated by settings:update and platform:update.
+Applies an RFC 7386 JSON Merge Patch to the namespace's platform binding; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
+
+The request body is a JSON object: pass it inline with --body, or from a file (or - for stdin) with --body-file. A malformed document is refused before any request is made.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--body` | string | (none) | the request body as a JSON object |
+| `--body-file` | string | (none) | read the request body, a JSON object, from this file (- for stdin) |
 
 Example:
 
 ```sh
-omniglass setting update <namespace>
+omniglass setting update notification --body '{"egress_allow":["smtp.example.com"]}'
 ```
 
 ## `omniglass severity-level`
@@ -5634,7 +5603,7 @@ Adds an operator severity level at a rank of its own, between two others without
 | `--color` | string | (none) | One of gray, blue, green, yellow, orange, red, darkred |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The level's name (lowercase kebab) |
-| `--rank` | int | `0` | Its place among the levels: higher is more severe; unique |
+| `--rank` | int | `0` | Its position among the levels: higher is more severe; unique |
 
 Example:
 
@@ -5705,7 +5674,7 @@ Patches an operator level's name, label, color or rank (an absent field is uncha
 | `--color` | string | (none) | One of gray, blue, green, yellow, orange, red, darkred |
 | `--label` | string | (none) | A human label |
 | `--name` | string | (none) | A new name; every alarm at this level follows |
-| `--rank` | int | `0` | Its place among the levels; unique |
+| `--rank` | int | `0` | Its position among the levels; unique |
 
 Example:
 
@@ -5715,7 +5684,7 @@ omniglass severity-level update <name>
 
 ## `omniglass sim`
 
-Simulate the devices placed on a node
+Simulate the devices placed on an outpost
 
 ### `omniglass sim mail`
 
@@ -5735,22 +5704,22 @@ Serves SMTP on --listen and keeps every message it accepts, writing each as one 
 
 ### `omniglass sim run`
 
-Serve the node's simulated devices and follow changes until interrupted
+Serve the outpost's simulated devices and follow changes until interrupted
 
 ```
 omniglass sim run [flags]
 ```
 
-Serves each component placed on the node whose product has a simulator profile and whose endpoints target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
+Serves each component placed on the outpost whose product has a simulator profile and whose endpoints target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--impairments` | bool | `false` | apply impairments (unplug, latency, loss) and truthful ping by rewriting the firewall and traffic shaping of this network namespace; needs NET_ADMIN, and is meant for a namespace of the simulator's own (a pod or container) |
-| `--name` | string | (none) | the node this simulator runs beside (env OMNIGLASS_NODE_NAME) |
+| `--name` | string | (none) | the outpost this simulator runs beside (env OMNIGLASS_OUTPOST_NAME) |
 | `--poll` | duration | `10s` | how often to re-pull the device list |
 | `--port-offset` | int | `0` | lift the simulated ports below 1024 by this much, to serve without the privilege to bind them |
 | `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
-| `--token` | string | (none) | that node's enrollment token (env OMNIGLASS_NODE_TOKEN) |
+| `--token` | string | (none) | that outpost's enrollment token (env OMNIGLASS_OUTPOST_TOKEN) |
 
 ## `omniglass simulation`
 
@@ -5764,7 +5733,7 @@ Add a simulated component
 omniglass simulation add-component <name> [flags]
 ```
 
-Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
+Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the outpost: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the outpost's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. An outpost with no simulator connected is a 409, and a product no profile simulates a 422.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -5786,13 +5755,13 @@ Add a simulated system
 omniglass simulation add-system <name> [flags]
 ```
 
-Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
+Creates a system built to a standard, with a simulated component for each staffed slot in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its slot, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; slots nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its slot writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--location` | string | (none) | Where the system and its components sit, by name or dotted path |
 | `--name` | string | (none) | The system's name; minted from its type when empty |
-| `--standard` | string | (none) | The standard the system is built to; its roles decide the components |
+| `--standard` | string | (none) | The standard the system is built to; its slots decide the components |
 | `--system-type` | string | (none) | The system's type, which also mints its name when none is given |
 
 Example:
@@ -5809,7 +5778,7 @@ Get the simulated fleet
 omniglass simulation get
 ```
 
-Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+Every outpost a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees an outpost's simulator when its component read scope holds at least one component the outpost simulates (an all-scope reader sees all of them); no outpost read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
 
 Example:
 
@@ -5825,7 +5794,7 @@ Plan a simulated system to a standard
 omniglass simulation plan-system <standard>
 ```
 
-Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.
+Previews a simulated system built to a standard: each of the standard's slots (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.
 
 Example:
 
@@ -5883,7 +5852,7 @@ Create a standard from a template
 omniglass standard createFromTemplate [flags]
 ```
 
-Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
+Writes one standard of your own (official false) from a standard template in the catalog: its slots, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -5938,7 +5907,7 @@ List standards
 omniglass standard list
 ```
 
-Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.
+Lists the standard catalog, ordered alphabetically by label. A standard is the contract a system is built to. Gated by standard:read.
 
 Example:
 
@@ -6072,7 +6041,7 @@ Moves a custom standard's name, the handle an operator types, addressed by its c
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -6080,68 +6049,68 @@ Example:
 omniglass standard rename <id> --name name
 ```
 
-### `omniglass standard role`
+### `omniglass standard slot`
 
-Commands for the role resource
+Commands for the slot resource
 
-#### `omniglass standard role delete`
+#### `omniglass standard slot delete`
 
-Withdraw a role from a standard
+Withdraw a slot from a standard
 
 ```
-omniglass standard role delete <id> <role>
+omniglass standard slot delete <id> <slot>
 ```
 
-Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.
+Removes the slot from the standard, and with it every assignment conforming systems made to it. A slot the standard does not declare is a 404. Gated by standard:delete.
 
 Example:
 
 ```sh
-omniglass standard role delete meeting-room <role>
+omniglass standard slot delete meeting-room <slot>
 ```
 
-#### `omniglass standard role list`
+#### `omniglass standard slot list`
 
-List a standard's declared roles
+List a standard's declared slots
 
 ```
-omniglass standard role list <id>
+omniglass standard slot list <id>
 ```
 
-Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
+Lists the slots this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
 
 Example:
 
 ```sh
-omniglass standard role list meeting-room
+omniglass standard slot list meeting-room
 ```
 
-#### `omniglass standard role update`
+#### `omniglass standard slot update`
 
-Declare a role on a standard
+Declare a slot on a standard
 
 ```
-omniglass standard role update <id> <role> [flags]
+omniglass standard slot update <id> <slot> [flags]
 ```
 
-Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a role name must mean one role in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.
+Declares a slot every conforming system needs filled, or revises it in place (the slot is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a slot name must mean one slot in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask |
-| `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
-| `--capacity` | int | `0` | The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
-| `--impact` | string | (none) | What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
-| `--label` | string | (none) | The role's human label; defaults to the role name on first declare |
+| `--alternate` | string | (none) | The choice/alternate this slot joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the slot, making it unconditional; an unknown choice or alternate is a 422 |
+| `--capacity` | int | `0` | The most components the slot will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
+| `--impact` | string | (none) | What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
+| `--label` | string | (none) | The slot's human label; defaults to the slot name on first declare |
 | `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask |
-| `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask |
-| `--quorum` | int | `0` | How many components must fill the role; one on first declare |
+| `--position-labels` | string | (none) | Human labels for each position within the slot, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask |
+| `--quorum` | int | `0` | How many components must fill the slot; one on first declare |
 | `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it |
 
 Example:
 
 ```sh
-omniglass standard role update meeting-room <role>
+omniglass standard slot update meeting-room <slot>
 ```
 
 ### `omniglass standard update`
@@ -6152,13 +6121,13 @@ Update a standard
 omniglass standard update <id> [flags]
 ```
 
-Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.
+Patches a custom standard's label, parent, label rule or map. The parent_standard_id field follows the three-state convention: an omitted field is unchanged, an explicit empty string clears it (a standalone standard), a handle or uuid sets it, and an unknown parent is a 422. Official standards are read-only (422). Gated by standard:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--label` | string | (none) | A new operator-facing label |
-| `--map` | string | (none) | The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair |
-| `--parent-standard-id` | string | (none) | A new variant parent, by handle or uuid |
+| `--map` | string | (none) | The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (slot, position) pair |
+| `--parent-standard-id` | string | (none) | A new variant parent, by handle or uuid; omit to leave unchanged, "" to clear it back to a standalone standard |
 
 Example:
 
@@ -6182,7 +6151,10 @@ List a system's members' alarms
 omniglass system alarm list <name>
 ```
 
-Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6220,7 +6192,7 @@ Create a system
 omniglass system create [flags]
 ```
 
-Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
+Creates a system, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped system:create grant; a root with no location needs the all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6230,7 +6202,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant), 
 | `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem. |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
 | `--standard-id` | string | (none) | The standard it conforms to, by handle or uuid; omit for a one-off system |
-| `--system-type-id` | string | (none) | The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified |
+| `--system-type-id` | string | (none) | The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified |
 
 Example:
 
@@ -6246,15 +6218,15 @@ Start a whole system from a template
 omniglass system createFromTemplate [flags]
 ```
 
-Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each slot filled to its quorum and assigned, and the declared values. A component whose slot you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the slots.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--attach` | string | (none) | Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached |
+| `--attach` | string | (none) | Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached |
 | `--label` | string | (none) | The system's label |
-| `--location` | string | (none) | The place the system and its components sit in, by name or dotted path |
+| `--location` | string | (none) | The location the system and its components sit in, by name or dotted path |
 | `--name` | string | (none) | The system's name; minted from its type when empty |
-| `--node` | string | (none) | The node the endpoints are placed on; needed when any component attaches |
+| `--outpost` | string | (none) | The outpost the endpoints are placed on; needed when any component attaches |
 | `--standard` | string | (none) | A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name |
 | `--template` | string | (none) | The system template, by name |
 
@@ -6273,6 +6245,9 @@ omniglass system delete <name>
 ```
 
 Deletes a system, refused (409) while it still has child systems or is still referenced elsewhere. Gated by system:delete; read and delete scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6294,6 +6269,9 @@ omniglass system event list <name>
 
 Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -6310,6 +6288,9 @@ omniglass system get <name>
 
 Fetches a system by name within the caller's read scope. Out of scope is a non-disclosing 404. Gated by system:read.
 
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -6324,7 +6305,7 @@ Read every system's health verdict
 omniglass system health
 ```
 
-The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
+The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
 
 Example:
 
@@ -6340,7 +6321,10 @@ Read a system's health
 omniglass system health list <name>
 ```
 
-The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6374,6 +6358,9 @@ omniglass system listTags <name>
 
 Lists the tags bound directly on a system (not the resolved cascade). Gated by system:read.
 
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -6393,6 +6380,9 @@ omniglass system log list <name> [flags]
 ```
 
 Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it, narrowed by an optional severity threshold and source, with the sources the window carries. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6417,7 +6407,11 @@ Take a component out of a system
 omniglass system member delete <name> <component>
 ```
 
-Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
+Unbinds this component from the system. Refused with a 409 while it still fills a slot here, since removing it would leave the system staffed by a non-member: unassign the slot first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
+
+Arguments:
+  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6433,7 +6427,10 @@ List the components in a system
 omniglass system member list <name>
 ```
 
-The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Arguments:
+  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6451,6 +6448,10 @@ omniglass system member setPrimary <name> <component>
 
 Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update, and also needs component:update, because the default decides which system's band every cascade on the component reads; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
 
+Arguments:
+  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -6466,6 +6467,10 @@ omniglass system member update <name> <component>
 ```
 
 Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update, and also needs component:update, because the binding writes onto the component (its primary, its label, the system band of its cascade): each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
+
+Arguments:
+  <name>  Name of the system, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <component>  Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6486,6 +6491,9 @@ omniglass system metric list <name>
 ```
 
 Every metric the system's standard declares, resolved to the newest observed or calculated sample across its live instances (instance names the one shown, instance_count counts them) or the contract default until one arrives (is_sampled marks a live series), plus any metric sampled directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6528,7 +6536,10 @@ Move a system
 omniglass system move <name> [flags]
 ```
 
-Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a system for read and create only). A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6571,6 +6582,9 @@ omniglass system property delete <name> <property>
 
 Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -6585,7 +6599,10 @@ List a system's properties and where each stands
 omniglass system property list <name>
 ```
 
-Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 Example:
 
@@ -6605,12 +6622,12 @@ Read one property series' change history
 omniglass system property sample list <name> <property> [flags]
 ```
 
-The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
-| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution |
+| `--instance` | string | (none) | The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it |
 | `--limit` | int | `0` | The row cap, newest kept; 500 when unset. Ignored when a resolution is set |
 | `--resolution` | int | `0` | The bucket width in seconds, at most 30 days. Set, the read answers with every regular bucket of the window (buckets) instead of raw rows; unset, the raw samples. A window of more than 5000 buckets is refused |
 
@@ -6629,6 +6646,9 @@ omniglass system property update <name> <property> [flags]
 ```
 
 Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6666,6 +6686,9 @@ omniglass system removeTag <name> [flags]
 
 Removes a key's value from a system. Gated by system:update.
 
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--key` | string | (none) | The tag key to remove |
@@ -6685,6 +6708,9 @@ omniglass system rename <name> [flags]
 ```
 
 Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The system's current name, a dotted address, or its uuid; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6712,7 +6738,7 @@ The system tier of :renderLabel on components. Drafts the name and the label a s
 | `--name` | string | (none) | The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all. |
 | `--parent` | string | (none) | The parent system, by name or uuid. Part of the placement bucket a generated name's ordinal is read from. Resolved within the caller's system:create scope. |
 | `--standard-id` | string | (none) | The standard this system conforms to, by name or uuid; omit for a one-off system |
-| `--system-type-id` | string | (none) | The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. |
+| `--system-type-id` | string | (none) | The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that catalog row. |
 
 Example:
 
@@ -6730,131 +6756,13 @@ omniglass system resetName <name>
 
 Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.
 
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
 omniglass system resetName <name>
-```
-
-### `omniglass system role`
-
-Commands for the role resource
-
-#### `omniglass system role assignment`
-
-Commands for the assignment resource
-
-##### `omniglass system role assignment delete`
-
-Unassign a component from a role
-
-```
-omniglass system role assignment delete <name> <role> <component>
-```
-
-Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).
-
-Example:
-
-```sh
-omniglass system role assignment delete <name> <role> <component>
-```
-
-##### `omniglass system role assignment update`
-
-Assign a component to a role
-
-```
-omniglass system role assignment update <name> <role> <component>
-```
-
-Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
-
-Example:
-
-```sh
-omniglass system role assignment update <name> <role> <component>
-```
-
-#### `omniglass system role delete`
-
-Withdraw a role from a system
-
-```
-omniglass system role delete <name> <role>
-```
-
-Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.
-
-Example:
-
-```sh
-omniglass system role delete <name> <role>
-```
-
-#### `omniglass system role list`
-
-List a system's effective roles
-
-```
-omniglass system role list <name>
-```
-
-Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
-
-Example:
-
-```sh
-omniglass system role list <name>
-```
-
-#### `omniglass system role swapPositions`
-
-Exchange two occupants' positions within a role
-
-```
-omniglass system role swapPositions <name> <role> [flags]
-```
-
-Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--position` | int | `0` | One of the two positions to exchange |
-| `--with` | int | `0` | The other position to exchange with |
-
-Example:
-
-```sh
-omniglass system role swapPositions <name> <role> --position <int> --with <int>
-```
-
-#### `omniglass system role update`
-
-Declare a role on a system
-
-```
-omniglass system role update <name> <role> [flags]
-```
-
-Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask |
-| `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
-| `--capacity` | int | `0` | The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
-| `--impact` | string | (none) | What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
-| `--label` | string | (none) | The role's human label; defaults to the role name on first declare |
-| `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask |
-| `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask |
-| `--quorum` | int | `0` | How many components must fill the role; one on first declare |
-| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it |
-
-Example:
-
-```sh
-omniglass system role update <name> <role>
 ```
 
 ### `omniglass system setTag`
@@ -6867,6 +6775,9 @@ omniglass system setTag <name> [flags]
 
 Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
 
+Arguments:
+  <name>  The entity's name. For a component, system, or location, also accepts a dotted address (e.g. boi.17c.415a.$comp.display-1); an outpost's name is always a single token; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--key` | string | (none) | The tag key (must exist and apply to this kind) |
@@ -6878,6 +6789,147 @@ Example:
 omniglass system setTag <name> --key key --value value
 ```
 
+### `omniglass system slot`
+
+Commands for the slot resource
+
+#### `omniglass system slot assignment`
+
+Commands for the assignment resource
+
+##### `omniglass system slot assignment delete`
+
+Unassign a component from a slot
+
+```
+omniglass system slot assignment delete <name> <slot> <component>
+```
+
+Takes this component out of the slot, leaving the slot understaffed until another fills it. A component that was not filling the slot is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the slot's own read already names it).
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+Example:
+
+```sh
+omniglass system slot assignment delete <name> <slot> <component>
+```
+
+##### `omniglass system slot assignment update`
+
+Assign a component to a slot
+
+```
+omniglass system slot assignment update <name> <slot> <component>
+```
+
+Puts this component in the slot for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the slot accepts, or (if the slot pins products) its product not one of them. A slot with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a slot makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+  <component>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+Example:
+
+```sh
+omniglass system slot assignment update <name> <slot> <component>
+```
+
+#### `omniglass system slot delete`
+
+Withdraw a slot from a system
+
+```
+omniglass system slot delete <name> <slot>
+```
+
+Removes a slot declared on this system, and with it every assignment to it. A slot the system does not declare itself is a 404 (a slot inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+Example:
+
+```sh
+omniglass system slot delete <name> <slot>
+```
+
+#### `omniglass system slot list`
+
+List a system's effective slots
+
+```
+omniglass system slot list <name>
+```
+
+Every slot this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+Example:
+
+```sh
+omniglass system slot list <name>
+```
+
+#### `omniglass system slot swapPositions`
+
+Exchange two occupants' positions within a slot
+
+```
+omniglass system slot swapPositions <name> <slot> [flags]
+```
+
+Exchanges the positions of whichever components currently hold position and with within this slot: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--position` | int | `0` | One of the two positions to exchange |
+| `--with` | int | `0` | The other position to exchange with |
+
+Example:
+
+```sh
+omniglass system slot swapPositions <name> <slot> --position <int> --with <int>
+```
+
+#### `omniglass system slot update`
+
+Declare a slot on a system
+
+```
+omniglass system slot update <name> <slot> [flags]
+```
+
+Declares a slot directly on this system (how a one-off system gets slots at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. A name the system's standard already declares is a 409: a system slot never shadows an inherited one, since a slot name must mean one slot in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask |
+| `--alternate` | string | (none) | The choice/alternate this slot joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the slot, making it unconditional; an unknown choice or alternate is a 422 |
+| `--capacity` | int | `0` | The most components the slot will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
+| `--impact` | string | (none) | What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
+| `--label` | string | (none) | The slot's human label; defaults to the slot name on first declare |
+| `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask |
+| `--position-labels` | string | (none) | Human labels for each position within the slot, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask |
+| `--quorum` | int | `0` | How many components must fill the slot; one on first declare |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it |
+
+Example:
+
+```sh
+omniglass system slot update <name> <slot>
+```
+
 ### `omniglass system update`
 
 Update a system
@@ -6886,7 +6938,10 @@ Update a system
 omniglass system update <name> [flags]
 ```
 
-Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a slot name the system declares itself is a 409 naming the slot, since a slot name must mean one slot in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited slot moves onto the new standard's slot of the same name when it is still a typed match and the slot has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+
+Arguments:
+  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -6919,7 +6974,7 @@ Creates a custom (non-official) system_type, optionally under a parent and optio
 | `--abbrev` | string | (none) | A compact form of label; omit to inherit the parent's |
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
 | `--label` | string | (none) | What an operator reads in pickers and lists |
-| `--label-rule` | string | (none) | The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile |
+| `--label-rule` | string | (none) | The label rule systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent system_type, by name or uuid; omit for a root type |
 | `--stem` | string | (none) | The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from. |
@@ -6954,7 +7009,7 @@ List system types
 omniglass system-type list
 ```
 
-Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+Lists the system_type catalog (the taxonomy of what a system is for: meeting, teaching, signage), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.
 
 Example:
 
@@ -6977,7 +7032,7 @@ Patches a custom system_type's label, stem, icon, abbrev, or label_rule. An unpa
 | `--abbrev` | string | (none) | A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--icon` | string | (none) | A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--label` | string | (none) | A new operator-facing label |
-| `--label-rule` | string | (none) | A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels |
+| `--label-rule` | string | (none) | A new label rule for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels |
 | `--stem` | string | (none) | A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). |
 
 Example:
@@ -7169,12 +7224,12 @@ Push telemetry for an owner
 omniglass telemetry push [flags]
 ```
 
-Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key a node writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is a node's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
+Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--events` | string | (none) | Natively caught occurrences, validated against event_type |
-| `--logs` | string | (none) | Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422 |
+| `--logs` | string | (none) | Raw untyped log lines. No catalog gate. Component owners only: a system batch carrying one is refused with a 422 |
 | `--metrics` | string | (none) | Numeric observations, validated against metric_type |
 | `--owner` | string | (none) | The entity every row in the batch lands under |
 | `--properties` | string | (none) | Categorical observations, validated against property_type and each type's validation schema |
@@ -7229,13 +7284,13 @@ omniglass template list
 
 ## `omniglass token`
 
-Mint an additional bearer token for an existing principal (direct DB)
+Mint an additional bearer token for an existing user (direct DB)
 
 ```
 omniglass token <username> [flags]
 ```
 
-Issues a new bearer credential for an existing principal, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for a dev database when the owner already exists. A --description (required) names what the token is for. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
+Issues a new bearer credential for an existing user, addressed by username, and prints the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a fresh login token for a dev database when the owner already exists. A --description (required) names what the token is for. The token expires after --ttl (default 90 days, hard maximum 365 days); every credential is time-bounded.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -7254,7 +7309,7 @@ List the transports the platform speaks
 omniglass transport list
 ```
 
-Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
+Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
 
 Example:
 
@@ -7274,12 +7329,604 @@ List the sources no endpoint claims
 omniglass unclaimed-source list
 ```
 
-The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as nodes are.
+The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by outpost:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as outposts are.
 
 Example:
 
 ```sh
 omniglass unclaimed-source list
+```
+
+## `omniglass user`
+
+Commands for the user resource
+
+### `omniglass user archive`
+
+Archive a user
+
+```
+omniglass user archive <id>
+```
+
+Soft-deletes a user: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by user:archive (all-scope). The last active owner cannot be archived.
+
+Example:
+
+```sh
+omniglass user archive <id>
+```
+
+### `omniglass user avatar`
+
+Commands for the avatar resource
+
+#### `omniglass user avatar list`
+
+Get a user's profile picture
+
+```
+omniglass user avatar list <id>
+```
+
+Returns the user's profile picture as a base64-encoded JPEG. Gated by user:read:admin. A user without a picture is a 404.
+
+Example:
+
+```sh
+omniglass user avatar list <id>
+```
+
+### `omniglass user create`
+
+Create a person
+
+```
+omniglass user create [flags]
+```
+
+Creates a person with an optional initial password. Gated by user:create (all-scope). The new user holds no grants; assign roles separately.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--email` | string | (none) | Contact email for the account |
+| `--label` | string | (none) | What an operator reads in lists; falls back to the username |
+| `--password` | string | (none) | Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in |
+| `--username` | string | (none) | Unique sign-in name (lowercase letters, digits, and . _ -) |
+
+Example:
+
+```sh
+omniglass user create --username username
+```
+
+### `omniglass user disable`
+
+Disable a user
+
+```
+omniglass user disable <id>
+```
+
+Soft-disables a user so it can no longer authenticate; its audit trail is kept. Gated by user:update (all-scope). The last active owner cannot be disabled.
+
+Example:
+
+```sh
+omniglass user disable <id>
+```
+
+### `omniglass user enable`
+
+Enable a user
+
+```
+omniglass user enable <id>
+```
+
+Re-enables a disabled user, restoring its ability to authenticate. Gated by user:update (all-scope).
+
+Example:
+
+```sh
+omniglass user enable <id>
+```
+
+### `omniglass user get`
+
+Get a user
+
+```
+omniglass user get <id>
+```
+
+Fetches one user by id with its profile and grants. Gated by user:read:admin.
+
+Example:
+
+```sh
+omniglass user get <id>
+```
+
+### `omniglass user grant`
+
+Commands for the grant resource
+
+#### `omniglass user grant create`
+
+Grant a role to a user
+
+```
+omniglass user grant create <id> [flags]
+```
+
+Assigns a role at a scope to a user. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
+| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
+| `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
+
+Example:
+
+```sh
+omniglass user grant create <id> --role role --scope-kind scope_kind
+```
+
+#### `omniglass user grant delete`
+
+Revoke a grant
+
+```
+omniglass user grant delete <id> <grantId>
+```
+
+Removes one grant from a user. Gated by user_grant:delete (all-scope). The last owner grant cannot be revoked.
+
+Example:
+
+```sh
+omniglass user grant delete <id> <grantId>
+```
+
+### `omniglass user impersonate`
+
+Impersonate a user (view-as or act-as)
+
+```
+omniglass user impersonate <id> [flags]
+```
+
+Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by user:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--duration-minutes` | int | `0` | Session lifetime in minutes (default 30, max 1440) |
+| `--mode` | string | (none) | view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user |
+
+Example:
+
+```sh
+omniglass user impersonate <id> --mode mode
+```
+
+### `omniglass user list`
+
+List users
+
+```
+omniglass user list [flags]
+```
+
+Lists all users (people and machine users) with their grants. Gated by user:read:admin.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--include-archived` | bool | `false` | Include archived (soft-deleted) users, hidden by default |
+| `--kind` | string | (none) | Optionally filter by user kind |
+
+Example:
+
+```sh
+omniglass user list
+```
+
+### `omniglass user purge`
+
+Purge a user
+
+```
+omniglass user purge <id>
+```
+
+Hard-deletes an archived user and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by user:purge:admin (admin-sensitive, all-scope), and the user must be archived first.
+
+Example:
+
+```sh
+omniglass user purge <id>
+```
+
+### `omniglass user removeAvatar`
+
+Remove a user's profile picture
+
+```
+omniglass user removeAvatar <id>
+```
+
+Clears another person's profile picture. Gated by user:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+
+Example:
+
+```sh
+omniglass user removeAvatar <id>
+```
+
+### `omniglass user resetPassword`
+
+Reset a user's password
+
+```
+omniglass user resetPassword <id> [flags]
+```
+
+Sets a new password for another person (an administrator action; the target's current password is not required). Gated by user:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--password` | string | (none) | The new password (at least 12 characters, not a common password, not containing the username) |
+
+Example:
+
+```sh
+omniglass user resetPassword <id> --password password
+```
+
+### `omniglass user restore`
+
+Restore a user
+
+```
+omniglass user restore <id>
+```
+
+Reverses an archive: the account is restored to active and can authenticate again. Gated by user:archive (all-scope).
+
+Example:
+
+```sh
+omniglass user restore <id>
+```
+
+### `omniglass user session`
+
+Commands for the session resource
+
+#### `omniglass user session list`
+
+List a user's sessions
+
+```
+omniglass user session list <id>
+```
+
+Lists another user's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by user:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another user).
+
+Example:
+
+```sh
+omniglass user session list <id>
+```
+
+#### `omniglass user session revoke`
+
+Revoke a user's session
+
+```
+omniglass user session revoke <id> <sid>
+```
+
+Revokes one of another user's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by user:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-user revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+
+Example:
+
+```sh
+omniglass user session revoke <id> <sid>
+```
+
+#### `omniglass user session revokeAll`
+
+Revoke all of a user's sessions or tokens
+
+```
+omniglass user session revokeAll <id> [flags]
+```
+
+Revokes every one of another user's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by user:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--purpose` | string | (none) | Which credentials to revoke: all of the user's web-login sessions, or all its CLI/API tokens |
+
+Example:
+
+```sh
+omniglass user session revokeAll <id> --purpose purpose
+```
+
+### `omniglass user setAvatar`
+
+Set a user's profile picture
+
+```
+omniglass user setAvatar <id> [flags]
+```
+
+Sets another person's profile picture (an administrator action). Gated by user:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--image-base64` | string | (none) | The image (JPEG, PNG, or WebP), base64-encoded; normalized server-side to a 256x256 JPEG |
+
+Example:
+
+```sh
+omniglass user setAvatar <id> --image-base64 image_base64
+```
+
+### `omniglass user update`
+
+Update a user
+
+```
+omniglass user update <id> [flags]
+```
+
+Updates a person's label, email, and username. Gated by user:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--email` | string | (none) | Email; empty clears it |
+| `--label` | string | (none) | Label; empty clears it |
+| `--username` | string | (none) | Sign-in name (lowercase letters, digits, and . _ -); renaming is safe |
+
+Example:
+
+```sh
+omniglass user update <id>
+```
+
+## `omniglass user-group`
+
+Commands for the user-group resource
+
+### `omniglass user-group create`
+
+Create a user group
+
+```
+omniglass user-group create [flags]
+```
+
+Creates a user group. Gated by user_group:create (all-scope). A duplicate name is 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | Free-form notes on what the group is for |
+| `--label` | string | (none) | What an operator reads in lists |
+| `--name` | string | (none) | Unique group name (lowercase letters, digits, and hyphens) |
+
+Example:
+
+```sh
+omniglass user-group create --name name
+```
+
+### `omniglass user-group delete`
+
+Delete a user group
+
+```
+omniglass user-group delete <group>
+```
+
+Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by user_group:delete (all-scope).
+
+Example:
+
+```sh
+omniglass user-group delete night-shift
+```
+
+### `omniglass user-group get`
+
+Get a user group
+
+```
+omniglass user-group get <group>
+```
+
+One user group, by name or uuid. Gated by user_group:read:admin.
+
+Example:
+
+```sh
+omniglass user-group get night-shift
+```
+
+### `omniglass user-group grant`
+
+Commands for the grant resource
+
+#### `omniglass user-group grant create`
+
+Grant a role to a group
+
+```
+omniglass user-group grant create <group> [flags]
+```
+
+Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
+| `--scope-id` | string | (none) | The scope root, the location, system or component the scope kind names, by name, dotted address or uuid (stored as its uuid); omit for the all scope |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
+| `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
+
+Example:
+
+```sh
+omniglass user-group grant create night-shift --role role --scope-kind scope_kind
+```
+
+#### `omniglass user-group grant delete`
+
+Revoke a group grant
+
+```
+omniglass user-group grant delete <group> <grantId>
+```
+
+Removes one grant from a group. Gated by user_grant:delete (all-scope).
+
+Example:
+
+```sh
+omniglass user-group grant delete night-shift <grantId>
+```
+
+#### `omniglass user-group grant list`
+
+List a group's grants
+
+```
+omniglass user-group grant list <group>
+```
+
+The role x scope grants a group confers on its members. Gated by user_group:read:admin.
+
+Example:
+
+```sh
+omniglass user-group grant list night-shift
+```
+
+### `omniglass user-group list`
+
+List user groups
+
+```
+omniglass user-group list
+```
+
+Every user group. Gated by user_group:read:admin.
+
+Example:
+
+```sh
+omniglass user-group list
+```
+
+### `omniglass user-group member`
+
+Commands for the member resource
+
+#### `omniglass user-group member create`
+
+Add a member to a group
+
+```
+omniglass user-group member create <group> [flags]
+```
+
+Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--user-id` | string | (none) | The user to add: a person's username, a machine user's name, or its uuid |
+
+Example:
+
+```sh
+omniglass user-group member create night-shift --user-id user_id
+```
+
+#### `omniglass user-group member delete`
+
+Remove a member from a group
+
+```
+omniglass user-group member delete <group> <user>
+```
+
+Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).
+
+Example:
+
+```sh
+omniglass user-group member delete night-shift alice
+```
+
+#### `omniglass user-group member list`
+
+List a group's members
+
+```
+omniglass user-group member list <group>
+```
+
+The users in a group. Gated by user_group:read:admin.
+
+Example:
+
+```sh
+omniglass user-group member list night-shift
+```
+
+### `omniglass user-group rename`
+
+Rename a user group
+
+```
+omniglass user-group rename <group> [flags]
+```
+
+Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by user_group:rename (all-scope).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | The new unique group name (lowercase letters, digits, hyphens) |
+
+Example:
+
+```sh
+omniglass user-group rename night-shift --name name
+```
+
+### `omniglass user-group update`
+
+Update a user group
+
+```
+omniglass user-group update <group> [flags]
+```
+
+Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by user_group:update (all-scope).
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--description` | string | (none) | Description; empty clears it |
+| `--label` | string | (none) | Label; empty clears it |
+
+Example:
+
+```sh
+omniglass user-group update night-shift
 ```
 
 ## `omniglass variable`
@@ -7321,6 +7968,9 @@ omniglass variable delete <variable>
 
 Removes a variable, by name or uuid. Gated by variable:delete, plus platform:delete when the variable sits at the platform tier; read and delete scopes on the owner drive the 404 versus 403 split.
 
+Arguments:
+  <variable>  The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
+
 Example:
 
 ```sh
@@ -7352,6 +8002,9 @@ omniglass variable update <variable> [flags]
 ```
 
 Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
+
+Arguments:
+  <variable>  The variable: its name, or <owner>/<name> where more than one you can see shares it (the owner by name, dotted address or uuid, or $platform), or its uuid. The slash is percent-encoded in a URL, as the CLI does; a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -7433,7 +8086,7 @@ List vendors
 omniglass vendor list
 ```
 
-Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
+Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
 
 Example:
 
@@ -7453,7 +8106,7 @@ Moves a custom vendor's name, the handle an operator types, addressed by its cur
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--name` | string | (none) | The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid) |
+| `--name` | string | (none) | The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid) |
 
 Example:
 
@@ -7521,7 +8174,7 @@ Read Omniglass's own health in one call
 omniglass view platform list
 ```
 
-Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.
+Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.
 
 Example:
 
@@ -7541,7 +8194,7 @@ Read what each simulator saw against what the platform collected
 omniglass view platform simulation list
 ```
 
-Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+Returns the read behind the Platform health page's simulation section: one row per outpost with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. An outpost reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
 
 Example:
 
@@ -7553,19 +8206,35 @@ omniglass view platform simulation list
 
 Commands for the webhook resource
 
-### `omniglass webhook get`
+### `omniglass webhook receive`
 
 Receive a webhook post for an endpoint
 
 ```
-omniglass webhook get <token>
+omniglass webhook receive <token>
 ```
 
-The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
+The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a user, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
 
 Example:
 
 ```sh
-omniglass webhook get <token>
+omniglass webhook receive <token>
+```
+
+### `omniglass webhook verify`
+
+Answer a webhook sender's verification of its URL
+
+```
+omniglass webhook verify <token>
+```
+
+A sender checking its URL before it posts (#1024): an unknown or rotated token is the receiver's identical 404; a known one answers 200, echoing the query parameter its driver declares as the challenge (text, bounded), and 204 when it declares none. Public by necessity, as the receiver is.
+
+Example:
+
+```sh
+omniglass webhook verify <token>
 ```
 

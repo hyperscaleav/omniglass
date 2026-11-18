@@ -34,7 +34,7 @@ func TestMustChangePasswordFlag(t *testing.T) {
 	all := scope.Set{All: true}
 
 	pwHash, _ := auth.HashPassword("orange-boat-42x")
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice", PasswordHash: pwHash}, all)
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice", PasswordHash: pwHash}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
@@ -47,10 +47,10 @@ func TestMustChangePasswordFlag(t *testing.T) {
 			t.Fatalf("%s: issue bearer: ok=%v err=%v", label, ok, err)
 		}
 		pr, err := gw.AuthenticateBearer(ctx, bh)
-		if err != nil || pr.Human == nil {
+		if err != nil || pr.Person == nil {
 			t.Fatalf("%s: authenticate: pr=%v err=%v", label, pr, err)
 		}
-		return pr.Human.MustChangePassword
+		return pr.Person.MustChangePassword
 	}
 
 	// A freshly created account is not flagged.
@@ -61,7 +61,7 @@ func TestMustChangePasswordFlag(t *testing.T) {
 	// An admin reset flags the account (and revokes the bearer just issued; flag()
 	// mints a new one each call, so the read still works).
 	newHash, _ := auth.HashPassword("purple-canyon-7")
-	if err := gw.SetPrincipalPassword(ctx, root.ID, alice.ID, newHash, all); err != nil {
+	if err := gw.SetUserPassword(ctx, root.ID, alice.ID, newHash, all); err != nil {
 		t.Fatalf("admin reset: %v", err)
 	}
 	if !flag("after reset") {

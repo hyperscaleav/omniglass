@@ -27,7 +27,7 @@ type logBody struct {
 	Source        string          `json:"source,omitempty" doc:"The channel the line arrived on (e.g. syslog)"`
 	Severity      string          `json:"severity,omitempty" doc:"The line's severity, when classified"`
 	Facility      string          `json:"facility,omitempty" doc:"The line's facility, when classified"`
-	Instance      string          `json:"instance,omitempty" doc:"The endpoint that collected the line, when a node collected it"`
+	Instance      string          `json:"instance,omitempty" doc:"The endpoint that collected the line, when an outpost collected it"`
 	Message       string          `json:"message" doc:"The raw log text"`
 	Attributes    json.RawMessage `json:"attributes,omitempty" doc:"Structured fields parsed from the line, when present"`
 	Labels        json.RawMessage `json:"labels,omitempty" doc:"Freeform classification labels, when present"`
@@ -65,15 +65,15 @@ func (in *systemLogsInput) filter() storage.LogFilter {
 	return storage.LogFilter{Severity: in.Severity, Source: in.Source}
 }
 
-type nodeLogsOutput struct {
+type outpostLogsOutput struct {
 	Body struct {
-		Node string    `json:"node"`
-		Logs []logBody `json:"logs"`
+		Outpost string    `json:"outpost"`
+		Logs    []logBody `json:"logs"`
 	}
 }
 
 // logBodies maps stored log rows to the wire body. Shared by the component and
-// node reads: both are the same raw log line, only the owner differs.
+// outpost reads: both are the same raw log line, only the owner differs.
 func logBodies(rows []storage.LogLine) []logBody {
 	out := make([]logBody, 0, len(rows))
 	for _, l := range rows {
@@ -132,27 +132,27 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 
-	// The node self-log read (ADR-0066): a node's own operational log lines, the
-	// same raw lane but owner-bound to the node. Gated by node:read and scope-injected
-	// through GetNode; an out-of-scope node is a non-disclosing 404.
+	// The outpost self-log read (ADR-0066): an outpost's own operational log lines, the
+	// same raw lane but owner-bound to the outpost. Gated by outpost:read and scope-injected
+	// through GetOutpost; an out-of-scope outpost is a non-disclosing 404.
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID: "list-node-logs",
+		OperationID: "list-outpost-logs",
 		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
-		Path:        "/nodes/{name}/logs",
-		Summary:     "List a node's recent self-logs",
-		Description: "Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.",
-	}, "node", "read"), func(ctx context.Context, in *nodePathInput) (*nodeLogsOutput, error) {
-		n, err := gw.GetNode(ctx, in.Name, a.scopeFor(ctx, "node", "read"))
+		Path:        "/outposts/{name}/logs",
+		Summary:     "List an outpost's recent self-logs",
+		Description: "Returns the outpost's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the outpost), newest first, bounded to the last 24 hours. Gated by outpost:read; an out-of-scope outpost is a non-disclosing 404.",
+	}, "outpost", "read"), func(ctx context.Context, in *outpostPathInput) (*outpostLogsOutput, error) {
+		n, err := gw.GetOutpost(ctx, in.Name, a.scopeFor(ctx, "outpost", "read"))
 		if err != nil {
-			return nil, mapNodeErr(err)
+			return nil, mapOutpostErr(err)
 		}
-		rows, err := gw.ListNodeLogs(ctx, n.Name, logHistoryWindow, logReadLimit)
+		rows, err := gw.ListOutpostLogs(ctx, n.Name, logHistoryWindow, logReadLimit)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("read node logs")
+			return nil, huma.Error500InternalServerError("read outpost logs")
 		}
-		out := &nodeLogsOutput{}
-		out.Body.Node = n.Name
+		out := &outpostLogsOutput{}
+		out.Body.Outpost = n.Name
 		out.Body.Logs = logBodies(rows)
 		return out, nil
 	})
@@ -168,7 +168,7 @@ type systemLogBody struct {
 	Source        string          `json:"source,omitempty" doc:"The channel the line arrived on (e.g. syslog)"`
 	Severity      string          `json:"severity,omitempty" doc:"The line's severity, when classified"`
 	Facility      string          `json:"facility,omitempty" doc:"The line's facility, when classified"`
-	Instance      string          `json:"instance,omitempty" doc:"The endpoint that collected the line, when a node collected it"`
+	Instance      string          `json:"instance,omitempty" doc:"The endpoint that collected the line, when an outpost collected it"`
 	Message       string          `json:"message" doc:"The raw log text"`
 	Attributes    json.RawMessage `json:"attributes,omitempty" doc:"Structured fields parsed from the line, when present"`
 	Labels        json.RawMessage `json:"labels,omitempty" doc:"Freeform classification labels, when present"`
@@ -187,6 +187,7 @@ type systemLogsOutput struct {
 func registerSystemLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-logs",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/logs",
 		Summary:     "List a system's members' recent log lines",

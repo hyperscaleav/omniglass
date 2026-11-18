@@ -28,7 +28,7 @@ import (
 // same refusal a component outside the caller's scope gets.
 var ErrCommandNotFound = errors.New("storage: command not found")
 
-// Where an in-flight command sits: queued for its node, delivered to it (a
+// Where an in-flight command sits: queued for its outpost, delivered to it (a
 // binding that settles on observation, so the reply decides nothing),
 // awaiting the reply that settles it, or awaiting the observation that does.
 // A terminal command's phase is its status.
@@ -105,20 +105,20 @@ type CommandRecord struct {
 	ObservedAt    *time.Time
 	IssuedAt      time.Time
 	DeliveredAt   *time.Time
-	// FirstDeliveredAt is when a node first took it; DeliveredAt moves on a
+	// FirstDeliveredAt is when an outpost first took it; DeliveredAt moves on a
 	// redelivery, this does not (#1626).
 	FirstDeliveredAt *time.Time
-	// DeliveryCount is how many times a node has taken it: 0 queued, 1
+	// DeliveryCount is how many times an outpost has taken it: 0 queued, 1
 	// delivered once, more when it went silent and was redelivered.
 	DeliveryCount int
 	ExecutedAt    *time.Time
 	SettledAt     *time.Time
-	// Endpoint is the endpoint the command rides: the one a node took it
-	// over, else the one a node would (its driver binds the type). Empty
+	// Endpoint is the endpoint the command rides: the one an outpost took it
+	// over, else the one an outpost would (its driver binds the type). Empty
 	// when no endpoint of the component can carry it.
 	Endpoint       string
 	EndpointID     string
-	Node           string
+	Outpost        string
 	Driver         string
 	IssuerID       string
 	Issuer         string
@@ -136,12 +136,12 @@ type CommandFilter struct {
 }
 
 // CommandPhase is where a command sits: its status once terminal; while
-// issued, queued until a node takes it (when one can), then delivered or
+// issued, queued until an outpost takes it (when one can), then delivered or
 // awaiting the reply (by how it settles) until its report lands, then
 // awaiting the observation that settles it. A command no endpoint can carry
-// is awaiting observation from its issue: no node will take it, and only a
+// is awaiting observation from its issue: no outpost will take it, and only a
 // sample of its target (a push, a poll) can settle it. A fire-and-forget
-// command (mode none) has no observation to wait on: it is queued until a node
+// command (mode none) has no observation to wait on: it is queued until an outpost
 // takes it, even when none can (its delivery window then times it out), and
 // delivered until its report decides it (#1630). Pure.
 func CommandPhase(status, mode string, delivered, executed, deliverable bool) string {
@@ -181,15 +181,15 @@ func SettleModeOf(b *driver.CommandBinding, settleable bool) string {
 }
 
 // commandRideSQL is the endpoint a command rides, as a lateral subquery over
-// command c and command_type ct: the endpoint a node took it over, else the
-// endpoint PendingNodeCommands would pick (the first, by name, of the
+// command c and command_type ct: the endpoint an outpost took it over, else the
+// endpoint PendingOutpostCommands would pick (the first, by name, of the
 // component's endpoints whose driver binds the type). One row or none.
 const commandRideSQL = `left join lateral (
-		select e.id, e.name, e.node_name, e.driver_id from endpoint e
+		select e.id, e.name, e.outpost_id, e.driver_id from endpoint e
 		where e.id = c.dispatched_endpoint_id
 		union all
 		select * from (
-			select e.id, e.name, e.node_name, e.driver_id from endpoint e join driver dr on dr.id = e.driver_id
+			select e.id, e.name, e.outpost_id, e.driver_id from endpoint e join driver dr on dr.id = e.driver_id
 			where c.dispatched_endpoint_id is null and c.owner_kind = 'component' and e.component = c.component_id
 			  and jsonb_path_exists(dr.spec, '$.commands[*] ? (@.command_type == $ct)', jsonb_build_object('ct', ct.name))
 			order by e.name limit 1) candidate
@@ -197,15 +197,18 @@ const commandRideSQL = `left join lateral (
 	) ride on true`
 
 // commandReadCols is the read shape, in the order scanCommandRecord reads it.
+// The two intended-value subselects order by id, insertion order (#712): an
+// intended row's ts is the database's now at the command's open, never a
+// caller's (see latestIntendedSQL).
 var commandReadCols = `c.id, c.ts, c.component_id::text, comp.name, ct.name, c.instance, c.params, c.status,
 	c.dispatched_at, c.first_dispatched_at, c.delivery_count, c.executed_at, c.settled_at, coalesce(c.exec_error, ''), c.reply, coalesce(c.reason, ''),
 	coalesce(c.settled_by, ''), c.observed_value, c.observed_at, c.caused_event_id, c.settled_event_id,
-	coalesce(c.actor::text, ''), ` + principalIdentCols("c.actor") + `,
+	coalesce(c.actor::text, ''), ` + userIdentCols("c.actor") + `,
 	ct.settle_window_seconds, coalesce(pt.name, ''), coalesce(mt.name, ''),
-	(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc, pr.id desc limit 1),
-	(select m.value from metric_declared m where m.command_id = c.id order by m.ts desc, m.id desc limit 1),
+	(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.id desc limit 1),
+	(select m.value from metric_declared m where m.command_id = c.id order by m.id desc limit 1),
 	coalesce(ride.id::text, ''), coalesce(ride.name, ''),
-	coalesce((select n.name from node n where n.principal_id = ride.node_name), ''),
+	coalesce((select n.name from outpost n where n.user_id = ride.outpost_id), ''),
 	coalesce(drv.name, ''), drv.spec`
 
 // commandReadFrom joins what the read shape needs.
@@ -245,24 +248,24 @@ func (sc specCache) binding(driverName string, raw []byte, commandType string) *
 
 func scanCommandRecord(row pgx.Row, specs specCache) (*CommandRecord, error) {
 	var (
-		r                           CommandRecord
-		username, service, nodeName *string
-		intendedProp                []byte
-		intendedMetric              *float64
-		propTarget, metricTarget    string
-		spec                        []byte
+		r                              CommandRecord
+		username, service, outpostName *string
+		intendedProp                   []byte
+		intendedMetric                 *float64
+		propTarget, metricTarget       string
+		spec                           []byte
 	)
 	if err := row.Scan(&r.ID, &r.IssuedAt, &r.ComponentID, &r.Component, &r.CommandType, &r.Instance, &r.Params, &r.Status,
 		&r.DeliveredAt, &r.FirstDeliveredAt, &r.DeliveryCount, &r.ExecutedAt, &r.SettledAt, &r.ExecError, &r.Reply, &r.Reason,
 		&r.SettledBy, &r.ObservedValue, &r.ObservedAt, &r.CausedEventID, &r.SettledEventID,
-		&r.IssuerID, &username, &service, &nodeName,
+		&r.IssuerID, &username, &service, &outpostName,
 		&r.SettleWindowSeconds, &propTarget, &metricTarget, &intendedProp, &intendedMetric,
-		&r.EndpointID, &r.Endpoint, &r.Node, &r.Driver, &spec); err != nil {
+		&r.EndpointID, &r.Endpoint, &r.Outpost, &r.Driver, &spec); err != nil {
 		return nil, err
 	}
-	r.Issuer = principalIdent(username, service, nodeName)
+	r.Issuer = userIdent(username, service, outpostName)
 	// A row stored before replies were masked carries its execution error as
-	// the node reported it; the labeled-pair pass runs on every read, a
+	// the outpost reported it; the labeled-pair pass runs on every read, a
 	// no-op on text already masked.
 	r.ExecError = redact.Keyed(r.ExecError)
 	if r.Reply != nil {
@@ -312,8 +315,9 @@ func (p *PG) GetComponentCommand(ctx context.Context, componentID string, id int
 }
 
 // ListComponentCommands reads a component's command history, newest first,
-// narrowed by f. componentID is RESOLVED, as for GetComponentCommand. A
-// limit outside 1..MaxCommandListLimit reads DefaultCommandListLimit or the
+// narrowed by f. It lists commands by their own ts: a history, not a series'
+// current row, so the insertion-order rule of #712 does not apply. componentID
+// is RESOLVED, as for GetComponentCommand. A limit outside 1..MaxCommandListLimit reads DefaultCommandListLimit or the
 // ceiling.
 func (p *PG) ListComponentCommands(ctx context.Context, componentID string, f CommandFilter) ([]CommandRecord, error) {
 	limit := f.Limit
@@ -372,9 +376,9 @@ const Withheld = "[withheld: the endpoint's credentials could not be read to mas
 // authorization value), in every form redact knows, then anything the text
 // labels a credential. It fails closed: when the secrets cannot be read (no
 // key provider, an envelope that will not open, a driver detached since the
-// dispatch), the node that sent the text may still hold them, so every
+// dispatch), the outpost that sent the text may still hold them, so every
 // non-empty text is withheld rather than stored half-masked. A secret input
-// that names nothing the component owns was delivered to the node as
+// that names nothing the component owns was delivered to the outpost as
 // absence, so there is nothing of it to mask.
 func (p *PG) endpointMask(ctx context.Context, q querier, endpointID string) func(string) string {
 	secrets, err := p.endpointSecretValues(ctx, q, endpointID)
@@ -392,7 +396,7 @@ func (p *PG) endpointMask(ctx context.Context, q querier, endpointID string) fun
 }
 
 // endpointSecretValues unseals the secret fields an endpoint authenticates
-// with, through the same cascade-confined lookup its node's worklist uses.
+// with, through the same cascade-confined lookup its outpost's worklist uses.
 // An error is a secret that may exist and could not be read.
 func (p *PG) endpointSecretValues(ctx context.Context, q querier, endpointID string) ([]string, error) {
 	var spec, inputs []byte
@@ -413,10 +417,10 @@ func (p *PG) endpointSecretValues(ctx context.Context, q querier, endpointID str
 	}
 	var out []string
 	for _, ref := range refs {
-		fields, _, shape, err := p.nodeSecretShaped(ctx, ref, *componentID)
+		fields, _, shape, err := p.outpostSecretShaped(ctx, ref, *componentID)
 		var amb *ErrAmbiguousName
 		if errors.Is(err, ErrSecretNotFound) || errors.As(err, &amb) {
-			continue // delivered to the node as absence: nothing of it to mask
+			continue // delivered to the outpost as absence: nothing of it to mask
 		}
 		if err != nil {
 			return nil, err

@@ -36,7 +36,7 @@
     {
       "n": 6,
       "kind": "wait",
-      "caption": "The node sent snmp requests the simulator never received. The gap opens, read as impaired, not lost.",
+      "caption": "The outpost sent snmp requests the simulator never received. The gap opens, read as impaired, not lost.",
       "still": "step-06.png"
     },
     {
@@ -73,8 +73,8 @@
   "poster": "step-06.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 56.2,
-    "bytes": 1180911,
-    "previewBytes": 835778
+    "seconds": 59.6,
+    "bytes": 1142492,
+    "previewBytes": 939418
   }
 }

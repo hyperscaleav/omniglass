@@ -41,6 +41,8 @@ refs: [1249, 1634, 1163, 1649, 1650, 1651, 1254, 1063, 1625]
      endpoint's lane, so they are bounded by that loop.
   7. **The flag names the pool.** `--lane-workers` (`OMNIGLASS_LANE_WORKERS`, default 16) replaces
      `--poll-workers`: the pool runs every kind of lane work, not polls alone.
+- **Amended by [ADR-1869](#adr-1869-a-node-sizes-its-lane-pool-from-its-cpu-and-memory):** the
+  `--lane-workers` default is `auto`, sized from the CPU and memory the node may use, not 16.
 - **Amends:** [ADR-1634](/architecture/decisions/#adr-1634-each-poll-and-probe-runs-on-its-own-interval-from-a-dispatcher-of-its-own)
   (the `--poll-workers` flag, and a run now handed through the run loop and refused while the last
   one waited there) and

@@ -15,7 +15,7 @@ import (
 
 // TestEventTypeAPI drives the /event-types catalog over HTTP: an owner registers,
 // reads, updates, and deletes a custom event type; an official (seeded) event type is
-// read-only; a malformed name and a duplicate are rejected; an ungranted principal is
+// read-only; a malformed name and a duplicate are rejected; an ungranted user is
 // forbidden to create. Mirrors the property_type catalog e2e.
 func TestEventTypeAPI(t *testing.T) {
 	t.Parallel()
@@ -89,7 +89,7 @@ func TestEventTypeAPI(t *testing.T) {
 
 	// A type an event rule names is in use (409) until the rule lets go of it.
 	c.do(ownerTok, http.MethodPost, "/event-rules", map[string]any{"name": "unplug-watch", "sample_key": "endpoint-reachable",
-		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_event_type": "condition-started",
+		"fire_criteria": map[string]any{"op": "eq", "value": "down"}, "fire_event_type": "rule-fired",
 		"clear_event_type": "cable-unplugged"}, http.StatusCreated)
 	if body := string(c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusConflict)); !strings.Contains(body, "in use") {
 		t.Fatalf("deleting a type a rule names: %s, want a 409 saying it is in use", body)
@@ -99,7 +99,66 @@ func TestEventTypeAPI(t *testing.T) {
 	// Delete the custom event type.
 	c.do(ownerTok, http.MethodDelete, "/event-types/cable-unplugged", nil, http.StatusNoContent)
 
-	// An ungranted principal is forbidden to create.
-	noneTok := principalWithGrants(t, ctx, dsn, "noevents", nil)
+	// An ungranted user is forbidden to create.
+	noneTok := userWithGrants(t, ctx, dsn, "noevents", nil)
 	c.do(noneTok, http.MethodPost, "/event-types", map[string]any{"name": "nope.event"}, http.StatusForbidden)
+}
+
+// A nullable JSON Schema object has no empty value to overload, so payload_schema
+// clears by being named in update_mask with no value (#1189, ADR-0106's rule
+// for a nullable object). Omitting it leaves it, a value replaces it, and a
+// mask naming other fields leaves it alone.
+func TestEventTypePayloadSchemaClearsUnderUpdateMask(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{
+		"name":           "cable-pulled",
+		"payload_schema": map[string]any{"type": "object"},
+	}, http.StatusCreated)
+
+	patch := func(body map[string]any) map[string]json.RawMessage {
+		t.Helper()
+		var got map[string]json.RawMessage
+		if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/event-types/cable-pulled", body, http.StatusOK), &got); err != nil {
+			t.Fatalf("decode patch: %v", err)
+		}
+		return got
+	}
+	hasSchema := func(step string, got map[string]json.RawMessage, wantSchema string) {
+		t.Helper()
+		raw, ok := got["payload_schema"]
+		if wantSchema == "" {
+			if ok && string(raw) != "null" {
+				t.Fatalf("%s: payload_schema = %s, want none", step, raw)
+			}
+			return
+		}
+		if !ok || !strings.Contains(string(raw), wantSchema) {
+			t.Fatalf("%s: payload_schema = %s, want it to carry %s", step, raw, wantSchema)
+		}
+	}
+
+	hasSchema("omitted", patch(map[string]any{"label": "A label"}), `"object"`)
+	hasSchema("replaced", patch(map[string]any{"payload_schema": map[string]any{"type": "string"}}), `"string"`)
+	// A mask naming another field leaves the schema, even though it is not in the body.
+	hasSchema("mask names another field", patch(map[string]any{"label": "Again", "update_mask": []string{"label"}}), `"string"`)
+	// Naming the field with no value clears it, on the response and on a re-read.
+	hasSchema("cleared", patch(map[string]any{"update_mask": []string{"payload_schema"}}), "")
+	var reread map[string]json.RawMessage
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/event-types/cable-pulled", nil, http.StatusOK), &reread)
+	hasSchema("reread", reread, "")
+	// A mask naming a field the route does not patch is a 422, never a no-op.
+	c.do(ownerTok, http.MethodPatch, "/event-types/cable-pulled",
+		map[string]any{"update_mask": []string{"name"}}, http.StatusUnprocessableEntity)
 }

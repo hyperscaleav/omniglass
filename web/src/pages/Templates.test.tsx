@@ -7,13 +7,13 @@ import Templates from "./Templates";
 import { TEMPLATES_KEY, type Template } from "../lib/templates";
 import { ME_KEY, type Me } from "../lib/auth";
 import { LOCATIONS_KEY, type Location } from "../lib/locations";
-import { NODES_KEY } from "../lib/nodes";
+import { OUTPOSTS_KEY } from "../lib/outposts";
 import { STANDARDS_KEY, type Standard } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
 import { DRIVERS_KEY } from "../lib/drivers";
 import { SECRETS_KEY } from "../lib/secrets";
 import { uuidFor } from "../lib/testids";
-import { standardRolesKey } from "../lib/system_roles";
+import { standardSlotsKey } from "../lib/system_slots";
 import { pickTree } from "../components/TreeSelect.testkit";
 
 // The Templates page (#1329): the catalog across four kinds, filtered by the
@@ -27,7 +27,7 @@ const catalog: Template[] = [
     kind: "standard_template", name: "mr55", label: "Meeting Room 55", description: "A 55-inch meeting room.",
     standard: {
       parent: "meeting-room",
-      roles: [
+      slots: [
         { name: "video-bar", label: "Video bar", quorum: 1, capacity: 1, accepted_types: ["video-bar"] },
         { name: "main-display", label: "Main display", quorum: 1, capacity: 1, pinned_products: ["boreal-edge-55"] },
       ],
@@ -36,17 +36,17 @@ const catalog: Template[] = [
   },
   {
     kind: "system_template", name: "mr55-system", label: "Meeting Room 55, staffed",
-    system: { standard: "mr55", system_type: "meeting", roles: { "video-bar": { component: "kestrel-vroom" }, "main-display": { component: "boreal-edge-55" } } },
+    system: { standard: "mr55", system_type: "meeting", slots: { "video-bar": { component: "kestrel-vroom" }, "main-display": { component: "boreal-edge-55" } } },
   },
   {
-    kind: "place_template", name: "meeting-floor", label: "A floor of meeting rooms",
-    place: { type: "floor", label: "Meeting floor", places: [{ type: "room", name: "mr-1", label: "Meeting room 1", systems: [{ template: "mr55-system" }] }] },
+    kind: "location_template", name: "meeting-floor", label: "A floor of meeting rooms",
+    location: { type: "floor", label: "Meeting floor", locations: [{ type: "room", name: "mr-1", label: "Meeting room 1", systems: [{ template: "mr55-system" }] }] },
   },
   { kind: "component_template", name: "boreal-edge-55", label: "Boreal Edge 55 display", component: { product: "boreal-edge-55", inputs: { port: "161" } } },
   { kind: "component_template", name: "kestrel-vroom", label: "Kestrel VRoom video bar", component: { product: "kestrel-vroom", inputs: { port: "443", "tls-mode": "pin" } } },
 ];
 
-// Places are offered and posted by dotted path; the create flows carry a uuid.
+// Locations are offered and posted by dotted path; the create flows carry a uuid.
 const hq: Location = { id: uuidFor("l-hq"), name: "hq", label: "HQ", location_type: "campus", path: "hq" };
 const west: Location = { id: uuidFor("l-west"), name: "west", label: "West", location_type: "building", parent_id: hq.id, path: "hq.west" };
 const standards: Standard[] = [{ id: uuidFor("std-mr"), name: "meeting-room", label: "Meeting room", official: false }];
@@ -55,8 +55,8 @@ const SYS_ID = uuidFor("sys-meeting-1");
 const LVL_ID = uuidFor("l-level-9");
 const COMP_ID = uuidFor("c-display-1");
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 let landed = "";
 function Landing() {
@@ -69,21 +69,21 @@ function Landing() {
 // location, system and component create/update/rename/move, no standard:create,
 // no endpoint:create.
 const deploy: Me = {
-  principal: { id: "u-deploy", kind: "human" }, human: { username: "deploy" }, grants: [],
+  user: { id: "u-deploy", kind: "person" }, person: { username: "deploy" }, grants: [],
   permissions: ["*:read", ...["location", "system", "component"].flatMap((r) => ["create", "update", "rename", "move"].map((a) => `${r}:${a}`))],
 };
 
-// The fleet's own mr55, whose roles differ from the template's copy.
+// The fleet's own mr55, whose slots differ from the template's copy.
 const mr55: Standard = { id: uuidFor("std-mr55"), name: "mr55", label: "Meeting Room 55", official: false };
 
-function mount(path: string, me: Me = admin, held: Standard[] = standards, roles: Record<string, unknown[]> = {}) {
+function mount(path: string, me: Me = admin, held: Standard[] = standards, slots: Record<string, unknown[]> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...TEMPLATES_KEY], catalog);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...LOCATIONS_KEY], [hq, west]);
-  qc.setQueryData([...NODES_KEY], [{ name: "lab-node", enrolled: true, tags: {} }]);
+  qc.setQueryData([...OUTPOSTS_KEY], [{ name: "lab-outpost", enrolled: true, tags: {} }]);
   qc.setQueryData([...STANDARDS_KEY], held);
-  for (const [id, r] of Object.entries(roles)) qc.setQueryData([...standardRolesKey(id)], r);
+  for (const [id, r] of Object.entries(slots)) qc.setQueryData([...standardSlotsKey(id)], r);
   qc.setQueryData([...PRODUCTS_KEY], []);
   qc.setQueryData([...DRIVERS_KEY], []);
   qc.setQueryData([...SECRETS_KEY], []);
@@ -122,7 +122,7 @@ describe("Templates page", () => {
     expect(screen.getByText("A floor of meeting rooms")).toBeInTheDocument();
     expect(screen.getByText("Boreal Edge 55 display")).toBeInTheDocument();
     expect(screen.getByTestId("template-teach")).toHaveTextContent("An example you clone, then own");
-    expect(screen.getByText("2 roles, a variant of meeting-room")).toBeInTheDocument();
+    expect(screen.getByText("2 slots, a variant of meeting-room")).toBeInTheDocument();
   });
 
   it("filters to the kinds the URL asks for, the chip reading the kind's word", async () => {
@@ -133,7 +133,7 @@ describe("Templates page", () => {
     expect(screen.getAllByText("system").length).toBeGreaterThan(0);
   });
 
-  it("renders a standard template's roles and choices from its body", async () => {
+  it("renders a standard template's slots and choices from its body", async () => {
     mount("/templates?kind=standard_template");
     const b = await blade("Meeting Room 55");
     const preview = within(b).getByTestId("preview-standard");
@@ -143,7 +143,7 @@ describe("Templates page", () => {
     expect(within(b).getByText("A 55-inch meeting room.")).toBeInTheDocument();
   });
 
-  it("renders a system's role fills by their component templates' labels", async () => {
+  it("renders a system's slot fills by their component templates' labels", async () => {
     mount("/templates?kind=system_template");
     const b = await blade("Meeting Room 55, staffed");
     const preview = within(b).getByTestId("preview-system");
@@ -151,8 +151,8 @@ describe("Templates page", () => {
     expect(within(preview).getByText("Main display")).toBeInTheDocument();
   });
 
-  it("renders a place template as an indented tree with the systems that land in it", async () => {
-    mount("/templates?kind=place_template");
+  it("renders a location template as an indented tree with the systems that land in it", async () => {
+    mount("/templates?kind=location_template");
     const b = await blade("A floor of meeting rooms");
     const items = within(b).getAllByRole("treeitem");
     expect(items.map((i) => i.getAttribute("data-depth"))).toEqual(["0", "1", "2"]);
@@ -173,7 +173,7 @@ describe("Templates page", () => {
     expect(within(b).getByTestId("start-needs")).toHaveTextContent("needs system:create, system:update, component:create, component:update, standard:create");
   });
 
-  it("starts a system at the carried place and lands on it with ?from=", async () => {
+  it("starts a system at the carried location and lands on it with ?from=", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -183,19 +183,19 @@ describe("Templates page", () => {
       }
       return json({});
     });
-    mount(`/templates?kind=system_template&place=${west.id}`);
+    mount(`/templates?kind=system_template&location=${west.id}`);
     const b = await blade("Meeting Room 55, staffed");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
     const form = await screen.findByTestId("start-form-system");
-    // An address with no node is refused before submit.
+    // An address with no outpost is refused before submit.
     fireEvent.input(within(form).getAllByPlaceholderText("unattached")[0], { target: { value: "10.0.0.5" } });
-    expect(await within(form).findByText("An address needs a node to place its endpoint on.")).toBeInTheDocument();
+    expect(await within(form).findByText("An address needs an outpost to place its endpoint on.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /start system/i })).toBeDisabled();
-    fireEvent.change(within(form).getByLabelText("Node"), { target: { value: "lab-node" } });
+    fireEvent.change(within(form).getByLabelText("Outpost"), { target: { value: "lab-outpost" } });
     fireEvent.click(screen.getByRole("button", { name: /start system/i }));
     // Lands on the id the answer carries, with the standards it created and what it left to attach.
     await waitFor(() => expect(landed).toBe(`/systems/${SYS_ID}?created_standards=meeting-room%2Cmr55&unattached=1&from=mr55-system`));
-    expect(sent).toEqual({ template: "mr55-system", location: "hq.west", node: "lab-node", attach: { "video-bar": [{ host: "10.0.0.5" }] } });
+    expect(sent).toEqual({ template: "mr55-system", location: "hq.west", outpost: "lab-outpost", attach: { "video-bar": [{ host: "10.0.0.5" }] } });
   });
 
   it("shows the API's refusal and lands nowhere", async () => {
@@ -229,23 +229,23 @@ describe("Templates page", () => {
     expect(sent).toEqual({ template: "mr55", name: "mr55-east" });
   });
 
-  it("starts places under a parent and lands on the subtree's root", async () => {
+  it("starts locations under a parent and lands on the subtree's root", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "POST") {
         sent = JSON.parse(await req.clone().text());
-        return json({ template: "meeting-floor", places: [{ location: "level-9", location_id: LVL_ID, type: "floor", parent: "west" }], systems: [], standards_created: [], to_attach: [] }, 201);
+        return json({ template: "meeting-floor", locations: [{ location: "level-9", location_id: LVL_ID, type: "floor", parent: "west" }], systems: [], standards_created: [], to_attach: [] }, 201);
       }
       return json({});
     });
-    mount("/templates?kind=place_template");
+    mount("/templates?kind=location_template");
     const b = await blade("A floor of meeting rooms");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
-    const form = await screen.findByTestId("start-form-place");
-    await pickTree(within(form).getByLabelText("Parent place"), "West");
+    const form = await screen.findByTestId("start-form-location");
+    await pickTree(within(form).getByLabelText("Parent location"), "West");
     fireEvent.input(within(form).getByLabelText("Name"), { target: { value: "level-9" } });
-    fireEvent.click(screen.getByRole("button", { name: /start places/i }));
+    fireEvent.click(screen.getByRole("button", { name: /start locations/i }));
     await waitFor(() => expect(landed).toBe(`/locations/${LVL_ID}?from=meeting-floor`));
     expect(sent).toEqual({ template: "meeting-floor", parent: "hq.west", name: "level-9" });
   });
@@ -260,15 +260,15 @@ describe("Templates page", () => {
       }
       return json({});
     });
-    mount(`/templates?kind=component_template&place=${hq.id}`);
+    mount(`/templates?kind=component_template&location=${hq.id}`);
     const b = await blade("Boreal Edge 55 display");
     fireEvent.click(within(b).getByRole("button", { name: /start from this template/i }));
     const form = await screen.findByTestId("start-form-component");
-    fireEvent.change(within(form).getByLabelText("Node"), { target: { value: "lab-node" } });
+    fireEvent.change(within(form).getByLabelText("Outpost"), { target: { value: "lab-outpost" } });
     fireEvent.input(within(form).getByLabelText("Address"), { target: { value: "10.0.0.20" } });
     fireEvent.click(screen.getByRole("button", { name: /start component/i }));
     await waitFor(() => expect(landed).toBe(`/components/${COMP_ID}?from=boreal-edge-55`));
-    expect(sent).toEqual({ template: "boreal-edge-55", location: "hq", node: "lab-node", inputs: { host: "10.0.0.20" } });
+    expect(sent).toEqual({ template: "boreal-edge-55", location: "hq", outpost: "lab-outpost", inputs: { host: "10.0.0.20" } });
   });
 
   it("names everything a deploy-shaped caller lacks, and offers no Start", async () => {
@@ -296,11 +296,11 @@ describe("Templates page", () => {
   });
 
   it("staffs the address slots to the fleet's own standard when it holds one", async () => {
-    const roles = [
+    const slots = [
       { name: "video-bar", label: "Video bar", quorum: 1, accepted_types: [], pinned_products: [], position_labels: [], impact: "degraded" },
       { name: "main-display", label: "Main display", quorum: 2, accepted_types: [], pinned_products: [], position_labels: [], impact: "degraded" },
     ];
-    mount("/templates?kind=system_template", admin, [...standards, mr55], { [mr55.id]: roles });
+    mount("/templates?kind=system_template", admin, [...standards, mr55], { [mr55.id]: slots });
     const b = await blade("Meeting Room 55, staffed");
     expect(within(b).getByTestId("preview-standard-source")).toHaveTextContent("(yours)");
     expect(within(b).getByText("x2")).toBeInTheDocument();

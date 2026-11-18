@@ -140,7 +140,7 @@ func batchLanding(ev *ogv1.TelemetryBatch) landing {
 // the window mean of ingest-lag over each batch's newest and oldest sample,
 // the window max of ingest-lag-max over its oldest, and its samples into
 // ingest-sample-count. The lag is server time minus the sample's ts, so a
-// node clock ahead of the server reads short (even negative) and one behind
+// outpost clock ahead of the server reads short (even negative) and one behind
 // reads long: kept as read, the skew is the clock's to fix (#419). A batch
 // with no samples observes nothing.
 func observeLanding(m pipelineMetrics, now time.Time, l landing) {
@@ -159,7 +159,7 @@ func observeLanding(m pipelineMetrics, now time.Time, l landing) {
 // committed records a batch whose transaction has just landed it: one more
 // batch, the samples it landed and their lag, at the moment it committed. A
 // batch its receipt held to a no-op (LandResult.Landed false: a redelivery or
-// a replay) landed nothing and is never recorded, and a node tick's landing
+// a replay) landed nothing and is never recorded, and an outpost tick's landing
 // is only its groups that landed, never one the fence or the gateway dropped.
 func (s *Server) committed(l landing) {
 	s.metrics.count(writerclass.IngestBatchCount, "", 1)
@@ -201,7 +201,7 @@ func (s *Server) request(path string, err error) {
 }
 
 // failOnce says when a failing path's warning is news: the first failure for
-// a key, and not again until that key has succeeded, so a node heartbeating
+// a key, and not again until that key has succeeded, so an outpost heartbeating
 // into a database that is down logs once, not every beat.
 type failOnce struct {
 	mu      sync.Mutex
@@ -229,21 +229,21 @@ func (f *failOnce) ok(key string) {
 	delete(f.failing, key)
 }
 
-// heartbeatFailLog is the warning a node's heartbeat write failure logs, once
+// heartbeatFailLog is the warning an outpost's heartbeat write failure logs, once
 // per run of failures.
-const heartbeatFailLog = "heartbeat not recorded, the node may read as silent"
+const heartbeatFailLog = "heartbeat not recorded, the outpost may read as silent"
 
-// recordHeartbeat records node's heartbeat, counting it and its failure.
-func (s *Server) recordHeartbeat(ctx context.Context, node string) {
-	err := s.store.RecordHeartbeat(ctx, node)
+// recordHeartbeat records outpost's heartbeat, counting it and its failure.
+func (s *Server) recordHeartbeat(ctx context.Context, outpost string) {
+	err := s.store.RecordHeartbeat(ctx, outpost)
 	s.request(requestHeartbeat, err)
 	if err != nil {
-		if s.heartbeatFail.failed(node) {
-			slog.Warn(heartbeatFailLog, "facility", "bus", "node", node, "error", err.Error())
+		if s.heartbeatFail.failed(outpost) {
+			slog.Warn(heartbeatFailLog, "facility", "bus", "outpost", outpost, "error", err.Error())
 		}
 		return
 	}
-	s.heartbeatFail.ok(node)
+	s.heartbeatFail.ok(outpost)
 }
 
 // sweep runs one sweep, recording its duration, that it ran, and whether it
@@ -293,65 +293,97 @@ func worklistSampler(read func() WorklistCounts) func(pipelineMetrics) {
 	}
 }
 
-// laneBusy is the fraction of wall the ingest lane spent busy between two
-// tallies. Pure.
-func laneBusy(prev, cur LaneTally, wall time.Duration) float64 {
-	if wall <= 0 {
-		return 0
+// laneBusy is the fraction of wall the busiest of the k partition lanes spent
+// busy between two readings of every lane's tally, matched by index (#1896):
+// the partitions land side by side, so ingest keeps up only while each one
+// does, and the busiest is the one that falls behind first. The tally past
+// the partitions is left out: it sums the push durable and any partition a
+// larger count left draining, several consumers at once, no one lane. Pure.
+func laneBusy(prev, cur []LaneTally, k int, wall time.Duration) float64 {
+	var busiest time.Duration
+	for i, c := range cur[:min(k, len(cur))] {
+		d := c.Busy
+		if i < len(prev) {
+			d -= prev[i].Busy
+		}
+		busiest = max(busiest, d)
 	}
-	return max(cur.Busy-prev.Busy, 0).Seconds() / wall.Seconds()
+	return platformmetric.BusyFraction(busiest, wall)
 }
 
 // Sampler is the bus's window-close reading for a platformmetric.Reporter:
-// the telemetry consumer's backlog, the ingest lane's busy fraction, the
+// the telemetry consumer's backlog, the busiest ingest lane's busy fraction, the
 // window's worklist pulls by outcome and its largest worklist reply.
 func (s *Server) Sampler() platformmetric.Sampler {
 	worklist := worklistSampler(s.WorklistCounts)
-	prevLane, prevAt := s.LaneTally(), time.Now()
+	prevLane, prevAt := s.PartitionTallies(), time.Now()
 	return func(ctx context.Context, r *platformmetric.Recorder) {
 		m := pipelineMetrics{r}
 		worklist(m)
-		now, lane := time.Now(), s.LaneTally()
-		m.gauge(writerclass.IngestLaneBusy, "", laneBusy(prevLane, lane, now.Sub(prevAt)))
+		now, lane := time.Now(), s.PartitionTallies()
+		m.gauge(writerclass.IngestLaneBusy, "", laneBusy(prevLane, lane, s.partitions, now.Sub(prevAt)))
 		prevLane, prevAt = lane, now
 		for _, b := range s.WorklistReplyBytes() {
 			m.max(writerclass.BusWorklistReplyBytesMax, "", float64(b))
 		}
 		s.sampleConsumer(ctx, m)
+		m.gauge(writerclass.RuleSweepAge, "", s.sweepClock.Age(now).Seconds())
 		for _, rd := range s.flow.Take().Readings() {
 			m.gauge(rd.Key, rd.Instance, rd.Value)
 		}
 	}
 }
 
-// sampleConsumer gauges the telemetry consumer's backlog: the batches stored
-// and not yet delivered, delivered and not yet acked, and redelivered. Beside
-// them it gauges the stream's last sequence and the consumer's ack floor, at
-// and below which every batch is answered, landed or dropped at the bound
-// (#1758). The head is read first, so a floor that reaches it proves every
-// batch the stream held at that read settled, whatever the load behind it. A
-// read that fails says nothing this window rather than a zero that did not
-// happen.
+// sampleConsumer gauges the telemetry backlog over every lane's durable: the
+// batches stored and not yet delivered, delivered and not yet acked, and
+// redelivered. Beside them it gauges the stream's last sequence and its ack
+// floor, at and below which every batch is answered, landed or dropped at the
+// bound (#1758). The stream is a work queue, so an answered batch leaves it
+// and the floor is the sequence below its first held batch: the lanes ack out
+// of order with one another, and no one durable's floor bounds them all. Both
+// come from one read of the stream, so a floor that reaches the head proves
+// every batch the stream held at that read settled. A read that fails says
+// nothing this window rather than a zero that did not happen: the stream's
+// read gates every gauge, and one lane's read only the sums over the lanes.
 func (s *Server) sampleConsumer(ctx context.Context, m pipelineMetrics) {
-	if s.cons == nil {
+	s.lanesMu.Lock()
+	lanes := append([]*ingestLane(nil), s.lanes...)
+	s.lanesMu.Unlock()
+	if len(lanes) == 0 || s.telemetry == nil {
 		return
 	}
 	ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if s.telemetry != nil {
-		if sinfo, err := s.telemetry.Info(ictx); err != nil {
-			slog.Debug("telemetry stream info unread", "facility", "ingest", "error", err.Error())
-		} else {
-			m.gauge(writerclass.BusStreamLastSeq, "", float64(sinfo.State.LastSeq))
-		}
-	}
-	info, err := s.cons.Info(ictx)
+	sinfo, err := s.telemetry.Info(ictx)
 	if err != nil {
-		slog.Debug("telemetry consumer info unread", "facility", "ingest", "error", err.Error())
+		slog.Debug("telemetry stream info unread", "facility", "ingest", "error", err.Error())
 		return
 	}
-	m.gauge(writerclass.BusConsumerPending, "", float64(info.NumPending))
-	m.gauge(writerclass.BusConsumerAckPending, "", float64(info.NumAckPending))
-	m.gauge(writerclass.BusConsumerAckFloor, "", float64(info.AckFloor.Stream))
-	m.gauge(writerclass.BusConsumerRedelivered, "", float64(info.NumRedelivered))
+	m.gauge(writerclass.BusStreamLastSeq, "", float64(sinfo.State.LastSeq))
+	m.gauge(writerclass.BusConsumerAckFloor, "", float64(ackFloor(sinfo.State.FirstSeq)))
+	var pending, ackPending, redelivered float64
+	for _, l := range lanes {
+		info, err := l.cons.Info(ictx)
+		if err != nil {
+			slog.Debug("telemetry consumer info unread", "facility", "ingest", "durable", l.name, "error", err.Error())
+			return
+		}
+		pending += float64(info.NumPending)
+		ackPending += float64(info.NumAckPending)
+		redelivered += float64(info.NumRedelivered)
+	}
+	m.gauge(writerclass.BusConsumerPending, "", pending)
+	m.gauge(writerclass.BusConsumerAckPending, "", ackPending)
+	m.gauge(writerclass.BusConsumerRedelivered, "", redelivered)
+}
+
+// ackFloor is the work-queue stream's ack floor from its first held
+// sequence: every batch below it is answered. An empty stream's first is one
+// past its last, so its floor is its head; a stream never written reads 0.
+// Pure.
+func ackFloor(first uint64) uint64 {
+	if first == 0 {
+		return 0
+	}
+	return first - 1
 }
