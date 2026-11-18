@@ -161,6 +161,13 @@ A name is a lookup, so it lands on whatever the one row you can see by that name
 answers with the row it reached (a secret's `owner_kind` and `owner_name`), and a script that must
 never drift, a credential rotation above all, addresses `<owner>/<name>` or stores the uuid.
 
+### An unknown verb is a failure
+
+A group (`component`, `component alarm`, `sim`) only routes to its subcommands. Run bare it prints
+its help and exits 0; given a word it does not know, it exits non-zero with
+`unknown command "raise" for "omniglass component alarm"` on stderr, so a script that guesses a verb
+fails instead of passing green while nothing happened.
+
 ## Authentication
 
 There are two ways to authenticate, both accepted on every request. A **bearer token** in
@@ -757,9 +764,24 @@ omniglass notification list --status failed                          # scoped by
 omniglass notification retry <id>                                     # notification:retry, an operator's
 omniglass notification-target create --name on-call-page --kind user_group --user-group on-call --channels '["inbox","email"]'
 omniglass notification-target create --name ops-mailbox --kind email --addresses '["ops@example.com"]'
+omniglass notification-target create --name site-admins --kind role --role admin --channels '["inbox","email"]'  # whoever holds admin, read at each alarm
 omniglass auth me notification list --unread                          # your own inbox, scoped as you read now
 omniglass auth me notification markAllRead
 omniglass sim mail --listen 0.0.0.0:2525 --out /tmp/mail.jsonl         # a mail relay simulator for a lab
+```
+
+A fresh install already routes its own alarms: the shipped `platform-alarms-to-admins` rule sends every
+alarm on the reserved `platform` system to two shipped `role` targets, `platform-admins` (role `admin`) and
+`platform-owners` (role `owner`, which does not inherit admin), in the console inbox
+([role targets](/architecture/alarms-actions/#role-targets-and-the-shipped-platform-routing)). The rows
+are official: the boot seed puts what it ships back on every start, and an edit of it or a delete is a
+409. Silence the routing with `enabled`, which a restart keeps, or add a target of your own beside the
+shipped ones; grant `admin` to the people who run the install.
+
+```sh
+omniglass action-rule get platform-alarms-to-admins | jq -c '{when, targets, enabled}'
+omniglass action-rule update platform-alarms-to-admins --enabled=false           # survives a restart
+omniglass action-rule update platform-alarms-to-admins --targets '["platform-admins","platform-owners","ops-chat"]'
 ```
 
 A noisy alarm is snoozed for `1m` to `7d`, and the snooze carries to the alarm raised again after

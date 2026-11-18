@@ -12,7 +12,11 @@ sidebar:
 systems, components, and the data they report), and a first session against the lab, a working
 Omniglass on your own machine with a simulated fleet to learn on.
 
-Until this section is written (#2156), start with
-[Try omniglass in five minutes](/guides/lab/), [Why Omniglass](/architecture/why/) and the
-[architecture overview](/architecture/). Every current page sits under **Being rebuilt** in the
-sidebar until its section replaces it.
+Read it in order:
+
+1. [What Omniglass is](/start/what-omniglass-is/): the problem, why AV needs its own observability
+   platform, and what Omniglass does about it.
+2. [The model in one pass](/start/the-model/): the words Omniglass is built on, in the order the data
+   travels.
+3. [Your first ten minutes](/start/first-ten-minutes/): a working Omniglass on your machine, signed
+   in, walking a simulated fleet with planted faults.

@@ -424,6 +424,7 @@ telemetry: {
   notification_target: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    role_id: uuid {constraint: foreign_key}
     secret_id: uuid {constraint: foreign_key}
     user_group_id: uuid {constraint: foreign_key}
     user_id: uuid {constraint: foreign_key}
@@ -782,6 +783,7 @@ telemetry.notification.notification_type_id -> telemetry.notification_type.id
 telemetry.notification.recipient_user_id -> identity.users.id
 telemetry.notification.rule_id -> telemetry.action_rule.id
 telemetry.notification.target_id -> telemetry.notification_target.id
+telemetry.notification_target.role_id -> identity.role.id
 telemetry.notification_target.secret_id -> config.secret.id
 telemetry.notification_target.user_group_id -> identity.user_group.id
 telemetry.notification_target.user_id -> identity.users.id

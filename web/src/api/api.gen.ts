@@ -56,6 +56,7 @@ export type ActionRuleBody = {
   notification_type?: string;
   /** That type's uuid */
   notification_type_id?: string;
+  /** Shipped with Omniglass by the boot seed: only its enabled switch, its opt-out allowance and the targets added to it are the operator's, and it cannot be deleted */
   official: boolean;
   /**
      * The alarm transitions it fires on: raised, cleared, or both
@@ -1849,7 +1850,7 @@ export type CreateActionRuleInputBody = {
      * @nullable
      */
   targets: string[] | null;
-  /** A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
+  /** A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, platform, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
   when?: string;
 };
 
@@ -2595,6 +2596,7 @@ export const CreateNotificationTargetInputBodyKind = {
   email: 'email',
   user_group: 'user_group',
   user: 'user',
+  role: 'role',
 } as const;
 
 export type CreateNotificationTargetInputBody = {
@@ -2606,7 +2608,7 @@ export type CreateNotificationTargetInputBody = {
      */
   addresses?: string[] | null;
   /**
-     * A group or person target's channels: inbox, email
+     * A group, person or role target's channels: inbox, email
      * @nullable
      */
   channels?: string[] | null;
@@ -2621,6 +2623,8 @@ export type CreateNotificationTargetInputBody = {
      * @minLength 1
      */
   name: string;
+  /** A role target's role, by name or uuid; binding one takes role:read:admin and user:read:admin, since it reaches whoever holds the role */
+  role?: string;
   /** A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) */
   secret?: string;
   /** A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
@@ -4811,7 +4815,7 @@ export const NotificationTargetBodyAuth = {
 } as const;
 
 /**
- * The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person. A person is told only about alarms on components they can read
+ * The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person; role reaches every person holding the role, directly or through a group grant, read at each alarm transition. A person is told only about alarms on components they can read
  */
 export type NotificationTargetBodyKind = typeof NotificationTargetBodyKind[keyof typeof NotificationTargetBodyKind];
 
@@ -4821,6 +4825,7 @@ export const NotificationTargetBodyKind = {
   email: 'email',
   user_group: 'user_group',
   user: 'user',
+  role: 'role',
 } as const;
 
 /**
@@ -4846,10 +4851,16 @@ export type NotificationTargetBody = {
   enabled: boolean;
   /** The target's uuid, the stable form of name */
   id: string;
-  /** The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person. A person is told only about alarms on components they can read */
+  /** The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person; role reaches every person holding the role, directly or through a group grant, read at each alarm transition. A person is told only about alarms on components they can read */
   kind: NotificationTargetBodyKind;
   label?: string;
   name: string;
+  /** Shipped with Omniglass by the boot seed: only its label and enabled switch are the operator's, and it cannot be deleted */
+  official: boolean;
+  /** The role a role target reaches the holders of, by name; shown to a caller who reads roles (role:read:admin, all-scope) */
+  role?: string;
+  /** The role's uuid */
+  role_id?: string;
   /** The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned */
   secret?: string;
   /** The bound secret's uuid, the stable form of secret */
@@ -8499,7 +8510,7 @@ export type UpdateNotificationTargetInputBody = {
   readonly $schema?: string;
   /** An email target's recipient addresses */
   addresses?: string[];
-  /** A group or person target's channels: inbox, email */
+  /** A group, person or role target's channels: inbox, email; refused on a shipped (official) target */
   channels?: string[];
   /** Whether deliveries go to it */
   enabled?: boolean;
@@ -9316,7 +9327,7 @@ export const getDeleteActionRuleUrl = (name: string,) => {
 }
 
 /**
- * Removes a rule; the notifications it queued keep its name. Audited. Gated by rule:delete, with an all-scope grant.
+ * Removes a rule; the notifications it queued keep its name. A shipped (official) rule is a 409: disable it instead. Audited. Gated by rule:delete, with an all-scope grant.
  * @summary Delete an action rule
  */
 export const deleteActionRule = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteActionRuleResponse> => {
@@ -9404,7 +9415,7 @@ export const getUpdateActionRuleUrl = (name: string,) => {
 }
 
 /**
- * Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. Audited. Gated by rule:update, with an all-scope grant.
+ * Patches a rule (an absent field is unchanged; on and targets replace their sets). It acts on transitions from the next one; a notification already queued is not re-rendered. A shipped (official) rule takes only enabled, opt_out_allowed and targets that keep the shipped ones; anything else is a 409. Audited. Gated by rule:update, with an all-scope grant.
  * @summary Update an action rule
  */
 export const updateActionRule = async (name: string,
@@ -17667,7 +17678,7 @@ export const getCreateNotificationTargetUrl = () => {
 }
 
 /**
- * Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+ * Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition), one user, or a role (every person holding it, directly or through a group grant, read at each alarm transition), on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin, binding a person user:read:admin, and binding a role role:read:admin and user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
  * @summary Create a notification target
  */
 export const createNotificationTarget = async (createNotificationTargetInputBody: NonReadonly<CreateNotificationTargetInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNotificationTargetResponse> => {
@@ -17711,7 +17722,7 @@ export const getDeleteNotificationTargetUrl = (name: string,) => {
 }
 
 /**
- * Removes a target. One an action rule still sends to is a 409. Audited. Gated by notification_target:delete with an all-scope grant.
+ * Removes a target. One an action rule still sends to is a 409, and so is a shipped (official) one, which is disabled instead. Audited. Gated by notification_target:delete with an all-scope grant.
  * @summary Delete a notification target
  */
 export const deleteNotificationTarget = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteNotificationTargetResponse> => {
@@ -17799,7 +17810,7 @@ export const getUpdateNotificationTargetUrl = (name: string,) => {
 }
 
 /**
- * Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+ * Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. A shipped (official) target takes only its label and enabled flag; any other field is a 409. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
  * @summary Update a notification target
  */
 export const updateNotificationTarget = async (name: string,
@@ -17888,7 +17899,7 @@ export const getTestNotificationTargetUrl = (name: string,) => {
 }
 
 /**
- * Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group or person target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
+ * Sends one synthetic message (transition test, about no alarm) to a webhook or email target through the egress contract, signed or authenticated as a delivery would be (an email through the install's mail relay), and answers what the receiver said; a group, person or role target is a 422, since people are told only about alarms. Records nothing but its audit row (the result, never the URL). A disabled target is still tested. Gated by notification_target:test with an all-scope grant.
  * @summary Send a test notification to a target
  */
 export const testNotificationTarget = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<testNotificationTargetResponse> => {
