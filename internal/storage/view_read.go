@@ -57,6 +57,9 @@ type ViewBinding struct {
 	Page  string
 	Logs  LogFilter
 	Read  scope.Set
+	// SystemRead is the caller's system:read scope, used to scope the
+	// filter.system lookup. An empty set admits nothing.
+	SystemRead scope.Set
 }
 
 // ViewEntity is one entity a binding's selector resolved to.
@@ -311,14 +314,25 @@ func viewRefErr(ref string, err, notFound error) error {
 	return err
 }
 
-// resolveFilterSystem resolves a filter.system ref to its UUID. Names are
-// unique only per placement (since migration 20260808090000), so a bare name
-// that matches more than one system is refused with a 422 rather than
-// silently merging their members. A UUID always resolves uniquely.
+// resolveFilterSystem resolves a filter.system ref to its UUID within the
+// caller's system read scope. Names are unique only per placement (since
+// migration 20260808090000), so a bare name that matches more than one
+// in-scope system is refused with a 422 rather than silently merging their
+// members. A UUID always resolves uniquely. An empty read scope admits
+// nothing and returns "".
 var ErrFilterSystemAmbiguous = errors.New("storage: filter.system name matches more than one system; use a uuid")
 
-func (p *PG) resolveFilterSystem(ctx context.Context, q querier, ref string) (string, error) {
-	rows, err := q.Query(ctx, `select id::text from system where name = $1 or id::text = $1 limit 3`, ref)
+func (p *PG) resolveFilterSystem(ctx context.Context, q querier, ref string, read scope.Set) (string, error) {
+	args, ok := scopedListArgs(systemTable, read)
+	if !ok {
+		return "", nil
+	}
+	args = append(args, ref)
+	n := len(args)
+	sql := fmt.Sprintf(
+		`select id from (`+scopedListSQL(systemTable, "id::text as id, name", read)+`) s where s.name = $%d or s.id = $%d limit 3`,
+		n, n)
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return "", fmt.Errorf("storage: resolve filter system %q: %w", ref, err)
 	}
@@ -356,7 +370,7 @@ func (p *PG) listViewEntities(ctx context.Context, q querier, b ViewBinding) ([]
 		conds = append(conds, fmt.Sprintf(cond, len(args)))
 	}
 	if b.Filter.System != "" {
-		systemID, err := p.resolveFilterSystem(ctx, q, b.Filter.System)
+		systemID, err := p.resolveFilterSystem(ctx, q, b.Filter.System, b.SystemRead)
 		if err != nil {
 			return nil, err
 		}

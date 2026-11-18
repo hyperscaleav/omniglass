@@ -268,7 +268,7 @@ func TestReadViewsFilterSelectsTheRightEntities(t *testing.T) {
 	}
 	ents, err := gw.ResolveViewEntities(ctx, storage.ViewBinding{
 		Primitive: tail.LaneMetric, Kind: "component",
-		Filter: storage.ViewFilter{System: sys.Name}, Read: all,
+		Filter: storage.ViewFilter{System: sys.Name}, Read: all, SystemRead: all,
 	})
 	if err != nil {
 		t.Fatalf("filter.system resolve: %v", err)
@@ -279,7 +279,7 @@ func TestReadViewsFilterSelectsTheRightEntities(t *testing.T) {
 	// Also works by UUID.
 	ents2, err := gw.ResolveViewEntities(ctx, storage.ViewBinding{
 		Primitive: tail.LaneMetric, Kind: "component",
-		Filter: storage.ViewFilter{System: sys.ID}, Read: all,
+		Filter: storage.ViewFilter{System: sys.ID}, Read: all, SystemRead: all,
 	})
 	if err != nil {
 		t.Fatalf("filter.system by uuid: %v", err)
@@ -366,11 +366,59 @@ func TestReadViewsFilterSystemAmbiguousNameRefuses(t *testing.T) {
 
 	_, err := gw.ResolveViewEntities(ctx, storage.ViewBinding{
 		Primitive: tail.LaneMetric, Kind: "component",
-		Filter: storage.ViewFilter{System: "shared-name"}, Read: all,
+		Filter: storage.ViewFilter{System: "shared-name"}, Read: all, SystemRead: all,
 	})
 	if !errors.Is(err, storage.ErrFilterSystemAmbiguous) {
 		t.Fatalf("ambiguous filter.system: %v, want ErrFilterSystemAmbiguous", err)
 	}
+}
+
+// filter.system is scoped to the caller's system read scope: a system outside
+// that scope cannot be matched, even if the system exists and its name is
+// globally unique.
+func TestReadViewsFilterSystemScopedToCallersSystems(t *testing.T) {
+	t.Parallel()
+	ctx, gw, _, _ := viewGateway(t)
+	all := scope.Set{All: true}
+
+	inScope, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "scope-sys-in"}, all, all)
+	if err != nil {
+		t.Fatalf("create in-scope system: %v", err)
+	}
+	outOfScope, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "scope-sys-out"}, all, all)
+	if err != nil {
+		t.Fatalf("create out-of-scope system: %v", err)
+	}
+
+	callerSysRead := scope.Set{SelfIDs: []string{inScope.ID}, Resource: "system"}
+
+	// A system outside the caller's scope matches nothing.
+	ents, err := gw.ResolveViewEntities(ctx, storage.ViewBinding{
+		Primitive:  tail.LaneMetric,
+		Kind:       "component",
+		Filter:     storage.ViewFilter{System: outOfScope.Name},
+		Read:       all,
+		SystemRead: callerSysRead,
+	})
+	if err != nil {
+		t.Fatalf("out-of-scope filter.system: unexpected error %v", err)
+	}
+	if len(ents) != 0 {
+		t.Fatalf("out-of-scope filter.system resolved %+v, want empty", ents)
+	}
+
+	// A system inside the caller's scope resolves normally (no members yet, so empty entities).
+	ents2, err := gw.ResolveViewEntities(ctx, storage.ViewBinding{
+		Primitive:  tail.LaneMetric,
+		Kind:       "component",
+		Filter:     storage.ViewFilter{System: inScope.Name},
+		Read:       all,
+		SystemRead: callerSysRead,
+	})
+	if err != nil {
+		t.Fatalf("in-scope filter.system: %v", err)
+	}
+	_ = ents2 // empty because no components are members yet; the point is no error
 }
 
 // A view read never holds the tail's fence while it waits on the pool: a

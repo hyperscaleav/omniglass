@@ -228,6 +228,7 @@ func viewBindings(ctx context.Context, a *authenticator, in []viewBindingBody, w
 			return nil, huma.Error403Forbidden(fmt.Sprintf("binding %d reads %ss, which needs %s:read", i, b.Kind, b.Kind))
 		}
 		b.Read = a.scopeFor(ctx, b.Kind, "read")
+		b.SystemRead = a.scopeFor(ctx, "system", "read")
 		out = append(out, b)
 	}
 	return out, nil
