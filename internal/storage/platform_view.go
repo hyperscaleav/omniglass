@@ -147,6 +147,7 @@ var PlatformServerGroups = []PlatformServerGroup{
 		{Name: writerclass.IngestLaneBusy},
 		{Name: writerclass.SweepFailureCount, Of: writerclass.SweepCount, Window: true},
 		{Name: writerclass.SweepCount, Window: true},
+		{Name: writerclass.RuleSweepAge},
 	}},
 	{Name: "retention", Label: "Retention", Keys: []PlatformServerKey{
 		{Name: writerclass.RetentionBehind},

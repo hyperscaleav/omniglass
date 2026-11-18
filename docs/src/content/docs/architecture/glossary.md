@@ -1,6 +1,9 @@
 ---
 title: Glossary
 description: "The authoritative glossary: every official term in the architecture, defined once."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 :::note[Frozen internal reference]

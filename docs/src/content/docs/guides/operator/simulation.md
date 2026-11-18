@@ -19,7 +19,7 @@ console.
 **In a lab**, with nothing but Docker, run `omniglass lab run` (`make lab` from a checkout): its own
 server and database, and the outpost `edge-hq` running the simulator in its own process with impairments
 applied, so the seeded fleet is collected for real and the console is at `http://127.0.0.1:8080/web`
-([try omniglass in five minutes](/guides/lab/)).
+([your first ten minutes](/start/first-ten-minutes/)).
 
 **Beside an outpost of your own**, run the outpost with the simulator in its process:
 `omniglass outpost run --simulate` serves the components placed on that outpost on its own loopback, with

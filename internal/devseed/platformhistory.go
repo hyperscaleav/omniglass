@@ -113,8 +113,10 @@ var platformHistory = func() map[string][]historySeries {
 		writerclass.OutboxQueuedDepth:                  zero(),
 		writerclass.OutboxDueAge:                       zero(),
 		writerclass.IngestLaneBusy:                     zero(),
-		writerclass.RetentionPassFailureCount:          zero(),
-		writerclass.RetentionWindowDays:                {{instance: "metric", base: 14, whole: true}},
+		// The sweep ticks every 5 s, so a healthy lab's age runs 0 to 5.
+		writerclass.RuleSweepAge:              one(2.5, 0.4),
+		writerclass.RetentionPassFailureCount: zero(),
+		writerclass.RetentionWindowDays:       {{instance: "metric", base: 14, whole: true}},
 	}
 	for _, r := range consoleRoutes {
 		h[writerclass.HTTPRequestDurationMax] = append(h[writerclass.HTTPRequestDurationMax], historySeries{instance: r.route, base: r.ms, swing: 0.3})
