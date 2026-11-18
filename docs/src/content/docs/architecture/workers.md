@@ -1,6 +1,9 @@
 ---
 title: Workers
 description: "One worker machinery over several JetStream consumers, plus the backtest capability and the reconcile loop over declared values."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 :::note[Implementation status]

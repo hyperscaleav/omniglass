@@ -1,6 +1,9 @@
 ---
 title: Why Omniglass
 description: "What Omniglass is, what it is for, and why AV needs its own observability platform instead of an IT monitoring tool."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 Run AV at scale and you know the feeling. You find out a room is broken when someone walks out
