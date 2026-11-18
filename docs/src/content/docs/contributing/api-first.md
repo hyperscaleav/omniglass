@@ -45,7 +45,7 @@ sorted, list entries in their source order. For those two, hunks that touch diff
 on their own:
 
 - `docs/src/generated/seed.json`: `cmd/seedgen`'s tests hold the layout, and
-  `internal/seed`'s merge test adds two property types at different places in one YAML, regenerates
+  `internal/seed`'s merge test adds two property types at different points in one YAML, regenerates
   each branch, and requires git's line merge of the two `seed.json` files to come back clean and
   equal to a fresh render.
 - `api/openapi.json`: `cmd/openapigen`'s canonical-layout test holds the same shape.
