@@ -12,7 +12,7 @@
     {
       "n": 2,
       "kind": "click",
-      "caption": "Add an endpoint, the way a node reaches the display.",
+      "caption": "Add an endpoint, the way an outpost reaches the display.",
       "still": "step-02.png"
     },
     {
@@ -42,7 +42,7 @@
     {
       "n": 7,
       "kind": "select",
-      "caption": "The node edge-hq collects it.",
+      "caption": "The outpost edge-hq collects it.",
       "still": "step-07.png"
     },
     {
@@ -66,7 +66,7 @@
     {
       "n": 11,
       "kind": "click",
-      "caption": "Save. No re-attach; the node reconnects on the new address at its next check-in.",
+      "caption": "Save. No re-attach; the outpost reconnects on the new address at its next check-in.",
       "still": "step-11.png"
     },
     {
@@ -85,8 +85,8 @@
   "poster": "step-13.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 47.1,
-    "bytes": 674850,
-    "previewBytes": 453970
+    "seconds": 47.5,
+    "bytes": 693328,
+    "previewBytes": 444410
   }
 }

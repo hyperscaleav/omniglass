@@ -12,7 +12,7 @@ import (
 // PanicError is a panic recovered on a session-layer goroutine, made an
 // error: the session it ran under fails it as it fails any other cause
 // (#1636), so one device's bad bytes cost that device's session, never the
-// node.
+// outpost.
 type PanicError struct {
 	// Where names the goroutine that panicked ("line reader 10.0.0.9:51325").
 	Where string
@@ -62,7 +62,7 @@ func asPanic(err error) (*PanicError, bool) {
 }
 
 // DialSlots bounds how many sessions make their first dial at once,
-// node-wide: a node restarted with every held endpoint wanted brings them up
+// outpost-wide: an outpost restarted with every held endpoint wanted brings them up
 // a few at a time rather than all at once. A session waiting for a slot
 // reads establishing; a redial takes none.
 // Nil is unbounded.

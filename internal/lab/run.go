@@ -72,8 +72,8 @@ type Lab struct {
 	// address); BaseURL is where this machine reaches the API.
 	ConsoleURL string
 	BaseURL    string
-	// NodeRunning is false for a scenario with no node to run.
-	NodeRunning bool
+	// OutpostRunning is false for a scenario with no outpost to run.
+	OutpostRunning bool
 	// Pending, when set, says what had not finished coming up when the
 	// readiness wait ran out (some endpoints not up yet).
 	Pending string
@@ -192,14 +192,17 @@ func (r *Runner) preflight(ctx context.Context, spec Spec, cfg Config, capacity 
 	if err := r.PortFree(cfg.Listen, cfg.Port); err != nil {
 		return c, err
 	}
-	labels, found, err := r.Engine.ImageLabels(ctx, c.Ref)
+	info, found, err := r.Engine.InspectImage(ctx, c.Ref)
 	if err != nil {
 		return c, fmt.Errorf("look up the image %s: %w", c.Ref, err)
 	}
-	if err := CheckDevImage(c, found, labels); err != nil {
+	if err := CheckDevImage(c, found, info.Labels); err != nil {
 		return c, &PreflightError{Cause: err.Error(), Fix: "run `make` in your omniglass checkout, then run the lab again.", Err: err}
 	}
-	if c.Warning != "" && found && c.OwnBuild(labels) {
+	// Pin the image the check read: the containers are created from this ID,
+	// so a tag re-pointed by another build after this line changes nothing.
+	c.ID = info.ID
+	if c.Warning != "" && found && c.OwnBuild(info.Labels) {
 		c.Warning, c.Why = "", "this binary's own build"
 	}
 	if c.Warning != "" {
@@ -221,9 +224,9 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 	var notUp *SitesNotUpError
 	if err != nil && !errors.As(err, &notUp) && ctx.Err() == nil &&
 		(errors.Is(err, errTimedOut) || errors.Is(bounded.Err(), context.DeadlineExceeded)) {
-		states := make([]SiteState, len(cfg.SiteNodes))
-		for i, n := range cfg.SiteNodes {
-			states[i] = SiteState{Node: n.Name, Want: n.Components}
+		states := make([]SiteState, len(cfg.SiteOutposts))
+		for i, n := range cfg.SiteOutposts {
+			states[i] = SiteState{Outpost: n.Name, Want: n.Components}
 		}
 		return nil, &SitesNotUpError{Timeout: cfg.ScaleRun.Timeout, Stage: *stage, States: states}
 	}
@@ -235,23 +238,42 @@ func (r *Runner) up(ctx context.Context, spec Spec, cfg Config) (*Lab, error) {
 func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *string) (*Lab, error) {
 	lab := &Lab{Spec: spec, ids: map[string]string{}, guarded: []string{"db", "server"}}
 	*stage = "pulling the images"
-	for _, ref := range []struct{ ref string }{{cfg.Image.Ref}, {PostgresImage}} {
-		_, found, err := r.Engine.ImageLabels(ctx, ref.ref)
+	imageID := cfg.Image.ID
+	for _, ref := range []string{cfg.Image.Ref, PostgresImage} {
+		if ref == cfg.Image.Ref && imageID != "" {
+			// Preflight found it and pinned its ID; the tag is not read again.
+			continue
+		}
+		_, found, err := r.Engine.InspectImage(ctx, ref)
 		if err != nil {
 			return nil, err
 		}
 		if found {
 			continue
 		}
-		if ref.ref == cfg.Image.Ref && !cfg.Image.Pull {
-			return nil, fmt.Errorf("the image %s is not built; run `make`", ref.ref)
+		if ref == cfg.Image.Ref && !cfg.Image.Pull {
+			return nil, fmt.Errorf("the image %s is not built; run `make`", ref)
 		}
-		r.step("image", "pulling "+ref.ref+" (a one-time download)")
-		if err := r.Engine.PullImage(ctx, ref.ref); err != nil {
-			return nil, fmt.Errorf("pull %s: %w", ref.ref, err)
+		r.step("image", "pulling "+ref+" (a one-time download)")
+		if err := r.Engine.PullImage(ctx, ref); err != nil {
+			return nil, fmt.Errorf("pull %s: %w", ref, err)
 		}
 	}
+	if imageID == "" {
+		// A pulled image has no ID until it is local.
+		info, found, err := r.Engine.InspectImage(ctx, cfg.Image.Ref)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, fmt.Errorf("the image %s is not present after its pull", cfg.Image.Ref)
+		}
+		imageID = info.ID
+	}
 	r.step("image", fmt.Sprintf("%s (%s)", cfg.Image.Ref, cfg.Image.Why))
+	// The lab reports the spec as planned (the reference a person gave);
+	// its containers run the pinned image.
+	run := spec.WithImage(imageID)
 
 	if cfg.Fresh {
 		vols, err := r.Engine.Volumes(ctx, ProjectLabels(spec.Project))
@@ -296,7 +318,7 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 	r.step("database", "Postgres is ready")
 
 	*stage = "seeding the fleet"
-	seedID, err := r.Engine.RunContainer(ctx, spec.Seed, spec.Network)
+	seedID, err := r.Engine.RunContainer(ctx, run.Seed, run.Network)
 	lab.ids["seed"] = seedID
 	if err != nil {
 		return nil, fmt.Errorf("start the seed: %w", err)
@@ -315,7 +337,7 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 	delete(lab.ids, "seed")
 
 	*stage = "waiting for the server"
-	id, err = r.Engine.RunContainer(ctx, spec.Server, spec.Network)
+	id, err = r.Engine.RunContainer(ctx, run.Server, run.Network)
 	lab.ids["server"] = id
 	if err != nil {
 		return nil, fmt.Errorf("start the server: %w", err)
@@ -359,17 +381,17 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 	r.step("sign in", fmt.Sprintf("the login %s / %s works", LoginUser, LoginPassword))
 
 	if cfg.ScaleRun != nil {
-		*stage = "starting the sites' nodes"
-		for _, n := range spec.Nodes {
-			id, err := r.Engine.RunContainer(ctx, n, spec.Network)
+		*stage = "starting the sites' outposts"
+		for _, n := range run.Outposts {
+			id, err := r.Engine.RunContainer(ctx, n, run.Network)
 			lab.ids[n.Name] = id
 			if err != nil {
-				return nil, fmt.Errorf("start the node %s: %w", n.Name, err)
+				return nil, fmt.Errorf("start the outpost %s: %w", n.Name, err)
 			}
 			lab.guarded = append(lab.guarded, n.Name)
 		}
-		lab.NodeRunning = true
-		r.step("nodes", fmt.Sprintf("%d, one per site", len(spec.Nodes)))
+		lab.OutpostRunning = true
+		r.step("outposts", fmt.Sprintf("%d, one per site", len(spec.Outposts)))
 		*stage = "waiting for the sites"
 		if err := r.waitSites(ctx, lab, client, cfg); err != nil {
 			return nil, err
@@ -377,30 +399,30 @@ func (r *Runner) upStages(ctx context.Context, spec Spec, cfg Config, stage *str
 		return lab, nil
 	}
 
-	if !res.Node {
-		if cfg.NoNode {
-			r.step("node", "none runs (--no-node): the fleet holds still, with nothing collecting from it")
+	if !res.Outpost {
+		if cfg.NoOutpost {
+			r.step("outpost", "none runs (--no-outpost): the fleet holds still, with nothing collecting from it")
 		} else {
-			r.step("node", "this scenario places no node, so none runs")
+			r.step("outpost", "this scenario places no outpost, so none runs")
 		}
 		return lab, nil
 	}
-	id, err = r.Engine.RunContainer(ctx, spec.Node, spec.Network)
-	lab.ids["node"] = id
+	id, err = r.Engine.RunContainer(ctx, run.Outpost, run.Network)
+	lab.ids["outpost"] = id
 	if err != nil {
-		return nil, fmt.Errorf("start the node: %w", err)
+		return nil, fmt.Errorf("start the outpost: %w", err)
 	}
-	lab.NodeRunning = true
-	lab.guarded = append(lab.guarded, "node")
+	lab.OutpostRunning = true
+	lab.guarded = append(lab.guarded, "outpost")
 	last, err := r.waitCollecting(ctx, lab, client, cfg.PlantedFaults)
 	switch {
 	case errors.Is(err, errTimedOut) && last.Running == last.Components && last.Components > 0:
-		// Everything runs and the node collects; some endpoints have not read
+		// Everything runs and the outpost collects; some endpoints have not read
 		// up in time. Worth saying, not worth taking the lab down for.
 		lab.Pending = fmt.Sprintf("%d of %d simulated endpoints are not up yet; the console's fleet view shows which, and why.",
 			last.Endpoints-last.Up, last.Endpoints)
 	case err != nil:
-		return nil, r.withLogs(ctx, err, "node", id)
+		return nil, r.withLogs(ctx, err, "outpost", id)
 	}
 	return lab, nil
 }
@@ -458,17 +480,17 @@ func (r *Runner) waitCollecting(ctx context.Context, lab *Lab, c *http.Client, p
 	}
 	var lastSim, lastCol string
 	var last Progress
-	err := r.waitFor(ctx, "the node to collect from the simulated fleet", func() (bool, error) {
-		if st, err := r.Engine.Inspect(ctx, lab.ID("node")); err == nil && !st.Running && !st.Restarting {
-			return false, r.stopped(ctx, "node", lab.ID("node"), st)
+	err := r.waitFor(ctx, "the outpost to collect from the simulated fleet", func() (bool, error) {
+		if st, err := r.Engine.Inspect(ctx, lab.ID("outpost")); err == nil && !st.Running && !st.Restarting {
+			return false, r.stopped(ctx, "outpost", lab.ID("outpost"), st)
 		}
 		p, err := readProgress(ctx, c, lab.BaseURL, planted)
 		if err != nil {
 			return false, nil
 		}
 		last = p
-		if s := fmt.Sprintf("%s with its simulator: %d of %d simulated components running", NodeName, p.Running, p.Components); p.Connected && s != lastSim {
-			r.step("node", s)
+		if s := fmt.Sprintf("%s with its simulator: %d of %d simulated components running", OutpostName, p.Running, p.Components); p.Connected && s != lastSim {
+			r.step("outpost", s)
 			lastSim = s
 		}
 		if p.Running < p.Components || p.Components == 0 {

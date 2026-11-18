@@ -39,7 +39,7 @@ func TestSetPasswordBreakGlassLockout(t *testing.T) {
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: bh, Prefix: bp, PasswordHash: pwHash, ExpiresAt: &future}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	pid, err := gw.ResolveUserRef(ctx, "root")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -100,9 +100,9 @@ func TestSetPasswordBreakGlassLockout(t *testing.T) {
 		t.Fatalf("set-password on an unknown user should error")
 	}
 
-	// A service account sharing the username (#1133's review): the break-glass
+	// A machine user sharing the username (#1133's review): the break-glass
 	// still revokes the HUMAN's sessions, the one whose password it rotated. A
-	// principal reference would now find both and refuse, after the password had
+	// user reference would now find both and refuse, after the password had
 	// already moved, leaving a stolen session alive.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -110,17 +110,17 @@ func TestSetPasswordBreakGlassLockout(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	var svc string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&svc); err != nil {
-		t.Fatalf("insert service principal: %v", err)
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&svc); err != nil {
+		t.Fatalf("insert service user: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, 'root')`, svc); err != nil {
+	if _, err := conn.Exec(ctx, `insert into machine (user_id, name) values ($1, 'root')`, svc); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	addSession()
 	if err := runSetPassword(ctx, "root", "blue-harbor-31x", false); err != nil {
-		t.Fatalf("set-password beside a same-named service account: %v", err)
+		t.Fatalf("set-password beside a same-named machine user: %v", err)
 	}
 	if s, _ := counts(); s != 0 {
-		t.Fatalf("after break-glass beside a same-named service account: %d session(s) survived", s)
+		t.Fatalf("after break-glass beside a same-named machine user: %d session(s) survived", s)
 	}
 }

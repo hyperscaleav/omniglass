@@ -13,7 +13,7 @@ import (
 )
 
 // TestInterfaceScopeCRUD covers the interface tier's component-cascade scope: an
-// interface inherits its owning component's read/action scope. A principal scoped
+// interface inherits its owning component's read/action scope. A user scoped
 // to component A can list/get/create/update/delete A's interfaces and is denied
 // (empty list / non-disclosing 404 / forbidden) B's interface and any
 // component-less one. The interface is protocol-named (name = its transport/type),

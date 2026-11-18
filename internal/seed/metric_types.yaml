@@ -17,7 +17,7 @@ metric_types:
     description: Time to establish the TCP connection; absent when the port is closed.
   # Collection telemetry (#1369): each endpoint's account of its own
   # collection over a report window (collection.report_seconds), the
-  # built-in data every endpoint carries whatever its driver. The node writes
+  # built-in data every endpoint carries whatever its driver. The outpost writes
   # the poll and push keys; the server writes the webhook keys.
   - name: poll-duration
     data_type: float
@@ -29,7 +29,7 @@ metric_types:
     unit: ms
     precision: 3
     label: Poll CPU Time
-    description: Mean CPU the kernel charged the endpoint's driver poll runs over the report window, read from each run's thread clock, so time waiting on the device is not in it; absent when no poll ran or the node's platform has no thread clock.
+    description: Mean CPU the kernel charged the endpoint's driver poll runs over the report window, read from each run's thread clock, so time waiting on the device is not in it; absent when no poll ran or the outpost's platform has no thread clock.
   - name: poll-failure-count
     data_type: int
     label: Poll Failures
@@ -49,7 +49,7 @@ metric_types:
   - name: poll-skipped-count
     data_type: int
     label: Skipped Polls
-    description: The endpoint's due driver polls the node skipped in the report window because the poll's last run was still in flight; counted, never queued; reported only when nonzero.
+    description: The endpoint's due driver polls the outpost skipped in the report window because the poll's last run was still in flight; counted, never queued; reported only when nonzero.
   - name: push-message-count
     data_type: int
     label: Pushed Messages
@@ -66,30 +66,30 @@ metric_types:
     data_type: int
     label: Webhook Refusals
     description: Webhook posts to the endpoint the server refused (a bad signature, a missing credential) in the report window; reported only when nonzero.
-  # Platform self-monitoring (#1625, #1094): a node's account of its own
-  # schedule, spool, sessions and process, landed on the node's component in
-  # the platform system under the platform writer class. Only the node (and the
+  # Platform self-monitoring (#1625, #1094): an outpost's account of its own
+  # schedule, spool, sessions and process, landed on the outpost's component in
+  # the platform system under the platform writer class. Only the outpost (and the
   # server, for checkin-age) may write them; no driver, rule or operator can.
   - name: checkin-age
     data_type: float
     unit: s
     label: Check-in Age
-    description: Seconds since the node's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the node is silent.
+    description: Seconds since the outpost's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the outpost is silent.
   - name: worklist-task-count
     data_type: int
     label: Worklist Tasks
-    description: Tasks in the worklist the node installed, sampled on each install.
+    description: Tasks in the worklist the outpost installed, sampled on each install.
   - name: worklist-pull-loss-ratio
     data_type: float
     unit: ratio
     precision: 3
     label: Worklist Pull Loss
-    description: The share of the node's worklist pulls over the report window that the bus refused or the node could not read, so the node ran its last worklist; a window with no pull carries the last pull's outcome. 0 is healthy, 1 is a node running a stale worklist.
+    description: The share of the outpost's worklist pulls over the report window that the bus refused or the outpost could not read, so the outpost ran its last worklist; a window with no pull carries the last pull's outcome. 0 is healthy, 1 is an outpost running a stale worklist.
   - name: tick-duration
     data_type: float
     unit: ms
     label: Tick Duration
-    description: The longest pass the node's dispatcher took over one heartbeat window, sampled each heartbeat.
+    description: The longest pass the outpost's dispatcher took over one heartbeat window, sampled each heartbeat.
   - name: tick-overrun-count
     data_type: int
     label: Tick Overruns
@@ -113,29 +113,33 @@ metric_types:
     unit: ratio
     precision: 3
     label: Worker Busy
-    description: Share of the node's worker time spent running polls, probes, commands and runs over the report window; near 1 every worker is busy and dues start to wait. Reported every window, 0 when idle.
+    description: Share of the outpost's worker time spent running polls, probes, commands and runs over the report window; near 1 every worker is busy and dues start to wait. Reported every window, 0 when idle.
+  - name: lane-worker-count
+    data_type: int
+    label: Lane Workers
+    description: How many endpoint lanes the outpost runs at once, each one request in flight to its endpoint; sized at boot from the CPU and memory the outpost may use unless an operator set it. Reported every window.
   - name: spool-batch-count
     data_type: int
     label: Spool Depth
-    description: Batches waiting in the node's spool for the bus, sampled each tick.
+    description: Batches waiting in the outpost's spool for the bus, sampled each tick.
   - name: delivery-in-count
     data_type: int
     label: Delivery In
-    description: Items that reached a hop over the report window, one sample per kind as the instance (metric, property, event, log); a node counts its spool, the server its ingest. At a node's schedule/{kind} instance it counts the runs due on the schedule that produce that kind. Written every window, 0 when quiet.
+    description: Items that reached a hop over the report window, one sample per kind as the instance (metric, property, event, log); an outpost counts its spool, the server its ingest. At an outpost's schedule/{kind} instance it counts the runs due on the schedule that produce that kind. Written every window, 0 when quiet.
   - name: delivery-out-count
     data_type: int
     label: Delivery Out
-    description: Items a hop handed on over the report window, one sample per kind as the instance (metric, property, event, log); a node counts what the bus acknowledged, the server what it stored, coalesced, or had already landed. At a node's schedule/{kind} instance it counts the runs made of those due. Written every window, 0 when quiet.
+    description: Items a hop handed on over the report window, one sample per kind as the instance (metric, property, event, log); an outpost counts what the bus acknowledged, the server what it stored, coalesced, or had already landed. At an outpost's schedule/{kind} instance it counts the runs made of those due. Written every window, 0 when quiet.
   - name: delivery-loss-ratio
     data_type: float
     unit: ratio
     precision: 3
     label: Delivery Loss
-    description: The share of a hop's items that came in and never went out over the report window, one sample per kind as the instance (metric, property, event, log); at a node's schedule/{kind} instance, the share of runs due that were skipped. 0 is healthy, and a quiet window writes 0.
+    description: The share of a hop's items that came in and never went out over the report window, one sample per kind as the instance (metric, property, event, log); at an outpost's schedule/{kind} instance, the share of runs due that were skipped. 0 is healthy, and a quiet window writes 0.
   - name: session-held-count
     data_type: int
     label: Sessions Held
-    description: Device sessions the node holds, one sample per session state as the instance, sampled each tick.
+    description: Device sessions the outpost holds, one sample per session state as the instance, sampled each tick.
   - name: process-goroutine-count
     data_type: int
     label: Goroutines
@@ -154,7 +158,7 @@ metric_types:
     data_type: float
     unit: s
     label: CPU Time
-    description: CPU time the Omniglass process spent since its previous sample (each tick on a node, each report window on the server), as the Go runtime estimates it rather than the kernel's account; divided by that interval it is the cores the process kept busy.
+    description: CPU time the Omniglass process spent since its previous sample (each tick on an outpost, each report window on the server), as the Go runtime estimates it rather than the kernel's account; divided by that interval it is the cores the process kept busy.
   - name: process-fd-count
     data_type: int
     label: Open Files
@@ -270,15 +274,38 @@ metric_types:
     data_type: int
     label: Pool Size
     description: The most connections the server's pool may open; db-pool-total reaching it means a new query waits.
+  - name: db-pool-acquire-count
+    data_type: int
+    label: Pool Acquires
+    description: Connections the server's pool handed out over the report window, the denominator db-pool-wait-count is a share of; a pool that waited 40 times of 50 acquires is starved, of 50,000 it is not.
   - name: db-pool-wait-count
     data_type: int
     label: Pool Waits
-    description: Connection acquires that found the pool exhausted and waited for a connection, over the report window.
+    description: Connection acquires that found the pool exhausted and waited for a connection, over the report window; read against db-pool-acquire-count, 0 is healthy.
   - name: db-pool-wait-duration
     data_type: float
     unit: ms
     label: Pool Wait Time
     description: Total time acquires spent waiting on an exhausted pool for a connection to free up or open, over the report window.
+  # The database's own side of its connections (#1980), read from
+  # pg_stat_activity each report window: what the server's pool cannot see.
+  - name: db-connection-count
+    data_type: int
+    label: Database Connections Held
+    description: Client connections open on the database from every source (the server's pool, migrate, psql, a lab measure, a second server) at the end of the report window, read against db-connection-limit; at the limit the database refuses the next client whatever headroom the server's pool shows.
+  - name: db-connection-limit
+    data_type: int
+    label: Database Connection Limit
+    description: The connections the database admits an ordinary role, max_connections less superuser_reserved_connections.
+  - name: db-connection-idle-in-transaction-count
+    data_type: int
+    label: Idle In Transaction
+    description: Database connections sitting idle inside an open transaction at the end of the report window, read against db-connection-count; 0 is healthy. Each holds a connection and its locks and blocks vacuum from reclaiming rows, a leak that shows nowhere until something fails.
+  - name: db-transaction-oldest-age
+    data_type: float
+    unit: s
+    label: Oldest Transaction
+    description: How long the oldest open transaction on the database has been open at the end of the report window, whatever state it is in; a figure that only climbs is a transaction nothing is finishing.
   # The server's pipeline (#1628), landed on the server's component in the
   # platform system each report window: how far behind ingest is, how deep
   # the queues stand, and whether the bus paths and sweeps fail. Every
@@ -288,7 +315,7 @@ metric_types:
     data_type: float
     unit: s
     label: Ingest Lag
-    description: Mean time from a sample's timestamp to its batch's commit on the server, over the newest and oldest sample of each batch landed in the report window; the node's clock stamps the sample, so a skewed node clock reads as lag.
+    description: Mean time from a sample's timestamp to its batch's commit on the server, over the newest and oldest sample of each batch landed in the report window; the outpost's clock stamps the sample, so a skewed outpost clock reads as lag.
   - name: ingest-lag-max
     data_type: float
     unit: s
@@ -301,7 +328,7 @@ metric_types:
   - name: ingest-sample-count
     data_type: int
     label: Samples Landed
-    description: Samples the server's committed telemetry batches landed over the report window; a node group the fence or the gateway dropped counts none.
+    description: Samples the server's committed telemetry batches landed over the report window; an outpost group the fence or the gateway dropped counts none.
   - name: ingest-lane-busy
     data_type: float
     unit: ratio
@@ -334,20 +361,20 @@ metric_types:
   - name: bus-worklist-pull-count
     data_type: int
     label: Worklist Pulls
-    description: Node worklist pulls the server answered over the report window, one sample per outcome as the instance (served, read-failed, oversize, respond-failed, expired, abandoned, busy).
+    description: Outpost worklist pulls the server answered over the report window, one sample per outcome as the instance (served, read-failed, oversize, respond-failed, expired, abandoned, busy).
   - name: bus-worklist-reply-bytes-max
     data_type: int
     unit: bytes
     label: Worklist Reply Size (max)
-    description: The largest worklist reply the server holds sized for any node, at the end of the report window; nearing the bus payload limit means a reply will be refused as oversize.
+    description: The largest worklist reply the server holds sized for any outpost, at the end of the report window; nearing the bus payload limit means a reply will be refused as oversize.
   - name: bus-request-count
     data_type: int
     label: Bus Requests
-    description: Node requests the server handled on the bus over the report window, one sample per path as the instance (heartbeat, command-pull, command-report).
+    description: Outpost requests the server handled on the bus over the report window, one sample per path as the instance (heartbeat, command-pull, command-report).
   - name: bus-request-failure-count
     data_type: int
     label: Bus Request Failures
-    description: Node requests on the bus the server failed to serve over the report window, one sample per path as the instance; a share of bus-request-count, written 0 beside a window of requests that all succeeded.
+    description: Outpost requests on the bus the server failed to serve over the report window, one sample per path as the instance; a share of bus-request-count, written 0 beside a window of requests that all succeeded.
   - name: calc-pending-depth
     data_type: int
     label: Calc Backlog
@@ -405,29 +432,29 @@ metric_types:
     unit: ms
     label: Push Lane Turn Wait (max)
     description: The longest a push waited for the publish turn over the report window, a refusal's whole bound included.
-  # A node's command queue (#1626), on the node's platform component: the
-  # server writes all but the pull failures, which the node counts of itself.
+  # An outpost's command queue (#1626), on the outpost's platform component: the
+  # server writes all but the pull failures, which the outpost counts of itself.
   # Each is one observation per sample; a percentile derives from the
   # per-command latencies, never a stored average.
   - name: command-pending-count
     data_type: int
     label: Pending Commands
-    description: Commands waiting for the node, the ones its next pull would take and the ones it took that await their execution report, sampled each platform tick.
+    description: Commands waiting for the outpost, the ones its next pull would take and the ones it took that await their execution report, sampled each platform tick.
   - name: command-pending-age
     data_type: float
     unit: s
     label: Oldest Pending Command
-    description: Seconds the oldest command waiting for the node has waited since its issue, sampled each platform tick; zero while none waits.
+    description: Seconds the oldest command waiting for the outpost has waited since its issue, sampled each platform tick; zero while none waits.
   - name: command-dispatch-latency
     data_type: float
     unit: ms
     label: Command Dispatch Latency
-    description: Time from a command's issue to the first time a node took it, one sample per command at that take; a command no node takes writes none and counts as expired.
+    description: Time from a command's issue to the first time an outpost took it, one sample per command at that take; a command no outpost takes writes none and counts as expired.
   - name: command-execution-latency
     data_type: float
     unit: ms
     label: Command Execution Latency
-    description: Time from a command's first take to the node's execution report, one sample per command at the report.
+    description: Time from a command's first take to the outpost's execution report, one sample per command at the report.
   - name: command-redelivery-count
     data_type: int
     label: Command Redeliveries
@@ -435,15 +462,15 @@ metric_types:
   - name: command-stuck-count
     data_type: int
     label: Stuck Commands
-    description: Commands the node took that have had no execution report for longer than the redelivery wait, still inside the delivery window, sampled each platform tick.
+    description: Commands the outpost took that have had no execution report for longer than the redelivery wait, still inside the delivery window, sampled each platform tick.
   - name: command-expired-count
     data_type: int
     label: Expired Commands
-    description: Commands that aged past the delivery window unexecuted over the platform tick's window, instance undelivered (no node took it) or unexecuted (taken, never reported); written every tick, zero when none.
+    description: Commands that aged past the delivery window unexecuted over the platform tick's window, instance undelivered (no outpost took it) or unexecuted (taken, never reported); written every tick, zero when none.
   - name: command-pull-failure-count
     data_type: int
     label: Command Pull Failures
-    description: Pulls of the node's command queue that failed (no answer, or one it could not read), over the report window; reported every window, 0 when quiet.
+    description: Pulls of the outpost's command queue that failed (no answer, or one it could not read), over the report window; reported every window, 0 when quiet.
   # Room-level series: the first standard-contract metrics (#790). A meeting
   # room's standard declares them, so every conforming system's zoom shows the
   # same KPI tiles; the sensor feeding them is whatever the room's build wires

@@ -19,7 +19,7 @@ import (
 // derived on read).
 
 // MetricTrendHorizon is how long after an hour ends the compaction waits
-// before closing it: the late-data horizon (ADR-0311, the node spool replays
+// before closing it: the late-data horizon (ADR-0311, the outpost spool replays
 // up to 12 hours), so an on-time spool replay lands before its hour closes.
 const MetricTrendHorizon = 24 * time.Hour
 
@@ -298,7 +298,12 @@ func (p *PG) recomputeDirtyTrends(ctx context.Context, laneDays int) (int64, err
 // (blockIntact, the merge's own test, #1546): a day whose start has slipped
 // past the window takes no late sample into its block, so an hour of it
 // still inside the window reads its raw rows, which hold what the block
-// does not. Each hour reads exactly one source.
+// does not. The merge and this statement run in different transactions, so a
+// window widened between them can make intact a day the merge found not: the
+// merge records that on the hour's dirty mark (raw_only, #1560), and an hour
+// so marked reads its raw rows whatever the window is now. Each hour reads
+// exactly one source. Raw rows are what raw_only reads, so the raw drop
+// (#1530) must leave a raw_only hour's day alone until the mark is cleared.
 func (p *PG) recomputeDirtyChunk(ctx context.Context, laneDays int) (int64, error) {
 	tx, err := p.pool.BeginTx(ctx, trendTxOptions)
 	if err != nil {
@@ -314,9 +319,9 @@ func (p *PG) recomputeDirtyChunk(ctx context.Context, laneDays int) (int64, erro
 				where hour < (select compacted_through from metric_trend_mark)
 				order by hour limit $1 for update skip locked) y
 			where x.series_id = y.series_id and x.hour = y.hour
-			returning x.series_id, x.hour),
+			returning x.series_id, x.hour, x.raw_only),
 		intact as (
-			select d.series_id, d.hour, `+blockIntact("date_bin('1 day', d.hour, "+trendEpoch+")", "$2")+` as day_intact
+			select d.series_id, d.hour, `+blockIntact("date_bin('1 day', d.hour, "+trendEpoch+")", "$2")+` and not d.raw_only as day_intact
 			from d
 			join metric_series s on s.id = d.series_id
 			join metric_type t on t.id = s.metric_type_id

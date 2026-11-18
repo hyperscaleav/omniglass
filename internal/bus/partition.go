@@ -12,11 +12,11 @@ import (
 )
 
 // The ingest partitions (#1896, ADR-1896). One durable with one batch in
-// flight keeps every node's batches in order, but it lands one batch at a
+// flight keeps every outpost's batches in order, but it lands one batch at a
 // time for the whole fleet, so its throughput is one landing's latency. The
-// stream instead files each node's batches under a partition of the node's
+// stream instead files each outpost's batches under a partition of the outpost's
 // name, and each partition has a durable of its own with one batch in
-// flight: a node's batches still land in the order it sent them (they share
+// flight: an outpost's batches still land in the order it sent them (they share
 // a partition), while the partitions land side by side.
 
 // DefaultIngestPartitions is how many ingest lanes the server runs when it
@@ -57,16 +57,16 @@ func ingestPartitions(want, dbPool int) (int, string) {
 	return n, reason
 }
 
-// PartitionOf is the partition the stream files node's batches under among
+// PartitionOf is the partition the stream files outpost's batches under among
 // k: FNV-1a of the name, modulo k, the hash the stream's partition transform
-// computes, so the server and the stream agree on a node's lane.
-func PartitionOf(node string, k int) int {
+// computes, so the server and the stream agree on an outpost's lane.
+func PartitionOf(outpost string, k int) int {
 	h := fnv.New32a()
-	_, _ = h.Write([]byte(node))
+	_, _ = h.Write([]byte(outpost))
 	return int(h.Sum32() % uint32(k))
 }
 
-// telemetryPrefix is the node telemetry subjects' common prefix.
+// telemetryPrefix is the outpost telemetry subjects' common prefix.
 var telemetryPrefix = strings.TrimSuffix(collection.TelemetryWildcard, "*")
 
 // partitionDurable is partition i's durable.
@@ -86,13 +86,13 @@ func partitionIndex(durable string) (int, bool) {
 	return i, true
 }
 
-// partitionFilter is the subject partition i's durable takes: every node's
+// partitionFilter is the subject partition i's durable takes: every outpost's
 // batch the stream filed under i.
 func partitionFilter(i int) string { return fmt.Sprintf("%s%d.*", telemetryPrefix, i) }
 
-// partitionTransform files a node's telemetry subject under its partition
-// among k as the stream stores it: og.v1.telemetry.<node> is stored as
-// og.v1.telemetry.<partition>.<node>.
+// partitionTransform files an outpost's telemetry subject under its partition
+// among k as the stream stores it: og.v1.telemetry.<outpost> is stored as
+// og.v1.telemetry.<partition>.<outpost>.
 func partitionTransform(k int) jetstream.SubjectTransformConfig {
 	return jetstream.SubjectTransformConfig{
 		Source:      collection.TelemetryWildcard,
@@ -100,9 +100,9 @@ func partitionTransform(k int) jetstream.SubjectTransformConfig {
 	}
 }
 
-// transformPartitions is the partition count a stream's transform files node
+// transformPartitions is the partition count a stream's transform files outpost
 // batches by, as partitionTransform wrote it; 0 for a stream with no such
-// transform, which files each batch under the node's own subject.
+// transform, which files each batch under the outpost's own subject.
 func transformPartitions(t *jetstream.SubjectTransformConfig) int {
 	if t == nil {
 		return 0
@@ -139,25 +139,25 @@ func pastPartitions(k, prior int, durables []string) []int {
 	return slices.Compact(out)
 }
 
-// reorderRisk is whether a start that files by k partitions may land a node's
+// reorderRisk is whether a start that files by k partitions may land an outpost's
 // batches out of order: the stream filed the batches it holds by prior (0 for
-// none, -1 for no stream before this start), and a node's batches held under
+// none, -1 for no stream before this start), and an outpost's batches held under
 // prior's partition land beside the ones the stream files under k's, on
 // another lane, in no fixed order.
 func reorderRisk(prior, k int, held uint64) bool {
 	return prior >= 0 && prior != k && held > 0
 }
 
-// canonicalSubject is the subject a node published a batch on, whichever
-// partition the stream filed it under: og.v1.telemetry.<p>.<node> reads as
-// og.v1.telemetry.<node>; any other subject is its own.
+// canonicalSubject is the subject an outpost published a batch on, whichever
+// partition the stream filed it under: og.v1.telemetry.<p>.<outpost> reads as
+// og.v1.telemetry.<outpost>; any other subject is its own.
 func canonicalSubject(subject string) string {
 	rest, ok := strings.CutPrefix(subject, telemetryPrefix)
 	if !ok {
 		return subject
 	}
-	if _, node, ok := strings.Cut(rest, "."); ok {
-		return collection.TelemetrySubject(node)
+	if _, outpost, ok := strings.Cut(rest, "."); ok {
+		return collection.TelemetrySubject(outpost)
 	}
 	return subject
 }

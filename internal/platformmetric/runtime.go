@@ -1,6 +1,6 @@
 // Package platformmetric reads the figures Omniglass reports about itself
 // (#1094): the platform metrics a process lands on its own platform component.
-// The read is at the edge, one sampler of the Go runtime that the node and the
+// The read is at the edge, one sampler of the Go runtime that the outpost and the
 // server share, and what it reads turns into readings by a pure step, so the
 // keys and units are unit-tested without a runtime to read.
 package platformmetric
@@ -103,7 +103,7 @@ func (p Process) Readings() []Reading {
 	return out
 }
 
-// Runtime is the one runtime sampler the server and the node share (#1628):
+// Runtime is the one runtime sampler the server and the outpost share (#1628):
 // it reads a Process into its readings and adds process-cpu-seconds, the CPU
 // time spent since the read before. The zero value is ready; its first read
 // has nothing to subtract, so it reads no CPU time.
@@ -124,7 +124,7 @@ func (rt *Runtime) Readings(p Process) []Reading {
 }
 
 // RuntimeSampler gauges the process read by read each window, CPU time as
-// the window's own: the server's runtime figures, on the sampler the node
+// the window's own: the server's runtime figures, on the sampler the outpost
 // reports its own through.
 func RuntimeSampler(read func() Process) Sampler {
 	var rt Runtime

@@ -18,7 +18,7 @@ type Trust []netip.Prefix
 
 // Default is the trust an unset OMNIGLASS_TRUSTED_PROXIES gives: the loopback
 // and the private ranges, where the chart's ingress (Traefik, which overwrites
-// the header from an untrusted client) and a node on the same host sit.
+// the header from an untrusted client) and an outpost on the same host sit.
 var Default = Trust{
 	netip.MustParsePrefix("127.0.0.0/8"),
 	netip.MustParsePrefix("10.0.0.0/8"),
@@ -94,6 +94,17 @@ func (t Trust) trusts(a netip.Addr) bool {
 		}
 	}
 	return false
+}
+
+// Proxied reports whether the connection's peer (host:port, or a bare host)
+// is a trusted proxy, so the forwarded headers it sets may be believed.
+func (t Trust) Proxied(remoteAddr string) bool {
+	host := remoteAddr
+	if h, _, err := net.SplitHostPort(remoteAddr); err == nil {
+		host = h
+	}
+	addr, err := netip.ParseAddr(host)
+	return err == nil && t.trusts(addr.Unmap())
 }
 
 // JoinForwarded joins every X-Forwarded-For line of a request in order, so a

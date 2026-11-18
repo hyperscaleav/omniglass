@@ -18,12 +18,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The command wire's storage side (#815): resolving a node's pending command
+// The command wire's storage side (#815): resolving an outpost's pending command
 // queue (the commands whose owning component has a driver-attached endpoint
-// placed on that node, with a binding for the command's type), and recording
+// placed on that outpost, with a binding for the command's type), and recording
 // the execution report. Delivery is at-least-once: a dispatched command whose
 // execution report never lands is redelivered after redeliverAfter, and
-// execution idempotence lives at the node (per command id) and in the
+// execution idempotence lives at the outpost (per command id) and in the
 // once-only executed_at stamp here.
 
 const (
@@ -32,7 +32,7 @@ const (
 	redeliverAfter = "30 seconds"
 	// deliveryTTL bounds how long an unexecuted command stays deliverable at
 	// all, as SQL interval text (CommandDeliveryWindow is the same span): past
-	// it, a command no node picked up is abandoned to its settlement arc (a
+	// it, a command no outpost picked up is abandoned to its settlement arc (a
 	// settleable one is judged by the settle-check when its window passes; a
 	// fire-and-forget one, which only its execution report decides, is timed
 	// out by the sweep, #1630).
@@ -50,7 +50,7 @@ const CommandDeliveryWindow = 10 * time.Minute
 const commandOpensIntendedSQL = `(exists (select 1 from property pr where pr.command_id = c.id and pr.provenance = 'intended')
 			or exists (select 1 from metric_declared md where md.command_id = c.id))`
 
-// CommandDelivery is one command resolved for a node's queue: the rendered
+// CommandDelivery is one command resolved for an outpost's queue: the rendered
 // request (templates resolved against the command's intended value and
 // params), the endpoint target it actuates over, and the transport.
 type CommandDelivery struct {
@@ -59,7 +59,7 @@ type CommandDelivery struct {
 	Transport   string
 	Target      string
 	Line        string
-	// EndpointID is the endpoint the command dispatches to (a node holding a
+	// EndpointID is the endpoint the command dispatches to (an outpost holding a
 	// session there actuates over it, #817); Reply is the binding's declared
 	// reply shape.
 	EndpointID string
@@ -73,24 +73,24 @@ type CommandDelivery struct {
 	// sent twice may act twice.
 	Retries int
 	// Request is an http command's rendered request (#902), never carrying
-	// a credential: the node applies the endpoint's scheme.
+	// a credential: the outpost applies the endpoint's scheme.
 	Request *driver.Request
-	// Disruptive: the command takes its device down (#1651). The node
+	// Disruptive: the command takes its device down (#1651). The outpost
 	// closes the gate of every endpoint in HoldEndpoints before it sends,
 	// runs nothing against them for QuietSeconds, then reopens each on its
 	// own first up verdict, with HoldSeconds the backstop. Empty for any
 	// other command. The hold set follows the dependency graph (#1648,
 	// ResolveHoldSet): the target's in-band endpoints and its host
 	// dependents', or for a power command what the named outlet feeds, each
-	// placed on this node.
+	// placed on this outpost.
 	Disruptive    bool
 	QuietSeconds  int
 	HoldSeconds   int
 	HoldEndpoints []string
 }
 
-// commandCandidates is the one resolution of which node actuates a command
-// (#1626), shared by the pull (PendingNodeCommands) and the queue's health
+// commandCandidates is the one resolution of which outpost actuates a command
+// (#1626), shared by the pull (PendingOutpostCommands) and the queue's health
 // read (CommandQueueHealth), so the depth the health read reports can never
 // disagree with what a pull delivers. It is the body of a CTE: every
 // unexecuted component command issued after lower, each with the ONE endpoint
@@ -98,17 +98,17 @@ type CommandDelivery struct {
 // type is a candidate (the jsonb_path_exists predicate), so the distinct-on
 // never collapses to a non-binding endpoint, and the same endpoint is chosen
 // on every read whatever the command's dispatch state. A command no endpoint
-// binds is no node's and is absent. The unexecuted predicate is
+// binds is no outpost's and is absent. The unexecuted predicate is
 // command_unexecuted_idx's, which keeps the read off the executed history.
 //
-// components narrows the read to one node's own components (#1631): the name
+// components narrows the read to one outpost's own components (#1631): the name
 // of a CTE yielding component_id, joined ahead of command so the scan of
 // command is searched by component through command_deliverable_idx. Empty
 // reads every component's commands (the fleet's health read). The actuating
 // endpoint is chosen over all of a command's endpoints either way.
 //
 // issuedOnly keeps only the commands still issued (#1630), the pull's read: a
-// terminal command is never handed to a node. The health read takes every
+// terminal command is never handed to an outpost. The health read takes every
 // unexecuted command and reads the status itself, since a command that aged
 // out of its window unexecuted is a delivery loss to count whatever status
 // its settlement then stamped.
@@ -124,7 +124,7 @@ func commandCandidates(lower, components string, issuedOnly bool) string {
 	return `
 		select distinct on (c.id)
 			c.id, c.ts, c.status, c.dispatched_at, c.first_dispatched_at, c.delivery_count, ct.name as command_type, c.params,
-			i.id as endpoint_id, i.transport, i.params as endpoint_params, i.node_name, d.spec,
+			i.id as endpoint_id, i.transport, i.params as endpoint_params, i.outpost_id, d.spec,
 			ct.disruptive, ct.quiet_seconds, ct.hold_seconds,
 			c.component_id::text as target_id, coalesce(ct.power_outlet_param, '') as power_outlet_param
 		from ` + from + `
@@ -138,31 +138,31 @@ func commandCandidates(lower, components string, issuedOnly bool) string {
 		order by c.id, i.name`
 }
 
-// PendingNodeCommands resolves and marks dispatched the commands a node
+// PendingOutpostCommands resolves and marks dispatched the commands an outpost
 // should actuate now: unexecuted, still issued (a terminal command, timed out
-// or failed, is never handed to a node, #1630), within the delivery TTL, not recently
+// or failed, is never handed to an outpost, #1630), within the delivery TTL, not recently
 // dispatched, owned by a component whose driver-attached endpoint is placed
-// on this node, with the driver's spec binding the command's type. A command
+// on this outpost, with the driver's spec binding the command's type. A command
 // whose binding cannot render (a template reference the issue did not supply)
 // is skipped with its execution error recorded, so it stops being redelivered
 // and the fault is visible on the row.
-func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDelivery, error) {
-	// Read only this node's components' commands (#1631): the here CTE is
-	// the components with a driver-attached endpoint placed on this node, and
+func (p *PG) PendingOutpostCommands(ctx context.Context, outpost string) ([]CommandDelivery, error) {
+	// Read only this outpost's components' commands (#1631): the here CTE is
+	// the components with a driver-attached endpoint placed on this outpost, and
 	// the candidate fragment searches command by those components, through
-	// command_deliverable_idx, so a pull costs the node's own backlog, never
+	// command_deliverable_idx, so a pull costs the outpost's own backlog, never
 	// the fleet's.
 	//
 	// The pull reads only commands still issued (#1630): a terminal one, timed
-	// out or failed, is never handed to a node. command_deliverable_idx
+	// out or failed, is never handed to an outpost. command_deliverable_idx
 	// carries the same status term, so it holds only the rows a pull can
 	// deliver, never the unexecuted terminal commands ever issued.
 	//
 	// The candidate fragment still picks ONE actuating endpoint per command
-	// over ALL of its component's endpoints, not only this node's, so a
-	// command is delivered to exactly one node (never once per node), which
+	// over ALL of its component's endpoints, not only this outpost's, so a
+	// command is delivered to exactly one outpost (never once per outpost), which
 	// is what makes the render-fault terminal stamp below correct: there is no
-	// other endpoint that would have rendered it differently. The node filter
+	// other endpoint that would have rendered it differently. The outpost filter
 	// and the redelivery wait apply to that chosen endpoint, outside the
 	// fragment, so the health read resolves the same endpoint for every
 	// command whether it is due now or not.
@@ -170,7 +170,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		with here as (
 			select distinct e.component as component_id
 			from endpoint e
-			where e.node_name = (select principal_id from node where name = $1)
+			where e.outpost_id = (select user_id from outpost where name = $1)
 			  and e.driver_id is not null
 			  and e.component is not null
 		),
@@ -178,12 +178,12 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		select k.id, k.command_type, k.params, k.endpoint_id, k.transport, k.endpoint_params, k.spec,
 			(select pr.value from property pr where pr.command_id = k.id and pr.provenance = 'intended' order by pr.id desc limit 1),
 			(select m.value from metric_declared m where m.command_id = k.id order by m.id desc limit 1),
-			k.disruptive, k.quiet_seconds, k.hold_seconds, k.target_id, k.node_name::text, k.power_outlet_param
+			k.disruptive, k.quiet_seconds, k.hold_seconds, k.target_id, k.outpost_id::text, k.power_outlet_param
 		from candidate k
-		where k.node_name = (select principal_id from node where name = $1)
-		  and (k.dispatched_at is null or k.dispatched_at < now() - interval '`+redeliverAfter+`')`, node)
+		where k.outpost_id = (select user_id from outpost where name = $1)
+		  and (k.dispatched_at is null or k.dispatched_at < now() - interval '`+redeliverAfter+`')`, outpost)
 	if err != nil {
-		return nil, fmt.Errorf("storage: pending commands for %q: %w", node, err)
+		return nil, fmt.Errorf("storage: pending commands for %q: %w", outpost, err)
 	}
 	defer rows.Close()
 
@@ -200,20 +200,20 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		disruptive     bool
 		quiet, hold    int
 		targetID       string
-		nodeName       string
+		outpostName    string
 		outletParam    string
 	}
 	var pending []pendingRow
 	for rows.Next() {
 		var r pendingRow
 		if err := rows.Scan(&r.id, &r.commandType, &r.params, &r.endpointID, &r.transport, &r.endpointParams, &r.spec, &r.intendedProp, &r.intendedMetric,
-			&r.disruptive, &r.quiet, &r.hold, &r.targetID, &r.nodeName, &r.outletParam); err != nil {
+			&r.disruptive, &r.quiet, &r.hold, &r.targetID, &r.outpostName, &r.outletParam); err != nil {
 			return nil, fmt.Errorf("storage: scan pending command: %w", err)
 		}
 		pending = append(pending, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: pending commands for %q: %w", node, err)
+		return nil, fmt.Errorf("storage: pending commands for %q: %w", outpost, err)
 	}
 
 	var out []CommandDelivery
@@ -256,7 +256,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			Retries:     req.RetriesOr(driver.DefaultCommandRetries),
 		}
 		if r.disruptive {
-			hold, err := p.holdSet(ctx, r.targetID, r.nodeName, r.outletParam != "", OutletParam(r.params, r.outletParam))
+			hold, err := p.holdSet(ctx, r.targetID, r.outpostName, r.outletParam != "", OutletParam(r.params, r.outletParam))
 			if err != nil {
 				return nil, err
 			}
@@ -269,7 +269,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		}
 		if driver.IsWebSocket(r.transport) {
 			// A websocket command is a frame over the held session (#1034):
-			// its line, or its JSON body rendered injection-safe; the node
+			// its line, or its JSON body rendered injection-safe; the outpost
 			// mints the correlation into it at execute.
 			frame, err := req.Frame()
 			if err != nil {
@@ -296,11 +296,11 @@ type dispatch struct {
 }
 
 // markDispatched stamps one pull's deliveries (#1626, #1631): dispatched_at
-// is when a node last took a command, first_dispatched_at when one first
+// is when an outpost last took a command, first_dispatched_at when one first
 // did, and delivery_count how many times it has been taken. One statement
 // stamps the whole pull, so the stamp's round trips do not grow with the
 // commands it delivers. Each first take writes the command's dispatch
-// latency (first_dispatched_at - ts) on the taking node's platform
+// latency (first_dispatched_at - ts) on the taking outpost's platform
 // component, in the same transaction as the stamp it derives from: one
 // sample per command, never one per pull, because the delivery loss counts
 // them. A redelivery writes no sample.
@@ -320,7 +320,7 @@ func (p *PG) markDispatched(ctx context.Context, delivered []dispatch) error {
 			from unnest($1::bigint[], $2::uuid[]) as u(id, endpoint_id)
 			where c.id = u.id
 			returning c.id, c.delivery_count, extract(epoch from c.first_dispatched_at - c.ts) * 1000, c.first_dispatched_at,
-				(select n.platform_component_id::text from endpoint i join node n on n.principal_id = i.node_name where i.id = u.endpoint_id)`,
+				(select n.platform_component_id::text from endpoint i join outpost n on n.user_id = i.outpost_id where i.id = u.endpoint_id)`,
 			ids, endpoints)
 		if err != nil {
 			return fmt.Errorf("storage: mark %d commands dispatched: %w", len(ids), err)
@@ -379,13 +379,13 @@ func (p *PG) recordCommandLatency(ctx context.Context, tx pgx.Tx, id int64, m Pl
 	}
 }
 
-// RecordCommandExecution stamps a node's execution report, once: a redelivered
-// report is a no-op, and only the node the command's DISPATCHED endpoint is
+// RecordCommandExecution stamps an outpost's execution report, once: a redelivered
+// report is a no-op, and only the outpost the command's DISPATCHED endpoint is
 // placed on may stamp it. Confining on the dispatched endpoint (not merely on
-// any endpoint of the command's component) is what keeps a second node that
+// any endpoint of the command's component) is what keeps a second outpost that
 // happens to hold an unrelated endpoint on the same component from stamping a
 // command it never received. An update that matches no row (a report for a
-// command dispatched to a different node, or already stamped) is ErrCommandNotDispatchedHere,
+// command dispatched to a different outpost, or already stamped) is ErrCommandNotDispatchedHere,
 // which the bus logs rather than silently dropping.
 //
 // The reply and the execution error are stored as evidence (#1155), masked of
@@ -393,10 +393,10 @@ func (p *PG) recordCommandLatency(ctx context.Context, tx pgx.Tx, id int64, m Pl
 // credential, then made storable and capped: a component that echoes its
 // login never has it stored or served. When the endpoint's secrets cannot be
 // read the masking fails closed and both are withheld (endpointMask). The
-// judgment below reads the reply whole, as the node sent it.
+// judgment below reads the reply whole, as the outpost sent it.
 //
 // A fire-and-forget command (one that opened no intended row) is decided by
-// the report itself (#1630): settled when the node carried it out, failed
+// the report itself (#1630): settled when the outpost carried it out, failed
 // with the masked execution error when it did not.
 //
 // When the binding settles from the response (ADR-0141), the reply decides
@@ -404,7 +404,7 @@ func (p *PG) recordCommandLatency(ctx context.Context, tx pgx.Tx, id int64, m Pl
 // observation of the target on the dispatched endpoint and settles or fails
 // the command against its intent; a confirmation settles it; a reply that
 // fails the binding's reading, or an execution error, fails it at once.
-func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID int64, execErr, reply string) error {
+func (p *PG) RecordCommandExecution(ctx context.Context, outpost string, commandID int64, execErr, reply string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin record execution: %w", err)
@@ -416,7 +416,7 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 		executedAt                                        time.Time
 		platform                                          *string
 	)
-	// The confining stamp first: a report the node had no standing to make
+	// The confining stamp first: a report the outpost had no standing to make
 	// is refused before anything about the endpoint (its secrets included)
 	// is read, and the mask below is the endpoint this stamp names, never a
 	// guess read before it.
@@ -428,12 +428,12 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 		  and exists (
 			select 1 from endpoint i
 			where i.id = c.dispatched_endpoint_id
-			  and i.node_name = (select principal_id from node where name = $2))
-		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text,
+			  and i.outpost_id = (select user_id from outpost where name = $2))
+		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.outpost_id)::text,
 			c.instance, (select name from command_type where id = c.command_type_id), c.dispatched_endpoint_id::text,
 			extract(epoch from c.executed_at - c.first_dispatched_at) * 1000, c.executed_at,
-			(select platform_component_id::text from node where name = $2)`,
-		commandID, node).Scan(&ownerKind, &arc, &instance, &commandType, &endpointID, &latencyMS, &executedAt, &platform)
+			(select platform_component_id::text from outpost where name = $2)`,
+		commandID, outpost).Scan(&ownerKind, &arc, &instance, &commandType, &endpointID, &latencyMS, &executedAt, &platform)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrCommandNotDispatchedHere
 	}
@@ -487,7 +487,7 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 		return fmt.Errorf("storage: release savepoint for command %d: %w", commandID, err)
 	}
 	// The execution latency (#1626), first dispatch to report, on the
-	// reporting node's platform component, in the stamp's transaction. A
+	// reporting outpost's platform component, in the stamp's transaction. A
 	// command dispatched before its first delivery was kept has none.
 	if latencyMS != nil && platform != nil {
 		p.recordCommandLatency(ctx, tx, commandID, PlatformMetric{ComponentID: *platform, Key: writerclass.CommandExecutionLatency,
@@ -517,7 +517,7 @@ func reportOutcome(execErr string) settlementOutcome {
 	if execErr != "" {
 		return settlementOutcome{status: "failed", by: SettledByReply, reason: "the execution failed: " + execErr}
 	}
-	return settlementOutcome{status: "settled", by: SettledByReply, reason: "the node carried it out"}
+	return settlementOutcome{status: "settled", by: SettledByReply, reason: "the outpost carried it out"}
 }
 
 // recordRenderFault stamps a command whose binding cannot render as executed
@@ -618,7 +618,9 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 	// The reply is an observation of a property target, recorded where the
 	// driver's polls of it land: held to the property's validation like any
 	// telemetry (a value outside it fails the command and records nothing),
-	// and written only as a transition.
+	// written only as a transition, and not at all when the target was
+	// observed after the command was first delivered (#1606): a late reply is
+	// evidence for the command, never a newer state of the device.
 	if ct.TargetPropertyType != "" {
 		var dataType string
 		var validation []byte
@@ -632,7 +634,11 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		if err != nil {
 			return nil, err
 		}
-		if latest == nil || !replyMatchesIntent(latest.Value, verdict.Value) {
+		newer, err := observedSinceDispatch(ctx, tx, commandID, latest)
+		if err != nil {
+			return nil, err
+		}
+		if !newer && (latest == nil || !replyMatchesIntent(latest.Value, verdict.Value)) {
 			now, err := dbNow(ctx, tx)
 			if err != nil {
 				return nil, err
@@ -650,6 +656,27 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		return failed(fmt.Sprintf("the reply carried %s, not the intended %s", verdict.Value, valueText(intended.Value)))
 	}
 	return &settlementOutcome{status: "settled", by: SettledByReply, reason: fmt.Sprintf("the reply carried %s, the intended value", verdict.Value)}, nil
+}
+
+// observedSinceDispatch reports whether the target's latest observation was
+// taken after the command's first delivery to a node, the earliest moment an
+// exchange that could have produced the reply began (#1606). A redelivery
+// advances dispatched_at, but the report of an earlier delivery's exchange is
+// still accepted, so the last take would miss a push made between the two. A
+// reply read after the first delivery is older than such an observation
+// however late it reaches the server, so it must not be written over it. The observation's time is the one it carries (a node's sample time
+// for a poll, the database's for a push); a node clock ahead of the database's
+// only withholds a reply observation the next poll restores (ADR-0141's "late,
+// never wrong"), and one behind it leaves today's behavior.
+func observedSinceDispatch(ctx context.Context, q querier, commandID int64, latest *CurrentValue) (bool, error) {
+	if latest == nil {
+		return false, nil
+	}
+	var dispatched *time.Time
+	if err := q.QueryRow(ctx, `select first_dispatched_at from command where id = $1`, commandID).Scan(&dispatched); err != nil {
+		return false, fmt.Errorf("storage: first delivery time of command %d: %w", commandID, err)
+	}
+	return dispatched != nil && latest.TS.After(*dispatched), nil
 }
 
 // writeReplyObservation records a command's reply, read through its driver
@@ -704,10 +731,10 @@ func replyMatchesIntent(intended json.RawMessage, value string) bool {
 	return bytes.Equal(bytes.TrimSpace(intended), []byte(value))
 }
 
-// ErrCommandNotDispatchedHere marks an execution report a node had no standing
-// to make: the command was not dispatched to an endpoint on that node, or was
+// ErrCommandNotDispatchedHere marks an execution report an outpost had no standing
+// to make: the command was not dispatched to an endpoint on that outpost, or was
 // already stamped. The bus logs it; it is never a silent drop.
-var ErrCommandNotDispatchedHere = errors.New("storage: command not dispatched to this node")
+var ErrCommandNotDispatchedHere = errors.New("storage: command not dispatched to this outpost")
 
 // intendedString renders a command's intended value for the request template:
 // the property arm's jsonb unquoted, or the metric arm's number.
@@ -771,9 +798,9 @@ func targetOf(raw []byte) string {
 // holdSet loads what ResolveHoldSet reads for one disruptive delivery: the
 // components reachable from the target over host edges (and, for a power
 // command, the power edges from the target), the power and host edges among
-// them, and their endpoints placed on the delivering node. The walk is a
+// them, and their endpoints placed on the delivering outpost. The walk is a
 // union recursive CTE, so a cycle that got in anyway terminates.
-func (p *PG) holdSet(ctx context.Context, target, nodeName string, power bool, outlet string) ([]string, error) {
+func (p *PG) holdSet(ctx context.Context, target, outpostName string, power bool, outlet string) ([]string, error) {
 	rows, err := p.pool.Query(ctx, `
 		with recursive reach(id) as (
 			select $1::uuid
@@ -787,7 +814,7 @@ func (p *PG) holdSet(ctx context.Context, target, nodeName string, power bool, o
 	if err != nil {
 		return nil, fmt.Errorf("storage: hold-set edges for %s: %w", target, err)
 	}
-	in := HoldInput{Target: target, Node: nodeName, Power: power, Outlet: outlet}
+	in := HoldInput{Target: target, Outpost: outpostName, Power: power, Outlet: outlet}
 	reach := []string{target}
 	for rows.Next() {
 		var e HoldEdge
@@ -802,15 +829,15 @@ func (p *PG) holdSet(ctx context.Context, target, nodeName string, power bool, o
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: hold-set edges for %s: %w", target, err)
 	}
-	rows, err = p.pool.Query(ctx, `select id::text, component::text, node_name::text, out_of_band from endpoint
-		where component = any($1::uuid[]) and node_name = $2`, reach, nodeName)
+	rows, err = p.pool.Query(ctx, `select id::text, component::text, outpost_id::text, out_of_band from endpoint
+		where component = any($1::uuid[]) and outpost_id = $2`, reach, outpostName)
 	if err != nil {
 		return nil, fmt.Errorf("storage: hold-set endpoints for %s: %w", target, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var e HoldEndpoint
-		if err := rows.Scan(&e.ID, &e.ComponentID, &e.Node, &e.OutOfBand); err != nil {
+		if err := rows.Scan(&e.ID, &e.ComponentID, &e.Outpost, &e.OutOfBand); err != nil {
 			return nil, fmt.Errorf("storage: scan hold-set endpoint: %w", err)
 		}
 		in.Endpoints = append(in.Endpoints, e)

@@ -18,7 +18,7 @@ const health = (verdict: string, owner: string): FleetHealth => ({
   owner,
   owner_kind: "system",
   verdict,
-  roles: [],
+  slots: [],
   systems: [],
   transitions: [],
 });

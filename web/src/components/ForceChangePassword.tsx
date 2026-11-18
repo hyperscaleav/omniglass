@@ -5,7 +5,7 @@ import { useMe, useChangePassword, useLogout } from "../lib/auth";
 import Button from "./Button";
 
 // ForceChangePassword is the full-screen gate shown when an administrator has reset
-// the caller's password (me.human.must_change_password). The server refuses every
+// the caller's password (me.person.must_change_password). The server refuses every
 // other route until the password is changed, so the console mirrors that: this
 // replaces the whole app shell until the change succeeds, which clears the flag (via
 // the /auth/me invalidation in useChangePassword) and releases the gate. Signing out
@@ -14,7 +14,7 @@ export default function ForceChangePassword() {
   const me = useMe();
   const changePassword = useChangePassword();
   const logout = useLogout();
-  const username = () => me.data?.human?.username;
+  const username = () => me.data?.person?.username;
 
   const [current, setCurrent] = createSignal("");
   const [next, setNext] = createSignal("");

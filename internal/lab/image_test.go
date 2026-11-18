@@ -19,10 +19,14 @@ func TestSelectImage(t *testing.T) {
 		{"0.4.1", testDigest, "", "ghcr.io/hyperscaleav/omniglass@" + testDigest, true, "", false},
 		{"v0.4.1", testDigest, "", "ghcr.io/hyperscaleav/omniglass@" + testDigest, true, "", false},
 		{"1.0.0-rc.1", testDigest, "", "ghcr.io/hyperscaleav/omniglass@" + testDigest, true, "", false},
-		{"4a34346d", "", "", "omniglass:dev", false, "4a34346d", false},
-		{"4a34346d-dirty-20261026T131500Z", "", "", "omniglass:dev", false, "4a34346d-dirty-20261026T131500Z", false},
+		// A build id selects the build-keyed tag, so another checkout
+		// re-pointing omniglass:dev cannot change the image (#1422).
+		{"4a34346d", "", "", "omniglass:dev-4a34346d", false, "4a34346d", false},
+		{"4a34346d-dirty-20261026T131500Z", "", "", "omniglass:dev-4a34346d-dirty-20261026T131500Z", false, "4a34346d-dirty-20261026T131500Z", false},
+		// No build id: the shared tag, held to the binary's version.
 		{"dev", "", "", "omniglass:dev", false, "dev", false},
 		{"4a34346d", "", "my/omniglass:try", "my/omniglass:try", true, "", true},
+		{"dev", "", "my/omniglass:try", "my/omniglass:try", true, "", true},
 		// --image overrides a release binary too, digest or none, with its warning.
 		{"0.4.1", testDigest, "my/omniglass:try", "my/omniglass:try", true, "", true},
 		{"0.4.1", "", "my/omniglass:try", "my/omniglass:try", true, "", true},

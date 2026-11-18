@@ -32,7 +32,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 . web/e2e/lib/lab.sh
 
-# The walkthroughs need the example fleet's places, node and simulated
+# The walkthroughs need the example fleet's locations, outpost and simulated
 # components; a fresh install (STACK_SCENARIO=empty) has none.
 if [ "${STACK_SCENARIO:-dev}" = empty ]; then
   echo "$(basename "$0"): STACK_SCENARIO=empty has no example fleet to walk through; use make probe for a fresh install" >&2

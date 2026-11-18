@@ -19,7 +19,7 @@ if (!root) throw new Error("missing #root element");
 const queryClient = new QueryClient();
 
 // When a protected request 401s, the session has ended (expired, reset, or locked
-// out): drop any stale bearer and null the cached principal so the AuthGuard
+// out): drop any stale bearer and null the cached user so the AuthGuard
 // redirects to /login on the spot, carrying the current path to return to.
 setUnauthorizedHandler(() => {
   clearToken();
@@ -41,9 +41,9 @@ const ProtectedShell: ParentComponent = (props) => (
 // manifest entry resolved through the PAGES registry, so a route cannot be added
 // without the entry the e2e smoke spec drives from. The manifest documents each
 // route's shape (the :id details, the stubs, the catalog layout); the guard test
-// (route-manifest-guard.test.ts) pins registry completeness and the stub lists.
+// (route-manifest-guard.test.ts) pins catalog completeness and the stub lists.
 // The Catalog area stays a layout route: CatalogShell draws the subrail around
-// each registry's own page while the URL stays canonical (/products, /metrics,
+// each catalog's own page while the URL stays canonical (/products, /metrics,
 // ...); each page keeps its own route-guard gate.
 const routesFor = (shell: RouteEntry["shell"]) =>
   ROUTE_MANIFEST.filter((r) => r.shell === shell).map((r) => <Route path={r.path} component={PAGES[r.page]} />);

@@ -48,7 +48,7 @@ const (
 
 	// ShapeFixedKey: nobody names it AND there is no uuid either, because the
 	// primary key is one of a closed vocabulary the PLATFORM declares and a
-	// CHECK enforces. An operator neither types a new key nor addresses a row
+	// CHECK (or the boot seed's reconcile) enforces. An operator neither types a new key nor addresses a row
 	// by a surrogate: the key set is the schema.
 	//
 	// It is not ShapeIDOnly, which promises a uuid this table does not have,
@@ -120,19 +120,19 @@ var IdentityShapes = map[string]TableIdentity{
 	"component": {Shape: ShapeKeyBearing},
 	"driver":    {Shape: ShapeKeyBearing}, "endpoint": {Shape: ShapeKeyBearing},
 	"location":      {Shape: ShapeKeyBearing},
-	"location_type": {Shape: ShapeKeyBearing}, "node": {Shape: ShapeKeyBearing},
-	"principal_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
+	"location_type": {Shape: ShapeKeyBearing}, "outpost": {Shape: ShapeKeyBearing},
+	"user_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
 	"role": {Shape: ShapeKeyBearing}, "secret": {Shape: ShapeKeyBearing},
 	"secret_type": {Shape: ShapeKeyBearing}, "standard": {Shape: ShapeKeyBearing},
-	"system": {Shape: ShapeKeyBearing}, "system_role": {Shape: ShapeKeyBearing},
+	"system": {Shape: ShapeKeyBearing}, "system_slot": {Shape: ShapeKeyBearing},
 	"tag": {Shape: ShapeKeyBearing}, "variable": {Shape: ShapeKeyBearing},
 	"vendor": {Shape: ShapeKeyBearing}, "component_type": {Shape: ShapeKeyBearing},
 	"system_type": {Shape: ShapeKeyBearing},
-	// role_choice is named the same way system_role is: within its owner
+	// slot_choice is named the same way system_slot is: within its owner
 	// arc (owner_kind, standard_id, system_id). choice_alternate is named
 	// within its choice (choice_id, name), one level narrower, the same
 	// relationship component_type's root/child split already has.
-	"role_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
+	"slot_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
 	// Keyspace: a name, on the other rule.
 	"property_type":       {Shape: ShapeKeyspace, Reason: "serial-number, a signal name referenced from drivers and templates"},
 	"metric_type":         {Shape: ShapeKeyspace, Reason: "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
@@ -146,13 +146,13 @@ var IdentityShapes = map[string]TableIdentity{
 	"action_rule":         {Shape: ShapeKeyBearing, Reason: "page-ops-high, a subscription a notification names as what queued it"},
 
 	// A human identifier that is not a name. These are the exceptions worth stating.
-	"human": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule and its own uniqueness, not the " +
-		"entity name rule; a principal route takes it beside the uuid (#163, #1133)"},
-	"service": {Shape: ShapeHumanNotAKey, Reason: "the username analogue for kind=service: unique like one " +
-		"(#563), on its own rule rather than the entity name rule; a principal route takes it beside " +
+	"person": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule and its own uniqueness, not the " +
+		"entity name rule; a user route takes it beside the uuid (#163, #1133)"},
+	"machine": {Shape: ShapeHumanNotAKey, Reason: "the username analogue for kind=machine: unique like one " +
+		"(#563), on its own rule rather than the entity name rule; a user route takes it beside " +
 		"the uuid, and a word that is both a username and a service name addresses neither (#1133)",
-		NoLabel: "the identifier IS what every surface shows: principalIdent resolves a service " +
-			"principal to service.name, and it cannot resolve to a label, which is optional and not unique"},
+		NoLabel: "the identifier IS what every surface shows: userIdent resolves a service " +
+			"user to service.name, and it cannot resolve to a label, which is optional and not unique"},
 	"file": {Shape: ShapeHumanNotAKey, Reason: "a filename with an extension (codec-firmware-2.1.4.txt): not " +
 		"unique and already the label; a file route takes it where exactly one file the caller can see " +
 		"carries it, and the uuid always (#1133)",
@@ -168,6 +168,12 @@ var IdentityShapes = map[string]TableIdentity{
 		"long as its horizon keeps it",
 		NoLabel: "no operator surface of its own: only the ingest's conflict check reads a receipt, and " +
 			"nothing renders a receipt row for a label to appear on"},
+	"oauth_code": {Shape: ShapeHumanNotAKey, Reason: "keyed by the hash of a minted authorization code (#2048), " +
+		"not a name: it lives five minutes and is spent by its one exchange",
+		NoLabel: "no operator surface of its own: only the token exchange reads a code"},
+	"oauth_refresh": {Shape: ShapeHumanNotAKey, Reason: "keyed by the hash of a minted refresh token (#2073), " +
+		"not a name: it is spent by its one refresh and pruned when its credential rotates",
+		NoLabel: "no operator surface of its own: only the refresh grant reads a refresh token"},
 	"platform_server": {Shape: ShapeHumanNotAKey, Reason: "the identity a server boots under " +
 		"(OMNIGLASS_SERVER_NAME, else its hostname), not an operator's name: a hostname need not be a " +
 		"kebab token, and the server's component carries the operator-facing name (#1627)",
@@ -176,59 +182,68 @@ var IdentityShapes = map[string]TableIdentity{
 
 	// Id only.
 	"alarm":        {Shape: ShapeIDOnly},
-	"alarm_snooze": {Shape: ShapeIDOnly, Reason: "a snooze on an alarm condition, keyed by component and dedup key; it is set and ended through an alarm, never named"},
-	"audit_log":    {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
+	"alarm_snooze": {Shape: ShapeIDOnly, Reason: "a snooze on an alarm, keyed by component and dedup key; it is set and ended through an alarm, never named"},
+	// A person's omnibot conversation (#2113): its owner types the name, unique
+	// among their own, and only they ever see it.
+	"assistant_conversation": {Shape: ShapeKeyBearing,
+		NoLabel: "a private working name its owner picks to resume by; nobody else reads it, so there is no audience a friendlier string would be for"},
+	"assistant_message": {Shape: ShapeIDOnly, Reason: "one message of a conversation (#2113), keyed by its conversation and place in it; read as the transcript, never named"},
+	"audit_log":         {Shape: ShapeIDOnly}, "command": {Shape: ShapeIDOnly},
 	"component_dependency": {Shape: ShapeIDOnly, Reason: "a dependency edge (#1648), keyed by its dependent, upstream and kind; addressed through its dependent by kind and upstream, never named"},
 	"credential":           {Shape: ShapeIDOnly},
-	"event":                {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
+	"oauth_client": {Shape: ShapeIDOnly, Reason: "an MCP client that registered itself (#2048) or is named by its metadata document URL (#2074), addressed by its client id; " +
+		"the name it declared is shown at consent, is not unique and is no key"},
+	"event": {Shape: ShapeIDOnly}, "impersonation_session": {Shape: ShapeIDOnly},
 	"location_type_metric": {Shape: ShapeIDOnly}, "location_type_property": {Shape: ShapeIDOnly},
 	"log_line": {Shape: ShapeIDOnly}, "metric": {Shape: ShapeIDOnly},
-	"metric_series":      {Shape: ShapeIDOnly, Reason: "what a metric sample is a sample of (#1275), keyed by its type, owner, instance, provenance, source and collecting node; nothing addresses it by name"},
+	"metric_series":      {Shape: ShapeIDOnly, Reason: "what a metric sample is a sample of (#1275), keyed by its type, owner, instance, provenance, source and collecting outpost; nothing addresses it by name"},
 	"metric_trend":       {Shape: ShapeIDOnly, Reason: "a metric series' trend for one hour (#1276), keyed by series and hour; nothing addresses it by name"},
 	"metric_trend_dirty": {Shape: ShapeIDOnly, Reason: "a closed hour a late sample landed in (#1276), keyed by series and hour; the compaction's work list, never named"},
 	"metric_trend_mark":  {Shape: ShapeIDOnly, Reason: "how far the trend compaction has announced and folded hours (#1276): one row, keyed by a constant true; nothing addresses it by name"},
 	"metric_block":       {Shape: ShapeIDOnly, Reason: "an observed or calculated metric series' samples over one hour, day or week (#1528, #1534), keyed by series, span start, span and calc rule lineage; nothing addresses it by name"},
 	"metric_block_mark":  {Shape: ShapeIDOnly, Reason: "how far the block folds have gone (#1528): one row, keyed by a constant true; nothing addresses it by name"},
 	"metric_declared":    {Shape: ShapeIDOnly, Reason: "a command's intended metric row, the metric lane's declared tier (#1275); read through its command, never named"},
-	"node_log":           {Shape: ShapeIDOnly},
-	"principal":          {Shape: ShapeIDOnly}, "principal_grant": {Shape: ShapeIDOnly},
-	"principal_group_member": {Shape: ShapeIDOnly},
-	"product_metric":         {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
-	"property":         {Shape: ShapeIDOnly},
-	"retired_sample":   {Shape: ShapeIDOnly, Reason: "a retired sample or event row kept for audit (ADR-1100), keyed by its lane and the row's own id; nothing addresses it by name"},
-	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
+	"outpost_log":        {Shape: ShapeIDOnly},
+	"users":              {Shape: ShapeIDOnly}, "user_grant": {Shape: ShapeIDOnly},
+	"user_group_member": {Shape: ShapeIDOnly},
+	"product_metric":    {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
+	"property":        {Shape: ShapeIDOnly},
+	"retired_sample":  {Shape: ShapeIDOnly, Reason: "a retired sample or event row kept for audit (ADR-1100), keyed by its lane and the row's own id; nothing addresses it by name"},
+	"setting_binding": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
-	"system_role_assignment": {Shape: ShapeIDOnly},
+	"system_slot_assignment": {Shape: ShapeIDOnly},
 	// The one row omniglass lab writes into its own database (#1195); nobody
 	// names or addresses it.
 	"lab_mark": {Shape: ShapeIDOnly},
 	// One row per impaired simulated component, keyed by that component's uuid.
-	"sim_impairment":       {Shape: ShapeIDOnly},
-	"event_rule_state":     {Shape: ShapeIDOnly, Reason: "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name"},
-	"event_rule_live":      {Shape: ShapeIDOnly, Reason: "when a rule last judged a sample, keyed by the rule's uuid; nothing addresses it by name"},
-	"event_rule_condition": {Shape: ShapeIDOnly, Reason: "a rule's condition in force, keyed by rule, component and instance; nothing addresses it by name"},
-	"calc_pending":         {Shape: ShapeIDOnly, Reason: "a calc rule's pending work on an owner, keyed by rule and owner; nothing addresses it by name"},
-	"calc_rule_state":      {Shape: ShapeIDOnly, Reason: "a calc rule's last outcome on an owner, keyed by rule and owner; nothing addresses it by name"},
-	"calc_rule_input":      {Shape: ShapeIDOnly, Reason: "one input of a calc rule, keyed by rule and position; its alias is an expression's binding, not an address"},
-	"endpoint_live":        {Shape: ShapeIDOnly, Reason: "when an endpoint last delivered a batch, keyed by the endpoint's uuid; nothing addresses it by name"},
-	"action_rule_target":   {Shape: ShapeIDOnly, Reason: "a target an action rule sends to, keyed by rule and target; nothing addresses it by name"},
-	"action_rule_opt_out":  {Shape: ShapeIDOnly, Reason: "a person opted out of a rule, keyed by rule and principal; nothing addresses it by name"},
-	"notification":         {Shape: ShapeIDOnly, Reason: "one message on its way, keyed by its uuid (the Idempotency-Key a receiver sees); nothing addresses it by name"},
-	"webhook_token":        {Shape: ShapeIDOnly, Reason: "a webhook endpoint's token binding, keyed by the endpoint's uuid and found by the token's digest; nothing addresses it by name"},
-	"unclaimed_source":     {Shape: ShapeIDOnly, Reason: "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name"},
-	"identity_binding":     {Shape: ShapeIDOnly, Reason: "a conduit's identity tied to its owner, addressed by its conduit, match key and value; nothing names it"},
-	"unbound_identity":     {Shape: ShapeIDOnly, Reason: "an identity a conduit reported that no binding places, one row per conduit, match key and value; read as the conduit's list, never addressed by name"},
-	"system_role_product":  {Shape: ShapeIDOnly}, "system_role_type": {Shape: ShapeIDOnly},
+	"sim_impairment":      {Shape: ShapeIDOnly},
+	"event_rule_state":    {Shape: ShapeIDOnly, Reason: "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name"},
+	"event_rule_live":     {Shape: ShapeIDOnly, Reason: "when a rule last judged a sample, keyed by the rule's uuid; nothing addresses it by name"},
+	"event_rule_firing":   {Shape: ShapeIDOnly, Reason: "one place a rule is firing, keyed by rule, component and instance; nothing addresses it by name"},
+	"calc_pending":        {Shape: ShapeIDOnly, Reason: "a calc rule's pending work on an owner, keyed by rule and owner; nothing addresses it by name"},
+	"calc_rule_state":     {Shape: ShapeIDOnly, Reason: "a calc rule's last outcome on an owner, keyed by rule and owner; nothing addresses it by name"},
+	"calc_rule_input":     {Shape: ShapeIDOnly, Reason: "one input of a calc rule, keyed by rule and position; its alias is an expression's binding, not an address"},
+	"endpoint_live":       {Shape: ShapeIDOnly, Reason: "when an endpoint last delivered a batch, keyed by the endpoint's uuid; nothing addresses it by name"},
+	"action_rule_target":  {Shape: ShapeIDOnly, Reason: "a target an action rule sends to, keyed by rule and target; nothing addresses it by name"},
+	"action_rule_opt_out": {Shape: ShapeIDOnly, Reason: "a person opted out of a rule, keyed by rule and user; nothing addresses it by name"},
+	"notification":        {Shape: ShapeIDOnly, Reason: "one message on its way, keyed by its uuid (the Idempotency-Key a receiver sees); nothing addresses it by name"},
+	"webhook_token":       {Shape: ShapeIDOnly, Reason: "a webhook endpoint's token binding, keyed by the endpoint's uuid and found by the token's digest; nothing addresses it by name"},
+	"unclaimed_source":    {Shape: ShapeIDOnly, Reason: "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name"},
+	"identity_binding":    {Shape: ShapeIDOnly, Reason: "a conduit's identity tied to its owner, addressed by its conduit, match key and value; nothing names it"},
+	"unbound_identity":    {Shape: ShapeIDOnly, Reason: "an identity a conduit reported that no binding places, one row per conduit, match key and value; read as the conduit's list, never addressed by name"},
+	"system_slot_product": {Shape: ShapeIDOnly}, "system_slot_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
-	// registry_shadow holds an operator's version of a shipped registry row
+	// catalog_shadow holds an operator's version of a shipped catalog row
 	// (#655, ADR-0095). Nobody names it: it is addressed by the row it shadows,
-	// (registry, row_id), and row_id is that row's uuid. Operators never see it
+	// (catalog, row_id), and row_id is that row's uuid. Operators never see it
 	// at all, since every read resolves it over the official row.
-	"registry_shadow": {Shape: ShapeIDOnly, Reason: "addressed by the registry row it shadows, never named"},
+	"catalog_shadow": {Shape: ShapeIDOnly, Reason: "addressed by the catalog row it shadows, never named"},
 	// label_rule holds the global tier of the label rules (#682, ADR-0098), one
-	// row per labelled entity kind, and it is the only table in the schema with
-	// a text primary key and no uuid at all.
+	// row per labelled entity kind: a text primary key and no uuid at all.
 	"label_rule": {Shape: ShapeFixedKey, Reason: "keyed by the entity kind it applies to (component, system, location), a closed set the table's own CHECK enforces"},
+	// reserved_key mirrors the keys writerclass reserves (#1447): the code
+	// declares the set, and the boot seed holds the table to it.
+	"reserved_key": {Shape: ShapeFixedKey, Reason: "keyed by a name writerclass reserves, a closed set the code declares and the boot seed reconciles the table to"},
 }
 
 // KeyProvedElsewhere excuses a name-bearing table from the behavioural create sweep,
@@ -237,7 +252,7 @@ var IdentityShapes = map[string]TableIdentity{
 var KeyProvedElsewhere = map[string]string{
 	"role":             "seeded only, no create path on the gateway",
 	"secret_type":      "seeded only, no create path on the gateway",
-	"role_choice":      "seeded only, no create path on the gateway",
+	"slot_choice":      "seeded only, no create path on the gateway",
 	"choice_alternate": "seeded only, no create path on the gateway",
 	"endpoint": "the name is server-derived, not operator-typed: EndpointSpec carries no Name " +
 		"and the column is set from spec.Transport, a name the code registry already validated",

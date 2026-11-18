@@ -21,7 +21,7 @@ import {
 } from "../lib/tags";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -169,7 +169,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
     destructive: () => (tag() && can(me.data, "tag", "delete") ? { label: "Delete", tone: "danger", onClick: removeTag } : undefined),
     // A tag key has no official flag (every key is operator-owned), so the
     // lock is judged on the permission arm alone.
-    locked: () => registryLock(tag() && { official: false }, me.data, "tag"),
+    locked: () => catalogLock(tag() && { official: false }, me.data, "tag"),
   });
 
   return (

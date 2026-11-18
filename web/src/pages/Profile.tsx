@@ -12,11 +12,12 @@ import { passwordError, isPasswordPolicyMessage, tokenTtlError } from "../lib/va
 import { can, useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
 import { Bell, Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
+import { kindLabel } from "../lib/users";
 
 // Profile is the signed-in operator's own account surface: edit your label
 // and email, change your password, and (pedagogically) see the identity model you
-// operate under, your principal, its permissions, and its role grants. Every field
-// here is self-scoped; the server edits only the caller's own principal.
+// operate under, your user, its permissions, and its role grants. Every field
+// here is self-scoped; the server edits only the caller's own user.
 export default function Profile() {
   const me = useMe();
   const updateProfile = useUpdateProfile();
@@ -91,7 +92,7 @@ export default function Profile() {
   const [label, setLabel] = createSignal("");
   const [seeded, setSeeded] = createSignal(false);
   createEffect(() => {
-    const h = me.data?.human;
+    const h = me.data?.person;
     if (h && !seeded()) {
       setLabel(h.label ?? "");
       setSeeded(true);
@@ -150,10 +151,10 @@ export default function Profile() {
     setPwBusy(false);
   }
 
-  const human = () => me.data?.human;
+  const human = () => me.data?.person;
 
   // The avatar image, fetched as base64 and wrapped in a data URL, only when the
-  // principal actually has one (has_avatar rides on /auth/me, so no fetch fires
+  // user actually has one (has_avatar rides on /auth/me, so no fetch fires
   // for a user without a picture). A change refetches both the flag and the image.
   const [avatarUrl, { refetch: refetchAvatar }] = createResource(
     () => human()?.has_avatar ?? false,
@@ -377,7 +378,7 @@ export default function Profile() {
           <div class="card-body gap-3">
             <h2 class="card-title text-base">Access</h2>
             <p class="text-xs text-base-content/50">
-              You are a <span class="font-data text-base-content/70">{me.data?.principal.kind}</span> principal. Your
+              You are a <span class="font-data text-base-content/70">{kindLabel(me.data?.user.kind ?? "")}</span> user. Your
               permissions are the flattened union of the roles granted to you; the server enforces them on every request
               (this is a hint, not the authority).
             </p>

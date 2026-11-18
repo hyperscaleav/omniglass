@@ -15,10 +15,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// A component's log lines from the node lane (#1145): a task's collected
+// A component's log lines from the outpost lane (#1145): a task's collected
 // lines ride task_logs and land in log_line on the task's component, the
-// collecting endpoint as their instance, never in node_log; the node's own
-// self-logs in the same batch still land in node_log. The severity table and
+// collecting endpoint as their instance, never in outpost_log; the outpost's own
+// self-logs in the same batch still land in outpost_log. The severity table and
 // the caps every writer shares are the Storage Gateway's (logs_test.go).
 
 func TestTaskLogWritesLandOnTheTasksComponent(t *testing.T) {
@@ -28,7 +28,7 @@ func TestTaskLogWritesLandOnTheTasksComponent(t *testing.T) {
 			{Message: "backlight driver reset", Severity: "WARN", Facility: "panel", Source: "nvp", Attributes: []byte(`{"zone":"front"}`), Ts: timestamppb.New(at)},
 			{Message: "EVT SCENE presentation"},
 		},
-	}, nodeOwner())
+	}, outpostOwner())
 	if len(logs) != 2 {
 		t.Fatalf("got %d writes, want 2", len(logs))
 	}
@@ -75,33 +75,33 @@ func TestLandFilesTaskLogsAndSelfLogsApart(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('tcp', 'tcp', $1::uuid, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1:51325"}'::jsonb)`, comp.ID); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('tcp', 'tcp', $1::uuid, (select user_id from outpost where name = 'outpost-a'), '{"target":"10.0.0.1:51325"}'::jsonb)`, comp.ID); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
 		('t-nvp', 'listen', (select id from endpoint where name = 'tcp'), true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
-	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-nvp", "node-a")
+	owner, ok, err := gw.ResolveTaskOwner(ctx, "t-nvp", "outpost-a")
 	if err != nil || !ok {
 		t.Fatalf("resolve task owner: ok=%v err=%v", ok, err)
 	}
 	s := &Server{store: gw}
 	at := time.Now().UTC().Truncate(time.Second)
 	ev := &ogv1.TelemetryBatch{
-		TaskId: "t-nvp", NodeId: "node-a",
-		Logs:     []*ogv1.LogLine{{Message: "worklist pulled", Source: "node"}},
+		TaskId: "t-nvp", OutpostId: "outpost-a",
+		Logs:     []*ogv1.LogLine{{Message: "worklist pulled", Source: "outpost"}},
 		TaskLogs: []*ogv1.LogLine{{Message: "backlight driver reset", Severity: "warn", Facility: "panel", Ts: timestamppb.New(at)}},
 	}
-	if err := s.land(ctx, "", ev, ingestBinding{LogNode: "node-a", SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.NodeWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
+	if err := s.land(ctx, "", ev, ingestBinding{LogOutpost: "outpost-a", SampleOwner: &owner, Arc: componentArc(owner), Writer: storage.OutpostWriter(owner.ComponentID, owner.EndpointName)}); err != nil {
 		t.Fatalf("land: %v", err)
 	}
 	lines, err := gw.ListComponentLogs(ctx, comp.ID, time.Hour, 10, storage.LogFilter{})
@@ -114,16 +114,16 @@ func TestLandFilesTaskLogsAndSelfLogsApart(t *testing.T) {
 	if lines[0].ReceivedAt == nil || time.Since(*lines[0].ReceivedAt) > time.Minute {
 		t.Fatalf("received_at = %v, want the server's receipt", lines[0].ReceivedAt)
 	}
-	self, err := gw.ListNodeLogs(ctx, "node-a", time.Hour, 10)
+	self, err := gw.ListOutpostLogs(ctx, "outpost-a", time.Hour, 10)
 	if err != nil {
-		t.Fatalf("list node logs: %v", err)
+		t.Fatalf("list outpost logs: %v", err)
 	}
 	if len(self) != 1 || self[0].Message != "worklist pulled" {
-		t.Fatalf("node logs = %+v, want the self-log alone", self)
+		t.Fatalf("outpost logs = %+v, want the self-log alone", self)
 	}
 
-	// An orphan batch (its task not this node's) lands its task logs nowhere.
-	if err := s.land(ctx, "", &ogv1.TelemetryBatch{TaskId: "t-other", TaskLogs: []*ogv1.LogLine{{Message: "stranger"}}}, ingestBinding{LogNode: "node-a"}); err != nil {
+	// An orphan batch (its task not this outpost's) lands its task logs nowhere.
+	if err := s.land(ctx, "", &ogv1.TelemetryBatch{TaskId: "t-other", TaskLogs: []*ogv1.LogLine{{Message: "stranger"}}}, ingestBinding{LogOutpost: "outpost-a"}); err != nil {
 		t.Fatalf("land orphan: %v", err)
 	}
 	var n int

@@ -73,7 +73,7 @@ func TestANameRuleReadsBackWithTheNamesItMintsAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "nre-owner", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "nre-owner", []grant{{role: "owner", scopeKind: "all"}})
 
 	for _, tc := range []struct {
 		typeName string
@@ -141,7 +141,7 @@ func TestSettingANameRuleOnAShippedTypeForksAndRestoresAPI(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
-	owner := principalWithGrants(t, ctx, dsn, "nre-fork-owner", []grant{{role: "owner", scopeKind: "all"}})
+	owner := userWithGrants(t, ctx, dsn, "nre-fork-owner", []grant{{role: "owner", scopeKind: "all"}})
 
 	shipped := locationTypeByName(t, c, owner, "floor")
 	if !shipped.Official || shipped.Forked || shipped.NameRule != nil {

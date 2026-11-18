@@ -1,0 +1,11 @@
+# The lab's omnibot (#2121): a recorded model the lab's server plays in place
+# of a live one, by position in each conversation, so every conversation runs
+# the same way. It reads the meeting 405 video bar, asks to tag it, and reports.
+turns:
+  - tool_calls:
+      - name: get-component
+        arguments: {name: hq.west.level-4.meeting-405.$comp.videobar-1}
+  - tool_calls:
+      - name: set-component-tag
+        arguments: {name: hq.west.level-4.meeting-405.$comp.videobar-1, key: asset-id, value: AV-0415}
+  - text: Tagged the meeting 405 video bar as AV-0415.

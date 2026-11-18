@@ -18,7 +18,7 @@ import (
 
 // The TLS dial primitive (#1035, ADR-0160). One client handshake over a
 // connection already made, under one of three modes: verify the certificate
-// against the node's roots with the server name from the host input, pin the
+// against the outpost's roots with the server name from the host input, pin the
 // public key on first use, or (the operator's explicit choice) skip every
 // check. It reports what the handshake observed: the offered public key's
 // fingerprint and the certificate's not-after. A refusal retrying cannot fix
@@ -42,7 +42,7 @@ type TLSTrust struct {
 	// ServerName is the name verify checks the certificate against (the
 	// host input).
 	ServerName string
-	// Roots is the pool verify checks against; nil is the node's system
+	// Roots is the pool verify checks against; nil is the outpost's system
 	// roots. Only tests set it.
 	Roots *x509.CertPool
 }

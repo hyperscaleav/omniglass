@@ -17,13 +17,13 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { systemHealthKey } from "../lib/health";
 import { uuidFor } from "../lib/testids";
 
-// Explore as an outline of places (#861, #867): one tree of locations, each
-// place wearing the system that sits there, components directly beneath. The
+// Explore as an outline of locations (#861, #867): one tree of locations, each
+// location wearing the system that sits there, components directly beneath. The
 // fixture is deliberately uneven: a campus of two buildings, a room holding
-// two systems, a degraded room, a system at a place this caller cannot read.
+// two systems, a degraded room, a system at a location this caller cannot read.
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["location:read", "system:read", "component:read", "tag:read"], grants: [] };
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["location:read", "system:read", "component:read", "tag:read"], grants: [] };
 
 const loc = (h: string, label: string, type: string, parent = "") => ({
   id: uuidFor(h), name: h, label, location_type: type, location_type_id: uuidFor(`t-${type}`), parent: parent ? uuidFor(parent) : undefined, verdict: "healthy",
@@ -121,14 +121,14 @@ const rowLabels = () => rows().map(labelOf);
 const expand = (label: string) => fireEvent.click(within(row(label)).getByRole("button", { name: `Expand ${label}` }));
 
 describe("arrival", () => {
-  it("shows the top-level places only, sorted by name, collapsed", async () => {
+  it("shows the top-level locations only, sorted by name, collapsed", async () => {
     mount();
     await screen.findByRole("tree");
     expect(rowLabels()).toEqual(["Headquarters", "Service Depot", "Placed nowhere you can see"]);
     expect(row("Headquarters").getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("says what a collapsed place holds in the registry's words, and counts its systems by health", async () => {
+  it("says what a collapsed location holds in the catalog's words, and counts its systems by health", async () => {
     mount();
     await screen.findByRole("tree");
     const hq = row("Headquarters");
@@ -151,7 +151,7 @@ describe("arrival", () => {
 });
 
 describe("drilling in", () => {
-  it("expands and collapses a place", async () => {
+  it("expands and collapses a location", async () => {
     mount();
     await screen.findByRole("tree");
     expand("Headquarters");
@@ -171,7 +171,7 @@ describe("drilling in", () => {
     expect(rowLabels()).toContain("West Building");
   });
 
-  it("wears a place's system on its row and lists the components directly beneath", async () => {
+  it("wears a location's system on its row and lists the components directly beneath", async () => {
     mount();
     await screen.findByRole("tree");
     expand("Headquarters");
@@ -184,7 +184,7 @@ describe("drilling in", () => {
     expect(rowLabels()).not.toContain("Auditorium AV");
   });
 
-  it("groups a place's components under one header per system when it holds two", async () => {
+  it("groups a location's components under one header per system when it holds two", async () => {
     mount();
     await screen.findByRole("tree");
     expand("Headquarters");
@@ -218,7 +218,7 @@ describe("drilling in", () => {
 });
 
 describe("the side panel", () => {
-  it("opens a place holding one system as that system", async () => {
+  it("opens a location holding one system as that system", async () => {
     mount();
     await screen.findByRole("tree");
     expand("Headquarters");
@@ -228,7 +228,7 @@ describe("the side panel", () => {
     expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-system-${uuidFor("s-huddle")}`);
   });
 
-  it("opens any other place as the location", async () => {
+  it("opens any other location as the location", async () => {
     mount();
     await screen.findByRole("tree");
     fireEvent.click(row("Headquarters"));
@@ -246,7 +246,7 @@ describe("the side panel", () => {
   });
 });
 
-describe("a place with nothing beneath", () => {
+describe("a location with nothing beneath", () => {
   it("offers no chevron when its system holds no components yet", async () => {
     const fleet = { locations: [loc("quiet", "Quiet Room", "room")], systems: [sys("s-quiet", "Quiet", "quiet", "healthy")] } as unknown as FleetView;
     mount("/web/explore", owner, fleet, false, []);
@@ -287,7 +287,7 @@ describe("creating where you stand", () => {
     expect(screen.queryByRole("button", { name: "Location" })).toBeNull();
   });
 
-  it("offers each place of a folded row, so the outer one stays reachable", async () => {
+  it("offers each location of a folded row, so the outer one stays reachable", async () => {
     // A campus of one building folds into one row; the operator must still be
     // able to add a second building beside the first, under the campus.
     const fleet = { locations: [loc("annex", "Annex Campus", "campus"), loc("annex-b", "Annex", "building", "annex")], systems: [] } as unknown as FleetView;
@@ -373,7 +373,7 @@ describe("finding things", () => {
 });
 
 describe("the states an operator can land in", () => {
-  it("collects systems at a place this caller cannot read under their own node", async () => {
+  it("collects systems at a location this caller cannot read under their own node", async () => {
     mount();
     await screen.findByRole("tree");
     expand("Placed nowhere you can see");
@@ -404,7 +404,7 @@ describe("the states an operator can land in", () => {
 describe("the Detail column", () => {
   it("names the alarm behind a component's red light, matched by the component's id", async () => {
     // A health report names an alarm's component by name and by uuid (internal/api/health.go); the outline matches the uuid.
-    const report = { roles: [{ alarms: [{ id: "a1", component: "dsp-1", component_id: uuidFor("dsp-1"), severity: "high", message: "No signal on input 3" }] }] };
+    const report = { slots: [{ alarms: [{ id: "a1", component: "dsp-1", component_id: uuidFor("dsp-1"), severity: "high", message: "No signal on input 3" }] }] };
     mount("/web/explore", owner, view, false, components, (qc) => qc.setQueryData([...systemHealthKey(uuidFor("s-aud"))], report));
     await screen.findByRole("tree");
     expand("Headquarters");
@@ -415,7 +415,7 @@ describe("the Detail column", () => {
 
   it("reads no health report while the filter shows results instead of the tree", async () => {
     localStorage.setItem("explore-open", JSON.stringify([uuidFor("hq"), uuidFor("east"), uuidFor("aud")]));
-    const health = vi.fn(async (_u: RequestInfo | URL) => new Response(JSON.stringify({ roles: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+    const health = vi.fn(async (_u: RequestInfo | URL) => new Response(JSON.stringify({ slots: [] }), { status: 200, headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", health);
     mount(`/web/explore?chips=${encodeURIComponent(JSON.stringify([{ key: "name", op: "contains", values: ["dsp"] }]))}`, owner, view, true);
     await screen.findByRole("list", { name: "Matches" });
@@ -423,8 +423,8 @@ describe("the Detail column", () => {
   });
 });
 
-describe("a place's health light", () => {
-  it("counts the places beneath it too, so a collapsed branch cannot hide an outage", async () => {
+describe("a location's health light", () => {
+  it("counts the locations beneath it too, so a collapsed branch cannot hide an outage", async () => {
     const fleet = {
       locations: [loc("annex", "Annex", "building"), loc("vault", "Vault", "room", "annex"), loc("vault2", "Vault 2", "room", "annex")],
       systems: [sys("s-lobby", "Lobby AV", "annex", "healthy"), sys("s-vault", "Vault AV", "vault", "outage")],
@@ -488,7 +488,7 @@ describe("what a link or a result points at", () => {
     systems: [sys("s-h1", "Hidden One", "elsewhere", "degraded"), sys("s-h2", "Hidden Two", "", "healthy")],
   } as unknown as FleetView;
 
-  it("reveals the node of things placed out of sight, rather than opening a place that is not one", async () => {
+  it("reveals the node of things placed out of sight, rather than opening a location that is not one", async () => {
     mount("/web/explore", owner, hidden, false, []);
     await screen.findByRole("tree");
     fireEvent.input(screen.getByPlaceholderText(/^Filter by/), { target: { value: "Placed nowhere" } });
@@ -504,7 +504,7 @@ describe("what a link or a result points at", () => {
     expect(row("Placed nowhere you can see").getAttribute("aria-selected")).toBe("true");
   });
 
-  it("selects a folded row when a link names its outer place", async () => {
+  it("selects a folded row when a link names its outer location", async () => {
     mount(`/web/explore?node=${uuidFor("annex")}`, owner, hidden, false, []);
     await screen.findByRole("tree");
     await waitFor(() => expect(row("Annex").getAttribute("aria-selected")).toBe("true"));

@@ -21,7 +21,7 @@ const HINTS = {
   inbox:
     "Notifications addressed to you on the inbox channel. You are only ever told about alarms on components you can read, and an entry about a component you can no longer read leaves your inbox.",
   group:
-    "An administrator points an action rule at you, or at a group you belong to, with the inbox as its channel. If the rule allows it, you can opt out of it for yourself.",
+    "An administrator points an action rule at you, or at a user group you belong to, with the inbox as its channel. If the rule allows it, you can opt out of it for yourself.",
   personal:
     "Your own alarm subscription: a rule you write that tells you alone, on the channels you pick, when an alarm you can see is raised or cleared.",
   unreadOnly: "Show only the entries you have not read yet.",

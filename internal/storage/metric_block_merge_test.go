@@ -190,7 +190,7 @@ func TestLateSamplesRewriteTheirBlockOnce(t *testing.T) {
 	r.verify()
 }
 
-// TestAReplayedSpoolLandsWhole: a node's three-day spool replayed after its
+// TestAReplayedSpoolLandsWhole: an outpost's three-day spool replayed after its
 // first two days folded lands every sample: Sunday's into its ISO week's
 // block, Monday's into its day block, and Tuesday's, a day the fold has not
 // reached, as raw rows the next pass folds. A batch delivered again lands
@@ -476,7 +476,7 @@ func (r *blockRig) windowRig(c foldedDay, cutoff time.Time, days int, override b
 		mustExec(r.t, r.conn, `update metric_type set retention_days = $1 where name = 'prune-rtt'`, days)
 	} else {
 		mustExec(r.t, r.conn, `update metric_type set retention_days = null where name = 'prune-rtt'`)
-		if _, err := r.gw.UpsertSettingOverride(r.ctx, "", "platform", "retention", map[string]any{"metric_days": days}, nil); err != nil {
+		if _, err := r.gw.UpsertSettingBinding(r.ctx, "", "platform", "retention", map[string]any{"metric_days": days}, nil); err != nil {
 			r.t.Fatal(err)
 		}
 	}
@@ -515,6 +515,51 @@ func TestAnIntactHourOfADayPastTheWindowCutoffTrendsFromItsRawRows(t *testing.T)
 				t.Errorf("the trend of the intact hour is %q, want %q, the fold of its raw rows", got, want)
 			}
 		})
+	}
+}
+
+// TestAWindowWidenedAfterTheMergeLeavesTheLateSampleInItsTrend: with the
+// cutoff inside a folded day, a late sample lands raw only (the merge needs
+// the whole day intact). If the type's retention_days is then raised so the
+// day is intact again before the recompute, the recompute must not read the
+// day's block, which lacks the sample: the merge's decision rides on the
+// dirty mark, and the hour's trend row is the raw rows' for trend_days (#1560,
+// ADR-1529 decision 7). The same holds when the platform's metric_days is
+// raised instead, and for a sample that merged beside one that did not.
+func TestAWindowWidenedAfterTheMergeLeavesTheLateSampleInItsTrend(t *testing.T) {
+	t.Parallel()
+	for _, c := range foldedDays {
+		for _, override := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/override=%v", c.name, override), func(t *testing.T) {
+				t.Parallel()
+				r := newBlockRig(t)
+				day := r.day(c.day)
+				a := r.windowRig(c, day.Add(6*time.Hour+30*time.Minute), 7, override)
+				hour := day.Add(10 * time.Hour)
+				r.ingest(sampleOf("", hour.Add(30*time.Minute+time.Millisecond), -7))
+				if got := r.blocksOf(a); !slices.Contains(got, c.want) {
+					t.Fatalf("the late sample of a day past the cutoff reached its block: the blocks are %v", got)
+				}
+				// The window is widened before the compaction recomputes the hour.
+				if override {
+					mustExec(t, r.conn, `update metric_type set retention_days = $1 where name = 'prune-rtt'`, blockLaneDays)
+				} else {
+					if _, err := r.gw.UpsertSettingBinding(r.ctx, "", "platform", "retention", map[string]any{"metric_days": blockLaneDays}, nil); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if _, err := r.gw.CompactMetricTrends(r.ctx, 1, blockLaneDays); err != nil {
+					t.Fatal(err)
+				}
+				want := r.rawTrendRow(a, hour)
+				if !strings.Contains(want, "-7") {
+					t.Fatalf("the raw rows' fold %q lacks the late sample", want)
+				}
+				if got := r.trendRow(a, hour); got != want {
+					t.Errorf("the trend of the hour is %q after the window widened, want %q, the fold of its raw rows", got, want)
+				}
+			})
+		}
 	}
 }
 

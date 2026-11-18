@@ -17,7 +17,7 @@ import (
 
 // TestForceChangePasswordGate drives the force-change gate through the real binary
 // (issue #159): after an admin reset, the flagged user can log in and read their
-// own principal, but every other route is refused with a distinct "password change
+// own user, but every other route is refused with a distinct "password change
 // required" 403 until they change the password, after which the gate releases.
 // Skipped under -short.
 func TestForceChangePasswordGate(t *testing.T) {
@@ -37,13 +37,13 @@ func TestForceChangePasswordGate(t *testing.T) {
 	all := scope.Set{All: true}
 
 	initHash, _ := auth.HashPassword("orange-boat-42x")
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice", PasswordHash: initHash}, all)
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice", PasswordHash: initHash}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 	// Admin reset to a known value: this flags must_change_password for alice.
 	resetHash, _ := auth.HashPassword("purple-canyon-7")
-	if err := gw.SetPrincipalPassword(ctx, root.ID, alice.ID, resetHash, all); err != nil {
+	if err := gw.SetUserPassword(ctx, root.ID, alice.ID, resetHash, all); err != nil {
 		t.Fatalf("admin reset: %v", err)
 	}
 
@@ -87,8 +87,8 @@ func TestForceChangePasswordGate(t *testing.T) {
 		t.Fatalf("me while flagged: want 200 with the flag, got %d (%s)", code, b)
 	}
 	// Any other route is gated with the distinct message (not the generic forbidden).
-	if code, b := get("/api/v1/principals"); code != http.StatusForbidden || !bytes.Contains(b, []byte("password change required")) {
-		t.Fatalf("principals while flagged: want 403 'password change required', got %d (%s)", code, b)
+	if code, b := get("/api/v1/users"); code != http.StatusForbidden || !bytes.Contains(b, []byte("password change required")) {
+		t.Fatalf("users while flagged: want 403 'password change required', got %d (%s)", code, b)
 	}
 
 	// Change the password: the current is the admin-set value, the new is policy-valid.
@@ -107,8 +107,8 @@ func TestForceChangePasswordGate(t *testing.T) {
 
 	// The gate has released: the same route is now the ordinary permission 403 (alice
 	// holds no grants), NOT the force-change message. The flag is cleared on /auth/me.
-	if code, b := get("/api/v1/principals"); code != http.StatusForbidden || bytes.Contains(b, []byte("password change required")) {
-		t.Fatalf("principals after change: want a generic 403, got %d (%s)", code, b)
+	if code, b := get("/api/v1/users"); code != http.StatusForbidden || bytes.Contains(b, []byte("password change required")) {
+		t.Fatalf("users after change: want a generic 403, got %d (%s)", code, b)
 	}
 	if code, b := get("/api/v1/auth/me"); code != http.StatusOK || bytes.Contains(b, []byte(`"must_change_password":true`)) {
 		t.Fatalf("me after change: flag should be cleared, got %d (%s)", code, b)

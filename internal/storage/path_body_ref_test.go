@@ -176,10 +176,10 @@ func TestCreateLocationDottedMissingParentMatchesBareNameForm(t *testing.T) {
 	assertNotLeakedPathNotFound(t, dottedErr)
 }
 
-// TestCreateNodeDottedMissingLocationMatchesBareNameForm covers nodes.go's
-// nodeLocationID, another explicit-fold call site, using a genuine
+// TestCreateOutpostDottedMissingLocationMatchesBareNameForm covers outposts.go's
+// outpostLocationID, another explicit-fold call site, using a genuine
 // structural miss under a real root ("boi.nope") like the location test.
-func TestCreateNodeDottedMissingLocationMatchesBareNameForm(t *testing.T) {
+func TestCreateOutpostDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
@@ -189,18 +189,18 @@ func TestCreateNodeDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 		t.Fatalf("create boi: %v", err)
 	}
 
-	_, bareErr := gw.CreateNode(ctx, "", storage.NodeSpec{
-		Name: "node-bare-loc", LocationName: strptr("ghost-loc"),
+	_, bareErr := gw.CreateOutpost(ctx, "", storage.OutpostSpec{
+		Name: "outpost-bare-loc", LocationName: strptr("ghost-loc"),
 	}, all, all)
 	if !errors.Is(bareErr, storage.ErrLocationNotFound) {
-		t.Fatalf("bare-name missing node location = %v, want ErrLocationNotFound", bareErr)
+		t.Fatalf("bare-name missing outpost location = %v, want ErrLocationNotFound", bareErr)
 	}
 
-	_, dottedErr := gw.CreateNode(ctx, "", storage.NodeSpec{
-		Name: "node-dotted-loc", LocationName: strptr("boi.nope"),
+	_, dottedErr := gw.CreateOutpost(ctx, "", storage.OutpostSpec{
+		Name: "outpost-dotted-loc", LocationName: strptr("boi.nope"),
 	}, all, all)
 	if !errors.Is(dottedErr, storage.ErrLocationNotFound) {
-		t.Fatalf("dotted missing node location (boi.nope) = %v, want ErrLocationNotFound (same as bare-name form)", dottedErr)
+		t.Fatalf("dotted missing outpost location (boi.nope) = %v, want ErrLocationNotFound (same as bare-name form)", dottedErr)
 	}
 	assertNotLeakedPathNotFound(t, dottedErr)
 }
@@ -234,30 +234,30 @@ func TestCreateVariableDottedMissingOwnerMatchesBareNameForm(t *testing.T) {
 	assertNotLeakedPathNotFound(t, dottedErr)
 }
 
-// TestRoleOwnerArgPassesThroughAnUnresolvableDottedSystemName covers the
-// review's third named shape: role_declarations.go's roleOwnerArg
+// TestSlotOwnerArgPassesThroughAnUnresolvableDottedSystemName covers the
+// review's third named shape: slot_declarations.go's slotOwnerArg
 // deliberately passes an unresolvable owner name through UNRESOLVED (rather
 // than erroring early) so the write falls through to the
-// system_role_owner_arc_check CHECK constraint, which produces the stable
-// ErrRoleRefNotFound sentinel. Before this fix round, a dotted owner name
+// system_slot_owner_arc_check CHECK constraint, which produces the stable
+// ErrSlotRefNotFound sentinel. Before this fix round, a dotted owner name
 // hard-errored with *ErrPathNotFound instead of passing through, because
-// roleOwnerArg's own errors.Is(err, ErrSystemNotFound) check could not see
+// slotOwnerArg's own errors.Is(err, ErrSystemNotFound) check could not see
 // through the unwrapped sentinel.
-func TestRoleOwnerArgPassesThroughAnUnresolvableDottedSystemName(t *testing.T) {
+func TestSlotOwnerArgPassesThroughAnUnresolvableDottedSystemName(t *testing.T) {
 	t.Parallel()
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
-	spec := storage.SystemRoleSpec{Name: "seat", Label: "Seat", Quorum: 1}
+	spec := storage.SystemSlotSpec{Name: "seat", Label: "Seat", Quorum: 1}
 
-	if _, err := gw.SetSystemRole(ctx, "", "system", "ghost-bare-system", spec); !errors.Is(err, storage.ErrRoleRefNotFound) {
-		t.Fatalf("bare-name unresolvable system owner = %v, want ErrRoleRefNotFound", err)
+	if _, err := gw.SetSystemSlot(ctx, "", "system", "ghost-bare-system", spec); !errors.Is(err, storage.ErrSlotRefNotFound) {
+		t.Fatalf("bare-name unresolvable system owner = %v, want ErrSlotRefNotFound", err)
 	}
 	dottedErr := func() error {
-		_, err := gw.SetSystemRole(ctx, "", "system", "$sys.ghost-dotted-system", spec)
+		_, err := gw.SetSystemSlot(ctx, "", "system", "$sys.ghost-dotted-system", spec)
 		return err
 	}()
-	if !errors.Is(dottedErr, storage.ErrRoleRefNotFound) {
-		t.Fatalf("dotted unresolvable system owner = %v, want ErrRoleRefNotFound (same as bare-name form)", dottedErr)
+	if !errors.Is(dottedErr, storage.ErrSlotRefNotFound) {
+		t.Fatalf("dotted unresolvable system owner = %v, want ErrSlotRefNotFound (same as bare-name form)", dottedErr)
 	}
 	assertNotLeakedPathNotFound(t, dottedErr)
 }

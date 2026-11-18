@@ -42,7 +42,7 @@ const LOOK: Record<SimState, { badge: string; icon: Component<{ size?: number }>
 
 const UNPLUGGED_HINT = "Unplugged by an operator: dark on every protocol, so a collector sees it down at every layer, as a pulled cable would look.";
 const SHAPED_HINT = "An operator shaped its traffic (latency, jitter, loss or a rate limit), and a collector sees exactly that.";
-const NOT_APPLIED_HINT = "The impairment is set, but the simulator did not apply it: impairments are unavailable on its node, the change has not reached it yet, or the component is not running.";
+const NOT_APPLIED_HINT = "The impairment is set, but the simulator did not apply it: impairments are unavailable on its outpost, the change has not reached it yet, or the component is not running.";
 
 export default function SimStatusBadge(props: {
   sim: Pick<SimComponent, "status" | "impairment" | "impaired">;

@@ -20,7 +20,7 @@ type eventTypeBody struct {
 	Description   string          `json:"description,omitempty"`
 	PayloadSchema json.RawMessage `json:"payload_schema,omitempty" doc:"A JSON Schema fragment for the occurrence payload"`
 	Official      bool            `json:"official"`
-	WriterClass   string          `json:"writer_class" enum:"node-probe,platform,command-lifecycle,calc,collected" doc:"Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
+	WriterClass   string          `json:"writer_class" enum:"outpost-probe,platform,command-lifecycle,calc,collected" doc:"Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit"`
 }
 
 func toEventTypeBody(et *storage.EventType) eventTypeBody {
@@ -73,6 +73,7 @@ type updateEventTypeInput struct {
 func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-event-type",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/event-types",
 		Summary:     "List event types",

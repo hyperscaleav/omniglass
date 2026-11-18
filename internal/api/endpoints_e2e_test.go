@@ -106,7 +106,7 @@ func TestEndpointAPI(t *testing.T) {
 	// A driver-attached endpoint's connection inputs edit in place (#1061
 	// ruling): its port moves its derived target; a value the driver refuses
 	// is a 400 naming the field; the viewer floor is refused.
-	nvp := "newtron-nvp"
+	nvp := "newtron-panel-nvp"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-d"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestEndpointAPI(t *testing.T) {
 	// the offered key itself is trusted.
 	sshEp := createEndpoint(c, ownerTok, map[string]any{"transport": "ssh", "component": "comp-d", "params": map[string]any{"target": "10.0.0.7:22"}})
 	shown, offeredNow := "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
-	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter("comp-d", sshEp.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
+	if err := gw.InsertPropertySamples(ctx, storage.OutpostWriter("comp-d", sshEp.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
 		Instance: sshEp.Name, Value: "responsive host-key 9f86d081 SHA256:" + strings.Repeat("P", 43) + " " + offeredNow, Source: "ssh", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ type endpointResp struct {
 	Name      string  `json:"name"`
 	Type      string  `json:"transport"`
 	Component *string `json:"component"`
-	Node      *string `json:"node"`
+	Outpost   *string `json:"outpost"`
 }
 
 func createEndpoint(c *apiClient, tok string, body map[string]any) endpointResp {
@@ -267,4 +267,58 @@ func listEndpoints(c *apiClient, tok string) []endpointResp {
 		c.t.Fatalf("decode endpoint list: %v", err)
 	}
 	return body.Endpoints
+}
+
+// TestDeletingAComponentThatOwnsEndpointsIs409 pins #138 over HTTP: the delete
+// is refused as occupied, the 409 names the endpoints and the next step, and
+// the endpoint is still attached to its component afterwards. Once the endpoint
+// is deleted, as the message asks, the component delete succeeds. Skipped under
+// -short.
+func TestDeletingAComponentThatOwnsEndpointsIs409(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := seededDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "has-endpoint"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	ep := createEndpoint(c, ownerTok, map[string]any{"transport": "tcp", "component": "has-endpoint"})
+
+	status, body := c.send(ownerTok, http.MethodDelete, "/components/has-endpoint", nil)
+	if status != http.StatusConflict {
+		t.Fatalf("delete component with an endpoint status = %d, want 409\nbody: %s", status, body)
+	}
+	for _, want := range []string{"1 endpoint", "delete or reassign"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("409 body = %s, want it to contain %q", body, want)
+		}
+	}
+	// The refusal must not have orphaned the endpoint.
+	if eps := listEndpoints(c, ownerTok); len(eps) != 1 || eps[0].Component == nil || *eps[0].Component != "has-endpoint" {
+		t.Errorf("endpoints after refused delete = %+v, want the one still on has-endpoint", eps)
+	}
+
+	c.do(ownerTok, http.MethodDelete, "/endpoints/"+ep.ID, nil, http.StatusNoContent)
+	c.do(ownerTok, http.MethodDelete, "/components/has-endpoint", nil, http.StatusNoContent)
 }

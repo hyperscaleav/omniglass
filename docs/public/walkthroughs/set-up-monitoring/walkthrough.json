@@ -1,7 +1,7 @@
 {
   "id": "set-up-monitoring",
   "title": "Set up monitoring on a component",
-  "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.",
+  "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge outpost, and watch reachability and samples arrive.",
   "steps": [
     {
       "n": 1,
@@ -12,7 +12,7 @@
     {
       "n": 2,
       "kind": "click",
-      "caption": "Add an endpoint, the way a node reaches the display.",
+      "caption": "Add an endpoint, the way an outpost reaches the display.",
       "still": "step-02.png"
     },
     {
@@ -42,7 +42,7 @@
     {
       "n": 7,
       "kind": "select",
-      "caption": "The node edge-hq sits on the display's network, so it collects it.",
+      "caption": "The outpost edge-hq sits on the display's network, so it collects it.",
       "still": "step-07.png"
     },
     {
@@ -54,7 +54,7 @@
     {
       "n": 9,
       "kind": "press",
-      "caption": "Close it. Next, a probe for one question: can the node reach it?",
+      "caption": "Close it. Next, a probe for one question: can the outpost reach it?",
       "still": "step-09.png"
     },
     {
@@ -66,7 +66,7 @@
     {
       "n": 11,
       "kind": "select",
-      "caption": "The same node runs it.",
+      "caption": "The same outpost runs it.",
       "still": "step-11.png"
     },
     {
@@ -103,8 +103,8 @@
   "poster": "step-16.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 51.9,
-    "bytes": 868929,
-    "previewBytes": 558878
+    "seconds": 51.6,
+    "bytes": 873496,
+    "previewBytes": 596850
   }
 }

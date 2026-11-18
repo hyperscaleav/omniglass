@@ -9,4 +9,4 @@
   other.
 - **Fix:** serialize with an advisory lock keyed on the row's id instead (`pg_advisory_xact_lock_shared`
   in the many-readers path, exclusive in the one writer), which the other path never takes, so no
-  cycle forms (`lockSystemForStaffing`, internal/storage/roles.go, ADR-0506).
+  cycle forms (`lockSystemForStaffing`, internal/storage/slots.go, ADR-0506).

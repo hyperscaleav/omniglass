@@ -109,7 +109,7 @@ func TestEnsureServerComponentNeedsThePlatform(t *testing.T) {
 }
 
 // TestServerComponentIsReserved: the server's component is the server's, as a
-// node's is the node's: an operator may relabel it and may not rename,
+// outpost's is the outpost's: an operator may relabel it and may not rename,
 // delete, re-parent or lend it to another system.
 func TestServerComponentIsReserved(t *testing.T) {
 	t.Parallel()
@@ -142,17 +142,18 @@ func TestServerComponentIsReserved(t *testing.T) {
 // serverKeys is every key the server writes of itself.
 var serverKeys = []string{writerclass.HTTPRequestCount, writerclass.HTTPRequestDuration, writerclass.HTTPRequestDurationMax,
 	writerclass.DBSlowQueryCount, writerclass.DBPoolAcquired, writerclass.DBPoolIdle, writerclass.DBPoolTotal,
-	writerclass.DBPoolMax, writerclass.DBPoolWaitCount, writerclass.DBPoolWaitDuration}
+	writerclass.DBPoolMax, writerclass.DBPoolAcquireCount, writerclass.DBPoolWaitCount, writerclass.DBPoolWaitDuration,
+	writerclass.DBConnectionCount, writerclass.DBConnectionLimit, writerclass.DBConnectionIdleInTransactionCount, writerclass.DBTransactionOldestAge}
 
 // TestServerKeysRefuseEveryOtherWriter: the server's keys land from the
-// process and are refused from a node or a push, so no device or operator
+// process and are refused from an outpost or a push, so no device or operator
 // can forge the server's account of itself.
 func TestServerKeysRefuseEveryOtherWriter(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
 	c := serverComponent(t, ctx, gw, "keyed-server")
 	for _, key := range serverKeys {
-		for name, w := range map[string]storage.KeyWriter{"node": storage.NodeWriter("", ""), "push": storage.PushWriter()} {
+		for name, w := range map[string]storage.KeyWriter{"outpost": storage.OutpostWriter("", ""), "push": storage.PushWriter()} {
 			err := gw.InsertMetricSamples(ctx, w, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: c.ID, Key: key, Instance: "GET /api/v1/x 2xx", Value: 1}})
 			if !errors.Is(err, storage.ErrKeyWriterRefused) {
 				t.Errorf("a %s writing %s = %v, want ErrKeyWriterRefused", name, key, err)
