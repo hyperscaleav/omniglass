@@ -35,7 +35,7 @@ func TestLabSeedWithNoOutpostWiresNothingAndEnrollsNoOutpost(t *testing.T) {
 		t.Setenv("OMNIGLASS_DSN", dsn)
 		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, tokenHash, noOutpost, nil, 0, false); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, tokenHash, noOutpost, nil, 0, false, ""); err != nil {
 			t.Fatalf("lab seed (no outpost %v): %v", noOutpost, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -91,7 +91,7 @@ func TestLabSeedGivesThePusherThisRunsToken(t *testing.T) {
 		}
 		var out bytes.Buffer
 		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(outpostHash), false,
-			map[string]lab.PusherToken{"sim-booking-service": {Hash: hex.EncodeToString(hash), Prefix: prefix}}, 0, false); err != nil {
+			map[string]lab.PusherToken{"sim-booking-service": {Hash: hex.EncodeToString(hash), Prefix: prefix}}, 0, false, ""); err != nil {
 			t.Fatalf("lab seed: %v", err)
 		}
 		return hash
@@ -128,7 +128,7 @@ func TestLabSeedSetsTheReportWindowItIsGiven(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(hash), false, nil, seconds, false); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, hex.EncodeToString(hash), false, nil, seconds, false, ""); err != nil {
 			t.Fatalf("lab seed (report seconds %d): %v", seconds, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -161,7 +161,7 @@ func TestLabSeedLandsPlatformHistoryOnlyWhenAsked(t *testing.T) {
 		t.Setenv("OMNIGLASS_DSN", dsn)
 		t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
 		var out bytes.Buffer
-		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, "", true, nil, 0, platformHistory); err != nil {
+		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, "", true, nil, 0, platformHistory, ""); err != nil {
 			t.Fatalf("lab seed (platform history %v): %v", platformHistory, err)
 		}
 		gw, err := storage.NewPG(ctx, dsn)
@@ -539,5 +539,56 @@ func TestLabScaleSeedInducesAnUnregisteredKeyWhenAsked(t *testing.T) {
 	defer gw.Close()
 	if _, err := gw.GetPropertyType(ctx, devseed.InducedKey); !errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		t.Errorf("the induced key after the seed: %v, want it unregistered", err)
+	}
+}
+
+// A lab told a model key (#2109) runs omnibot live: the seed seals the key as
+// the lab's platform api-key secret and points the assistant settings at it,
+// and a later run with a new key rotates it. A run told none goes back to the
+// recording and drops the key, leaving an operator's own key_secret alone.
+func TestLabSeedPointsOmnibotAtTheKeyItIsGiven(t *testing.T) {
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	t.Setenv("OMNIGLASS_DSN", dsn)
+	t.Setenv("OMNIGLASS_DATA_DIR", t.TempDir())
+	seed := func(key string) *storage.OmnibotModelConfig {
+		t.Helper()
+		var out bytes.Buffer
+		if err := runLabSeed(ctx, &out, "dev", lab.OutpostName, lab.LoginUser, lab.LoginPassword, "", true, nil, 0, false, key); err != nil {
+			t.Fatalf("lab seed (key %q): %v", key, err)
+		}
+		gw, _, err := openLabDB(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer gw.Close()
+		m, err := gw.OmnibotModel(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	if m := seed("first-key"); m == nil || m.Provider != "openai" || m.Key != "first-key" || m.BaseURL != "https://models.github.ai/inference" {
+		t.Fatalf("seeded with a key: model = %+v, want openai on GitHub Models with that key", m)
+	}
+	if m := seed("second-key"); m == nil || m.Key != "second-key" {
+		t.Fatalf("seeded with a new key: model = %+v, want the new key", m)
+	}
+	if m := seed(""); m != nil {
+		t.Fatalf("seeded with no key: model = %+v, want none, so the recording plays", m)
+	}
+	gw, _, err := openLabDB(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gw.Close()
+	secrets, err := gw.ListSecrets(ctx, scope.Set{All: true}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range secrets {
+		if s.Name == lab.OmnibotKeySecret {
+			t.Errorf("seeded with no key: the lab's key secret %s is still there, want it gone", s.Name)
+		}
 	}
 }

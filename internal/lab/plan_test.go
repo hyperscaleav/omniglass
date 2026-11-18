@@ -957,3 +957,43 @@ func TestSpecWithImageRepointsOnlyTheOmniglassServices(t *testing.T) {
 		t.Errorf("the receiver changed: server %q outpost %q", spec.Server.Image, spec.Outposts[0].Image)
 	}
 }
+
+// A lab given a model key (#2109) hands it to the seed alone, which seals it
+// as a secret; no other service sees it and no config hash carries it. A lab
+// given none hands the seed none, so the seed puts the recording back. A
+// scale lab's omnibot is not its measurement, so it refuses one.
+func TestPlanOmnibotKeyGoesToTheSeedAlone(t *testing.T) {
+	o := testOptions()
+	o.OmnibotKey = "ghp-lab-key"
+	s, err := Plan(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := OmnibotKeyEnv + "=ghp-lab-key"; !slices.Contains(s.Seed.Env, want) {
+		t.Fatalf("seed env %v, want %s", s.Seed.Env, want)
+	}
+	for _, svc := range []Service{s.DB, s.Server, s.Outpost} {
+		for _, e := range svc.Env {
+			if strings.Contains(e, "ghp-lab-key") {
+				t.Fatalf("%s sees the model key: %s", svc.Name, e)
+			}
+		}
+	}
+	if h := configHash(s.Seed); strings.Contains(h, "ghp-lab-key") {
+		t.Fatal("the seed's config hash carries the key")
+	}
+	s, err = Plan(testOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range s.Seed.Env {
+		if strings.HasPrefix(e, OmnibotKeyEnv+"=") {
+			t.Fatalf("a lab with no key hands the seed %s", e)
+		}
+	}
+	sc := scaleOptions()
+	sc.OmnibotKey = "ghp-lab-key"
+	if _, err := Plan(sc); err == nil || !strings.Contains(err.Error(), "--omnibot-key-env") {
+		t.Fatalf("a scale lab with a model key: err = %v, want a refusal naming --omnibot-key-env", err)
+	}
+}
