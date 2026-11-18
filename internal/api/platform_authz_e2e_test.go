@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// fleetWriterPerms is the fleet authority both principals in the platform-tier
+// fleetWriterPerms is the fleet authority both users in the platform-tier
 // test hold: everything needed to write a variable, a secret, a tag value, and a
 // settings namespace. The only difference between the two roles built from it is
 // platform:*, which is exactly what the tier gate turns on.
@@ -28,9 +28,9 @@ var fleetWriterPerms = []string{
 
 // TestPlatformTierNeedsItsOwnPermission pins the separation the platform tier
 // exists for: an ALL scope is full-fleet reach, not install-wide authority. A
-// principal holding every fleet permission at the all scope must be refused at
+// user holding every fleet permission at the all scope must be refused at
 // the least-specific tier (variables, secrets, tag bindings, settings) and
-// allowed everywhere below it; the same principal plus platform:* is allowed at
+// allowed everywhere below it; the same user plus platform:* is allowed at
 // the tier too. Without the second gate, the first half of every pair passes,
 // which is the pre-slice behaviour this test rejects.
 func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
@@ -49,8 +49,8 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 	insertRole(t, ctx, dsn, "install-writer", append(append([]string{}, fleetWriterPerms...), "platform:*"))
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
-	fleetTok := principalWithGrants(t, ctx, dsn, "fleet-writer-svc", []grant{{role: "fleet-writer", scopeKind: "all"}})
-	installTok := principalWithGrants(t, ctx, dsn, "install-writer-svc", []grant{{role: "install-writer", scopeKind: "all"}})
+	fleetTok := userWithGrants(t, ctx, dsn, "fleet-writer-svc", []grant{{role: "fleet-writer", scopeKind: "all"}})
+	installTok := userWithGrants(t, ctx, dsn, "install-writer-svc", []grant{{role: "install-writer", scopeKind: "all"}})
 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -71,7 +71,7 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 	c.do(fleetTok, http.MethodPatch, "/variables/"+tierVarID, map[string]any{"value": 99}, http.StatusForbidden)
 	c.do(fleetTok, http.MethodDelete, "/variables/"+tierVarID, nil, http.StatusForbidden)
 
-	// Allowed below the tier: the same principal owns the fleet outright.
+	// Allowed below the tier: the same user owns the fleet outright.
 	belowID := createdID(t, c.do(fleetTok, http.MethodPost, "/variables",
 		varReq("allowed-below", "string", "location", "ceres", "x"), http.StatusCreated))
 	c.do(fleetTok, http.MethodPatch, "/variables/"+belowID, map[string]any{"value": "y"}, http.StatusOK)
@@ -85,7 +85,7 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 	c.do(fleetTok, http.MethodDelete, "/secrets/"+tierSecretID, nil, http.StatusForbidden)
 
 	// Allowed below the tier, on the same three verbs: the gate is about the tier,
-	// not about the principal.
+	// not about the user.
 	belowSecretID := createdID(t, c.do(fleetTok, http.MethodPost, "/secrets",
 		secretReq("below-snmp", "location", "ceres", "public"), http.StatusCreated))
 	c.do(fleetTok, http.MethodPatch, "/secrets/"+belowSecretID, secretFieldsReq("rotated"), http.StatusOK)
@@ -123,8 +123,8 @@ func TestSeededRolesCarryThePlatformPermission(t *testing.T) {
 	}
 	defer gw.Close()
 	bootstrapOwnerTok(t, ctx, gw)
-	adminTok := principalWithGrants(t, ctx, dsn, "platform-admin", []grant{{role: "admin", scopeKind: "all"}})
-	opTok := principalWithGrants(t, ctx, dsn, "platform-operator", []grant{{role: "operator", scopeKind: "all"}})
+	adminTok := userWithGrants(t, ctx, dsn, "platform-admin", []grant{{role: "admin", scopeKind: "all"}})
+	opTok := userWithGrants(t, ctx, dsn, "platform-operator", []grant{{role: "operator", scopeKind: "all"}})
 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()

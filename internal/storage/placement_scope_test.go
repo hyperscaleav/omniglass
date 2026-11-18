@@ -87,7 +87,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wide create into the same system: %v", err)
 	}
-	if !strings.Contains(leaked.Label, "Boardroom") {
+	if !strings.Contains(leaked.Label, "Board Meeting") {
 		t.Errorf("wide create stored %q, want the system type's label in it", leaked.Label)
 	}
 }
@@ -101,7 +101,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 // exotic, it is the ordinary shape today: applicableKinds("system") is
 // {"system"} alone (internal/scope/scope.go) and the cross-tier expansion is
 // unbuilt (#10), so a location-scoped deploy grant beside the all-scoped viewer
-// floor a real principal carries resolves to exactly it. Answering
+// floor a real user carries resolves to exactly it. Answering
 // ErrSystemNotFound there tells a caller that a row it can GET does not exist.
 func TestTheSystemBindSaysWhichAuthorityIsMissing(t *testing.T) {
 	t.Parallel()
@@ -347,7 +347,7 @@ func TestTheDraftResolvesTheSystemInTheScopeTheBindRequires(t *testing.T) {
 	if d.Label == "" || d.Label != c.Label {
 		t.Errorf("drafted label %q, stored %q: the form promised a label the create did not write", d.Label, c.Label)
 	}
-	if !strings.Contains(d.Label, "Boardroom") {
+	if !strings.Contains(d.Label, "Board Meeting") {
 		t.Errorf("drafted label %q does not carry the system type's label, so the refusals above withhold nothing", d.Label)
 	}
 }

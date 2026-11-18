@@ -9,6 +9,7 @@ import { SYSTEMS_KEY } from "../lib/systems";
 import { COMPONENTS_KEY } from "../lib/components";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+import { pickTree, selectedTree, treeOptions } from "../components/TreeSelect.testkit";
 
 // A variable at the `platform` tier is install-wide, so the server gates the write
 // on `platform:<action>` on top of `variable:<action>`. The console must gate the
@@ -22,8 +23,8 @@ const seed: Variable[] = [
   { id: uuidFor("v-below"), name: "room_poll", value_type: "int", owner_kind: "location", owner_name: "room", value: 30 },
 ];
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const fleetWriter: Me = { principal: { id: "u-est", kind: "human" }, human: { username: "sam" }, permissions: ["variable:*"], grants: [] };
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const fleetWriter: Me = { user: { id: "u-est", kind: "person" }, person: { username: "sam" }, permissions: ["variable:*"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
@@ -56,7 +57,7 @@ const scopeOptions = () =>
 describe("Variables page platform-tier authority", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("offers the Platform scope to a principal that holds the install-wide permission", async () => {
+  it("offers the Platform scope to a user that holds the install-wide permission", async () => {
     mount(owner);
     expect(await screen.findByText("poll-interval")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /new variable/i }));
@@ -128,14 +129,13 @@ describe("Variables create owner picker survives duplicate names (#627)", () => 
     ));
     fireEvent.click(screen.getByRole("button", { name: /new variable/i }));
     fireEvent.change(screen.getByLabelText("Scope"), { target: { value: "location" } });
-    const ownerSelect = (await screen.findByLabelText("Location")) as HTMLSelectElement;
-    const values = Array.from(ownerSelect.options).map((o) => o.value);
-    expect(values).toContain(annexA.id);
-    expect(values).toContain(annexB.id);
+    const ownerSelect = await screen.findByLabelText("Location");
+    expect(await treeOptions(ownerSelect)).toEqual(["Choose…", "annex", "annex"]);
+    fireEvent.keyDown(ownerSelect, { key: "Escape" });
 
-    fireEvent.change(ownerSelect, { target: { value: annexA.id } });
-    expect(ownerSelect.value).toBe(annexA.id);
-    fireEvent.change(ownerSelect, { target: { value: annexB.id } });
-    expect(ownerSelect.value).toBe(annexB.id);
+    await pickTree(ownerSelect, 1);
+    expect(await selectedTree(ownerSelect)).toEqual([1]);
+    await pickTree(ownerSelect, 2);
+    expect(await selectedTree(ownerSelect)).toEqual([2]);
   });
 });

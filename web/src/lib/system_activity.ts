@@ -2,11 +2,11 @@
 // the workspace's Events and Logs tabs. One call each for the room's whole
 // story, rows labeled by owner; the server merges and caps.
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { SystemEventBody, SystemLogBody } from "../api/api.gen";
 import { logQuery, type LogFilter } from "./logs";
 
-export type SystemEvent = components["schemas"]["SystemEventBody"];
-export type SystemLog = components["schemas"]["SystemLogBody"];
+export type SystemEvent = SystemEventBody;
+export type SystemLog = SystemLogBody;
 
 export const systemEventsKey = (system: string) => ["system-events", system] as const;
 export const systemLogsKey = (system: string, f: LogFilter = {}) => ["system-logs", system, f.severity ?? "", f.source ?? ""] as const;

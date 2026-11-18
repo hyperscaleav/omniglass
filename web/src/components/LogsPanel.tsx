@@ -89,7 +89,7 @@ function LogRow(p: { line: ComponentLog }) {
 // LogsPanel reads a raw-log stream (ADR-0066) and renders it. It defaults to a
 // component's logs, which it filters by a severity threshold and a source
 // (#1145), but accepts an explicit source (query key + fetcher) and copy so the
-// same panel serves a node's self-logs, which take no filter; both are the same
+// same panel serves an outpost's self-logs, which take no filter; both are the same
 // LogBody row.
 export default function LogsPanel(p: {
   name: string;

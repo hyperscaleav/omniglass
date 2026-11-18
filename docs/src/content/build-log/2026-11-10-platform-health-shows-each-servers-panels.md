@@ -26,5 +26,5 @@ an open tooltip and a closed panel set survive the poll.
 
 Walkthroughs gained a `hover` step and an off-camera `ready` wait. Docs shots gained a `wait` step.
 The divergences from the ticket are
-[ADR-1645](/architecture/decisions/#adr-1645-server-panels-rank-in-sql-and-flag-from-the-rule).
+[ADR-1645](/architecture/decisions/#adr-1645-server-panels-rank-in-sql-and-flag-a-panel-from-its-alarms-rule).
 The loss view across hops is #1646.

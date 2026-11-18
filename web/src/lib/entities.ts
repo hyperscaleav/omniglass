@@ -14,7 +14,7 @@ import { createSignal } from "solid-js";
 // look like a typo rather than an absence. The name shown as-is is honest, and it
 // keeps the gap visible.
 //
-// This rule used to be written out six times: `nodeLabel` in lib/nodes.ts, the
+// This rule used to be written out six times: `outpostLabel` in lib/outposts.ts, the
 // `display:` mapper on each of the Components, Systems, and Locations pages, and
 // three inline copies in the Variables owner picker. Six copies of one rule is
 // how the Components list ended up showing a name where its neighbours showed a
@@ -44,7 +44,7 @@ export type IdentityBinding = keyof typeof IDENTITY_LABELS;
 // it in one expression rather than growing a seventh copy of the rule.
 //
 // label_generated is optional because only component, system and location
-// carry it. Every catalog registry row (a product, a vendor, a role) has a label
+// carry it. Every catalog row (a product, a vendor, a role) has a label
 // no rule renders, so its absence must read as "the operator owns it".
 export interface Labelled {
   name: string;
@@ -62,12 +62,30 @@ export function entityLabel(e: Labelled): string {
 // byLabel is how a list of labelled rows is ordered: alphabetically by the label
 // an operator reads, with UNLABELLED rows last and the name breaking ties.
 //
-// It exists because the console re-sorts every registry list client-side, so
-// this rule is written twice and the two halves have to agree. The SQL half is
-// `order by nullif(label, '') nulls last, name` (#613, ADR-0118). Both are
-// spelled explicitly for the same reason: an unset label is the empty string,
-// `"".localeCompare(anything)` is negative, and a plain sort by label therefore
-// puts every unlabelled row at the TOP of the picker rather than the bottom.
+// The server's order is the order (#757). A catalog list the API serves is
+// ordered by the SQL half of this rule, `order by label nulls last, name` (#613,
+// ADR-0118), and the console renders it as received; byLabel is for a list the
+// client composes itself, where no query has ordered it. Writing the rule twice
+// means the halves have to agree, and web/src/lib/label_order.fixture.json is
+// how that is held: internal/storage/label_order_test.go orders it through the
+// real query and entities.test.ts orders it through this function, both
+// asserting the one committed sequence.
+//
+// The rule is spelled explicitly for a reason: an unset label sorts as the empty
+// string here, `"".localeCompare(anything)` is negative, and a plain sort by
+// label therefore puts every unlabelled row at the TOP of a list rather than the
+// bottom.
+//
+// The call sites that remain, each composing client-side because the endpoint
+// serves another order (everything else renders the server's order):
+//   - pages/SecretTypes.tsx: ListSecretTypes serves `order by name`.
+//   - components/StartFromTemplateForm.tsx OutpostSelect: ListNodes serves
+//     `order by name`.
+//   - components/TemplateCreate.tsx: the template catalog is served by kind,
+//     then name, from the binary, and is filtered to a kind here.
+// The other comparators called byLabel (pages/Rules.tsx, pages/CalcRules.tsx,
+// lib/identity_bindings.ts, lib/outline.ts) are not this one: they order by the
+// RENDERED label, or sort lists the client assembles from other sources.
 //
 // Whitespace counts as unset, the same way entityLabel treats it, so a label of
 // " " does not sort ahead of every real one.
@@ -173,8 +191,8 @@ export function deriveName(display: string): string {
 // can never rewrite a live name from its label. Renaming is a deliberate
 // act (the API takes it explicitly), never a side effect of relabelling.
 //
-// It is for the REGISTRY and identity pages only: products, vendors, standards,
-// drivers, groups, nodes, the three type registries, and users. Their names have
+// It is for the CATALOG and identity pages only: products, vendors, standards,
+// drivers, groups, outposts, the three type catalogs, and users. Their names have
 // no generator and stay globally unique, so deriving one from what the operator
 // typed is exactly the right affordance there.
 //

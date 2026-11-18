@@ -47,8 +47,8 @@ then read the code it describes, and believe the code.** The clusters:
    the seed YAMLs, and the migrations.
 2. **Values + config**: variables, settings, files, cascade vs `internal/storage`,
    `internal/settings`, `internal/blob`.
-3. **Telemetry + collection**: properties, events, commands, collection, nodes,
-   messaging, workers, storage vs `internal/bus`, `internal/node`,
+3. **Telemetry + collection**: properties, events, commands, collection, outposts,
+   messaging, workers, storage vs `internal/bus`, `internal/outpost`,
    `internal/collection`, the proto.
 4. **IAM + audit + api**: identity-access, audit, api vs `internal/api`,
    `internal/rbac`, `internal/scope`, `api/openapi.json`.

@@ -1,4 +1,5 @@
 // @ts-check
+import { unified } from '@astrojs/markdown-remark';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import starlight from '@astrojs/starlight';
@@ -22,27 +23,39 @@ export default defineConfig({
   // lint suite keys on. remarkFragments splices the build log's and the decision
   // log's entries (one file each under src/content/build-log/ and
   // src/content/decisions/) into their pages before the parse (#1095).
+  //
+  // Astro 7 defaults to the Sätteri pipeline; these are remark plugins, so the
+  // site keeps the unified (remark/rehype) processor, which .mdx inherits too.
   markdown: {
-    remarkPlugins: [
-      [remarkFragments, { contentDir: fileURLToPath(new URL('./src/content', import.meta.url)) }],
-      remarkDirective,
-      remarkScreenshots,
-      [remarkWalkthroughs, { publicDir: fileURLToPath(new URL('./public', import.meta.url)) }],
-      remarkDesignFence,
-    ],
+    processor: unified({
+      remarkPlugins: [
+        [remarkFragments, { contentDir: fileURLToPath(new URL('./src/content', import.meta.url)) }],
+        remarkDirective,
+        remarkScreenshots,
+        [remarkWalkthroughs, { publicDir: fileURLToPath(new URL('./public', import.meta.url)) }],
+        remarkDesignFence,
+      ],
+    }),
   },
+  // Astro 7 changed the default to 'jsx' whitespace handling; keep v6's output.
+  compressHTML: true,
+  // Starlight 0.41 stopped forcing the ':where()' scoping strategy; keep it, so
+  // component styles keep the specificity custom.css was written against.
+  scopedStyleStrategy: 'where',
   // The monolithic "the console" guide was split into per-flow operator pages.
   // Keep its old URL alive for external links and bookmarks.
   redirects: {
     '/guides/console/': '/guides/operator/',
     '/architecture/datapoints/': '/architecture/properties/',
-    // The joint Types guide split into one page per registry (#598); the old
+    // The joint Types guide split into one page per catalog (#598); the old
     // URL lands on the location half, which inherited most of its content.
     '/guides/admin/types/': '/guides/admin/location-types/',
     // Find things in your fleet folded into the outline guide (#861).
     '/guides/operator/inventory/': '/guides/operator/fleet/',
     // Walkthroughs became one of a demo's two recorders (#1132).
     '/contributing/walkthroughs/': '/contributing/demos/',
+    // The collecting process became the outpost (ADR-2031, #2059).
+    '/architecture/nodes/': '/architecture/outposts/',
   },
   integrations: [
     // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
@@ -129,7 +142,7 @@ export default defineConfig({
             { label: 'API', slug: 'architecture/api' },
             { label: 'Messaging', slug: 'architecture/messaging' },
             // the foundations underneath
-            { label: 'Nodes', slug: 'architecture/nodes' },
+            { label: 'Outposts', slug: 'architecture/outposts' },
             { label: 'Simulation', slug: 'architecture/simulation' },
             { label: 'Storage', slug: 'architecture/storage' },
             { label: 'Data model', slug: 'architecture/data-model' },
@@ -144,8 +157,8 @@ export default defineConfig({
         },
         {
           // The pages that describe entirely unbuilt capability: every one is a
-          // :::design sketch, badged Design, and graduates out of this group as
-          // its subsystem lands (#434).
+          // :::design sketch, and graduates out of this group as its subsystem
+          // lands (#434).
           label: 'Design sketches',
           collapsed: true,
           items: [
@@ -166,6 +179,7 @@ export default defineConfig({
             { label: 'Learning tool', slug: 'contributing/learning-tool' },
             { label: 'Primitive first', slug: 'contributing/primitive-first' },
             { label: 'Design system', slug: 'contributing/design-system' },
+            { label: 'Visualization survey', slug: 'contributing/visualization-inventory' },
             { label: 'Demos', slug: 'contributing/demos' },
             { label: 'Slice workflow', slug: 'contributing/slice-workflow' },
             { label: 'Feature loops', slug: 'contributing/feature-loops' },
@@ -229,10 +243,12 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
-            // All generated: the CLI page by cmd/docsgen, the MCP tools page by
-            // cmd/mcpgen, the API groups by starlight-openapi. None is hand-maintained.
+            // All generated: the glossary by cmd/vocabgen, the CLI page by cmd/docsgen, the MCP tools page by
+            // cmd/mcpgen (and its skills page from the embedded skills), the API groups by starlight-openapi. None is hand-maintained.
+            { label: 'Glossary', slug: 'reference/glossary' },
             { label: 'CLI', slug: 'reference/cli' },
             { label: 'MCP tools', slug: 'reference/mcp' },
+            { label: 'MCP skills', slug: 'reference/mcp/skills' },
             ...openAPISidebarGroups,
           ],
         },

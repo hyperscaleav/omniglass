@@ -21,14 +21,14 @@ import (
 // and reject-not-project drops a name unknown to the metric catalog, INCLUDING a
 // name that is registered on another lane (the lane is the array, #594).
 func TestDeriveMetrics(t *testing.T) {
-	reg := collection.NewRegistry([]storage.MetricType{
+	reg := collection.NewCatalog([]storage.MetricType{
 		{Name: "icmp-rtt-avg"},
 		{Name: "tcp-connect-time"},
 	}, []storage.PropertyType{{Name: "video-input", DataType: "string"}}, nil)
 	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
 	ev := &ogv1.TelemetryBatch{
-		TaskId: "t1",
-		NodeId: "node-a",
+		TaskId:    "t1",
+		OutpostId: "outpost-a",
 		Metrics: []*ogv1.MetricSample{
 			{Name: "icmp-rtt-avg", Value: 1},
 			{Name: "tcp-connect-time", Value: 3.5},
@@ -37,7 +37,7 @@ func TestDeriveMetrics(t *testing.T) {
 		},
 	}
 
-	metrics := deriveMetrics(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
+	metrics := deriveMetrics(ev, componentArc(owner), owner, reg, storage.OutpostWriter(owner.ComponentID, owner.EndpointName), nil)
 	if len(metrics) != 2 {
 		t.Fatalf("derived %d metrics, want 2 (unregistered and cross-lane names dropped): %+v", len(metrics), metrics)
 	}
@@ -54,10 +54,10 @@ func TestDeriveMetrics(t *testing.T) {
 // TestDeriveProperties: the property lane carries canonical JSON text; the value
 // must be valid JSON of the type's data_type, and when the property_type carries
 // a validation schema the value must satisfy it. A violating or malformed value
-// is dropped (reject-not-project has no reply channel on the node lane); a valid
+// is dropped (reject-not-project has no reply channel on the outpost lane); a valid
 // one lands with the same owner stamping as a metric.
 func TestDeriveProperties(t *testing.T) {
-	reg := collection.NewRegistry(
+	reg := collection.NewCatalog(
 		[]storage.MetricType{{Name: "tcp-connect-time"}},
 		[]storage.PropertyType{
 			{Name: "endpoint-reachable", DataType: "string", Validation: []byte(`{"enum":["up","down"]}`)},
@@ -73,7 +73,7 @@ func TestDeriveProperties(t *testing.T) {
 		{Name: "not.registered", ValueJson: `"up"`},
 		{Name: "tcp-connect-time", ValueJson: `"3"`}, // a metric name on the property lane: refused by name
 	}}
-	states := deriveProperties(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
+	states := deriveProperties(ev, componentArc(owner), owner, reg, storage.OutpostWriter(owner.ComponentID, owner.EndpointName), nil)
 	if len(states) != 2 {
 		t.Fatalf("states = %+v, want exactly the valid up and SN-1", states)
 	}
@@ -94,7 +94,7 @@ func TestDeriveProperties(t *testing.T) {
 func TestDeriveEvents(t *testing.T) {
 	// The schema declares its properties: Huma's validator enforces required and
 	// type only over declared property names.
-	reg := collection.NewRegistry(nil, nil,
+	reg := collection.NewCatalog(nil, nil,
 		[]storage.EventType{
 			{Name: "call-started", PayloadSchema: []byte(`{"type":"object","properties":{"participants":{"type":"integer"}},"required":["participants"]}`)},
 			{Name: "note"},
@@ -108,7 +108,7 @@ func TestDeriveEvents(t *testing.T) {
 		{Name: "note"},                                         // neither message nor payload: dropped
 		{Name: "not.registered", Message: "x"},
 	}}
-	events := deriveEvents(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
+	events := deriveEvents(ev, componentArc(owner), owner, reg, storage.OutpostWriter(owner.ComponentID, owner.EndpointName), nil)
 	if len(events) != 2 {
 		t.Fatalf("events = %+v, want exactly the valid call-started and note", events)
 	}
@@ -128,7 +128,7 @@ func TestDeriveEvents(t *testing.T) {
 // and when both are absent the zero time is passed so the insert path stamps
 // ingest time.
 func TestSampleTimeRule(t *testing.T) {
-	reg := collection.NewRegistry(
+	reg := collection.NewCatalog(
 		[]storage.MetricType{{Name: "tcp-connect-time"}},
 		[]storage.PropertyType{{Name: "serial-number", DataType: "string"}},
 		[]storage.EventType{{Name: "note"}})
@@ -151,9 +151,9 @@ func TestSampleTimeRule(t *testing.T) {
 			{Name: "note", Message: "x"},
 		},
 	}
-	metrics := deriveMetrics(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
-	states := deriveProperties(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
-	events := deriveEvents(ev, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil)
+	metrics := deriveMetrics(ev, componentArc(owner), owner, reg, storage.OutpostWriter(owner.ComponentID, owner.EndpointName), nil)
+	states := deriveProperties(ev, componentArc(owner), owner, reg, storage.OutpostWriter(owner.ComponentID, owner.EndpointName), nil)
+	events := deriveEvents(ev, componentArc(owner), owner, reg, storage.OutpostWriter(owner.ComponentID, owner.EndpointName), nil)
 	if len(metrics) != 2 || len(states) != 2 || len(events) != 2 {
 		t.Fatalf("derived %d/%d/%d, want 2 per lane", len(metrics), len(states), len(events))
 	}
@@ -172,7 +172,7 @@ func TestSampleTimeRule(t *testing.T) {
 
 	// Both absent: zero, so the insert path stamps ingest time.
 	bare := &ogv1.TelemetryBatch{Metrics: []*ogv1.MetricSample{{Name: "tcp-connect-time", Value: 1}}}
-	if got := deriveMetrics(bare, componentArc(owner), owner, reg, storage.NodeWriter(owner.ComponentID, owner.EndpointName), nil); len(got) != 1 || !got[0].TS.IsZero() {
+	if got := deriveMetrics(bare, componentArc(owner), owner, reg, storage.OutpostWriter(owner.ComponentID, owner.EndpointName), nil); len(got) != 1 || !got[0].TS.IsZero() {
 		t.Fatalf("no ts anywhere: want the zero time for the insert path, got %+v", got)
 	}
 }
@@ -194,7 +194,7 @@ type fakeMsg struct {
 func (m *fakeMsg) Metadata() (*jetstream.MsgMetadata, error) { return m.meta, m.metaErr }
 func (m *fakeMsg) Data() []byte                              { return m.data }
 func (m *fakeMsg) Headers() nats.Header                      { return m.header }
-func (m *fakeMsg) Subject() string                           { return "og.v1.telemetry.node-a" }
+func (m *fakeMsg) Subject() string                           { return "og.v1.telemetry.outpost-a" }
 func (m *fakeMsg) Reply() string                             { return "" }
 func (m *fakeMsg) Ack() error                                { return nil }
 func (m *fakeMsg) DoubleAck(context.Context) error           { return m.ackErr }
@@ -252,5 +252,25 @@ func TestNakOrTerm(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The encoding the storage reads depend on (#1202): an outpost-lane property
+// value lands as its text form, a bool as true/false and a number as its
+// digits, which the gateway reads back typed by the property's data_type.
+func TestDerivePropertiesStoresTheTextForm(t *testing.T) {
+	reg := collection.NewCatalog(nil,
+		[]storage.PropertyType{
+			{Name: "panel-lit", DataType: "bool"},
+			{Name: "seat-count", DataType: "json"},
+		}, nil)
+	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
+	ev := &ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{
+		{Name: "panel-lit", ValueJson: `true`},
+		{Name: "seat-count", ValueJson: `3`},
+	}}
+	got := deriveProperties(ev, componentArc(owner), owner, reg, storage.OutpostWriter(owner.ComponentID, owner.EndpointName), nil)
+	if len(got) != 2 || got[0].Value != "true" || got[1].Value != "3" {
+		t.Fatalf("derived %+v, want the text forms true and 3", got)
 	}
 }

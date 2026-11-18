@@ -11,13 +11,14 @@ import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types"
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { pickTree, treeOptions } from "../components/TreeSelect.testkit";
 
 // The Components route in the create-as-route model (the list is Explore's outline, #861): New routes
 // to /components/create (a draft accordion), Save hands off to /components/<name> in
 // edit; the detail is read-only in view (no in-body mutation control) and editable via
 // the pencil. Data is seeded into the query cache so no server is needed; `>` grants
 // every permission.
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 const comp: Component = { id: uuidFor("c-1"), name: "mic-2", label: "Ceiling Mic 2", product_id: "shure-mxa920", system_count: 0, effective_tags: {} };
 
 // #614: every component is an instance of a product; the create form's
@@ -31,7 +32,7 @@ const products: Product[] = [
   { id: uuidFor("prod-generic-service"), name: "generic-service", label: "Generic Service", kind: "service", component_type: "generic-service", component_type_id: uuidFor("ct-generic-service"), official: true },
 ];
 
-// The device-class registry the create form resolves a generated name's stem
+// The device-class catalog the create form resolves a generated name's stem
 // through. Three tiers on purpose: ceiling-mic sets no stem of its own, so a
 // preview that read the product's own type and stopped would answer nothing
 // where the server's inheriting walk answers "mic".
@@ -157,7 +158,7 @@ describe("Components create-as-route", () => {
     const productSelect = (await screen.findByLabelText("Product")) as HTMLSelectElement;
     fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
     // Enabled once the platform has ANSWERED, which is a round trip since #702
-    // rather than a synchronous read of a registry the picker had loaded. The
+    // rather than a synchronous read of a catalog the picker had loaded. The
     // wait is the behaviour change: submitting before the answer lands would
     // post no precondition, so the gate holds until there is one.
     await waitFor(() => expect(submit.disabled).toBe(false)); // name still blank, and that is fine
@@ -329,15 +330,13 @@ describe("Components create identity", () => {
     await waitFor(() => expect(key.value).toBe("mic-1"));
     expect(screen.getByText(/Unique among the unplaced components/)).toBeTruthy();
 
-    const location = screen.getByLabelText("Location") as HTMLSelectElement;
-    fireEvent.change(location, { target: { value: room.id } });
+    await pickTree(screen.getByLabelText("Location"), "Boardroom");
     await waitFor(() => expect(screen.getByText(/Unique at Boardroom/)).toBeTruthy());
 
     // A parent wins over a location, the server's own bucket precedence. Both
     // are set here on purpose: with only one, a page handing the two to the
     // rule in the wrong order reads exactly the same.
-    const parent = screen.getByLabelText("Parent component") as HTMLSelectElement;
-    fireEvent.change(parent, { target: { value: comp.id } });
+    await pickTree(screen.getByLabelText("Parent component"), "Ceiling Mic 2");
     await waitFor(() => expect(screen.getByText(/Unique under Ceiling Mic 2/)).toBeTruthy());
     expect(screen.queryByText(/Unique at Boardroom/)).toBeNull();
   });
@@ -359,8 +358,7 @@ describe("Components create identity", () => {
     });
     const { product, display } = await fields();
     fireEvent.change(product, { target: { value: "shure-mxa920" } });
-    const location = screen.getByLabelText("Location") as HTMLSelectElement;
-    fireEvent.change(location, { target: { value: room.id } });
+    await pickTree(screen.getByLabelText("Location"), "Boardroom");
 
     await waitFor(() => expect(display.value).toBe("Ceiling Microphone n"));
     expect(display.readOnly).toBe(true);
@@ -408,38 +406,38 @@ describe("Components create identity", () => {
 // established that a create form does not present what the platform refuses, and
 // a 403 discovered after the form is filled in is the outcome that pattern
 // exists to prevent.
-describe("Components create offers a system only to a principal who may bind one", () => {
+describe("Components create offers a system only to a user who may bind one", () => {
   afterEach(() => {
     window.history.pushState({}, "", "/");
     vi.restoreAllMocks();
   });
 
   // The operator tier as roles.yaml seeds it, beside the all-scoped viewer floor
-  // a real principal carries: system:READ is held, system:update is not, which is
+  // a real user carries: system:READ is held, system:update is not, which is
   // what makes this test about the permission that gates the membership rather
   // than about visibility.
   const operatorMe: Me = {
-    principal: { id: "u-op", kind: "human" },
-    human: { username: "op" },
+    user: { id: "u-op", kind: "person" },
+    person: { username: "op" },
     permissions: ["component:create,update,rename,move", "*:read"],
     grants: [],
   };
 
-  // A principal holding system:update whose grants reach no system at all. That
+  // A user holding system:update whose grants reach no system at all. That
   // is not a corner case: applicableKinds("system") is {"system"} alone and the
   // cross-tier expansion is unbuilt (#10), so a location-scoped deploy grant
   // resolves system:update to the empty set while the viewer floor beside it
   // reads every system in the fleet. Every row comes back readable and none
   // writable, which is what the actions array says.
   const deployMe: Me = {
-    principal: { id: "u-dep", kind: "human" },
-    human: { username: "tech-east" },
+    user: { id: "u-dep", kind: "person" },
+    person: { username: "tech-east" },
     permissions: ["system:create,update,rename,move", "component:create,update,rename,move", "*:read"],
     grants: [],
   };
   const readOnlySystems: System[] = systems.map((s) => ({ ...s, actions: [] }));
 
-  it("offers the picker to a principal who may write a membership", async () => {
+  it("offers the picker to a user who may write a membership", async () => {
     stubFetch();
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
@@ -454,10 +452,9 @@ describe("Components create offers a system only to a principal who may bind one
     stubFetch();
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
-    const picker = screen.getByLabelText("System") as HTMLSelectElement;
-    const values = [...picker.options].map((o) => o.value);
-    expect(values).toContain(uuidFor("s-board"));
-    expect(values).not.toContain(uuidFor("s-annex"));
+    const offered = await treeOptions(screen.getByLabelText("System"));
+    expect(offered).toContain("Boardroom AV");
+    expect(offered).not.toContain("Annex AV");
   });
 
   // The scope half of the gate, which the permission half cannot see.
@@ -473,7 +470,7 @@ describe("Components create offers a system only to a principal who may bind one
     expect(screen.getByLabelText("Parent component")).toBeTruthy();
   });
 
-  it("hides it from a principal who may not, and names the permission", async () => {
+  it("hides it from a user who may not, and names the permission", async () => {
     stubFetch();
     mount("/components/create", operatorMe);
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
@@ -490,7 +487,7 @@ describe("Components create offers a system only to a principal who may bind one
   // leak it into the draft first, one request earlier and against a route gated
   // by component:create rather than system:update. stubFetch answers the draft
   // itself and would have swallowed that, so this test drives its own fetch.
-  it("neither drafts nor posts a system for the principal it hid the picker from", async () => {
+  it("neither drafts nor posts a system for the user it hid the picker from", async () => {
     let sent: Record<string, unknown> | undefined;
     const drafted: Record<string, unknown>[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

@@ -19,9 +19,9 @@ import {
   deleteTag,
   appliesToLabel,
 } from "../lib/tags";
-import { byLabel, createIdentity, entityLabel } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -54,9 +54,9 @@ export default function Tags() {
   const me = useMe();
   const tags = useQuery(() => ({ queryKey: TAGS_KEY, queryFn: listTags }));
 
-  // Ordered by the label an operator reads, unlabelled keys last, exactly as
-  // ListTags orders them in SQL (`order by label nulls last, name`, #613).
-  const rows = createMemo(() => [...(tags.data ?? [])].sort(byLabel));
+  // Rendered in the order ListTags serves: by label, unlabelled keys last, the
+  // name breaking ties (`order by label nulls last, name`, #613, #757).
+  const rows = createMemo(() => tags.data ?? []);
 
   return (
     <FlatList<Tag>
@@ -169,7 +169,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
     destructive: () => (tag() && can(me.data, "tag", "delete") ? { label: "Delete", tone: "danger", onClick: removeTag } : undefined),
     // A tag key has no official flag (every key is operator-owned), so the
     // lock is judged on the permission arm alone.
-    locked: () => registryLock(tag() && { official: false }, me.data, "tag"),
+    locked: () => catalogLock(tag() && { official: false }, me.data, "tag"),
   });
 
   return (

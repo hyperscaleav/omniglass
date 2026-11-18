@@ -17,8 +17,10 @@ package and fails any use of a raw listener's or an httptest server's address af
 closed in line or in a subtest, or by a defer in a function that returns the address, with the
 address followed through what is derived from it. Its excused uses are the two UDP tests whose code
 under test must be told a listen port, picked again on a collision, and the helper's own contrast
-test. A port released through a wrapper is outside what it reads: the node's session tests restart a
-simulated face on its port at an address every run shares, filed as #1116. Off Linux, where the
+test. A port released through a wrapper is outside what it reads: the node's session tests restarted a
+simulated face on its port at an address every run shares (#1116); they now take a claimed address
+(`simtest.ClaimLoopback`), and a sibling guard (`TestNoTestRestartsAFaceAtALiteralAddress`) fails a
+test that stops a face and restarts it on a port at a literal loopback address. Off Linux, where the
 hold's bind semantics differ, a refused-dial test skips. Proven three ways: each of the five tests failed with a
 competing listener injected into its gap and passes with the same injection beside the helper,
 whose bind is refused; the helper's tests take the address with every listen form and option and

@@ -35,11 +35,11 @@ type simulationBody struct {
 	} `json:"devices"`
 }
 
-// TestNodeSimulationAPI drives GET /nodes/{name}/simulation: the devices a
-// simulator beside the node serves, joined to the hits the server has seen,
-// gated by node:read, and honest (connected false, no hits) when no
+// TestOutpostSimulationAPI drives GET /outposts/{name}/simulation: the devices a
+// simulator beside the outpost serves, joined to the hits the server has seen,
+// gated by outpost:read, and honest (connected false, no hits) when no
 // simulator has pulled.
-func TestNodeSimulationAPI(t *testing.T) {
+func TestOutpostSimulationAPI(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
 	ctx := context.Background()
@@ -57,7 +57,7 @@ func TestNodeSimulationAPI(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	for _, n := range []string{"site-a", "site-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+		if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: n}, all, all); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -70,14 +70,14 @@ func TestNodeSimulationAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values ('dsp-1-tcp', 'tcp', (select id from component where name = 'dsp-1'), (select principal_id from node where name = 'site-a'), '{"target":"127.22.0.5:80"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values ('dsp-1-tcp', 'tcp', (select id from component where name = 'dsp-1'), (select user_id from outpost where name = 'site-a'), '{"target":"127.22.0.5:80"}'::jsonb)`); err != nil {
 		t.Fatal(err)
 	}
 	var dsp1 string
 	if err := conn.QueryRow(ctx, `select id from component where name = 'dsp-1'`).Scan(&dsp1); err != nil {
 		t.Fatal(err)
 	}
-	// A reader of every node whose component scope is one component: the
+	// A reader of every outpost whose component scope is one component: the
 	// view lists only components that scope covers.
 	scopedTo := func(component string) string {
 		tok, hash, prefix, err := auth.NewBearerToken()
@@ -85,17 +85,17 @@ func TestNodeSimulationAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 		var pid string
-		if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
+		if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
 			t.Fatal(err)
 		}
 		for _, q := range []struct {
 			sql  string
 			args []any
 		}{
-			{`insert into service (principal_id, name) values ($1, $2)`, []any{pid, "sim-scoped-" + component}},
-			{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
-			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-node-reader'), 'all', null)`, []any{pid}},
-			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-component-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
+			{`insert into machine (user_id, name) values ($1, $2)`, []any{pid, "sim-scoped-" + component}},
+			{`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
+			{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-outpost-reader'), 'all', null)`, []any{pid}},
+			{`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-component-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
 		} {
 			if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
 				t.Fatalf("%s: %v", q.sql, err)
@@ -103,7 +103,7 @@ func TestNodeSimulationAPI(t *testing.T) {
 		}
 		return tok
 	}
-	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values ('sim-node-reader', '{"node:read"}'), ('sim-component-reader', '{"component:read"}')`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values ('sim-outpost-reader', '{"outpost:read"}'), ('sim-component-reader', '{"component:read"}')`); err != nil {
 		t.Fatal(err)
 	}
 	seesDsp1, seesElsewhere := scopedTo("dsp-1"), scopedTo("elsewhere")
@@ -121,7 +121,7 @@ func TestNodeSimulationAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	var got simulationBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusOK), &got); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusOK), &got); err != nil {
 		t.Fatal(err)
 	}
 	if !got.Connected || got.LastSeen == nil || !got.Capabilities.LowPorts {
@@ -136,28 +136,28 @@ func TestNodeSimulationAPI(t *testing.T) {
 		t.Fatalf("dsp-1 = %+v", d)
 	}
 
-	// A node with no simulator is honest about it.
+	// An outpost with no simulator is honest about it.
 	var idle simulationBody
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/nodes/site-b/simulation", nil, http.StatusOK), &idle); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/outposts/site-b/simulation", nil, http.StatusOK), &idle); err != nil {
 		t.Fatal(err)
 	}
 	if idle.Connected || idle.LastSeen != nil || len(idle.Devices) != 0 {
-		t.Fatalf("idle node = %+v", idle)
+		t.Fatalf("idle outpost = %+v", idle)
 	}
 
 	// An all-scope viewer may read it; no credential may not; an unknown
-	// node is a 404.
+	// outpost is a 404.
 	viewer := setupAllViewer(t, ctx, dsn, "sim-viewer")
-	c.do(viewer, http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusOK)
-	c.do("", http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusUnauthorized)
+	c.do(viewer, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusOK)
+	c.do("", http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusUnauthorized)
 	for tok, want := range map[string]int{seesDsp1: 1, seesElsewhere: 0} {
 		var v simulationBody
-		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusOK), &v); err != nil {
+		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/outposts/site-a/simulation", nil, http.StatusOK), &v); err != nil {
 			t.Fatal(err)
 		}
 		if len(v.Devices) != want {
 			t.Errorf("a component-scoped reader sees %d devices, want %d", len(v.Devices), want)
 		}
 	}
-	c.do(ownerTok, http.MethodGet, "/nodes/ghost/simulation", nil, http.StatusNotFound)
+	c.do(ownerTok, http.MethodGet, "/outposts/ghost/simulation", nil, http.StatusNotFound)
 }

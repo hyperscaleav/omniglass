@@ -5,22 +5,24 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
-    "build": "node --test src/plugins/fragments.test.mjs src/plugins/fragments-loader.test.mjs && node scripts/check-fragments.mjs && node scripts/check-design-fences.mjs && node scripts/check-embeds.mjs && node scripts/astro-build.mjs && node scripts/check-fragment-pages.mjs && node scripts/check-walkthrough-embeds.mjs",
+    "build": "node --test src/plugins/fragments.test.mjs src/plugins/fragments-loader.test.mjs scripts/lib/decision-anchors.test.mjs && node scripts/check-fragments.mjs && node scripts/check-design-fences.mjs && node scripts/check-embeds.mjs && node scripts/astro-build.mjs && node scripts/check-decision-anchors.mjs && node scripts/check-fragment-pages.mjs && node scripts/check-walkthrough-embeds.mjs",
     "preview": "astro preview",
     "diagrams": "node scripts/gen-diagrams.mjs",
-    "test": "node --test src/plugins/fragments.test.mjs src/plugins/fragments-loader.test.mjs"
+    "test": "node --test src/plugins/fragments.test.mjs src/plugins/fragments-loader.test.mjs scripts/lib/decision-anchors.test.mjs"
   },
   "dependencies": {
-    "@astrojs/mdx": "^5.0.0",
-    "@astrojs/sitemap": "^3.7.4",
-    "@astrojs/starlight": "^0.39.3",
-    "astro": "^6.4.8",
+    "@astrojs/markdown-remark": "^7.3.9",
+    "@astrojs/markdown-satteri": "^0.4.10",
+    "@astrojs/mdx": "^8.1.6",
+    "@astrojs/sitemap": "^3.7.5",
+    "@astrojs/starlight": "^0.43.1",
+    "astro": "^7.4.12",
     "github-slugger": "^2.0.0",
     "remark-directive": "^4.0.0",
-    "starlight-openapi": "^0.25.3",
+    "starlight-openapi": "^0.27.1",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "astro-d2": "^0.11.0"
+    "astro-d2": "^0.14.1"
   }
 }

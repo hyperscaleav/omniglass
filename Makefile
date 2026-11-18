@@ -3,27 +3,38 @@
 # #1193). Production deploy is BYO Postgres; tests use ephemeral testcontainer
 # Postgres.
 
-.PHONY: all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
+.PHONY: all lab test-lab test-lab-image scale-lab scale-measure perf-check perf-baseline footprint lab-footprint compress-bench build build-web web image gen gen-proto gen-web adr-renumber migration migration-check test test-web test-short test-go test-go-storage test-go-devseed test-go-rest test-go-shards-check test-e2e bench clean-testcontainers tidy dev release-plan release-snapshot docs-shots docs-shots-check docs-shots-verify docs-walkthroughs bench-sim test-netadmin walkthroughs test-walkthroughs demo test-demos probe
 
 # The bare `make` (#1196) needs only Docker. From one Dockerfile and one tree
-# it builds the image omniglass:dev and exports this machine's own binary to
+# it builds the image and exports this machine's own binary to
 # bin/omniglass (the hostbin stage, cross-compiled for this OS and
 # architecture), both stamped with one build id: the commit, plus a dirty
-# marker and the build time for an uncommitted tree. `omniglass lab run` runs
-# only the image whose version label is its own build id, so a lab always
-# reflects the code it was built from; the lab never builds implicitly.
+# marker and the build time for an uncommitted tree. The image is tagged
+# omniglass:dev-<build id>, which `omniglass lab run` runs, and also
+# omniglass:dev, a tag every checkout on a Docker host shares (the newest
+# build anywhere wins it, #1422). `omniglass lab run` runs only the image
+# whose version label is its own build id, so a lab always reflects the code
+# it was built from; the lab never builds implicitly.
 # BuildKit cache mounts keep a Go-only change to seconds. The image is built
 # for this machine's architecture only; CI keeps the multi-arch build.
 .DEFAULT_GOAL := all
 BUILD_ID := $(shell c=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown); \
 	if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then c="$$c-dirty-$$(date -u +%Y%m%dT%H%M%SZ)"; fi; echo $$c)
+# Screenshot builds stamp the newest release tag instead of BUILD_ID: a dirty
+# build id is long and time-stamped, and the Version tile on Platform health
+# would otherwise shift every baseline with it.
+SHOTS_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo $(BUILD_ID))
+# A tag is a semver, which the lab takes for a release binary and would run by
+# image digest; point it at the local image this build just tagged instead.
+docs-shots docs-shots-check: BUILD_ID := $(SHOTS_VERSION)
+docs-shots docs-shots-check: export OMNIGLASS_LAB_IMAGE := omniglass:dev-$(SHOTS_VERSION)
 HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | sed -e 's/^mingw.*/windows/' -e 's/^msys.*/windows/' -e 's/^cygwin.*/windows/')
 HOST_ARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 all:
-	docker build -t omniglass:dev --build-arg VERSION=$(BUILD_ID) .
+	docker build -t omniglass:dev -t omniglass:dev-$(BUILD_ID) --build-arg VERSION=$(BUILD_ID) .
 	docker build --target hostbin --build-arg VERSION=$(BUILD_ID) \
 		--build-arg HOSTOS=$(HOST_OS) --build-arg HOSTARCH=$(HOST_ARCH) --output type=local,dest=bin .
-	@echo "built omniglass:dev and bin/omniglass (build $(BUILD_ID)); run a lab with ./bin/omniglass lab run"
+	@echo "built omniglass:dev-$(BUILD_ID) (also tagged omniglass:dev) and bin/omniglass (build $(BUILD_ID)); run a lab with ./bin/omniglass lab run"
 
 # The lab (#1193), the short form: build, then `./bin/omniglass lab run` in
 # the foreground until Ctrl-C. LAB_ARGS passes flags (LAB_ARGS="--fresh").
@@ -31,24 +42,25 @@ lab: all
 	./bin/omniglass lab run $(LAB_ARGS)
 
 # The lab against a real daemon (internal/lab's integration test): it comes
-# up, publishes one loopback port, keeps privilege on the node, collects, takes
+# up, publishes one loopback port, keeps privilege on the outpost, collects, takes
 # an impairment, tears down leaving no container and no network, keeps its
 # estate across a re-run, reaps a killed run, and starts over with --fresh.
 # The measuring tests run the ladder's smoke size, corporate at 20 systems
 # (every product seeded; #1719): the footprint and a scale measure.
 # Outside make test, because it builds the image (as the demo targets do).
 test-lab: all
-	$(MAKE) test-lab-image
+	$(MAKE) test-lab-image LAB_BUILD=$(BUILD_ID)
 
-# The same tests against an image already built, building nothing: LAB_IMAGE
-# names it (a private tag where omniglass:dev is shared; empty runs
-# omniglass:dev), and LAB_RUN narrows the tests.
+# The same tests against an image already built, building nothing: LAB_BUILD
+# is the build id whose omniglass:dev-<build id> image they run (test-lab
+# passes the one it just built), LAB_IMAGE names another image outright, and
+# with neither they run omniglass:dev. LAB_RUN narrows the tests.
 LAB_RUN ?= Integration
 test-lab-image:
-	OMNIGLASS_LAB_TEST=1 OMNIGLASS_LAB_IMAGE=$(LAB_IMAGE) go test -tags labintegration -count=1 -p 1 -timeout 60m -v -run '$(LAB_RUN)' ./internal/lab/ ./internal/labfootprint/
+	OMNIGLASS_LAB_TEST=1 OMNIGLASS_LAB_TEST_BUILD=$(LAB_BUILD) OMNIGLASS_LAB_IMAGE=$(LAB_IMAGE) go test -tags labintegration -count=1 -p 1 -timeout 60m -v -run '$(LAB_RUN)' ./internal/lab/ ./internal/labfootprint/
 
-# The scale lab (#1554): a scale lab scenario at a size, one node per site,
-# checked by scripts/scale-lab.sh (a node container per site, every simulated
+# The scale lab (#1554): a scale lab scenario at a size, one outpost per site,
+# checked by scripts/scale-lab.sh (an outpost container per site, every simulated
 # component at its own loopback address, the containers' memory and CPU, and
 # a teardown that leaves nothing). Outside make test and CI: it builds the
 # image and stands up thousands of simulated devices. SYSTEMS sets the size,
@@ -100,7 +112,7 @@ build-web: web
 
 # Build the SPA into the embed target (internal/webui/dist).
 web:
-	cd web && npm install && npm run build
+	cd web && npm ci && npm run build
 
 # Build the container image CI publishes: the multistage Dockerfile (Vite build
 # then `go build -tags web`) on a distroless base. VERSION stamps main.version;
@@ -116,7 +128,7 @@ image:
 # command tree (internal/cli/api_gen.go), the MCP tool catalog and its reference
 # page (internal/mcp/catalog_gen.go, docs/, via mcpgen), the CLI reference page
 # (from that command tree, into docs/), the protobuf telemetry wire, the typed SPA
-# client (web/src/api/schema.gen.ts), and the schema facts the docs render
+# client (web/src/api/api.gen.ts and paths.gen.ts, via orval), and the schema facts the docs render
 # storage tables from (docs/src/generated/schema.json, via erdgen). The spec is
 # the seam every downstream client is generated from. Run after any API change;
 # the results are committed and reviewed like code.
@@ -125,6 +137,7 @@ gen: gen-proto
 	go run ./cmd/cligen
 	go run ./cmd/mcpgen
 	go run ./cmd/docsgen
+	go run ./cmd/vocabgen
 	go run ./cmd/erdgen
 	go run ./cmd/seedgen
 	go run ./cmd/writerclassgen
@@ -133,7 +146,7 @@ gen: gen-proto
 	go run ./cmd/configgen
 	go run ./cmd/identitygen
 	go run ./cmd/labgen
-	cd web && npm install && npm run gen:api
+	cd web && npm ci && npm run gen:api
 
 # Regenerate the protobuf telemetry wire (proto/og/v1/telemetry.pb.go) from its
 # .proto source. protoc 34.1 must be on PATH and protoc-gen-go v1.36.11 installed
@@ -147,7 +160,7 @@ gen-proto:
 # Regenerate just the typed SPA client from the committed OpenAPI. Requires node.
 gen-web:
 	go run ./cmd/openapigen
-	cd web && npm install && npm run gen:api
+	cd web && npm ci && npm run gen:api
 
 # Renumber a decision (#1095, #1108). A decision takes the number of the issue it
 # was decided under, so two PRs clash only when both add a second decision to one
@@ -265,7 +278,7 @@ test-go-shards-check:
 # three unresolved `node:` imports sat on main long enough to become background
 # noise everybody scrolled past (#252).
 test-web:
-	cd web && npm install && npm run typecheck && npm run test
+	cd web && npm ci && npm run typecheck && npm run test
 
 # Fast iteration: unit/pure tests only. -short skips anything that needs a
 # Postgres container or builds the binary.
@@ -301,7 +314,7 @@ bench:
 	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/... ./internal/bus/...
 
 # The ingest footprint (#1272): the standard workload delivered through the real
-# telemetry handler over the dev scenario's fleet, printing what one node batch
+# telemetry handler over the dev scenario's fleet, printing what one outpost batch
 # costs the database (statements, rows per observation, heap and index bytes
 # per row, receipt bytes, WAL bytes per observation, and the statements of one
 # batch). Then the block footprint (#1528): what the compacted tier's blocks
@@ -439,30 +452,15 @@ clean-testcontainers:
 	docker ps -aq --filter "label=org.testcontainers=true" --filter "ancestor=postgres:18" | xargs -r docker rm -f
 
 # ---- release ---------------------------------------------------------------
-# Releases are cut MANUALLY (not on merge to main). `release-plan` is the
-# dry-run preview: it prints the next version and the generated notes and
-# publishes nothing. `release-apply` performs the release: it pushes the git tag
-# and creates the GitHub Release. Run both from an up-to-date `main`.
-# semantic-release reads the conventional-commit subjects since the last tag
-# (.releaserc.json drives the plugins).
-SEMANTIC_RELEASE := npx --yes -p semantic-release@24 \
-	-p @semantic-release/commit-analyzer \
-	-p @semantic-release/release-notes-generator \
-	-p @semantic-release/github semantic-release
-
-# The token is resolved inside the recipe shell at runtime (prefer an exported
-# GITHUB_TOKEN, else the gh CLI), never stored in a make variable, so it is
-# never echoed into the build log. The recipe is `@`-silenced and fails fast
-# with an actionable message when no token is available.
+# Releases are cut only by the release workflow (.github/workflows/release.yml),
+# dispatched on a release/<major>.<minor> branch, which builds the image and
+# stamps its digest into the binaries (#1257); there is no local publish target.
+# `release-plan` is the local preview: run from a release branch, it prints the
+# tag the next dispatch would cut, from the branch name and the tags (#2139).
+# FINAL=1 previews the final release of the newest candidate instead.
 release-plan:
-	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
-	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
-	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --dry-run --no-ci
-
-release-apply:
-	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
-	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
-	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --no-ci
+	@git fetch --quiet --tags origin
+	@go run ./cmd/releaseversion -branch "$$(git branch --show-current)" $(if $(FINAL),-final)
 
 # Local dry build of the release matrix (all OS/arch archives + checksums), with
 # no tag and no publish, to validate .goreleaser.yaml. SBOM is skipped (needs
@@ -483,7 +481,7 @@ tidy:
 # /api to the lab at http://127.0.0.1:8080 (OMNIGLASS_LAB_URL moves it, for a
 # lab on another --port).
 dev: all
-	cd web && npm install
+	cd web && npm ci
 
 # Capture the docs screenshots against the real console (a throwaway lab with
 # no node, #1267, and Playwright in the pinned container), writing PNGs into
@@ -498,9 +496,9 @@ docs-shots: all
 # masked in the baseline through each page's frontmatter, so the pinned
 # browser's rasters are byte-stable and a nonzero diff is a real,
 # un-recaptured UI change. The clean shots the docs embed are not diffed;
-# their masked regions legitimately move every capture. DOCS_SHOTS_EXACT=1
-# compares every pixel instead of through pixelmatch's perceptual threshold
-# (#774): with DOCS_SHOTS_TZ, it is how a mask is proven to hold (#1081).
+# their masked regions legitimately move every capture. The comparison is
+# exact, every pixel in every channel (#774); with DOCS_SHOTS_TZ it is how a
+# mask is proven to hold (#1081).
 # The temp dirs are repo-relative so they land inside the capture container's mount.
 docs-shots-check: all
 	@tmp=.docs-shots-tmp; mkdir -p $$tmp/clean $$tmp/baseline; \
@@ -513,6 +511,17 @@ docs-shots-check: all
 # ids are unique. Fast enough to run on every PR (see .github/workflows/docs-shots.yml).
 docs-shots-verify:
 	node web/e2e/docs-shots-verify.mjs
+
+# Gate check: ensure npm ci doesn't rewrite web/package-lock.json.
+# This prevents unrelated npm version churn from landing on main (#1278).
+lockfile-check:
+	@cd web && npm ci >/dev/null 2>&1 && \
+	if [ -n "$$(git status --porcelain package-lock.json)" ]; then \
+		echo "web/package-lock.json was modified by npm ci. Check your npm version."; \
+		echo "npm ci should not rewrite the lockfile. Verify you are using a supported npm version."; \
+		exit 1; \
+	fi; \
+	echo "lockfile remains stable with npm ci"
 
 # Walkthroughs in the docs (#926): copy each walkthrough a page declares in its
 # `walkthroughs` frontmatter (manifest, per-step stills and the mp4 the embed

@@ -94,7 +94,7 @@ func TestTheShippedFerritePDUAPIDriverSwitchesAnOutlet(t *testing.T) {
 		t.Fatalf("outlet 2 after outlet-on = %q, want on", got)
 	}
 
-	// Its one poll, the login's carrier to the node, reads the document's
+	// Its one poll, the login's carrier to the outpost, reads the document's
 	// agent block.
 	poll := sp.Polls[0]
 	rec := httptest.NewRecorder()

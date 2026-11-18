@@ -1,6 +1,6 @@
 // Package impair breaks simulated devices on purpose: unplugged (dark on
 // every protocol), slow, lossy or rate-limited, applied in the network the
-// simulator shares with its node, so a collector sees exactly what a failing
+// simulator shares with its outpost, so a collector sees exactly what a failing
 // device would show. It also makes ping truthful: every loopback address
 // answers ICMP, so the addresses that are not devices are told to stay
 // silent. Applying needs NET_ADMIN.

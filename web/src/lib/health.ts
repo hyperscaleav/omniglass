@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { components } from "../api/schema.gen";
+import type { FleetHealthOutputBody, HealthSlotBody, HealthTransitionBody } from "../api/api.gen";
 
 // The health data layer: thin typed wrappers over the generated client plus the
 // pure read-time derivations the console renders.
@@ -8,34 +8,34 @@ import type { components } from "../api/schema.gen";
 //
 //   an ALARM impairs its COMPONENT's own verdict wholesale (#626: no longer
 //   per named capability)
-//   -> a ROLE carries a QUORUM; when too few assigned components currently
+//   -> a SLOT carries a QUORUM; when too few assigned components currently
 //      occupy it (their own verdict is not outage; degraded still occupies),
-//      the role is IMPAIRED
-//   -> an impaired role contributes its IMPACT (outage, degraded, or none)
+//      the slot is IMPAIRED
+//   -> an impaired slot contributes its IMPACT (outage, degraded, or none)
 //      UNLESS it belongs to a CHOICE (#626: an exclusive-or group, such as an
 //      all-in-one alternate versus a component-built one) whose best-satisfied
-//      alternate is a different one; the role's own ACTIVE flag says so, and
+//      alternate is a different one; the slot's own ACTIVE flag says so, and
 //      its impaired/short/spare figures are then read-only trivia, not part
 //      of why the system is what it is
-//   -> a SYSTEM takes the worst contribution among its ACTIVE roles
+//   -> a SYSTEM takes the worst contribution among its ACTIVE slots
 //   -> a LOCATION takes the worst verdict among the systems placed beneath it
 //
 // The verdict is never computed here: the server sends it, and the console shows
 // the chain that produced it. Recomputing it in the browser is exactly how a
 // console starts disagreeing with the API it reads. The same discipline applies
-// to ACTIVE: rendering a role's impaired figure without checking it first is
+// to ACTIVE: rendering a slot's impaired figure without checking it first is
 // exactly the contradiction the field exists to prevent (a badge over an
 // impaired list that flatly disagrees with it), so every derivation below
-// filters through activeRoles rather than the raw list.
+// filters through activeSlots rather than the raw list.
 
 export type Verdict = "healthy" | "incomplete" | "degraded" | "outage";
-export type HealthRole = components["schemas"]["HealthRoleBody"];
-export type HealthTransition = components["schemas"]["HealthTransitionBody"];
-export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
+export type HealthSlot = HealthSlotBody;
+export type HealthTransition = HealthTransitionBody;
+export type FleetHealth = FleetHealthOutputBody;
 
 // One cache namespace per arc, so a system and a location that share a name never
 // collide.
-// The prefixes every system's and place's health share, for a write that moves them all.
+// The prefixes every system's and location's health share, for a write that moves them all.
 export const SYSTEM_HEALTH_PREFIX = ["system-health"] as const;
 export const LOCATION_HEALTH_PREFIX = ["location-health"] as const;
 export const systemHealthKey = (name: string) => [...SYSTEM_HEALTH_PREFIX, name] as const;
@@ -51,7 +51,7 @@ export async function systemHealth(name: string): Promise<FleetHealth> {
 // health column renders, for every system the caller can see.
 //
 // Its own cache namespace, deliberately NOT the per-system one: those entries
-// hold a full FleetHealth report that the panels read roles and transitions out
+// hold a full FleetHealth report that the panels read slots and transitions out
 // of, and seeding them from this read would put a verdict-only object behind a
 // key whose readers expect the whole report. A write that changes a verdict
 // invalidates both, which is why SYSTEM_VERDICTS_KEY sits beside systemHealthKey
@@ -77,7 +77,7 @@ export function verdictOf(v: string | null | undefined): Verdict | null {
   return v === "healthy" || v === "incomplete" || v === "degraded" || v === "outage" ? v : null;
 }
 
-// Worst wins, everywhere: a role over its system, a system over its location.
+// Worst wins, everywhere: a slot over its system, a system over its location.
 // The order is the severity ranking, matching internal/health's Verdict enum
 // exactly. incomplete sits between healthy and degraded: a commissioning gap is
 // worth surfacing above a clean system and worth burying under anything that is
@@ -116,34 +116,34 @@ export function verdictHue(v: Verdict | null, down = false): string {
   return down ? VERDICT_HUE.outage : "text-base-content/35";
 }
 
-const roles = (h: FleetHealth | undefined): HealthRole[] => h?.roles ?? [];
+const slots = (h: FleetHealth | undefined): HealthSlot[] => h?.slots ?? [];
 
-// activeRoles is every role whose own figures actually counted toward the
-// verdict: unconditional roles (no choice) plus the role of whichever
-// alternate answered its choice. A role whose alternate LOST reads active
+// activeSlots is every slot whose own figures actually counted toward the
+// verdict: unconditional slots (no choice) plus the slot of whichever
+// alternate answered its choice. A slot whose alternate LOST reads active
 // false; it can still be impaired on its own terms, but rendering that
 // impairment as part of "why this system reads what it does" is exactly the
 // contradiction active exists to catch, so every other derivation here reads
-// through this rather than the raw roles list.
-export function activeRoles(h: FleetHealth | undefined): HealthRole[] {
-  return roles(h).filter((r) => r.active);
+// through this rather than the raw slots list.
+export function activeSlots(h: FleetHealth | undefined): HealthSlot[] {
+  return slots(h).filter((r) => r.active);
 }
 
-// inactiveRoles is the complement: roles belonging to a choice's alternate
+// inactiveSlots is the complement: slots belonging to a choice's alternate
 // that lost. Surfaced separately (not silently dropped) so an operator can
 // still see what the unbuilt alternate would need, without it reading as a
 // current impairment.
-export function inactiveRoles(h: FleetHealth | undefined): HealthRole[] {
-  return roles(h).filter((r) => !r.active);
+export function inactiveSlots(h: FleetHealth | undefined): HealthSlot[] {
+  return slots(h).filter((r) => !r.active);
 }
 
-// quorumLabel reads the role's fill against what it wants, in the API's own terms:
+// quorumLabel reads the slot's fill against what it wants, in the API's own terms:
 // how many assigned components can still satisfy it, and how many it needs.
-export function quorumLabel(r: Pick<HealthRole, "satisfying" | "quorum">): string {
+export function quorumLabel(r: Pick<HealthSlot, "satisfying" | "quorum">): string {
   return `${r.satisfying} of ${r.quorum} satisfying`;
 }
 
-// What an impaired role means for its system, in words rather than an enum.
+// What an impaired slot means for its system, in words rather than an enum.
 export function impactPhrase(impact: string): string {
   if (impact === "outage") return "outage";
   if (impact === "degraded") return "degraded";

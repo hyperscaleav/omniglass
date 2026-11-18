@@ -15,7 +15,7 @@ import (
 // /systems and /components itself. A five-figure component list fetched to draw
 // squares is a page that never loads; a dot needs an id, a verdict, and two
 // flags, so that is all this carries. Everything an operator can only see after
-// clicking (product, tags, properties, the role chain) is deliberately absent
+// clicking (product, tags, properties, the slot chain) is deliberately absent
 // and is the drill-down read's job.
 //
 // The shape is FLAT on purpose: locations carry their parent id rather than
@@ -27,7 +27,7 @@ import (
 //
 // Scope is injected per tier, in the query, through the same scopedListSQL
 // primitive every other tree read uses. The three sets are separate arguments
-// rather than one, because they answer three different permissions: a principal
+// rather than one, because they answer three different permissions: a user
 // who may read the place tree but not its components gets the shape of their
 // fleet with no contents, which is a legitimate view and not an error.
 
@@ -76,6 +76,10 @@ type FleetSystem struct {
 type FleetView struct {
 	Locations []FleetLocation
 	Systems   []FleetSystem
+	// OpenAlarms is the count of alarms open on the components the caller may
+	// read, wherever those components sit. Nil when the caller may read no
+	// component: the number is unknown to them, which is not the same as zero.
+	OpenAlarms *int
 }
 
 // latestVerdict is the current recorded health for an owner column, the same
@@ -85,11 +89,33 @@ type FleetView struct {
 // concurrent writes can land with the two inverted (#356). An owner with
 // nothing recorded reads healthy: nothing has been claimed about it.
 func latestVerdict(ownerCol, table string) string {
+	return recordedVerdict(ownerCol, table, `'healthy'`)
+}
+
+// latestComponentVerdict is latestVerdict for a component, whose silence is
+// two different facts (#1454): a component something has observed and found
+// clean reads healthy, and one nothing has ever observed reads unknown, since
+// healthy there would be a false green. See componentObservedSQL.
+func latestComponentVerdict(table string) string {
+	return recordedVerdict("component_id", table, `case when `+componentObservedSQL(table+`.id`)+` then 'healthy' else 'unknown' end`)
+}
+
+func recordedVerdict(ownerCol, table, fallback string) string {
 	return `coalesce((select v.value #>> '{}' from property v
 		where v.` + ownerCol + ` = ` + table + `.id
 		  and v.property_type_id = (select id from property_type where namespace = 'og' and name = 'health')
 		  and v.instance = '' and v.provenance = 'calculated'
-		order by v.id desc limit 1), 'healthy')`
+		order by v.id desc limit 1), ` + fallback + `)`
+}
+
+// componentObservedSQL is the boolean expression for "something has observed
+// this component" (#1454), given an expression for its uuid: an alarm was ever
+// raised on it (cleared ones count, the history outlives the fix), or one of
+// its endpoints has delivered a batch (endpoint_live, #933). Until then there
+// is nothing to call it healthy on.
+func componentObservedSQL(idExpr string) string {
+	return `(exists (select 1 from alarm oa where oa.component_id = ` + idExpr + `)
+		or exists (select 1 from endpoint oe join endpoint_live ol on ol.endpoint_id = oe.id where oe.component = ` + idExpr + `))`
 }
 
 // Every derived column is aliased, the type subquery above all: scopedListSQL
@@ -113,6 +139,10 @@ func (p *PG) FleetProjection(ctx context.Context, locRead, sysRead, compRead sco
 		return nil, err
 	}
 	view.Locations = locs
+
+	if view.OpenAlarms, err = p.fleetOpenAlarms(ctx, compRead); err != nil {
+		return nil, err
+	}
 
 	systems, err := p.fleetSystems(ctx, sysRead)
 	if err != nil {
@@ -140,6 +170,22 @@ func (p *PG) FleetProjection(ctx context.Context, locRead, sysRead, compRead sco
 	return view, nil
 }
 
+// fleetOpenAlarms counts the open alarms on the components the read scope
+// admits, in one statement with the scope injected into it (the same
+// expansion the dots use), so an alarm on a component the caller cannot read
+// is never counted. An empty scope is nil rather than zero.
+func (p *PG) fleetOpenAlarms(ctx context.Context, read scope.Set) (*int, error) {
+	if read.Empty() {
+		return nil, nil
+	}
+	f := newReadFilter(componentTable, read, 1)
+	var n int
+	if err := p.pool.QueryRow(ctx, f.With+` select count(*) from alarm a where a.cleared_at is null and `+f.Pred("a.component_id"), f.Args...).Scan(&n); err != nil {
+		return nil, fmt.Errorf("storage: fleet open alarms: %w", err)
+	}
+	return &n, nil
+}
+
 // scopedTreeQuery runs a read over one scoped tree table through the same
 // scopedListSQL the scoped-CRUD primitive uses, so this projection cannot drift
 // from the scope semantics every other tree read has. It returns nil rows (not
@@ -149,16 +195,11 @@ func (p *PG) scopedTreeQuery(ctx context.Context, tbl scopeTable, cols string, r
 	if read.Empty() {
 		return nil, nil
 	}
-	sql := scopedListSQL(tbl, cols, read.All)
-	if read.All {
-		return p.pool.Query(ctx, sql)
-	}
-	roots := uuidRoots(read.IDs)
-	selfIDs := uuidRoots(read.SelfIDs)
-	if len(roots) == 0 && len(selfIDs) == 0 {
+	args, ok := scopedListArgs(tbl, read)
+	if !ok {
 		return nil, nil
 	}
-	return p.pool.Query(ctx, sql, roots, selfIDs)
+	return p.pool.Query(ctx, scopedListSQL(tbl, cols, read), args...)
 }
 
 func (p *PG) fleetLocations(ctx context.Context, read scope.Set) ([]FleetLocation, error) {
@@ -204,8 +245,8 @@ func (p *PG) fleetSystems(ctx context.Context, read scope.Set) ([]FleetSystem, e
 // fleetDots reads every membership of the given systems whose component the
 // caller may read, as dots keyed by system id.
 //
-// The component scope is injected as a subquery over the SAME recursive tree
-// expansion scopedListSQL builds, rather than filtered out in Go afterwards: a
+// The component scope is injected as a subquery over the SAME read filter
+// every derived component read uses (newReadFilter), rather than filtered out in Go afterwards: a
 // component the caller cannot read must never be fetched, let alone counted
 // into a cluster (the unscoped-gateway-list class, #458).
 func (p *PG) fleetDots(ctx context.Context, systemIDs []string, read scope.Set) (map[string][]FleetDot, error) {
@@ -213,7 +254,7 @@ func (p *PG) fleetDots(ctx context.Context, systemIDs []string, read scope.Set) 
 	if read.Empty() {
 		return out, nil
 	}
-	cols := `m.system_id, c.id, c.name, ` + latestVerdict("component_id", "c") + `,
+	cols := `m.system_id, c.id, c.name, ` + latestComponentVerdict("c") + `,
 		m.is_primary,
 		(select count(*) from system_member peer where peer.component_id = m.component_id) > 1`
 	from := ` from system_member m join component c on c.id = m.component_id
@@ -228,19 +269,12 @@ func (p *PG) fleetDots(ctx context.Context, systemIDs []string, read scope.Set) 
 		sql = `select ` + cols + from + order
 		args = []any{systemIDs}
 	} else {
-		roots := uuidRoots(read.IDs)
-		selfIDs := uuidRoots(read.SelfIDs)
-		if len(roots) == 0 && len(selfIDs) == 0 {
+		f := newReadFilter(componentTable, read, 2)
+		if f.With == "" {
 			return out, nil // every scope root is malformed: nothing is in scope
 		}
-		sql = `with recursive sub(id) as (
-				select id from component where id = any($2::uuid[])
-				union all
-				select t.id from component t join sub on t.parent_id = sub.id
-			) cycle id set is_cycle using path
-			select ` + cols + from + `
-			  and (c.id in (select id from sub) or c.id = any($3::uuid[]))` + order
-		args = []any{systemIDs, roots, selfIDs}
+		sql = f.With + ` select ` + cols + from + ` and ` + f.Pred("c.id") + order
+		args = append([]any{systemIDs}, f.Args...)
 	}
 
 	rows, err := p.pool.Query(ctx, sql, args...)

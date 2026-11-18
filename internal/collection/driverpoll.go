@@ -22,7 +22,7 @@ type DriverPollTask struct {
 	Target    string
 	Secrets   map[string]map[string]string
 	Timeout   time.Duration
-	// Session is the endpoint's held session, when the node holds one
+	// Session is the endpoint's held session, when the outpost holds one
 	// (#816): a line poll borrows it instead of dialing a throwaway
 	// connection, and a session that is not up faults the poll rather than
 	// the poll reconnecting on its own.

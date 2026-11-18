@@ -12,8 +12,8 @@ import (
 )
 
 // WithClosedLoopRing supplies the server's closed-loop ring: the sliding
-// window over each node with a simulator that the Platform health page reads.
-// Without it the page's simulation section reads no node.
+// window over each outpost with a simulator that the Platform health page reads.
+// Without it the page's simulation section reads no outpost.
 func WithClosedLoopRing(r *closedloop.Ring) Option {
 	return func(o *options) { o.ring = r }
 }
@@ -21,33 +21,33 @@ func WithClosedLoopRing(r *closedloop.Ring) Option {
 // simLoopSource is the server's closedloop.Source: the bracketed reads and
 // device hits through its line to the simulators, the poll targets and
 // receipts from the Gateway. cadence is the one the server assumes for every
-// node: it is not told a node's flags, so a node run faster than cadence has
+// outpost: it is not told an outpost's flags, so an outpost run faster than cadence has
 // targets due more often than the server counts. A lab tells its server its
-// nodes' cadence (OMNIGLASS_CLOSED_LOOP_HEARTBEAT, _PROBE_EVERY).
+// outposts' cadence (OMNIGLASS_CLOSED_LOOP_HEARTBEAT, _PROBE_EVERY).
 type simLoopSource struct {
 	hub     SimHub
 	gw      storage.Gateway
-	cadence closedloop.NodeCadence
+	cadence closedloop.OutpostCadence
 }
 
 // NewSimLoopSource is the ring's source on a server, assuming cadence for
-// every node.
-func NewSimLoopSource(hub SimHub, gw storage.Gateway, cadence closedloop.NodeCadence) closedloop.Source {
+// every outpost.
+func NewSimLoopSource(hub SimHub, gw storage.Gateway, cadence closedloop.OutpostCadence) closedloop.Source {
 	return simLoopSource{hub: hub, gw: gw, cadence: cadence}
 }
 
-// Observe brackets the node and reads its simulator's device hits: every
+// Observe brackets the outpost and reads its simulator's device hits: every
 // device it was handed or has hits for, impaired when its simulator says so.
-func (s simLoopSource) Observe(ctx context.Context, node string) (collection.EndpointObservation, map[string]closedloop.DeviceRead, error) {
-	obs, err := s.hub.EndpointObservation(ctx, node)
+func (s simLoopSource) Observe(ctx context.Context, outpost string) (collection.EndpointObservation, map[string]closedloop.DeviceRead, error) {
+	obs, err := s.hub.EndpointObservation(ctx, outpost)
 	if err != nil {
 		return obs, nil, err
 	}
-	st, _ := s.hub.SimStatus(node)
+	st, _ := s.hub.SimStatus(outpost)
 	return obs, simDeviceReads(st.Listed, st.Devices, st.Impairments.Impaired), nil
 }
 
-// Targets is every enabled poll target by node, at the interval it runs
+// Targets is every enabled poll target by outpost, at the interval it runs
 // under the assumed cadence.
 func (s simLoopSource) Targets(ctx context.Context) (map[string][]closedloop.PollTarget, error) {
 	rows, err := s.gw.ListClosedLoopPollTargets(ctx)
@@ -56,17 +56,17 @@ func (s simLoopSource) Targets(ctx context.Context) (map[string][]closedloop.Pol
 	}
 	out := map[string][]closedloop.PollTarget{}
 	for _, r := range rows {
-		out[r.Node] = append(out[r.Node], closedloop.PollTarget{
+		out[r.Outpost] = append(out[r.Outpost], closedloop.PollTarget{
 			ComponentID: r.ComponentID, Transport: r.Transport, Interval: s.cadence.Interval(r.Every)})
 	}
 	return out, nil
 }
 
-// Receipts counts the node's telemetry receipts by landed_at. The server
+// Receipts counts the outpost's telemetry receipts by landed_at. The server
 // reads no ingest lane's drain, so Backlog is 0 and a batch acknowledged
 // before the start read that landed after it counts in the window (ADR-1647).
-func (s simLoopSource) Receipts(ctx context.Context, node string, from, start, end, next time.Time) (closedloop.ReceiptCount, error) {
-	w, err := s.gw.CountTelemetryReceipts(ctx, collection.TelemetrySubject(node)+" ", from, start, end, next)
+func (s simLoopSource) Receipts(ctx context.Context, outpost string, from, start, end, next time.Time) (closedloop.ReceiptCount, error) {
+	w, err := s.gw.CountTelemetryReceipts(ctx, collection.TelemetrySubject(outpost)+" ", from, start, end, next)
 	if err != nil {
 		return closedloop.ReceiptCount{}, err
 	}
@@ -95,12 +95,12 @@ func simDeviceReads(listed map[string]bool, devices map[string]simhub.DeviceHits
 	return out
 }
 
-// SimLoopNodes lists the nodes whose simulator pulled within the connected
-// window, the nodes a ring brackets.
-func SimLoopNodes(hub SimHub, now func() time.Time) func() []string {
+// SimLoopOutposts lists the outposts whose simulator pulled within the connected
+// window, the outposts a ring brackets.
+func SimLoopOutposts(hub SimHub, now func() time.Time) func() []string {
 	return func() []string {
 		var out []string
-		for _, n := range hub.Nodes() {
+		for _, n := range hub.Outposts() {
 			if st, ok := hub.SimStatus(n); ok && now().Sub(st.LastSeen) <= simConnectedWindow {
 				out = append(out, n)
 			}

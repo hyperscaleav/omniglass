@@ -1,10 +1,6 @@
 ---
 title: Calculations
 description: "The rule families that run server-side over typed samples, and calc_rule in detail: cross-key and system-level derivation."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[The event rule is built; the calc rule runs on components and systems]
@@ -12,9 +8,9 @@ Of the three rule families below, the **`event_rule`** is built (#819,
 [ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)):
 its own table with typed columns, evaluated in the ingest transaction rather than on a JetStream
 consumer, and documented on [alarms and actions](/architecture/alarms-actions/#the-event_rule). It
-writes its typed fire and clear events at each edge of its condition, its alarm optional
+writes its typed fire and clear events as it fires and clears, its alarm optional
 ([ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)).
-The **`calc_rule` registry** is built (#995, [ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)):
+The **`calc_rule` catalog** is built (#995, [ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)):
 rules are authored, type-checked and kept acyclic, below. **Component and system rules run** (#996,
 #997, [ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-durable-pending-set-and-a-server-tick-not-a-jetstream-consumer)): on a durable pending set and a
 server tick rather than a JetStream consumer, below. A rule's **state** and a candidate's **preview**
@@ -25,7 +21,7 @@ inputs** held by uuid, each bound as the list of its values (#1018). Event rules
 (#1002), and the `action_rule` is still design.
 :::
 
-## The calc_rule registry
+## The calc_rule catalog
 
 A **calc rule** derives one **output key** on each of its owners from aliased **inputs**. It is a
 sibling table of `event_rule` (ADR-0144 ruling 1), with typed columns rather than one spec:
@@ -36,7 +32,7 @@ sibling table of `event_rule` (ADR-0144 ruling 1), with typed columns rather tha
   included, and systems, both empty for every system). Fixed at create.
 - **`inputs`**: one to sixteen `{alias, key}` pairs, held in `calc_rule_input`, one row each (#1018).
   `key` is a registered property or metric, read once, written by name or uuid and **held by its id**
-  in its lane's registry (the lane recorded), so renaming the key changes nothing the rule computes and
+  in its lane's catalog (the lane recorded), so renaming the key changes nothing the rule computes and
   a key a rule reads cannot be deleted; a read answers both its name now (`key`) and its uuid
   (`key_id`, with `lane`). `alias` is the name the expression binds the input by (the
   [alias rules](#aliases) below). An input may carry a **`window_seconds`** (1 to 3600, a component
@@ -44,12 +40,12 @@ sibling table of `event_rule` (ADR-0144 ruling 1), with typed columns rather tha
   ([windowed inputs](#windowed-inputs) below).
 - **`reduce`**: always an **expression** `{expr}` over the aliases (#1018 retired the named reducers;
   the list functions below compute what they did).
-- **`output_key`**: a registered property or metric, held by its id in its lane's registry (the lane
+- **`output_key`**: a registered property or metric, held by its id in its lane's catalog (the lane
   recorded in `output_lane`), so a key a rule writes cannot be deleted.
 - `name` (unique, renameable), `label`, `description`, `enabled`, `official` (read-only), `version`
   (bumps on every update; a write that changes nothing writes nothing).
 
-Rules read like a registry, gated `rule:read` on any grant, and are written with `rule:*` on an
+Rules read like a catalog, gated `rule:read` on any grant, and are written with `rule:*` on an
 all-scope grant, as event rules are; every write is audited on the rule's uuid and returns it. A rule
 is addressed by its name or its uuid, and `POST /calc-rules/{name}:rename` moves the name
 ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)):
@@ -64,7 +60,7 @@ its own (its bindings, list functions, builtins and budget are in the generated 
 - **Each input binds by its alias as the list of its current values**, typed by its key (a metric's
   numbers, a property's text, a bool property's bools). On a **component** the list holds one value per
   instance of the key (the [instance rules](#how-a-calc-rule-runs) below); a key reported once is a
-  one-element list. On a **system** it holds every role-bound member's values, in member order (name,
+  one-element list. On a **system** it holds every slot-bound member's values, in member order (name,
   then id), and the members' records stay beside it ([system rules](#system-rules)). A **windowed**
   input binds instead as its samples over the window, one record each ([windowed inputs](#windowed-inputs)).
 - **List functions fold a list into one value**, each vetted as a builtin is (one charged pass, one
@@ -109,7 +105,7 @@ Every write is refused, with a 422 naming the field at fault, when:
   provenance rule, not in place of it: a loop through an event rule and an alarm is not in this graph.
 - **it reads `health`, or writes a reserved key.** An alarm moves health, so a rule reading it could
   feed back through an event rule. A rule's output is a key it owns, so it is never a key of the
-  reserved family: a native probe key is the node's observation, and `health` is the rollup's
+  reserved family: a native probe key is the outpost's observation, and `health` is the rollup's
   ([the writer class](/architecture/properties/#who-writes-a-key-the-writer-class)).
 - **its output is a key another enabled rule writes.** One enabled rule writes a key: two would mix
   their values on an owner by newest timestamp. The refusal names the other rule, and enabling a
@@ -120,7 +116,7 @@ Every write is refused, with a 422 naming the field at fault, when:
   The reverse order is held too, by the writer class
   ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway)):
   once a rule outputs a key it is of the `calc` class, so a driver created or edited to emit it is
-  refused at its spec's write, a command type targeting it at its target, and a push or a node lane
+  refused at its spec's write, a command type targeting it at its target, and a push or an outpost lane
   carrying it at the Storage Gateway.
 
 The graph and the one-writer check are key-level: they ignore owner kinds, so a component rule and a
@@ -152,8 +148,11 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   holds one of its inputs, so a rule over stable values computes at once and an edit recomputes.
   Changing a component's product does the same for the component rules whose type selection it moves:
   a rule that now selects it is marked when it holds one of the rule's inputs, and a rule that no longer
-  does drops its mark and state there. A component staffing a system role cannot be deleted, so a
-  delete never leaves a system rule computing over a member that is gone.
+  does drops its mark and state there. Reclassifying a product (changing its component type) marks the
+  type-selecting rules on every component of the product in one statement, and the serve settles each:
+  it computes a rule a component came into and drops the state of one it left. A component staffing a
+  system slot cannot be deleted, so a delete never leaves a system rule computing over a member that is
+  gone.
 - **The tick.** Every server drains due marks once a second, oldest first, up to 500 a pass under a
   10s deadline, each mark in its own transaction taken `FOR UPDATE SKIP LOCKED`. Replicas share one
   queue and never compute a mark twice; a mark is deleted only by the transaction that computes it, so a
@@ -172,6 +171,14 @@ describes ([ADR-0148](/architecture/decisions/#adr-0148-calc-rules-run-on-a-dura
   as a **calculated** sample naming the rule (`source_rule`) and its version (`source_rule_version`),
   on the lane the rule holds its output by, so event rules judge it there and downstream calc rules are
   marked in turn. An unchanged result writes no row, on either lane, so storage grows only with change.
+- **The value check.** A property output passes the check ingest applies to the same key
+  (`key.ValidateValue` against the property's data type and its validation, so an enum, a pattern or a
+  JSON schema holds for a calculated value as for a pushed one; a `json` property reads the result text as the JSON document, so text that is
+  not valid JSON is refused). A result the property cannot hold is
+  not a database fault and is not retried: nothing is written, the mark is not deferred, and the rule's
+  last outcome on the owner (`calc_rule_state.error`, shown in the blade's State) names the output key,
+  the value and the validator's reason. The next input change recomputes it. The metric lane needs no
+  such check: its output is already a float.
 - **Never itself.** A write knows the rule that produced it and never marks that rule, which stops a
   rule feeding itself at runtime; longer loops are refused at authoring, and a loop written around the
   gateway is out of contract
@@ -215,18 +222,18 @@ and `len(rtt)` how many samples it holds; a predicate reads a record's fields as
 
 ### System rules
 
-A **system rule** derives on each system its selector picks, from the system's **role-bound members**:
-the components assigned to one of its roles (declared on it or inherited from its standard), the same
+A **system rule** derives on each system its selector picks, from the system's **slot-bound members**:
+the components assigned to one of its slots (declared on it or inherited from its standard), the same
 set the health rollup resolves. A member's sample marks every enabled system rule reading its key whose
 selected systems it staffs, in the sample write's marking (one statement more, and only when a system
-rule reads one of the batch's keys); assigning or unassigning a role, declaring or withdrawing one, and
+rule reads one of the batch's keys); assigning or unassigning a slot, declaring or withdrawing one, and
 creating, retyping or re-standarding a system mark the system's rules, and a system a retype moves out
 of a rule's selector loses that rule's state there. Creating, enabling or editing a system rule marks
 every system it selects.
 
 Each input's alias binds the list of **every member's values**, under the same instance and staleness
 rules as on a component, in member order: `avg(temp)` is what the `average` reducer was. Beside the lists
-an expression reads the members as **records**: `members`, one per role-bound member, ordered by
+an expression reads the members as **records**: `members`, one per slot-bound member, ordered by
 component name then id, each holding the member's `id` and `name`, its own value of each input under
 `value.<alias>` (its aggregate instance's newest value, the type's zero when it has none) and whether it
 holds one under `has.<alias>`. One record per member keeps a member's inputs together, so

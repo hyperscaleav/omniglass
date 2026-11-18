@@ -47,7 +47,7 @@ type Command struct {
 // opens an `intended` series row (#394, #590) that the target's observed value
 // settles against. The intended row names this command (command_id lineage) beside
 // the caused event. Every command is recorded issued. One that opens no intended
-// value (fire-and-forget) settles on its node's execution report, or times out
+// value (fire-and-forget) settles on its outpost's execution report, or times out
 // past its delivery window with none (#1630); one that does is swept by the
 // settle-check before the transaction commits, so a zero-window command returns
 // already terminal.
@@ -116,9 +116,9 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	// The owner arrives resolved and in scope, so this binds the arc column and
 	// confirms the row is still there (a component deleted between the resolve
 	// and here is its own not-found rather than a foreign-key error). For the
-	// three tree kinds the arc value IS the id it was handed; the node arm is
-	// what makes the call worth making, since a node's arc value is its
-	// principal_id.
+	// three tree kinds the arc value IS the id it was handed; the outpost arm is
+	// what makes the call worth making, since an outpost's arc value is its
+	// user_id.
 	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
 	if err != nil {
 		return nil, err
@@ -159,8 +159,8 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	}
 
 	// The command row, issued: a command that sets nothing waits on its
-	// node's execution report like any other, so it reads issued until the
-	// node says it ran it (#1630).
+	// outpost's execution report like any other, so it reads issued until the
+	// outpost says it ran it (#1630).
 	var cmd Command
 	cmdSQL := fmt.Sprintf(`insert into command (owner_kind, %s, command_type_id, instance, params, actor, caused_event_id, status)
 		values ($1, $2, (select id from command_type_in_effect() command_type where name = $3), $4, $5, $6, $7, 'issued')
@@ -181,7 +181,7 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 			metricSQL := fmt.Sprintf(`with series as (
 					insert into metric_series (metric_type_id, owner_kind, %s, instance, provenance, source)
 					values ((select id from metric_type_in_effect() metric_type where name = $3), $1, $2, $4, 'intended', 'command')
-					on conflict (owner_id, metric_type_id, instance, provenance, source, collector_node_id, source_conduit_id)
+					on conflict (owner_id, metric_type_id, instance, provenance, source, collector_outpost_id, source_conduit_id)
 						do update set source = excluded.source
 					returning id)
 				insert into metric_declared (series_id, value, event_id, command_id)

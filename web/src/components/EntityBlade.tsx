@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal, createUniqueId, type JSX } from "solid-js";
-import PlaceCard from "./PlaceCard";
+import LocationCard from "./LocationCard";
 import AcknowledgeButton from "./AcknowledgeButton";
 import SnoozeButton, { SnoozedBadge } from "./SnoozeButton";
 import AlarmTimeline, { createTimelineToggles } from "./AlarmTimeline";
@@ -14,7 +14,7 @@ import { Maximize } from "./icons";
 import { useBlades, useBladeEdit, type BladeDef, type BladeDestructive } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { entityLabel } from "../lib/entities";
-import { systemHealth, systemHealthKey, locationHealth, locationHealthKey } from "../lib/health";
+import { systemHealth, systemHealthKey, locationHealth, locationHealthKey, SYSTEM_HEALTH_PREFIX, SYSTEM_VERDICTS_KEY } from "../lib/health";
 import { alarmRows, sinceOf } from "../lib/system_zoom";
 import { dotVerdict, leafAlarmSince } from "../lib/component_leaf";
 import { SYSTEMS_KEY, listSystems, deleteSystem } from "../lib/systems";
@@ -22,9 +22,9 @@ import { LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents, deleteComponent } from "../lib/components";
 import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
 import { componentSystems, componentSystemsKey } from "../lib/members";
-import { systemRoles, systemRolesKey } from "../lib/system_roles";
+import { systemSlots, systemSlotsKey, SYSTEM_SLOTS_PREFIX } from "../lib/system_slots";
 import { slotStrip } from "../lib/slot_strip";
-import { contentsOf, isRoomOf, rolesOf, systemsAtPlace } from "../lib/detail";
+import { contentsOf, isRoomOf, slotsOf, systemsAtLocation } from "../lib/detail";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
@@ -32,11 +32,11 @@ import { durationText } from "../lib/timeline";
 // EntityBlade (#799, refit in #826, the glance since #872): ONE blade per
 // fleet kind, and it is where an operator lands from a row. Verdict and
 // since-when lead, the active alarms say why with their severity, and the
-// context the operator came for follows: a system's place and its standard
-// and size, a component's place and the systems it serves with its role in
-// each, a place's systems with their verdicts. Then the form's identity,
+// context the operator came for follows: a system's location and its standard
+// and size, a component's location and the systems it serves with its slot in
+// each, a location's systems with their verdicts. Then the form's identity,
 // placement and tags, read or edit through the blade's own footer.
-// Configuration (roles, properties, their cascade) and the depth (members,
+// Configuration (slots, properties, their cascade) and the depth (members,
 // history, vitals) are the detail view's, one Expand away. Every body
 // self-fetches by id, so any page can push any kind.
 
@@ -191,7 +191,7 @@ function SystemBody(props: { id: string }) {
         }))}
       />
       {/* The room's only system is the room: the title already names it. */}
-      <Show when={cluster()?.location}>{(pid) => <PlaceCard placeId={pid()} path showName={!(view.data && isRoomOf(view.data, pid(), [props.id]))} />}</Show>
+      <Show when={cluster()?.location}>{(pid) => <LocationCard locationId={pid()} path showName={!(view.data && isRoomOf(view.data, pid(), [props.id]))} />}</Show>
       {/* Size only: the standard is the form's Classification, said there. */}
       <div data-testid="blade-brief" class="flex flex-wrap items-center gap-x-2 text-base-content/70">
         <span class="tabular-nums">{count()} {count() === 1 ? "component" : "components"}</span>
@@ -219,20 +219,20 @@ function ComponentBody(props: { id: string }) {
   const verdict = () => (view.data ? dotVerdict(view.data, props.id) : null);
   const scale = useSeverity();
   const active = createMemo(() => splitAlarms(alarmsQ.data ?? [], scale().levels).active);
-  // The systems it serves, by uuid, each with the role it fills there, the
+  // The systems it serves, by uuid, each with the slot it fills there, the
   // primary first (the read orders by name, and the primary is the one whose
-  // place stands in for a component with none of its own).
+  // location stands in for a component with none of its own).
   const served = createMemo(() =>
     [...(members.data ?? [])]
       .sort((a, b) => Number(!!b.primary) - Number(!!a.primary))
       .map((m) => (view.data?.systems ?? []).find((s) => s.id === m.system_id || (!m.system_id && s.name === m.system)))
       .filter((s): s is NonNullable<typeof s> => !!s),
   );
-  const roleReads = useQueries(() => ({
-    queries: served().map((s) => ({ queryKey: systemRolesKey(s.id), queryFn: () => systemRoles(s.id), staleTime: 30_000 })),
+  const slotReads = useQueries(() => ({
+    queries: served().map((s) => ({ queryKey: systemSlotsKey(s.id), queryFn: () => systemSlots(s.id), staleTime: 30_000 })),
   }));
   const primarySystem = () => served()[0];
-  const placeId = () => row()?.location_id ?? primarySystem()?.location ?? null;
+  const locationId = () => row()?.location_id ?? primarySystem()?.location ?? null;
 
   // The Why strip's snooze surface: the blade's alarms panel shows the same
   // alarms at once, with its own.
@@ -243,7 +243,17 @@ function ComponentBody(props: { id: string }) {
     name: () => row()?.name,
     actions: () => row()?.actions ?? [],
     remove: (id) => deleteComponent(id),
-    invalidate: () => Promise.all([qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]),
+    // A blade is page-level, so it may sit over a system workspace whose slot
+    // cards and health read their own keys: refresh those too, or the deleted
+    // component's card stays and opens a blade stuck loading.
+    invalidate: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] }),
+        qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEM_SLOTS_PREFIX] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEM_HEALTH_PREFIX] }),
+        qc.invalidateQueries({ queryKey: [...SYSTEM_VERDICTS_KEY] }),
+      ]),
   });
 
   return (
@@ -270,10 +280,10 @@ function ComponentBody(props: { id: string }) {
           timeline: { component: props.id, alarmId: a.id },
         }))}
       />
-      {/* Where its place is the room a system it serves makes, Serves names
-          that room already, so no place card says it again. */}
-      <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), served().map((s) => s.id)))}>
-        <PlaceCard placeId={placeId()!} path showName provenance={row()?.location_id ? "set here" : "from its system"} />
+      {/* Where its location is the room a system it serves makes, Serves names
+          that room already, so no location card says it again. */}
+      <Show when={locationId() && !(view.data && isRoomOf(view.data, locationId(), served().map((s) => s.id)))}>
+        <LocationCard locationId={locationId()!} path showName provenance={row()?.location_id ? "set here" : "from its system"} />
       </Show>
       <Show when={served().length > 0}>
         <div data-testid="blade-serves" class={section}>
@@ -282,7 +292,7 @@ function ComponentBody(props: { id: string }) {
             {(s, i) => (
               <div class="flex flex-wrap items-center gap-2">
                 <button type="button" class="cursor-pointer hover:underline" onClick={() => blades.push({ kind: "system", id: s.id })}>{entityLabel(s)}</button>
-                <For each={roleReads[i()]?.data ? rolesOf(row()?.name ?? "", roleReads[i()]!.data!) : []}>
+                <For each={slotReads[i()]?.data ? slotsOf(row()?.name ?? "", slotReads[i()]!.data!) : []}>
                   {(r) => <span class="badge badge-ghost badge-sm">{r}</span>}
                 </For>
               </div>
@@ -306,7 +316,7 @@ function LocationBody(props: { id: string }) {
   const now = Date.now();
   const row = () => (locations.data ?? []).find((l) => l.id === props.id);
   const anchor = () => view.data?.locations?.find((l) => l.id === props.id);
-  const here = createMemo(() => (view.data ? systemsAtPlace(view.data, props.id) : []));
+  const here = createMemo(() => (view.data ? systemsAtLocation(view.data, props.id) : []));
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   const contents = () => (view.data ? contentsOf(view.data, props.id, types.data ?? []) : "");
 
@@ -328,8 +338,8 @@ function LocationBody(props: { id: string }) {
         <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
-      {/* The places beneath it; a room holding systems and no places says
-          nothing about places (its systems are listed below). */}
+      {/* The locations beneath it; a room holding systems and no locations says
+          nothing about locations (its systems are listed below). */}
       <Show when={contents() !== "Empty" || here().length === 0}>
         <div data-testid="blade-contents" class={section}>
           <span class={eyebrow}>Holds</span>

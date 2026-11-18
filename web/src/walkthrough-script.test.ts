@@ -6,15 +6,19 @@ import {
   MAX_PREVIEW_BYTES,
   MAX_SECONDS,
   PREVIEW_MIN_YMAX,
-  PREVIEW_SETTLE_MS,
   budgetLimits,
   previewOpeningProblem,
-  previewStartSeconds,
+  paintSeconds,
+  parseLumas,
+  previewScanProblem,
+  previewStartFromLumas,
+  TITLE_HOLD_MS,
   readyFailure,
   budgetProblems,
   idProblem,
   parseWalkthrough,
   runSetup,
+  setupCollisions,
   stepFailure,
   stillName,
   validateWalkthrough,
@@ -101,6 +105,18 @@ describe("walkthrough script validation", () => {
       "w.yaml: only one step may be the poster (steps 1, 2 are)",
     );
     expect(bad({ title: "T", steps: [{ press: "a", caption: "a", poster: "yes" }, done] })).toBe("w.yaml: step 1 (press): poster is true or absent");
+  });
+
+  it("holds modifier keys through a click, and only a click", () => {
+    const done = { wait: { text: "x" }, caption: "c" };
+    expect(ok([{ click: "#row", modifiers: ["Alt", "Shift"], caption: "a" }, done]).steps[0].modifiers).toEqual(["Alt", "Shift"]);
+    expect(ok([{ click: "#row", caption: "a" }, done]).steps[0].modifiers).toBeUndefined();
+    expect(bad({ title: "T", steps: [{ click: "#row", modifiers: ["Hyper"], caption: "a" }, done] })).toBe(
+      "w.yaml: step 1 (click): modifiers is a list of Alt, Shift, Control, Meta",
+    );
+    expect(bad({ title: "T", steps: [{ hover: "#row", modifiers: ["Alt"], caption: "a" }, done] })).toBe(
+      'w.yaml: step 1 (hover) has unknown key "modifiers"',
+    );
   });
 
   it("refuses exact on a selector target, where it means nothing", () => {
@@ -303,12 +319,50 @@ describe("walkthrough failure and budget messages", () => {
     }
   });
 
-  it("starts the preview once the title card is painted, a settle beat later, never on the blank lead-in", () => {
-    expect(PREVIEW_SETTLE_MS).toBe(500);
-    expect(previewStartSeconds(1_000, 1_000)).toBe(0.5);
-    expect(previewStartSeconds(10_000, 10_640)).toBe(1.14);
-    expect(() => previewStartSeconds(10_000, 9_000)).toThrow("painted before the video started");
-    expect(() => previewStartSeconds(NaN, 1)).toThrow("not measured");
+  it("measures when the title card was painted, in seconds into the video", () => {
+    expect(paintSeconds(1_000, 1_000)).toBe(0);
+    expect(paintSeconds(10_000, 10_640)).toBe(0.64);
+    expect(() => paintSeconds(10_000, 9_000)).toThrow("painted before the video started");
+    expect(() => paintSeconds(NaN, 1)).toThrow("not measured");
+  });
+
+  it("opens the preview on the first painted frame at or after the paint, however far the video lags", () => {
+    const dark = (t: number) => ({ t, ymax: 26 });
+    const lit = (t: number) => ({ t, ymax: 255 });
+    // A frame before the paint is the lead-in: skipped even when bright.
+    expect(previewStartFromLumas(1, [lit(0.5), dark(1), dark(1.2), lit(1.4), lit(1.6)])).toBe(1.4);
+    expect(previewStartFromLumas(1, [lit(0.5), lit(1), lit(1.2)])).toBe(1);
+    // A half-painted frame (the ground and the rule, no text) does not qualify.
+    expect(previewStartFromLumas(0.5, [{ t: 0.6, ymax: 154 }, { t: 0.8, ymax: PREVIEW_MIN_YMAX }])).toBe(0.8);
+    // A loaded runner: the card appears late in the video, still inside its hold.
+    expect(previewStartFromLumas(0.5, [dark(0.5), dark(1.5), dark(2.5), lit(2.7)])).toBe(2.7);
+    // None qualifies, or only one past the card's hold, or none at all.
+    expect(previewStartFromLumas(1, [dark(1), dark(1.5), lit(0.9)])).toBeNull();
+    expect(previewStartFromLumas(1, [dark(1), lit(1 + TITLE_HOLD_MS / 1000 + 0.04)])).toBeNull();
+    expect(previewStartFromLumas(1, [])).toBeNull();
+  });
+
+  it("reads the frames from ffmpeg's signalstats listing", () => {
+    const text = [
+      "frame:0    pts:0       pts_time:0",
+      "lavfi.signalstats.YMAX=16",
+      "frame:1    pts:40      pts_time:0.04",
+      "lavfi.signalstats.YMAX=235",
+      "",
+    ].join("\n");
+    expect(parseLumas(text)).toEqual([{ t: 0, ymax: 16 }, { t: 0.04, ymax: 235 }]);
+    expect(parseLumas("")).toEqual([]);
+  });
+
+  it("fails a card that never painted, naming the window scanned and the brightest luma", () => {
+    const frames = [{ t: 0.4, ymax: 255 }, { t: 0.6, ymax: 26 }, { t: 1.2, ymax: 154 }, { t: 3, ymax: 255 }];
+    expect(previewScanProblem("demo", 0.5, [...frames, { t: 1.5, ymax: 255 }])).toBeNull();
+    expect(previewScanProblem("demo", 0.5, frames)).toBe(
+      "walkthrough demo: the title card never painted between 0.50s and 2.70s (brightest luma 154 over 2 frames, the card's text reaches at least 200)",
+    );
+    expect(previewScanProblem("demo", 0.5, [])).toBe(
+      "walkthrough demo: no frame to open the preview on between 0.50s and 2.70s (the recording has none there)",
+    );
   });
 
   it("refuses a preview that would open on a blank frame, naming its brightest pixel", () => {
@@ -353,6 +407,44 @@ describe("the shipped walkthroughs", () => {
       expect(idProblem(f.slice(f.lastIndexOf("/") + 1, -".yaml".length))).toBeNull();
     });
   }
+});
+
+// The probe replays every walkthrough on one stack, in order (#1404), while the
+// recorder gives each a lab of its own, so two walkthroughs whose setups claim
+// the same component or alarm and whose steps change it pass recorded and fail
+// probed. The lint holds that line at validation.
+describe("setup collisions", () => {
+  const act = { click: "button", caption: "c" };
+  const look = { wait: { text: "x" }, caption: "c" };
+  const component = (name: string) => ({ post: "/components", body: { name, product: "p", location: "l" } });
+  const alarm = (on: string, dedup_key: string) => ({ post: `/components/${on}/alarms`, body: { severity: "high", message: "m", dedup_key } });
+  const w = (id: string, setup: unknown[], steps: unknown[]) => ({ id, ...ok(steps, { setup }) });
+
+  it("flags two walkthroughs that set up the same component when one changes it", () => {
+    const found = setupCollisions([w("a", [component("bay-2-display")], [act, look]), w("b", [component("bay-2-display")], [look])]);
+    expect(found).toEqual(['walkthroughs a, b both set up component "bay-2-display" and a changes it: give each its own']);
+  });
+  it("flags the same alarm dedup key on one component, and names who changes it", () => {
+    const found = setupCollisions([w("a", [alarm("panel-2", "k")], [act, look]), w("b", [alarm("panel-2", "k")], [act, look])]);
+    expect(found).toEqual(['walkthroughs a, b both set up alarm "k" on panel-2 and a, b change it: give each its own']);
+  });
+  it("lets walkthroughs share what none of them changes, and tell different alarms on one component apart", () => {
+    expect(setupCollisions([w("a", [component("c")], [look]), w("b", [component("c")], [look])])).toEqual([]);
+    expect(setupCollisions([w("a", [alarm("panel-2", "k1")], [act, look]), w("b", [alarm("panel-2", "k2")], [act, look])])).toEqual([]);
+    expect(setupCollisions([w("a", [alarm("panel-2", "k")], [act, look]), w("b", [alarm("panel-3", "k")], [act, look])])).toEqual([]);
+  });
+  it("ignores setup it does not understand, such as other creates", () => {
+    const other = { post: "/notification-types", body: { name: "n" } };
+    expect(setupCollisions([w("a", [other], [act, look]), w("b", [other], [act, look])])).toEqual([]);
+  });
+  it("finds none in the shipped walkthroughs", () => {
+    const dir = join(__dirname, "../e2e/walkthroughs");
+    const all = readdirSync(dir)
+      .filter((f) => f.endsWith(".yaml"))
+      .sort()
+      .map((f) => ({ id: f.slice(0, -".yaml".length), ...parseWalkthrough(readFileSync(join(dir, f), "utf8"), f) }));
+    expect(setupCollisions(all)).toEqual([]);
+  });
 });
 
 // Platform health's walkthrough (#1730) teaches the page as it is: it opens a

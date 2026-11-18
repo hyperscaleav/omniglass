@@ -112,19 +112,19 @@ func TestCommandIssueAPI(t *testing.T) {
 		t.Fatalf("issue to mismatched value: want recorded status failed, got %q", failed.Status)
 	}
 
-	// A fire-and-forget command reads issued until its node reports it run
+	// A fire-and-forget command reads issued until its outpost reports it run
 	// (#1630): the computed verdict stays none (nothing was told), and the
 	// execution report settles it.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "reboot-proto", Label: "Reboot Proto", Version: "1.0.0", Spec: []byte(`{"version": 1, "transport": "tcp",
 		"inputs": [{"name": "host", "kind": "string", "required": true}, {"name": "port", "kind": "number", "default": "4998"}],
 		"commands": [{"command_type": "reboot", "request": {"line": "REBOOT"}}]}`)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
-	comp, drv, node := "disp-1", "reboot-proto", "edge-1"
-	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
+	comp, drv, outpost := "disp-1", "reboot-proto", "edge-1"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpost,
 		Inputs: map[string]string{"host": "10.20.4.80"}}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -139,9 +139,9 @@ func TestCommandIssueAPI(t *testing.T) {
 	if ff.Settlement != "none" || ff.Status != "issued" {
 		t.Fatalf("fire-and-forget: want verdict none with status issued, got %+v", ff)
 	}
-	pulled, err := gw.PendingNodeCommands(ctx, "edge-1")
+	pulled, err := gw.PendingOutpostCommands(ctx, "edge-1")
 	if err != nil || len(pulled) != 1 || pulled[0].ID != ff.ID {
-		t.Fatalf("the node's pull = %+v (%v), want the reboot", pulled, err)
+		t.Fatalf("the outpost's pull = %+v (%v), want the reboot", pulled, err)
 	}
 	if err := gw.RecordCommandExecution(ctx, "edge-1", ff.ID, "", ""); err != nil {
 		t.Fatalf("report: %v", err)
@@ -152,7 +152,7 @@ func TestCommandIssueAPI(t *testing.T) {
 	}
 	json.Unmarshal(c.do(ownerTok, http.MethodGet, fmt.Sprintf("/components/disp-1/commands/%d", ff.ID), nil, http.StatusOK), &carried)
 	if carried.Status != "settled" || carried.SettledBy != "reply" {
-		t.Fatalf("fire-and-forget once the node ran it: want settled by its report, got %+v", carried)
+		t.Fatalf("fire-and-forget once the outpost ran it: want settled by its report, got %+v", carried)
 	}
 
 	// An unknown command_type is a 422.
@@ -198,7 +198,7 @@ func TestCommandIssueAPI(t *testing.T) {
 	opTok := setupScopedViewer(t, ctx, dsn, "op-other", "operator", "component", other.ID)
 	c.do(opTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{"command_type": "reboot"}, http.StatusNotFound)
 
-	// An ungranted principal is forbidden to issue.
-	noneTok := principalWithGrants(t, ctx, dsn, "nocmd", nil)
+	// An ungranted user is forbidden to issue.
+	noneTok := userWithGrants(t, ctx, dsn, "nocmd", nil)
 	c.do(noneTok, http.MethodPost, "/components/disp-1/commands:issue", map[string]any{"command_type": "reboot"}, http.StatusForbidden)
 }

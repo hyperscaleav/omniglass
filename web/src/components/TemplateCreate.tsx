@@ -5,7 +5,7 @@ import Eyebrow from "./Eyebrow";
 import FieldRow from "./FieldRow";
 import InfoTip from "./InfoTip";
 import TemplatePreview from "./TemplatePreview";
-import StartFromTemplateForm, { useHeldRoles, useHeldStandards } from "./StartFromTemplateForm";
+import StartFromTemplateForm, { useHeldSlots, useHeldStandards } from "./StartFromTemplateForm";
 import { RotateCcw } from "./icons";
 import { byLabel, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
@@ -53,13 +53,15 @@ export function CreateModeChoice(props: { mode: CreateMode; onChange: (m: Create
   );
 }
 
-export default function TemplateCreate(props: { kind: TemplateKind; place?: string; onDone: (href: string) => void }): JSX.Element {
+export default function TemplateCreate(props: { kind: TemplateKind; location?: string; onDone: (href: string) => void }): JSX.Element {
   const templates = useQuery(() => ({ queryKey: TEMPLATES_KEY, queryFn: listTemplates }));
+  // byLabel stays here (#757): the template catalog is served by kind then name
+  // from the binary, not by the SQL label rule, so the order is composed here.
   const options = createMemo(() => [...ofKinds(templates.data ?? [], [props.kind])].sort(byLabel));
   const [chosen, setChosen] = createSignal("");
   const picked = () => options().find((t) => t.name === chosen());
   const { byName } = useHeldStandards();
-  const heldRoles = useHeldRoles(byName, () => picked()?.system?.standard ?? "");
+  const heldSlots = useHeldSlots(byName, () => picked()?.system?.standard ?? "");
   return (
     <div class="flex flex-col gap-4" data-testid="template-create">
       <Show when={templates.error && !templates.data}>
@@ -82,11 +84,11 @@ export default function TemplateCreate(props: { kind: TemplateKind; place?: stri
         {(t) => (
           <>
             <section class="flex flex-col gap-2 rounded-box border border-base-300 bg-base-200 p-3" data-testid="template-create-preview">
-              <Eyebrow label="What it creates" hint="Read from the template itself. A system is staffed to the roles of the standard it is built to: yours of that name when you hold one." />
+              <Eyebrow label="What it creates" hint="Read from the template itself. A system is staffed to the slots of the standard it is built to: yours of that name when you hold one." />
               <Show when={t.description}><p class="text-sm text-base-content/70">{t.description}</p></Show>
-              <TemplatePreview template={t} all={templates.data ?? []} heldRoles={heldRoles()} />
+              <TemplatePreview template={t} all={templates.data ?? []} heldSlots={heldSlots()} />
             </section>
-            <StartFromTemplateForm template={t} all={templates.data ?? []} place={props.place} onDone={props.onDone} />
+            <StartFromTemplateForm template={t} all={templates.data ?? []} location={props.location} onDone={props.onDone} />
           </>
         )}
       </Show>

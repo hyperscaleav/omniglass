@@ -16,8 +16,8 @@ func newTokenCmd() *cobra.Command {
 	var description string
 	cmd := &cobra.Command{
 		Use:   "token <username>",
-		Short: "Mint an additional bearer token for an existing principal (direct DB)",
-		Long: "Issues a new bearer credential for an existing principal, addressed by username, and prints " +
+		Short: "Mint an additional bearer token for an existing user (direct DB)",
+		Long: "Issues a new bearer credential for an existing user, addressed by username, and prints " +
 			"the token once. The same trusted direct-DB lane as bootstrap: token reissue, break-glass, or a " +
 			"fresh login token for a dev database when the owner already exists. A --description (required) names " +
 			"what the token is for. The token expires after --ttl (default 90 days, hard maximum 365 days); " +
@@ -35,7 +35,7 @@ func newTokenCmd() *cobra.Command {
 }
 
 // runToken ensures the schema exists, mints a bearer token with a bounded lifetime,
-// and attaches it to the named principal. It rejects a --ttl above the hard cap and
+// and attaches it to the named user. It rejects a --ttl above the hard cap and
 // errors clearly if the username does not exist.
 func runToken(ctx context.Context, username string, ttl time.Duration, description string) error {
 	if ttl > auth.MaxTokenLifetime {
@@ -66,7 +66,7 @@ func runToken(ctx context.Context, username string, ttl time.Duration, descripti
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("no principal with username %q (create one first: omniglass bootstrap %s)", username, username)
+		return fmt.Errorf("no user with username %q (create one first: omniglass bootstrap %s)", username, username)
 	}
 	fmt.Printf("Bearer token for %q (shown once, store it now; expires %s):\n\n  %s\n\n",
 		username, expiresAt.Format(time.RFC3339), token)

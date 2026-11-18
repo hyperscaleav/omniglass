@@ -6,7 +6,7 @@ screenshots:
     path: /web/explore
     alt: "A location's blade slides in from the right with its details and a footer action bar."
     # Harbor Point holds two buildings and no system, so its row opens the
-    # location's own blade (a place holding one system opens that system).
+    # location's own blade (a location holding one system opens that system).
     steps:
       - action: click
         selector: "[role=treeitem]:has-text('Harbor Point')"
@@ -27,7 +27,7 @@ screenshots:
         width: 184
   - id: entity-edit-face
     path: /web/locations/east?edit=1
-    alt: "An ?edit=1 deep link lands a place's view on its Configure tab, already editing."
+    alt: "An ?edit=1 deep link lands a location's view on its Configure tab, already editing."
     # No mask: the Configure tab replaces the overview (and its since-line
     # clock), and the form renders from the seed deterministically.
 ---
@@ -50,21 +50,21 @@ Enter to open it.
 
 A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
 from a row. It leads with the verdict and since-when and the active alarms that say why, each
-with its severity, then the context you came for: a system's place (as a card saying where it
+with its severity, then the context you came for: a system's location (as a card saying where it
 sits, the path above it, since a blade has no breadcrumb) and its size;
-the systems a component serves, with the role it fills in each, and its place when that is
-somewhere else; a place's systems, each with its verdict, one click from its own blade. Then
+the systems a component serves, with the slot it fills in each, and its location when that is
+somewhere else; a location's systems, each with its verdict, one click from its own blade. Then
 the entity's **form**: its name, classification, a location's parent, and tags, read or edited
 in place. Each fact is said once: the blade's title is the label (the Label field appears only
-while editing), a room's only system is the room (its card names no place and offers no second
-blade for it, only **Configure place**), and the standard is in Classification, not repeated
+while editing), a room's only system is the room (its card names no location and offers no second
+blade for it, only **Configure location**), and the standard is in Classification, not repeated
 above it. Configuration (a
-system's roles, the properties and their cascade, the reconciliation, a component's
+system's slots, the properties and their cascade, the reconciliation, a component's
 endpoints) is the detail view's **Configure** tab, one **Expand** away, along with the
 components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
 permissions on that row.
 
-The identity pages (Users, Groups, and Roles) use the same blade, and there drilling crosses entities: from a
+The identity pages (Users, User groups, and Roles) use the same blade, and there drilling crosses entities: from a
 user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can
 trace where access comes from without leaving the page. Each page roots one entity and drills one direction (a
 user's groups, a group's members), so the stack stays shallow and the reverse relation on the far blade is a
@@ -104,7 +104,7 @@ link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so 
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
 left. A room holding one system is configured on its system's view, so `?edit=1` on that
 room's address lands on the system's Configure with the room's own form editing
-(`?edit=place`). The console itself uses these links for its handoffs: creating an entity lands on
+(`?edit=location`). The console itself uses these links for its handoffs: creating an entity lands on
 `/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
 identity pages.
 
@@ -135,8 +135,8 @@ identity pages.
   not a choice you are stuck with. **Edit** a component and the primary system is a picker you can
   change or clear, and any other systems it belongs to (a shared device is in several) are chips with a
   remove control. **Save** applies them with the rest of the edit; if the server refuses one (a system
-  outside your `system:update` scope, or a role the component still fills there), the reason shows in
-  the form and it stays in edit. Without `system:update` the field reads but does not edit. The
+  outside your `system:update` scope, or a slot the component still fills there), the reason shows in
+  the footer beside **Save** and the form stays in edit. Without `system:update` the field reads but does not edit. The
   system's member list updates without a reload.
 
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
@@ -161,7 +161,7 @@ identity pages.
 
   The locked **name** is the name the row will get, number and all: `display-3`, not `display-n`. The
   **stem** comes from the type and the **number** is the lowest one free in that placement right now.
-  Some types carry no number on the first of their kind in a place, so the first boardroom in a place is
+  Some types carry no number on the first of their kind in a location, so the first boardroom in a location is
   `boardroom` and the second is `boardroom-2`; the form shows whichever applies rather than a shape you
   have to read. Under it the form names the **placement the name has to be unique in**, as a path: the
   name itself never carries that path, since a name is unique within its placement rather than across
@@ -187,17 +187,17 @@ identity pages.
   A location's shipped rule reads its **own name as words**: create a location named `north-boardroom` and
   the locked field shows **North Boardroom**, because the rule splits the name on its hyphens, capitalises
   each word, and applies your [acronym list](/architecture/settings/) (so `hq-west` reads **HQ West** once
-  `HQ` is on it). It only re-cases what you typed, so where the place's real name is not in its machine
+  `HQ` is on it). It only re-cases what you typed, so where the location's real name is not in its machine
   name (a `huddle` that everyone calls the Huddle Room), open the lock and type it.
 
-  A system's shipped rule reads its **place**, because a system is what makes that place work: a
-  system you create in Boardroom 204B shows the label **Boardroom 204B**. Once a place holds several
-  systems, each adds its **type**: **Media Lab Meeting Room** beside **Media Lab Signage**, and the
+  A system's shipped rule reads its **location**, because a system is what makes that location work: a
+  system you create in Boardroom 204B shows the label **Boardroom 204B**. Once a location holds several
+  systems, each adds its **type**: **Media Lab Meeting** beside **Media Lab Signage**, and the
   first one restamps when the second arrives (and back when it leaves). Two of the same type add
-  the number their names carry: `boardroom-2` shows **Boardroom 204B Boardroom 2**. A system with
+  the number their names carry: `boardroom-2` shows **Boardroom 204B Board Meeting 2**. A system with
   no type names itself instead ("Media Lab Lobby Wall"). The two fields are one answer, so a label
   with a number in it means a name with the same number in it, and neither is a guess: both are read
-  from the placement you have just picked. A system with no place reads its type.
+  from the placement you have just picked. A system with no location reads its type.
 
   A name is **required** only where nothing will generate one, and there the field arrives unlocked
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
@@ -263,7 +263,7 @@ identity pages.
   re-parent that would put an entity under itself or one of its own children is refused); the console
   just has no picker for either yet. From the CLI, an entity's `<name>` argument takes a uuid, a bare
   name, or its full **dotted address** (`boi.17c.415a.$comp.display-1`), the location path down to a
-  `$comp`/`$sys` accessor and the entity's own place from there. **Quote it**: an unquoted `$comp`
+  `$comp`/`$sys` accessor and the entity's own location from there. **Quote it**: an unquoted `$comp`
   disappears before the shell ever sends the request, so `omniglass component get
   'boi.17c.415a.$comp.display-1'` (single quotes), never bare.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
@@ -282,11 +282,11 @@ identity pages.
   `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**.
   Nothing you typed yourself is touched by either.
 - **The same applies to systems, and that upgrade is worth running.** A system's shipped label
-  reads its place, so a room and its system read as one name instead of the room's name above the
-  system's kind ("Meeting Room" under Briefing Room). A fleet created before the upgrade keeps its
+  reads its location, so a room and its system read as one name instead of the room's name above the
+  system's type ("Meeting" under Briefing Room). A fleet created before the upgrade keeps its
   old labels until you run `omniglass system previewLabels`, then `omniglass system
-  recomputeLabels`. Only the second of a kind in a place adds its type and number: a place with one
-  boardroom reads as the place, exactly as its name is `boardroom` rather than `boardroom-1`.
+  recomputeLabels`. Only the second of a kind in a location adds its type and number: a location with one
+  boardroom reads as the location, exactly as its name is `boardroom` rather than `boardroom-1`.
 
 ## Properties on the detail
 
@@ -304,41 +304,41 @@ an observation disagrees with want. A property nothing declares appears here onc
 commanded, with nothing wanted and so nothing to drift from; it stays out of the Properties panel,
 which holds only what is declared or calculated. A calculated property is not reconciled (nobody
 asked for its value), so it shows in Properties alone. A location has no Reconciliation panel: a
-place owns no observed value.
+location owns no observed value.
 
-## Roles on a system
+## Slots on a system
 
-A **system** carries one more panel: **Roles**, the slots it needs filled. A role is a slot (a room
-microphone, a main display), not a component, so the system can say what it needs before anything is
-assigned and an **empty slot stays visible**. These are slots in a system, not the
-[roles that grant people access](/guides/admin/access/); the two share only the word.
+A **system** carries one more panel: **Slots**, the places it needs filled. A slot (a room
+microphone, a main display) is a position, not a component, so the system can say what it needs before anything is
+assigned and an **empty slot stays visible**. A slot is not one of the
+[roles that grant people access](/guides/admin/access/): a role is IAM's word, a slot the system's.
 
-Each row is one role with **where it came from**, **who fills it**, and **how many more it wants**:
+Each row is one slot with **where it came from**, **who fills it**, and **how many more it wants**:
 
-- **Inherited or declared here.** A role marked as coming from the standard is declared on the
+- **Inherited or declared here.** A slot marked as coming from the standard is declared on the
   [standard](/guides/admin/standards/) this system conforms to, and every conforming system has it.
-  A role declared on this system is this system's own. A **one-off system** (conforming to no standard)
+  A slot declared on this system is this system's own. A **one-off system** (conforming to no standard)
   has only its own.
-- **Assigned and understaffed.** A role has a **quorum**, how many components should fill it. Two
+- **Assigned and understaffed.** A slot has a **quorum**, how many components should fill it. Two
   assigned against a quorum of two reads as staffed; one reads as short by one. That is true the
   moment you enter it, with nothing collecting: staffing is a fact about your model, not a
   measurement.
-- **Impact.** Each role also says what the system loses when the slot is not being filled properly:
+- **Impact.** Each slot also says what the system loses when the slot is not being filled properly:
   **outage**, **degraded**, or **none**. That is what turns a broken component into a system-level verdict
   further down this page, and it is declared on the
-  [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) or on the system.
-- **Assign** picks a component to fill the role; **unassign** takes it out and the role goes back to
+  [standard](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled) or on the system.
+- **Assign** picks a component to fill the slot; **unassign** takes it out and the slot goes back to
   understaffed. Assigning the same component twice changes nothing.
-- **A component staffing a role cannot be deleted.** Unassign it first. The refusal is deliberate: a
+- **A component staffing a slot cannot be deleted.** Unassign it first. The refusal is deliberate: a
   delete that silently emptied a slot would leave the system quietly wrong.
 
-**An assignment can be refused, and the refusal tells you why.** A role's [accepted types and pinned
-products](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) are the typed-slot
+**An assignment can be refused, and the refusal tells you why.** A slot's [accepted types and pinned
+products](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled) are the typed-slot
 guard: assign a component of the wrong type and you get both parties named
-(`component "panel-1" is a display; role "Table microphone" wants a video-bar`), which is either a
-sign you picked the wrong component or that the role needs widening.
+(`component "panel-1" is a display; slot "Table microphone" wants a video-bar`), which is either a
+sign you picked the wrong component or that the slot needs widening.
 
-Declaring the roles is on the [Standards guide](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled);
+Declaring the slots is on the [Standards guide](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled);
 this panel is where they get staffed.
 
 ## Alarms on a component
@@ -353,20 +353,20 @@ Raising one takes two things:
   under Actions: Severity** (the [rules guide](/guides/admin/rules/#severity-levels) renders the shipped
   set, and an admin can add more between them on that page). Every alarm wears its level's label in its color. This is how loudly to treat it, and it sets the
   **component's own** verdict (any active alarm makes the component degraded, one at a level marked
-  outage takes it out). Only an **outage** stops a component occupying a role it fills: an info or warning
+  outage takes it out). Only an **outage** stops a component occupying a slot it fills: an info or warning
   alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
   a system on its own;
 - a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
 
 **Not every alarm is raised by hand.** An [event rule](/guides/admin/rules/) raises and clears its
 own as telemetry lands: such an alarm says **by rule** and the rule's name, and the rule clears it
-when the condition passes (the official reachability rule does this for every endpoint that stops
+when the rule clears (the official reachability rule does this for every endpoint that stops
 answering). You acknowledge it like any other. Clearing it by hand works too, and **a hand clear of a
-rule's alarm holds until the condition ends and returns**, whatever the input: a rule acts on the
-condition's edges, not on each sample, so a metric still reading over its threshold on every poll does
-not reopen it. The rule still counts the condition as in force (its condition and the events it wrote
-are untouched); once the value recovers the condition ends, and if it comes back later the rule opens
-a new alarm. Fix the condition rather than clearing its alarm.
+rule's alarm holds until the rule clears and fires again**, whatever the input: a rule acts on
+edges, not on each sample, so a metric still reading over its threshold on every poll does
+not reopen it. The rule still counts itself as firing there (the firing and the events it wrote
+are untouched); once the value recovers the rule clears, and if it fires again later it raises
+a new alarm. Fix the fault rather than clearing its alarm.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
@@ -398,20 +398,20 @@ Acknowledging twice is harmless. The first person and the first time are what th
 second click (or a colleague reaching it a moment after you) changes nothing and is not an error.
 There is no un-acknowledge yet.
 
-### Snoozing: silencing a noisy condition for a while
+### Snoozing: silencing a noisy alarm for a while
 
 **Snoozing stops the people an alarm notifies from being told about it, for a bounded time.** It is
 for the alarm that flaps or that you are already working on: **Snooze** beside the alarm (in the
 **Why** strip and the alarms panel, active or recently cleared) offers 15 minutes, 1 hour, 4 hours
-or 24 hours. While it holds, every notification about that condition, a raise or a clear, on a
+or 24 hours. While it holds, every notification about that alarm, a raise or a clear, on a
 webhook, by email or in an inbox, is recorded instead of sent, and each one stays on the alarm's
 timeline reading **snoozed**, with the reason. The alarm wears a **snoozed until** chip naming the time, and its tooltip
 names who snoozed it.
 
-A snooze belongs to the alarm's **condition**, not to one alarm row: when the condition clears and
-comes back, the new alarm is snoozed too, until the deadline. Another alarm on the same component is
-not affected. When the snooze ends, by its deadline or by **Unsnooze**, and the condition is still
-raised, the people its rules reach are told again; a condition that cleared meanwhile gets nothing.
+A snooze belongs to the alarm's **identity** (its component and dedup key), not to one alarm row: when
+the alarm clears and is raised again, the new alarm is snoozed too, until the deadline. Another alarm on
+the same component is not affected. When the snooze ends, by its deadline or by **Unsnooze**, and the
+alarm is still raised, the people its rules reach are told again; an alarm that cleared meanwhile gets nothing.
 
 It is not acknowledging (nobody is recorded as having looked), not [opting out](/guides/admin/notifications/)
 (that silences only you), and not pausing an action rule (that silences a rule for every alarm). It
@@ -428,14 +428,14 @@ omniglass component alarm unsnooze display-1 <alarm-id>
 
 The **clock** button on an alarm row (in the **Why** strip at the top of a component's or a system's
 page, and in the alarms panel, active or recently cleared) opens the alarm's **timeline** under the row: everything recorded about it, oldest first. An **event** line is what a rule saw (its
-`condition-started` when the condition came into force and opened the alarm, its `condition-ended`
-when it passed and resolved it), named by the rule and the endpoint; an **audit** line is what was
+`rule-fired` when it fired and raised the alarm, its `rule-cleared`
+when it cleared and resolved it), named by the rule and the endpoint; an **audit** line is what was
 done to the alarm (raised, acknowledged, cleared, snoozed, unsnoozed, snooze ended) and by whom, a person by name or the rule the
 platform acted for. A **notify** line is a notification the alarm's raise or clear queued, read as a
 status row: its target, how its delivery stands (**on its way**, **sent**, **failed** with the
 receiver's answer and a **Retry**, or **snoozed** with the snooze's reason), and the **action rule**
 that queued it. A hand-raised alarm's timeline is its audit lines alone. The same button sits on
-each open alarm in a rule's blade on the Rules page. Click it again to fold the timeline away; any
+each open alarm in a rule's blade on the Event rules page. Click it again to fold the timeline away; any
 number can be open at once.
 
 From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unacknowledged]`,
@@ -447,20 +447,20 @@ From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unac
 
 A component's **Activity** tab carries its **Commands** above its events: what the component was told
 and where each command stands, newest first. A command in flight wears its phase, **queued** (waiting
-for its node to take it), **delivered** (its node has it, and the next observation settles it),
+for its outpost to take it), **delivered** (its outpost has it, and the next observation settles it),
 **awaiting reply** or **awaiting observation**, with its settle window counting down beside it; a
 terminal one reads **settled**, **failed** or **timed out**, with why. Hover the phase for what it
 means for that command. A fire-and-forget command such as a reboot has nothing to observe, so its
-node's report decides it: **settled** once the node carried it out, **failed** when it could not,
+outpost's report decides it: **settled** once the outpost carried it out, **failed** when it could not,
 and **timed out** when no report arrives within ten minutes of its issue. The list refreshes every second while anything is in flight.
 
 The arrow at a row's end opens the command in place: its **arc**, the issue's time and each later
-step (delivered to its node, answered, settled) as how long after the issue it came; **why** it
+step (delivered to its outpost, answered, settled) as how long after the issue it came; **why** it
 settled, failed or timed out; how it **settles** (from the component's reply or an observation of
-what it sets), its window, the **endpoint**, **node** and **driver** that carried it, and who
+what it sets), its window, the **endpoint**, **outpost** and **driver** that carried it, and who
 **issued** it; and the **evidence**: the component's **reply** (the endpoint's login and anything it labels a
 credential masked before it was stored, or withheld when that login could not be read), or the **observed** sample that matched. A timed-out command says where it stopped:
-queued for a node that never took it, delivered with no answer, or answered with nothing observed
+queued for an outpost that never took it, delivered with no answer, or answered with nothing observed
 after.
 
 **Issue a command** (with `command:issue`, which the **Operator** role carries) sits in the section's
@@ -490,34 +490,34 @@ the outline:
 | **degraded** | it is working, worse |
 | **outage** | it is not working |
 
-**`incomplete` is not a fault.** It means a role is short because nobody has put the hardware in
+**`incomplete` is not a fault.** It means a slot is short because nobody has put the hardware in
 yet, so no alarm will ever fire for it: there is nothing there to alarm. A system mid-installation
 reads incomplete, and it stays that way until somebody fills the slot. That is deliberately a
 different colour from a system that is broken, because during a rollout most of your fleet is in
 the first state and you need to be able to see past it to the second.
 
 A location's verdict is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
-when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **roles** it
+when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **slots** it
 needs filled.
 
 **The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
 view names the chain instead: **Why** leads its Overview, each alarm naming the down component
-and the role it impairs, and the component rows beneath carry the arithmetic. Read together they are this
+and the slot it impairs, and the component rows beneath carry the arithmetic. Read together they are this
 chain:
 
 ```text
 alarm on mic-pod-2 (high, "no audio on channel 1")
   -> mic-pod-2 is down (its own verdict, from the alarm)
-    -> role room-mic wants 2, and mic-pod-2 no longer occupies its slot
+    -> slot room-mic wants 2, and mic-pod-2 no longer occupies its slot
       -> only 1 assigned component still occupies it
-        -> role impaired, impact degraded
+        -> slot impaired, impact degraded
           -> hq-r1 is degraded
 ```
 
-Read it bottom-up when you want the verdict and top-down when you want the fix. A role can also be
+Read it bottom-up when you want the verdict and top-down when you want the fix. A slot can also be
 impaired with **no down component named**, which means it is **short-staffed** rather than broken:
 nobody is assigned. Those are two different jobs, and the view keeps them apart: an unstaffed seat
-reads **incomplete** as an empty slot, a down occupant keeps its seat and reads the impact its role
+reads **incomplete** as an empty slot, a down occupant keeps its seat and reads the impact its slot
 declared.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
@@ -532,19 +532,19 @@ From the CLI: `omniglass system health list <name>` and `omniglass location heal
 
 Once, in order, on a real system:
 
-1. **Declare the roles with their impact.** On the system's
-   [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled), give **Main Display**
+1. **Declare the slots with their impact.** On the system's
+   [standard](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled), give **Main Display**
    impact **outage** and **Room Microphone** impact **degraded** with quorum 2, accepting `video-bar`.
    Every conforming system inherits both immediately.
-2. **Staff the system.** Assign components to each role from the system's **Roles** panel. A component
-   of the wrong type is refused by name (`component "panel-1" is a display; role "Room Microphone"
+2. **Staff the system.** Assign components to each slot from the system's **Slots** panel. A component
+   of the wrong type is refused by name (`component "panel-1" is a display; slot "Room Microphone"
    wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
 3. **Raise an alarm.** On one of the mic pods, raise a `high` alarm.
-4. **Watch the system move.** The system goes **degraded** (the `room-mic` role now has one occupant
+4. **Watch the system move.** The system goes **degraded** (the `room-mic` slot now has one occupant
    against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
-   the alarm been on the main display instead, the system would be an **outage**, because that role says so.
+   the alarm been on the main display instead, the system would be an **outage**, because that slot says so.
 5. **Read the system's Overview** to find the cause: the active alarm, the component it took down and
-   the role that component fills, with the message and the time it was raised. Walk to the pod.
+   the slot that component fills, with the message and the time it was raised. Walk to the pod.
 6. **Clear the alarm** once it is fixed. The system returns to **healthy** in the same transaction, and the
    alarm row stays in the component's history.
 7. **Read the history afterwards.** The transition strip now shows the exact stretch the system was

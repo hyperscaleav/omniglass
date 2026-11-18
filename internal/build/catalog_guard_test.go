@@ -43,6 +43,9 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// Pins the shipped UCC drivers to the simulated platform's own
 		// answer, so naming the shipped product is what it tests (#1282).
 		"internal/seed/ucc_drivers_test.go": true,
+		// The outpost rename carries the seeded platform rows by name, so
+		// naming the shipped platform product is what it tests (#2059).
+		"internal/storage/outpost_rename_migration_test.go": true,
 		// Switches the simulated Ferrite PDU with the shipped
 		// ferrite-pdu-api driver's rendered requests, so naming the shipped
 		// product is what it tests (#1653).
@@ -50,7 +53,7 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		// Drives the shipped recording service driver against its simulated
 		// service; a driver is named for its product, so the product id is
 		// in the name it loads (#1363).
-		"internal/node/run_recording_service_test.go": true,
+		"internal/outpost/run_recording_service_test.go": true,
 		// States the class-signal floor for the shipped Newtron touch panel
 		// on the running lab, so naming the product is what it tests, until
 		// #1371 holds the floor for every class (#1494).

@@ -24,15 +24,15 @@ func receiptsDB(t *testing.T) (context.Context, *pgx.Conn, time.Time, time.Time)
 	t.Cleanup(func() { _ = conn.Close(ctx) })
 	from := time.Date(2026, 11, 12, 14, 0, 0, 0, time.UTC)
 	to := from.Add(5 * time.Minute)
-	put := func(node, boot string, seq int, minted time.Time, ledgered bool) {
+	put := func(outpost, boot string, seq int, minted time.Time, ledgered bool) {
 		t.Helper()
 		ledger := "{1,0,null,null,null,null,null,null}"
 		if !ledgered {
 			ledger = ""
 		}
-		if _, err := conn.Exec(ctx, `insert into telemetry_receipt (batch_id, node, boot, seq, minted, ledger)
+		if _, err := conn.Exec(ctx, `insert into telemetry_receipt (batch_id, outpost, boot, seq, minted, ledger)
 			values ($1, $2, $3, $4, $5, nullif($6, '')::bigint[])`,
-			fmt.Sprintf("og.v1.telemetry.%s %s-%d", node, boot, seq), node, boot, seq, minted, ledger); err != nil {
+			fmt.Sprintf("og.v1.telemetry.%s %s-%d", outpost, boot, seq), outpost, boot, seq, minted, ledger); err != nil {
 			t.Fatalf("put %s %d: %v", boot, seq, err)
 		}
 	}
@@ -43,17 +43,17 @@ func receiptsDB(t *testing.T) (context.Context, *pgx.Conn, time.Time, time.Time)
 	put("a", "a1", 4, from.Add(2*time.Minute), true) // in the window
 	put("a", "a1", 5, to.Add(time.Minute), true)     // after it: says the boot settled
 	put("a", "a1", 6, to.Add(2*time.Minute), false)  // carried no ledger
-	put("a", "a2", 1, to.Add(2*time.Minute), true)   // the node started again
+	put("a", "a2", 1, to.Add(2*time.Minute), true)   // the outpost started again
 	put("a", "a2", 2, to.Add(3*time.Minute), true)   // not that boot's first
-	put("b", "b1", 1, to.Add(time.Minute), true)     // a node with nothing in the window
+	put("b", "b1", 1, to.Add(time.Minute), true)     // an outpost with nothing in the window
 	put("c", "c1", 1, from.Add(30*time.Second), true)
 	return ctx, conn, from, to
 }
 
 // The delivery read returns, for each boot with a batch in the window, its
 // receipts from its first in the window on and its lower neighbor however
-// long before, and the first receipt of each later boot of the same nodes;
-// nothing of a node with nothing in the window, of an earlier boot, or
+// long before, and the first receipt of each later boot of the same outposts;
+// nothing of an outpost with nothing in the window, of an earlier boot, or
 // without a ledger.
 func TestIntegrationReceiptsQueryReadsTheWindowsBoots(t *testing.T) {
 	t.Parallel()
@@ -79,7 +79,7 @@ func TestIntegrationReceiptsQueryReadsTheWindowsBoots(t *testing.T) {
 	}
 	var got []string
 	for _, r := range rs {
-		got = append(got, fmt.Sprintf("%s/%s/%d", r.Node, r.Boot, r.Seq))
+		got = append(got, fmt.Sprintf("%s/%s/%d", r.Outpost, r.Boot, r.Seq))
 	}
 	want := []string{"a/a1/2", "a/a1/3", "a/a1/4", "a/a1/5", "a/a2/1", "c/c1/1"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {

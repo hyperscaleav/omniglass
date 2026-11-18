@@ -6,6 +6,7 @@ package scenario_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/lab"
@@ -74,5 +75,35 @@ func TestCorporateSmokeSizeSeedsEveryProduct(t *testing.T) {
 		if missing := at(n); len(missing) == 0 {
 			t.Errorf("corporate at %d seeds every product: the gap the smoke size clears closed, so revisit it", n)
 		}
+	}
+}
+
+// A manifest naming the retired per-room ucc-service profile is refused
+// (#1390): the lab's one UCC shape is the account-wide conduit, so a pusher
+// of the old profile reads as the profile it is not.
+func TestManifestRefusesTheRetiredUCCServiceProfile(t *testing.T) {
+	m, err := scenario.Shipped("corporate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := scenario.ShippedCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := scenario.Validate(m, cat); err != nil {
+		t.Fatalf("corporate does not validate as shipped: %v", err)
+	}
+	swapped := 0
+	for i := range m.Pushers {
+		if strings.HasPrefix(m.Pushers[i].Profile.Name, "ucc-") {
+			m.Pushers[i].Profile.Name = "ucc-service"
+			swapped++
+		}
+	}
+	if swapped == 0 {
+		t.Fatal("corporate declares no UCC pusher to swap")
+	}
+	if err := scenario.Validate(m, cat); err == nil {
+		t.Error("a pusher of the retired ucc-service profile validates, want it refused")
 	}
 }

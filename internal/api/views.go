@@ -56,13 +56,15 @@ type fleetLocationBody struct {
 
 type fleetViewOutput struct {
 	Body struct {
-		Locations []fleetLocationBody `json:"locations" doc:"Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than place without a second read"`
-		Systems   []fleetSystemBody   `json:"systems" doc:"Every system the caller may read, each carrying its dots"`
+		Locations  []fleetLocationBody `json:"locations" doc:"Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than location without a second read"`
+		Systems    []fleetSystemBody   `json:"systems" doc:"Every system the caller may read, each carrying its dots"`
+		OpenAlarms *int                `json:"open_alarms,omitempty" doc:"How many alarms are open (not cleared) on the components the caller may read, wherever they sit; absent without a component read, never zero"`
 	}
 }
 
 func toFleetViewOutput(v *storage.FleetView) *fleetViewOutput {
 	out := &fleetViewOutput{}
+	out.Body.OpenAlarms = v.OpenAlarms
 	out.Body.Locations = make([]fleetLocationBody, 0, len(v.Locations))
 	for i := range v.Locations {
 		l := &v.Locations[i]
@@ -144,7 +146,7 @@ type platformAlarmBody struct {
 }
 
 type platformKeyBody struct {
-	Name        string `json:"name" doc:"The metric type's name: the key a node's figures are indexed by"`
+	Name        string `json:"name" doc:"The metric type's name: the key an outpost's figures are indexed by"`
 	Label       string `json:"label" doc:"The metric type's label, the column header"`
 	Unit        string `json:"unit,omitempty" doc:"The metric type's unit, when it has one"`
 	Description string `json:"description,omitempty" doc:"The metric type's catalog description, the column's tooltip"`
@@ -161,15 +163,15 @@ type platformFigureBody struct {
 	ObservedAt time.Time `json:"observed_at" doc:"When the sample was taken"`
 }
 
-type platformNodeBody struct {
+type platformOutpostBody struct {
 	Name            string                        `json:"name"`
 	Label           string                        `json:"label"`
 	Enrolled        bool                          `json:"enrolled"`
-	LastHeartbeatAt *time.Time                    `json:"last_heartbeat_at,omitempty" doc:"The node's last heartbeat; absent when it has never sent one"`
-	Component       string                        `json:"component,omitempty" doc:"The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted"`
-	Verdict         string                        `json:"verdict,omitempty" doc:"The node's platform component verdict, which tones the row; absent without a fleet-wide component read"`
-	Figures         map[string]platformFigureBody `json:"figures,omitempty" doc:"The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read"`
-	Loss            *float64                      `json:"loss,omitempty" doc:"The share of what the node's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read"`
+	LastHeartbeatAt *time.Time                    `json:"last_heartbeat_at,omitempty" doc:"The outpost's last heartbeat; absent when it has never sent one"`
+	Component       string                        `json:"component,omitempty" doc:"The outpost's platform component uuid, where every figure has its history; absent for an outpost the boot has not yet adopted"`
+	Verdict         string                        `json:"verdict,omitempty" doc:"The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read"`
+	Figures         map[string]platformFigureBody `json:"figures,omitempty" doc:"The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read"`
+	Loss            *float64                      `json:"loss,omitempty" doc:"The share of what the outpost's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read"`
 }
 
 type platformPipelineFigureBody struct {
@@ -199,10 +201,10 @@ type platformPipelineComponentBody struct {
 }
 
 type platformPipelineHopBody struct {
-	ID             string                          `json:"id" enum:"schedule,sim,node,ingest" doc:"The hop's name, as the delivery model names it"`
+	ID             string                          `json:"id" enum:"schedule,sim,outpost,ingest" doc:"The hop's name, as the delivery model names it"`
 	Label          string                          `json:"label" doc:"The hop's title"`
 	Description    string                          `json:"description" doc:"What the hop does and what counts as out and as lost there"`
-	ComponentClass string                          `json:"component_class" enum:"node,server" doc:"Which platform components record the hop"`
+	ComponentClass string                          `json:"component_class" enum:"outpost,server" doc:"Which platform components record the hop"`
 	Keys           []string                        `json:"keys" doc:"The keys the hop's figures are read from, the same three on every hop"`
 	Kinds          []platformPipelineKindBody      `json:"kinds" doc:"The hop's figures per kind it carried, across its components; a kind it carried nothing of is absent"`
 	Total          platformPipelineSpanBody        `json:"total" doc:"The hop's figures, every kind summed"`
@@ -234,9 +236,9 @@ type platformViewOutput struct {
 		FiguresRead bool                  `json:"figures_read" doc:"True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported"`
 		System      *platformSystemBody   `json:"system,omitempty" doc:"The platform system and its verdict; absent without a fleet-wide system read"`
 		Servers     []platformServerBody  `json:"servers" doc:"Every server's platform component, the identity its boot wrote and its panels; empty without a fleet-wide component read"`
-		Groups      []platformGroupBody   `json:"groups" doc:"The node table's column groups, in order: the page renders these and has no key list of its own"`
-		Nodes       []platformNodeBody    `json:"nodes" doc:"One row per node, in name order"`
-		LossHops    []string              `json:"loss_hops" doc:"The hops a node's loss composes: the ones its own platform component records"`
+		Groups      []platformGroupBody   `json:"groups" doc:"The outpost table's column groups, in order: the page renders these and has no key list of its own"`
+		Outposts    []platformOutpostBody `json:"outposts" doc:"One row per outpost, in name order"`
+		LossHops    []string              `json:"loss_hops" doc:"The hops an outpost's loss composes: the ones its own platform component records"`
 		Pipeline    *platformPipelineBody `json:"pipeline,omitempty" doc:"Where work is lost: each hop's in, out and loss per kind, newest window and last hour, and the end to end. Absent without a fleet-wide component read"`
 	}
 }
@@ -347,9 +349,9 @@ func toPlatformViewOutput(v *storage.PlatformView, readAt time.Time, lab bool) *
 	if v.Pipeline != nil {
 		out.Body.Pipeline = toPlatformPipeline(v.Pipeline)
 	}
-	out.Body.Nodes = make([]platformNodeBody, 0, len(v.Nodes))
-	for _, n := range v.Nodes {
-		body := platformNodeBody{Name: n.Name, Label: n.Label, Enrolled: n.Enrolled, LastHeartbeatAt: n.LastHeartbeatAt}
+	out.Body.Outposts = make([]platformOutpostBody, 0, len(v.Outposts))
+	for _, n := range v.Outposts {
+		body := platformOutpostBody{Name: n.Name, Label: n.Label, Enrolled: n.Enrolled, LastHeartbeatAt: n.LastHeartbeatAt}
 		if n.ComponentID != nil {
 			body.Component = *n.ComponentID
 		}
@@ -363,7 +365,7 @@ func toPlatformViewOutput(v *storage.PlatformView, readAt time.Time, lab bool) *
 				body.Figures[k] = platformFigureBody{Value: f.Value, ObservedAt: f.ObservedAt}
 			}
 		}
-		out.Body.Nodes = append(out.Body.Nodes, body)
+		out.Body.Outposts = append(out.Body.Outposts, body)
 	}
 	return out
 }
@@ -375,7 +377,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log 
 		Method:      http.MethodGet,
 		Path:        "/views/fleet",
 		Summary:     "Read the whole in-scope fleet in one call",
-		Description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
+		Description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. The open_alarms count is the alarms open on the components the caller may read. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
 	}, "location", "read"), func(ctx context.Context, _ *struct{}) (*fleetViewOutput, error) {
 		// Three scopes, three permissions. Resolving them separately is what
 		// makes the tiers independent: Explore is a location-rooted surface,
@@ -400,14 +402,14 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway, log 
 		Method:      http.MethodGet,
 		Path:        "/views/platform",
 		Summary:     "Read Omniglass's own health in one call",
-		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.",
-	}, "node", "read"), func(ctx context.Context, _ *struct{}) (*platformViewOutput, error) {
+		Description: "Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.",
+	}, "outpost", "read"), func(ctx context.Context, _ *struct{}) (*platformViewOutput, error) {
 		v, err := gw.PlatformView(ctx,
-			a.scopeFor(ctx, "node", "read"),
+			a.scopeFor(ctx, "outpost", "read"),
 			a.scopeFor(ctx, "system", "read"),
 			a.scopeFor(ctx, "component", "read"),
 		)
-		if errors.Is(err, storage.ErrNodeForbidden) {
+		if errors.Is(err, storage.ErrOutpostForbidden) {
 			return nil, huma.Error403Forbidden("forbidden")
 		}
 		if err != nil {

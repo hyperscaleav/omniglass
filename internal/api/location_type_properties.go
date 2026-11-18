@@ -11,7 +11,7 @@ import (
 )
 
 // The location type declared-property contract: what a location type exposes, so
-// every location classified by it inherits the same set. The place-side mirror of
+// every location classified by it inherits the same set. The location-side mirror of
 // the product and standard contracts, and the same shape: a contract line only
 // names a catalog property and says how the type presents it (an optional
 // default, whether an instance must set it); data_type and validation stay in the
@@ -61,11 +61,11 @@ type setLocationTypePropertyInput struct {
 }
 
 // registerLocationTypePropertyRoutes wires the location type's declared-property
-// contract. The registry it hangs off is gated by location_type:*, so the
+// contract. The catalog it hangs off is gated by location_type:*, so the
 // contract keeps that permission story: the read rides the location_type:read
 // viewer floor, the writes sit at location_type:update / location_type:delete.
 // The writes do NOT consult the official flag (#703, ADR-0106): a contract line
-// is a row in its own table rather than a column of the registry row a fork
+// is a row in its own table rather than a column of the catalog row a fork
 // covers, and nothing seeds one, so every line in this table is an operator's
 // already. Refusing them on the four shipped types would have withdrawn the
 // contract editor for the types a fleet actually uses.
@@ -129,9 +129,9 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 // mapLocationTypePropertyErr translates the contract storage sentinels into HTTP
 // status, mirroring the product contract: a property the catalog does not know is
 // a 422 (the request names a property that does not exist), everything else falls
-// through to the shared type-registry mapping, of which these paths reach the
+// through to the shared type-catalog mapping, of which these paths reach the
 // not-found 404. They cannot reach its official read-only 422: the guard here is
-// requireRegistryRow, which asks whether the type EXISTS and never who owns it
+// requireCatalogRow, which asks whether the type EXISTS and never who owns it
 // (#703, ADR-0106).
 func mapLocationTypePropertyErr(err error) error {
 	if errors.Is(err, storage.ErrPropertyTypeNotFound) {

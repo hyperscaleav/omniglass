@@ -36,11 +36,23 @@ table.column references (against the generated schema facts), plus the badge-fen
 coverage check and the docs-command-and-flag guard in `internal/cli`. The semantic
 drift no lint can see gets the periodic `/docs-audit` pass (#429).
 
+A worked example of the rule: the collection page's per-transport probe table (each transport's
+rung, its `endpoint.params` and the samples its probe lands) is rendered from the transport registry
+and the probe keys through `cmd/seedgen`, `seed.json` and `SeededSet`, and a test in `internal/outpost`
+drives each built transport's probe and fails when what it lands differs from what its entry
+declares. A new transport's row, such as snmp's, appears with its registry entry and no doc edit.
+
 ## What "the docs" means here
 
 - **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
-  documents, and the current decisions. Each official term is defined once in the
-  [glossary](/architecture/glossary/) and not redefined in the leaves.
+  documents, and the current decisions. Each official term is defined once and not redefined in
+  the leaves. A word an operator or an admin reads (an entity, a nav label, a verdict) is a row
+  in `internal/vocab/terms.yaml`: its word and plural, a one-sentence definition, its API
+  collection, schema and permission noun, its nav entry, and any word it retired. `make gen`
+  renders the [glossary](/reference/glossary/) and the entity descriptions in the OpenAPI spec
+  from it, and the guards fail a new collection, nav entry or verdict that names no row, or a
+  retired word back in console strings or docs prose. Internal architecture terms stay in the
+  frozen [architecture glossary](/architecture/glossary/).
 - **Guides** (`/guides/`) are how-to pages for someone *using* the product, split by
   audience: the **operator guide** (running the fleet from the console and the CLI), the
   **admin guide** (managing accounts, access, audit, and config), and **deployment**
@@ -59,9 +71,16 @@ states its one-line justification in the PR body.
 
 ## Status moves with the code
 
-The architecture pages are written in the present tense as the **target design**, so build status is
+:::note[The site is being rebuilt]
+The docs site is being rebuilt by audience, section by section, in the vocabulary's words
+([ADR-2087.2](/architecture/decisions/#adr-20872-the-docs-site-is-rebuilt-by-audience-the-old-pages-leave-as-their-section-lands)). The rebuilt pages carry the status badges. The pages that predate
+the rebuild carry none: each stays the reference for its capability, kept true when a slice falsifies it,
+until its section is rebuilt and the section's PR deletes it. Git is their history.
+:::
+
+The rebuilt pages are written in the present tense as the **target design**, so build status is
 carried *alongside* the prose, not woven into it, and keeping it current is part of docs-with-everything.
-A slice that advances a page updates three surfaces in the **same PR**:
+A slice that advances a rebuilt page updates three surfaces in the **same PR**:
 
 - the page's **status badge** moves to its new floor (`Design` to `Partial` to `Built`), which the live
   grid on [implementation status](/architecture/status/) reads directly, so the grid never lies;
@@ -108,6 +127,13 @@ adding entries add two files.
   and the one landing second runs `make adr-renumber FROM=NNNN.2 TO=NNNN.3` (adding `FILE=` once both are
   in the tree), which renames its file and rewrites every reference across the docs, code comments, and
   skills.
+
+**Cite an ADR by the slug of its current title.** An ADR's heading id on the decision log is
+github-slugger's slug of its `title:`, so a link is `/architecture/decisions/#adr-NNNN-<title-slug>` (or
+`#adr-NNNN-...` from inside the log). Reword a title and every link that spelled the old one silently lands
+at the top of the page, so the docs build checks it: `docs/scripts/check-decision-anchors.mjs` runs after
+`astro build` and fails on any link into the log whose fragment is not a heading id on the built page.
+When you retitle an ADR, the build names the links to fix.
 
 The frontmatter is a small line grammar (a double-quoted or single-quoted string, a list of integers like
 `[1234]`, or a bare word), read identically by the docs build and by `internal/docslint`, which checks every
@@ -163,7 +189,7 @@ screenshots:
 
 That frontmatter is the **single source**: `make docs-shots` reads it from every page, drives
 the real console (the same binary an operator runs, never a mock, served by a throwaway lab with
-no node collecting, so the pages hold still; the capture hides the lab's banner), and writes
+no outpost collecting, so the pages hold still; the capture hides the lab's banner), and writes
 `public/screenshots/<id>.png`; the directive renders the figure from the same entry. So the
 capture list and the embed cannot drift, a `#id` with no frontmatter entry (or no captured
 image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.
@@ -177,13 +203,28 @@ regions a capture cannot render deterministically (a v7-uuid id subtext, a seed-
 timestamp, a history strip whose weights divide by the capture's own clock) are painted as
 constant boxes. `make docs-shots-check` recaptures and diffs **the baselines only**, at zero
 tolerance, the visual sibling of the `make gen` drift check: the pinned browser's masked
-rasters are byte-stable, so any diff is a real, un-recaptured UI change. The old percentage
-ceiling passed exactly the changes the gate exists to catch, a renamed label or a collapsed
-rail repainting fewer pixels than seed jitter (#398, #623). Two caveats: the comparison counts
-the pixels pixelmatch judges different at its default perceptual threshold, so a change
-confined to near-identical dark tones can still score zero (#774), and a real UI change that
-falls entirely inside a masked region is invisible to the gate, which is the price of masking
-and the reason a mask names the smallest box that holds still around what moves.
+rasters are byte-stable, so any diff is a real, un-recaptured UI change. The comparison is
+exact: byte-equal files pass, and otherwise every pixel is compared in every channel, so a
+change confined to near-identical dark tones fails too (#774). The old percentage ceiling
+passed exactly the changes the gate exists to catch, a renamed label or a collapsed rail
+repainting fewer pixels than seed jitter (#398, #623), and a perceptual threshold would have
+passed a surface token swap. One caveat: a real UI change that falls entirely inside a masked
+region is invisible to the gate, which is the price of masking and the reason a mask names the
+smallest box that holds still around what moves.
+
+Capture on a committed tree. The console shows the build id it was built from, and a dirty
+tree stamps a long `-dirty-<time>` id where CI's clean checkout stamps a bare commit, which
+wraps and changes the height of the platform cards, so every shot of that page shifts. Commit
+the code, run `make docs-shots`, then commit the PNGs, and `make docs-shots-check` passes on
+the clean tree that follows.
+
+CI's runner is the canonical raster. The pinned browser picks its rasterizer's SIMD path from
+the host CPU, so a host without AVX2 (a generic virtual CPU) rounds some gradient pixels one
+level off from CI: repeatable on that host, and visible to an exact comparison (five pixels of
+the users page's avatar gradient, #774). When the freshness job fails only by such a residue on
+a PR that changed no UI there, adopt the job's own recapture, which it publishes to the
+`ci/docs-shots-recapture` ref (`git fetch origin ci/docs-shots-recapture`), instead of
+loosening the comparison or masking the element.
 
 ### A mask covers a box that holds still, and says that it is there
 
@@ -227,7 +268,7 @@ the only correct answer when the enclosing cell holds something the shot exists 
 
 **Standing masks** cover console chrome that shows a count of the seed's rows, and need no
 frontmatter entry: the capture applies them to every shot wherever the element renders
-(`STANDING_MASKS` in `web/e2e/shotmasklib.mjs`). Today that is the Catalog subrail's per-registry
+(`STANDING_MASKS` in `web/e2e/shotmasklib.mjs`). Today that is the Catalog subrail's per-catalog
 counts (`data-testid="catalog-entry-count"`). A count is the seed's, not the page's, so a release
 that adds a driver or a type moves a digit on every page under the Catalog shell; without the
 standing mask each such PR failed the gate on a UI it never touched (#1482). Add a new count of
@@ -241,14 +282,12 @@ fill; they embed the clean render.
 
 Prove a mask holds by recapturing **with the clock moved**, never by capturing twice a few
 minutes apart: two captures in the same hour of the same day are structurally blind to exactly
-the jitter a mask exists to absorb. And prove it **exactly**: the gate's comparison counts the
-pixels pixelmatch judges different at threshold 0.1 (#774), which scores a mask edge moving one
-pixel over a dark surface as zero, so the gate alone passes a mask that moves. `DOCS_SHOTS_EXACT=1`
-compares every pixel instead:
+the jitter a mask exists to absorb. The gate's comparison is exact (#774), so a mask edge
+moving one pixel fails it and the proof is the gate itself with the clock moved:
 
 ```bash
-make docs-shots-check                                                # the gate
-DOCS_SHOTS_EXACT=1 DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check  # the proof: the clock moved, every pixel equal
+make docs-shots-check                                  # the gate
+DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check       # the proof: the clock moved, every pixel equal
 ```
 
 The contract (the page's declared mask paints a box the value cannot move, leaves what the shot
@@ -260,6 +299,16 @@ a varying value adds its case there. Every capture logs what each mask resolved 
 (`mask 59x td 190x37 <- text=/…/`, `mask  1x box 184x16 over span 157 <- [data-testid=blade-since]`),
 so a mask that lands on the wrong element shows up in the capture output rather than in a raster
 nobody diffs by hand: a selector mask whose box is as wide as its text is the tell.
+
+Both renders' `page.screenshot` calls (the clean shot in `docs-shots.mjs` and the baseline in
+`shootBaseline`) go through `withCaptureRetry`, because Chromium can drop a capture under runner
+load (`Protocol error (Page.captureScreenshot): Unable to capture screenshot`, #1177). That error
+comes from the browser, not the page: Chromium has already forced the page to redraw and retried
+its copy of the compositor surface five times before reporting it, so waiting on the page (a load
+state, a `requestAnimationFrame`) cannot prevent it. The capture is retried once, and only on that
+exact error, logging the failing call and the page's state (URL, `readyState`, viewport) so a
+recurrence shows in the capture output. Any other error and a second drop fail the capture.
+Playwright's own `retries` stays off, since it would also hide a real assertion flake.
 
 ## Every PR demos its feature
 
@@ -281,6 +330,20 @@ and stills come from the recording, copied into `docs/public/walkthroughs/<id>/`
 `make docs-walkthroughs`, so a re-recorded flow updates the docs by a copy, never by an edit, and
 the embed plays the video with controls. Writing,
 recording, reviewing and embedding one is [demos](/contributing/demos/#embed-a-walkthrough-in-the-docs).
+
+## Where committed images live
+
+A committed image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) belongs in one of a short list of
+homes, and a guard test in `internal/build` fails any other:
+
+- `docs/public/screenshots/`: the clean docs renders from `make docs-shots`.
+- `docs/screenshots/baseline/`: their masked twins, the diff baseline for `make docs-shots-check`.
+- `docs/public/walkthroughs/<id>/`: walkthrough stills copied by `make docs-walkthroughs`.
+- `docs/public/d2/`: D2 diagram renders (SVG, an image home all the same).
+- `.github/screenshots/<n>/`: PR evidence for PR `n`, including its `walkthroughs/` subtrees.
+- `internal/avatar/testdata/`: a test fixture the avatar renderer reads.
+
+A new home is a line in the guard's list with the reason it exists, plus a line here.
 
 ## Style
 

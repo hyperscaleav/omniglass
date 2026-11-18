@@ -1,4 +1,5 @@
 import { type Context, type JSX, createContext, createSignal, useContext } from "solid-js";
+import { describeError } from "./format";
 
 // The blade stack's shared state and cross-entity refs. A stack entry is a
 // { kind, id } ref (not a bare node id), so one stack can hold a user blade with
@@ -102,6 +103,15 @@ export type BladeEdit = {
   editable: () => boolean;
   editing: () => boolean;
   saving: () => boolean;
+  // Why the last save failed, in the operator's words, or null. Set when a save
+  // rejects (the slot stays editing), cleared by the next save, begin or cancel.
+  // The host shows it beside Save: a long form scrolled to its last section
+  // would otherwise show the spinner stopping and nothing else.
+  saveError: () => string | null;
+  // True while editing with drafts that differ from the row, from the bound
+  // `dirty`; a body that binds none is never dirty. A host asks it before
+  // dropping the drafts (leaving the tab).
+  dirty: () => boolean;
   // valid gates the footer Save: false disables it, so a body with a field that
   // fails inline validation cannot be committed. Defaults to always-valid.
   valid: () => boolean;
@@ -142,6 +152,8 @@ export type BladeEdit = {
   bind: (h: {
     editable?: () => boolean;
     valid?: () => boolean;
+    // Do the drafts differ from the row as it stands (see `dirty` above).
+    dirty?: () => boolean;
     save?: () => Promise<void>;
     cancel?: () => void;
     // Fill this body's draft signals from the row as it stands. Bound, the slot
@@ -159,10 +171,12 @@ export type BladeEdit = {
 export function createEditSlot(): BladeEdit {
   const [editing, setEditing] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
+  const [saveError, setSaveError] = createSignal<string | null>(null);
   const [bound, setBound] = createSignal(false);
   let handler: { save: () => Promise<void>; cancel: () => void } = { save: async () => {}, cancel: () => {} };
   let editablePred: () => boolean = () => false;
   let validPred: () => boolean = () => true;
+  let dirtyPred: () => boolean = () => false;
   let destructivePred: () => BladeDestructive | undefined = () => undefined;
   let secondaryPred: () => BladeSecondary[] = () => [];
   let primaryPred: () => BladePrimary | undefined = () => undefined;
@@ -176,23 +190,31 @@ export function createEditSlot(): BladeEdit {
     editing,
     saving,
     valid: () => validPred(),
+    saveError,
+    dirty: () => editing() && dirtyPred(),
     // Seed BEFORE the edit controls render, so they mount holding the row's
     // values rather than being filled a tick later.
     begin: () => {
+      setSaveError(null);
       seedFn();
       setEditing(true);
     },
     reseed: () => seedFn(),
     cancel: () => {
       handler.cancel();
+      setSaveError(null);
       setEditing(false);
     },
     save: async () => {
       setSaving(true);
+      setSaveError(null);
       try {
         for (const contribute of [...contributors]) await contribute();
         await handler.save();
         setEditing(false);
+      } catch (e) {
+        setSaveError(describeError(e));
+        throw e;
       } finally {
         setSaving(false);
       }
@@ -210,6 +232,7 @@ export function createEditSlot(): BladeEdit {
       // one that only registers a destructive / secondary action is not.
       editablePred = h.editable ?? (() => !!h.save);
       validPred = h.valid ?? (() => true);
+      dirtyPred = h.dirty ?? (() => false);
       handler = { save: h.save ?? (async () => {}), cancel: h.cancel ?? (() => {}) };
       destructivePred = h.destructive ?? (() => undefined);
       secondaryPred = h.secondary ?? (() => []);

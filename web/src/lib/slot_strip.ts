@@ -1,25 +1,25 @@
 // The system card's slot strip (#630 design fidelity): one square per slot
-// the standard wants filled, computed over the ACTIVE roles' quorum from the
+// the standard wants filled, computed over the ACTIVE slots' quorum from the
 // health read. A filled square carries its occupant's state, an empty one is
 // outlined. The gap line beneath uses the design's own words. Pure, and no
 // verdict is computed: filled/down/empty are the server's assigned and down
 // lists read back.
 
 import type { FleetHealth } from "./health";
-import { activeRoles } from "./health";
+import { activeSlots } from "./health";
 
-export type SlotSquare = { kind: "filled" | "down" | "empty"; role: string; occupant?: string };
+export type SlotSquare = { kind: "filled" | "down" | "empty"; slot: string; occupant?: string };
 
 export type SlotStrip = { squares: SlotSquare[]; filled: number; total: number; down: number; empty: number; note: string };
 
 export function slotStrip(health: FleetHealth): SlotStrip {
   const squares: SlotSquare[] = [];
-  for (const r of activeRoles(health)) {
+  for (const r of activeSlots(health)) {
     const assigned = r.assigned_to ?? [];
     const downSet = new Set(r.down ?? []);
     // Occupants first (each a slot), then the remaining quorum as empty.
-    for (const name of assigned) squares.push({ kind: downSet.has(name) ? "down" : "filled", role: r.name, occupant: name });
-    for (let i = assigned.length; i < r.quorum; i++) squares.push({ kind: "empty", role: r.name });
+    for (const name of assigned) squares.push({ kind: downSet.has(name) ? "down" : "filled", slot: r.name, occupant: name });
+    for (let i = assigned.length; i < r.quorum; i++) squares.push({ kind: "empty", slot: r.name });
   }
   const filled = squares.filter((s) => s.kind === "filled").length;
   const down = squares.filter((s) => s.kind === "down").length;

@@ -1,10 +1,6 @@
 ---
 title: Views
 description: "The read side: a view is a named, parameterized, scope-checked query returning a uniform ViewResult, the backend-for-frontend every read goes through."
-sidebar:
-  badge:
-    text: Design
-    variant: caution
 ---
 
 ::::design[Target design: the ViewResult contract, tracked in #523]
@@ -12,7 +8,7 @@ sidebar:
 :::caution[Design: the ViewResult contract is entirely unbuilt]
 The framework on this page is not built: there is no `view` table, no `ViewResult` shape, no
 `/views/{id}:run` route, and no renderer library. Today's read side is typed CRUD `GET`s plus six
-hand-written composed reads (reachability, events, the component and node log
+hand-written composed reads (reachability, events, the component and outpost log
 reads, the fleet projection at `GET /views/fleet`, the first route actually served under
 `/views/`, and the platform projection at `GET /views/platform`, the second, behind
 [Platform health](/guides/operator/platform-health/), with its closed-loop read at
@@ -46,7 +42,7 @@ and the `official` boolean:
   view rather than a bespoke route, the same view backing a dashboard widget unchanged.
 - **Private views** are operator-saved **structured** queries (filter + order + fields + params),
   **never raw SQL**, following the official / private
-  [namespace shadow](/architecture/properties/#key-scope-org-and-official) like the registries.
+  [namespace shadow](/architecture/properties/#key-scope-org-and-official) like the catalogs.
 - **Parameterized**: typed params bound at run time at `/views/{id}:run?param=`; an undeclared or
   missing-required param is a clean 400.
 

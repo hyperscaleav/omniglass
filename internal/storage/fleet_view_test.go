@@ -25,10 +25,10 @@ import (
 //	depot (building)                    > depot-r1 (room) -> depot-huddle, shared occupant
 //
 // Two roots, three hops deep against two, and no level in common below the
-// root: the seeded type registry allows a building at root, which is what lets
+// root: the seeded type catalog allows a building at root, which is what lets
 // the fixture prove the canvas needs no fixed campus/building/floor/room ladder.
 //
-// bar-1 fills a role in hq-huddle and is ALSO a member of depot-huddle, which
+// bar-1 fills a slot in hq-huddle and is ALSO a member of depot-huddle, which
 // is what the shared-dot rules are read against.
 type fleetFixture struct {
 	gw  *storage.PG
@@ -75,18 +75,18 @@ func newFleetFixture(t *testing.T) *fleetFixture {
 			t.Fatalf("create system %s: %v", s.name, err)
 		}
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "fleet-huddle", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemSlot(ctx, "", "standard", "fleet-huddle", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
-		t.Fatalf("declare role: %v", err)
+		t.Fatalf("declare slot: %v", err)
 	}
 
 	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
+	if err := gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	// The same physical box also serves the depot room. This is the case the dot
@@ -237,19 +237,19 @@ func TestFleetProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
 }
 
 // Scope decides what exists, per tier, in the query rather than after it. A
-// principal who can read no location sees an empty canvas, which is not an
+// user who can read no location sees an empty canvas, which is not an
 // error: there is simply nothing of theirs to draw.
 func TestFleetProjectionIsEmptyWithoutScopeRatherThanFailing(t *testing.T) {
 	t.Parallel()
 	f := newFleetFixture(t)
 	v := f.project(t, scope.Set{}, scope.Set{}, scope.Set{})
 	if len(v.Locations) != 0 || len(v.Systems) != 0 {
-		t.Fatalf("an unscoped principal must get an empty canvas, got %d locations and %d systems",
+		t.Fatalf("an unscoped user must get an empty canvas, got %d locations and %d systems",
 			len(v.Locations), len(v.Systems))
 	}
 }
 
-// The three tiers are scoped independently, which is what lets a principal who
+// The three tiers are scoped independently, which is what lets a user who
 // may read the place tree but not its components see the shape of their fleet
 // without its contents.
 func TestFleetProjectionScopesEachTierOnItsOwn(t *testing.T) {
@@ -322,5 +322,50 @@ func TestFleetProjectionVerdictLookupsAreIndexed(t *testing.T) {
 			t.Errorf("the %s verdict subquery does not reach for %s, so it would scan the telemetry lane once per row.\nplan:\n%s",
 				tc.table, tc.index, plan)
 		}
+	}
+}
+
+// The Home tile reads one fleet-wide number: the alarms open on the components
+// the caller may read. A cleared alarm is history, not open, and a caller with
+// no component read gets no number at all (nil), never a zero that reads as
+// "nothing is wrong".
+func TestFleetProjectionCountsTheOpenAlarmsInComponentScope(t *testing.T) {
+	t.Parallel()
+	f := newFleetFixture(t)
+	ctx := context.Background()
+
+	prod := storagetest.MintProduct(t, ctx, f.gw, "video-bar").Name
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &prod}, f.all, f.all, f.all, f.all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	raise := func(comp, key string) string {
+		t.Helper()
+		a, err := f.gw.RaiseAlarm(ctx, "", comp, storage.AlarmSpec{Severity: "high", Message: key, DedupKey: key})
+		if err != nil {
+			t.Fatalf("raise %s on %s: %v", key, comp, err)
+		}
+		return a.ID
+	}
+	raise("bar-1", "no-signal")
+	cleared := raise("bar-1", "fan")
+	raise("bar-2", "no-signal")
+	if err := f.gw.ClearAlarm(ctx, "", "bar-1", cleared); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+
+	got := func(comp scope.Set) *int { return f.project(t, f.all, f.all, comp).OpenAlarms }
+
+	if n := got(f.all); n == nil || *n != 2 {
+		t.Errorf("open alarms in full scope = %v, want 2 (the cleared one is history)", n)
+	}
+	if n := got(scope.Set{}); n != nil {
+		t.Errorf("open alarms with no component read = %d, want nil: absent, never zero", *n)
+	}
+	bar2, err := f.gw.GetComponent(ctx, "bar-2", f.all)
+	if err != nil {
+		t.Fatalf("get bar-2: %v", err)
+	}
+	if n := got(scope.Set{IDs: []string{bar2.ID}}); n == nil || *n != 1 {
+		t.Errorf("open alarms scoped to bar-2 = %v, want 1: bar-1's alarm is out of scope", n)
 	}
 }

@@ -11,7 +11,7 @@ import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import ContractEditor from "../components/ContractEditor";
-import RoleEditor from "../components/RoleEditor";
+import SlotEditor from "../components/SlotEditor";
 import { Plus } from "../components/icons";
 import TemplateCreate, { CreateModeChoice, useTemplateChoice } from "../components/TemplateCreate";
 import {
@@ -23,12 +23,12 @@ import {
   deleteStandard,
 } from "../lib/standards";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
-import { byLabel, createIdentity, entityLabel } from "../lib/entities";
+import { catalogLock } from "../lib/catalog";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// Standards: the catalog of blueprints a system conforms to ("Meeting room",
+// Standards: the catalog of contracts a system is built to ("Meeting room",
 // "Huddle space"), on the flat FlatList surface beside Products. A standard is the
 // system-side counterpart of a product: it is addressed by its kebab name
 // (ADR-0062: the uuid is identity, the name is what an operator reads and
@@ -38,7 +38,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // the Edit / Delete pair greys, and the contract is read-only.
 //
 // A standard lives here rather than as a Types tab because it is no longer a bare
-// classifier registry row: it carries a contract and its own authorization
+// classifier catalog row: it carries a contract and its own authorization
 // resource (standard:*), exactly like a product.
 
 function officialBadge(official: boolean): JSX.Element {
@@ -62,9 +62,7 @@ export default function Standards() {
   const [params] = useSearchParams();
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
-  const rows = createMemo(() =>
-    [...(standards.data ?? [])].sort(byLabel),
-  );
+  const rows = createMemo(() => standards.data ?? []);
   // ?open=<name> opens a standard's blade: a standard created from a template lands here
   // (#1329), its ?from= carried to the notice above the list.
   const openId = () => {
@@ -175,7 +173,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "standard", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeStandard }
         : undefined,
-    locked: () => registryLock(row(), me.data, "standard"),
+    locked: () => catalogLock(row(), me.data, "standard"),
   });
 
   return (
@@ -206,7 +204,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
           </BladeField>
           <ContractEditor classifier="standard" id={r().name} official={r().official} />
           <ContractEditor classifier="standard" lane="metric" id={r().name} official={r().official} />
-          <RoleEditor id={r().id} official={r().official} />
+          <SlotEditor id={r().id} official={r().official} />
         </div>
       )}
     </Show>
@@ -288,17 +286,15 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
   );
 }
 
-// ParentStandardSelect: the variant-parent picker over the standard registry, with
+// ParentStandardSelect: the variant-parent picker over the standard catalog, with
 // a "None" option. `exclude` drops the standard being edited, so a row cannot be
 // made a variant of itself.
 function ParentStandardSelect(p: { value: string; exclude?: string; onChange: (v: string) => void }): JSX.Element {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const options = createMemo(() =>
-    [...(standards.data ?? [])]
-      .filter((s) => s.name !== p.exclude)
-      .sort(byLabel),
+    (standards.data ?? []).filter((s) => s.name !== p.exclude),
   );
-  // Bound through the shared binder, not value=: the registry can answer after
+  // Bound through the shared binder, not value=: the catalog can answer after
   // the edit face is on screen, and a <select> keeps no value it has no option
   // for (lib/selectvalue.ts, #772).
   return (

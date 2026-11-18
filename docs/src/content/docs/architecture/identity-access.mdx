@@ -1,10 +1,6 @@
 ---
 title: Identity and access
-description: How principals authenticate, how grants combine roles with scopes, and how the app enforces capability at the route and ABAC scope in the Storage Gateway.
-sidebar:
-  badge:
-    text: Partial
-    variant: note
+description: How users authenticate, how grants combine roles with scopes, and how the app enforces capability at the route and ABAC scope in the Storage Gateway.
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -13,31 +9,31 @@ import SeededSet from '../../../components/SeededSet.astro';
 Identity and access controls who may call the platform and which slice of the fleet each caller sees and acts on, enforced entirely in the app so "forgot to filter" cannot happen: the capability check (`<resource>:<action>`) runs as **API route middleware** before the handler, and the **ABAC scope** filter is injected by the **Storage Gateway**, the only path to the database. Scope is built on the cascade's groups ([cascade](/architecture/cascade/)).
 
 :::note[Partial: what is built, and where it diverges]
-Built and tested today: the `principal` (+ per-kind `human` / `service`) and `credential` tables, the
-`role` / `principal_grant` model, the `audit_log`, the capability fast-reject, **local password auth
+Built and tested today: the `users` (+ per-kind `person` / `machine`) and `credential` tables, the
+`role` / `user_grant` model, the `audit_log`, the capability fast-reject, **local password auth
 (argon2id) behind an httpOnly session cookie** (`POST /auth/login`, `/auth/logout`, the public
 `GET /auth/status`), self-service `GET` / `PATCH /auth/me` and `POST /auth/me:changePassword`,
 **session list and revoke** (`GET /auth/me/sessions`, `POST /auth/me/sessions/{id}:revoke`), admin
-**session management** (`GET /principals/{id}/sessions`,
-`POST /principals/{id}/sessions/{sid}:revoke`, gated `principal:revoke-session`), the admin
-**principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
-(`POST /principals`) and **update** (`PATCH /principals/{id}`: label, email, username), the
-admin **password reset** (`POST /principals/{id}:resetPassword`, gated `principal:reset-password`:
+**session management** (`GET /users/{id}/sessions`,
+`POST /users/{id}/sessions/{sid}:revoke`, gated `user:revoke-session`), the admin
+**user directory** (`GET /users`, `GET /users/{id}`), person **create**
+(`POST /users`) and **update** (`PATCH /users/{id}`: label, email, username), the
+admin **password reset** (`POST /users/{id}:resetPassword`, gated `user:reset-password`:
 policy-enforced, no current password, audited as the admin, refused on self, behind the **takeover
 guard**; **force-logout** revokes every target **session** while API **tokens** survive (a token is
 its own bearer secret, not password-tied; a self-service change instead revokes the caller's other
 sessions, keeping the current one); **force-change-on-next-login** sets
-`human.must_change_password`, the `authn` choke point 403ing **every** route until the change except
-reading the caller's own principal and the change itself), **role assignment**
-(`POST /principals/{id}/grants` / `DELETE /principals/{id}/grants/{grantId}`) with the
-**owner-invariant trigger**, the **principal lifecycle** (reversible
-`POST /principals/{id}:disable` / `:enable`; `:archive` / `:restore`, a soft delete hiding the
+`person.must_change_password`, the `authn` choke point 403ing **every** route until the change except
+reading the caller's own user and the change itself), **granting roles**
+(`POST /users/{id}/grants` / `DELETE /users/{id}/grants/{grantId}`) with the
+**owner-invariant trigger**, the **user lifecycle** (reversible
+`POST /users/{id}:disable` / `:enable`; `:archive` / `:restore`, a soft delete hiding the
 account and blocking authentication; `:purge`, an irreversible hard delete gated on prior archival
-and the admin-sensitive `principal:purge:admin`; disabling or archiving the last active owner is
+and the admin-sensitive `user:purge:admin`; disabling or archiving the last active owner is
 refused; a purge preserves the audit trail by denormalizing the actor's identifier into each row, the
 audit foreign keys going `ON DELETE SET NULL`), the per-action `visible_set` resolver enforced in
-the Storage Gateway across locations, systems, and components, **principal groups** (the
-`/principal-groups` family: CRUD, membership, and group grants, gated `principal_group`), members
+the Storage Gateway across locations, systems, and components, **user groups** (the
+`/user-groups` family: CRUD, membership, and group grants, gated `user_group`), members
 **inheriting** group grants through the grant-loader union, and **profile pictures**
 ([below](#profile-pictures)). Session surfaces and their takeover guard:
 [the /auth/me contract](#the-authme-contract); the per-slice breakdown:
@@ -47,7 +43,7 @@ Where the build differs from the present-tense design below (each logged in the
 [decision log](/architecture/decisions/)):
 
 - **`credential.kind` is `bearer` or `password`** (argon2id, PHC-encoded, one password per
-  principal); the `oidc` / `nats` methods and the full `(method, identifier)` lookup are deferred.
+  user); the `oidc` / `nats` methods and the full `(method, identifier)` lookup are deferred.
   The minted bearer token prefix is `ogp_`.
 - **Every credential is time-bounded** ([ADR-0019](/architecture/decisions/#adr-0019-every-credential-is-time-bounded-token-purpose-not-expiry-shape),
   reversing tokens-never-expire), the lifetimes in the table below (the session cookie's `Max-Age`
@@ -63,16 +59,16 @@ Where the build differs from the present-tense design below (each logged in the
   | web-login session | `session` | 12h absolute (fixed) |
   | CLI/API token (`omniglass token`) | `token` | 90d default, `--ttl` up to 365d max |
   | bootstrap token (`omniglass bootstrap`) | `token` | 90d default, `--ttl` up to 365d max |
-- **Failed logins lock the account.** `human.failed_login_count` counts consecutive misses; the 5th
-  sets `human.locked_until` 15 minutes out, inside which `AuthenticatePassword` refuses every attempt
+- **Failed logins lock the account.** `person.failed_login_count` counts consecutive misses; the 5th
+  sets `person.locked_until` 15 minutes out, inside which `AuthenticatePassword` refuses every attempt
   (even the correct password) with the **same generic 401** as a bad credential, so the lock is no
   enumeration oracle; only the audit (`login_locked`) records it. The lock decision runs **after** the
   argon2 verify (not a faster probe), a correct password below the threshold clears the counter, and
-  **rotating the password clears the lock** (`SetPrincipalPassword` and `SetPassword` zero the counter
+  **rotating the password clears the lock** (`SetUserPassword` and `SetPassword` zero the counter
   in the same transaction as the new secret). Threshold and window are fixed; per-IP throttling and a
   configurable policy are later refinements.
 - **A password policy gates the API password surfaces.** One pure validator (`auth.ValidatePassword`)
-  runs on `POST /principals` and `POST /auth/me:changePassword`: **at least 12 characters, not on a
+  runs on `POST /users` and `POST /auth/me:changePassword`: **at least 12 characters, not on a
   common-password denylist, and not containing the username**; no composition rules (NIST 800-63B).
   The API maps a violation to 422; the console mirrors the length and username rules inline and
   offers a crypto-strong **Generate**, the denylist staying server-side. The **direct-DB break-glass
@@ -85,8 +81,15 @@ Where the build differs from the present-tense design below (each logged in the
 - **The `iam` command namespace is not built.** Owner creation is `omniglass bootstrap <username>
   [--password <pw>]` ([Bootstrap](#bootstrap)); the broader `iam` admin CLI is deferred with the
   admin user surface.
-- **The `agent` principal kind** is reserved in the schema's `kind` CHECK, but no `agent` identity
-  is issued yet (AI still acts as a `human` or `service`).
+- **The `agent` user kind** is reserved in the schema's `kind` CHECK, but no `agent` identity
+  is issued: an AI acts through an [agent token](#agent-tokens) on a person's credential. Built: the
+  mint, the intersection, the plaintext ceiling, `secret:bind`, the channel allowlist and the audit `agent` column.
+  OAuth 2.1 sign-in for MCP clients ([below](#mcp-clients-sign-in-with-oauth-21)) is built, refresh tokens
+  and client metadata documents included.
+  Omnibot's marking is built: its runs mint an agent token held to the `omnibot` channel, which stamps
+  `channel = 'omnibot'` on its rows ([#1166](https://github.com/hyperscaleav/omniglass/issues/1166)).
+  Not built yet: narrowing an agent token to a location and the console's agent fields
+  ([#1179](https://github.com/hyperscaleav/omniglass/issues/1179)).
 - **The required permission is published per route in the OpenAPI spec**
   ([below](#the-permission-universe-published-per-route)), the **Roles view** reporting the
   universe as a **net** view. Two build-time guards keep it honest: the published-gate guard (every
@@ -96,34 +99,33 @@ Where the build differs from the present-tense design below (each logged in the
 
 ## The model in one breath
 
-A **principal** is the polymorphic subject of authN/authZ; identity is its opaque uuid, never an email or name. Each principal has one or more **credentials** and zero or more **grants**, each a `(role x scope)` pair: the role contributes the verbs, the scope the entities, **additive** across grants.
+A **user** is the polymorphic subject of authN/authZ; identity is its opaque uuid, never an email or name. Each user has one or more **credentials** and zero or more **grants**, each a `(role x scope)` pair: the role contributes the verbs, the scope the entities, **additive** across grants.
 
-## Principal kinds
+## User kinds
 
-A principal carries a `kind`: authN methods and per-kind domain attributes differ, the role machinery does not.
+A user carries a `kind`: authN methods and per-kind domain attributes differ, the role machinery does not. A user is a **person** or a **machine user** ([ADR-2036](/architecture/decisions/#adr-2036-the-iam-subject-is-a-user-a-person-or-a-machine)), and the wire spells those kinds `person` and `machine`. An outpost is a machine user whose detail lives on its `outpost` row rather than a `machine` row.
 
 | kind | what it represents | authN |
 |---|---|---|
-| `human` | a person | local password + session, OIDC, SAML |
-| `service` | scripts, integrations, SDKs, bots | bearer token |
-| `node` | the edge daemon running in the field | NATS JWT/nkey credential |
+| `person` | a person | local password + session, OIDC, SAML |
+| `machine` | scripts, integrations, SDKs, bots, and the outpost (the edge daemon running in the field) | bearer token; an outpost a NATS JWT/nkey credential |
 
-**AI acts as a user** (a first-class `agent` principal is deferred): an AI tool authenticates with a **bearer token as a `human` or `service` principal** and acts with exactly that principal's grants, a scoped, audited user ([AI](/architecture/ai/)). Through the [MCP server](/architecture/api/#also-an-mcp-surface) the token is the whole authority: the `/mcp` endpoint admits a request only when the API accepts its bearer token (a session cookie is never consulted), every tool call runs its route with that token, so the route's permission and the Storage Gateway's scope apply unchanged, and there is no `mcp:*` permission. Expiry, revocation and impersonation behave as on every route: a token revoked mid-session fails its next call, an act-as token's writes record the real actor, and a view-as token writes nothing ([ADR-1162](/architecture/decisions/#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token)).
+**AI acts as a user** (a first-class `agent` user is deferred): an AI tool authenticates with a **bearer token as a person or a machine user**, ideally an [agent token](#agent-tokens) that person minted for it, and acts with at most that user's grants, a scoped, audited user ([AI](/architecture/ai/)). Through the [MCP server](/architecture/api/#also-an-mcp-surface) the token is the whole authority: the `/mcp` endpoint admits a request only when the API accepts its bearer token (a session cookie is never consulted), every tool call runs its route with that token, so the route's permission and the Storage Gateway's scope apply unchanged, and there is no `mcp:*` permission. Expiry, revocation and impersonation behave as on every route: a token revoked mid-session fails its next call, an act-as token's writes record the real actor, and a view-as token writes nothing ([ADR-1162](/architecture/decisions/#adr-1162-the-mcp-server-is-a-generated-client-of-the-operations-stamped-for-it-run-as-the-callers-token)).
 
-Each kind gets a **1:1 per-kind table** linked by `principal_id` (`human`, `service`, `node`); the base `principal` table holds identity + kind only, the per-kind tables the rest, including the kind's own identifier: a human's `username`, a service account's `name`, a node's `name`. Each of the three is unique, because each is the only handle its principal has and each is denormalized as bare text into the audit trail ([ADR-0111](/architecture/decisions/#adr-0111-a-service-accounts-identifier-is-a-name-and-it-is-unique)).
+Each kind gets a **1:1 per-kind table** linked by `user_id` (`person`, `machine`, or an outpost's `outpost` row); the base `users` table holds identity + kind only, the per-kind tables the rest, including the kind's own identifier: a person's `username`, a machine user's `name`, an outpost's `name`. Each of the three is unique, because each is the only handle its user has and each is denormalized as bare text into the audit trail ([ADR-0111](/architecture/decisions/#adr-0111-a-service-accounts-identifier-is-a-name-and-it-is-unique)).
 
 ## Credentials
 
-One `credential` row per authN method per principal; a principal can hold many. `(method, identifier)` is the lookup key.
+One `credential` row per authN method per user; a user can hold many. `(method, identifier)` is the lookup key.
 
 | method | identifier | secret_hash | who uses it |
 |---|---|---|---|
-| `password` | `principal.id` (uuid) | argon2id of the password | humans |
-| `oidc` | `iss\|sub` (issuer + subject) | null (IdP verifies) | humans |
-| `token` | `sha256(token)` | null (identifier IS the verifier) | service |
-| `nats` | nkey public key | null (NATS verifies the signed nonce) | nodes |
+| `password` | `users.id` (uuid) | argon2id of the password | persons |
+| `oidc` | `iss\|sub` (issuer + subject) | null (IdP verifies) | persons |
+| `token` | `sha256(token)` | null (identifier IS the verifier) | machine users |
+| `nats` | nkey public key | null (NATS verifies the signed nonce) | outposts |
 
-The password identifier is the `principal.id` (not the username), so a username change does not invalidate the credential. Service bearer tokens are `ogp_<locator>_<secret>`: a prefix for secret-scanners, a 4-byte non-secret locator (stored, so a token can be named without its secret), and a 24-byte (192-bit) `crypto/rand` secret; the server stores only `sha256(token)`, cleartext returned once at mint. A `node` enrolls with a per-tenant **NATS JWT/nkey**, the JWT carrying the node's placement-derived `visible_set` as subject permissions ([The node path](#the-node-path)).
+The password identifier is the `users.id` (not the username), so a username change does not invalidate the credential. Service bearer tokens are `ogp_<locator>_<secret>`: a prefix for secret-scanners, a 4-byte non-secret locator (stored, so a token can be named without its secret), and a 24-byte (192-bit) `crypto/rand` secret; the server stores only `sha256(token)`, cleartext returned once at mint. An `outpost` enrolls with a per-tenant **NATS JWT/nkey**, the JWT carrying the outpost's placement-derived `visible_set` as subject permissions ([The outpost path](#the-outpost-path)).
 
 :::caution[Open question]
 OIDC delegates MFA to the IdP; whether to add a local-account TOTP path for installs not on OIDC is
@@ -132,21 +134,21 @@ undecided.
 
 ## Subjects
 
-`human`, `service`, `node`, and **`principal_group`s**. Roles attach regardless of kind; the same `principal_grant` rows mean the same thing for each.
+Persons, machine users (outposts among them), and **`user_group`s**. Roles attach regardless of kind; the same `user_grant` rows mean the same thing for each.
 
 ## Group kinds
 
 The `group` membership mechanism (static list or dynamic filter) is shared across kinds, but the kinds are kept **distinct** (not one polymorphic primitive yet):
 
 - **`component` / `system` / `location` groups** are **entity-groups**: they carry config bindings (the cascade) and serve as ABAC **scopes**.
-- **`principal_group`** is a collection of principals (SCIM-synced or local): a grant **subject**, carrying no config. Members can be any principal kind, in practice humans synced from the IdP. A grant attaches through the same `principal_grant` table and every member **inherits** it (the grant loader unions group grants with direct grants, so an inherited grant resolves identically). Membership is static and flat (no nesting) in the first cut; a group grant is bounded by the same escalation cover-check as a direct one.
+- **`user_group`** is a collection of users (SCIM-synced or local): a grant **subject**, carrying no config. Members can be any user kind, in practice persons synced from the IdP. A grant attaches through the same `user_grant` table and every member **inherits** it (the grant loader unions group grants with direct grants, so an inherited grant resolves identically). Membership is static and flat (no nesting) in the first cut; a group grant is bounded by the same escalation cover-check as a direct one. A grant inherited from a group names its source by the identity triad: `group` (the group's name, which `/user-groups/{group}` takes), `group_id`, and `group_label` (the friendly string, absent when the group has none).
 
-So `group` appears on **both sides of authZ**: `principal_group`s as subjects, entity-groups as object scopes.
+So `group` appears on **both sides of authZ**: `user_group`s as subjects, entity-groups as object scopes.
 
 ### People as notification audiences
 
-A `principal_group` is also an **audience**: a notification target can name a group or one person, and
-an alarm transition tells its human members in their console inbox (#1341,
+A `user_group` is also an **audience**: a notification target can name a group or one person, and
+an alarm transition tells its members who are persons in their console inbox (#1341,
 [alarms and actions](/architecture/alarms-actions/#people-group-and-person-targets-and-the-inbox)). The
 ABAC invariant holds for what a person is told, not only for what they query: each member is told
 only when **their own** component read scope admits the alarm's component, judged at the transition
@@ -155,8 +157,8 @@ inbox read is scoped by the reader's scope as it stands, so a revoked grant empt
 ([ADR-1341](/architecture/decisions/#adr-1341-a-person-is-told-about-an-alarm-only-while-they-can-read-it-groups-expand-at-queue-time-scope-is-checked-there-and-again-at-delivery)).
 Membership is read at the transition, so a group change takes effect on the next alarm. Because the
 directory is admin-tier, two things follow from it: binding a group or a person to a target takes
-`principal_group:read:admin` or `principal:read:admin`, and a person-addressed row names its recipient
-only to that person and to `principal:read:admin` holders; others see the row with the name withheld.
+`user_group:read:admin` or `user:read:admin`, and a person-addressed row names its recipient
+only to that person and to `user:read:admin` holders; others see the row with the name withheld.
 
 A person subscribes **themselves** with a personal action rule, under `notification:subscribe`, which
 `viewer` carries explicitly (its floor is `*:read`), so every person who can see alarms can subscribe
@@ -171,16 +173,17 @@ converges.
 
 ## Roles and the role hierarchy
 
-:::note[One word, two models]
-A **role** on this page is an IAM role: a capability set granted to a principal, in the `role` table, on the
-`/roles` routes. A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)**
-is a slot a system needs filled, in `system_role`, on the `/standards/{id}/roles` and `/systems/{name}/roles`
-routes. They are separate namespaces with no crossing, which is why the fleet-side storage methods are
-named `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole` rather than colliding with `ListRoles` /
-`UpsertRole`.
+:::note[Role is IAM's word]
+A **role** on this page is an IAM role: a capability set granted to a user, in the `role` table, on the
+`/roles` routes. A place a system needs filled is a
+**[system slot](/architecture/core-entities/#system-slots-what-a-system-needs-filled)**, in `system_slot`, on
+the `/standards/{id}/slots` and `/systems/{name}/slots` routes, with storage methods `ListSystemSlots` /
+`SetSystemSlot` / `DeleteSystemSlot`. It was also called a role until
+[ADR-2032](/architecture/decisions/#adr-2032-role-is-iams-what-a-system-needs-filled-is-a-system-slot); the
+word now means only the IAM role.
 :::
 
-A role is a **capability set**: permissions per `(resource, action)`, in a `role` table with a uuid `id`, a renameable `name` unique within its namespace ([ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key): `og` for the shipped roles), and an **`official` boolean**: `official: true` ships with the binary, seeded via the boot phase (`ON CONFLICT DO UPDATE` can patch a default permission on release); `official: false` is operator-created via the IAM API. **No overrides**: the create paths refuse a collision with an official name and the seed phase never writes an operator's role, diverging from the shadowable registries (role override risks lockout with no compensating use case): a role name both the operator's `local` and the shipped `og` namespace hold reaches neither (#1432, fail closed), so its holders lose that role rather than gain the wrong one, and a grant naming it is refused as an unknown role (422).
+A role is a **capability set**: permissions per `(resource, action)`, in a `role` table with a uuid `id`, a renameable `name` unique within its namespace ([ADR-0318](/architecture/decisions/#adr-0318-every-catalog-key-is-a-namespace-and-a-key): `og` for the shipped roles), and an **`official` boolean**: `official: true` ships with the binary, seeded via the boot phase (`ON CONFLICT DO UPDATE` can patch a default permission on release); `official: false` is operator-created via the IAM API. **No overrides**: the create paths refuse a collision with an official name and the seed phase never writes an operator's role, diverging from the shadowable catalogs (role override risks lockout with no compensating use case): a role name both the operator's `local` and the shipped `og` namespace hold reaches neither (#1432, fail closed), so its holders lose that role rather than gain the wrong one, and a grant naming it is refused as an unknown role (422).
 
 ### The five official roles
 
@@ -192,10 +195,10 @@ Each role carries a `label` and a `description` (surfaced in the Roles view and 
 
 What the permission strings above do not say, per role:
 
-- **`viewer`** reads every operator-facing resource in scope, and two families are deliberately not operator-facing. The IAM directories (`principal`, `role`, `principal_group`) read at the admin tier (`<resource>:read:admin`), which a two-token `*:read` structurally cannot reach, so the Users, Roles and Groups pages stay closed to it ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)). `secret` is a **sensitive resource** a bare `*` does not reach at all, so `viewer` reads no secret directory ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
+- **`viewer`** reads every operator-facing resource in scope, and two families are deliberately not operator-facing. The IAM directories (`user`, `role`, `user_group`) read at the admin tier (`<resource>:read:admin`), which a two-token `*:read` structurally cannot reach, so the Users, Roles and User groups pages stay closed to it ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)). `secret` is a **sensitive resource** a bare `*` does not reach at all, so `viewer` reads no secret directory ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). `viewer` also carries `assistant:use`, a person's own omnibot conversations: owner-only by predicate, not by scope, so no grant (`>` included) reads another person's ([ADR-2113](/architecture/decisions/#adr-2113-a-persons-omnibot-conversations-are-theirs-alone)).
 - **`operator`** holds the operational secrets in its scope and never the platform's: secret **delete** stays admin-only, and an **admin-sensitive** secret (a platform credential, `admin_sensitive = true`) is absent from the directory and a non-disclosing 404 on reveal regardless of scope, so an operator sees device secrets but never a platform key at the same scope ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). Creating an admin-sensitive secret needs the admin tier, so an operator mints only operational ones.
-- **`deploy`** is the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root, and **a grant of it reaches one tier, the tier it is scoped at**. Its permission set names three tiers, but a location-kind grant fills no system-tier or component-tier scope at all, not even to read one, because a scope kind contains only its own tier until the cross-tier expansion lands ([#10](https://github.com/hyperscaleav/omniglass/issues/10)). Building out a building therefore takes a location-scoped, a system-scoped and a component-scoped grant of this role together, the shape `internal/api/placement_scope_e2e_test.go` uses; the reach is pinned by `internal/seed/role_reach_test.go` and the role's own description says so.
-- **`admin`** adds `platform:*`, the install-wide authority a write at the cascade's `platform` tier needs ([below](#install-wide-authority-is-not-fleet-scope)); `operator` and `deploy` hold no `platform` capability, so an all-scoped operator runs every site without being able to change the install-wide value under them. It holds `secret:>` and `file:>` (the tail wildcard, not the two-token `*`), which is what reaches the admin-sensitive tiers a two-token wildcard cannot. IAM management is meaningful only from an `@ all` grant: a scoped `admin @ subtree` keeps the operator powers within its subtree and gets no IAM. Registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. It is deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles.
+- **`deploy`** is the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root. Granted at a location, it builds out and edits the rooms under it, and since [#1498](https://github.com/hyperscaleav/omniglass/issues/1498) the same single grant also **reads and creates the systems and components placed in that location** (a root system or component at a room in scope is a 201, one outside it the placement bind's non-disclosing 422, one with no location a 403). It does **not** edit, rename, move or delete those systems and components: the modify half of the cross-tier expansion is [#10](https://github.com/hyperscaleav/omniglass/issues/10), so changing one still takes a system-scoped or component-scoped grant of this role. The dev seed's `tech-east` is exactly this shape; the reach is pinned by `internal/seed/role_reach_test.go`, driven over the wire by `internal/api/location_grant_reach_e2e_test.go`, and the role's own description says so.
+- **`admin`** adds `platform:*`, the install-wide authority a write at the cascade's `platform` tier needs ([below](#install-wide-authority-is-not-fleet-scope)); `operator` and `deploy` hold no `platform` capability, so an all-scoped operator runs every site without being able to change the install-wide value under them. It holds `secret:>` and `file:>` (the tail wildcard, not the two-token `*`), which is what reaches the admin-sensitive tiers a two-token wildcard cannot. IAM management is meaningful only from an `@ all` grant: a scoped `admin @ subtree` keeps the operator powers within its subtree and gets no IAM. Catalog curation is a plain capability, so a custom role can carry `<catalog>:create` alone for a non-admin curator. It is deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles.
 - **`owner`** is break-glass and unkillable: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), an owner account cannot be impersonated, and the bootstrap creates the first one.
 
 The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with label, description, inheritance, and **effective permissions**. The role blade renders a **net** view: the **permission universe** ([below](#the-permission-universe-published-per-route)) plus, per role, the **held** subset (resolved server-side by the same `rbac.Set.Allows` matcher), one-per-line, lexicographically, with a `Held / Missing / All` toggle. Custom-role editing is a later slice.
@@ -220,15 +223,15 @@ component:read                <- one permission
 component:create,update       <- expands to component:create and component:update
 alarm:acknowledge             <- a domain verb alongside CRUD
 alarm:snooze                  <- another, on the same resource
-property_type:create         <- a registry curator capability (tag/unit/event_type/severity_level/source likewise)
-principal:*                   <- any single action on this resource (a two-token pattern)
+property_type:create         <- a catalog curator capability (tag/unit/event_type/severity_level/source likewise)
+user:*                        <- any single action on this resource (a two-token pattern)
 audit:read:admin              <- an admin-sensitive permission (three tokens)
 >                             <- everything, at every tier (the owner superuser)
 ```
 
-A normal permission is `resource:action` (two tokens); an **admin-sensitive** one carries a third `admin` token (`audit:read:admin`). Because `*` matches exactly one token, a two-token pattern like `*:read` or `principal:*` **structurally cannot** match a three-token `:admin` permission: admin-sensitivity is a **deeper token**, not a matcher special case. The IAM directory reads (`principal:read:admin`, `role:read:admin`, `principal_group:read:admin`) use this to stay off the `viewer` floor, alongside `audit:read:admin` and `principal:purge:admin`; `admin` carries each explicitly. `>` is the whole-fleet superuser (owner); `<resource>:>` grants everything under one resource including its admin tier. Actions are HTTP-aligned (`read`, `create`, `update`, `delete`) plus resource-specific verbs (`acknowledge`, `reveal`, `issue`); there is no aggregate `write`.
+A normal permission is `resource:action` (two tokens); an **admin-sensitive** one carries a third `admin` token (`audit:read:admin`). Because `*` matches exactly one token, a two-token pattern like `*:read` or `user:*` **structurally cannot** match a three-token `:admin` permission: admin-sensitivity is a **deeper token**, not a matcher special case. The IAM directory reads (`user:read:admin`, `role:read:admin`, `user_group:read:admin`) use this to stay off the `viewer` floor, alongside `audit:read:admin` and `user:purge:admin`; `admin` carries each explicitly. `>` is the whole-fleet superuser (owner); `<resource>:>` grants everything under one resource including its admin tier. Actions are HTTP-aligned (`read`, `create`, `update`, `delete`) plus resource-specific verbs (`acknowledge`, `reveal`, `issue`); there is no aggregate `write`.
 
-One further carve-out: a **sensitive-resource set**, `{secret, settings, platform, notification_target}`, that a bare single-token `*` does not reach in **either** place `*` can grant (the direct topic match and the `:read` floor), for resources not `:admin`-tier wholesale but that a bare wildcard must not sweep up: an operator holds a literal `secret:read` while a `*:read`-only `viewer` reads no secrets; `settings` is install configuration off the viewer floor (an ordinary user sees only the client-visible namespaces, through the authn-only `/settings/me`); and `platform` is install-wide **authority** ([below](#install-wide-authority-is-not-fleet-scope)), which full-fleet **reach** must not confer; a `notification_target` is an egress destination holding a credential (#618), admin-only. A literal, a resource wildcard (`secret:*`), and owner's `>` still name a sensitive resource; only the **bare** `*` is turned away ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). This composes with the `:admin` tier: `secret` uses **both**, a per-secret `admin_sensitive` flag flipping an individual platform credential to the `:admin` tier ([config and credentials](/architecture/variables/)). The IAM directories are **not** in the set (no legitimate sub-admin reader, so the `:admin` tier alone suffices).
+One further carve-out: a **sensitive-resource set**, `{secret, settings, platform, notification_target}`, that a bare single-token `*` does not reach in **either** location `*` can grant (the direct topic match and the `:read` floor), for resources not `:admin`-tier wholesale but that a bare wildcard must not sweep up: an operator holds a literal `secret:read` while a `*:read`-only `viewer` reads no secrets; `settings` is install configuration off the viewer floor (an ordinary user sees only the client-visible namespaces, through the authn-only `/settings/me`); and `platform` is install-wide **authority** ([below](#install-wide-authority-is-not-fleet-scope)), which full-fleet **reach** must not confer; a `notification_target` is an egress destination holding a credential (#618), admin-only. A literal, a resource wildcard (`secret:*`), and owner's `>` still name a sensitive resource; only the **bare** `*` is turned away ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). This composes with the `:admin` tier: `secret` uses **both**, a per-secret `admin_sensitive` flag flipping an individual platform credential to the `:admin` tier ([variables, secrets, and declared values](/architecture/variables/)). The IAM directories are **not** in the set (no legitimate sub-admin reader, so the `:admin` tier alone suffices).
 
 Inheritance composes permissions **by union**:
 
@@ -242,13 +245,13 @@ There are no negative permissions; to narrow, define a fresh role. The escalatio
 
 ### The permission universe, published per route
 
-Every capability-gated route registers through one helper, `gated(op, tokens...)`, which sets the `authn` + `require` middleware, **stamps the operation** with the `x-omniglass-permission` OpenAPI extension, and records the permission in an in-process registry, so the authz contract is **published in the generated `api/openapi.json`**, machine-readable, not buried in Go middleware. The **permission universe** is the sorted, deduped set of every stamp, derived from the routes with no hand-kept catalog to drift; the Roles view reports it as the denominator for the net held-vs-missing view.
+Every capability-gated route registers through one helper, `gated(op, tokens...)`, which sets the `authn` + `require` middleware, **stamps the operation** with the `x-omniglass-permission` OpenAPI extension, and records the permission in an in-process catalog, so the authz contract is **published in the generated `api/openapi.json`**, machine-readable, not buried in Go middleware. The **permission universe** is the sorted, deduped set of every stamp, derived from the routes with no hand-kept catalog to drift; the Roles view reports it as the denominator for the net held-vs-missing view.
 
 A permission granted but absent from the universe would enforce nothing; since #463 reversed the ship-ahead policy there are none. A grant lands in `roles.yaml` in the same slice as the first route that enforces it, the **drift test**'s `aheadOfRoutes` allow-list is empty, and the docs lint closes the loop from the other side (a permission named in prose must gate a route or sit inside a design fence).
 
 ## Authorization: grants = role x scope
 
-A principal holds grants in `principal_grant`. Each grant is a `(role, scope_kind, scope_id)` triple; a principal can hold many, and they are **additive**:
+A user holds grants in `user_grant`. Each grant is a `(role, scope_kind, scope_id)` triple; a user can hold many, and they are **additive**:
 
 ```
 canDo(P, action, E)  iff  exists grant g in grants(P) such that
@@ -256,11 +259,11 @@ canDo(P, action, E)  iff  exists grant g in grants(P) such that
                             AND E in expand(g.scope_kind, g.scope_id)
 ```
 
-**Action and scope bind per grant, not globally.** The `action` and the `E`-membership test are satisfied by the **same** grant `g`; flattening permissions into one global set and entities into one global visible set over-permits, and the enforcement layers below preserve the per-grant binding (the [worked example](#enforcement-where-each-check-lives) traces it). The same role at different scopes and mixed roles (`operator @ HQ` + `viewer @ all` for a site lead) are the intended pattern; grants from `principal_group` memberships compose the same way.
+**Action and scope bind per grant, not globally.** The `action` and the `E`-membership test are satisfied by the **same** grant `g`; flattening permissions into one global set and entities into one global visible set over-permits, and the enforcement layers below preserve the per-grant binding (the [worked example](#enforcement-where-each-check-lives) traces it). The same role at different scopes and mixed roles (`operator @ HQ` + `viewer @ all` for a site lead) are the intended pattern; grants from `user_group` memberships compose the same way.
 
 ### Scopes
 
-:::design[The cross-tier scope expansion and the group scope kind, tracked in #10]
+:::design[The cross-tier modify actions and the group scope kind, tracked in #10]
 | scope_kind | scope_id | expansion |
 |---|---|---|
 | `all` | null | every entity in the database |
@@ -269,15 +272,30 @@ canDo(P, action, E)  iff  exists grant g in grants(P) such that
 | `component` | component id | exactly `{ C }` |
 | `group` | group id | members(G) at resolution time (dynamic groups re-resolve) |
 
-"Their components" means the components whose **effective** place is in the subtree: a component's
-place is inherited from its primary system unless set
+"Their components" means the components whose **effective** location is in the subtree: a component's
+location is inherited from its primary system unless set
 ([ADR-0140](/architecture/decisions/#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing),
 #878), and a `system` scope reaches its subsystems as well as its members.
 :::
 
-Today each fleet entity is scoped by its own tier (a `location` scope contains locations only, and
-so on; only `secret` / `variable` / `endpoint` / `task` resolve through their owning entity's
-tier), and a `group` scope is refused with a 422.
+**Built: a location grant reads and creates what is placed in it**
+([ADR-1498](/architecture/decisions/#adr-1498-a-location-grant-reads-and-creates-the-systems-and-components-placed-in-it)).
+The `location` row of the table above is live for **read** and **create** on `system` and
+`component`. A subtree-op location grant that carries `system:read` / `component:read` resolves to
+the location as a **cross-tier root** (`scope.Set.LocationIDs`), and the Storage Gateway matches a
+row by its placement: a system placed in the location subtree, plus its subsystems; a component
+whose own location is in it or, with none of its own, whose primary system is, plus its
+subcomponents. Every read derived from a component's scope (its alarms, notifications, dependencies,
+rule previews, the fleet view's dots) follows through the same read-filter primitive. On create, a
+root system or component needs either an all-scoped grant or a location inside a cross-tier root of
+its create scope, and a root with no location still needs the all-scoped grant (403). A `self`
+location grant reaches no system or component, and a `system` or `component` grant still confers no
+location access.
+
+Everything else is still scoped by its own tier: the modify actions (update, rename, move, delete)
+on systems and components, a `location` scope against every other resource (only `secret` /
+`variable` / `endpoint` / `task` resolve through their owning entity's tier), a `system` scope
+against its member components, and a `group` scope, which is refused with a 422.
 
 `expand` realizes a scope to a **bound id set** the gateway injects as a parameterized `owner IN (...)` predicate (or a closure-table join for deep trees), never string-built; the tree walk carries a cycle guard, and the set is **fleet-size-bounded** (entities), an indexed membership filter. `scope_kind` is enumerated; adding a kind is a schema change (CHECK constraint) plus a new `expand` case. `scope_id` is operator data.
 
@@ -300,7 +318,7 @@ metric_type:update   + platform:update <- POST /metric-types/{name}:setRetention
 property_type:update + platform:update <- POST /property-types/{name}:setRetention
 ```
 
-A **scope** says *how much of the fleet* a grant reaches; `platform:<action>` says whether the principal may
+A **scope** says *how much of the fleet* a grant reaches; `platform:<action>` says whether the user may
 change *the value under all of it*. `platform:*` is seeded to **`admin`** (and reaches `owner` through `>`);
 `operator` and `deploy` hold no `platform` write, and **nothing implies one**, mechanically: `platform` is in
 the [sensitive-resource set](#permission-format), so a bare single-token `*` never names it, which is why a
@@ -315,7 +333,7 @@ other write.
 
 ## Visibility cascades down the structural tree
 
-A scope of entity E includes E **and everything structurally beneath it** (a location -> its systems -> their components -> their properties and alarms). The visible set is **parameterized by action**: `visible_set(P, action)` = the union, over **only the grants whose role carries `action`**, of each scope entity plus its descendants. **`:read` is an implicit floor on every grant**: `visible_set(P, read)` is always the widest set, every other per-action set a subset. The floor lives **in the matcher, evaluated per call** (`rbac.Set.Allows`): a two-token `<resource>:read` check passes when the set holds any permission on that resource, so the floor holds in the fast-reject and in `canDo` without pre-expansion, and a verb-only role (`secret:reveal` without `secret:read`) is **not** hard-403'd on the read. The asymmetry runs one way: a principal can **read** an entity it cannot **act** on, never the reverse, so the status split below stays three-way. Dynamic-group scopes recompute as membership changes; each per-action set is bounded by **fleet size (entities)**, not data volume.
+A scope of entity E includes E **and everything structurally beneath it** (a location -> its systems -> their components -> their properties and alarms). The visible set is **parameterized by action**: `visible_set(P, action)` = the union, over **only the grants whose role carries `action`**, of each scope entity plus its descendants. **`:read` is an implicit floor on every grant**: `visible_set(P, read)` is always the widest set, every other per-action set a subset. The floor lives **in the matcher, evaluated per call** (`rbac.Set.Allows`): a two-token `<resource>:read` check passes when the set holds any permission on that resource, so the floor holds in the fast-reject and in `canDo` without pre-expansion, and a verb-only role (`secret:reveal` without `secret:read`) is **not** hard-403'd on the read. The asymmetry runs one way: a user can **read** an entity it cannot **act** on, never the reverse, so the status split below stays three-way. Dynamic-group scopes recompute as membership changes; each per-action set is bounded by **fleet size (entities)**, not data volume.
 
 ### Scope operators (how a grant's root matches the tree)
 
@@ -334,7 +352,7 @@ location:room-42 (>)` lets a field tech add and edit the LOCATIONS under room-42
 deleting room-42 itself (the tier is the grant's own kind: the systems and components sitting in
 room-42 need their own grants, see the role table above); it narrows only the **modify** actions, so a `PATCH` on the root is the
 readable-but-out-of-write-scope **403** while a `POST` under it and a `PATCH` on a descendant succeed.
-`self` is a leaf-lock on one node: exactly its own row for read, update, and delete, and **not**
+`self` is a leaf-lock on one tree node: exactly its own row for read, update, and delete, and **not**
 create-placement, so `operator @ location:room-42 (=)` sees and edits only room-42 and a `POST` under it is
 a **403**. Operators combine by union across grants, resolved per action: an inclusive `subtree` grant wins
 over an excluding one, and a `self` grant re-admits a root that a `subtree_excl_root` grant stripped. The
@@ -346,12 +364,12 @@ At least one active `owner @ all` grant must exist at all times. Enforced as a d
 
 ```
 BEGIN;
-  INSERT INTO principal_grant (... role='owner', scope_kind='all' ...);  -- new owner
-  DELETE FROM principal_grant WHERE principal_id=<old> AND role='owner';  -- old
+  INSERT INTO user_grant (... role='owner', scope_kind='all' ...);  -- new owner
+  DELETE FROM user_grant WHERE user_id=<old> AND role='owner';  -- old
 COMMIT;  -- trigger fires here, sees the new grant, passes.
 ```
 
-Removing the last owner (by grant delete, principal delete, principal disable, or role change) raises a check-violation, which the Gateway translates into a **409** with a remediation message ("cannot revoke the last owner grant").
+Removing the last owner (by grant delete, user delete, user disable, or role change) raises a check-violation, which the Gateway translates into a **409** with a remediation message ("cannot revoke the last owner grant").
 
 ### Grants cannot exceed the granter
 
@@ -359,16 +377,16 @@ Creating a grant is refused (403) when the granted role's capabilities are not *
 
 ## Impersonation (view-as and act-as)
 
-An owner or all-scope admin holding `principal:impersonate` can temporarily see and act through another
-principal, for troubleshooting. **View-as** resolves reads under the target's `visible_set` and refuses
-every write; **act-as** is full, its mutations attributed to **both** principals.
-`POST /principals/{id}:impersonate` mints a bounded (default 30 minutes, revocable) bearer token stored as
-an `impersonation_session`, distinct from `credential` (a credential authenticates a principal **as
-itself**, a session one principal **as another**, with its own expiry, revoke, and "who is impersonating
-whom" listing). `authn` resolves the token on a bearer miss to the **target** principal, tagging the
+An owner or all-scope admin holding `user:impersonate` can temporarily see and act through another
+user, for troubleshooting. **View-as** resolves reads under the target's `visible_set` and refuses
+every write; **act-as** is full, its mutations attributed to **both** users.
+`POST /users/{id}:impersonate` mints a bounded (default 30 minutes, revocable) bearer token stored as
+an `impersonation_session`, distinct from `credential` (a credential authenticates a user **as
+itself**, a session one user **as another**, with its own expiry, revoke, and "who is impersonating
+whom" listing). `authn` resolves the token on a bearer miss to the **target** user, tagging the
 request with the real actor and mode; `POST /auth/me:stopImpersonation` revokes it.
 
-Two guarantees, over a hard floor. **Owner protection**: a principal holding `owner @ all` is
+Two guarantees, over a hard floor. **Owner protection**: a user holding `owner @ all` is
 un-impersonatable by **anyone**, in either mode; impersonating the highest-trust account is a full-takeover
 vector, removed rather than left to the cover arithmetic. The **escalation guard**: a caller may
 impersonate a (non-owner) target only when its capabilities **cover** the target's (`rbac.Set.Covers`), so
@@ -376,9 +394,9 @@ impersonation never confers a capability the caller lacks. View-as is cross-scop
 authority), but **act-as** also requires the caller's **all-scope grants alone** to cover the target, since
 an impersonated request resolves its scope from the target; without it a split-grant admin (all-scope user
 management, campus-scoped infra) could act-as a different campus's admin and gain write there. The rule is
-resource-agnostic, closing escalation through non-tree writes (`principal_grant`, `role`) whose scoped
+resource-agnostic, closing escalation through non-tree writes (`user_grant`, `role`) whose scoped
 grants resolve to an empty effective scope. And **accountability**: every audited mutation while
-impersonating records `real_actor_principal_id` alongside the impersonated `actor_principal_id`.
+impersonating records `real_actor_user_id` alongside the impersonated `actor_user_id`.
 Self-impersonation and nesting are refused, and disabling either party kills the session on its next
 request (the same per-request `active` re-read that makes disable hard revocation).
 
@@ -429,16 +447,16 @@ The capability check is **necessary not sufficient** (it only rejects), the `can
 
 - **Capability (RBAC) in the API middleware is a FAST-REJECT, never an authorization.** Does the action appear in **any** grant? If not, 403 before the gateway is touched, answered from an in-process cache. Passing only means "not categorically forbidden"; scope still decides. Routes declare their permission through `gated(op, "component", "create")` ([above](#the-permission-universe-published-per-route)).
 - **Scope (ABAC) in the Storage Gateway is per-action.** Every query carries `visible_set(P, action)` for the **specific action**, filtering rows by their exclusive-arc owner: a read uses `visible_set(P, read)`, a write the write-action's set, never a global union. An `:ack` outside `visible_set(P, ack)` matches **0 rows** even if the handler forgot its check, and a 0-row write is **never a silent success** (a silent 200/no-op is forbidden): the gateway reports the miss and the handler returns 404 or 403 matching the up-front decision. The set is fleet-size-bounded; as an owner filter in app code it works identically on Postgres, the columnar tier, or object storage.
-- The gateway has three query **modes**: **scoped** (an API request carrying a principal's visible set), **node** (a node-driven write confined to the node's placement-derived `visible_set`, so a compromised node cannot write arbitrary owners intra-tenant), and **system** (trusted internal work: the CDC publisher, the sample persistence sink, reconcile / migrate / seed, all-visibility; an explicit, audited choice, never the default). There is no fourth path.
+- The gateway has three query **modes**: **scoped** (an API request carrying a user's visible set), **outpost** (an outpost-driven write confined to the outpost's placement-derived `visible_set`, so a compromised outpost cannot write arbitrary owners intra-tenant), and **system** (trusted internal work: the CDC publisher, the sample persistence sink, reconcile / migrate / seed, all-visibility; an explicit, audited choice, never the default). There is no fourth path.
 - **Targeted mutation on a known id resolves the target twice: within the read scope, then within the action's own scope.** A custom method against a specific id (`POST /components/{name}/alarms/{id}:acknowledge` is one of twenty-one) resolves that target through the gateway carrying `visible_set(P, read)` to decide whether the caller may know it exists, and `visible_set(P, action)` for **its own action**, never a neighbouring one, to decide whether it may act. The read set decides only which refusal is owed and **grants nothing**, so a wide read still cannot widen a narrow write. The status split is three-way ([below](#the-three-way-status-split)): (a) action in **no** grant -> 403 at the fast-reject; (b) target in `visible_set(P, read)` but outside `visible_set(P, action)` -> **403**; (c) target outside `visible_set(P, read)` -> **404**, non-disclosing.
-- **A refusal names only rows the caller may read.** A write on a catalog row (a standard role declaration, gated by `standard:update`) is checked against every conforming system across the fleet, beyond any scope the caller holds. When that check refuses, the API names a conflicting system only if it is in `visible_set(P, read)`: a role-name collision with an unreadable system says so without naming it, and a capacity lowered below what conforming systems already hold names the worst-exceeding system the caller can read, or else says only that a system it cannot read is in the way, with no name, staffing count or tally of such systems ([#1216](https://github.com/hyperscaleav/omniglass/issues/1216)). The check itself stays fleet-wide, so the refusal is never weakened to fit the caller; only its wording is. That leaves one accepted disclosure: whether a write is refused at all. A caller probing successive capacities learns the highest staffing of the role among systems it cannot read, because the catalog invariant it is editing holds across the whole fleet.
-- **Scope is structural, not per-handler**: the principal's scope is a required input to the gateway's query layer, so no code path can query unscoped by accident. With no RLS backstop, the gateway is the sole guarantor.
-- **Beside scope, every key has one writer.** Scope decides which owners a principal's write may reach; it cannot decide that a key's value is a node's observation and nobody else's. So the gateway holds a second, data-side invariant on every sample and event write: the key's **writer class** must admit the write's writer (the node lane bound to its task's endpoint, the push lane, a calc rule, the health rollup, a command, an operator), refused otherwise with a 422 naming the key ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway), [storage](/architecture/storage/#every-key-has-one-writer)). It is not a permission and no grant confers it: an owner with every permission still cannot write a node's probe key through a declared value or a push. Like the scope argument, it is structural, held by a guard that fails on any gateway write path that skips it.
-- **Coverage scales with the surface, by test.** An **authz conformance matrix** runs the full assertion set (capability 403, the over-permit scope 403, the non-disclosing 404, in-scope success, the read/act asymmetry) against **every** scoped entity from a registry: a new scoped entity is one registry line. Each entity also declares the mutating routes that hang **off** it and resolve it as their target (its property writes, and for a system its membership and role writes and its telemetry push, for a component its alarm writes, its command issue and its telemetry push), and the matrix drives the whole three-way split through each one, so the truthful 403 is proved per **route** and not merely per entity: the routes are not uniform across the registry, and a per-entity assertion would have left thirteen of them unproved. A **route-gating guard** drives every generated-OpenAPI operation with a zero-permission principal, asserting 403 outside a short allow-list: `GET /healthz`, `GET /auth/status`, `POST /auth/login`, `POST /auth/logout`, the authn-only `/auth/me` family and `GET /settings/me`, `POST /nodes:claim` (safe unauthenticated because the enrollment token in its body **is** the credential, minted once by a `node:enroll`-gated route, only its hash stored; an invalid token is a 401 that discloses nothing), and the webhook route, `POST /webhooks/{token}` with the `GET` and `HEAD` a sender verifies its URL with ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)): public by necessity, since the sender is not a principal; the token names one endpoint, its driver's declared scheme is the authentication, and the write is bound to that endpoint's component on the push lane, whose writer admits only collected keys, so a leaked token writes only collected keys on one component; an unknown or rotated token answers one identical 404. These are the API's **two public writes**. A **published-gate guard** is the spec-side companion: every route outside that allow-list carries an `x-omniglass-permission` stamp and every allow-listed route carries none, so "gated" and "published" are the same set.
+- **A refusal names only rows the caller may read.** A write on a catalog row (a standard slot declaration, gated by `standard:update`) is checked against every conforming system across the fleet, beyond any scope the caller holds. When that check refuses, the API names a conflicting system only if it is in `visible_set(P, read)`: a slot-name collision with an unreadable system says so without naming it, and a capacity lowered below what conforming systems already hold names the worst-exceeding system the caller can read, or else says only that a system it cannot read is in the way, with no name, staffing count or tally of such systems ([#1216](https://github.com/hyperscaleav/omniglass/issues/1216)). The check itself stays fleet-wide, so the refusal is never weakened to fit the caller; only its wording is. That leaves one accepted disclosure: whether a write is refused at all. A caller probing successive capacities learns the highest staffing of the slot among systems it cannot read, because the catalog invariant it is editing holds across the whole fleet.
+- **Scope is structural, not per-handler**: the user's scope is a required input to the gateway's query layer, so no code path can query unscoped by accident. With no RLS backstop, the gateway is the sole guarantor.
+- **Beside scope, every key has one writer.** Scope decides which owners a user's write may reach; it cannot decide that a key's value is an outpost's observation and nobody else's. So the gateway holds a second, data-side invariant on every sample and event write: the key's **writer class** must admit the write's writer (the outpost lane bound to its task's endpoint, the push lane, a calc rule, the health rollup, a command, an operator), refused otherwise with a 422 naming the key ([ADR-0161](/architecture/decisions/#adr-0161-every-key-has-one-writer-class-held-at-the-storage-gateway), [storage](/architecture/storage/#every-key-has-one-writer)). It is not a permission and no grant confers it: an owner with every permission still cannot write an outpost's probe key through a declared value or a push. Like the scope argument, it is structural, held by a guard that fails on any gateway write path that skips it.
+- **Coverage scales with the surface, by test.** An **authz conformance matrix** runs the full assertion set (capability 403, the over-permit scope 403, the non-disclosing 404, in-scope success, the read/act asymmetry) against **every** scoped entity from a catalog: a new scoped entity is one catalog line. Each entity also declares the mutating routes that hang **off** it and resolve it as their target (its property writes, and for a system its membership and slot writes and its telemetry push, for a component its alarm writes, its command issue and its telemetry push), and the matrix drives the whole three-way split through each one, so the truthful 403 is proved per **route** and not merely per entity: the routes are not uniform across the catalog, and a per-entity assertion would have left thirteen of them unproved. A **route-gating guard** drives every generated-OpenAPI operation with a zero-permission user, asserting 403 outside a short allow-list: `GET /healthz`, `GET /auth/status`, `POST /auth/login`, `POST /auth/logout`, the authn-only `/auth/me` family and `GET /settings/me`, `POST /outposts:claim` (safe unauthenticated because the enrollment token in its body **is** the credential, minted once by an `outpost:enroll`-gated route, only its hash stored; an invalid token is a 401 that discloses nothing), and the webhook route, `POST /webhooks/{token}` with the `GET` and `HEAD` a sender verifies its URL with ([ADR-1024](/architecture/decisions/#adr-1024-omniglass-receives-webhooks-on-the-server-and-a-webhook-token-is-a-sealed-secret)): public by necessity, since the sender is not a user; the token names one endpoint, its driver's declared scheme is the authentication, and the write is bound to that endpoint's component on the push lane, whose writer admits only collected keys, so a leaked token writes only collected keys on one component; an unknown or rotated token answers one identical 404. These are the API's **two public writes**. A **published-gate guard** is the spec-side companion: every route outside that allow-list carries an `x-omniglass-permission` stamp and every allow-listed route carries none, so "gated" and "published" are the same set.
 
-- **Every gated resource registers its scope tier, by test.** `visible_set(P, action)` is resolved for a resource, and the resolver only knows which grant kinds can contain a resource it has been told about (`applicableKinds` in `internal/scope`): a tier (`command` and `alarm` on the component tier, `telemetry` on the component and system tiers, `secret` / `variable` on all three), or **fleet-wide** (`node`, `rule`, `principal` and the other catalog and directory resources, which only an `all` grant confers). A resource registered nowhere still resolves, to the empty set for every grant but an `all` one, so a route fencing on it denies every scoped caller while an `all`-scoped owner keeps working, and nothing tells an empty grant from the missing registration ([#754](https://github.com/hyperscaleav/omniglass/issues/754)). So `TestEveryGatedResourceRegistersItsScope` (`internal/api`) reads every operation's permission stamps (`x-omniglass-permission` and the platform and conditional second gates) from the generated OpenAPI and fails `make test` on any resource that is unregistered, naming the route and the permission: a new route that forgets its tier, such as a system- or location-level command route, cannot merge. Beneath it, the gateway's resolve paths (the scoped resolve, the reference and placement resolvers) check that each non-`all` set was resolved for a resource the table's tier can contain (`scope.Covers`) and answer a set that was not with a **wiring error**, logged and returned as a **500**, never the 404 or 403 an empty grant earns.
+- **Every gated resource registers its scope tier, by test.** `visible_set(P, action)` is resolved for a resource, and the resolver only knows which grant kinds can contain a resource it has been told about (`applicableKinds` in `internal/scope`): a tier (`command` and `alarm` on the component tier, `telemetry` on the component and system tiers, `secret` / `variable` on all three), or **fleet-wide** (`outpost`, `rule`, `user` and the other catalog and directory resources, which only an `all` grant confers). A resource registered nowhere still resolves, to the empty set for every grant but an `all` one, so a route fencing on it denies every scoped caller while an `all`-scoped owner keeps working, and nothing tells an empty grant from the missing registration ([#754](https://github.com/hyperscaleav/omniglass/issues/754)). So `TestEveryGatedResourceRegistersItsScope` (`internal/api`) reads every operation's permission stamps (`x-omniglass-permission` and the platform and conditional second gates) from the generated OpenAPI and fails `make test` on any resource that is unregistered, naming the route and the permission: a new route that forgets its tier, such as a system- or location-level command route, cannot merge. Beneath it, the gateway's resolve paths (the scoped resolve, the reference and placement resolvers) check that each non-`all` set was resolved for a resource the table's tier can contain (`scope.Covers`) and answer a set that was not with a **wiring error**, logged and returned as a **500**, never the 404 or 403 an empty grant earns.
 
-**Worked example (per-grant binding denies fleet-wide acknowledgement).** This one is **built** ([#728](https://github.com/hyperscaleav/omniglass/issues/728), refusal status corrected by [#736](https://github.com/hyperscaleav/omniglass/issues/736)), so it is the real route rather than a stand-in. Principal P holds `operator @ component-A` (the role carries `alarm:acknowledge`) and `viewer @ all` (read-only). Alarm X hangs off **component B**. P calls `POST /components/{name}/alarms/{id}:acknowledge` naming B and X:
+**Worked example (per-grant binding denies fleet-wide acknowledgement).** This one is **built** ([#728](https://github.com/hyperscaleav/omniglass/issues/728), refusal status corrected by [#736](https://github.com/hyperscaleav/omniglass/issues/736)), so it is the real route rather than a stand-in. User P holds `operator @ component-A` (the role carries `alarm:acknowledge`) and `viewer @ all` (read-only). Alarm X hangs off **component B**. P calls `POST /components/{name}/alarms/{id}:acknowledge` naming B and X:
 
 1. **Middleware fast-reject**: `alarm:acknowledge` appears in *a* grant (the `operator @ component-A` one), so it passes; fast-reject cannot see that the acknowledging grant does not cover X.
 2. **Scope resolved from the acknowledgement's own permission**: `visible_set(P, alarm, acknowledge)` unions only the grants whose role carries it, so it is `{component-A}`; the fleet-wide `viewer` grant carries no acknowledgement and widens nothing. This is the load-bearing part: resolving the scope from `component:read` (which P holds everywhere) or from `component:update` (which a pure responder role need not hold at all) would answer the wrong question in opposite directions.
@@ -457,7 +475,7 @@ A refusal picks its status from the **difference between two scopes**, not from 
 
 One primitive makes the split for every route that has one, `resolveScoped` in the Storage
 Gateway, so the ordering (read first, then action) exists in one place rather than once per
-route. Routes whose write takes no scope of its own, the alarm verbs, the system-role
+route. Routes whose write takes no scope of its own, the alarm verbs, the system-slot
 declarations, the command issue and the telemetry push, reach the same primitive through
 `ResolveActionTarget`.
 
@@ -503,15 +521,15 @@ it was written.** The three tree entities' own CRUD (update, rename, move, delet
 `system`, `component`) had made the three-way split for some time, and the conformance matrix had
 been asserting it. What actually answered 404 for case (b) was narrower and less obvious: the
 routes that hang **off** a tree entity and resolve it as their target, a property write on it, a
-membership or role write on it, an alarm write on it. Those seventeen routes adopted the existing
+membership or slot write on it, an alarm write on it. Those seventeen routes adopted the existing
 primitive rather than a new one, and the matrix now drives all three branches through each of them.
 :::
 
 - **Non-entity resources** have no entity `E`, so `canDo` cannot scope by owner; the authorization is the grant-class check, the one place the decision is capability-shaped. Three governance classes:
-  - **IAM subjects** (`principal`, `role`, `principal_grant`, and a principal's **login credential** create/delete): the action must appear in a grant whose `scope_kind` is `all`; a scoped grant confers **no** IAM capability. Typically `owner @ all` / `admin @ all`. (A **credential variable** is different: entity-scoped, so its `secret:read` decrypt and rotation are ordinary scoped actions, [config and credentials](/architecture/variables/).)
-  - **Data registries** (`property_type`, `tag`, `unit`, `event_type`, `severity_level`, source): a distinct **`<registry>:create` curator capability** (`property_type:create`, `tag:create`, `event_type:create`; the rest take the same shape when they land). No owner entity, so `scope_kind` is irrelevant, and a curator role mints entries **without** IAM admin. A minted entry carries its own `scope` (an org-scoped entry shadows an official one, the [namespace-shadow pattern](/architecture/properties/#key-scope-org-and-official)); `official`-scoped entries are reserved to `owner` and the boot seed. One exception: writing a `severity_level` takes the permission on an all-scope grant, since a level's rank moves health fleet-wide (ADR-0144).
-  - **Type registries** (`location_type`, `secret_type`): each speaks its own permission word, never a shared generic one. The **`location_type`** registry carries its own resource with the full verb set (`location_type:read`, `:create`, `:update`, `:delete`); the read rides `viewer`'s `*:read` floor, the writes go to `admin`, and the **property contract** (`/location-types/{id}/properties`) hangs off the same resource (`location_type:update` declares, `location_type:delete` withdraws). The **`secret_type`** registry is read-only reference data behind **`secret:read`** (a sensitive resource **off** the viewer floor, so whoever may read secrets may read their shapes, and nobody else); it has no write routes. A type row carries no namespace-shadow `scope`: an operator row is editable, and deleting a `location_type` still referenced by a location is refused (409, a Gateway pre-count with the parent foreign key as backstop). The **shipped location types seed as `official: true`** through an authoritative upsert ([ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)): an operator's edit **forks** one into `registry_shadow` rather than writing it, `:restore` drops the fork, and an official row is never deleted ([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it), [the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs)); the shipped secret types are seed-owned and `official: true`.
-  - **Catalog entities** (`vendor`, `driver`, `component_type`, `product`, **`standard`**): each its **own** resource with the full verb set (`product:read` / `:create` / `:update` / `:delete`, `standard:read` / ..., and so on), because each declares more than a label. A **component** carries no type (its shape comes from its `product`, delete-guarded by the `component.product_id` restrict FK); a **system** conforms to a `standard`, which is why `standard` graduated out of the `type` registry ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). Each catalog's property contract rides its owner's permission (`product:update`, `standard:update`).
+  - **IAM subjects** (`user`, `role`, `user_grant`, and a user's **login credential** create/delete): the action must appear in a grant whose `scope_kind` is `all`; a scoped grant confers **no** IAM capability. Typically `owner @ all` / `admin @ all`. (A **credential variable** is different: entity-scoped, so its `secret:read` decrypt and rotation are ordinary scoped actions, [variables, secrets, and declared values](/architecture/variables/).)
+  - **Data catalogs** (`property_type`, `tag`, `unit`, `event_type`, `severity_level`, source): a distinct **`<catalog>:create` curator capability** (`property_type:create`, `tag:create`, `event_type:create`; the rest take the same shape when they land). No owner entity, so `scope_kind` is irrelevant, and a curator role mints entries **without** IAM admin. A minted entry carries its own `scope` (an org-scoped entry shadows an official one, the [namespace-shadow pattern](/architecture/properties/#key-scope-org-and-official)); `official`-scoped entries are reserved to `owner` and the boot seed. One exception: writing a `severity_level` takes the permission on an all-scope grant, since a level's rank moves health fleet-wide (ADR-0144).
+  - **Type catalogs** (`location_type`, `secret_type`): each speaks its own permission word, never a shared generic one. The **`location_type`** catalog carries its own resource with the full verb set (`location_type:read`, `:create`, `:update`, `:delete`); the read rides `viewer`'s `*:read` floor, the writes go to `admin`, and the **property contract** (`/location-types/{id}/properties`) hangs off the same resource (`location_type:update` declares, `location_type:delete` withdraws). The **`secret_type`** catalog is read-only reference data behind **`secret:read`** (a sensitive resource **off** the viewer floor, so whoever may read secrets may read their shapes, and nobody else); it has no write routes. A type row carries no namespace-shadow `scope`: an operator row is editable, and deleting a `location_type` still referenced by a location is refused (409, a Gateway pre-count with the parent foreign key as backstop). The **shipped location types seed as `official: true`** through an authoritative upsert ([ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)): an operator's edit **forks** one into `catalog_shadow` rather than writing it, `:restore` drops the fork, and an official row is never deleted ([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it), [the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs)); the shipped secret types are seed-owned and `official: true`.
+  - **Catalog entities** (`vendor`, `driver`, `component_type`, `product`, **`standard`**): each its **own** resource with the full verb set (`product:read` / `:create` / `:update` / `:delete`, `standard:read` / ..., and so on), because each declares more than a label. A **component** carries no type (its shape comes from its `product`, delete-guarded by the `component.product_id` restrict FK); a **system** conforms to a `standard`, which is why `standard` graduated out of the `type` catalog ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)). Each catalog's property contract rides its owner's permission (`product:update`, `standard:update`).
 
 ### A reference resolves within a scope
 
@@ -530,7 +548,7 @@ caller scope to filter by at all, where the list stays empty by design: the thre
 availability advisories (deliberately scope-blind, so availability answers about the placement bucket
 asked about rather than the caller's own grant) and `ResolveTags`' `for_system` (whose only scope in
 hand is resolved for the other tier, which can never narrow it). The component end of a membership or
-role write used to be one of these; it now resolves in the caller's own `component:read` scope
+slot write used to be one of these; it now resolves in the caller's own `component:read` scope
 ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends)),
 so its refusals list their candidates like any other bind. A dotted address skips this step entirely on its own: the placement-scoped unique
 indexes it walks admit at most one row per hop, so there is no ambiguity to decide, only the same scope
@@ -539,8 +557,8 @@ check every other reference gets once it resolves to a uuid.
 The same rule reaches the resources whose name is unique only inside something else, or nowhere
 ([ADR-1133](/architecture/decisions/#adr-1133-every-operator-resource-answers-to-its-name-and-an-endpoint-is-its-component-and-its-name)):
 an **endpoint** (`<component>/<endpoint name>`), a **secret** or **variable** (`<name>` or
-`<owner>/<name>`), a **file** (its filename), a **principal group** (its name) and a group **member**
-(a username or a service account's name). Each name is narrowed to what the caller may read before
+`<owner>/<name>`), a **file** (its filename), a **user group** (its name) and a group **member**
+(a username or a machine user's name). Each name is narrowed to what the caller may read before
 anything else is decided: an endpoint's candidate components to those in its `endpoint:read` scope
 that carry an endpoint of that name; a secret's candidates to the owners in its `secret:read` scope
 and, for an admin-sensitive one, to the admin tier; a file's to the files it may see; a group's only
@@ -550,8 +568,8 @@ found and nothing about what may be done to it. A name no visible row answers to
 is a 404 naming the reference, listing each visible match in a spelling that resolves; an out-of-scope
 match never appears, so the refusal reads the same as for an absent row. The owner part of a secret
 reference resolves scope-blind but only ever intersects with secrets already proven visible, so it
-discloses nothing on its own. A **principal** route resolves a name only for a caller who may list
-the whole directory (`principal:read:admin` on an all-scope grant); anyone else gets the same
+discloses nothing on its own. A **user** route resolves a name only for a caller who may list
+the whole directory (`user:read:admin` on an all-scope grant); anyone else gets the same
 all-scope 403 for every name, existing or not, since the route resolves before the gateway's own
 all-scope check would otherwise answer.
 
@@ -579,7 +597,7 @@ promise:
   being written, and a location's scope tree is its own unrelated ancestor chain, so checking a
   component-tier scope against the location table can never match and would deny every non-all
   caller; and the question a **location** asks is a **read** question, because since
-  [ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-fleet)
+  [ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)
   the label these writes stamp is rendered from the location's own label and the primary system's
   type label and is handed straight back in the response. Existence-only resolution therefore made a
   create a read of a row the caller holds no grant to read. The `:renderLabel` draft route
@@ -600,7 +618,7 @@ promise:
   ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
   That is a live narrowing of who may create a component into a system: `operator` holds
   `component:create` and no `system:*` at all, so it maintains components and a `deploy` tech builds
-  out systems and their membership. The console does not offer the picker to a principal that cannot
+  out systems and their membership. The console does not offer the picker to a user that cannot
   use it, and the API's refusal names the permission, so the narrowing is met before the form is
   filled in rather than as a 403 after it.
 
@@ -611,27 +629,27 @@ promise:
   system's own type, for a create the platform then refused. The draft carries the create's
   conditional permission as well as its scope, so both halves of the gate rehearse.
 
-- **The component end of a membership or a role assignment** is the same bind seen from the other
+- **The component end of a membership or a slot assignment** is the same bind seen from the other
   end, and it costs a write on that end too
   ([ADR-0510](/architecture/decisions/#adr-0510-a-membership-or-a-role-assignment-costs-a-write-on-both-of-its-ends),
   [#510](https://github.com/hyperscaleav/omniglass/issues/510)). Binding a component into a system
   makes that system its primary when it is the first, restamps its label, and seeds the system band of
   every cascade the component reads, so a membership writes onto the component as well as the system.
   The five routes that name a component (add, remove and re-default a member; assign and unassign a
-  role) therefore need `component:update` beside their `system:update` gate: the handler refuses a
+  slot) therefore need `component:update` beside their `system:update` gate: the handler refuses a
   caller holding none with a 403 naming it, and the route publishes it as its conditional permission.
   The gateway scopes the end in sets resolved for the component tier. A **bind** resolves the
   component in `component:read` and requires `component:update`, the same read-then-action split one
   tier over (out of read the non-disclosing 404, readable but not writable a 403); a write naming a
   component **already** a member or an occupant requires `component:update` alone and refuses with a
-  403, because the system's own member list and role read already name it, while a name that is not
+  403, because the system's own member list and slot read already name it, while a name that is not
   bound here answers the same 404 whether it names a component outside the caller's read scope or
-  nothing at all. Before this, a principal
+  nothing at all. Before this, a user
   scoped to one system bound a component it could not read and wrote its own variables onto it through
   the cascade. A system-wide act that settles its bindings without naming a component (deleting the
-  system, withdrawing one of its roles, changing its standard) stays gated on the system alone: it acts
+  system, withdrawing one of its slots, changing its standard) stays gated on the system alone: it acts
   only on components the system already holds (a primary moved to another system that holds the
-  member, an occupant carried onto the new standard's role) and binds none it did not.
+  member, an occupant carried onto the new standard's slot) and binds none it did not.
 
 - **An identity binding** is the same rule on a relationship whose owner end may be either tier
   ([ADR-1282](/architecture/decisions/#adr-1282-a-conduit-fans-each-identified-value-out-to-the-owner-its-binding-names-and-a-binding-costs-a-write-on-both-of-its-ends),
@@ -651,7 +669,7 @@ promise:
   and it is accepted: a put naming an identity already bound to an owner the caller cannot read is
   refused with the move 403, so the caller learns that the identity is bound, never to whom (the
   list's hidden count already says the conduit has bindings it cannot see). Neither end alone is
-  enough: a principal scoped to one system could otherwise claim an identity that belongs to another owner and pull a conduit
+  enough: a user scoped to one system could otherwise claim an identity that belongs to another owner and pull a conduit
   it cannot read onto its system, and one scoped to the conduit could write onto systems it cannot
   update.
 
@@ -660,9 +678,9 @@ promise:
   owner other than the endpoint's component, authorized by the binding, which was checked on both
   ends when it was written; the ingest's fan-out read runs in system mode, as the rest of ingest does.
   Nothing in a payload names an owner: a payload names an identity, resolved only against the bindings
-  of the conduit the batch is already confined to (the node's own task's component at
+  of the conduit the batch is already confined to (the outpost's own task's component at
   `ResolveTaskOwner`, or the webhook token's one endpoint's component). The Storage Gateway holds every
-  fanned row to the `fan-out` writer: a `collected` key only (never a node-probe, platform,
+  fanned row to the `fan-out` writer: a `collected` key only (never an outpost-probe, platform,
   command-lifecycle or calc-owned key), on an owner one of the conduit's bindings names, re-read in
   the write's own transaction. A fanned sample then reads wherever its owner's samples read, under the
   owner's `read` and scope-injected on the owner's tier, so a binding widens the conduit's reach onto
@@ -699,7 +717,7 @@ force-allow.
 The hot path must not hit the DB for RBAC. Three layers, in-process, no persisted "effective permissions" projection (which invites the stale-join class of cache-coherence bug):
 
 1. **Role index**: at boot, the `role` table loads into a Go map with `inherits` resolved transitively into flattened pattern sets. Wildcards and the **`:read` floor are not pre-expanded** (the matcher evaluates both per call). Refreshed on a NATS KV watch keyed on `role` changes.
-2. **Principal cache**: at session establish (or first token-auth), the principal's **grants** and the `role -> perms` index are cached by `principal_id`; the flattened `Set[resource:action]` (used only for the fast-reject and `/auth/me`) derives from them. Invalidated on a NATS KV watch keyed on `principal_grant`, `principal`, or `role` changes. **Group membership resolves live in-query** (no materialized member-set cache), so a dynamic group's expansion is always current.
+2. **User cache**: at session establish (or first token-auth), the user's **grants** and the `role -> perms` index are cached by `user_id`; the flattened `Set[resource:action]` (used only for the fast-reject and `/auth/me`) derives from them. Invalidated on a NATS KV watch keyed on `user_grant`, `users`, or `role` changes. **Group membership resolves live in-query** (no materialized member-set cache), so a dynamic group's expansion is always current.
 3. **Per-request**: the per-action authorization is **composed at request time** from the cached grants + `role -> perms`: an O(1) Set-membership fast-reject in the middleware, and the gateway's `visible_set(P, action)` unioned from only the grants whose role carries the action.
 
 The DB is the source of truth; caches are derived views with explicit invalidation events, carried in **NATS KV** (not Postgres `LISTEN/NOTIFY`) through the leader-elected CDC publisher, the same contract single-binary (embedded NATS) or against an external cluster.
@@ -709,13 +727,13 @@ The DB is the source of truth; caches are derived views with explicit invalidati
 
 ## The /auth/me contract
 
-The web app (and any CLI client) gets the principal + their effective permissions in one call:
+The web app (and any CLI client) gets the user + their effective permissions in one call:
 
 ```json
 GET /api/v1/auth/me
 {
-  "principal": { "id": "...", "kind": "human" },
-  "human":     { "username": "jordan", "email": "jordan@example.com", "label": "Jordan Rivera", ... },
+  "user":   { "id": "...", "kind": "person" },
+  "person": { "username": "jordan", "email": "jordan@example.com", "label": "Jordan Rivera", ... },
   "permissions": [
     "component:read", "component:create", "component:update",
     "alarm:acknowledge",
@@ -728,18 +746,121 @@ GET /api/v1/auth/me
 }
 ```
 
-The `/auth/me` family also manages **the caller's own** identity: `PATCH /api/v1/auth/me` edits the caller's `label` (email is administrator-set), and `POST /api/v1/auth/me:changePassword` verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list; acting on **another** principal is the admin surface and does carry capabilities. The same family manages **its own sessions**: `GET /api/v1/auth/me/sessions` lists the caller's **live** bearer credentials (told apart by `credential.purpose`; the request's own credential flagged `current`, expired rows omitted by the same filter `AuthenticateBearer` uses), returning only non-secret metadata (the `sha256(token)` is compared in-query and never leaves the database). `POST /api/v1/auth/me/sessions/{id}:revoke` deletes one, **bounded to the caller's own principal** (another principal's credential id is a non-disclosing 404); revoking the current credential signs that session out. The **bulk** `POST /api/v1/auth/me/sessions:revokeAll` with a `{ purpose }` body (`session` or `token`) ends all of one kind, **always keeping the credential that made the request**, and returns the count (reusing `RevokeBearersByPurposeExcept`, the change-password force-logout primitive). `POST /api/v1/auth/me/tokens` mints the caller's own API token (a **required** description, an optional `ttl_days`, default 90, capped at 365), returning the secret **once**. Every bearer credential carries **identifying metadata**: the token's description (empty on an auto-created session), the **user-agent** and **client-ip** that created it (captured by middleware before Huma; the client-ip is the connection's peer, or, only when that peer is a trusted proxy, the rightmost `X-Forwarded-For` hop outside the trusted set, which `OMNIGLASS_TRUSTED_PROXIES` configures and which defaults to the loopback and private ranges, so a client reaching the server directly cannot name its own address; [ADR-1185](/architecture/decisions/#adr-1185-the-client-address-believes-a-forwarded-header-only-from-a-configured-proxy)), and a **`last_used_at`** bumped on authentication (throttled to once a minute). GeoIP is **deferred**. The console splits the list into **Sessions** and **API tokens** sections, each with a **Revoke all**, plus a **Create token** action.
+The `/auth/me` family also manages **the caller's own** identity: `PATCH /api/v1/auth/me` edits the caller's `label` (email is administrator-set), and `POST /api/v1/auth/me:changePassword` verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list; acting on **another** user is the admin surface and does carry capabilities. The same family manages **its own sessions**: `GET /api/v1/auth/me/sessions` lists the caller's **live** bearer credentials (told apart by `credential.purpose`; the request's own credential flagged `current`, expired rows omitted by the same filter `AuthenticateBearer` uses), returning only non-secret metadata (the `sha256(token)` is compared in-query and never leaves the database). `POST /api/v1/auth/me/sessions/{id}:revoke` deletes one, **bounded to the caller's own user** (another user's credential id is a non-disclosing 404); revoking the current credential signs that session out. The **bulk** `POST /api/v1/auth/me/sessions:revokeAll` with a `{ purpose }` body (`session` or `token`) ends all of one kind, **always keeping the credential that made the request**, and returns the count (reusing `RevokeBearersByPurposeExcept`, the change-password force-logout primitive). `POST /api/v1/auth/me/tokens` mints the caller's own API token (a **required** description, an optional `ttl_days`, default 90, capped at 365), returning the secret **once**. Every bearer credential carries **identifying metadata**: the token's description (empty on an auto-created session), the **user-agent** and **client-ip** that created it (captured by middleware before Huma; the client-ip is the connection's peer, or, only when that peer is a trusted proxy, the rightmost `X-Forwarded-For` hop outside the trusted set, which `OMNIGLASS_TRUSTED_PROXIES` configures and which defaults to the loopback and private ranges, so a client reaching the server directly cannot name its own address; [ADR-1185](/architecture/decisions/#adr-1185-the-client-address-believes-a-forwarded-header-only-from-a-configured-proxy)), and a **`last_used_at`** bumped on authentication (throttled to once a minute). GeoIP is **deferred**. The console splits the list into **Sessions** and **API tokens** sections, each with a **Revoke all**, plus a **Create token** action.
 
-The **admin** counterpart ends **another** principal's sessions, so a lost laptop or a leaked API token can be cut off without resetting the account. `GET /api/v1/principals/{id}/sessions` lists the target's active bearer credentials in the same non-secret shape, with `current` **always false** (a nil `currentHash`); `POST /api/v1/principals/{id}/sessions/{sid}:revoke` ends one (204). Both gate on **`principal:revoke-session`**, a normal two-token permission held by `admin` and `owner` through `principal:*` / `>`, kept separable for a future help-desk role. The revoke reuses the same principal-scoped delete as the self-service one (a `sid` that is not the target's is a non-disclosing 404) and sits behind the same **takeover guard** as impersonation and the password reset: an **owner's sessions cannot be revoked by anyone**, nor can a caller revoke a principal whose capabilities exceed its own. It is **audited with the acting admin as the actor and the target principal** (`verb = revoke_session`; the real actor rides context when impersonating). The list is read-only and carries no takeover guard, so an admin can *see* an owner's sessions even where it cannot end them. The **bulk** `POST /api/v1/principals/{id}/sessions:revokeAll` (`{ purpose }`) ends **all** of one kind (a purpose-filtered `RevokeBearersByPurpose`, so revoking sessions never touches tokens) and returns the count, with the same gate, guard, and audit.
+### Agent tokens
 
-`permissions` is the flat union of the caller's roles' **raw patterns** (wildcards like `principal:*` and `>` ride through unexpanded, the `:read` floor not materialized), so a `useCan(...)` check in the web app applies the same matching rules the server does. It is a **fast-reject / UI hint only**: "could this principal ever do X anywhere", never "can it do X to **this** entity". Per-row action affordances (the acknowledge button on a specific alarm) must be computed against `visible_set(P, action)` for that target, which the `grants` array drives (scope chips, per-row actionability, explaining why a button is hidden). The server is the only authority regardless.
+An **agent token** is a token type on the person's own credential, not a user of its own
+([ADR-1179](/architecture/decisions/#adr-1179-an-agent-token-is-a-token-type-on-its-persons-credential-and-never-reveals)).
+`POST /api/v1/auth/me/tokens` with an `agent` name mints one; the name is fixed at issue, `ttl_days`
+is **required** (an agent token always expires), and two optional fields narrow it:
+
+- **`roles`** are the agent's own grant. Its authority is that grant **intersected** with the
+  minter's current permissions (`rbac.Set.Within`), resolved in `authn` on **every** request, so
+  narrowing or revoking the person's access narrows or stops the agent at its next call. A role the
+  minter does not cover is refused at mint (403); an unknown role is a 422. With no roles the agent
+  holds what its person holds. The scope the Storage Gateway injects is the person's, gated by the
+  intersected permissions in `scopeFor`, so a scope never outruns the capability.
+- **`channels`** (`api`, `mcp`) is an allowlist of the paths it is accepted on, checked in `authn`
+  against the channel the MCP dispatch sets on the request context, which no caller can claim. A
+  refused channel is a 403, except `GET /auth/me`, so the agent can still read who it is.
+
+**The plaintext ceiling.** An agent token never holds a `reveal` or `enroll` action, whatever its
+roles: `authn` strips them by construction (`rbac.Set.Without`), so the owner's `>` loses them too,
+and the denied actions are out of reach of any wildcard. The ceiling applies to an agent token on
+every channel **and** to any token used through MCP, so an agent never decrypts a credential on its
+person's behalf; it works with credentials only through routes that use them server-side (an
+endpoint poll, a command issue), knowing a credential is present and never its value. The ceiling
+covers exactly the operations whose output is a credential in plaintext (reveal, copy, a minted
+token, an enrollment token, which is itself an outpost credential); everything else the person may do,
+the agent may do ([ADR-2047](/architecture/decisions/#adr-2047-an-agent-may-do-what-its-person-may-except-take-a-credential-out-in-plaintext)).
+That includes **binding**: a write that hands a secret to a target (an endpoint attach or an edit
+of a secret-bound endpoint's inputs or outpost, a plan applied from a template, a simulated system or
+fleet device, a notification target, the mail relay) takes **`secret:bind`** on the secret, on top
+of `secret:read` (`secretBind`), whoever the caller is. A secret the caller cannot read is the
+non-disclosing refusal; one it can read but not bind is a 403 naming `secret:bind`. Binding
+chooses where a credential goes, so the person decides per tool in their MCP client whether an
+agent's bind runs always, asks first or never; the platform does not hold an agent's write for
+approval, and every such write is audited as the agent's.
+
+The `/auth/me` permission list is conservative under the ceiling (a held `>` lists nothing), while the
+route check stays exact. An agent token is also refused, with a 403 before its body is read, by the
+routes that would let it escape: minting a token, changing the password, and impersonation (an
+impersonation token is not an agent token and would shed both the ceiling and the attribution).
+Every escalation guard (granting a role, adding a group member, resetting a password, impersonating)
+measures a constrained caller by its bounded permissions, so an agent cannot hand a user it
+controls a capability it is itself denied.
+
+Every write it makes records the person as `actor` and the agent's name in `audit_log.agent`
+([audit](/architecture/audit/)); the session list returns `agent`, `agent_roles` and
+`agent_channels` per credential, and revoking it alone leaves the person's sessions untouched.
+
+#### MCP clients sign in with OAuth 2.1
+
+An MCP client gets an agent token without the person minting one, through the OAuth 2.1
+authorization code flow the MCP authorization spec names
+([ADR-2048](/architecture/decisions/#adr-2048-an-mcp-client-signs-in-with-oauth-21-for-an-agent-token-linked-to-it)).
+Omniglass is both the resource server and the authorization server:
+
+- **Discovery.** `/mcp` refuses a request with no token with a `WWW-Authenticate` challenge whose
+  `resource_metadata` names `/.well-known/oauth-protected-resource/mcp` (RFC 9728); that document
+  names the server as its own authorization server, whose metadata is
+  `/.well-known/oauth-authorization-server` (RFC 8414). The origin in every URL is the request's,
+  with an `X-Forwarded-Proto` believed only from a trusted proxy.
+- **Registration.** `POST /oauth/register` is open dynamic client registration (RFC 7591): a public
+  client (no secret, `token_endpoint_auth_method` `none`), the code and refresh grants, and redirect URIs that
+  are https or http on a loopback host. A registration nobody consented to within a day is pruned.
+- **Client metadata documents.** A client may skip registration and use an https URL as its
+  `client_id`, the URL serving its metadata (the MCP spec's client ID metadata document); the
+  authorization server metadata says so with `client_id_metadata_document_supported`. At authorize the
+  server fetches the document through the [egress contract](/architecture/alarms-actions/#durability-and-egress) a webhook sends through (never a private or
+  loopback address, whatever the install's allow list names, 5 KB at most), requires its `client_id` to
+  equal the URL it came from, and holds the client to the redirect URIs it lists, under the same rules
+  as a registration. The client is kept keyed by its URL and refetched after ten minutes; a refetch
+  that fails refuses the client rather than trusting the stale copy. The client is named by its URL
+  alone; its stored id is no client to the OAuth endpoints, and consent refuses a stale document. A document that fails any check is
+  a 400 with no redirect. The consent page names the host serving the document beside the client's
+  self-chosen name, since the host is the part it cannot choose. The token and refresh grants take the
+  URL as `client_id` without fetching, and, since a client may send it as an HTTP Basic username
+  (RFC 6749 2.3.1), read it from there too; a form value differing from the header is refused
+  ([ADR-2074](/architecture/decisions/#adr-2074-an-mcp-client-may-name-itself-by-a-metadata-document-url-fetched-through-egress)).
+- **Authorization.** `GET /oauth/authorize` takes the code response type, S256 PKCE and the `resource`
+  (this server's `/mcp`); an unknown client or a redirect URI it did not register is a 400 with no
+  redirect, and the redirect is compared exactly, except that an http loopback redirect matches on
+  any port, since a native client listens on whichever is free (OAuth 2.1, RFC 8252 section 7.3). A valid request goes to the console's consent
+  page, where the signed-in person approves roles or denies. The approval
+  (`authorize-oauth-client`) is a person's alone: an agent token is refused it, like minting a token,
+  so an agent cannot consent for another client. Each approved role must be one the person covers.
+  No other site may frame a console page (`frame-ancestors 'none'`), so none can overlay its own
+  content on the Approve button.
+- **Exchange.** `POST /oauth/token` spends the code on any attempt (it lives five minutes, stored as
+  a hash), checks the client, redirect, resource and PKCE verifier, and mints an agent token named
+  after the client, on the `mcp` channel only, with the approved roles and a one-hour lifetime, plus a
+  refresh token good for 30 days (`Cache-Control: no-store`). The credential row links the client, and
+  a client holds one token per person: a new sign-in replaces the old token in the same transaction.
+  There is no implicit or password grant.
+- **Refresh.** The refresh grant spends the refresh token (stored as a hash) and rotates the same
+  credential row in place: a new access token for an hour and a new refresh token for another 30 days,
+  so a client in use stays connected and one left idle for 30 days signs its person in again. The
+  rotation is audited as the person's, taken by the client. A spent refresh token presented again
+  means it leaked: the grant ends (the credential and its refresh chain are deleted, audited as a
+  revoke). A token from another client, an expired one, or one whose person is disabled is refused
+  without being spent ([ADR-2073](/architecture/decisions/#adr-2073-an-oauth-client-refreshes-a-one-hour-token-with-a-rotating-refresh-token)).
+  The session list keeps the client while its refresh token is good, showing that expiry.
+
+The token is an ordinary agent token from then on: the intersection with the person's grants, the
+plaintext ceiling, the audit `agent` name and revocation from the session list all apply unchanged.
+
+The **admin** counterpart ends **another** user's sessions, so a lost laptop or a leaked API token can be cut off without resetting the account. `GET /api/v1/users/{id}/sessions` lists the target's active bearer credentials in the same non-secret shape, with `current` **always false** (a nil `currentHash`); `POST /api/v1/users/{id}/sessions/{sid}:revoke` ends one (204). Both gate on **`user:revoke-session`**, a normal two-token permission held by `admin` and `owner` through `user:*` / `>`, kept separable for a future help-desk role. The revoke reuses the same user-scoped delete as the self-service one (a `sid` that is not the target's is a non-disclosing 404) and sits behind the same **takeover guard** as impersonation and the password reset: an **owner's sessions cannot be revoked by anyone**, nor can a caller revoke a user whose capabilities exceed its own. It is **audited with the acting admin as the actor and the target user** (`verb = revoke_session`; the real actor rides context when impersonating). The list is read-only and carries no takeover guard, so an admin can *see* an owner's sessions even where it cannot end them. The **bulk** `POST /api/v1/users/{id}/sessions:revokeAll` (`{ purpose }`) ends **all** of one kind (a purpose-filtered `RevokeBearersByPurpose`, so revoking sessions never touches tokens) and returns the count, with the same gate, guard, and audit.
+
+`permissions` is the flat union of the caller's roles' **raw patterns** (wildcards like `user:*` and `>` ride through unexpanded, the `:read` floor not materialized), so a `useCan(...)` check in the web app applies the same matching rules the server does. It is a **fast-reject / UI hint only**: "could this user ever do X anywhere", never "can it do X to **this** entity". Per-row action affordances (the acknowledge button on a specific alarm) must be computed against `visible_set(P, action)` for that target, which the `grants` array drives (scope chips, per-row actionability, explaining why a button is hidden). The server is the only authority regardless.
 
 ## Profile pictures
 
-A human principal can carry a **profile picture**, on the identity surface's two lanes.
+A person can carry a **profile picture**, on the identity surface's two lanes.
 **Self**: `POST /auth/me:setAvatar` / `:removeAvatar`, authn-only and self-scoped, no capability.
-**Admin**: `POST /principals/{id}:setAvatar` / `:removeAvatar`, gated `principal:set-avatar` (an all-scope
-capability, held by `admin` through `principal:*` and `owner` through `>`), audited with the administrator
+**Admin**: `POST /users/{id}:setAvatar` / `:removeAvatar`, gated `user:set-avatar` (an all-scope
+capability, held by `admin` through `user:*` and `owner` through `>`), audited with the administrator
 as the actor; an avatar is not a capability, so the admin lane carries no takeover guard (unlike a password
 reset).
 
@@ -747,26 +868,26 @@ The upload is **normalized server-side** by the pure `avatar.Normalize` primitiv
 bypass it: JPEG, PNG, or WebP in (anything else rejected), a payload over 8 MiB or any source dimension
 over 8000px refused (two decompression-bomb guards), center-cropped to the largest centered square, resized
 to 256x256, re-encoded as JPEG at quality 82; a bad or oversize image is a **422**. The one normalized size
-is stored **base64 on the human row** (`avatar`, with `avatar_updated_at`); the bytes are **never** loaded
-on the `loadPrincipal` hot path, which selects only `avatar is not null`, so the read models carry a cheap
+is stored **base64 on the person row** (`avatar`, with `avatar_updated_at`); the bytes are **never** loaded
+on the `loadUser` hot path, which selects only `avatar is not null`, so the read models carry a cheap
 `has_avatar` flag and the console falls back to initials without paying for the payload per row.
 
-The **read side is a JSON endpoint** (`GET /principals/{id}/avatar` gated `principal:read:admin`,
-`GET /auth/me/avatar` on the self lane) returning `{ image_base64 }`, rendered as a `data:` URL; a principal
+The **read side is a JSON endpoint** (`GET /users/{id}/avatar` gated `user:read:admin`,
+`GET /auth/me/avatar` on the self lane) returning `{ image_base64 }`, rendered as a `data:` URL; a user
 without a picture is a **404**. JSON, **not** raw `image/jpeg`
 ([ADR-0018](/architecture/decisions/#adr-0018-the-avatar-read-endpoint-is-json-not-raw-image-bytes)): a
 raw-bytes chi handler would sit outside the Huma authz middleware, breaking the permission-on-every-route
 invariant, and a bare `<img src>` cannot carry a bearer.
 
-:::design[The nkey/JWT node identity and placement-derived subject grants, per ADR-0036]
-## The node path
+:::design[The nkey/JWT outpost identity and placement-derived subject grants, per ADR-0036]
+## The outpost path
 
-Nodes do not use general role x scope. A node authenticates with a per-tenant **NATS JWT/nkey** credential bound to its `node.name` and is authorized only to **its own assignments**: publish telemetry, heartbeat, consume its commands. The scope is carried by **NATS subject permissions**, not a route authorizer:
+Outposts do not use general role x scope. An outpost authenticates with a per-tenant **NATS JWT/nkey** credential bound to its `outpost.name` and is authorized only to **its own assignments**: publish telemetry, heartbeat, consume its commands. The scope is carried by **NATS subject permissions**, not a route authorizer:
 
-- A node is a NATS client over the WAN (outbound only). The connection resolves the principal (kind=`node`) from the nkey, and the JWT's subject permissions are the node's placement-derived `visible_set`: publish only to its own ingress and report subjects, consume only from its own durable command queue. Placement (the [cascade](/architecture/cascade/)) compiles into the account's subject grants, so a node can address only the owners it covers.
-- A node's published samples are owner-bound at **stream-consume time, ahead of any evaluation**, by the **admission consumer**: for a node it checks the payload owner against the node's placement-derived `visible_set`; for a central webhook, against the endpoint's declared owner ([messaging](/architecture/messaging/)). Only confined samples re-publish to the trusted stream; an owner outside the set is an orphan / discovery candidate, never an authoritative sample ([collection](/architecture/collection/)). The fence cannot live only at the durable write, because the rule engine consumes the stream **live**: a forged owner must be caught **before** it can open an alarm or fire an action. **Trusted server-internal producers** (calc, the action layer's intended write) publish to the trusted stream directly. The admission consumer runs in **system mode**; the persistence sink is a trusted system-mode `COPY` relying on confined owners upstream.
+- An outpost is a NATS client over the WAN (outbound only). The connection resolves the user (kind=`outpost`) from the nkey, and the JWT's subject permissions are the outpost's placement-derived `visible_set`: publish only to its own ingress and report subjects, consume only from its own durable command queue. Placement (the [cascade](/architecture/cascade/)) compiles into the account's subject grants, so an outpost can address only the owners it covers.
+- An outpost's published samples are owner-bound at **stream-consume time, ahead of any evaluation**, by the **admission consumer**: for an outpost it checks the payload owner against the outpost's placement-derived `visible_set`; for a central webhook, against the endpoint's declared owner ([messaging](/architecture/messaging/)). Only confined samples re-publish to the trusted stream; an owner outside the set is an orphan / discovery candidate, never an authoritative sample ([collection](/architecture/collection/)). The fence cannot live only at the durable write, because the rule engine consumes the stream **live**: a forged owner must be caught **before** it can open an alarm or fire an action. **Trusted server-internal producers** (calc, the action layer's intended write) publish to the trusted stream directly. The admission consumer runs in **system mode**; the persistence sink is a trusted system-mode `COPY` relying on confined owners upstream.
 
-A `node` credential whose subject permissions do not cover a subject is rejected by NATS at publish/subscribe time; a non-`node` principal cannot hold a node account's subject grants.
+An `outpost` credential whose subject permissions do not cover a subject is rejected by NATS at publish/subscribe time; a non-`outpost` user cannot hold an outpost account's subject grants.
 :::
 
 ## One model, never duplicated
@@ -774,15 +895,15 @@ A `node` credential whose subject permissions do not cover a subject is rejected
 Each layer is **enforced in one place and re-derived nowhere else**: capability in the route middleware, scope in the Storage Gateway (which also writes the in-transaction `audit_log`, owning scope and audit but not capability). No third surface re-implements either:
 
 - **The live UI relay calls these, it does not copy them.** Operators never connect to NATS. The SSE subscribe is a normal route, **capability fast-rejected** at open (not authorized there); the server-side [SSE relay](/architecture/messaging/) runs each candidate message through the **same** gateway scope a read uses (`visible_set(P, read)` against the message's exclusive-arc owner), and the session **re-checks on every grant-cache invalidation**, so a mid-stream scope shrink tears the stream down rather than leaking.
-- **Node subject permissions gate the subject; the admission consumer gates the owner.** Subject permissions constrain the subject **string**, while a sample's owner lives in the **payload**: subject perms keep a node off subjects it has no business on; the admission consumer (above) keeps a forged owner label out of the trusted stream. The bus carries no operator (`kind=human`) clients at all.
+- **Outpost subject permissions gate the subject; the admission consumer gates the owner.** Subject permissions constrain the subject **string**, while a sample's owner lives in the **payload**: subject perms keep an outpost off subjects it has no business on; the admission consumer (above) keeps a forged owner label out of the trusted stream. The bus carries no operator (`kind=person`) clients at all.
 
 ## Encryption in transit
 
-TLS on the HTTP API (terminated at the binary when given a cert + key, or at the operator's reverse proxy) and on the NATS connection that carries node telemetry and commands. **BYO PKI.** "TLS off" is a deliberate dev-mode flag, never a silent default.
+TLS on the HTTP API (terminated at the binary when given a cert + key, or at the operator's reverse proxy) and on the NATS connection that carries outpost telemetry and commands. **BYO PKI.** "TLS off" is a deliberate dev-mode flag, never a silent default.
 
 ## Audit
 
-Every API operation records the resolved **actor** (the principal id) in `audit_log`; secret decrypts are always audited, never filterable. Node-mode writes record the node principal; a system-mode write records a **null** actor (`audit_log.actor_principal_id` is a nullable foreign key), distinguishing operator action from platform internals; an impersonated request also records `real_actor_principal_id`. Fleet mutations write their `audit_log` row **in the same transaction** as the change (via the Storage Gateway); **auth events** (login, logout) fire on read/no-tx paths through a separate non-transactional seam under `resource = 'auth'`. The read side (`GET /audit-log`) requires the admin-sensitive `audit:read:admin`, out of a two-token wildcard's reach ([ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)). A token's minting (the bootstrap token's included) and revoking (a logout with it included) are written too (`resource = 'credential'`, verbs `create` and `revoke`, keyed by the credential id and carrying its prefix and description, never the token), since a token is how an agent or a script is given access. An MCP tool call's row carries `channel = 'mcp'` and the client the agent declared, set by the server. An attempt on an **unknown** username is **not** written, so scanning random usernames cannot flood the log; endpoint rate limiting (a later slice) bounds a targeted brute force. The full model, including the auth-event verbs, is [audit](/architecture/audit/).
+Every API operation records the resolved **actor** (the user id) in `audit_log`; secret decrypts are always audited, never filterable. Outpost-mode writes record the outpost user; a system-mode write records a **null** actor (`audit_log.actor_user_id` is a nullable foreign key), distinguishing operator action from platform internals; an impersonated request also records `real_actor_user_id`. Fleet mutations write their `audit_log` row **in the same transaction** as the change (via the Storage Gateway); **auth events** (login, logout) fire on read/no-tx paths through a separate non-transactional seam under `resource = 'auth'`. The read side (`GET /audit-log`) requires the admin-sensitive `audit:read:admin`, out of a two-token wildcard's reach ([ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)). A token's minting (the bootstrap token's included) and revoking (a logout with it included) are written too (`resource = 'credential'`, verbs `create` and `revoke`, keyed by the credential id and carrying its prefix and description, never the token), since a token is how an agent or a script is given access. An MCP tool call's row carries `channel = 'mcp'` and the client the agent declared, set by the server. An attempt on an **unknown** username is **not** written, so scanning random usernames cannot flood the log; endpoint rate limiting (a later slice) bounds a targeted brute force. The full model, including the auth-event verbs, is [audit](/architecture/audit/).
 
 One slice of the audit log is readable without `audit:read:admin`, deliberately: an **alarm's timeline**
 (`GET /components/{name}/alarms/{id}:timeline`, `alarm:read` with the component's read scope) shows the
@@ -792,34 +913,34 @@ own `acknowledged_by` already does ([alarms and actions](/architecture/alarms-ac
 
 ## Bootstrap
 
-The first install runs `omniglass bootstrap <username>` with optional `--password <pw>`, `--email <email>`, and `--label <name>` flags: one transaction creating the first operator as a `human` principal with an `owner @ all` grant and a bearer credential; `--password` also installs a password credential for the web console. There is no implicit default principal; the bootstrap is the only path to the first owner.
+The first install runs `omniglass bootstrap <username>` with optional `--password <pw>`, `--email <email>`, and `--label <name>` flags: one transaction creating the first operator as a person with an `owner @ all` grant and a bearer credential; `--password` also installs a password credential for the web console. There is no implicit default user; the bootstrap is the only path to the first owner.
 
 ## Worked example
 
-Sam, an AV support tech, is SCIM-synced into the **`AV-Support`** `principal_group`, which holds `operator @ "AV-devices" (component-group), viewer @ "HQ" (location)`. Sam operates on AV devices fleet-wide and reads everything at HQ; the gateway hides every row outside those scopes, and the middleware blocks `principal:create` (not in `operator`). The day a device joins the `AV-devices` dynamic group it enters Sam's scope; the day Sam leaves `AV-Support` in the IdP, SCIM removes the grant.
+Sam, an AV support tech, is SCIM-synced into the **`AV-Support`** `user_group`, which holds `operator @ "AV-devices" (component-group), viewer @ "HQ" (location)`. Sam operates on AV devices fleet-wide and reads everything at HQ; the gateway hides every row outside those scopes, and the middleware blocks `user:create` (not in `operator`). The day a device joins the `AV-devices` dynamic group it enters Sam's scope; the day Sam leaves `AV-Support` in the IdP, SCIM removes the grant.
 
 :::caution[Open question]
-The SCIM mapping detail: which IdP attributes drive `principal_group` membership and grants.
+The SCIM mapping detail: which IdP attributes drive `user_group` membership and grants.
 :::
 
 ## Storage
 
 The IAM subjects and their grants; the physical layout lives on [storage](/architecture/storage/). Each
-kind carries its own identifier and, where it has one, a label: `human.username` plus email and the
-optional `label`, `service.name`, and `node.name` with its own `label` (whose full
-table renders on [core entities](/architecture/core-entities/)). A service account has an identifier
+kind carries its own identifier and, where it has one, a label: `person.username` plus email and the
+optional `label`, `machine.name`, and `outpost.name` with its own `label` (whose full
+table renders on [core entities](/architecture/core-entities/)). A machine user has an identifier
 and no label at all: the console shows its name, and there is nowhere else to put words.
 
-<SchemaTable table="principal" notes={{ kind: 'human, service, or node; the per-kind table holds the rest' }} />
+<SchemaTable table="users" notes={{ kind: 'person or machine; the per-kind table holds the rest, and an outpost&#39;s machine user keeps its detail on its outpost row' }} />
 
 <SchemaTable
-  table="human"
+  table="person"
   notes={{
     label: 'The person&#39;s real name, the operator-facing label',
   }}
 />
 
-<SchemaTable table="service" />
+<SchemaTable table="machine" />
 
 `role` is the RBAC capability set; viewer/operator/admin/owner ship, custom roles are org-local.
 
@@ -831,10 +952,10 @@ and no label at all: the console shows its name, and there is nowhere else to pu
   }}
 />
 
-`principal_grant` is role times scope, additive: the scope is a structural entity or `all`.
+`user_grant` is role times scope, additive: the scope is a structural entity or `all`.
 
 <SchemaTable
-  table="principal_grant"
+  table="user_grant"
   notes={{
     scope_kind: 'Which arm carries the scope; group is admitted by the CHECK but refused by every code path today',
     scope_op: 'How the scope composes',

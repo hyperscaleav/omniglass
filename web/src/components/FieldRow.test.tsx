@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render } from "@solidjs/testing-library";
 import FieldRow from "./FieldRow";
+import TreeSelect from "./TreeSelect";
 
 describe("FieldRow", () => {
   it("renders the label and its control", () => {
@@ -19,6 +20,19 @@ describe("FieldRow", () => {
     const control = getByRole("textbox");
     expect(label.getAttribute("for")).toBe(control.id);
     expect(control.id).toBeTruthy(); // the wrapper generated and assigned an id
+  });
+
+  it("points the label at the trigger of a composite control, not its wrapper", () => {
+    // A TreeSelect is a group around a button; a label aimed at the group labels
+    // nothing, so the accessible name of the picker would be its selected value.
+    const { getByText, getByRole } = render(() => (
+      <FieldRow label="Parent">
+        <TreeSelect items={[{ id: "a", value: "a", label: "A" }]} value="a" onChange={() => {}} />
+      </FieldRow>
+    ));
+    const trigger = getByRole("button");
+    expect((getByText("Parent") as HTMLLabelElement).getAttribute("for")).toBe(trigger.id);
+    expect(trigger.id).toBeTruthy();
   });
 
   it("renders a hint under the control when given", () => {

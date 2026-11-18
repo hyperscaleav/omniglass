@@ -13,7 +13,7 @@ import (
 // a permission token finds every operation it gates), and every ungated
 // operation's description must say why it needs no gate ("public" or
 // "authn-only"). Before this test, one operation had already deviated: the
-// principal purge described a two-token gate while carrying the admin-tier
+// user purge described a two-token gate while carrying the admin-tier
 // three-token stamp.
 func TestDescriptionsNameTheirGate(t *testing.T) {
 	t.Parallel()
