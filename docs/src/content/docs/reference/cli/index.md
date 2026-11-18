@@ -290,7 +290,7 @@ Run omnibot on one of your conversations
 omniglass assistant conversation run <name> [flags]
 ```
 
-Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use.
+Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. The run talks to the model the assistant settings configure, read as it starts; with none, the server's recording, if it has one. A server with no model, or a configured model whose key no longer resolves, is a 503. Gated by assistant:use.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -3265,6 +3265,7 @@ Docker is the only requirement. Only the console is published, on 127.0.0.1 (--l
 | `--image` | string | (none) | run this omniglass image instead of the one this binary was built with (env OMNIGLASS_LAB_IMAGE); one that is not this binary's own build is warned about |
 | `--keep` | bool | `false` | a scale lab: keep its data when it stops, so the next run with the same scenario, size and --keep picks up where it left off (--fresh starts over) |
 | `--listen` | string | `127.0.0.1` | the address the console is published on; anything but loopback exposes the lab, and its well-known login, to your network |
+| `--omnibot-key-env` | string | (none) | run omnibot on a live model (GitHub Models by default) with the key in this environment variable, e.g. GITHUB_TOKEN; without it omnibot plays a recording |
 | `--plan` | bool | `false` | print the scale lab scenario's resolved plan (sites, systems per standard, components per product) and exit, starting nothing |
 | `--port` | int | `8080` | the console's port on this machine; 0 lets Docker pick a free one, printed when the lab is ready |
 | `--scenario` | string | `dev` | the fleet the lab seeds on its first run (the seed-dev command lists them), or a scale lab scenario (corporate) sized by --systems |
@@ -4514,20 +4515,21 @@ Run omnibot, the built-in assistant, on a prompt or in a chat
 omniglass omnibot [prompt...] [flags]
 ```
 
-Runs omnibot, the built-in assistant, against the server's MCP tools as the person whose token it is given. It mints a one-day agent token of its own for the omnibot channel, so the audit log shows its actions as omnibot's acting for that person, and revokes the token when it finishes. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks for a credential without echo, stores it as a secret with your own token, and tells omnibot only its name, so the value never reaches the model. --resume <name> keeps the conversation on the server under that name, for you alone, and picks it up where it was left; a call a paused run left waiting is put to you first. The model is a recording (--replay) until a live provider lands.
+Runs omnibot, the built-in assistant, as the person whose token it is given. The conversation runs on the server, on the model the install is configured with (the assistant settings), so the model's key never reaches this terminal; the server is told it acts for you and the audit log shows its actions as omnibot's. A tool whose agent policy is always runs, one whose policy is ask is put to you on the terminal first (without a terminal it is declined), and one whose policy is never is not offered. With no prompt it opens a chat, each line continuing the conversation; in the chat, /secret <name> <type> [location:<name>|component:<name>] asks for a credential without echo, stores it as a secret with your own token, and tells omnibot only its name, so the value never reaches the model. Each conversation is kept on the server for you alone; --resume <name> names it, picking it up where it was left if it exists, and a call a paused run left waiting is put to you first. --replay <file> runs the loop on this machine instead, on a recorded model, with a one-day agent token of its own that it revokes when it finishes; --max-steps bounds that loop.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--max-steps` | int | `10` | the most model turns the run takes before it stops |
-| `--replay` | string | (none) | a recorded model to drive the run (YAML turns) |
+| `--max-steps` | int | `10` | with --replay, the most model turns the run takes before it stops |
+| `--replay` | string | (none) | run the loop here on a recorded model (YAML turns) instead of on the server's |
 | `--resume` | string | (none) | keep the conversation on the server under this name, picking it up if it exists |
 
 Example:
 
 ```sh
-omniglass omnibot --replay lobby.yaml "add a display to the lobby"
-  omniglass omnibot --replay lobby.yaml
-  omniglass omnibot --replay lobby.yaml --resume lobby-refit
+omniglass omnibot "add a display to the lobby"
+  omniglass omnibot
+  omniglass omnibot --resume omnibot-3f2a
+  omniglass omnibot --replay lobby.yaml "add a display to the lobby"
 ```
 
 ## `omniglass outpost`
