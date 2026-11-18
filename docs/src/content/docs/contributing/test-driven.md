@@ -79,7 +79,7 @@ unproven proves nothing about the capability.
   throwaway lab of a project of its own per run (`omniglass lab run`, through
   `web/e2e/lib/lab.sh`), on a loopback port Docker picks, which isolates them the same way.
   The browser tier's lab is seeded with the `empty` scenario, so its CRUD round-trips start
-  from a fresh install; the screenshots' lab runs with no node (`--no-node`), so the pages
+  from a fresh install; the screenshots' lab runs with no outpost (`--no-outpost`), so the pages
   they photograph hold still. The browser tier has a floor
   no console route can dodge: the router renders from a route manifest
   (`web/src/lib/routemanifest.ts`) and the smoke spec (`web/e2e/routes.spec.ts`) drives
@@ -151,9 +151,9 @@ label and the `postgres:18` image so it never touches the compose dev stack.
 ### Tests run in parallel, and a fixture is seeded once
 
 Because every test owns a database, tests in `internal/storage`,
-`internal/devseed`, `internal/api` and `internal/node` are independent by
+`internal/devseed`, `internal/api` and `internal/outpost` are independent by
 construction, and they run in parallel on the package's one container. The api
-and node end-to-end stacks bind ephemeral ports only, which is what lets them
+and outpost end-to-end stacks bind ephemeral ports only, which is what lets them
 overlap; a test that needs a fixed port says `// Serial:`. A test that is not parallel puts its whole length on
 the gate's critical path, so the default is a rule: every top-level test starts
 with `t.Parallel()`, or says in a `// Serial:` comment why it cannot. The reasons
@@ -199,7 +199,7 @@ The rule is enforced, not documented, in the house pattern: a guard in
 outside the designated pin files (the seed's own tests and the demo fleet's),
 reading the SKU list from the seed's own render so it can never drift from
 the catalog it protects. The pin files, in turn, derive their expectations
-(counts, role shapes, accepted types, contract defaults) from the embedded
+(counts, slot shapes, accepted types, contract defaults) from the embedded
 YAML instead of restating it. A future catalog change touches the YAML and
 the pin files, and nothing else (#804).
 
@@ -217,7 +217,7 @@ thing. Knowing which answers a given question is most of the value:
 
 | | **Round-trip counting** | **Access-path assertions** | **Ingest footprint** | **Scale lab gate** | **Lab footprint** | **Wall-clock benchmarks** |
 |---|---|---|---|---|---|---|
-| Catches | N+1s: cost that grows with row count | A read that cannot reach the index it was built for | What one node batch costs the database: statements, rows per observation, bytes per row | A fleet that loses work or costs more to run than the committed baseline: closed-loop gaps, delivery loss, rows and bytes per system, latency, CPU and memory | What a running lab costs per container and per day: CPU, memory, rows a minute, growth, read latency | Cost inside one statement: a recursive CTE that stops being bounded, a plan that degrades on real volume |
+| Catches | N+1s: cost that grows with row count | A read that cannot reach the index it was built for | What one outpost batch costs the database: statements, rows per observation, bytes per row | A fleet that loses work or costs more to run than the committed baseline: closed-loop gaps, delivery loss, rows and bytes per system, latency, CPU and memory | What a running lab costs per container and per day: CPU, memory, rows a minute, growth, read latency | Cost inside one statement: a recursive CTE that stops being bounded, a plan that degrades on real volume |
 | Blind to | Anything a single statement does | Everything except one relation's access path | Reads, and time | A regression smaller than its tolerance or the runs' spread; times and usage on a host other than the baseline's | Anything smaller than the host's neighbours move it by | Anything smaller than the host's own noise |
 | Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Exact, except index bytes, which are bounded | Exact for the loss figures; the rest a median of N runs against a spread | Noisy. A median of N windows, with the range beside it | Noisy. Interpreted by comparison, never by threshold |
 | Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **Yes.** An ordinary test in `make test` | **Opt in.** Fails the change it runs on; never a required check | **No.** A diagnostic | **No.** Inert without `-bench` |
@@ -254,7 +254,7 @@ Three rules, and an assertion that breaks one of them is worse than none:
 2. **Assert the index CONDITION, not only the index name.** A scan node can name an index
    and carry no condition, meaning the planner walks the whole index and filters afterwards.
    That is the shape a coerced predicate produces, and it reads as a pass to anything that
-   greps for the name. `Plan.MustReach` checks the name, the condition, and that the node is
+   greps for the name. `Plan.MustReach` checks the name, the condition, and that the outpost is
    not one the planner was forced into.
 3. **Explain the statement the code really issued.** `querycount.Counter.Calls` hands back
    each captured statement WITH its arguments, so the guard replays the gateway's own SQL
@@ -263,13 +263,14 @@ Three rules, and an assertion that breaks one of them is worse than none:
 
 ### Counting what ingest costs
 
-`TestIngestFootprint` (`internal/bus/footprint_test.go`) holds what one node batch costs the
+`TestIngestFootprint` (`internal/bus/footprint_test.go`) holds what one outpost batch costs the
 database ([ADR-1272](/architecture/decisions/#adr-1272-the-ingest-footprint-is-counted-and-a-stored-rows-heap-bytes-are-a-count)).
 It seeds the dev scenario's fleet for real and delivers a **standard workload** through the
-telemetry handler exactly as JetStream would: the owner binding, the catalog fingerprint read,
-`LandBatch` with its receipt, locks, transition guard and rule evaluation, and the endpoint's
-seen stamp. Only the transport is a double. The workload (`internal/footprint`) is one batch
-per node per tick, a group per task, built deterministically from the tasks and the tick, so two runs land the
+telemetry handler exactly as JetStream would: the owner binding, `LandBatch` with its receipt,
+locks, transition guard, rule evaluation and the endpoint's seen stamp. The catalog fingerprint is
+read on the warm-up and the catalog's clock is frozen, so the window's batches reuse it as a
+fleet's do between reads. Only the transport is a double. The workload (`internal/footprint`) is one batch
+per outpost per tick, a group per task, built deterministically from the tasks and the tick, so two runs land the
 same rows and a number that moves is the code moving.
 
 It holds five things and reports the rest:
@@ -314,7 +315,7 @@ a figure from here compares with the same size on the
 never a lab measurement's basis, and the report names the scenario and size it read from the lab's
 labels ([ADR-1719](/architecture/decisions/#adr-1719-every-measuring-lab-runs-the-corporate-fleet-at-a-stated-size)).
 
-- **CPU per container** (server, the nodes summed into one row, Postgres), in millicores, from
+- **CPU per container** (server, the outposts summed into one row, Postgres), in millicores, from
   each cgroup's CPU time as the Engine reports it.
 - **Memory per container**, the working set: anonymous plus shared memory, never RSS, which
   counts the binary's file pages and the page cache the kernel would reclaim.
@@ -342,8 +343,8 @@ make lab-footprint LAB_FOOTPRINT_ARGS="-cadence default -windows 7 -json out.jso
 generator to render.
 
 A scale lab's figures are diagnostic, but one thing it reads is not a cost and is held: whether
-every request a node sent reached its simulated endpoint and was answered. `omniglass lab measure`
-reconciles each node's tally against what its simulators observed and what landed, hop by hop
+every request an outpost sent reached its simulated endpoint and was answered. `omniglass lab measure`
+reconciles each outpost's tally against what its simulators observed and what landed, hop by hop
 (`connect-not-accepted`, `sent-not-received`, `received-not-settled`, `answered-not-returned`,
 `published-not-landed`, `spool-dropped`, `unhit-endpoint`), each a lower bound with its masking
 term beside it ([how to read them](/guides/lab/#every-request-reached-its-endpoint-and-was-answered)).

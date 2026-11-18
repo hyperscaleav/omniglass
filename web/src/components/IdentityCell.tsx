@@ -17,7 +17,7 @@ import { entityLabel, hasLabel, labelIsName, type Labelled } from "../lib/entiti
 //     Products, Standards, Types)
 //   - "Key" and "Label" columns                    (Properties, EventTypes,
 //     CommandTypes, Tags)
-//   - one column, label plus inline muted name (Groups, Roles, Users, Nodes)
+//   - one column, label plus inline muted name (Groups, Roles, Users, Outposts)
 //   - the name alone                               (Secrets, Variables)
 //
 // Four idioms is why the same fleet read four different ways depending on which

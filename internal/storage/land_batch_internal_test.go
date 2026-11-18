@@ -23,7 +23,7 @@ func TestIsRefusedWrite(t *testing.T) {
 		{"a data exception", &pgconn.PgError{Code: "22021"}, true},
 		{"a CHECK violation", &pgconn.PgError{Code: "23514"}, true},
 		// A parent row deleted under the batch (a metric type, a calc rule):
-		// the redelivery re-derives against the registry as it is now and
+		// the redelivery re-derives against the catalog as it is now and
 		// lands the rest, so these are not refusals.
 		{"a foreign key gone under the batch", &pgconn.PgError{Code: "23503"}, false},
 		{"a type lookup gone null under the batch", &pgconn.PgError{Code: "23502"}, false},

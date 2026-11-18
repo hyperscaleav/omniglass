@@ -4,7 +4,7 @@ date: 2026-11-09
 refs: [1644, 1643, 1625, 1626, 1627, 1646, 523]
 ---
 
-The console has a [Platform health](/guides/operator/platform-health/) page at `/platform`, behind
+The console has a [Platform health](/operator/platform-health/) page at `/platform`, behind
 `node:read`, reached from the sidebar under Nodes and from a new Platform tile on Home that replaces
 the Collectors placeholder. Its header names the build the server runs, how long it has been up and
 the platform system's verdict, linking to that system's view; its table has one row per node, with

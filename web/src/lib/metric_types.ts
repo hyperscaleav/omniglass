@@ -1,7 +1,7 @@
 import { api } from "../api/client";
 
 // The Metrics catalog data layer: thin typed wrappers over the /metric-types
-// surface, the numeric lane of the signal registry and the twin of
+// surface, the numeric lane of the signal catalog and the twin of
 // lib/properties. A metric type is a canonical numeric series a sample measures,
 // carrying the numeric facts the property lane never holds: a display unit (ms,
 // dB, percent) and a precision (decimal places a rendered value keeps). Official

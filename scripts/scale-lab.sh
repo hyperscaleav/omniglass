@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # The scale lab check (#1554): bring up a scenario at a size as a person
 # would (./bin/omniglass lab run --scenario S --systems N), and once it says
-# it is ready, prove what it brought up: one node container per site of the
+# it is ready, prove what it brought up: one outpost container per site of the
 # plan, every simulated component served at its own loopback address, and the
 # containers' memory and CPU (for the lab guide's cost model). Every site is
-# up (its node has pulled its worklist and heartbeated) within UP_WITHIN
-# seconds of the start, and no node container restarted on the way (#1577).
+# up (its outpost has pulled its worklist and heartbeated) within UP_WITHIN
+# seconds of the start, and no outpost container restarted on the way (#1577).
 # Then stop it
 # with Ctrl-C and prove it left no container and no network. A refusal or a
 # timeout fails the check with the lab's own message. Not in make test or CI:
@@ -53,37 +53,37 @@ url=$(sed -n 's/^  Console    \(http[^ ]*\)$/\1/p' "$log" | head -n1)
 base=${url%/web}
 [ -n "$base" ] || { echo "scale-lab: no console URL in the output" >&2; exit 1; }
 
-# One node container per site.
-nodes=$(docker ps -q --filter "label=omniglass.lab=$project" --filter "name=$project-edge-" | wc -l)
-[ "$nodes" -eq "$sites" ] || { echo "scale-lab: $nodes node containers for $sites sites" >&2; exit 1; }
-echo "scale-lab: $nodes node containers, one per site"
+# One outpost container per site.
+outposts=$(docker ps -q --filter "label=omniglass.lab=$project" --filter "name=$project-edge-" | wc -l)
+[ "$outposts" -eq "$sites" ] || { echo "scale-lab: $outposts outpost containers for $sites sites" >&2; exit 1; }
+echo "scale-lab: $outposts outpost containers, one per site"
 
-# No node container exited or restarted on the way up.
+# No outpost container exited or restarted on the way up.
 restarts=$(docker inspect -f '{{.RestartCount}}' $(docker ps -aq --filter "label=omniglass.lab=$project" --filter "name=$project-edge-") | awk '{n += $1} END {print n + 0}')
-[ "$restarts" -eq 0 ] || { echo "scale-lab: node containers restarted $restarts times" >&2; exit 1; }
-echo "scale-lab: no node container restarted"
+[ "$restarts" -eq 0 ] || { echo "scale-lab: outpost containers restarted $restarts times" >&2; exit 1; }
+echo "scale-lab: no outpost container restarted"
 
 # Every simulated component at its own loopback address.
 jar="$(mktemp)"
 curl -sf -c "$jar" -H 'Content-Type: application/json' \
   -d '{"username":"dev","password":"dev"}' "$base/api/v1/auth/login" >/dev/null
 sim=$(curl -sf -b "$jar" "$base/api/v1/simulation")
-served=$(printf '%s' "$sim" | jq '[.nodes[].components[]] | length')
-unique=$(printf '%s' "$sim" | jq '[.nodes[].components[].address] | unique | length')
-loopback=$(printf '%s' "$sim" | jq '[.nodes[].components[].address | select(startswith("127."))] | length')
-simnodes=$(printf '%s' "$sim" | jq '[.nodes[] | select(.connected)] | length')
+served=$(printf '%s' "$sim" | jq '[.outposts[].components[]] | length')
+unique=$(printf '%s' "$sim" | jq '[.outposts[].components[].address] | unique | length')
+loopback=$(printf '%s' "$sim" | jq '[.outposts[].components[].address | select(startswith("127."))] | length')
+simoutposts=$(printf '%s' "$sim" | jq '[.outposts[] | select(.connected)] | length')
 [ "$served" -eq "$components" ] || { echo "scale-lab: the simulators serve $served of $components components" >&2; exit 1; }
 [ "$unique" -eq "$components" ] || { echo "scale-lab: $components components share $unique addresses" >&2; exit 1; }
 [ "$loopback" -eq "$components" ] || { echo "scale-lab: $((components - loopback)) components are off loopback" >&2; exit 1; }
-[ "$simnodes" -eq "$sites" ] || { echo "scale-lab: $simnodes of $sites site simulators connected" >&2; exit 1; }
-echo "scale-lab: $components components on $unique loopback addresses, $simnodes site simulators connected"
+[ "$simoutposts" -eq "$sites" ] || { echo "scale-lab: $simoutposts of $sites site simulators connected" >&2; exit 1; }
+echo "scale-lab: $components components on $unique loopback addresses, $simoutposts site simulators connected"
 
-# Every site is up: its node heartbeats only once it holds a worklist, so a
-# heartbeat since the start is a node that pulled. Within UP_WITHIN seconds.
+# Every site is up: its outpost heartbeats only once it holds a worklist, so a
+# heartbeat since the start is an outpost that pulled. Within UP_WITHIN seconds.
 up_within=${UP_WITHIN:-600}
 while :; do
   up=0
-  for at in $(curl -sf -b "$jar" "$base/api/v1/nodes" | jq -r '.nodes[] | select(.name | startswith("edge-")) | .last_heartbeat_at // empty'); do
+  for at in $(curl -sf -b "$jar" "$base/api/v1/outposts" | jq -r '.outposts[] | select(.name | startswith("edge-")) | .last_heartbeat_at // empty'); do
     [ "$(date -d "$at" +%s)" -lt "$start" ] || up=$((up + 1))
   done
   [ "$up" -lt "$sites" ] || break

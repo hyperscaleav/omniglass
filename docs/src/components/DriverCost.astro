@@ -1,0 +1,71 @@
+---
+// The driver cost table, rendered from the sweep's own (docs/src/generated/
+// drivercost.json, written by make gen via cmd/labgen from internal/
+// labfootprint's DriverCostFacts: the committed sweep joined with the plan).
+// Every driver the plan knows is a row, so a driver the sweep has not measured
+// reads as such, with its reason, rather than going missing, and so does a
+// figure the sweep could not fit beside one it could. Where the sweep ran is
+// DriverCostSource, above both tables.
+//
+// Usage: <DriverCost />
+import facts from '../generated/drivercost.json';
+import { every } from '../lib/duration';
+
+if (!facts.drivers.length) {
+  throw new Error('DriverCost: drivercost.json has no drivers; run make gen');
+}
+
+type Row = (typeof facts.drivers)[number];
+const num = (r: Row, k: string, digits: number) => {
+  const v = (r as Record<string, unknown>)[k];
+  return typeof v === 'number' ? v.toFixed(digits) : '';
+};
+const share = (r: Row) => {
+  const v = (r as Record<string, unknown>).thread_share;
+  return typeof v === 'number' ? `${Math.round(v * 100)}%` : '';
+};
+const polls = (r: Row) => ('polls' in r && r.polls ? r.polls.map(every).join(', ') : '');
+---
+
+<table class="driver-cost">
+  <thead>
+    <tr>
+      <th>Driver</th>
+      <th>Kind</th>
+      <th>Product</th>
+      <th>Polls</th>
+      <th>Step (tasks)</th>
+      <th>Memory per task (KiB)</th>
+      <th>Memory per endpoint (KiB)</th>
+      <th>Warm memory (MiB)</th>
+      <th>Millicores per task</th>
+      <th>CPU per run (ms)</th>
+      <th>Thread CPU per run (ms)</th>
+      <th>Thread share</th>
+      <th>Not measured</th>
+    </tr>
+  </thead>
+  <tbody>
+    {
+      facts.drivers.map((r) => (
+        <tr>
+          <td>
+            <code>{r.driver}</code>
+          </td>
+          <td>{'kind' in r && r.kind ? <code>{r.kind}</code> : ''}</td>
+          <td>{'product' in r && r.product ? <code>{r.product}</code> : ''}</td>
+          <td>{polls(r)}</td>
+          <td>{num(r, 'step_tasks', 0)}</td>
+          <td>{num(r, 'memory_per_task_kib', 1)}</td>
+          <td>{num(r, 'memory_per_endpoint_kib', 1)}</td>
+          <td>{num(r, 'memory_warm_mib', 1)}</td>
+          <td>{num(r, 'millicores_per_task', 3)}</td>
+          <td>{num(r, 'cpu_per_run_ms', 2)}</td>
+          <td>{num(r, 'thread_cpu_per_run_ms', 2)}</td>
+          <td>{share(r)}</td>
+          <td>{'reason' in r && r.reason ? r.reason : ''}</td>
+        </tr>
+      ))
+    }
+  </tbody>
+</table>

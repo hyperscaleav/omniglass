@@ -32,8 +32,8 @@ import type { SimProfile } from "../lib/simulation";
 // stubbed so the page's polls read the same fixtures back, and each write's
 // request is recorded for the assertions.
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer-hq" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer-hq" }, permissions: ["*:read"], grants: [] };
 
 const DISPLAY = uuidFor("sim-display");
 const DSP = uuidFor("sim-dsp");
@@ -45,8 +45,8 @@ const simRow = (id: string, name: string, hits: number, extra: Partial<SimCompon
 
 const fleet = (hits: [number, number], connected = true): SimFleet => ({
   connected,
-  nodes: [{
-    node: "edge-hq", connected, last_seen: new Date().toISOString(),
+  outposts: [{
+    outpost: "edge-hq", connected, last_seen: new Date().toISOString(),
     capabilities: { low_ports: false, net_admin: false, port_offset: 10000 },
     impairments: { available: false, reason: "impairments are off; run the simulator with --impairments" },
     components: [
@@ -62,7 +62,7 @@ const components: Component[] = [
 ];
 
 const componentSim: ComponentSim = {
-  simulated: true, node: "edge-hq", connected: true, address: "127.60.0.2", product: "boreal-edge-55", profile: "boreal-edge-86",
+  simulated: true, outpost: "edge-hq", connected: true, address: "127.60.0.2", product: "boreal-edge-55", profile: "boreal-edge-86",
   summary: "Boreal Edge 86-inch 4K commercial display", variants: ["boreal-edge-86", "boreal-edge-55"],
   activity: simRow(DISPLAY, "display-1", 7),
   impairments: { available: false, reason: "impairments are off; run the simulator with --impairments" },
@@ -140,7 +140,7 @@ describe("the Simulation sidebar door", () => {
     current = { fleet: fleet([0, 0], false) };
     stubFetch();
     mount(() => <Sidebar collapsed={false} onToggle={() => {}} />);
-    expect(await screen.findByText("Nodes")).toBeTruthy();
+    expect(await screen.findByText("Outposts")).toBeTruthy();
     expect(screen.queryByText("Simulation")).toBeNull();
   });
 
@@ -153,7 +153,7 @@ describe("the Simulation sidebar door", () => {
 });
 
 describe("the Simulation page", () => {
-  it("renders the node card and a table row per simulated component, the impaired one marked", async () => {
+  it("renders the outpost card and a table row per simulated component, the impaired one marked", async () => {
     current = { fleet: fleet([3, 0]) };
     stubFetch();
     mount(() => <Simulation />);
@@ -173,16 +173,16 @@ describe("the Simulation page", () => {
     expect(within(rows[0]).queryByTestId("sim-impairment-chip")).toBeNull();
     expect(within(rows[1]).getByTestId("sim-state").textContent).toBe("running");
     expect(within(rows[1]).getByTestId("sim-impairment-chip").textContent).toBe("unplugged");
-    expect(screen.getByTestId("node-hits").textContent).toBe("3");
+    expect(screen.getByTestId("outpost-hits").textContent).toBe("3");
     expect(screen.getByText("unavailable")).toBeTruthy();
-    // One node: no Node column.
-    expect(within(screen.getByTestId("sim-table")).queryByRole("columnheader", { name: "Node" })).toBeNull();
+    // One outpost: no Outpost column.
+    expect(within(screen.getByTestId("sim-table")).queryByRole("columnheader", { name: "Outpost" })).toBeNull();
     expect(screen.getByRole("button", { name: /Add simulated component/ })).toBeTruthy();
   });
 
   it("shows a failed and a starting component by their state, the impairment set on the starting one marked not applied", async () => {
     const f = fleet([0, 0]);
-    f.nodes![0].components = [
+    f.outposts![0].components = [
       simRow(DISPLAY, "display-1", 0, { status: "failed", serving: false }),
       simRow(DSP, "dsp-1", 0, { status: "starting", serving: false, impairment: { latency_ms: 150, loss_pct: 2.5 } }),
     ];
@@ -198,7 +198,7 @@ describe("the Simulation page", () => {
 
   it("filters by state, and by the impairment's words", async () => {
     const f = fleet([0, 0]);
-    f.nodes![0].components = [
+    f.outposts![0].components = [
       simRow(DISPLAY, "display-1", 0, { status: "failed", serving: false }),
       simRow(DSP, "dsp-1", 0, { impaired: true, impairment: { latency_ms: 150, loss_pct: 2.5 } }),
     ];
@@ -218,15 +218,15 @@ describe("the Simulation page", () => {
     await waitFor(() => expect(screen.getAllByTestId("sim-row").map((r) => r.dataset.component)).toEqual([DSP]));
   });
 
-  it("adds a Node column when more than one node serves", async () => {
-    const west = { ...fleet([0, 0]).nodes![0], node: "edge-west", components: [simRow(uuidFor("sim-west"), "display-9", 0)] };
-    current = { fleet: { connected: true, nodes: [fleet([0, 0]).nodes![0], west] } };
+  it("adds an Outpost column when more than one outpost serves", async () => {
+    const west = { ...fleet([0, 0]).outposts![0], outpost: "edge-west", components: [simRow(uuidFor("sim-west"), "display-9", 0)] };
+    current = { fleet: { connected: true, outposts: [fleet([0, 0]).outposts![0], west] } };
     stubFetch();
     mount(() => <Simulation />);
     const rows = await screen.findAllByTestId("sim-row");
     expect(rows).toHaveLength(3);
-    expect(within(screen.getByTestId("sim-table")).getByRole("columnheader", { name: "Node" })).toBeTruthy();
-    expect(screen.getAllByTestId("sim-node")).toHaveLength(2);
+    expect(within(screen.getByTestId("sim-table")).getByRole("columnheader", { name: "Outpost" })).toBeTruthy();
+    expect(screen.getAllByTestId("sim-outpost")).toHaveLength(2);
   });
 
   it("highlights a row when its hit count rises between reads, only that row, and not on first load", async () => {
@@ -275,7 +275,7 @@ describe("the Simulation page", () => {
   });
 
   it("teaches and offers the add path when a simulator serves nothing yet", async () => {
-    current = { fleet: { connected: true, nodes: [{ ...fleet([0, 0]).nodes![0], components: [] }] } };
+    current = { fleet: { connected: true, outposts: [{ ...fleet([0, 0]).outposts![0], components: [] }] } };
     stubFetch();
     mount(() => <Simulation />);
     const empty = await screen.findByTestId("sim-empty");
@@ -368,7 +368,7 @@ describe("the component page's Simulation section", () => {
     expect(screen.queryByTestId("leaf-simulation")).toBeNull();
   });
 
-  // A node, an address or a hit count in monospace sits on its label's
+  // An outpost, an address or a hit count in monospace sits on its label's
   // baseline, not above it (#1379's review).
   it("aligns each simulation value on its label's baseline", async () => {
     stubFetch();
@@ -396,11 +396,11 @@ describe("the component page's Simulation section", () => {
   });
 });
 
-// A principal who may remove a component but not impair one, and one who may add
-// simulated components but not read places.
-const remover: Me = { principal: { id: "u-rm", kind: "human" }, human: { username: "remover" }, permissions: ["*:read", "component:delete"], grants: [] };
+// A user who may remove a component but not impair one, and one who may add
+// simulated components but not read locations.
+const remover: Me = { user: { id: "u-rm", kind: "person" }, person: { username: "remover" }, permissions: ["*:read", "component:delete"], grants: [] };
 const placeless: Me = {
-  principal: { id: "u-np", kind: "human" }, human: { username: "placeless" },
+  user: { id: "u-np", kind: "person" }, person: { username: "placeless" },
   permissions: ["simulation:read", "simulation:update", "component:read", "component:create", "endpoint:create"], grants: [],
 };
 
@@ -546,8 +546,8 @@ describe("the Simulation page's writes and stale state", () => {
     return r;
   }
 
-  it("adds a simulated component with a POST to the node, then closes", async () => {
-    stubFetch({ "POST /nodes/edge-hq/simulation/components": { component: "lab-display-1", address: "127.60.0.4" } });
+  it("adds a simulated component with a POST to the outpost, then closes", async () => {
+    stubFetch({ "POST /outposts/edge-hq/simulation/components": { component: "lab-display-1", address: "127.60.0.4" } });
     await openAdd();
     fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
@@ -560,7 +560,7 @@ describe("the Simulation page's writes and stale state", () => {
   });
 
   it("surfaces the server's refusal of an add and keeps the form open", async () => {
-    stubFetch({ "POST /nodes/edge-hq/simulation/components": new Answer(409, { title: "Conflict", status: 409, detail: "component lab-display-1 already exists" }) });
+    stubFetch({ "POST /outposts/edge-hq/simulation/components": new Answer(409, { title: "Conflict", status: 409, detail: "component lab-display-1 already exists" }) });
     await openAdd();
     fireEvent.change(await screen.findByLabelText("Product"), { target: { value: "boreal-edge-55" } });
     fireEvent.input(screen.getByLabelText("Name"), { target: { value: "lab-display-1" } });
@@ -572,7 +572,7 @@ describe("the Simulation page's writes and stale state", () => {
   });
 
   it("shows every field's hint when an incomplete form is submitted", async () => {
-    current = { fleet: { connected: true, nodes: [fleet([0, 0]).nodes![0], { ...fleet([0, 0]).nodes![0], node: "edge-west" }] } };
+    current = { fleet: { connected: true, outposts: [fleet([0, 0]).outposts![0], { ...fleet([0, 0]).outposts![0], outpost: "edge-west" }] } };
     stubFetch();
     await openAdd();
     const name = await screen.findByLabelText("Name");
@@ -580,11 +580,11 @@ describe("the Simulation page's writes and stale state", () => {
     fireEvent.submit(name.closest("form")!);
     expect(await screen.findByText("Name the new component.")).toBeTruthy();
     expect(screen.getByText("Choose a simulated product.")).toBeTruthy();
-    expect(screen.getByText("Choose the node whose simulator serves it.")).toBeTruthy();
+    expect(screen.getByText("Choose the outpost whose simulator serves it.")).toBeTruthy();
     expect(calls.some((c) => c.method === "POST")).toBe(false);
   });
 
-  it("offers no Location to a user who cannot read places, and never asks for them", async () => {
+  it("offers no Location to a user who cannot read locations, and never asks for them", async () => {
     stubFetch();
     await openAdd(placeless);
     await screen.findByLabelText("Name");
@@ -605,18 +605,18 @@ const meetingPlan: SimSystemPlan = {
   standard: "meeting-room",
   alternates: { audio: "ceiling" },
   components: 3,
-  roles: [
-    { role: "display", product: "boreal-edge-55", count: 2 },
-    { role: "ceiling-mic", alternate: "audio/ceiling", product: "polaris-mic-1", count: 1 },
-    { role: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" },
+  slots: [
+    { slot: "display", product: "boreal-edge-55", count: 2 },
+    { slot: "ceiling-mic", alternate: "audio/ceiling", product: "polaris-mic-1", count: 1 },
+    { slot: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" },
   ],
 };
 const systemMaker: Me = {
-  principal: { id: "u-sm", kind: "human" }, human: { username: "system-maker" },
-  permissions: ["simulation:read", "simulation:update", "system:create", "system:update", "component:read", "component:create", "endpoint:create", "standard:read", "system_type:read", "system:read", "node:read"], grants: [],
+  user: { id: "u-sm", kind: "person" }, person: { username: "system-maker" },
+  permissions: ["simulation:read", "simulation:update", "system:create", "system:update", "component:read", "component:create", "endpoint:create", "standard:read", "system_type:read", "system:read", "outpost:read"], grants: [],
 };
 const noSystemUpdate: Me = {
-  principal: { id: "u-ns", kind: "human" }, human: { username: "no-system-update" },
+  user: { id: "u-ns", kind: "person" }, person: { username: "no-system-update" },
   permissions: ["*:read", "simulation:update", "system:create", "component:create", "endpoint:create"], grants: [],
 };
 
@@ -636,7 +636,7 @@ describe("adding a simulated system", () => {
     fireEvent.change(screen.getByLabelText("System type"), { target: { value: "room-system" } });
   }
 
-  it("offers the action beside Add simulated component, quiet, to a principal holding every permission it needs", async () => {
+  it("offers the action beside Add simulated component, quiet, to a user holding every permission it needs", async () => {
     stubFetch();
     mount(() => <Simulation />);
     const sys = await screen.findByRole("button", { name: /Add simulated system/ });
@@ -644,7 +644,7 @@ describe("adding a simulated system", () => {
     expect(screen.getByRole("button", { name: /Add simulated component/ }).classList.contains("btn-action")).toBe(true);
   });
 
-  it("hides the action from a principal missing system:update, though it may add a component", async () => {
+  it("hides the action from a user missing system:update, though it may add a component", async () => {
     stubFetch();
     mount(() => <Simulation />, noSystemUpdate);
     await screen.findAllByTestId("sim-row");
@@ -652,7 +652,7 @@ describe("adding a simulated system", () => {
     expect(screen.queryByRole("button", { name: /Add simulated system/ })).toBeNull();
   });
 
-  it("offers the action to a principal holding exactly the permissions it needs", async () => {
+  it("offers the action to a user holding exactly the permissions it needs", async () => {
     stubFetch();
     mount(() => <Simulation />, systemMaker);
     expect(await screen.findByRole("button", { name: /Add simulated system/ })).toBeTruthy();
@@ -661,12 +661,12 @@ describe("adding a simulated system", () => {
   // Each permission the add needs, the writes and the reads its form and the
   // server depend on: without any one, the action is not offered. system:read is
   // gated too, but can() reads any system:<action> grant as including it, so a
-  // principal holding system:create is never without it and it has no row here.
+  // user holding system:create is never without it and it has no row here.
   for (const perm of [
     "simulation:update", "system:create", "system:update", "component:create", "endpoint:create",
-    "standard:read", "system_type:read", "node:read",
+    "standard:read", "system_type:read", "outpost:read",
   ]) {
-    it(`hides the action from a principal missing ${perm}`, async () => {
+    it(`hides the action from a user missing ${perm}`, async () => {
       stubFetch();
       const me: Me = { ...systemMaker, permissions: systemMaker.permissions.filter((p) => p !== perm) };
       mount(() => <Simulation />, me);
@@ -691,14 +691,14 @@ describe("adding a simulated system", () => {
     expect(screen.queryByRole("button", { name: /Add simulated system/ })).toBeNull();
   });
 
-  it("previews the plan once a standard is chosen: each role's product and count, the short role with its reason, the total", async () => {
+  it("previews the plan once a standard is chosen: each slot's product and count, the short slot with its reason, the total", async () => {
     stubFetch();
     await openAddSystem();
     expect(screen.queryByTestId("sim-plan")).toBeNull();
     fireEvent.change(await screen.findByLabelText("Standard"), { target: { value: "meeting-room" } });
     const preview = await screen.findByTestId("sim-plan");
-    const rows = within(preview).getAllByTestId("plan-role");
-    expect(rows.map((r) => r.getAttribute("data-role"))).toEqual(["display", "ceiling-mic", "camera"]);
+    const rows = within(preview).getAllByTestId("plan-slot");
+    expect(rows.map((r) => r.getAttribute("data-slot"))).toEqual(["display", "ceiling-mic", "camera"]);
     expect(within(rows[0]).getByText("boreal-edge-55")).toBeTruthy();
     expect(rows[0].lastElementChild!.textContent).toBe("2");
     expect(within(rows[1]).getByText("audio/ceiling")).toBeTruthy();
@@ -709,7 +709,7 @@ describe("adding a simulated system", () => {
   });
 
   it("reads the plan from the API for the chosen standard", async () => {
-    stubFetch({ "GET /simulation/standards/huddle-space:plan": { ...meetingPlan, standard: "huddle-space", components: 1, roles: [{ role: "display", product: "boreal-edge-55", count: 1 }] } });
+    stubFetch({ "GET /simulation/standards/huddle-space:plan": { ...meetingPlan, standard: "huddle-space", components: 1, slots: [{ slot: "display", product: "boreal-edge-55", count: 1 }] } });
     await openAddSystem();
     fireEvent.change(await screen.findByLabelText("Standard"), { target: { value: "huddle-space" } });
     await waitFor(() => expect(screen.getByTestId("plan-total").textContent).toBe("1"));
@@ -718,7 +718,7 @@ describe("adding a simulated system", () => {
 
   it("refuses to add when nothing in the standard can be simulated", async () => {
     stubFetch();
-    const empty: SimSystemPlan = { standard: "meeting-room", alternates: {}, components: 0, roles: [{ role: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }] };
+    const empty: SimSystemPlan = { standard: "meeting-room", alternates: {}, components: 0, slots: [{ slot: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }] };
     await openAddSystem(admin, empty);
     await fill();
     expect(await screen.findByTestId("plan-empty")).toBeTruthy();
@@ -727,14 +727,14 @@ describe("adding a simulated system", () => {
 
   it("sends the standard, the type and only what was filled, then closes, refreshes the fleet and names the system", async () => {
     stubFetch({
-      "POST /nodes/edge-hq/simulation/systems": new Answer(201, {
-        system: "room-system-7", system_id: uuidFor("sys-room-7"), node: "edge-hq",
+      "POST /outposts/edge-hq/simulation/systems": new Answer(201, {
+        system: "room-system-7", system_id: uuidFor("sys-room-7"), outpost: "edge-hq",
         components: [
-          { component: "display-1", role: "display", product: "boreal-edge-55", address: "127.60.0.4" },
-          { component: "display-2", role: "display", product: "boreal-edge-55", address: "127.60.0.5" },
-          { component: "mic-1", role: "ceiling-mic", product: "polaris-mic-1", address: "127.60.0.6" },
+          { component: "display-1", slot: "display", product: "boreal-edge-55", address: "127.60.0.4" },
+          { component: "display-2", slot: "display", product: "boreal-edge-55", address: "127.60.0.5" },
+          { component: "mic-1", slot: "ceiling-mic", product: "polaris-mic-1", address: "127.60.0.6" },
         ],
-        unstaffed: [{ role: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }],
+        unstaffed: [{ slot: "camera", count: 0, missing: 1, reason: "no simulated product is a camera" }],
       }),
     });
     const { qc } = await openAddSystem();
@@ -745,14 +745,14 @@ describe("adding a simulated system", () => {
     fireEvent.click(add);
     await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
     const post = calls.find((c) => c.method === "POST")!;
-    expect(post.path).toBe("/nodes/edge-hq/simulation/systems");
+    expect(post.path).toBe("/outposts/edge-hq/simulation/systems");
     expect(post.body).toEqual({ standard: "meeting-room", system_type: "room-system" });
     await waitFor(() => expect(screen.queryByRole("button", { name: "Add system" })).toBeNull());
     const note = await screen.findByTestId("sim-system-added");
     expect(note.textContent).toContain("room-system-7");
     expect(note.textContent).toContain("3 components");
     expect(note.textContent).toContain("camera");
-    // The short role's reason reads as text, not only on hover.
+    // The short slot's reason reads as text, not only on hover.
     expect(note.textContent).toContain("no simulated product is a camera");
     // The system's name links to its page, by id.
     const link = within(note).getByRole("link", { name: "room-system-7" });
@@ -764,8 +764,8 @@ describe("adding a simulated system", () => {
     expect(screen.queryByTestId("sim-system-added")).toBeNull();
   });
 
-  it("sends a typed name and a chosen place", async () => {
-    stubFetch({ "POST /nodes/edge-hq/simulation/systems": new Answer(201, { system: "lab-room", system_id: uuidFor("sys-lab"), node: "edge-hq", components: [], unstaffed: [] }) });
+  it("sends a typed name and a chosen location", async () => {
+    stubFetch({ "POST /outposts/edge-hq/simulation/systems": new Answer(201, { system: "lab-room", system_id: uuidFor("sys-lab"), outpost: "edge-hq", components: [], unstaffed: [] }) });
     const { qc } = await openAddSystem();
     qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("loc-a"), name: "boardroom-a", label: "Boardroom A", path: "hq.boardroom-a" }]);
     await fill();
@@ -779,12 +779,12 @@ describe("adding a simulated system", () => {
   });
 
   for (const [status, title, detail] of [
-    [409, "Conflict", "no simulator is connected to node edge-hq"],
+    [409, "Conflict", "no simulator is connected to outpost edge-hq"],
     [422, "Unprocessable Entity", "nothing in standard meeting-room can be simulated"],
     [403, "Forbidden", "missing permission system:update"],
   ] as const) {
     it(`surfaces a ${status} in the form and keeps it open`, async () => {
-      stubFetch({ "POST /nodes/edge-hq/simulation/systems": new Answer(status, { title, status, detail }) });
+      stubFetch({ "POST /outposts/edge-hq/simulation/systems": new Answer(status, { title, status, detail }) });
       await openAddSystem();
       await fill();
       const add = screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement;
@@ -838,7 +838,7 @@ describe("adding a simulated system", () => {
     fireEvent.change(screen.getByLabelText("Standard"), { target: { value: "huddle-space" } });
     await waitFor(() => expect(add.disabled).toBe(true));
     const preview = screen.getByTestId("sim-plan");
-    expect(within(preview).queryAllByTestId("plan-role")).toHaveLength(0);
+    expect(within(preview).queryAllByTestId("plan-slot")).toHaveLength(0);
     expect(within(preview).queryByTestId("plan-total")).toBeNull();
   });
 
@@ -852,7 +852,7 @@ describe("adding a simulated system", () => {
     r.qc.setQueryData([...simPlanKey("huddle-space")], meetingPlan);
     await fill("huddle-space");
     const preview = await screen.findByTestId("sim-plan");
-    expect(within(preview).queryAllByTestId("plan-role")).toHaveLength(0);
+    expect(within(preview).queryAllByTestId("plan-slot")).toHaveLength(0);
     expect((screen.getByRole("button", { name: "Add system" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -890,7 +890,7 @@ describe("adding a simulated system", () => {
     await waitFor(() => expect(gets()).toBe(2));
   });
 
-  it("alerts with a retry when the places cannot be read, instead of offering only unplaced", async () => {
+  it("alerts with a retry when the locations cannot be read, instead of offering only unplaced", async () => {
     stubFetch();
     await openAddSystem();
     const alert = await screen.findByTestId("locations-error");
@@ -910,7 +910,7 @@ describe("adding a simulated system", () => {
     expect(screen.getByText(/No system types yet/)).toBeTruthy();
   });
 
-  it("offers no Location to a principal who cannot read places, and never asks for them", async () => {
+  it("offers no Location to a user who cannot read locations, and never asks for them", async () => {
     stubFetch();
     await openAddSystem(systemMaker);
     await screen.findByLabelText("Standard");

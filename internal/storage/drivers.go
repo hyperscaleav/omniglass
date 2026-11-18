@@ -9,10 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Driver is a registry row naming the implementation that gets/emits/sets a
+// Driver is a catalog row naming the implementation that gets/emits/sets a
 // product's signals (e.g. "Generic SNMP", "Kestrel Device API"): a stable id, the
 // official flag, a label, a version string, and (since #813) the declarative
-// spec body. It is a flat registry like vendor: no tree. The registry lists
+// spec body. It is a flat catalog like vendor: no tree. The catalog lists
 // alphabetically by label; there is no ordering field.
 type Driver struct {
 	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062).
@@ -71,6 +71,10 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 		return fmt.Errorf("storage: begin upsert driver %q: %w", d.Name, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	prior, err := priorDriverSpec(ctx, tx, `namespace = case when $2 then 'og' else 'local' end and name = $1`, d.Name, d.Official)
+	if err != nil {
+		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
+	}
 	var id string
 	err = tx.QueryRow(ctx, `
 		insert into driver (namespace, name, label, version, official, spec)
@@ -94,6 +98,9 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
 	if err := rederiveDriverTasks(ctx, tx, id); err != nil {
+		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
+	}
+	if err := announceOutpostsOf(ctx, tx, driverSpecOutpostsSQL, id, prior); err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -124,7 +131,7 @@ func (p *PG) ListDrivers(ctx context.Context) ([]Driver, error) {
 
 // GetDriver resolves one driver by id. An unknown id is ErrTypeNotFound.
 func (p *PG) GetDriver(ctx context.Context, id string) (*Driver, error) {
-	d, err := scanDriver(p.pool.QueryRow(ctx, `select `+driverCols+` from `+refRows("driver", id)+` driver where `+registryRefCol(id)+` = $1`, id))
+	d, err := scanDriver(p.pool.QueryRow(ctx, `select `+driverCols+` from `+refRows("driver", id)+` driver where `+catalogRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -185,7 +192,7 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 	if err := guardTypeMutable(ctx, tx, "driver", id); err != nil {
 		return nil, err
 	}
-	before, err := registryAuditImage(ctx, tx, "driver", id)
+	before, err := catalogAuditImage(ctx, tx, "driver", id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -197,6 +204,10 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 			return nil, err
 		}
 	}
+	prior, err := priorDriverSpec(ctx, tx, `id = (select id from `+refRows("driver", id)+` t where `+catalogRefCol(id)+` = $1)`, id)
+	if err != nil {
+		return nil, err
+	}
 	setLabel, labelVal := labelPatch(patch.Label)
 	d, err := scanDriver(tx.QueryRow(ctx, `
 		update driver set
@@ -204,7 +215,7 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 			version      = coalesce($3, version),
 			spec         = coalesce($5, spec),
 			updated_at   = now()
-		where id = (select id from `+refRows("driver", id)+` t where `+registryRefCol(id)+` = $1)
+		where id = (select id from `+refRows("driver", id)+` t where `+catalogRefCol(id)+` = $1)
 		returning `+driverCols,
 		id, labelVal, patch.Version, setLabel, specOrNull(patch.Spec)))
 	if err != nil {
@@ -216,7 +227,10 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 	if err := rederiveDriverTasks(ctx, tx, d.ID); err != nil {
 		return nil, err
 	}
-	after, err := registryAuditImage(ctx, tx, "driver", id)
+	if err := announceOutpostsOf(ctx, tx, driverSpecOutpostsSQL, d.ID, prior); err != nil {
+		return nil, err
+	}
+	after, err := catalogAuditImage(ctx, tx, "driver", id)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image driver %q: %w", id, err)
 	}
@@ -245,20 +259,20 @@ func (p *PG) DeleteDriver(ctx context.Context, actorID, id string) error {
 	var inUse bool
 	if err := tx.QueryRow(ctx, `select exists (
 			select 1 from endpoint e join `+refRows("driver", id)+` d on d.id = e.driver_id
-			where d.`+registryRefCol(id)+` = $1)`, id).Scan(&inUse); err != nil {
+			where d.`+catalogRefCol(id)+` = $1)`, id).Scan(&inUse); err != nil {
 		return fmt.Errorf("storage: driver in-use check %q: %w", id, err)
 	}
 	if inUse {
 		return ErrTypeInUse
 	}
-	before, err := registryAuditImage(ctx, tx, "driver", id)
+	before, err := catalogAuditImage(ctx, tx, "driver", id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrTypeNotFound
 		}
 		return fmt.Errorf("storage: audit image driver %q: %w", id, err)
 	}
-	if _, err := tx.Exec(ctx, `delete from driver where id = (select id from `+refRows("driver", id)+` t where `+registryRefCol(id)+` = $1)`, id); err != nil {
+	if _, err := tx.Exec(ctx, `delete from driver where id = (select id from `+refRows("driver", id)+` t where `+catalogRefCol(id)+` = $1)`, id); err != nil {
 		return fmt.Errorf("storage: delete driver %q: %w", id, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "driver", auditImageID(before), before, nil); err != nil {

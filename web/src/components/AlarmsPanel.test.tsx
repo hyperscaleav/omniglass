@@ -7,7 +7,7 @@ import { componentAlarmsKey, type Alarm } from "../lib/alarms";
 import { MAJOR_LEVEL, SEEDED_LEVELS, seedSeverityLevels } from "../lib/testseverity";
 import type { SeverityLevel } from "../lib/severity";
 
-// The alarms panel is where fleet health starts: a condition on this component
+// The alarms panel is where fleet health starts: an alarm on this component
 // that impairs its own verdict wholesale (#626). Rows are seeded into the query
 // cache so no server is needed; the raise / clear writes are faked where a test
 // drives one.
@@ -87,7 +87,7 @@ describe("AlarmsPanel", () => {
         component: "disp-1",
         alarm_id: "a-1",
         entries: [
-          { at: ago(2 * 3_600_000 + 14_000), kind: "event", what: "condition-started", rule: "lamp-life", instance: "lamp", message: "Lamp hours exceeded" },
+          { at: ago(2 * 3_600_000 + 14_000), kind: "event", what: "rule-fired", rule: "lamp-life", instance: "lamp", message: "Lamp hours exceeded" },
           { at: ago(2 * 3_600_000 + 14_000), kind: "audit", what: "raise", rule: "lamp-life", message: "Lamp hours exceeded" },
           { at: ago(134_000), kind: "audit", what: "acknowledge", actor: "jordan" },
         ],
@@ -106,7 +106,7 @@ describe("AlarmsPanel", () => {
     expect(document.getElementById(controls)?.contains(list)).toBe(true);
     const items = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items).toHaveLength(3);
-    expect(items[0]).toContain("condition-started");
+    expect(items[0]).toContain("rule-fired");
     expect(items[0]).toContain("rule lamp-life");
     expect(items[0]).toContain("Lamp hours exceeded");
     expect(items[0]).toMatch(/2h 0m ago/);
@@ -304,9 +304,9 @@ describe("AlarmsPanel", () => {
     expect(within(group).getByText(/never acknowledged/)).toBeTruthy();
   });
 
-  // Severity is the registry's (#917): the form lists its levels least to most
+  // Severity is the catalog's (#917): the form lists its levels least to most
   // severe, shows each label with what it does, and sends the name.
-  it("offers the registry's levels, labelled, least to most severe", () => {
+  it("offers the catalog's levels, labelled, least to most severe", () => {
     const { getByLabelText } = mount();
     const options = [...(getByLabelText("Alarm severity") as HTMLSelectElement).options];
     expect(options.map((o) => o.value)).toEqual(["info", "warning", "average", "high", "disaster"]);
@@ -332,7 +332,7 @@ describe("AlarmsPanel", () => {
     expect(JSON.parse(await post!.text()).severity).toBe("info");
   });
 
-  it("offers, renders and sorts an operator-defined level by the registry alone", async () => {
+  it("offers, renders and sorts an operator-defined level by the catalog alone", async () => {
     let post: Request | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -355,7 +355,7 @@ describe("AlarmsPanel", () => {
     expect(JSON.parse(await post!.text()).severity).toBe("major");
   });
 
-  it("shows a snoozed condition on every row of it, active or cleared, and offers Snooze only with alarm:snooze (#1318)", () => {
+  it("shows a snoozed alarm on every row of it, active or cleared, and offers Snooze only with alarm:snooze (#1318)", () => {
     const until = new Date(Date.now() + 3_600_000).toISOString();
     const rows = alarms.map((a) => (a.id === "a-1" || a.id === "a-0" ? { ...a, snoozed_until: until, snoozed_by: "jordan" } : a));
     const viewer = mount({ rows, canSnooze: false });

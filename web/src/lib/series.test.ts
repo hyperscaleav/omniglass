@@ -38,6 +38,24 @@ describe("bucketed series reads", () => {
     expect(url.searchParams.has("instance")).toBe(false);
   });
 
+  it("reads the value in force at the window's start, and each bucket's held value (#1488)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        carried_in: "on",
+        covered_from: "2026-11-01T00:00:00Z",
+        buckets: [{ ts: "2026-11-01T00:00:00Z", count: 0, last: null, held: "on" }],
+      }),
+    );
+    const got = await propertyBuckets("components", "disp-1", "power", 1, 3600);
+    expect(got.carriedIn).toBe("on");
+    expect(got.buckets[0].held).toBe("on");
+  });
+
+  it("carries nothing in when the read names no value", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ buckets: [] }));
+    expect((await propertyBuckets("components", "disp-1", "power", 1, 3600)).carriedIn).toBeNull();
+  });
+
   it("keys two instances of one metric apart", () => {
     expect(metricBucketsKey("systems", "r", "m", 24, 300, "a")).not.toEqual(metricBucketsKey("systems", "r", "m", 24, 300, "b"));
     expect(metricBucketsKey("systems", "r", "m", 24, 300, "")).not.toEqual(metricBucketsKey("systems", "r", "m", 24, 300));

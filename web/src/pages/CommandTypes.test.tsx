@@ -27,8 +27,8 @@ const metrics: MetricRow[] = [
   { name: "mic-gain", data_type: "float", label: "Mic gain", official: false },
 ];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 

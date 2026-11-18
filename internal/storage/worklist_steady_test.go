@@ -18,26 +18,26 @@ const httpsPollsSpec = `{"version":1,"transport":"https",
 		{"name":"device","schedule":{"every":"60s"},"request":{"path":"/api/device"},"emits":[{"name":"model-number","extract":{"jsonpath":"device.model"}}]}
 	]}`
 
-// An unchanged node's worklist is the same bytes on every build (#1872): it
-// changes only when the node learns something, here the key it trusted on
+// An unchanged outpost's worklist is the same bytes on every build (#1872): it
+// changes only when the outpost learns something, here the key it trusted on
 // first use and the endpoint's rejection, each riding every task of its
 // endpoint, and then holds again. The bus encodes the reply from this value
 // alone, so steady bytes here are a steady reply.
-func TestAnUnchangedNodesWorklistBuildsTheSameBytes(t *testing.T) {
+func TestAnUnchangedOutpostsWorklistBuildsTheSameBytes(t *testing.T) {
 	t.Parallel()
 	f := newTLSFixture(t)
 	drv := "panel-https"
 	if _, err := f.gw.CreateDriver(f.ctx, "", storage.Driver{Name: drv, Label: "Panel HTTPS", Version: "1.0.0", Spec: []byte(httpsPollsSpec)}); err != nil {
 		t.Fatal(err)
 	}
-	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
+	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Outpost: &f.outpost,
 		Inputs: map[string]string{"host": "10.0.0.9"}}, f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
 	build := func() (storage.Worklist, []byte) {
 		t.Helper()
-		wl, err := f.gw.NodeWorklist(f.ctx, f.node)
+		wl, err := f.gw.OutpostWorklist(f.ctx, f.outpost)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   HOUSE,
+  NEEDS,
   MAX_GIF_BYTES,
   MAX_SECONDS,
   PACE,
@@ -35,6 +36,37 @@ const bad = (body: string, head?: string) => {
   throw new Error("expected the tape to be refused");
 };
 const CMD = 'Type "omniglass component list"\nEnter\nWait\n';
+
+describe("a tape's demo-needs (#1313)", () => {
+  it("declares nothing by default", () => {
+    expect(ok(CMD).needs).toEqual([]);
+  });
+
+  it("reads each `# demo-needs: <need>` comment line, wherever it sits, once", () => {
+    expect(ok(`# demo-needs: database\n${CMD}`).needs).toEqual(["database"]);
+    expect(ok(`# demo-needs: docker-socket\n${CMD}`).needs).toEqual(["docker-socket"]);
+    expect(ok(`# demo-needs: database\n${CMD}# demo-needs: database\n`).needs).toEqual(["database"]);
+  });
+
+  it("is not part of the description, whether it opens the block or follows it", () => {
+    expect(ok(CMD, "# Title\n#\n# What it shows.\n# demo-needs: database\n\n").description).toBe("What it shows.");
+  });
+
+  it("refuses a need it does not know, naming the file and line", () => {
+    expect(bad(`# demo-needs: nitrogen\n${CMD}`)).toBe(
+      `${F}:5: unknown demo-needs "nitrogen" (a tape needs one of: ${NEEDS.join(", ")})`,
+    );
+    expect(bad(`# demo-needs:\n${CMD}`)).toContain('unknown demo-needs ""');
+  });
+
+  it("does not read a typed caption, which only looks like the header", () => {
+    expect(ok('Type "# demo-needs: nitrogen"\nEnter\nWait\n').needs).toEqual([]);
+  });
+
+  it("refuses the socket with the database, whose Postgres the host network cannot reach", () => {
+    expect(bad(`# demo-needs: docker-socket\n# demo-needs: database\n${CMD}`)).toContain("cannot need database");
+  });
+});
 
 describe("a tape's title and description", () => {
   it("are its leading comment block: the first line the title, the rest the description", () => {
@@ -73,7 +105,7 @@ describe("the house rules a tape is held to", () => {
         "Wait@90s",
         "Show",
         "",
-        "Type 'omniglass node list | jq -c .'",
+        "Type 'omniglass outpost list | jq -c .'",
         "Enter",
         "Wait",
         "Type \"x\"",
@@ -117,8 +149,19 @@ describe("the house rules a tape is held to", () => {
   });
 
   it("waits on an Enter only with a prompt Wait: a Wait+Screen or Wait+Line pattern can match the command's own typed text", () => {
-    expect(bad('Type "omniglass node list"\nEnter\nWait+Screen /node/\n')).toBe(`${F}:6: the command entered here is not waited on (a Wait) before the tape ends`);
+    expect(bad('Type "omniglass outpost list"\nEnter\nWait+Screen /outpost/\n')).toBe(`${F}:6: the command entered here is not waited on (a Wait) before the tape ends`);
     expect(bad('Type "a"\nEnter\nWait+Line /a/\nType "b"\nEnter\nWait\n')).toContain(`${F}:6: the command entered here is not waited on`);
+  });
+
+  it("lets a tape answer a running command's own prompt, once a pattern its typed text cannot match has shown it", () => {
+    const ask = 'Type "omniglass omnibot go"\nEnter\nWait+Screen /Run it\\?/\nType "y"\nEnter\nWait+Screen /second/\nType "n"\nEnter\nWait\n';
+    expect(() => ok(ask)).not.toThrow();
+    // The answer still has to end on a prompt Wait.
+    expect(bad('Type "omniglass omnibot go"\nEnter\nWait+Screen /Run it/\nType "y"\nEnter\n')).toContain("before the tape ends");
+    // A pattern the answer itself could match proves nothing.
+    expect(bad('Type "omniglass omnibot go"\nEnter\nWait+Screen /Run/\nType "Run"\nEnter\nWait+Screen /Run/\nType "y"\nEnter\nWait\n')).toContain(
+      `${F}:9: the command entered here is not waited on`,
+    );
   });
 
   it("refuses a second command smuggled onto a Hide, Show or Wait line, since VHS reads several to a line", () => {

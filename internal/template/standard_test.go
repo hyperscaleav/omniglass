@@ -28,7 +28,7 @@ const fixtureCatalog = `templates:
           alternates:
             - { name: all-in-one, label: All-in-one }
             - { name: kit, label: Kit }
-      roles:
+      slots:
         - { name: main-display, label: Main Display, quorum: 2, capacity: 3, impact: outage, accepted_types: [display] }
         - { name: bar, label: Bar, accepted_types: [video-bar], choice: conferencing, alternate: all-in-one }
         - { name: codec, label: Codec, accepted_types: [codec], choice: conferencing, alternate: kit }
@@ -39,13 +39,13 @@ const fixtureCatalog = `templates:
       map:
         aspect: 1.5
         positions:
-          - { role: main-display, position: 1, x: 0.5, y: 0.1 }
+          - { slot: main-display, position: 1, x: 0.5, y: 0.1 }
   - kind: standard_template
     name: base-room-wide
     label: Base Room, wide
     standard:
       parent: base-room
-      roles:
+      slots:
         - { name: main-display, label: Main Display, quorum: 2, accepted_types: [display] }
 `
 
@@ -89,16 +89,16 @@ func TestCreateFromTemplateWritesTheStandardWhole(t *testing.T) {
 		t.Error("the fork dropped the template's map")
 	}
 
-	roles, err := gw.ListSystemRoles(ctx, "standard", "base-room")
+	slots, err := gw.ListSystemSlots(ctx, "standard", "base-room")
 	if err != nil {
-		t.Fatalf("roles: %v", err)
+		t.Fatalf("slots: %v", err)
 	}
-	byName := map[string]storage.SystemRole{}
-	for _, r := range roles {
+	byName := map[string]storage.SystemSlot{}
+	for _, r := range slots {
 		byName[r.Name] = r
 	}
 	if len(byName) != 3 {
-		t.Fatalf("forked %d roles, want the template's 3: %+v", len(byName), roles)
+		t.Fatalf("forked %d slots, want the template's 3: %+v", len(byName), slots)
 	}
 	disp := byName["main-display"]
 	if disp.Quorum != 2 || disp.Capacity == nil || *disp.Capacity != 3 || disp.Impact != "outage" {
@@ -108,7 +108,7 @@ func TestCreateFromTemplateWritesTheStandardWhole(t *testing.T) {
 		t.Errorf("main-display accepts %v, want [display]", got)
 	}
 	if byName["bar"].Alternate != "conferencing/all-in-one" || byName["codec"].Alternate != "conferencing/kit" {
-		t.Errorf("choice roles joined %q and %q, want their alternates", byName["bar"].Alternate, byName["codec"].Alternate)
+		t.Errorf("choice slots joined %q and %q, want their alternates", byName["bar"].Alternate, byName["codec"].Alternate)
 	}
 
 	metrics, err := gw.ListStandardMetrics(ctx, "base-room")
@@ -141,11 +141,11 @@ func TestCreateFromTemplateWritesTheStandardWhole(t *testing.T) {
 	if second.ID == st.ID || second.Label != "HQ Room" {
 		t.Fatalf("second fork = %+v, want an independent row", second)
 	}
-	if err := gw.DeleteSystemRole(ctx, "", "standard", "hq-room", "codec"); err != nil {
+	if err := gw.DeleteSystemSlot(ctx, "", "standard", "hq-room", "codec"); err != nil {
 		t.Fatalf("edit the second fork: %v", err)
 	}
-	if again, _ := gw.ListSystemRoles(ctx, "standard", "base-room"); len(again) != 3 {
-		t.Errorf("editing one fork changed the other: base-room has %d roles", len(again))
+	if again, _ := gw.ListSystemSlots(ctx, "standard", "base-room"); len(again) != 3 {
+		t.Errorf("editing one fork changed the other: base-room has %d slots", len(again))
 	}
 }
 
@@ -178,7 +178,7 @@ func TestAVariantIsCreatedOnlyOnceItsParentIsHeld(t *testing.T) {
 
 // TestShippedStandardTemplatesCreateWhole is the build's real-write half of
 // the dry run: every shipped standard template forks into the seeded
-// catalogs, parents before variants, and each fork holds exactly the roles
+// catalogs, parents before variants, and each fork holds exactly the slots
 // its template declares. A second pass forks nothing.
 func TestShippedStandardTemplatesCreateWhole(t *testing.T) {
 	gw := seeded(t)
@@ -213,13 +213,13 @@ func TestAStandardFromATemplateIgnoresTheNextRelease(t *testing.T) {
 	if _, err := gw.UpdateStandard(ctx, "", "base-room", storage.StandardPatch{Label: &label}); err != nil {
 		t.Fatalf("edit: %v", err)
 	}
-	// The next release reworks the template: a new label, a role more.
+	// The next release reworks the template: a new label, a slot more.
 	next, err := template.Load(map[string][]byte{"f.yaml": []byte(`templates:
   - kind: standard_template
     name: base-room
     label: Base Room Mk II
     standard:
-      roles:
+      slots:
         - { name: main-display, label: Main Display, accepted_types: [display] }
         - { name: speakers, label: Speakers, quorum: 4, accepted_types: [speaker] }
 `)})
@@ -236,9 +236,9 @@ func TestAStandardFromATemplateIgnoresTheNextRelease(t *testing.T) {
 	if err != nil || st.Label != "Our Room" {
 		t.Fatalf("after the next release: %+v (%v), want the operator's label", st, err)
 	}
-	roles, _ := gw.ListSystemRoles(ctx, "standard", "base-room")
-	if len(roles) != 3 {
-		t.Errorf("after the next release: %d roles, want the fork's 3", len(roles))
+	slots, _ := gw.ListSystemSlots(ctx, "standard", "base-room")
+	if len(slots) != 3 {
+		t.Errorf("after the next release: %d slots, want the fork's 3", len(slots))
 	}
 }
 
@@ -253,7 +253,7 @@ func jsonHas(raw []byte, key, want string) bool {
 	return ok && got == want
 }
 
-// checkForkMatches holds a forked standard to its template: the same roles
+// checkForkMatches holds a forked standard to its template: the same slots
 // (name, quorum, accepted types, pins, the alternate each joins), the same
 // metric contract, and the same map. What the dev fleet's Map tab and KPI
 // tiles read moved from the old seed into the templates, so this is their
@@ -265,24 +265,24 @@ func checkForkMatches(t *testing.T, gw storage.Gateway, tm template.Template) {
 	if err != nil {
 		t.Fatalf("read %s: %v", tm.Name, err)
 	}
-	roles, err := gw.ListSystemRoles(ctx, "standard", tm.Name)
+	slots, err := gw.ListSystemSlots(ctx, "standard", tm.Name)
 	if err != nil {
-		t.Fatalf("roles of %s: %v", tm.Name, err)
+		t.Fatalf("slots of %s: %v", tm.Name, err)
 	}
 	got := map[string]string{}
-	for _, r := range roles {
-		got[r.Name] = roleKey(r.Quorum, r.AcceptedTypes, r.PinnedProducts, r.Alternate)
+	for _, r := range slots {
+		got[r.Name] = slotKey(r.Quorum, r.AcceptedTypes, r.PinnedProducts, r.Alternate)
 	}
 	want := map[string]string{}
-	for _, r := range tm.Standard.Roles {
+	for _, r := range tm.Standard.Slots {
 		alt := ""
 		if r.Choice != "" {
 			alt = r.Choice + "/" + r.Alternate
 		}
-		want[r.Name] = roleKey(r.Quorate(), r.AcceptedTypes, r.PinnedProducts, alt)
+		want[r.Name] = slotKey(r.Quorate(), r.AcceptedTypes, r.PinnedProducts, alt)
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%s roles = %v, want %v", tm.Name, got, want)
+		t.Errorf("%s slots = %v, want %v", tm.Name, got, want)
 	}
 	var metrics, wantMetrics []string
 	ms, err := gw.ListStandardMetrics(ctx, tm.Name)
@@ -309,8 +309,8 @@ func checkForkMatches(t *testing.T, gw storage.Gateway, tm template.Template) {
 	}
 }
 
-// roleKey renders the parts of a role a fork must carry, sets sorted.
-func roleKey(quorum int, types, pins []string, alt string) string {
+// slotKey renders the parts of a slot a fork must carry, sets sorted.
+func slotKey(quorum int, types, pins []string, alt string) string {
 	ts := append([]string{}, types...)
 	ps := append([]string{}, pins...)
 	sort.Strings(ts)

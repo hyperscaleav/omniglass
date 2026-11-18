@@ -10,7 +10,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// newSystemNamegenDB is the fixture every case below shares: a seeded registry
+// newSystemNamegenDB is the fixture every case below shares: a seeded catalog
 // (system_type "board" carries stem "boardroom", "class" carries "classroom")
 // and one room to place systems in, since a location is the bucket an operator
 // actually creates rooms' systems into.
@@ -36,7 +36,7 @@ func newSystemNamegenDB(t *testing.T) (*storage.PG, context.Context, string) {
 
 // TestSystemCreateGeneratesFromTypeStem is the acceptance case: a system
 // created with a type and a placement gets a name without the operator typing
-// one. The stem is the system_type chain's (ADR-0096's registry, resolved by
+// one. The stem is the system_type chain's (ADR-0096's catalog, resolved by
 // the same walk a label's facts use), and the ordinal is per placement bucket,
 // so an identical room elsewhere starts again at the bare name.
 func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {

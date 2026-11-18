@@ -1,12 +1,12 @@
 {
   "id": "trust-a-changed-host-key",
   "title": "Trust a changed host key",
-  "description": "A touch panel was reimaged, so it presents a new ssh host key and the node refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.",
+  "description": "A touch panel was reimaged, so it presents a new ssh host key and the outpost refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.",
   "steps": [
     {
       "n": 1,
       "kind": "goto",
-      "caption": "This place's system. A node collects its touch panel over the panel's ssh console.",
+      "caption": "This location's system. An outpost collects its touch panel over the panel's ssh console.",
       "still": "step-01.png"
     },
     {
@@ -24,13 +24,13 @@
     {
       "n": 4,
       "kind": "wait",
-      "caption": "The host key changed, so the node refused before logging in. It names the key pinned and the key offered.",
+      "caption": "The host key changed, so the outpost refused before logging in. It names the key pinned and the key offered.",
       "still": "step-04.png"
     },
     {
       "n": 5,
       "kind": "click",
-      "caption": "Trusting a key decides who the node will talk to, so it confirms first.",
+      "caption": "Trusting a key decides who the outpost will talk to, so it confirms first.",
       "still": "step-05.png"
     },
     {
@@ -60,15 +60,15 @@
     {
       "n": 10,
       "kind": "wait",
-      "caption": "The node redials onto the new pin at its next check-in, and the session reads up.",
+      "caption": "The outpost redials onto the new pin at its next check-in, and the session reads up.",
       "still": "step-10.png"
     }
   ],
   "poster": "step-10.png",
   "preview": "preview.webp",
   "budget": {
-    "seconds": 34.8,
-    "bytes": 672166,
-    "previewBytes": 521500
+    "seconds": 36,
+    "bytes": 741542,
+    "previewBytes": 569292
   }
 }

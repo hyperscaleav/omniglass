@@ -51,7 +51,7 @@ func historyMax(key string) float64 {
 func TestPlatformHistoryReadsHealthy(t *testing.T) {
 	t.Parallel()
 	for _, key := range []string{
-		writerclass.DBPoolWaitCount,
+		writerclass.DBPoolWaitCount, writerclass.DBPoolWaitDuration, writerclass.DBConnectionIdleInTransactionCount,
 		writerclass.BusConsumerPending, writerclass.BusConsumerAckPending, writerclass.CalcPendingDepth,
 		writerclass.OutboxQueuedDepth, writerclass.OutboxDueAge,
 		writerclass.RetentionBehind, writerclass.RetentionDeletedCount, writerclass.RetentionPassFailureCount,

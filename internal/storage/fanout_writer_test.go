@@ -49,7 +49,7 @@ func newFanFixture(t *testing.T) fanFixture {
 // TestFanoutWriterIsHeldToTheConduitsBindings: the fan-out writer (ADR-1282
 // point 6) lands a collected key on an owner the conduit's bindings name, and
 // the gateway refuses, before anything lands, a row on an owner the conduit
-// has not bound, and any key outside the collected class: a node-probe key,
+// has not bound, and any key outside the collected class: an outpost-probe key,
 // a platform key, a calc rule's output.
 func TestFanoutWriterIsHeldToTheConduitsBindings(t *testing.T) {
 	t.Parallel()
@@ -80,7 +80,7 @@ func TestFanoutWriterIsHeldToTheConduitsBindings(t *testing.T) {
 		err  error
 	}{
 		{"an owner the conduit has not bound", f.gw.InsertMetricSamples(f.ctx, w, metric(f.unbound, "participant-count"))},
-		{"a node-probe key", f.gw.InsertMetricSamples(f.ctx, w, metric(f.bound, "tcp-connect-time"))},
+		{"an outpost-probe key", f.gw.InsertMetricSamples(f.ctx, w, metric(f.bound, "tcp-connect-time"))},
 		{"a calc rule's output", f.gw.InsertMetricSamples(f.ctx, w, metric(f.bound, "avg-uptime"))},
 		{"a platform key", f.gw.InsertPropertySamples(f.ctx, w, []storage.PropertySampleWrite{{OwnerKind: "system", OwnerID: f.bound, Key: "health", Value: "ok"}})},
 		{"another conduit's bound owner", f.gw.InsertMetricSamples(f.ctx, storage.FanoutWriter(f.unbound), metric(f.bound, "participant-count"))},

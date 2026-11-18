@@ -13,7 +13,7 @@ import (
 // TestIAMReadsAreAdminTier pins that the Users, Roles, and Groups directories are
 // admin-tier reads: a viewer@all (the read floor deploy also inherits) is refused,
 // while admin@all and owner are allowed. This is the fix for the reported bug where
-// viewer's *:read reached principal/role/principal_group read.
+// viewer's *:read reached user/role/user_group read.
 func TestIAMReadsAreAdminTier(t *testing.T) {
 	t.Parallel()
 	dsn := seededDSN(t)
@@ -30,10 +30,10 @@ func TestIAMReadsAreAdminTier(t *testing.T) {
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	// viewer@all carries *:read, the same floor deploy inherits. If it cannot read
 	// these, neither can deploy (which holds no broader grant on them).
-	viewerTok := principalWithGrants(t, ctx, dsn, "az-viewer", []grant{{role: "viewer", scopeKind: "all"}})
-	adminTok := principalWithGrants(t, ctx, dsn, "az-admin", []grant{{role: "admin", scopeKind: "all"}})
+	viewerTok := userWithGrants(t, ctx, dsn, "az-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	adminTok := userWithGrants(t, ctx, dsn, "az-admin", []grant{{role: "admin", scopeKind: "all"}})
 
-	reads := []string{"/principals", "/roles", "/principal-groups"}
+	reads := []string{"/users", "/roles", "/user-groups"}
 	for _, p := range reads {
 		c.do(viewerTok, http.MethodGet, p, nil, http.StatusForbidden)
 		c.do(adminTok, http.MethodGet, p, nil, http.StatusOK)

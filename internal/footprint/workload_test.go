@@ -19,14 +19,14 @@ func standard() footprint.Workload {
 // that moves is the code under test moving, never the workload.
 func TestBatchIsDeterministic(t *testing.T) {
 	w := standard()
-	task := footprint.Task{ID: "t-1", Node: "edge-hq"}
+	task := footprint.Task{ID: "t-1", Outpost: "edge-hq"}
 	for tick := 0; tick < 5; tick++ {
 		a, b := w.Batch(task, tick), w.Batch(task, tick)
 		if !proto.Equal(a, b) {
 			t.Fatalf("tick %d: two builds differ:\n%v\n%v", tick, a, b)
 		}
 	}
-	if proto.Equal(w.Batch(footprint.Task{ID: "t-1", Node: "edge-hq"}, 1), w.Batch(footprint.Task{ID: "t-2", Node: "edge-hq"}, 1)) {
+	if proto.Equal(w.Batch(footprint.Task{ID: "t-1", Outpost: "edge-hq"}, 1), w.Batch(footprint.Task{ID: "t-2", Outpost: "edge-hq"}, 1)) {
 		t.Fatal("two tasks built the same batch: a noisy signal must vary by task")
 	}
 }
@@ -35,9 +35,9 @@ func TestBatchIsDeterministic(t *testing.T) {
 // lane the mix declares, stamped at the tick's time, bound to the task.
 func TestBatchCarriesTheMix(t *testing.T) {
 	w := standard()
-	b := w.Batch(footprint.Task{ID: "t-9", Node: "edge-hq"}, 3)
-	if b.GetTaskId() != "t-9" || b.GetNodeId() != "edge-hq" {
-		t.Fatalf("batch not bound to its task: task %q node %q", b.GetTaskId(), b.GetNodeId())
+	b := w.Batch(footprint.Task{ID: "t-9", Outpost: "edge-hq"}, 3)
+	if b.GetTaskId() != "t-9" || b.GetOutpostId() != "edge-hq" {
+		t.Fatalf("batch not bound to its task: task %q outpost %q", b.GetTaskId(), b.GetOutpostId())
 	}
 	var metrics, properties int
 	for _, s := range footprint.StandardMix {
@@ -63,7 +63,7 @@ func TestBatchCarriesTheMix(t *testing.T) {
 // and is not constant.
 func TestSignalShapes(t *testing.T) {
 	w := standard()
-	task := footprint.Task{ID: "t-1", Node: "edge-hq"}
+	task := footprint.Task{ID: "t-1", Outpost: "edge-hq"}
 	values := func(key string) []float64 {
 		var out []float64
 		for tick := 0; tick < 20; tick++ {
@@ -114,7 +114,7 @@ func TestSignalShapes(t *testing.T) {
 // TestPropertyValuesAreCanonicalJSON: a property's value rides as canonical
 // JSON text, which ingest parses against the property type.
 func TestPropertyValuesAreCanonicalJSON(t *testing.T) {
-	for _, p := range standard().Batch(footprint.Task{ID: "t-1", Node: "edge-hq"}, 0).GetProperties() {
+	for _, p := range standard().Batch(footprint.Task{ID: "t-1", Outpost: "edge-hq"}, 0).GetProperties() {
 		if v := p.GetValueJson(); len(v) < 2 || v[0] != '"' || v[len(v)-1] != '"' {
 			t.Errorf("%s: value %q is not a JSON string", p.GetName(), v)
 		}

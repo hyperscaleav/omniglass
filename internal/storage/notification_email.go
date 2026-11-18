@@ -67,10 +67,10 @@ func (p *PG) emailSend(ctx context.Context, q querier, targetID, ruleID, recipie
 		if err != nil || refused != "" {
 			return nil, refused, err
 		}
-		if t.Kind == TargetPrincipalGroup && ruleID != nil {
+		if expandsToPeople(t.Kind) && ruleID != nil {
 			var opted bool
 			if err := q.QueryRow(ctx, `select exists (select 1 from action_rule_opt_out o join action_rule r on r.id = o.rule_id
-				where o.rule_id = $1::uuid and o.principal_id = $2::uuid and r.opt_out_allowed)`, *ruleID, *recipientID).Scan(&opted); err != nil {
+				where o.rule_id = $1::uuid and o.user_id = $2::uuid and r.opt_out_allowed)`, *ruleID, *recipientID).Scan(&opted); err != nil {
 				return nil, "", fmt.Errorf("storage: recheck opt-out: %w", err)
 			}
 			if opted {
@@ -98,7 +98,7 @@ func (p *PG) personalEmailSend(ctx context.Context, q querier, ruleID, recipient
 	}
 	var owner string
 	var enabled, email bool
-	err := q.QueryRow(ctx, `select coalesce(owner_principal_id::text, ''), enabled, 'email' = any(channels) from action_rule where id = $1::uuid`, *ruleID).Scan(&owner, &enabled, &email)
+	err := q.QueryRow(ctx, `select coalesce(owner_user_id::text, ''), enabled, 'email' = any(channels) from action_rule where id = $1::uuid`, *ruleID).Scan(&owner, &enabled, &email)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && owner != *recipientID) {
 		return nil, "the subscription was deleted", nil
 	}
@@ -111,7 +111,7 @@ func (p *PG) personalEmailSend(ctx context.Context, q querier, ruleID, recipient
 	case !email:
 		return nil, "the subscription no longer sends email", nil
 	}
-	addr, refused, err := recheckRecipient(ctx, q, &NotificationTarget{Kind: TargetPrincipal, PrincipalID: owner}, recipientID, componentID)
+	addr, refused, err := recheckRecipient(ctx, q, &NotificationTarget{Kind: TargetUser, UserID: owner}, recipientID, componentID)
 	if err != nil || refused != "" {
 		return nil, refused, err
 	}
@@ -133,19 +133,23 @@ func (p *PG) personalEmailSend(ctx context.Context, q querier, ruleID, recipient
 
 // recheckRecipient judges a person's email row again at send, as the queue
 // judged them (ADR-1341), and resolves their directory email: they are still
-// an active human, still a member of the group the row came through (or
-// still the person the target names), and their component read scope, as it
-// stands now, still admits the alarm's component.
+// an active human, still a member of the group the row came through (still
+// a holder of the role it came through, or still the person the target
+// names), and their component read scope, as it stands now, still admits the
+// alarm's component.
 func recheckRecipient(ctx context.Context, q querier, t *NotificationTarget, recipientID *string, componentID string) (string, string, error) {
 	if recipientID == nil {
 		return "", "the recipient was deleted", nil
 	}
 	var email string
-	var active, member bool
+	var active, member, holder bool
 	err := q.QueryRow(ctx, `select coalesce(h.email, ''), pr.active and pr.archived_at is null,
-			$2::uuid is null or exists (select 1 from principal_group_member m where m.group_id = $2::uuid and m.principal_id = pr.id)
-		from principal pr join human h on h.principal_id = pr.id where pr.id = $1::uuid`,
-		*recipientID, nullIfEmpty(t.PrincipalGroupID)).Scan(&email, &active, &member)
+			$2::uuid is null or exists (select 1 from user_group_member m where m.group_id = $2::uuid and m.user_id = pr.id),
+			$3::uuid is null or exists (select 1 from user_grant g where g.role_id = $3::uuid and g.user_id = pr.id)
+				or exists (select 1 from user_grant g join user_group_member m on m.group_id = g.group_id
+				            where g.role_id = $3::uuid and m.user_id = pr.id)
+		from users pr join person h on h.user_id = pr.id where pr.id = $1::uuid`,
+		*recipientID, nullIfEmpty(t.UserGroupID), nullIfEmpty(t.RoleID)).Scan(&email, &active, &member, &holder)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "the recipient was deleted", nil
 	}
@@ -159,7 +163,9 @@ func recheckRecipient(ctx context.Context, q querier, t *NotificationTarget, rec
 		// The group is not named: a reason is read by whoever reads the
 		// alarm, and the group directory is admin-tier.
 		return "", "the recipient is no longer a member of the target's group", nil
-	case t.Kind == TargetPrincipal && t.PrincipalID != *recipientID:
+	case !holder:
+		return "", "the recipient no longer holds the target's role", nil
+	case t.Kind == TargetUser && t.UserID != *recipientID:
 		return "", "the target no longer names the recipient", nil
 	}
 	readers, err := readersOf(ctx, q, componentID, []string{*recipientID})
@@ -237,9 +243,9 @@ func (p *PG) MailRelay(ctx context.Context) (*MailRelay, string, error) {
 
 // checkMailSecret judges binding a secret to the mail relay (the notification
 // settings' mail_secret), as binding one to a target is judged: a PLATFORM
-// basic-auth secret, by bare name, that the caller may reveal (SecretUse),
+// basic-auth secret, by bare name, that the caller may bind (SecretUse),
 // since every send hands it to whatever mail_relay names. A secret outside
-// the caller's view is ErrSecretNotFound, one it reads but may not reveal
+// the caller's view is ErrSecretNotFound, one it reads but may not bind
 // ErrSecretForbidden, one of another kind ErrMailSecretInvalid.
 func (p *PG) checkMailSecret(ctx context.Context, q querier, ref string, use SecretUse) error {
 	if ref == "" {
@@ -248,7 +254,7 @@ func (p *PG) checkMailSecret(ctx context.Context, q querier, ref string, use Sec
 	if isUUID(ref) || strings.Contains(ref, "/") {
 		return fmt.Errorf("%w: mail_secret names a platform secret by its bare name", ErrMailSecretInvalid)
 	}
-	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Reveal, use.CanAdmin, true)
+	row, _, err := p.secretRowForAction(ctx, q, ref, use.Read, use.Bind, use.CanAdmin, true)
 	if err != nil {
 		return err
 	}

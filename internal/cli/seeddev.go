@@ -36,7 +36,7 @@ func newSeedDevCmd() *cobra.Command {
 			return runSeedDev(cmd.Context(), sc, simFleet, simPortOffset)
 		},
 	}
-	cmd.Flags().BoolVar(&simFleet, "sim-fleet", true, "wire the simulated fleet: addresses and endpoints on the dev node for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (a lab's node collects from them)")
+	cmd.Flags().BoolVar(&simFleet, "sim-fleet", true, "wire the simulated fleet: addresses and endpoints on the dev outpost for every example-fleet component the simulator serves, never a scenario's copies or a hand-added device (a lab's outpost collects from them)")
 	cmd.Flags().IntVar(&simPortOffset, "sim-port-offset", 0, "the lift the simulator applies to ports below 1024, which the simulated fleet's endpoints target: 0 for one that binds the real ports (in a container, as the lab's does), or the --port-offset of a simulator run unprivileged on a host")
 	cmd.Flags().StringVar(&scenario, "scenario", devseed.Scenarios()[0].Name, "the fleet to seed (see the list above)")
 	return cmd

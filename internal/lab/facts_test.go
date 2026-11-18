@@ -21,8 +21,8 @@ func TestLabFactsMatchCommitted(t *testing.T) {
 	if string(committed) != string(fresh) {
 		t.Error("docs/src/generated/lab.json drifted from the planner or the walkthroughs: run make gen and commit the result")
 	}
-	if !strings.Contains(string(fresh), `"node"`) || !strings.Contains(string(fresh), "NET_ADMIN") {
-		t.Fatal("the facts lack the node and its NET_ADMIN")
+	if !strings.Contains(string(fresh), `"outpost"`) || !strings.Contains(string(fresh), "NET_ADMIN") {
+		t.Fatal("the facts lack the outpost and its NET_ADMIN")
 	}
 	for _, want := range []string{`"cadences"`, `"walkthrough"`, `"probe_every"`, `"30s"`} {
 		if !strings.Contains(string(fresh), want) {
@@ -54,6 +54,25 @@ func TestSetupCommandIsTheCLICreate(t *testing.T) {
 	for _, bad := range []string{"components", "/components/x", "/", "/auth/me/tokens", "/components//alarms", "/a/b/c/d"} {
 		if _, err := SetupCommand(bad, map[string]any{"name": "x"}); err == nil {
 			t.Errorf("SetupCommand(%q) made a command, want a refusal", bad)
+		}
+	}
+}
+
+// The topology table names a container's caps as a learner reads them, and
+// an uncapped container as none (#1892).
+func TestFormatLimits(t *testing.T) {
+	for _, tc := range []struct {
+		cpus   float64
+		memory int64
+		want   string
+	}{
+		{1, 512 << 20, "1 CPU, 512 MiB"},
+		{2, 2969 << 20, "2 CPUs, 2969 MiB"},
+		{0.5, 0, "0.5 CPUs"},
+		{0, 0, ""},
+	} {
+		if got := FormatLimits(tc.cpus, tc.memory); got != tc.want {
+			t.Errorf("FormatLimits(%g, %d) = %q, want %q", tc.cpus, tc.memory, got, tc.want)
 		}
 	}
 }

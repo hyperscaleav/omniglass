@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// One place renders a label (#683).
+// One component renders a label (#683).
 //
 // `entityLabel` has been the single renderer since #581, and the console went on
 // hand-rolling `label || name` beside it anyway, in three dialects:
@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest";
 // typing "undefined" matched every unlabelled row and typing a label matched
 // nothing on the pages that spelled it `${r.name} ${r.label}`. No page
 // test catches that, because the page nobody wrote a test for is the page that
-// drifts, and a rule written out seventy times drifts in seventy places.
+// drifts, and a rule written out seventy times drifts seventy ways.
 //
 // It matters more now than it did: #682 made a label something a RULE renders,
 // so a second renderer no longer merely looks different, it disagrees about who
@@ -77,7 +77,7 @@ function handRolled(line: string): boolean {
 //
 // Keyed on the LINE and not just the file: a file-level exemption would let the
 // next hand-rolled fallback hide behind a neighbour that had a good reason, which
-// is how a sweep ends up half done. lib/principals.ts is exactly that case, since
+// is how a sweep ends up half done. lib/users.ts is exactly that case, since
 // its role facet goes through entityLabel and the function beneath it does not.
 const ALLOWED: { file: string; match: string; why: string }[] = [
   {
@@ -87,16 +87,16 @@ const ALLOWED: { file: string; match: string; why: string }[] = [
   },
   {
     file: "lib/groups.ts",
-    match: "m.name || m.label || m.principal_id",
+    match: "m.name || m.label || m.user_id",
     why:
-      "memberName is a PRINCIPAL's name, not an entity's: its precedence is identifier-first " +
-      "(a service account has no label at all), the other way round from the entity " +
+      "memberName is a USER's name, not an entity's: its precedence is identifier-first " +
+      "(a machine user has no label at all), the other way round from the entity " +
       "rule, which entityLabel does not express and must not learn",
   },
   {
-    file: "lib/principals.ts",
-    match: "p.human?.label || p.human?.username",
-    why: "principalName, the same principal rule over the nested human/service shape",
+    file: "lib/users.ts",
+    match: "p.person?.label || p.person?.username",
+    why: "userName, the same user rule over the nested person/machine shape",
   },
   {
     file: "components/ContractEditor.tsx",

@@ -12,7 +12,7 @@ import (
 // gw, parents before variants, through the same primitive POST
 // /standards:createFromTemplate uses. The boot seed plants no standard (ADR-0827), so a
 // test that builds a system on a shipped standard creates it first, as an
-// operator would. Run it after seed.Run: a role names the component types
+// operator would. Run it after seed.Run: a slot names the component types
 // and products the seed plants.
 func CreateShippedStandards(t testing.TB, gw storage.Gateway) {
 	t.Helper()

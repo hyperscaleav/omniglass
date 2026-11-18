@@ -2,7 +2,7 @@ import { type JSX } from "solid-js";
 import BladeField from "./BladeField";
 import type { InheritedFact } from "../lib/catalog";
 
-// InheritedField is a type registry blade's field for a fact that INHERITS: the
+// InheritedField is a type catalog blade's field for a fact that INHERITS: the
 // stem, abbrev and icon a component_type or system_type takes from the nearest
 // ancestor that states one when it states none of its own.
 //
@@ -52,7 +52,7 @@ export default function InheritedField(props: {
   label: string;
   // The fact's own sentence. The inheritance sentence is appended here, so the
   // caller describes the FACT and this component describes the RELATION, once
-  // for both registries.
+  // for both catalogs.
   hint: string;
   // What the server says this row would inherit, and from where.
   inherited: () => InheritedFact;

@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
 // The alarm write side. An alarm is component-local and impairs it wholesale
@@ -22,7 +25,7 @@ import (
 // separately visible, and a verdict computed later would stamp its transition at
 // the time somebody looked rather than the time the fleet changed.
 
-// Alarm is one raised condition on a component. ClearedAt is nil while the alarm
+// Alarm is one raised problem on a component. ClearedAt is nil while the alarm
 // is active; clearing keeps the row, so the record of what was wrong and when
 // survives the fix.
 type Alarm struct {
@@ -31,21 +34,21 @@ type Alarm struct {
 	ComponentName string
 	Severity      string
 	Message       string
-	// DedupKey names WHICH condition this incident is about (ADR-0075): the
+	// DedupKey names WHAT this alarm is about (ADR-0075): the
 	// one-open invariant is per (component, dedup_key), enforced by the partial
 	// unique index while the row is open.
 	DedupKey  string
 	RaisedAt  time.Time
 	ClearedAt *time.Time
 	// AcknowledgedAt and AcknowledgedBy record that a HUMAN has seen this
-	// incident, and are ORTHOGONAL to ClearedAt (#728): raised state belongs to
-	// the condition, acknowledgement to a person, so an alarm can be raised and
+	// alarm, and are ORTHOGONAL to ClearedAt (#728): raised state belongs to
+	// the problem, acknowledgement to a person, so an alarm can be raised and
 	// unacknowledged (the queue an operator works), raised and acknowledged
 	// (somebody is on it), or cleared having never been acknowledged.
 	// AcknowledgedBy is the acknowledger's IDENTIFIER, not their uuid and not a
-	// label: a human's username, a service account's name, or a node's name,
-	// resolved by principalIdent. It is what an operator surface renders
-	// (ADR-0062), and it reads empty once that principal is purged, while
+	// label: a person's username, a machine user's name, or an outpost's name,
+	// resolved by userIdent. It is what an operator surface renders
+	// (ADR-0062), and it reads empty once that user is purged, while
 	// audit_log keeps the identifier it denormalized.
 	AcknowledgedAt *time.Time
 	AcknowledgedBy string
@@ -54,7 +57,7 @@ type Alarm struct {
 	RaisedByRuleID *string
 	// RaisedByRule is that rule's name, carried beside its id.
 	RaisedByRule *string
-	// SnoozedUntil and SnoozedBy are the snooze on the alarm's CONDITION
+	// SnoozedUntil and SnoozedBy are the snooze on the alarm's IDENTITY
 	// (#1318, ADR-1318), not on this row: every alarm of the same
 	// (component, dedup_key) reads the same pair while the snooze is in
 	// force, and none once its deadline passes. SnoozedBy is the identifier
@@ -70,7 +73,7 @@ func (a Alarm) Active() bool { return a.ClearedAt == nil }
 // alarm. It says nothing about whether the alarm is still raised.
 func (a Alarm) Acknowledged() bool { return a.AcknowledgedAt != nil }
 
-// Snoozed reports whether the alarm's condition is snoozed.
+// Snoozed reports whether the alarm is snoozed.
 func (a Alarm) Snoozed() bool { return a.SnoozedUntil != nil }
 
 // AlarmFilter narrows a component's alarm list. The zero value is what is wrong
@@ -80,17 +83,17 @@ type AlarmFilter struct {
 	IncludeCleared bool
 	// Unacknowledged keeps only the alarms nobody has looked at. With the zero
 	// IncludeCleared this is exactly "raised and unacknowledged", the queue an
-	// operator actually works; with IncludeCleared it also returns the incidents
+	// operator actually works; with IncludeCleared it also returns the alarms
 	// that came and went unattended.
 	Unacknowledged bool
 }
 
 // AlarmSpec is the raise input: a severity, an operator's note on what is
-// wrong, and the condition's dedup identity.
+// wrong, and the dedup key that names what it is about.
 type AlarmSpec struct {
 	Severity string
 	Message  string
-	// DedupKey is the condition identity (required): a re-raise of the same key
+	// DedupKey names what the alarm is about (required): a re-raise of the same key
 	// on the same component returns the existing open alarm, never a duplicate.
 	DedupKey string
 }
@@ -105,13 +108,13 @@ var (
 	ErrAlarmInvalid = errors.New("storage: alarm is invalid")
 )
 
-// alarmCols is the read shape. acknowledged_by surfaces the acting principal's
+// alarmCols is the read shape. acknowledged_by surfaces the acting user's
 // IDENTIFIER rather than its uuid, so every alarm read hands the API something
-// an operator recognises (ADR-0062); it reads empty once that principal is
+// an operator recognises (ADR-0062); it reads empty once that user is
 // purged, which is honest, and audit_log still names them.
 //
 // The identifier sources are projected as their own columns and folded in Go
-// (principalIdent), which is where that policy lives since #564 dropped the
+// (userIdent), which is where that policy lives since #564 dropped the
 // stored function. A projection rather than a join, because one of the four
 // statements reading this shape is an UPDATE ... RETURNING: RETURNING cannot
 // left-join, and giving the UPDATE a FROM clause would change which rows it
@@ -123,10 +126,10 @@ var (
 var alarmCols = `a.id, a.component_id, (select c.name from component c where c.id = a.component_id),
 	a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at, a.raised_by_rule_id::text,
 	(select r.name from event_rule r where r.id = a.raised_by_rule_id),
-	a.acknowledged_at, ` + principalIdentCols("a.acknowledged_by") + `,
-	` + snoozeOf("snoozed_until") + `, ` + principalIdentCols(snoozeOf("snoozed_by"))
+	a.acknowledged_at, ` + userIdentCols("a.acknowledged_by") + `,
+	` + snoozeOf("snoozed_until") + `, ` + userIdentCols(snoozeOf("snoozed_by"))
 
-// snoozeOf reads one column of the snooze in force on the alarm's condition
+// snoozeOf reads one column of the snooze in force on the alarm's dedup key
 // (#1318): a scalar subquery on the primary key, so it rides the UPDATE ...
 // RETURNING reads as the acknowledger's projection does. A snooze past its
 // deadline that the sweep has not yet ended reads as no snooze: the row is
@@ -137,30 +140,30 @@ func snoozeOf(col string) string {
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
-	var ackUsername, ackServiceName, ackNodeName *string
-	var snzUsername, snzServiceName, snzNodeName *string
+	var ackUsername, ackServiceName, ackOutpostName *string
+	var snzUsername, snzServiceName, snzOutpostName *string
 	if err := row.Scan(&a.ID, &a.ComponentID, &a.ComponentName, &a.Severity, &a.Message,
-		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackNodeName,
-		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzNodeName); err != nil {
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackOutpostName,
+		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzOutpostName); err != nil {
 		return nil, err
 	}
-	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName, ackNodeName)
-	a.SnoozedBy = principalIdent(snzUsername, snzServiceName, snzNodeName)
+	a.AcknowledgedBy = userIdent(ackUsername, ackServiceName, ackOutpostName)
+	a.SnoozedBy = userIdent(snzUsername, snzServiceName, snzOutpostName)
 	return &a, nil
 }
 
-// RaiseAlarm records a condition on a component, then recomputes the health
+// RaiseAlarm raises an alarm on a component, then recomputes the health
 // chain in the same transaction. An unknown component is ErrComponentNotFound.
 func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error) {
 	// The rule: prefix is the rule key namespace (ruleDedupKey): a hand raise
-	// keyed in it would stand in for a rule's condition, or be cleared as one.
+	// keyed in it would stand in for a rule's alarm, or be cleared as one.
 	// The key defaults to the message, so a message is judged the same way.
 	key := spec.DedupKey
 	if key == "" {
 		key = spec.Message
 	}
 	if strings.HasPrefix(key, "rule:") {
-		return nil, fmt.Errorf("%w: a hand-raised alarm's dedup_key (its message when none is given) may not begin rule:, which names a rule's condition", ErrAlarmInvalid)
+		return nil, fmt.Errorf("%w: a hand-raised alarm's dedup_key (its message when none is given) may not begin rule:, which names a rule's alarm", ErrAlarmInvalid)
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -194,19 +197,19 @@ func (p *PG) RaiseAlarm(ctx context.Context, actorID, componentName string, spec
 // hand raise and the rule evaluator (#919) raise through the same guarded
 // conditional insert, audit row and health recompute. ruleID names the rule
 // that raised it, nil for a hand raise. A raise that lands on an open alarm
-// of the same condition returns that alarm and writes nothing.
+// of the same dedup key returns that alarm and writes nothing.
 func (p *PG) raiseAlarmTx(ctx context.Context, tx pgx.Tx, actorID string, component *Component, spec AlarmSpec, ruleID *string) (*Alarm, error) {
 	if spec.DedupKey == "" {
-		// The message is the condition identity when the raiser supplies no
-		// explicit key (ADR-0075): the same condition text re-raised is the
-		// same condition. A raise with neither key nor message has no known
+		// The message is the dedup key when the raiser supplies no
+		// explicit key (ADR-0075): the same message re-raised is the
+		// same alarm. A raise with neither key nor message has no known
 		// identity, and the insert below mints a unique placeholder so it
 		// dedups with nothing, exactly the pre-key behavior.
 		spec.DedupKey = spec.Message
 	}
 	// The guarded conditional insert (ADR-0075): the partial unique index
-	// carries the one-open-per-condition invariant, and a losing raise reads
-	// the existing open incident back instead of minting a duplicate. The
+	// carries the one-open-per-dedup-key invariant, and a losing raise reads
+	// the existing open alarm back instead of minting a duplicate. The
 	// no-op path writes no audit row and recomputes nothing: nothing changed.
 	//
 	// Every read path, this one included, carries the component's uuid and
@@ -220,7 +223,7 @@ func (p *PG) raiseAlarmTx(ctx context.Context, tx pgx.Tx, actorID string, compon
 		returning id, raised_at, dedup_key`,
 		component.ID, spec.Severity, spec.Message, spec.DedupKey, ruleID).Scan(&a.ID, &a.RaisedAt, &a.DedupKey)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// The severity names a level in the registry (#917). A raise that
+		// The severity names a level in the catalog (#917). A raise that
 		// lands on an open alarm's dedup key inserts nothing, so the foreign
 		// key never checks it: check here, on this path only, so the winning
 		// raise costs no extra statement.
@@ -257,7 +260,7 @@ func (p *PG) raiseAlarmTx(ctx context.Context, tx pgx.Tx, actorID string, compon
 	}
 	// The raise's notifications, in its transaction (#618): a hand raise
 	// and a rule's raise both pass here, and a re-raise that landed on an
-	// open alarm returned above, so each opened incident notifies once.
+	// open alarm returned above, so each opened alarm notifies once.
 	if err := p.queueNotificationsTx(ctx, tx, component.ID, a.ID, TransitionRaised); err != nil {
 		return nil, err
 	}
@@ -305,7 +308,7 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 		}
 		return fmt.Errorf("storage: clear alarm %s: %w", alarmID, err)
 	}
-	// Both images, and the condition: an alarm's audit rows outlive it (#1339).
+	// Both images, and the dedup key: an alarm's audit rows outlive it (#1339).
 	if err := writeAuditRes(ctx, tx, actorID, "update", "alarm", alarmID, map[string]any{"cleared_at": nil},
 		map[string]any{"component": component.Name, "dedup_key": dedupKey, "cleared_at": cleared}); err != nil {
 		return err
@@ -313,7 +316,7 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 	if err := p.RecomputeHealth(ctx, tx, component.ID); err != nil {
 		return err
 	}
-	// A clear is the condition's edge whoever records it (decision 6 of
+	// A clear is the alarm's edge whoever records it (decision 6 of
 	// #618), so a hand clear notifies as a rule's does.
 	if err := p.queueNotificationsTx(ctx, tx, component.ID, alarmID, TransitionCleared); err != nil {
 		return err
@@ -326,19 +329,19 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 
 // AcknowledgeAlarm records that a human has seen this alarm, and changes nothing
 // else. It deliberately does NOT recompute health: an alarm's raised state
-// belongs to its condition, so acknowledging is not fixing, and a recompute here
+// belongs to its problem, so acknowledging is not fixing, and a recompute here
 // would stamp a transition at a moment when nothing about the fleet changed.
 //
 // Acknowledging twice is IDEMPOTENT, not a refusal (#728). The recorded fact is
 // "a human has seen this", which is monotonic, and the FIRST sighting is the
 // operationally meaningful one (time to acknowledge), so a second call keeps the
 // first person and the first time, writes no second audit row, and returns the
-// row. It is the same shape as a re-raise of an open condition returning the
-// existing incident (ADR-0075): the no-op leg changed nothing, so it records
+// row. It is the same shape as a re-raise of an open alarm returning the
+// existing alarm (ADR-0075): the no-op leg changed nothing, so it records
 // nothing.
 //
 // A cleared alarm is acknowledgeable too. The two facts are independent in both
-// directions, and the record of who read an incident outlives the fix exactly as
+// directions, and the record of who read an alarm outlives the fix exactly as
 // the row itself does.
 func (p *PG) AcknowledgeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error) {
 	// A malformed id is a miss rather than a server error: the address simply does
@@ -432,7 +435,7 @@ func (p *PG) ListAlarms(ctx context.Context, componentName string, filter AlarmF
 // ListSystemAlarms returns a system's members' alarms in one query, newest
 // first (#940): every active alarm whatever its age, and every alarm cleared
 // inside window (a zero window keeps every cleared one), capped at limit. It
-// is what a system's Activity polls to explain its incidents, so the poll is
+// is what a system's Activity polls to explain its alarms, so the poll is
 // one request however many members the system has. The system is resolved
 // (and scope-checked) by the caller and passed by id.
 func (p *PG) ListSystemAlarms(ctx context.Context, systemID string, window time.Duration, limit int) ([]Alarm, error) {
@@ -460,11 +463,53 @@ func (p *PG) ListSystemAlarms(ctx context.Context, systemID string, window time.
 	return out, rows.Err()
 }
 
+// ListFleetAlarms returns the active alarms across every component the caller
+// may read, in one query (#2025): the worst severity first (by the level's
+// rank), newest first within a level, capped at limit. The caller's component
+// scope is injected here through scopedListSQL, the same rooted walk every
+// scoped component list takes, so an out-of-scope alarm is never read at all.
+// An empty or wholly malformed scope is an empty list, not an error.
+func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, error) {
+	if read.Empty() {
+		return []Alarm{}, nil
+	}
+	args, ok := scopedListArgs(componentTable, read)
+	if !ok {
+		return []Alarm{}, nil
+	}
+	args = append(args, filter.Unacknowledged, limit)
+	unack, lim := "$"+strconv.Itoa(len(args)-1), "$"+strconv.Itoa(len(args))
+	rows, err := p.pool.Query(ctx, `
+		with comp as (`+scopedListSQL(componentTable, "id", read)+`)
+		select `+alarmCols+`
+		from alarm a
+		left join severity_level l on l.name = a.severity
+		where a.cleared_at is null
+		  and a.component_id in (select id from comp)
+		  and (not `+unack+` or a.acknowledged_at is null)
+		order by coalesce(l.rank, 0) desc, a.raised_at desc, a.id desc
+		limit `+lim, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list fleet alarms: %w", err)
+	}
+	defer rows.Close()
+
+	out := []Alarm{}
+	for rows.Next() {
+		a, err := scanAlarm(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan fleet alarm: %w", err)
+		}
+		out = append(out, *a)
+	}
+	return out, rows.Err()
+}
+
 // activeAlarms is the health report's read: what is currently wrong with a
 // component, so the report can name the alarm behind a down occupant. Takes the
-// component's id directly (resolveHealthRoles' assignee join already has it;
-// see resolvedRole.AssignedIDs), not its name: two components can share a name
-// once #627 lands, but system_role_assignment.component_id never does.
+// component's id directly (resolveHealthSlots' assignee join already has it;
+// see resolvedSlot.AssignedIDs), not its name: two components can share a name
+// once #627 lands, but system_slot_assignment.component_id never does.
 func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentID string) ([]Alarm, error) {
 	rows, err := q.Query(ctx, `
 		select `+alarmCols+`
@@ -487,11 +532,11 @@ func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentID string) 
 	return out, rows.Err()
 }
 
-// clearAlarmByDedupTx clears the open alarm of one condition on a component
+// clearAlarmByDedupTx clears the open alarm of one dedup key on a component
 // raised by ruleID (the rule evaluator's clear, #919; a rule clears only its
 // own alarms), audited and with health recomputed in
 // the caller's transaction. It returns the cleared alarm's id, which the
-// rule's clear event carries (#949). No open alarm of that condition is not
+// rule's clear event carries (#949). No open alarm of that dedup key is not
 // an error: there is nothing to clear, nothing is written, and the id is "".
 func (p *PG) clearAlarmByDedupTx(ctx context.Context, tx pgx.Tx, actorID string, component *Component, dedupKey string, ruleID *string) (string, error) {
 	var alarmID string

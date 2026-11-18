@@ -28,7 +28,7 @@ func TestExcludeRootDeployScopeAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	ownerTok := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	// Owner builds room-42 > rack-1: the deploy target subtree.
 	body := func(name, parent string) map[string]any {
@@ -51,7 +51,7 @@ func TestExcludeRootDeployScopeAPI(t *testing.T) {
 
 	// An integrator scoped to room-42 with exclude_root (the deploy role: create +
 	// update on the three tree tiers, read via the viewer floor).
-	deployTok := principalWithGrants(t, ctx, dsn, "integrator",
+	deployTok := userWithGrants(t, ctx, dsn, "integrator",
 		[]grant{{role: "deploy", scopeKind: "location", scopeID: roomID, scopeOp: "subtree_excl_root"}})
 	patch := map[string]any{"label": "x"}
 

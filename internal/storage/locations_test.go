@@ -8,11 +8,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestLocationTypeRegistry is the round-trip for the location_type registry: an
+// TestLocationTypeCatalog is the round-trip for the location_type catalog: an
 // upsert installs a type, a second upsert by the same id updates it (idempotent,
 // the boot-seed contract), and ListLocationTypes returns them alphabetically by
 // label.
-func TestLocationTypeRegistry(t *testing.T) {
+func TestLocationTypeCatalog(t *testing.T) {
 	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()

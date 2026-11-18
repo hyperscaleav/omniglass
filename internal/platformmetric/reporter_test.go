@@ -17,13 +17,14 @@ import (
 // running totals.
 func TestPoolReadingsAreTheWindowsDeltas(t *testing.T) {
 	t.Parallel()
-	prev := storage.PoolStat{Acquired: 1, Idle: 3, Total: 4, Max: 10, EmptyAcquireCount: 5, EmptyAcquireWait: 40 * time.Millisecond}
-	cur := storage.PoolStat{Acquired: 6, Idle: 0, Total: 6, Max: 10, EmptyAcquireCount: 9, EmptyAcquireWait: 140 * time.Millisecond}
+	prev := storage.PoolStat{Acquired: 1, Idle: 3, Total: 4, Max: 10, AcquireCount: 100, EmptyAcquireCount: 5, EmptyAcquireWait: 40 * time.Millisecond}
+	cur := storage.PoolStat{Acquired: 6, Idle: 0, Total: 6, Max: 10, AcquireCount: 350, EmptyAcquireCount: 9, EmptyAcquireWait: 140 * time.Millisecond}
 	want := map[string]float64{
 		writerclass.DBPoolAcquired:     6,
 		writerclass.DBPoolIdle:         0,
 		writerclass.DBPoolTotal:        6,
 		writerclass.DBPoolMax:          10,
+		writerclass.DBPoolAcquireCount: 250,
 		writerclass.DBPoolWaitCount:    4,
 		writerclass.DBPoolWaitDuration: 100,
 	}
@@ -42,7 +43,7 @@ func TestPoolReadingsAreTheWindowsDeltas(t *testing.T) {
 // sampler) reads no negative wait.
 func TestPoolReadingsNeverGoNegative(t *testing.T) {
 	t.Parallel()
-	prev := storage.PoolStat{EmptyAcquireCount: 9, EmptyAcquireWait: time.Second}
+	prev := storage.PoolStat{AcquireCount: 90, EmptyAcquireCount: 9, EmptyAcquireWait: time.Second}
 	for _, r := range platformmetric.PoolReadings(prev, storage.PoolStat{Max: 2}) {
 		if r.Value < 0 {
 			t.Errorf("%s = %v, want no negative", r.Key, r.Value)

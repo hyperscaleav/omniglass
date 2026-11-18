@@ -17,7 +17,7 @@ import (
 
 // The tls transport on the server side (#1035): the worklist delivers the
 // pin a tls endpoint holds (the operator's declared tls-certificate, else
-// the key the node trusted on first use), the declared pin alone moves the
+// the key the outpost trusted on first use), the declared pin alone moves the
 // connection fingerprint, an operator accepts a changed key through :retry
 // with certificate (audited), and the verification mode is a driver input
 // that edits in place and moves the fingerprint. Skipped under -short.
@@ -27,7 +27,7 @@ type tlsFixture struct {
 	gw        *storage.PG
 	dsn       string
 	all       scope.Set
-	node      string
+	outpost   string
 	component string
 }
 
@@ -46,11 +46,11 @@ func newTLSFixture(t *testing.T) *tlsFixture {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatal(err)
 	}
-	f := &tlsFixture{ctx: ctx, gw: gw, dsn: dsn, all: scope.Set{All: true}, node: "edge-t", component: "panel-t"}
+	f := &tlsFixture{ctx: ctx, gw: gw, dsn: dsn, all: scope.Set{All: true}, outpost: "edge-t", component: "panel-t"}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: f.component}, f.all, f.all, f.all, f.all); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: f.node}, f.all, f.all); err != nil {
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: f.outpost}, f.all, f.all); err != nil {
 		t.Fatal(err)
 	}
 	return f
@@ -59,7 +59,7 @@ func newTLSFixture(t *testing.T) *tlsFixture {
 // task is the worklist's first task for the endpoint.
 func (f *tlsFixture) task(t *testing.T, endpointID string) storage.WorklistTask {
 	t.Helper()
-	wl, err := f.gw.NodeWorklist(f.ctx, f.node)
+	wl, err := f.gw.OutpostWorklist(f.ctx, f.outpost)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func key(c string) string { return "SHA256:" + strings.Repeat(c, 43) }
 func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 	t.Parallel()
 	f := newTLSFixture(t)
-	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Node: &f.node,
+	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Outpost: &f.outpost,
 		Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"pin"}`)}, f.all)
 	if err != nil {
 		t.Fatalf("a tls endpoint: %v", err)
@@ -90,7 +90,7 @@ func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 		t.Fatalf("a fresh endpoint carries a pin: %+v", before)
 	}
 
-	// The node trusts a key on first use: it rides back as the pin, and
+	// The outpost trusts a key on first use: it rides back as the pin, and
 	// (a learned fact) moves nothing.
 	if err := insertProperties(f.ctx, f.gw, []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: f.component,
 		Key: "tls-certificate", Instance: ep.Name, Value: key("A"), Source: "tls", TS: time.Now()}}); err != nil {
@@ -162,7 +162,7 @@ func TestTLSPinRidesTheWorklistAndRetryAcceptsAChangedKey(t *testing.T) {
 func TestRetryRefusesACertificateOffATLSEndpoint(t *testing.T) {
 	t.Parallel()
 	f := newTLSFixture(t)
-	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &f.component, Node: &f.node,
+	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &f.component, Outpost: &f.outpost,
 		Params: []byte(`{"target":"10.0.0.9:22"}`)}, f.all)
 	if err != nil {
 		t.Fatal(err)
@@ -177,15 +177,15 @@ func TestRetryRefusesACertificateOffATLSEndpoint(t *testing.T) {
 
 // The verification mode is a driver input (decision 3 of #1076): the
 // seeded newtron-nvp-tls declares pin, which the attach bakes into the
-// endpoint's params for the node to read; an operator edits it in place,
+// endpoint's params for the outpost to read; an operator edits it in place,
 // which moves the fingerprint (so a gate lifts); an unknown mode is refused
 // naming the input; a label edit moves nothing.
 func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 	t.Parallel()
 	f := newTLSFixture(t)
 	drv := "newtron-nvp-tls"
-	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
-		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all}, f.all)
+	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Outpost: &f.outpost,
+		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: f.all, SecretBind: f.all}, f.all)
 	if err != nil {
 		t.Fatalf("attach newtron-nvp-tls: %v", err)
 	}
@@ -194,8 +194,8 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 	if params["tls-mode"] != "pin" || params["target"] != "10.0.0.9:51326" {
 		t.Fatalf("attached params %s, want the driver's default mode, pin, and its port", ep.Params)
 	}
-	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Node: &f.node,
-		Inputs: map[string]string{"host": "10.0.0.9", "tls-mode": "trust-me"}, SecretRead: f.all}, f.all); err == nil || !strings.Contains(err.Error(), "tls-mode") {
+	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &f.component, Outpost: &f.outpost,
+		Inputs: map[string]string{"host": "10.0.0.9", "tls-mode": "trust-me"}, SecretRead: f.all, SecretBind: f.all}, f.all); err == nil || !strings.Contains(err.Error(), "tls-mode") {
 		t.Fatalf("an attach with an unknown mode = %v, want refused naming tls-mode", err)
 	}
 
@@ -207,10 +207,10 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 	if f.task(t, ep.ID).Fingerprint != before {
 		t.Fatal("a label edit moved the fingerprint")
 	}
-	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "maybe"}, SecretRead: f.all}, f.all, f.all); !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), "tls-mode") {
+	if _, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "maybe"}, SecretRead: f.all, SecretBind: f.all}, f.all, f.all); !errors.Is(err, storage.ErrEndpointPatchInvalid) || !strings.Contains(err.Error(), "tls-mode") {
 		t.Fatalf("an unknown mode edit = %v, want ErrEndpointPatchInvalid naming tls-mode", err)
 	}
-	edited, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "skip"}, SecretRead: f.all}, f.all, f.all)
+	edited, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": "skip"}, SecretRead: f.all, SecretBind: f.all}, f.all, f.all)
 	if err != nil {
 		t.Fatalf("edit the mode to skip: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 		t.Fatal("editing the mode left the fingerprint")
 	}
 	// Clearing the input falls back to the driver's default.
-	cleared, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": ""}, SecretRead: f.all}, f.all, f.all)
+	cleared, err := f.gw.UpdateEndpoint(f.ctx, "", ep.ID, storage.EndpointPatch{Inputs: map[string]string{"tls-mode": ""}, SecretRead: f.all, SecretBind: f.all}, f.all, f.all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,16 +233,16 @@ func TestTLSModeIsADriverInputThatEditsInPlace(t *testing.T) {
 }
 
 // Review of #1035, finding 5: a bare tls endpoint's params carry its mode
-// as given, so a value the node cannot read is refused where it is written,
+// as given, so a value the outpost cannot read is refused where it is written,
 // naming the field, at create and at an edit; a good one is taken.
 func TestABareTLSEndpointsModeIsCheckedAtWrite(t *testing.T) {
 	t.Parallel()
 	f := newTLSFixture(t)
-	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Node: &f.node,
+	if _, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Outpost: &f.outpost,
 		Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"pinned"}`)}, f.all); !errors.Is(err, storage.ErrEndpointParamsInvalid) || !strings.Contains(err.Error(), "tls-mode") {
 		t.Fatalf("a bare tls endpoint with mode pinned = %v, want ErrEndpointParamsInvalid naming tls-mode", err)
 	}
-	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Node: &f.node,
+	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Transport: "tls", Component: &f.component, Outpost: &f.outpost,
 		Params: []byte(`{"target":"10.0.0.9:51326","tls-mode":"skip"}`)}, f.all)
 	if err != nil {
 		t.Fatalf("a bare tls endpoint with mode skip: %v", err)

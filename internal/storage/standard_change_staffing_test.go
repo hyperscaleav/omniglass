@@ -12,7 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// Changing a system's standard carries its staffing onto the roles that still
+// Changing a system's standard carries its staffing onto the slots that still
 // exist and releases the rest (#506, ADR-0506). The operator's view of it is
 // driven over the wire by internal/api/standard_change_staffing_e2e_test.go;
 // these are the gateway halves the wire cannot see: positions and capacity,
@@ -20,13 +20,13 @@ import (
 // against a staffing write, and the one-time release of the strands an earlier
 // release already made.
 
-// declareRole declares a role on a standard the test owns.
-func (f *healthFixture) declareRole(t *testing.T, ctx context.Context, standard string, spec storage.SystemRoleSpec) {
+// declareSlot declares a slot on a standard the test owns.
+func (f *healthFixture) declareSlot(t *testing.T, ctx context.Context, standard string, spec storage.SystemSlotSpec) {
 	t.Helper()
 	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: standard, Label: standard}); err != nil {
 		t.Fatalf("standard %s: %v", standard, err)
 	}
-	if _, err := f.gw.SetSystemRole(ctx, "", "standard", standard, spec); err != nil {
+	if _, err := f.gw.SetSystemSlot(ctx, "", "standard", standard, spec); err != nil {
 		t.Fatalf("declare %s/%s: %v", standard, spec.Name, err)
 	}
 }
@@ -47,19 +47,19 @@ func (f *healthFixture) moveStandard(t *testing.T, ctx context.Context, system, 
 	}
 }
 
-func (f *healthFixture) effectiveRole(t *testing.T, ctx context.Context, system, role string) storage.EffectiveRole {
+func (f *healthFixture) effectiveSlot(t *testing.T, ctx context.Context, system, slot string) storage.EffectiveSlot {
 	t.Helper()
-	roles, err := f.gw.EffectiveRoles(ctx, system, f.all)
+	slots, err := f.gw.EffectiveSlots(ctx, system, f.all)
 	if err != nil {
-		t.Fatalf("effective roles %s: %v", system, err)
+		t.Fatalf("effective slots %s: %v", system, err)
 	}
-	for _, r := range roles {
-		if r.Name == role {
+	for _, r := range slots {
+		if r.Name == slot {
 			return r
 		}
 	}
-	t.Fatalf("%s has no role %q (roles %+v)", system, role, roles)
-	return storage.EffectiveRole{}
+	t.Fatalf("%s has no slot %q (slots %+v)", system, slot, slots)
+	return storage.EffectiveSlot{}
 }
 
 func (f *healthFixture) count(t *testing.T, ctx context.Context, sql string, args ...any) int {
@@ -76,7 +76,7 @@ func (f *healthFixture) assignmentID(t *testing.T, ctx context.Context, system, 
 	t.Helper()
 	var id string
 	if err := f.conn.QueryRow(ctx, `
-		select ra.id from system_role_assignment ra
+		select ra.id from system_slot_assignment ra
 		where ra.system_id = (select id from system where name = $1)
 		  and ra.component_id = (select id from component where name = $2)`, system, component).Scan(&id); err != nil {
 		t.Fatalf("assignment of %s in %s: %v", component, system, err)
@@ -84,43 +84,43 @@ func (f *healthFixture) assignmentID(t *testing.T, ctx context.Context, system, 
 	return id
 }
 
-// strandedAssignments counts the assignments whose role is neither the
+// strandedAssignments counts the assignments whose slot is neither the
 // system's own nor its current standard's: the rows #506 left behind.
 const strandedAssignments = `
-	select count(*) from system_role_assignment ra
+	select count(*) from system_slot_assignment ra
 	join system s on s.id = ra.system_id
-	join system_role r on r.id = ra.role_id
+	join system_slot r on r.id = ra.slot_id
 	where not (r.owner_kind = 'system' and r.system_id = s.id)
 	  and not (r.owner_kind = 'standard' and r.standard_id is not distinct from s.standard_id)`
 
-// TestStandardChangeCarriesStaffingOntoTheRolesThatStillExist: the fixture's
+// TestStandardChangeCarriesStaffingOntoTheSlotsThatStillExist: the fixture's
 // bar fills health-huddle's table-mic; moving the system onto a standard that
 // declares a table-mic it still fits carries it across, audited as one update
 // of its assignment, and the health the move records already counts it.
-func TestStandardChangeCarriesStaffingOntoTheRolesThatStillExist(t *testing.T) {
+func TestStandardChangeCarriesStaffingOntoTheSlotsThatStillExist(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
-	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{
+	f.declareSlot(t, ctx, "huddle-next", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	})
-	// A role the system declares itself is not the standard's to carry.
-	if _, err := f.gw.SetSystemRole(ctx, "", "system", "hq-huddle", storage.SystemRoleSpec{Name: "spare", Label: "Spare", Quorum: 1}); err != nil {
-		t.Fatalf("the system's own role: %v", err)
+	// A slot the system declares itself is not the standard's to carry.
+	if _, err := f.gw.SetSystemSlot(ctx, "", "system", "hq-huddle", storage.SystemSlotSpec{Name: "spare", Label: "Spare", Quorum: 1}); err != nil {
+		t.Fatalf("the system's own slot: %v", err)
 	}
 	f.mustBar(t, ctx, "bar-own")
-	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "spare", "bar-own", f.all, f.all, f.all, f.all); err != nil {
-		t.Fatalf("staff the system's own role: %v", err)
+	if err := f.gw.AssignSlot(ctx, "", "hq-huddle", "spare", "bar-own", f.all, f.all, f.all, f.all); err != nil {
+		t.Fatalf("staff the system's own slot: %v", err)
 	}
 	f.mustAgreeWithRecord(t, ctx, "hq-huddle", "healthy")
 	carried := f.assignmentID(t, ctx, "hq-huddle", "bar-1")
 
 	f.moveStandard(t, ctx, "hq-huddle", "huddle-next")
 
-	if mic := f.effectiveRole(t, ctx, "hq-huddle", "table-mic"); !slices.Equal(mic.AssignedTo, []string{"bar-1"}) || !mic.FromStandard {
+	if mic := f.effectiveSlot(t, ctx, "hq-huddle", "table-mic"); !slices.Equal(mic.AssignedTo, []string{"bar-1"}) || !mic.FromStandard {
 		t.Fatalf("table-mic after the move = %+v, want bar-1 carried onto huddle-next's", mic)
 	}
-	if spare := f.effectiveRole(t, ctx, "hq-huddle", "spare"); !slices.Equal(spare.AssignedTo, []string{"bar-own"}) {
+	if spare := f.effectiveSlot(t, ctx, "hq-huddle", "spare"); !slices.Equal(spare.AssignedTo, []string{"bar-own"}) {
 		t.Fatalf("the system's own spare after the move = %+v, want bar-own untouched", spare)
 	}
 	// The carry moved the row rather than replacing it, so its history holds.
@@ -129,7 +129,7 @@ func TestStandardChangeCarriesStaffingOntoTheRolesThatStillExist(t *testing.T) {
 	}
 	var oldImage, newImage []byte
 	if err := f.conn.QueryRow(ctx, `select old, new from audit_log
-		where resource = 'system_role_assignment' and verb = 'update' and resource_id = $1
+		where resource = 'system_slot_assignment' and verb = 'update' and resource_id = $1
 		order by id desc limit 1`, carried).Scan(&oldImage, &newImage); err != nil {
 		t.Fatalf("the carry's audit row: %v", err)
 	}
@@ -144,47 +144,47 @@ func TestStandardChangeCarriesStaffingOntoTheRolesThatStillExist(t *testing.T) {
 }
 
 // TestStandardChangeKeepsPositionsWithinTheNewCapacity: a carried occupant
-// keeps its position where it is free in the new role, lowest positions are
-// carried first when the new role has less room, and an occupant past the new
+// keeps its position where it is free in the new slot, lowest positions are
+// carried first when the new slot has less room, and an occupant past the new
 // capacity is released, still a member, audited as a delete of its assignment.
 func TestStandardChangeKeepsPositionsWithinTheNewCapacity(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
 	three, one := 3, 1
-	f.declareRole(t, ctx, "pair-wide", storage.SystemRoleSpec{Name: "pair", Label: "Pair", Quorum: 1, Capacity: &three, Impact: "degraded"})
-	f.declareRole(t, ctx, "pair-open", storage.SystemRoleSpec{Name: "pair", Label: "Pair", Quorum: 1, Impact: "degraded"})
-	f.declareRole(t, ctx, "pair-narrow", storage.SystemRoleSpec{Name: "pair", Label: "Pair", Quorum: 1, Capacity: &one, Impact: "degraded"})
+	f.declareSlot(t, ctx, "pair-wide", storage.SystemSlotSpec{Name: "pair", Label: "Pair", Quorum: 1, Capacity: &three, Impact: "degraded"})
+	f.declareSlot(t, ctx, "pair-open", storage.SystemSlotSpec{Name: "pair", Label: "Pair", Quorum: 1, Impact: "degraded"})
+	f.declareSlot(t, ctx, "pair-narrow", storage.SystemSlotSpec{Name: "pair", Label: "Pair", Quorum: 1, Capacity: &one, Impact: "degraded"})
 	std, room := "pair-wide", "hq-r1"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cap-room", StandardID: &std, LocationName: &room}, f.all, all); err != nil {
 		t.Fatalf("system: %v", err)
 	}
 	for _, c := range []string{"cap-1", "cap-2", "cap-3"} {
 		f.mustBar(t, ctx, c)
-		if err := f.gw.AssignRole(ctx, "", "cap-room", "pair", c, f.all, f.all, f.all, f.all); err != nil {
+		if err := f.gw.AssignSlot(ctx, "", "cap-room", "pair", c, f.all, f.all, f.all, f.all); err != nil {
 			t.Fatalf("assign %s: %v", c, err)
 		}
 	}
-	if err := f.gw.UnassignRole(ctx, "", "cap-room", "pair", "cap-1", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.UnassignSlot(ctx, "", "cap-room", "pair", "cap-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("vacate position 1: %v", err)
 	}
 
 	f.moveStandard(t, ctx, "cap-room", "pair-open")
-	pair := f.effectiveRole(t, ctx, "cap-room", "pair")
+	pair := f.effectiveSlot(t, ctx, "cap-room", "pair")
 	if !slices.Equal(pair.AssignedTo, []string{"cap-2", "cap-3"}) || !slices.Equal(pair.Positions, []int{2, 3}) {
 		t.Fatalf("pair on pair-open = %v at %v, want cap-2 and cap-3 at their own positions 2 and 3", pair.AssignedTo, pair.Positions)
 	}
 
 	released := f.assignmentID(t, ctx, "cap-room", "cap-3")
 	f.moveStandard(t, ctx, "cap-room", "pair-narrow")
-	pair = f.effectiveRole(t, ctx, "cap-room", "pair")
+	pair = f.effectiveSlot(t, ctx, "cap-room", "pair")
 	if !slices.Equal(pair.AssignedTo, []string{"cap-2"}) || !slices.Equal(pair.Positions, []int{1}) {
 		t.Fatalf("pair on pair-narrow = %v at %v, want cap-2 alone at position 1 (its own 2 is past the capacity)", pair.AssignedTo, pair.Positions)
 	}
 	if n := f.count(t, ctx, `select count(*) from system_member where component_id = (select id from component where name = 'cap-3')`); n != 1 {
 		t.Fatalf("cap-3 has %d memberships after its release, want it still a member", n)
 	}
-	if n := f.count(t, ctx, `select count(*) from audit_log where resource = 'system_role_assignment' and verb = 'delete' and resource_id = $1`, released); n != 1 {
+	if n := f.count(t, ctx, `select count(*) from audit_log where resource = 'system_slot_assignment' and verb = 'delete' and resource_id = $1`, released); n != 1 {
 		t.Fatalf("%d delete audit rows for cap-3's released assignment, want 1", n)
 	}
 	// A released member is free: it leaves the system and the estate.
@@ -197,7 +197,7 @@ func TestStandardChangeKeepsPositionsWithinTheNewCapacity(t *testing.T) {
 }
 
 // TestStaffingWaitsOutAStandardChange: a staffing write that starts while a
-// standard change is open resolves its role after the change commits, never
+// standard change is open resolves its slot after the change commits, never
 // against the standard being left, so it cannot strand an assignment the
 // change has already settled. The change is held open on a raw connection at
 // the point the gateway's own change holds: the system's staffing lock taken
@@ -206,10 +206,10 @@ func TestStaffingWaitsOutAStandardChange(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newHealthFixture(t)
-	f.declareRole(t, ctx, "huddle-next", storage.SystemRoleSpec{
+	f.declareSlot(t, ctx, "huddle-next", storage.SystemSlotSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	})
-	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.UnassignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("vacate table-mic: %v", err)
 	}
 
@@ -228,7 +228,7 @@ func TestStaffingWaitsOutAStandardChange(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all)
+		done <- f.gw.AssignSlot(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all, f.all, f.all)
 	}()
 	// Commit once the assign is waiting on the change, or once it has finished
 	// without waiting (the defect), whichever comes first.
@@ -263,8 +263,8 @@ func TestStaffingWaitsOutAStandardChange(t *testing.T) {
 		t.Fatalf("assign across the change: %v", early)
 	}
 	var standard string
-	if err := f.conn.QueryRow(ctx, `select coalesce(st.name, '') from system_role_assignment ra
-		join system_role r on r.id = ra.role_id left join standard st on st.id = r.standard_id
+	if err := f.conn.QueryRow(ctx, `select coalesce(st.name, '') from system_slot_assignment ra
+		join system_slot r on r.id = ra.slot_id left join standard st on st.id = r.standard_id
 		where ra.component_id = (select id from component where name = 'bar-1')`).Scan(&standard); err != nil {
 		t.Fatalf("read the assignment: %v", err)
 	}
@@ -290,6 +290,11 @@ func TestStrandedAssignmentBackfillReleasesOnlyTheStrands(t *testing.T) {
 		t.Fatal("the backfill has no -- migrate:down")
 	}
 	up = strings.TrimPrefix(up, "-- migrate:up")
+	// The backfill ran once, before ADR-2032 renamed the tables it names
+	// (20261117050000_system_role_becomes_slot.sql); read it against today's
+	// names so the database it runs on here is the current schema.
+	up = strings.NewReplacer("system_role_assignment", "system_slot_assignment",
+		"system_role", "system_slot", "role_id", "slot_id").Replace(up)
 
 	// A second room still on health-huddle keeps its staffing.
 	std, room := "health-huddle", "hq-r1"
@@ -297,16 +302,16 @@ func TestStrandedAssignmentBackfillReleasesOnlyTheStrands(t *testing.T) {
 		t.Fatalf("system: %v", err)
 	}
 	f.mustBar(t, ctx, "bar-kept")
-	if err := f.gw.AssignRole(ctx, "", "kept-room", "table-mic", "bar-kept", f.all, f.all, f.all, f.all); err != nil {
+	if err := f.gw.AssignSlot(ctx, "", "kept-room", "table-mic", "bar-kept", f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("staff kept-room: %v", err)
 	}
-	// hq-huddle's own role keeps its staffing too.
-	if _, err := f.gw.SetSystemRole(ctx, "", "system", "hq-huddle", storage.SystemRoleSpec{Name: "spare", Label: "Spare", Quorum: 1}); err != nil {
-		t.Fatalf("the system's own role: %v", err)
+	// hq-huddle's own slot keeps its staffing too.
+	if _, err := f.gw.SetSystemSlot(ctx, "", "system", "hq-huddle", storage.SystemSlotSpec{Name: "spare", Label: "Spare", Quorum: 1}); err != nil {
+		t.Fatalf("the system's own slot: %v", err)
 	}
 	f.mustBar(t, ctx, "bar-own")
-	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "spare", "bar-own", f.all, f.all, f.all, f.all); err != nil {
-		t.Fatalf("staff the system's own role: %v", err)
+	if err := f.gw.AssignSlot(ctx, "", "hq-huddle", "spare", "bar-own", f.all, f.all, f.all, f.all); err != nil {
+		t.Fatalf("staff the system's own slot: %v", err)
 	}
 	// What a release before #506 left: hq-huddle repointed with bar-1 still on
 	// health-huddle's table-mic, invisible and wedged.
@@ -327,7 +332,7 @@ func TestStrandedAssignmentBackfillReleasesOnlyTheStrands(t *testing.T) {
 		if n := f.count(t, ctx, strandedAssignments); n != 0 {
 			t.Fatalf("run %d: %d stranded assignment(s) left", run, n)
 		}
-		if n := f.count(t, ctx, `select count(*) from system_role_assignment`); n != 2 {
+		if n := f.count(t, ctx, `select count(*) from system_slot_assignment`); n != 2 {
 			t.Fatalf("run %d: %d assignments left, want kept-room's and hq-huddle's own", run, n)
 		}
 	}

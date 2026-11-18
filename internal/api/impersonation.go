@@ -13,9 +13,9 @@ import (
 const defaultImpersonationMinutes = 30
 
 type impersonateInput struct {
-	ID   string `path:"id" doc:"The principal to impersonate, addressed by its uuid, a human's username, or a service account's name"`
+	ID   string `path:"id" doc:"The user to impersonate, addressed by its uuid, a person's username, or a machine user's name"`
 	Body struct {
-		Mode            string `json:"mode" enum:"view_as,act_as" doc:"view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal"`
+		Mode            string `json:"mode" enum:"view_as,act_as" doc:"view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user"`
 		DurationMinutes int    `json:"duration_minutes,omitempty" minimum:"1" maximum:"1440" doc:"Session lifetime in minutes (default 30, max 1440)"`
 	}
 }
@@ -30,20 +30,21 @@ type impersonateOutput struct {
 }
 
 // registerImpersonationRoutes wires :impersonate (mint a view-as / act-as session)
-// and :stopImpersonation (end it). The capability gate (principal:impersonate,
+// and :stopImpersonation (end it). The capability gate (user:impersonate,
 // all-scope) is the middleware; the escalation guard (the caller must cover the
 // target's capabilities) is enforced in the handler.
 func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
-		OperationID:   "impersonate-principal",
+		OperationID:   "impersonate-user",
+		Extensions:    plaintext(),
 		Method:        http.MethodPost,
-		Path:          "/principals/{id}:impersonate",
+		Path:          "/users/{id}:impersonate",
 		DefaultStatus: http.StatusCreated,
-		Summary:       "Impersonate a principal (view-as or act-as)",
-		Description:   "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.",
+		Summary:       "Impersonate a user (view-as or act-as)",
+		Description:   "Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by user:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.",
 		Errors:        []int{http.StatusForbidden, http.StatusNotFound, http.StatusUnprocessableEntity},
-	}, "principal", "impersonate"), func(ctx context.Context, in *impersonateInput) (*impersonateOutput, error) {
-		actor, ok := principalFrom(ctx)
+	}, "user", "impersonate"), func(ctx context.Context, in *impersonateInput) (*impersonateOutput, error) {
+		actor, ok := userFrom(ctx)
 		if !ok {
 			return nil, huma.Error401Unauthorized("unauthenticated")
 		}
@@ -53,7 +54,7 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		}
 		// Resolve the target (uuid or username) before the self-check, so impersonating
 		// yourself by username is caught too.
-		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
+		id, rerr := a.resolveUserRef(ctx, in.ID)
 		if rerr != nil {
 			return nil, rerr
 		}
@@ -61,10 +62,10 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		if actor.ID == in.ID {
 			return nil, huma.Error422UnprocessableEntity("cannot impersonate yourself")
 		}
-		// The target must be readable, which for a principal is all-scope only.
-		target, err := gw.GetPrincipal(ctx, in.ID, a.scopeFor(ctx, "principal", "read"))
+		// The target must be readable, which for a user is all-scope only.
+		target, err := gw.GetUser(ctx, in.ID, a.scopeFor(ctx, "user", "read"))
 		if err != nil {
-			return nil, mapPrincipalErr(err)
+			return nil, mapUserErr(err)
 		}
 		// Takeover guard: an owner is un-impersonatable by anyone (including another
 		// owner), and the caller's capabilities must cover the target's, so
@@ -75,7 +76,7 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		case errors.Is(err, errOwnerTarget):
 			return nil, huma.Error403Forbidden("an owner cannot be impersonated")
 		case errors.Is(err, errCapabilityEscalation):
-			return nil, huma.Error403Forbidden("cannot impersonate a principal whose capabilities exceed yours")
+			return nil, huma.Error403Forbidden("cannot impersonate a user whose capabilities exceed yours")
 		case err != nil:
 			return nil, huma.Error500InternalServerError("impersonation failed")
 		}
@@ -87,7 +88,7 @@ func registerImpersonationRoutes(api huma.API, a *authenticator, gw storage.Gate
 		// it. Close the gap by requiring the caller's ALL-SCOPE grants alone to cover
 		// the target: a capability held only through a scoped grant does not count.
 		// This is resource-agnostic, so it also closes escalation through non-tree
-		// writes (principal_grant, role) whose scoped grants resolve to an empty
+		// writes (user_grant, role) whose scoped grants resolve to an empty
 		// effective scope. view-as stays cross-scope (read only, grants no authority).
 		if in.Body.Mode == "act_as" {
 			ok, err := a.allScopeCovers(ctx, actor, target)
@@ -153,11 +154,11 @@ var (
 // allScopeCovers reports whether the caller's ALL-SCOPE grants alone flatten to a
 // permission set covering the target's. The scope-blind cover in checkTakeoverGuard
 // is not enough for a FULL-authority takeover (act-as impersonation, password reset):
-// the acting principal resolves scope from the target, so a capability the caller
+// the acting user resolves scope from the target, so a capability the caller
 // holds only at a narrow scope must not become fleet-wide by taking the target over.
 // A capability held only through a scoped grant does not count. view-as does not need
 // this (read-only, grants no authority).
-func (a *authenticator) allScopeCovers(ctx context.Context, actor, target *storage.Principal) (bool, error) {
+func (a *authenticator) allScopeCovers(ctx context.Context, actor, target *storage.User) (bool, error) {
 	idx, err := a.roleIndex(ctx)
 	if err != nil {
 		return false, err
@@ -166,16 +167,10 @@ func (a *authenticator) allScopeCovers(ctx context.Context, actor, target *stora
 	for _, g := range target.Grants {
 		targetRoleIDs = append(targetRoleIDs, g.Role)
 	}
-	allScopeRoleIDs := make([]string, 0, len(actor.Grants))
-	for _, g := range actor.Grants {
-		if g.ScopeKind == "all" {
-			allScopeRoleIDs = append(allScopeRoleIDs, g.Role)
-		}
-	}
-	return idx.Flatten(allScopeRoleIDs).Covers(idx.Flatten(targetRoleIDs)), nil
+	return allScopePerms(ctx, idx, actor).Covers(idx.Flatten(targetRoleIDs)), nil
 }
 
-func (a *authenticator) checkTakeoverGuard(ctx context.Context, target *storage.Principal) error {
+func (a *authenticator) checkTakeoverGuard(ctx context.Context, target *storage.User) error {
 	for _, g := range target.Grants {
 		if g.Role == "owner" && g.ScopeKind == "all" {
 			return errOwnerTarget

@@ -51,9 +51,9 @@ func CheckLabMark(labMode, marked, holdsData bool) error {
 // unmarked or empty, never as an error.
 func (p *PG) LabState(ctx context.Context) (LabState, error) {
 	var st LabState
-	var hasMark, hasHuman bool
+	var hasMark, hasPerson bool
 	if err := p.pool.QueryRow(ctx, `
-		select to_regclass('lab_mark') is not null, to_regclass('human') is not null`).Scan(&hasMark, &hasHuman); err != nil {
+		select to_regclass('lab_mark') is not null, to_regclass('person') is not null`).Scan(&hasMark, &hasPerson); err != nil {
 		return LabState{}, fmt.Errorf("storage: lab state: %w", err)
 	}
 	if hasMark {
@@ -65,8 +65,8 @@ func (p *PG) LabState(ctx context.Context) (LabState, error) {
 			st.Marked, st.MarkedAt = true, *at
 		}
 	}
-	if hasHuman {
-		if err := p.pool.QueryRow(ctx, `select exists(select 1 from human)`).Scan(&st.HoldsData); err != nil {
+	if hasPerson {
+		if err := p.pool.QueryRow(ctx, `select exists(select 1 from person)`).Scan(&st.HoldsData); err != nil {
 			return LabState{}, fmt.Errorf("storage: lab state: %w", err)
 		}
 	}

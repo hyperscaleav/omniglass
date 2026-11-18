@@ -31,7 +31,7 @@ name: tessellate-census-c1
 manufacturer: Tessellate
 model: "Census C1"
 device_type: people-counter
-# Case-study hostname role. Hostnames come from the system-profile
+# Case-study hostname slot. Hostnames come from the system-profile
 # suffix ("people-counter"); slug_prefix only seeds the internal
 # HostID slug. Kept aligned with the case-study name.
 slug_prefix: people-counter

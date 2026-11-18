@@ -6,10 +6,10 @@
 // and the create-from-template primitives read a template from it and write
 // ordinary rows the operator owns outright, with nothing pointing back.
 //
-// Four kinds ship: a standard_template (a standard's attributes, roles,
+// Four kinds ship: a standard_template (a standard's attributes, slots,
 // choices and contract lines), a component_template (a product, its driver's
 // attach preset and declared values), a system_template (a standard and a
-// component per role) and a place_template (a subtree of places and the
+// component per slot) and a location_template (a subtree of locations and the
 // systems that land in them). Every template is validated at load against
 // the shape below; a template naming a catalog row a release withdrew is
 // caught by the dry-run test against the seeded catalogs, not here, since
@@ -41,11 +41,11 @@ const (
 	KindStandard  Kind = "standard_template"
 	KindComponent Kind = "component_template"
 	KindSystem    Kind = "system_template"
-	KindPlace     Kind = "place_template"
+	KindLocation  Kind = "location_template"
 )
 
 // Kinds is every kind, in the order the catalog lists them.
-var Kinds = []Kind{KindStandard, KindSystem, KindPlace, KindComponent}
+var Kinds = []Kind{KindStandard, KindSystem, KindLocation, KindComponent}
 
 // Valid reports whether k is one of the four kinds.
 func (k Kind) Valid() bool {
@@ -73,7 +73,7 @@ type Template struct {
 	Standard  *Standard  `yaml:"standard,omitempty" json:"standard,omitempty"`
 	Component *Component `yaml:"component,omitempty" json:"component,omitempty"`
 	System    *System    `yaml:"system,omitempty" json:"system,omitempty"`
-	Place     *Place     `yaml:"place,omitempty" json:"place,omitempty"`
+	Location  *Location  `yaml:"location,omitempty" json:"location,omitempty"`
 }
 
 // Standard is a standard_template's body: what creating a standard from it writes.
@@ -82,7 +82,7 @@ type Standard struct {
 	// is created from only once the operator holds a standard of that name.
 	Parent  string         `yaml:"parent,omitempty" json:"parent,omitempty"`
 	Choices []Choice       `yaml:"choices,omitempty" json:"choices,omitempty"`
-	Roles   []Role         `yaml:"roles" json:"roles"`
+	Slots   []Slot         `yaml:"slots" json:"slots"`
 	Props   []ContractLine `yaml:"properties,omitempty" json:"properties,omitempty"`
 	Metrics []ContractLine `yaml:"metrics,omitempty" json:"metrics,omitempty"`
 	// Map is the layout a conforming system's Map tab draws (ADR-0128), the
@@ -90,7 +90,7 @@ type Standard struct {
 	Map *Map `yaml:"map,omitempty" json:"map,omitempty"`
 }
 
-// Choice is an exclusive-or group of roles (#626): a conforming system
+// Choice is an exclusive-or group of slots (#626): a conforming system
 // answers it through exactly one of its alternates.
 type Choice struct {
 	Name       string      `yaml:"name" json:"name"`
@@ -105,8 +105,8 @@ type Alternate struct {
 	Label string `yaml:"label" json:"label"`
 }
 
-// Role is one slot a conforming system needs filled.
-type Role struct {
+// Slot is one slot a conforming system needs filled.
+type Slot struct {
 	Name           string   `yaml:"name" json:"name"`
 	Label          string   `yaml:"label" json:"label"`
 	Quorum         int      `yaml:"quorum,omitempty" json:"quorum,omitempty"`
@@ -118,9 +118,9 @@ type Role struct {
 	Alternate      string   `yaml:"alternate,omitempty" json:"alternate,omitempty"`
 }
 
-// Quorate is the role's quorum with the storage floor applied: a role no
-// component need fill is not a role, so zero reads as one.
-func (r Role) Quorate() int { return max(r.Quorum, 1) }
+// Quorate is the slot's quorum with the storage floor applied: a slot no
+// component need fill is not a slot, so zero reads as one.
+func (r Slot) Quorate() int { return max(r.Quorum, 1) }
 
 // ContractLine is one property or metric a standard declares, optionally
 // with a default (a JSON value) and optionally required.
@@ -158,10 +158,10 @@ type Map struct {
 	Positions []MapPosition `yaml:"positions" json:"positions"`
 }
 
-// MapPosition places one role's nth position on the layout, in unit
+// MapPosition places one slot's nth position on the layout, in unit
 // coordinates.
 type MapPosition struct {
-	Role     string  `yaml:"role" json:"role"`
+	Slot     string  `yaml:"slot" json:"slot"`
 	Position int     `yaml:"position" json:"position"`
 	X        float64 `yaml:"x" json:"x"`
 	Y        float64 `yaml:"y" json:"y"`
@@ -188,29 +188,29 @@ type System struct {
 	// template's name, which is also the name a standard created from it takes by default.
 	Standard   string `yaml:"standard" json:"standard"`
 	SystemType string `yaml:"system_type,omitempty" json:"system_type,omitempty"`
-	// Roles fills each role, by role name.
-	Roles      map[string]RoleFill `yaml:"roles" json:"roles"`
+	// Slots fills each slot, by slot name.
+	Slots      map[string]SlotFill `yaml:"slots" json:"slots"`
 	Properties Values              `yaml:"properties,omitempty" json:"properties,omitempty"`
 }
 
-// RoleFill names what fills a role: a component template or a bare product,
+// SlotFill names what fills a slot: a component template or a bare product,
 // exactly one.
-type RoleFill struct {
+type SlotFill struct {
 	Component string `yaml:"component,omitempty" json:"component,omitempty"`
 	Product   string `yaml:"product,omitempty" json:"product,omitempty"`
 }
 
-// Place is a place_template's body, and each place within it.
-type Place struct {
-	Type    string        `yaml:"type" json:"type"`
-	Name    string        `yaml:"name,omitempty" json:"name,omitempty"`
-	Label   string        `yaml:"label,omitempty" json:"label,omitempty"`
-	Systems []PlaceSystem `yaml:"systems,omitempty" json:"systems,omitempty"`
-	Places  []Place       `yaml:"places,omitempty" json:"places,omitempty"`
+// Location is a location_template's body, and each location within it.
+type Location struct {
+	Type      string           `yaml:"type" json:"type"`
+	Name      string           `yaml:"name,omitempty" json:"name,omitempty"`
+	Label     string           `yaml:"label,omitempty" json:"label,omitempty"`
+	Systems   []LocationSystem `yaml:"systems,omitempty" json:"systems,omitempty"`
+	Locations []Location       `yaml:"locations,omitempty" json:"locations,omitempty"`
 }
 
-// PlaceSystem is a system template landing in a place.
-type PlaceSystem struct {
+// LocationSystem is a system template landing in a location.
+type LocationSystem struct {
 	Template string `yaml:"template" json:"template"`
 	Label    string `yaml:"label,omitempty" json:"label,omitempty"`
 }
@@ -400,7 +400,7 @@ func kindOrder(k Kind) int {
 	return len(Kinds)
 }
 
-// nameRule is the platform's name rule for registry and fleet names: lower
+// nameRule is the platform's name rule for catalog and fleet names: lower
 // case, digits and hyphens, starting with a letter or digit.
 var nameRule = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
@@ -429,7 +429,7 @@ func (t *Template) Validate() error {
 	}
 	bodies := map[Kind]bool{
 		KindStandard: t.Standard != nil, KindComponent: t.Component != nil,
-		KindSystem: t.System != nil, KindPlace: t.Place != nil,
+		KindSystem: t.System != nil, KindLocation: t.Location != nil,
 	}
 	for k, set := range bodies {
 		if set != (k == t.Kind) {
@@ -447,8 +447,8 @@ func (t *Template) Validate() error {
 		err = t.Component.validate()
 	case KindSystem:
 		err = t.System.validate()
-	case KindPlace:
-		err = t.Place.validate(true)
+	case KindLocation:
+		err = t.Location.validate(true)
 	}
 	if err != nil {
 		return fmt.Errorf("%s: %w", t.Name, err)
@@ -456,7 +456,7 @@ func (t *Template) Validate() error {
 	return nil
 }
 
-var roleImpacts = map[string]bool{"": true, "outage": true, "degraded": true, "none": true}
+var slotImpacts = map[string]bool{"": true, "outage": true, "degraded": true, "none": true}
 
 func (s *Standard) validate() error {
 	alts := map[string]bool{}
@@ -484,32 +484,32 @@ func (s *Standard) validate() error {
 			alts[c.Name+"/"+a.Name] = true
 		}
 	}
-	if len(s.Roles) == 0 {
-		return errors.New("a standard template declares no roles")
+	if len(s.Slots) == 0 {
+		return errors.New("a standard template declares no slots")
 	}
-	roles := map[string]bool{}
-	for _, r := range s.Roles {
-		if err := checkName("a role", r.Name); err != nil {
+	slots := map[string]bool{}
+	for _, r := range s.Slots {
+		if err := checkName("a slot", r.Name); err != nil {
 			return err
 		}
-		if roles[r.Name] {
-			return fmt.Errorf("role %q is declared twice", r.Name)
+		if slots[r.Name] {
+			return fmt.Errorf("slot %q is declared twice", r.Name)
 		}
-		roles[r.Name] = true
+		slots[r.Name] = true
 		if r.Quorum < 0 {
-			return fmt.Errorf("role %q has a negative quorum", r.Name)
+			return fmt.Errorf("slot %q has a negative quorum", r.Name)
 		}
 		if r.Capacity != nil && *r.Capacity < r.Quorate() {
-			return fmt.Errorf("role %q has a capacity below its quorum", r.Name)
+			return fmt.Errorf("slot %q has a capacity below its quorum", r.Name)
 		}
-		if !roleImpacts[r.Impact] {
-			return fmt.Errorf("role %q has impact %q, want outage, degraded or none", r.Name, r.Impact)
+		if !slotImpacts[r.Impact] {
+			return fmt.Errorf("slot %q has impact %q, want outage, degraded or none", r.Name, r.Impact)
 		}
 		if (r.Choice == "") != (r.Alternate == "") {
-			return fmt.Errorf("role %q names choice %q and alternate %q, want both or neither", r.Name, r.Choice, r.Alternate)
+			return fmt.Errorf("slot %q names choice %q and alternate %q, want both or neither", r.Name, r.Choice, r.Alternate)
 		}
 		if r.Choice != "" && !alts[r.Choice+"/"+r.Alternate] {
-			return fmt.Errorf("role %q names unknown choice/alternate %s/%s", r.Name, r.Choice, r.Alternate)
+			return fmt.Errorf("slot %q names unknown choice/alternate %s/%s", r.Name, r.Choice, r.Alternate)
 		}
 	}
 	for _, lines := range [][]ContractLine{s.Props, s.Metrics} {
@@ -526,8 +526,8 @@ func (s *Standard) validate() error {
 	}
 	if s.Map != nil {
 		for _, p := range s.Map.Positions {
-			if !roles[p.Role] {
-				return fmt.Errorf("the map places role %q, which the template does not declare", p.Role)
+			if !slots[p.Slot] {
+				return fmt.Errorf("the map places slot %q, which the template does not declare", p.Slot)
 			}
 		}
 		// The rest of the map's rule is the write's own: one rule, held
@@ -567,12 +567,12 @@ func (s *System) validate() error {
 	if err := checkName("the standard", s.Standard); err != nil {
 		return err
 	}
-	if len(s.Roles) == 0 {
-		return errors.New("a system template fills no roles")
+	if len(s.Slots) == 0 {
+		return errors.New("a system template fills no slots")
 	}
-	for role, fill := range s.Roles {
+	for slot, fill := range s.Slots {
 		if (fill.Component == "") == (fill.Product == "") {
-			return fmt.Errorf("role %q names %s, want exactly one of a component template or a product", role, fillWords(fill))
+			return fmt.Errorf("slot %q names %s, want exactly one of a component template or a product", slot, fillWords(fill))
 		}
 	}
 	for _, name := range s.Properties.Names() {
@@ -583,28 +583,28 @@ func (s *System) validate() error {
 	return nil
 }
 
-func fillWords(f RoleFill) string {
+func fillWords(f SlotFill) string {
 	if f.Component == "" && f.Product == "" {
 		return "neither"
 	}
 	return "both"
 }
 
-func (p *Place) validate(root bool) error {
-	if err := checkName("a place's location type", p.Type); err != nil {
+func (p *Location) validate(root bool) error {
+	if err := checkName("a location's location type", p.Type); err != nil {
 		return err
 	}
 	if p.Name != "" {
-		if err := checkName("a place", p.Name); err != nil {
+		if err := checkName("a location", p.Name); err != nil {
 			return err
 		}
 	}
 	names := map[string]bool{}
-	for i := range p.Places {
-		child := &p.Places[i]
+	for i := range p.Locations {
+		child := &p.Locations[i]
 		if child.Name != "" {
 			if names[child.Name] {
-				return fmt.Errorf("place %q holds two places named %q", p.Type, child.Name)
+				return fmt.Errorf("location %q holds two locations named %q", p.Type, child.Name)
 			}
 			names[child.Name] = true
 		}
@@ -621,10 +621,10 @@ func (p *Place) validate(root bool) error {
 }
 
 // validateRefs checks every reference between templates: a variant's parent
-// is a standard template, a system's role fills name component templates, a
-// system template built on a standard template fills exactly the roles a
-// conforming system needs (every unconditional role, and one alternate's
-// roles in full for each choice), and a place's systems name system
+// is a standard template, a system's slot fills name component templates, a
+// system template built on a standard template fills exactly the slots a
+// conforming system needs (every unconditional slot, and one alternate's
+// slots in full for each choice), and a location's systems name system
 // templates.
 func (c *Catalog) validateRefs() error {
 	for i := range c.list {
@@ -640,8 +640,8 @@ func (c *Catalog) validateRefs() error {
 			}
 		case KindSystem:
 			err = c.validateSystemRefs(t.System)
-		case KindPlace:
-			err = c.validatePlaceRefs(t.Place)
+		case KindLocation:
+			err = c.validateLocationRefs(t.Location)
 		}
 		if err != nil {
 			return fmt.Errorf("template: %s: %w", t.Name, err)
@@ -651,46 +651,46 @@ func (c *Catalog) validateRefs() error {
 }
 
 func (c *Catalog) validateSystemRefs(s *System) error {
-	for _, role := range sortedKeys(s.Roles) {
-		if comp := s.Roles[role].Component; comp != "" {
+	for _, slot := range sortedKeys(s.Slots) {
+		if comp := s.Slots[slot].Component; comp != "" {
 			if _, err := c.GetKind(comp, KindComponent); err != nil {
-				return fmt.Errorf("role %q: %w", role, err)
+				return fmt.Errorf("slot %q: %w", slot, err)
 			}
 		}
 	}
 	// A shipped system template builds to a standard the catalog ships, so
-	// its fills are checked against that standard's roles here, and a
+	// its fills are checked against that standard's slots here, and a
 	// release withdrawing the standard template fails the load. (A create
 	// from it may still name a standard of the operator's own.)
 	std, err := c.GetKind(s.Standard, KindStandard)
 	if err != nil {
 		return fmt.Errorf("builds to %w", err)
 	}
-	_, err = StaffedRoles(std.Standard, s)
+	_, err = StaffedSlots(std.Standard, s)
 	return err
 }
 
-// StaffedRoles returns the roles of standard st a system built from sys
-// fills, in declaration order, refusing a fill that names a role st does not
-// declare, an unconditional role left unfilled, or a choice answered by
-// anything but exactly one alternate's roles in full.
-func StaffedRoles(st *Standard, sys *System) ([]Role, error) {
-	declared := map[string]Role{}
-	for _, r := range st.Roles {
+// StaffedSlots returns the slots of standard st a system built from sys
+// fills, in declaration order, refusing a fill that names a slot st does not
+// declare, an unconditional slot left unfilled, or a choice answered by
+// anything but exactly one alternate's slots in full.
+func StaffedSlots(st *Standard, sys *System) ([]Slot, error) {
+	declared := map[string]Slot{}
+	for _, r := range st.Slots {
 		declared[r.Name] = r
 	}
-	for _, name := range sortedKeys(sys.Roles) {
+	for _, name := range sortedKeys(sys.Slots) {
 		if _, ok := declared[name]; !ok {
-			return nil, fmt.Errorf("fills role %q, which standard %s does not declare", name, sysStandardName(sys))
+			return nil, fmt.Errorf("fills slot %q, which standard %s does not declare", name, sysStandardName(sys))
 		}
 	}
 	answered := map[string]string{}
-	var out []Role
-	for _, r := range st.Roles {
-		_, filled := sys.Roles[r.Name]
+	var out []Slot
+	for _, r := range st.Slots {
+		_, filled := sys.Slots[r.Name]
 		if r.Choice == "" {
 			if !filled {
-				return nil, fmt.Errorf("leaves role %q unfilled", r.Name)
+				return nil, fmt.Errorf("leaves slot %q unfilled", r.Name)
 			}
 			out = append(out, r)
 			continue
@@ -709,10 +709,10 @@ func StaffedRoles(st *Standard, sys *System) ([]Role, error) {
 		if !ok {
 			return nil, fmt.Errorf("answers choice %q with no alternate", ch.Name)
 		}
-		for _, r := range st.Roles {
+		for _, r := range st.Slots {
 			if r.Choice == ch.Name && r.Alternate == alt {
-				if _, filled := sys.Roles[r.Name]; !filled {
-					return nil, fmt.Errorf("answers choice %q with %s but leaves its role %q unfilled", ch.Name, alt, r.Name)
+				if _, filled := sys.Slots[r.Name]; !filled {
+					return nil, fmt.Errorf("answers choice %q with %s but leaves its slot %q unfilled", ch.Name, alt, r.Name)
 				}
 			}
 		}
@@ -722,14 +722,14 @@ func StaffedRoles(st *Standard, sys *System) ([]Role, error) {
 
 func sysStandardName(s *System) string { return s.Standard }
 
-func (c *Catalog) validatePlaceRefs(p *Place) error {
+func (c *Catalog) validateLocationRefs(p *Location) error {
 	for _, s := range p.Systems {
 		if _, err := c.GetKind(s.Template, KindSystem); err != nil {
 			return err
 		}
 	}
-	for i := range p.Places {
-		if err := c.validatePlaceRefs(&p.Places[i]); err != nil {
+	for i := range p.Locations {
+		if err := c.validateLocationRefs(&p.Locations[i]); err != nil {
 			return err
 		}
 	}

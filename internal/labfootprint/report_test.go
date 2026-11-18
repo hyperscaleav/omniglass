@@ -39,9 +39,9 @@ func testReport() Report {
 			MetricBytesPerDay: 900 << 20, PropertyBytesPerDay: 1 << 20, ReceiptBytesPerDay: 2 << 20,
 			DatabaseBytesPerDay: 1 << 30, WALBytesPerDay: 3 << 30,
 			Containers: map[string]ContainerWindow{
-				"server": {Millicores: cpu, WorkingSetMiB: 60},
-				"node":   {Millicores: cpu / 2, WorkingSetMiB: 140},
-				"db":     {Millicores: cpu * 2, WorkingSetMiB: 80},
+				"server":  {Millicores: cpu, WorkingSetMiB: 60},
+				"outpost": {Millicores: cpu / 2, WorkingSetMiB: 140},
+				"db":      {Millicores: cpu * 2, WorkingSetMiB: 80},
 			},
 		}
 	}
@@ -77,7 +77,7 @@ func TestSummarize(t *testing.T) {
 	if server.Millicores.Median != 60 || total.Millicores.Median != 210 || total.WorkingSetMiB.Median != 280 {
 		t.Fatalf("server %+v total %+v", server, total)
 	}
-	if names := []string{r.Containers[0].Name, r.Containers[1].Name, r.Containers[2].Name, r.Containers[3].Name}; strings.Join(names, ",") != "server,node,db,total" {
+	if names := []string{r.Containers[0].Name, r.Containers[1].Name, r.Containers[2].Name, r.Containers[3].Name}; strings.Join(names, ",") != "server,outpost,db,total" {
 		t.Fatalf("container order %v", names)
 	}
 	if r.ReadLatencyMS[0].Hours != 24 || r.ReadLatencyMS[0].Stat.Median != 6 || r.ReadLatencyMS[1].Hours != 720 {

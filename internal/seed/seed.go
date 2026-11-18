@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 	"gopkg.in/yaml.v3"
 )
 
@@ -47,6 +48,9 @@ var notificationTypesYAML []byte
 
 //go:embed command_types.yaml
 var commandTypesYAML []byte
+
+//go:embed action_rules.yaml
+var actionRulesYAML []byte
 
 //go:embed vendors.yaml
 var vendorsYAML []byte
@@ -82,7 +86,7 @@ type rolesDoc struct {
 type labelRulesDoc struct {
 	LabelRules []struct {
 		EntityKind string `yaml:"entity_kind"`
-		Template   string `yaml:"template"`
+		Rule       string `yaml:"rule"`
 	} `yaml:"label_rules"`
 }
 
@@ -210,7 +214,7 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 		return err
 	}
 	// The severity levels before anything that names one: an alarm references
-	// a level by name, so the registry lands first.
+	// a level by name, so the catalog lands first.
 	if err := seedSeverityLevels(ctx, gw); err != nil {
 		return err
 	}
@@ -223,13 +227,18 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedLocationTypes(ctx, gw); err != nil {
 		return err
 	}
-	// The three registries are disjoint by name, or a shared name would be
+	// The three catalogs are disjoint by name, or a shared name would be
 	// unwritable on every lane (#457): refuse to seed a collision rather than
 	// ship it.
-	if shared, err := sharedRegistryNames(metricTypesYAML, propertyTypesYAML, eventTypesYAML); err != nil {
+	if shared, err := sharedCatalogNames(metricTypesYAML, propertyTypesYAML, eventTypesYAML); err != nil {
 		return err
 	} else if len(shared) > 0 {
-		return fmt.Errorf("seed: the ship-with metric, property and event registries share names %v", shared)
+		return fmt.Errorf("seed: the ship-with metric, property and event catalogs share names %v", shared)
+	}
+	// The reserved keys before the catalogs: the search path refuses a
+	// reserved key both tiers hold (#1447), and it reads the names from here.
+	if err := gw.ReconcileReservedKeys(ctx, writerclass.ReservedNames()); err != nil {
+		return fmt.Errorf("seed: reserved keys: %w", err)
 	}
 	if err := seedPropertyTypes(ctx, gw); err != nil {
 		return err
@@ -246,7 +255,12 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedNotificationTypes(ctx, gw); err != nil {
 		return err
 	}
-	// The official event rules after the registries their keys and levels
+	// The shipped routing after the roles its targets name and the types its
+	// rule sends.
+	if err := seedActionRules(ctx, gw); err != nil {
+		return err
+	}
+	// The official event rules after the catalogs their keys and levels
 	// name.
 	if err := seedEventRules(ctx, gw); err != nil {
 		return err
@@ -274,7 +288,7 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedProducts(ctx, gw); err != nil {
 		return err
 	}
-	// The platform system last: it is of a seeded system type, and the node
+	// The platform system last: it is of a seeded system type, and the outpost
 	// components it adopts are of a seeded product (#1625).
 	if err := gw.EnsurePlatform(ctx); err != nil {
 		return fmt.Errorf("seed: platform system: %w", err)
@@ -283,7 +297,7 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 }
 
 // seedLabelRules writes the rule this release ships for each labelled entity
-// kind (#682). Authoritative on default_template only: an operator's own rule
+// kind (#682). Authoritative on default_rule only: an operator's own rule
 // is a separate column, so re-seeding restates what we ship and never reaches
 // what they chose.
 func seedLabelRules(ctx context.Context, gw storage.Gateway) error {
@@ -292,7 +306,7 @@ func seedLabelRules(ctx context.Context, gw storage.Gateway) error {
 		return fmt.Errorf("seed: parse label_rules: %w", err)
 	}
 	for _, r := range doc.LabelRules {
-		if err := gw.UpsertLabelRuleDefault(ctx, r.EntityKind, r.Template); err != nil {
+		if err := gw.UpsertLabelRuleDefault(ctx, r.EntityKind, r.Rule); err != nil {
 			return fmt.Errorf("seed: label_rule %s: %w", r.EntityKind, err)
 		}
 	}
@@ -324,7 +338,7 @@ func seedPropertyTypes(ctx context.Context, gw storage.Gateway) error {
 }
 
 // seedMetricTypes installs the ship-with metric_type canon (the numeric lane of
-// the catalog, #587), authoritative on conflict like the property registry.
+// the catalog, #587), authoritative on conflict like the property catalog.
 func seedMetricTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc metricTypesDoc
 	if err := yaml.Unmarshal(metricTypesYAML, &doc); err != nil {
@@ -400,7 +414,7 @@ func parseSeedDuration(s string) (time.Duration, error) {
 }
 
 // seedSeverityLevels installs the official severity levels, authoritative on
-// conflict like the other registries; an operator's own levels are untouched.
+// conflict like the other catalogs; an operator's own levels are untouched.
 func seedSeverityLevels(ctx context.Context, gw storage.Gateway) error {
 	var doc struct {
 		Levels []struct {
@@ -423,8 +437,8 @@ func seedSeverityLevels(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-// seedEventTypes installs the ship-with event_type registry (the occurrence
-// keyspace), authoritative on conflict like the property registry.
+// seedEventTypes installs the ship-with event_type catalog (the occurrence
+// keyspace), authoritative on conflict like the property catalog.
 func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc struct {
 		EventTypes []struct {
@@ -446,8 +460,8 @@ func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
-// seedCommandTypes installs the ship-with command_type registry (the "do" catalog),
-// authoritative on conflict like the other registries. A settleable command carries
+// seedCommandTypes installs the ship-with command_type catalog (the "do" catalog),
+// authoritative on conflict like the other catalogs. A settleable command carries
 // a settle window and one target arm (a property or a metric, never both); a
 // fire-and-forget one carries neither. An unregistered or double target fails the
 // seed run with the row named (the upsert refuses rather than silently NULLing).
@@ -524,6 +538,49 @@ func seedNotificationTypes(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
+// actionRulesDoc is the action_rules.yaml shape: the shipped targets, then
+// the rules that name them.
+type actionRulesDoc struct {
+	NotificationTargets []struct {
+		Name     string   `yaml:"name"`
+		Label    string   `yaml:"label"`
+		Kind     string   `yaml:"kind"`
+		Role     string   `yaml:"role"`
+		Channels []string `yaml:"channels"`
+	} `yaml:"notification_targets"`
+	ActionRules []struct {
+		Name        string   `yaml:"name"`
+		Label       string   `yaml:"label"`
+		Description string   `yaml:"description"`
+		On          []string `yaml:"on"`
+		When        string   `yaml:"when"`
+		Targets     []string `yaml:"targets"`
+	} `yaml:"action_rules"`
+}
+
+// seedActionRules installs the shipped alarm routing (#1987).
+func seedActionRules(ctx context.Context, gw storage.Gateway) error {
+	var doc actionRulesDoc
+	if err := yaml.Unmarshal(actionRulesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse action_rules: %w", err)
+	}
+	for _, t := range doc.NotificationTargets {
+		if err := gw.UpsertNotificationTarget(ctx, storage.NotificationTargetSpec{
+			Name: t.Name, Label: t.Label, Kind: t.Kind, Role: t.Role, Channels: t.Channels,
+		}); err != nil {
+			return fmt.Errorf("seed: notification_target %s: %w", t.Name, err)
+		}
+	}
+	for _, r := range doc.ActionRules {
+		if err := gw.UpsertActionRule(ctx, storage.ActionRuleSpec{
+			Name: r.Name, Label: r.Label, Description: r.Description, On: r.On, When: r.When, Targets: r.Targets,
+		}); err != nil {
+			return fmt.Errorf("seed: action_rule %s: %w", r.Name, err)
+		}
+	}
+	return nil
+}
+
 func seedSecretTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc secretTypesDoc
 	if err := yaml.Unmarshal(secretTypesYAML, &doc); err != nil {
@@ -592,10 +649,10 @@ func seedDrivers(ctx context.Context, gw storage.Gateway) error {
 }
 
 // seedComponentTypes installs the ship-with component_type taxonomy,
-// authoritative on conflict like the other registries. The YAML lists a
+// authoritative on conflict like the other catalogs. The YAML lists a
 // parent before any child that names it (parent_id), so a single pass works:
 // each row upserts, then reloads to learn the uuid the database assigned it
-// (Upsert only returns an error, matching the other registries), and that id
+// (Upsert only returns an error, matching the other catalogs), and that id
 // is what a later row's parent_id resolves against, since ComponentType.ParentID
 // is a real uuid, not a name reference resolved in SQL like the other trees.
 func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
@@ -760,7 +817,7 @@ func seedRoles(ctx context.Context, gw storage.Gateway) error {
 // official rows the platform owns (#703). It was insert-if-absent, on the
 // argument that a fleet shapes its own place vocabulary, and that argument
 // is now carried by the fork instead: an operator's edit of a shipped type
-// lives in registry_shadow and is resolved over the row, so the seed can
+// lives in catalog_shadow and is resolved over the row, so the seed can
 // rewrite the row on every boot without reaching anything they own. What that
 // buys is withdrawal: a value dropped from location_types.yaml leaves an
 // fleet that already seeded it, which insert-if-absent could never do.

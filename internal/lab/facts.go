@@ -37,9 +37,11 @@ type FactService struct {
 	Publish  string   `json:"publish"`
 	RunsOnce bool     `json:"runs_once"`
 	Role     string   `json:"role"`
+	// Limits is the container's CPU and memory caps, empty when it has none.
+	Limits string `json:"limits"`
 }
 
-// FactCadence is one cadence profile the lab's node runs at.
+// FactCadence is one cadence profile the lab's outpost runs at.
 type FactCadence struct {
 	Name          string `json:"name"`
 	Heartbeat     string `json:"heartbeat"`
@@ -48,7 +50,7 @@ type FactCadence struct {
 	// ReportEvery is the collection report window the profile's seed sets
 	// (#1646), empty when it leaves the platform's own setting.
 	ReportEvery string `json:"report_every"`
-	// ClosedLoopBracket is how often the server brackets the node for
+	// ClosedLoopBracket is how often the server brackets the outpost for
 	// Platform health's closed loop.
 	ClosedLoopBracket string `json:"closed_loop_bracket"`
 	For               string `json:"for"`
@@ -103,6 +105,23 @@ func SetupCommand(apiPath string, body map[string]any) (string, error) {
 	return strings.Join(words, " "), nil
 }
 
+// FormatLimits names a container's caps as the topology table shows them:
+// "1 CPU, 512 MiB", either part left out when it has no cap.
+func FormatLimits(cpus float64, memoryBytes int64) string {
+	var parts []string
+	if cpus != 0 {
+		unit := "CPUs"
+		if cpus == 1 {
+			unit = "CPU"
+		}
+		parts = append(parts, fmt.Sprintf("%g %s", cpus, unit))
+	}
+	if memoryBytes != 0 {
+		parts = append(parts, fmt.Sprintf("%d MiB", memoryBytes>>20))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // collection reports whether a path segment names a collection: a plural word.
 func collection(seg string) bool {
 	return seg != "" && strings.HasSuffix(seg, "s") && !strings.ContainsAny(seg, "/:{}")
@@ -111,14 +130,15 @@ func collection(seg string) bool {
 // FactsJSON renders the facts for the default lab, reading the walkthrough
 // manifests from walkthroughs (the web/e2e/walkthroughs directory).
 func FactsJSON(walkthroughs fs.FS) ([]byte, error) {
-	spec, err := Plan(Options{Image: "omniglass", Port: DefaultPort, NodeToken: "(minted per run)"})
+	spec, err := Plan(Options{Image: "omniglass", Port: DefaultPort, OutpostToken: "(minted per run)"})
 	if err != nil {
 		return nil, err
 	}
 	f := Facts{Published: fmt.Sprintf("%s:%d", DefaultListen, DefaultPort)}
 	for _, s := range spec.Services() {
 		row := FactService{Name: s.Name, Image: s.Image, Command: strings.Join(s.Cmd, " "),
-			User: s.User, Caps: append([]string{}, s.CapAdd...), RunsOnce: s.OneOff, Role: s.Role}
+			User: s.User, Caps: append([]string{}, s.CapAdd...), RunsOnce: s.OneOff, Role: s.Role,
+			Limits: FormatLimits(s.CPUs, s.MemoryBytes)}
 		if row.User == "" {
 			row.User = "the image's (nonroot)"
 			if s.Name == "db" {

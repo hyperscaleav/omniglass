@@ -11,10 +11,10 @@ Wait
 Type `omniglass standard createFromTemplate --template meeting-room --name hq-meeting --label 'HQ Meeting' | jq -c '{name, label, official}'`
 Enter
 Wait
-Type "# It carries the template's roles, written in the same transaction"
+Type "# It carries the template's slots, written in the same transaction"
 Enter
 Wait
-Type `omniglass standard role list hq-meeting | jq -r '.roles[] | "\(.name) accepts \(.accepted_types | join(","))"'`
+Type `omniglass standard slot list hq-meeting | jq -r '.slots[] | "\(.name) accepts \(.accepted_types | join(","))"'`
 Enter
 Wait
 Type "# The template's name lives in the audit detail, and nowhere else"

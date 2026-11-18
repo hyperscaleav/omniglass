@@ -7,7 +7,7 @@ summary: "Health is **recorded as a transition** and **recomputed at the write**
 
 - **Date:** 2026-07-21 | **Status:** Accepted | **Pages:** [health](/architecture/health/),
   [core entities](/architecture/core-entities/), [API](/architecture/api/), [glossary](/architecture/glossary/),
-  [Standards guide](/guides/admin/standards/), [Work with an entity](/guides/operator/entities/)
+  [Standards guide](/guides/admin/standards/), [Work with an entity](/operator/entities/)
 - **Decision:** Health is a **verdict** on a system or a location, **derived** from what is wrong with the
   components staffing it and **recorded as a transition** at the moment it changes. Five calls carry that.
 

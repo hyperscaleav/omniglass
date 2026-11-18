@@ -5,7 +5,7 @@
 // gate lifts only when the fingerprint changes (a rotated secret, a new
 // address, port or transport, a changed login declaration or pin) or an
 // operator's :retry moves the counter that is part of it. A leaf, pure: the
-// storage gateway computes it for the worklist, and the node only compares.
+// storage gateway computes it for the worklist, and the outpost only compares.
 package fingerprint
 
 import (
@@ -19,7 +19,7 @@ import (
 
 // Inputs is every input a connection to an endpoint is made with. It is the
 // one declaration of them: a field added here is hashed (every field is, by
-// reflection test), and the worklist's table test holds every field a node
+// reflection test), and the worklist's table test holds every field an outpost
 // reads to connect to one of these.
 type Inputs struct {
 	// Transport is the wire (tcp, telnet, ssh, ...).

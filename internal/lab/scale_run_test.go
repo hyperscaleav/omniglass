@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// scaleServer is a scale lab's API as readiness reads it: each site's node
+// scaleServer is a scale lab's API as readiness reads it: each site's outpost
 // simulator, connected unless named in silent, serving its components, each
 // up unless named in down.
 func scaleServer(t *testing.T, sites map[string][]string, silent, down map[string]bool) *httptest.Server {
@@ -20,9 +20,9 @@ func scaleServer(t *testing.T, sites map[string][]string, silent, down map[strin
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/healthz", func(http.ResponseWriter, *http.Request) {})
 	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("GET /api/v1/nodes/{name}/simulation", func(w http.ResponseWriter, r *http.Request) {
-		node := r.PathValue("name")
-		comps, ok := sites[node]
+	mux.HandleFunc("GET /api/v1/outposts/{name}/simulation", func(w http.ResponseWriter, r *http.Request) {
+		outpost := r.PathValue("name")
+		comps, ok := sites[outpost]
 		if !ok {
 			http.NotFound(w, r)
 			return
@@ -30,9 +30,9 @@ func scaleServer(t *testing.T, sites map[string][]string, silent, down map[strin
 		var devs []string
 		for i, c := range comps {
 			devs = append(devs, fmt.Sprintf(`{"component_id":"id-%s","component":%q,"address":"127.0.%d.%d","status":"running"}`,
-				c, c, len(node), i+1))
+				c, c, len(outpost), i+1))
 		}
-		fmt.Fprintf(w, `{"connected":%v,"devices":[%s]}`, !silent[node], strings.Join(devs, ","))
+		fmt.Fprintf(w, `{"connected":%v,"devices":[%s]}`, !silent[outpost], strings.Join(devs, ","))
 	})
 	mux.HandleFunc("GET /api/v1/components/{id}/reachability", func(w http.ResponseWriter, r *http.Request) {
 		verdict := "up"
@@ -55,7 +55,7 @@ func scaleConfig() Config {
 	cfg := testConfig()
 	cfg.PlantedFaults = nil
 	cfg.Project, cfg.Ephemeral, cfg.Scenario, cfg.Systems = ScaleProject, true, "corporate", 20
-	cfg.SiteNodes = []SiteNode{
+	cfg.SiteOutposts = []SiteOutpost{
 		{Name: "edge-hq", Token: "t1", TokenHash: "h1", Components: 3},
 		{Name: "edge-branch-01", Token: "t2", TokenHash: "h2", Components: 1},
 	}
@@ -63,9 +63,9 @@ func scaleConfig() Config {
 	return cfg
 }
 
-// A scale lab starts one node per site, after the seed and the server, and
+// A scale lab starts one outpost per site, after the seed and the server, and
 // is up once every site's components are.
-func TestScaleRunBringsUpOneNodePerSite(t *testing.T) {
+func TestScaleRunBringsUpOneOutpostPerSite(t *testing.T) {
 	srv := scaleServer(t, testSites, nil, nil)
 	eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
 	var out bytes.Buffer
@@ -77,11 +77,11 @@ func TestScaleRunBringsUpOneNodePerSite(t *testing.T) {
 	if got := strings.Join(eng.created, ","); got != want {
 		t.Fatalf("created %s, want %s", got, want)
 	}
-	if lab.ID("edge-hq") == "" || lab.ID("edge-branch-01") == "" || lab.ID("node") != "" {
+	if lab.ID("edge-hq") == "" || lab.ID("edge-branch-01") == "" || lab.ID("outpost") != "" {
 		t.Fatalf("container ids %v", lab.ids)
 	}
 	if len(eng.containers) != 4 {
-		t.Fatalf("%d containers running, want db, server and a node per site", len(eng.containers))
+		t.Fatalf("%d containers running, want db, server and an outpost per site", len(eng.containers))
 	}
 	for _, line := range []string{"2 of 2 sites up; 4 of 4 simulated components up", "2, one per site", "capacity"} {
 		if !strings.Contains(out.String(), line) {
@@ -96,6 +96,56 @@ func TestScaleRunBringsUpOneNodePerSite(t *testing.T) {
 	}
 }
 
+// A scale lab whose options do not plan is refused before the host is read,
+// so a bad flag reads as itself rather than as a Docker host it never needed.
+func TestScaleRunPlansBeforeReadingTheHost(t *testing.T) {
+	eng := newFakeEngine("127.0.0.1:1")
+	cfg := scaleConfig()
+	cfg.Listen = "not-an-ip"
+	_, err := testRunner(eng, &bytes.Buffer{}).Run(context.Background(), cfg)
+	if err == nil || !strings.Contains(err.Error(), "is not an IP address") {
+		t.Fatalf("err = %v, want the --listen refusal", err)
+	}
+	if eng.hostReads != 0 {
+		t.Fatalf("the host was read %d times before the plan was refused", eng.hostReads)
+	}
+}
+
+// A scale lab's Postgres is sized from the Docker host it runs on: the
+// host's own report, or the forced limit that stands in for it.
+func TestScaleRunSizesPostgresFromTheHost(t *testing.T) {
+	srv := scaleServer(t, testSites, nil, nil)
+	for name, tc := range map[string]struct {
+		host, forced int64
+		baseMiB      float64
+		want         string
+	}{
+		"the host's own": {32 << 30, 0, 0, "shared_buffers=8192MB"},
+		"a forced limit": {32 << 30, 8 << 30, 0, "shared_buffers=2048MB"},
+		// A forced limit past the host's memory sizes nothing the host lacks.
+		"a forced limit above the host": {8 << 30, 32 << 30, 0, "shared_buffers=2048MB"},
+		// A fleet that leaves less than a quarter of the host spare gets
+		// what it leaves: 720 usable MiB less a 524 MiB estimate.
+		"the fleet's spare": {900 << 20, 0, 500, "shared_buffers=196MB"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
+			eng.host.MemBytes = tc.host
+			cfg := scaleConfig()
+			cfg.ScaleRun.HostMemory = tc.forced
+			if tc.baseMiB > 0 {
+				cfg.ScaleRun.Cost.Base.MemMiB = tc.baseMiB
+			}
+			if _, err := testRunner(eng, &bytes.Buffer{}).Run(context.Background(), cfg); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(eng.cmds["db"], " "); !strings.Contains(got, tc.want) {
+				t.Fatalf("the database ran %q, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
 // A size the host cannot fit is refused before anything is created, naming
 // the largest size that fits; a host too small for any is told so.
 func TestScaleRunRefusesASizeTheHostCannotFit(t *testing.T) {
@@ -105,7 +155,8 @@ func TestScaleRunRefusesASizeTheHostCannotFit(t *testing.T) {
 		want string
 	}{
 		// 600 MiB, of which 480 usable: 100 + 10*(1+n/10) + 3n MiB is 479
-		// at 93 systems (10 sites) and 483 at 94.
+		// at 93 systems (10 sites) and 483 at 94. The buffers take only what
+		// the fleet leaves, so they move the largest size not at all.
 		"some size fits": {600 << 20, "--systems 93, the largest that fits"},
 		"none fits":      {64 << 20, "Not even the smallest size fits"},
 	} {
@@ -113,7 +164,7 @@ func TestScaleRunRefusesASizeTheHostCannotFit(t *testing.T) {
 			eng := newFakeEngine(strings.TrimPrefix(srv.URL, "http://"))
 			eng.host.CPUs = 100
 			cfg := scaleConfig()
-			cfg.Systems, cfg.SiteNodes[0].Components = 1000, 3000
+			cfg.Systems, cfg.SiteOutposts[0].Components = 1000, 3000
 			cfg.ScaleRun.HostMemory = tc.mem
 			_, err := testRunner(eng, &bytes.Buffer{}).Run(context.Background(), cfg)
 			var pe *PreflightError
@@ -189,8 +240,8 @@ func TestFormatSitesNotUpCountsPastTheFirstTwenty(t *testing.T) {
 		names = append(names, fmt.Sprintf("c%d", i))
 	}
 	got := FormatSitesNotUp([]SiteState{
-		{Node: "edge-a", Connected: true, Want: 3, Listed: 3, Up: 3},
-		{Node: "edge-b", Connected: true, Want: 30, Listed: 28, Up: 3, NotUp: names},
+		{Outpost: "edge-a", Connected: true, Want: 3, Listed: 3, Up: 3},
+		{Outpost: "edge-b", Connected: true, Want: 30, Listed: 28, Up: 3, NotUp: names},
 	})
 	if strings.Contains(got, "edge-a") {
 		t.Errorf("a site up was named: %s", got)

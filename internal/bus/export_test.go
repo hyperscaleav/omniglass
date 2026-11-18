@@ -18,7 +18,7 @@ func SetTelemetryAckWait(d time.Duration) (restore func()) {
 	return func() { telemetryAckWait = prior }
 }
 
-// SetOrphanWindow sets how often one node's orphaned batches are warned about
+// SetOrphanWindow sets how often one outpost's orphaned batches are warned about
 // and how often their count reaches the store, for a test of #1200; the
 // returned func restores both. It applies to a Server built after it.
 func SetOrphanWindow(window, flush time.Duration) (restore func()) {
@@ -45,15 +45,44 @@ func (s *Server) PublishTelemetryAs(ctx context.Context, b *ogv1.TelemetryBatch,
 // DeleteTelemetryStream deletes OG_TELEMETRY (its consumer with it), so a
 // publish has no stream to store it.
 func (s *Server) DeleteTelemetryStream(ctx context.Context) error {
-	if s.consumeCtx != nil {
-		s.consumeCtx.Stop()
-		s.consumeCtx = nil
-	}
+	s.stopLanes()
 	js, err := jetstream.New(s.nc)
 	if err != nil {
 		return err
 	}
 	return js.DeleteStream(ctx, telemetryStream)
+}
+
+// StopTelemetryLanes stops every lane's pull loop and leaves the stream and
+// its durables as they are, as a server that stops does.
+func (s *Server) StopTelemetryLanes() { s.stopLanes() }
+
+// DeletePartitionDurables deletes every partition's durable and leaves the
+// batches filed under them, as a durable lost while its batches stay.
+func (s *Server) DeletePartitionDurables(ctx context.Context) error {
+	for i := range s.partitions {
+		if err := s.telemetry.DeleteConsumer(ctx, partitionDurable(i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UnpartitionTelemetryStream stores outpost batches under the outpost's own subject
+// again, as the stream did before it filed them by partition.
+func (s *Server) UnpartitionTelemetryStream(ctx context.Context) error {
+	js, err := jetstream.New(s.nc)
+	if err != nil {
+		return err
+	}
+	stream, err := js.Stream(ctx, telemetryStream)
+	if err != nil {
+		return err
+	}
+	cfg := stream.CachedInfo().Config
+	cfg.SubjectTransform = nil
+	_, err = js.UpdateStream(ctx, cfg)
+	return err
 }
 
 // RestartTelemetryConsumer creates the stream and its consumer again, as the
@@ -104,7 +133,7 @@ func SetTelemetryNakDelay(d time.Duration) (restore func()) {
 // client reads it from the server.
 func (s *Server) MaxPayload() int64 { return s.nc.MaxPayload() }
 
-// AsTick is a one-task batch as the node tick that carries it (#1582): its
+// AsTick is a one-task batch as the outpost tick that carries it (#1582): its
 // task's rows in the tick's one group.
 func AsTick(ev *ogv1.TelemetryBatch) *ogv1.TelemetryBatch { return asTick(ev) }
 

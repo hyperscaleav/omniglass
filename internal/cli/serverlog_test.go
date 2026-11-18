@@ -18,13 +18,13 @@ func TestServerLoggerIsTheProcessDefault(t *testing.T) {
 	var buf bytes.Buffer
 	log := serverLogger(&buf)
 	log.Info("migrations applied")
-	slog.Info("ingest lane", "facility", "ingest", "batches", 3, "busy_ms", 120)
+	slog.Info("ingest lane", "facility", "ingest", "partition", "2", "batches", 3, "busy_ms", 120)
 
 	samples, err := labfootprint.ParseLaneLog(&buf)
 	if err != nil {
 		t.Fatalf("parse the server log: %v\n%s", err, buf.String())
 	}
-	if len(samples) != 1 || samples[0].Batches != 3 || samples[0].Busy != 120*time.Millisecond {
+	if len(samples) != 1 || samples[0].Partition != "2" || samples[0].Batches != 3 || samples[0].Busy != 120*time.Millisecond {
 		t.Fatalf("a package-level tally line did not reach the harness: %+v\n%s", samples, buf.String())
 	}
 	if time.Since(samples[0].At) > time.Minute {

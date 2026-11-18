@@ -1,5 +1,5 @@
 // Package ingress is the listener primitive's placement-agnostic core
-// (#1024, ADR-1024): what a host (the server today, a node in a later
+// (#1024, ADR-1024): what a host (the server today, an outpost in a later
 // slice) does to one pushed message between receiving it and landing it.
 // It bounds (token buckets, a delivery's replay window), authenticates (the
 // scheme the endpoint's driver declares), routes (listeners first, through

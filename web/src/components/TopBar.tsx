@@ -1,12 +1,14 @@
+import { Show } from "solid-js";
 import { hostPlatform, shortcutModifier, shortcutHint } from "../lib/platform";
-import { Search } from "./icons";
+import { Bot, Search } from "./icons";
 import Button from "./Button";
 import InboxIndicator from "./InboxIndicator";
 
 // The sticky top bar (daisyUI navbar): the current section label, the
 // command-palette trigger (a global jump, distinct from a page's own filter),
-// and the inbox bell with its unread count.
-export default function TopBar(props: { section: string; onOpenPalette: () => void }) {
+// omnibot's panel for a person who may run it (#1167), and the inbox bell with
+// its unread count.
+export default function TopBar(props: { section: string; onOpenPalette: () => void; onOpenOmnibot?: () => void }) {
   // Label the palette shortcut with the host-native modifier (⌘ on mac, Ctrl else).
   const mod = shortcutModifier(hostPlatform());
   const hint = shortcutHint(hostPlatform(), "K");
@@ -27,6 +29,9 @@ export default function TopBar(props: { section: string; onOpenPalette: () => vo
         </span>
       </button>
       <Button square icon={Search} onClick={props.onOpenPalette} title="Search and jump" label="Search and jump" class="sm:hidden" />
+      <Show when={props.onOpenOmnibot}>
+        {(open) => <Button square icon={Bot} onClick={open()} title="Ask omnibot" label="Ask omnibot" />}
+      </Show>
       <InboxIndicator />
     </header>
   );

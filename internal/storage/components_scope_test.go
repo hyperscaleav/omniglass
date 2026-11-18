@@ -116,3 +116,57 @@ func mustCreateComponent(t *testing.T, gw storage.Gateway, spec storage.Componen
 	}
 	return c
 }
+
+// TestComponentDeleteRefusedWhileItOwnsEndpoints pins #138: a childless
+// component that still owns an endpoint is occupied, the same refusal as one
+// with child components, so the endpoint (and the tasks derived from it) is
+// never orphaned by a delete that would otherwise SET NULL its component. The
+// refusal leaves the endpoint attached; a component with neither children nor
+// endpoints still deletes.
+func TestComponentDeleteRefusedWhileItOwnsEndpoints(t *testing.T) {
+	t.Parallel()
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "owner"}, all)
+	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "bare"}, all)
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: strptr("owner")}, all)
+	if err != nil {
+		t.Fatalf("create endpoint: %v", err)
+	}
+
+	err = gw.DeleteComponent(ctx, "", "owner", all, all)
+	if !errors.Is(err, storage.ErrComponentHasEndpoints) {
+		t.Fatalf("delete component with an endpoint = %v, want ErrComponentHasEndpoints", err)
+	}
+	var occ *storage.ComponentHasEndpointsError
+	if !errors.As(err, &occ) || occ.Count != 1 {
+		t.Errorf("refusal = %#v, want a ComponentHasEndpointsError counting 1 endpoint", err)
+	}
+	got, err := gw.GetEndpoint(ctx, ep.ID, all)
+	if err != nil {
+		t.Fatalf("get endpoint after refused delete: %v", err)
+	}
+	if got.Component == nil || *got.Component != "owner" {
+		t.Errorf("endpoint component after refused delete = %v, want owner", got.Component)
+	}
+
+	// Delete the endpoint first, as the refusal says, and the component goes.
+	if err := gw.DeleteEndpoint(ctx, "", ep.ID, all, all); err != nil {
+		t.Fatalf("delete endpoint: %v", err)
+	}
+	if err := gw.DeleteComponent(ctx, "", "owner", all, all); err != nil {
+		t.Errorf("delete component once its endpoint is gone = %v, want ok", err)
+	}
+	if err := gw.DeleteComponent(ctx, "", "bare", all, all); err != nil {
+		t.Errorf("delete component with no children and no endpoints = %v, want ok", err)
+	}
+}

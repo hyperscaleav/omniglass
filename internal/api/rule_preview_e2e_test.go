@@ -85,7 +85,7 @@ func TestPreviewEventRuleAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compViewer := setupScopedPrincipal(t, ctx, dsn, "pa1-viewer", grantSpec{role: "viewer", scopeKind: "component", scopeID: pa1.ID})
+	compViewer := setupScopedUser(t, ctx, dsn, "pa1-viewer", grantSpec{role: "viewer", scopeKind: "component", scopeID: pa1.ID})
 	south := c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "south", "location_type": "campus"}, http.StatusCreated)
 	var loc struct {
 		ID string `json:"id"`
@@ -93,8 +93,8 @@ func TestPreviewEventRuleAPI(t *testing.T) {
 	if err := json.Unmarshal(south, &loc); err != nil {
 		t.Fatal(err)
 	}
-	placeViewer := setupScopedPrincipal(t, ctx, dsn, "south-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: loc.ID})
-	limited := setupLimitedPrincipal(t, ctx, dsn)
+	placeViewer := setupScopedUser(t, ctx, dsn, "south-viewer", grantSpec{role: "viewer", scopeKind: "location", scopeID: loc.ID})
+	limited := setupLimitedUser(t, ctx, dsn)
 
 	body := map[string]any{"sample_key": "endpoint-reachable", "fire_criteria": map[string]any{"expr": `value == "down"`},
 		"selector": map[string]any{"components": []string{"pa-1", "pa-2"}}, "fire_sustain": "15s"}

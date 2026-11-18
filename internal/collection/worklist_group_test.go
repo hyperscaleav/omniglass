@@ -112,7 +112,7 @@ func TestATaskNamingAMissingEntryDoesNotDecode(t *testing.T) {
 func TestEveryTaskFieldRoundTripsThroughTheGroupedWire(t *testing.T) {
 	task := TaskSpec{ID: "a", Mode: "poll", EndpointID: "e", EndpointName: "ssh", Transport: "ssh",
 		EndpointParams: json.RawMessage(`{"target":"10.0.0.1:22"}`), Spec: json.RawMessage(`{"get":"show"}`),
-		Secrets: map[string]map[string]string{"login": {"user": "admin"}}, Session: &driver.SessionSpec{Credential: "login"},
+		Secrets: map[string]map[string]string{"login": {"user": "admin"}}, Mask: []string{"pw"}, Session: &driver.SessionSpec{Credential: "login"},
 		SessionRetry: 2, HostKey: "ssh-ed25519 AAAA", CertificatePin: "SHA256:pin", Fingerprint: "fp",
 		Rejection: "credential-rejected", Ladder: &driver.EffectiveLadder{Ping: true}, ComponentID: "c",
 		PathUpstreams: []PathUpstream{{ComponentID: "u", ComponentName: "switch", EndpointIDs: []string{"e-u"}}}}
@@ -138,7 +138,7 @@ func TestEveryTaskFieldRoundTripsThroughTheGroupedWire(t *testing.T) {
 
 // A reply with no endpoints list, as a server built before the grouped wire
 // sends, fails the pull. Read as no tasks, it would tear down every session the
-// node holds; failed, the node keeps its last worklist.
+// outpost holds; failed, the outpost keeps its last worklist.
 func TestAFlatReplyDoesNotDecode(t *testing.T) {
 	var got WorklistReply
 	err := json.Unmarshal([]byte(`{"tasks":[{"id":"a","mode":"poll","endpoint_name":"tcp","transport":"tcp"}],"config_generation":1,"report_seconds":60}`), &got)

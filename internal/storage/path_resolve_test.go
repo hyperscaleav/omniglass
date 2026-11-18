@@ -228,7 +228,7 @@ func TestResolvePathOutOfScopeIsNonDisclosing(t *testing.T) {
 // inScopeTree's own doc), but that test would pass even if resolvePath's
 // wiring into loadByRef were entirely absent, because the literal address
 // string never matches a `name` column value either way. What was never
-// exercised anywhere in the suite is a non-All principal SCOPED TO A REAL
+// exercised anywhere in the suite is a non-All user SCOPED TO A REAL
 // SUBTREE of the address's own target tier resolving successfully, and the
 // SAME scope correctly denying a sibling outside it: exactly the shape that
 // produced two criticals in Task 11 which three green full-suite runs missed

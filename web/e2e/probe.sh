@@ -19,9 +19,9 @@
 #                           checked before it is filed and how a settled state is seen.
 #                           Exits 0 when the script reached its end, 1 when it failed at
 #                           a step, 2 when the replay itself never ran.
-#   probe.sh node <name> <enrollment-token>
-#                           run a node on the held lab's network as <name>, enrolled
-#                           with a token the persona minted (node enroll); torn down
+#   probe.sh outpost <name> <enrollment-token>
+#                           run an outpost on the held lab's network as <name>, enrolled
+#                           with a token the persona minted (outpost enroll); torn down
 #                           with the lab. How a fresh-install mission gets a collector.
 #
 # Exits non-zero only when the probe itself could not run; what it found is in
@@ -84,25 +84,25 @@ replay)
   echo "probe: the replay never ran the script; see $rep/test-results" >&2
   exit 2
   ;;
-node)
-  name=${1:?usage: probe.sh node <name> <enrollment-token>}
-  enroll=${2:?usage: probe.sh node <name> <enrollment-token>}
+outpost)
+  name=${1:?usage: probe.sh outpost <name> <enrollment-token>}
+  enroll=${2:?usage: probe.sh outpost <name> <enrollment-token>}
   [ -f "$OUT/stack.env" ] || { echo "probe: no held lab ($OUT/stack.env); run probe.sh hold first" >&2; exit 2; }
   set -a
   # shellcheck disable=SC1091
   . "$OUT/stack.env"
   set +a
-  # The lab's labels, so the lab's teardown removes this node with the rest.
+  # The lab's labels, so the lab's teardown removes this outpost with the rest.
   labels=()
   for kv in $OG_STACK_LABELS; do labels+=(--label "$kv"); done
   docker run -d --rm "${labels[@]}" --network "$OG_STACK_NET" \
     --sysctl net.ipv4.ping_group_range="0 65535" \
-    -e OMNIGLASS_SERVER="$OG_STACK_SRV_URL" -e OMNIGLASS_NODE_NAME="$name" -e OMNIGLASS_NODE_TOKEN="$enroll" \
-    "$OG_STACK_IMAGE" node run --heartbeat 2s --probe-every 2s --worklist-every 2s
+    -e OMNIGLASS_SERVER="$OG_STACK_SRV_URL" -e OMNIGLASS_OUTPOST_NAME="$name" -e OMNIGLASS_OUTPOST_TOKEN="$enroll" \
+    "$OG_STACK_IMAGE" outpost run --heartbeat 2s --probe-every 2s --worklist-every 2s
   exit
   ;;
 *)
-  echo "usage: $0 [run|hold|release|replay <file.yaml>|node <name> <token>]" >&2
+  echo "usage: $0 [run|hold|release|replay <file.yaml>|outpost <name> <token>]" >&2
   exit 2
   ;;
 esac

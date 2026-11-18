@@ -1,6 +1,6 @@
 // Package rejection declares the endpoint-rejection value (ADR-0158): the gate
-// a terminal refusal holds on an endpoint, as the node publishes it and as
-// the node (a restart adopts it), the server (a :retry trusting a key checks
+// a terminal refusal holds on an endpoint, as the outpost publishes it and as
+// the outpost (a restart adopts it), the server (a :retry trusting a key checks
 // it) and the reachability read (the console names its keys) read it back.
 // A leaf, like probekeys, so all three read the one shape.
 //
@@ -17,7 +17,7 @@
 // verdict) is an entry `<kind> <since> <source>` beside it, since an RFC 3339
 // UTC instant and source the task whose verdict added it. Entries are joined
 // by ";", the refusal first. Parse reads the refusal alone, so a :retry and a
-// restarted node read exactly what they read before; ParseSet reads them all.
+// restarted outpost read exactly what they read before; ParseSet reads them all.
 package rejection
 
 import (

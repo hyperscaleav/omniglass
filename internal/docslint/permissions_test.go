@@ -10,7 +10,7 @@ func permStamps() [][]string {
 	return [][]string{
 		{"component", "create"}, {"component", "read"}, {"component", "update"},
 		{"secret", "reveal"}, {"audit", "read", "admin"}, {"command", "issue"},
-		{"settings", "update"}, {"principal", "read", "admin"},
+		{"settings", "update"}, {"user", "read", "admin"},
 	}
 }
 

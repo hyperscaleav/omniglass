@@ -38,7 +38,7 @@ type calcOwnerStateBody struct {
 	Stale          []calcStaleBody  `json:"stale" doc:"The instances an input's list left out as stale, on components the caller may read"`
 	StaleHidden    int              `json:"stale_hidden" doc:"How many more stale instances are on components the caller may not read"`
 	Error          string           `json:"error,omitempty" required:"false" doc:"Why the rule could not compute (a run-time failure, a reduce that no longer compiles, a database fault it is backing off from)"`
-	NoMembersSince *time.Time       `json:"no_members_since,omitempty" required:"false" doc:"A system with no role-bound members since then: the rule writes nothing and its last value stands, unsupported"`
+	NoMembersSince *time.Time       `json:"no_members_since,omitempty" required:"false" doc:"A system with no slot-bound members since then: the rule writes nothing and its last value stands, unsupported"`
 	Pending        bool             `json:"pending" doc:"The owner is marked for the next tick"`
 	DueAt          *time.Time       `json:"due_at,omitempty" required:"false" doc:"When a deferred mark (a failed computation backing off) is due"`
 }
@@ -95,7 +95,7 @@ type calcPreviewOwnerBody struct {
 	SkippedHidden int              `json:"skipped_hidden" doc:"How many more skipped members the caller may not read"`
 	Stale         []calcStaleBody  `json:"stale" doc:"The instances an input's list would leave out as stale, on components the caller may read"`
 	StaleHidden   int              `json:"stale_hidden" doc:"How many more stale instances the caller may not read"`
-	NoMembers     bool             `json:"no_members" doc:"A system with no role-bound members: the rule would write nothing"`
+	NoMembers     bool             `json:"no_members" doc:"A system with no slot-bound members: the rule would write nothing"`
 	Error         string           `json:"error,omitempty" required:"false" doc:"Why the rule could not compute on the owner"`
 }
 
@@ -115,6 +115,7 @@ type calcPreviewOutput struct {
 func registerCalcRuleStateRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-calc-rule-state",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/calc-rules/{name}/state",
 		Summary:     "Get a calc rule's live state",
@@ -142,6 +143,7 @@ func registerCalcRuleStateRoutes(api huma.API, a *authenticator, gw storage.Gate
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "preview-calc-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/calc-rules:preview",
 		Summary:     "Preview a calc rule",

@@ -7,8 +7,8 @@ import (
 
 // A target's interval is the slower of its own and the tick it waits on; a
 // probe with no probe interval runs every tick.
-func TestNodeCadenceInterval(t *testing.T) {
-	c := NodeCadence{Heartbeat: 2 * time.Second, ProbeEvery: 10 * time.Second}
+func TestOutpostCadenceInterval(t *testing.T) {
+	c := OutpostCadence{Heartbeat: 2 * time.Second, ProbeEvery: 10 * time.Second}
 	for _, x := range []struct {
 		every string
 		want  time.Duration
@@ -17,7 +17,7 @@ func TestNodeCadenceInterval(t *testing.T) {
 			t.Errorf("Interval(%q) = %v, want %v", x.every, got, x.want)
 		}
 	}
-	if got := (NodeCadence{Heartbeat: 2 * time.Second}).Interval(""); got != 2*time.Second {
+	if got := (OutpostCadence{Heartbeat: 2 * time.Second}).Interval(""); got != 2*time.Second {
 		t.Errorf("a probe with no probe interval = %v, want the heartbeat", got)
 	}
 }

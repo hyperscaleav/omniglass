@@ -13,7 +13,7 @@ import (
 )
 
 // scopeGrants mirrors the API's storage.Grant -> scope.Grant mapping so a test can
-// resolve a principal's effective scope from its (possibly group-inherited) grants.
+// resolve a user's effective scope from its (possibly group-inherited) grants.
 func scopeGrants(grants []storage.Grant) []scope.Grant {
 	out := make([]scope.Grant, 0, len(grants))
 	for _, g := range grants {
@@ -26,7 +26,7 @@ func scopeGrants(grants []storage.Grant) []scope.Grant {
 	return out
 }
 
-// TestGroupGrantsInheritScopeAndPerms proves the whole point of principal groups
+// TestGroupGrantsInheritScopeAndPerms proves the whole point of user groups
 // against real Postgres: a role x scope granted to a GROUP is inherited by its
 // members, resolving into scope and permissions exactly like a direct grant, and
 // the inheritance rides the single grant-loader union (nothing else changes).
@@ -66,12 +66,12 @@ func TestGroupGrantsInheritScopeAndPerms(t *testing.T) {
 		t.Fatalf("create lab: %v", err)
 	}
 
-	bob, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "bob"}, all)
+	bob, err := gw.CreatePerson(ctx, owner.ID, storage.PersonSpec{Username: "bob"}, all)
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
 	// Bob starts with no access at all.
-	if got, _ := gw.GetPrincipal(ctx, bob.ID, all); len(got.Grants) != 0 {
+	if got, _ := gw.GetUser(ctx, bob.ID, all); len(got.Grants) != 0 {
 		t.Fatalf("bob should start with no grants, got %+v", got.Grants)
 	}
 
@@ -103,8 +103,8 @@ func TestGroupGrantsInheritScopeAndPerms(t *testing.T) {
 		t.Fatalf("duplicate group grant: want ErrGrantExists, got %v", err)
 	}
 
-	// Bob now inherits the grant: it shows on his principal, tagged with the group.
-	got, err := gw.GetPrincipal(ctx, bob.ID, all)
+	// Bob now inherits the grant: it shows on his user, tagged with the group.
+	got, err := gw.GetUser(ctx, bob.ID, all)
 	if err != nil {
 		t.Fatalf("get bob: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestGroupGrantsInheritScopeAndPerms(t *testing.T) {
 	if err := gw.RemoveGroupMember(ctx, owner.ID, grp.ID, bob.ID, all); err != nil {
 		t.Fatalf("remove member: %v", err)
 	}
-	if got, _ := gw.GetPrincipal(ctx, bob.ID, all); len(got.Grants) != 0 {
+	if got, _ := gw.GetUser(ctx, bob.ID, all); len(got.Grants) != 0 {
 		t.Fatalf("bob should inherit nothing after removal, got %+v", got.Grants)
 	}
 
@@ -152,7 +152,7 @@ func TestGroupGrantsInheritScopeAndPerms(t *testing.T) {
 	if err := gw.DeleteGroup(ctx, owner.ID, grp.ID, all); err != nil {
 		t.Fatalf("delete group: %v", err)
 	}
-	if got, _ := gw.GetPrincipal(ctx, bob.ID, all); len(got.Grants) != 0 {
+	if got, _ := gw.GetUser(ctx, bob.ID, all); len(got.Grants) != 0 {
 		t.Fatalf("deleting the group should drop bob's inherited access, got %+v", got.Grants)
 	}
 	if _, err := gw.GetGroup(ctx, grp.ID, all); !errors.Is(err, storage.ErrGroupNotFound) {

@@ -1,5 +1,6 @@
-import { type ParentComponent, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
+import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
+import { pageHere } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
@@ -7,12 +8,16 @@ import LabBanner from "./components/LabBanner";
 import { useAuthStatus } from "./lib/authStatus";
 import CommandPalette from "./components/CommandPalette";
 import Toaster from "./components/Toaster";
+import OmnibotPanel from "./components/OmnibotPanel";
+import { can, useMe } from "./lib/auth";
 import { sectionLabel } from "./lib/nav";
 import { useTheme, applyTheme, themeFromMe } from "./lib/theme";
 import { useSettingsMe } from "./lib/settings";
 
-// App is the authenticated shell: the nav rail, the sticky top bar, the routed
-// page, the global ⌘K command palette, and the toasts any surface raises. It
+// App is the authenticated shell (the data-app-shell root, which an open blade
+// makes inert): the nav rail, the sticky top bar, the routed
+// page, the global ⌘K command palette, omnibot's panel (#1167, for a person who
+// may run it, from the top bar or the palette), and the toasts any surface raises. It
 // owns the rail collapse state, the theme effect (mirrors the mode onto
 // <html>), and the ⌘K keybinding.
 const App: ParentComponent = (props) => {
@@ -27,6 +32,14 @@ const App: ParentComponent = (props) => {
 
   const [collapsed, setCollapsed] = createSignal(localStorage.getItem("og-collapsed") === "1");
   const [paletteOpen, setPaletteOpen] = createSignal(false);
+  const [omnibotOpen, setOmnibotOpen] = createSignal(false);
+  const [omnibotPrompt, setOmnibotPrompt] = createSignal<string>();
+  const me = useMe();
+  const mayAsk = () => can(me.data, "assistant", "use");
+  const openOmnibot = (prompt?: string) => {
+    setOmnibotPrompt(prompt || undefined);
+    setOmnibotOpen(true);
+  };
 
   createEffect(() => {
     const me = settingsMe.data;
@@ -45,19 +58,24 @@ const App: ParentComponent = (props) => {
   onCleanup(() => window.removeEventListener("keydown", onKey));
 
   return (
-    <div class="flex min-h-screen bg-base-100">
+    <>
+    <div data-app-shell class="flex min-h-screen bg-base-100">
       <Sidebar collapsed={collapsed()} onToggle={() => setCollapsed(!collapsed())} />
       <div class="flex min-w-0 flex-1 flex-col">
-        <TopBar section={section()} onOpenPalette={() => setPaletteOpen(true)} />
+        <TopBar section={section()} onOpenPalette={() => setPaletteOpen(true)} onOpenOmnibot={mayAsk() ? () => openOmnibot() : undefined} />
         <LabBanner lab={authStatus.data?.lab} />
         <ImpersonationBanner />
         <main id="scroll-main" class="mx-auto w-full max-w-330 flex-1 overflow-y-auto px-8 pb-16 pt-7">
           {props.children}
         </main>
       </div>
-      <CommandPalette open={paletteOpen()} onClose={() => setPaletteOpen(false)} />
-      <Toaster />
     </div>
+    <CommandPalette open={paletteOpen()} onClose={() => setPaletteOpen(false)} onAsk={openOmnibot} />
+    <Show when={mayAsk()}>
+      <OmnibotPanel open={omnibotOpen()} onClose={() => setOmnibotOpen(false)} prompt={omnibotPrompt()} page={pageHere(location.pathname, location.search)} />
+    </Show>
+    <Toaster />
+    </>
   );
 };
 

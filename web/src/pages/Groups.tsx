@@ -13,11 +13,11 @@ import { handleError } from "../lib/validate";
 import { Plus } from "../components/icons";
 import { useFormActions } from "../lib/formactions";
 
-// Groups: the principal-group admin surface, a config over the shared FlatList. A
+// User groups: the user-group admin surface, a config over the shared FlatList. A
 // group holds role x scope grants that its members inherit, so an admin assigns
 // access to a team once. A row opens the group blade (rooted here on group, drilling
 // into its members' user blades); the blade body lives in GroupDetail. Gated by
-// principal_group.
+// user_group.
 
 const columns: FlatColumn<Group>[] = [
   identityColumn<Group>(),
@@ -41,22 +41,22 @@ export default function Groups() {
   return (
     <FlatList<Group>
       config={{
-        entity: { name: "group", plural: "groups" },
+        entity: { name: "user group", plural: "user groups" },
         rows: () => groups.data ?? [],
         loading: () => groups.isPending,
         error: () => groups.error,
         filterKeys,
         filterPlaceholder: "filter by name or description",
         columns,
-        empty: "No groups yet.",
+        empty: "No user groups yet.",
         rowId: (g) => g.id,
         openId,
         blades: { registry: identityRegistry, rootKind: "group" },
-        create: can(me.data, "principal_group", "create")
+        create: can(me.data, "user_group", "create")
           // The handoff is the URL (#762): ?g=<id>&edit=1 opens the new group's
           // blade already editing, so members and grants are added without a
           // second step.
-          ? { label: "New group", can: () => can(me.data, "principal_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => { setParams({ g: g.id, edit: "1" }); ctx.close(); }} onClose={ctx.close} /> }
+          ? { label: "New user group", can: () => can(me.data, "user_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => { setParams({ g: g.id, edit: "1" }); ctx.close(); }} onClose={ctx.close} /> }
           : undefined,
       }}
     />
@@ -76,7 +76,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
   const [err, setErr] = createSignal<string | null>(null);
 
   useFormActions().bind({
-    submitLabel: "Create group",
+    submitLabel: "Create user group",
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
@@ -105,7 +105,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
 
   return (
     <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <p class="text-xs text-base-content/50">Creates a group. Members inherit the group's role grants; add members and grants afterwards.</p>
+      <p class="text-xs text-base-content/50">Creates a user group. Members inherit the group's role grants; add members and grants afterwards.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>

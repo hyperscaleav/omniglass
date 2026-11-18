@@ -22,7 +22,7 @@ import (
 // What must never differ is the ANSWER. The console reads the listing's facts
 // and the write paths read the query walk's, so a disagreement between them is
 // the same defect #695 closed across the language boundary, reopened inside one
-// package. This runs both over the whole seeded registry, every row, and
+// package. This runs both over the whole seeded catalog, every row, and
 // compares ALL THREE inherited facts (#716 widened the listing walk from the
 // icon to the stem and the abbrev, so the agreement has to widen with it). It
 // is the test that permits the duplication.

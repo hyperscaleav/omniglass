@@ -17,6 +17,9 @@ export default function TimeseriesChart(props: {
   buckets?: ChartBucket[];
   resolutionMs?: number;
   mode?: "line" | "step";
+  // The value in force when the window opens (#1488), step mode only: drawn
+  // from the left edge to the first change.
+  carriedIn?: number;
   now: number;
   windowMs: number;
   unit?: string;
@@ -35,9 +38,9 @@ export default function TimeseriesChart(props: {
       windowMs: props.windowMs,
     };
     if (props.buckets) return bucketLayout(props.buckets, { ...frame, resolutionMs: props.resolutionMs ?? 3600_000 });
-    return chartLayout(props.samples ?? [], { ...frame, mode: props.mode });
+    return chartLayout(props.samples ?? [], { ...frame, mode: props.mode, carriedIn: props.carriedIn });
   });
-  const last = () => (layout().points.length > 0 ? layout().endDot : undefined);
+  const last = () => (layout().linePath ? layout().endDot : undefined);
   const tip = (p: ChartPoint) =>
     p.min !== undefined && p.max !== undefined
       ? `${fmtV(p.value)}${props.unit ?? ""} avg, ${fmtV(p.min)} to ${fmtV(p.max)} (${p.count} samples) · ${fmtTime(p.ts)}`
@@ -58,7 +61,7 @@ export default function TimeseriesChart(props: {
   };
   return (
     <Show
-      when={layout().points.length > 0}
+      when={layout().linePath !== ""}
       fallback={
         <Show when={!props.spark} fallback={<span class="text-[10px] text-base-content/40">no samples</span>}>
           <p class="text-sm text-base-content/50">No samples in the window.</p>

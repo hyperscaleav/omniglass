@@ -82,7 +82,7 @@ var sites = []Site{{
 	Bindings: "Each of the rule's inputs by its alias, as the list of its current values, typed by its key (a metric " +
 		"is a number, a property text, a bool property a bool). For a component owner, one value per instance: the " +
 		"named instances, the aggregate instance only when it is the key's one, an instance not heard from in an hour " +
-		"left out. For a system owner, every role-bound member's values, ordered by member name then id; and members: " +
+		"left out. For a system owner, every slot-bound member's values, ordered by member name then id; and members: " +
 		"one record per member, holding id, name, value.<alias> (the member's own current value, the type's zero when " +
 		"it has none) and has.<alias> (whether it holds one), so one member's inputs stay together. A list function " +
 		"(avg, max, min, sum, majority, any, all) folds a list into one value.",
@@ -90,7 +90,7 @@ var sites = []Site{{
 }, {
 	Name: "action",
 	Summary: "An action rule's when: true or false for one alarm transition, over the alarm facts a " +
-		"notification template reads (in snake_case) and the severity's rank. Empty always holds. " +
+		"notification's subject and text read (in snake_case) and the severity's rank. Empty always holds. " +
 		"No key types it, so none is needed.",
 	Variants: []SiteVariant{
 		{ValueType: ValueBool, When: "every action rule", Env: actionEnv},

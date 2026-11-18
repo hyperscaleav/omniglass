@@ -1,6 +1,6 @@
-# A fire-and-forget command reads settled only once its node runs it
+# A fire-and-forget command reads settled only once its outpost runs it
 #
-# A reboot has no value to settle against, so its node's execution report decides it (#1630).
+# A reboot has no value to settle against, so its outpost's execution report decides it (#1630).
 # A simulated Kestrel bar in the depot's Bay 1, attached by a custom driver that binds reboot
 # to the bar's admin route: the reboot reads issued and queued, then settled once edge-hq
 # carries it out. A second bar holding a stale login refuses it: failed, its refusal the reason.
@@ -22,7 +22,7 @@ Wait
 Type `demo_hush 'omniglass endpoint delete "$bar/https"'`
 Enter
 Wait
-Type `demo_hush 'omniglass endpoint create --component "$bar" --driver kestrel-admin --node edge-hq --inputs "$inputs"'`
+Type `demo_hush 'omniglass endpoint create --component "$bar" --driver kestrel-admin --outpost edge-hq --inputs "$inputs"'`
 Enter
 Wait
 Type "clear"
@@ -30,10 +30,10 @@ Enter
 Wait
 Show
 
-Type "# A reboot has nothing to settle against: it reads issued, queued for the node"
+Type "# A reboot has nothing to settle against: it reads issued, queued for the outpost"
 Enter
 Wait
-Type `omniglass component command issue "$bar" --command-type reboot | jq -c '{status, phase, settle_mode, endpoint, node}'`
+Type `omniglass component command issue "$bar" --command-type reboot | jq -c '{status, phase, settle_mode, endpoint, outpost}'`
 Enter
 Wait
 
@@ -43,7 +43,7 @@ Enter
 Wait@70s
 Show
 
-Type "# The node ran it and reported: settled by that report, and on the bar's timeline"
+Type "# The outpost ran it and reported: settled by that report, and on the bar's timeline"
 Enter
 Wait
 Type `omniglass component command list "$bar" --limit 1 | jq -c '.commands[0] | {status, settled_by, reason}'`
@@ -63,7 +63,7 @@ Wait
 Type `demo_hush 'omniglass endpoint delete "$stale/https"'`
 Enter
 Wait
-Type `demo_hush 'omniglass endpoint create --component "$stale" --driver kestrel-admin --node edge-hq --inputs "$inputs"'`
+Type `demo_hush 'omniglass endpoint create --component "$stale" --driver kestrel-admin --outpost edge-hq --inputs "$inputs"'`
 Enter
 Wait
 Type "clear"

@@ -399,6 +399,49 @@ func (c *Client) Post(ctx context.Context, r Request) Result {
 	return res
 }
 
+// Fetch reads the document at rawURL under the contract (#2074): a GET
+// asking for JSON, answered 200, its body at most limit bytes. Anything else
+// (a refused destination, a failed connection, another status, a redirect,
+// which is not followed, or a longer body) is an error, and a body is never
+// part of one.
+func (c *Client) Fetch(ctx context.Context, rawURL string, limit int64) ([]byte, error) {
+	u, err := c.policy.CheckURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, errors.New("egress: the request could not be built")
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		if errors.Is(err, ErrRefused) {
+			return nil, refusal{reason(err)}
+		}
+		return nil, errors.New(reason(err))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("egress: the server answered %d, want 200", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, errors.New(reason(err))
+	}
+	if int64(len(body)) > limit {
+		return nil, fmt.Errorf("egress: the document is longer than %d bytes", limit)
+	}
+	return body, nil
+}
+
+// refusal is a refused destination's reason that still answers
+// errors.Is(err, ErrRefused).
+type refusal struct{ reason string }
+
+func (r refusal) Error() string        { return r.reason }
+func (r refusal) Is(target error) bool { return target == ErrRefused }
+
 // scrubWindow is how much of a response body is read to scrub before the
 // reason is cut to MaxReasonBytes.
 const scrubWindow = 16 << 10

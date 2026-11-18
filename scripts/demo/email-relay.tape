@@ -22,10 +22,10 @@ Wait@30s
 Type `demo_hush 'python3 -c "import json, os, sys, urllib.request; r = urllib.request.Request(os.environ[\"OMNIGLASS_SERVER\"] + \"/api/v1/settings/notification\", data=json.dumps({\"egress_allow\": [sys.argv[1]], \"mail_relay\": sys.argv[1] + \":2525\", \"mail_security\": \"none\", \"mail_from\": \"Omniglass <alerts@example.com>\"}).encode(), method=\"PATCH\", headers={\"Authorization\": \"Bearer \" + os.environ[\"OMNIGLASS_TOKEN\"], \"Content-Type\": \"application/json\"}); urllib.request.urlopen(r)" "$rx"'`
 Enter
 Wait
-Type `demo_hush 'for u in fay gus; do omniglass principal create --username $u --email $u@example.com && omniglass principal grant create $u --role viewer --scope-kind all; done'`
+Type `demo_hush 'for u in fay gus; do omniglass user create --username $u --email $u@example.com && omniglass user grant create $u --role viewer --scope-kind all; done'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal-group create --name night-shift && omniglass principal-group member create night-shift --principal-id fay && omniglass principal-group member create night-shift --principal-id gus'`
+Type `demo_hush 'omniglass user-group create --name night-shift && omniglass user-group member create night-shift --user-id fay && omniglass user-group member create night-shift --user-id gus'`
 Enter
 Wait
 Type "clear"
@@ -51,7 +51,7 @@ Wait
 Type "# The night shift is told by email too, each member at their directory address"
 Enter
 Wait
-Type `omniglass notification-target create --name night-page --kind principal_group --principal-group night-shift --channels '["email"]' | jq -c '{name, principal_group, channels}'`
+Type `omniglass notification-target create --name night-page --kind user_group --user-group night-shift --channels '["email"]' | jq -c '{name, user_group, channels}'`
 Enter
 Wait
 Type `omniglass action-rule create --name mail-night --on '["raised"]' --when 'message == "no audio from the ceiling mics"' --targets '["night-page","ops-mailbox"]' | jq -c '{name, targets}'`
@@ -99,7 +99,7 @@ Wait
 Type "# While they wait, gus leaves the night shift; then the relay comes back"
 Enter
 Wait
-Type `omniglass principal-group member delete night-shift gus`
+Type `omniglass user-group member delete night-shift gus`
 Enter
 Wait
 Type `echo up > /tmp/mail-mode`

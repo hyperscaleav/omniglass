@@ -110,22 +110,22 @@ func TestSettingsAuditRowsCarryTheirImages(t *testing.T) {
 	ctx := context.Background()
 	dsn, gw := newAuditGateway(t)
 
-	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-light"}, []string{"theme"}); err != nil {
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-light"}, []string{"theme"}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if _, err := gw.UpsertSettingOverride(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-dark"}, nil); err != nil {
+	if _, err := gw.UpsertSettingBinding(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-dark"}, nil); err != nil {
 		t.Fatalf("re-upsert: %v", err)
 	}
 	row := latestAudit(t, dsn, "settings", "ui", "update")
 	row.wantMoved(t, "settings update", "doc")
 	row.wantMoved(t, "settings update", "locks")
 
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-light"}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "ui", map[string]any{"theme": "omniglass-light"}); err != nil {
 		t.Fatalf("merge patch: %v", err)
 	}
 	latestAudit(t, dsn, "settings", "ui", "update").wantMoved(t, "settings merge-patch", "doc")
 
-	if err := gw.DeleteSettingOverride(ctx, "", "platform", "ui"); err != nil {
+	if err := gw.DeleteSettingBinding(ctx, "", "platform", "ui"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	del := latestAudit(t, dsn, "settings", "ui", "delete")
@@ -135,11 +135,11 @@ func TestSettingsAuditRowsCarryTheirImages(t *testing.T) {
 	// The factory reset deletes every row under one audit row: its old image is
 	// all of them.
 	for _, ns := range []string{"ui", "notifications"} {
-		if _, err := gw.UpsertSettingOverride(ctx, "", "platform", ns, map[string]any{"k": ns}, nil); err != nil {
+		if _, err := gw.UpsertSettingBinding(ctx, "", "platform", ns, map[string]any{"k": ns}, nil); err != nil {
 			t.Fatalf("upsert %s: %v", ns, err)
 		}
 	}
-	if err := gw.DeleteAllSettingOverrides(ctx, "", "platform"); err != nil {
+	if err := gw.DeleteAllSettingBindings(ctx, "", "platform"); err != nil {
 		t.Fatalf("delete all: %v", err)
 	}
 	all := latestAudit(t, dsn, "settings", "", "delete")
@@ -173,6 +173,34 @@ func TestTagAuditRowsCarryTheirImages(t *testing.T) {
 	del := latestAudit(t, dsn, "tag", tg.ID, "delete")
 	del.wantHeld(t, "tag delete", "name", "site")
 	del.wantHeld(t, "tag delete", "label", "Site")
+}
+
+func TestTagBindingAuditRowsCarryTheirImages(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dsn, gw := newAuditGateway(t)
+	all := scope.Set{All: true}
+
+	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "region", Label: "Region", AppliesTo: []string{"component"}}, all); err != nil {
+		t.Fatalf("create tag: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bind-host"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	comp := "bind-host"
+
+	b1, err := gw.SetTagBinding(ctx, "", "region", "component", &comp, "west", all, all)
+	if err != nil {
+		t.Fatalf("set: %v", err)
+	}
+
+	// Re-set with a different value: audit row must carry both old and new value.
+	if _, err := gw.SetTagBinding(ctx, "", "region", "component", &comp, "east", all, all); err != nil {
+		t.Fatalf("re-set: %v", err)
+	}
+	row := latestAudit(t, dsn, "tag_binding", b1.ID, "set")
+	row.wantMoved(t, "tag binding re-set", "value")
+	row.wantHeld(t, "tag binding re-set", "value", "west")
 }
 
 func TestVariableAuditRowsCarryTheirImages(t *testing.T) {
@@ -276,10 +304,14 @@ func TestWebhookTokenAuditRowsCarryTheirImages(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select secret_id from webhook_token where endpoint_id = $1`, ep.ID).Scan(&secretID); err != nil {
 		t.Fatalf("find the token secret: %v", err)
 	}
-	var token string
-	if err := conn.QueryRow(ctx, `select value::text from secret where id = $1`, secretID).Scan(&token); err != nil {
-		t.Fatalf("read the sealed token: %v", err)
+
+	// Reveal the plaintext token before rotation so the check is against the
+	// actual secret, not the sealed envelope (ADR-1442: plaintext must not appear in audit).
+	fieldsBefore, err := gw.RevealSecret(ctx, "", secretID, all, all, true)
+	if err != nil {
+		t.Fatalf("reveal token before rotation: %v", err)
 	}
+	plainBefore := fieldsBefore["token"]
 
 	if _, err := gw.RotateWebhookToken(ctx, "", ep.ID, all, all); err != nil {
 		t.Fatalf("rotate: %v", err)
@@ -287,7 +319,14 @@ func TestWebhookTokenAuditRowsCarryTheirImages(t *testing.T) {
 	row := latestAudit(t, dsn, "secret", secretID, "update")
 	row.wantMoved(t, "token rotation", "version")
 	row.wantHeld(t, "token rotation", "name", "webhook-token")
-	row.wantNoPlaintext(t, "token rotation", token)
+	row.wantNoPlaintext(t, "token rotation", plainBefore)
+
+	// Reveal the new plaintext after rotation.
+	fieldsAfter, err := gw.RevealSecret(ctx, "", secretID, all, all, true)
+	if err != nil {
+		t.Fatalf("reveal token after rotation: %v", err)
+	}
+	plainAfter := fieldsAfter["token"]
 
 	if err := gw.DeleteEndpoint(ctx, "", ep.ID, all, all); err != nil {
 		t.Fatalf("delete endpoint: %v", err)
@@ -295,7 +334,7 @@ func TestWebhookTokenAuditRowsCarryTheirImages(t *testing.T) {
 	del := latestAudit(t, dsn, "secret", secretID, "delete")
 	del.wantHeld(t, "token delete", "name", "webhook-token")
 	del.wantHeld(t, "token delete", "secret_type", "webhook-token")
-	del.wantNoPlaintext(t, "token delete", token)
+	del.wantNoPlaintext(t, "token delete", plainBefore, plainAfter)
 }
 
 func TestPropertyValueAuditRowsCarryTheirImages(t *testing.T) {
@@ -404,15 +443,15 @@ func TestRoleAssignmentAuditRowsCarryTheirImages(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "amp"}, all, all, all, all); err != nil {
 		t.Fatalf("component amp: %v", err)
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "system", "room-a", storage.SystemRoleSpec{Name: "mic", Label: "Mic", Quorum: 1, Impact: "none"}); err != nil {
-		t.Fatalf("role: %v", err)
+	if _, err := gw.SetSystemSlot(ctx, "", "system", "room-a", storage.SystemSlotSpec{Name: "mic", Label: "Mic", Quorum: 1, Impact: "none"}); err != nil {
+		t.Fatalf("slot: %v", err)
 	}
 	for _, c := range []string{"dsp", "amp"} {
-		if err := gw.AssignRole(ctx, "", "room-a", "mic", c, all, all, all, all); err != nil {
+		if err := gw.AssignSlot(ctx, "", "room-a", "mic", c, all, all, all, all); err != nil {
 			t.Fatalf("assign %s: %v", c, err)
 		}
 	}
-	assign := latestAuditOf(t, dsn, "system_role_assignment", "update")
+	assign := latestAuditOf(t, dsn, "system_slot_assignment", "update")
 	assign.wantMoved(t, "assign", "assigned")
 	assign.wantHeld(t, "assign", "assigned", false)
 	assign.wantHeld(t, "assign", "component", "amp")
@@ -421,35 +460,30 @@ func TestRoleAssignmentAuditRowsCarryTheirImages(t *testing.T) {
 	if err := gw.SwapPositions(ctx, "", "room-a", "mic", 1, 2, all, all); err != nil {
 		t.Fatalf("swap: %v", err)
 	}
-	swap := latestAuditOf(t, dsn, "system_role_assignment", "update")
+	swap := latestAuditOf(t, dsn, "system_slot_assignment", "update")
 	swap.wantMoved(t, "swap", "occupants")
 	swap.wantHeld(t, "swap", "occupants", []map[string]any{
 		{"position": 1, "component": "dsp"}, {"position": 2, "component": "amp"},
 	})
 
-	if err := gw.UnassignRole(ctx, "", "room-a", "mic", "dsp", all, all, all, all); err != nil {
+	if err := gw.UnassignSlot(ctx, "", "room-a", "mic", "dsp", all, all, all, all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
-	del := latestAuditOf(t, dsn, "system_role_assignment", "delete")
+	del := latestAuditOf(t, dsn, "system_slot_assignment", "delete")
 	del.wantHeld(t, "unassign", "component", "dsp")
-	del.wantHeld(t, "unassign", "role", "mic")
+	del.wantHeld(t, "unassign", "slot", "mic")
 	del.wantHeld(t, "unassign", "assigned", true)
 	del.wantHeld(t, "unassign", "position", 2)
 }
 
-func TestRoleChoiceAuditRowsCarryTheirSubjectOnDelete(t *testing.T) {
+func TestSlotChoiceAuditRowsCarryTheirSubjectOnDelete(t *testing.T) {
 	t.Parallel()
 	gw, ctx, dsn := newChoiceTestGateway(t)
 	std := "audit-choice-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Audit Choice"}); err != nil {
-		t.Fatalf("standard: %v", err)
-	}
-	if _, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
+	plantChoice(t, ctx, gw, std, storage.SlotChoiceSpec{
 		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{{Name: "all-in-one", Label: "All-in-one"}, {Name: "split", Label: "Split"}},
-	}); err != nil {
-		t.Fatalf("seed choice: %v", err)
-	}
+	})
 
 	if err := gw.DeleteAlternate(ctx, "", "standard", std, "conferencing", "split"); err != nil {
 		t.Fatalf("delete alternate: %v", err)
@@ -463,7 +497,7 @@ func TestRoleChoiceAuditRowsCarryTheirSubjectOnDelete(t *testing.T) {
 	if err := gw.DeleteChoice(ctx, "", "standard", std, "conferencing"); err != nil {
 		t.Fatalf("delete choice: %v", err)
 	}
-	choice := latestAuditOf(t, dsn, "role_choice", "delete")
+	choice := latestAuditOf(t, dsn, "slot_choice", "delete")
 	choice.wantHeld(t, "choice delete", "name", "conferencing")
 	choice.wantHeld(t, "choice delete", "label", "Conferencing")
 	choice.wantHeld(t, "choice delete", "owner_kind", "standard")
@@ -485,57 +519,57 @@ func TestPrincipalAuditRowsCarryTheirImages(t *testing.T) {
 		t.Fatalf("auth root: %v", err)
 	}
 	all := scope.Set{All: true}
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice", Email: "a@example.test", Label: "Alice"}, all)
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice", Email: "a@example.test", Label: "Alice"}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 
 	newLabel := "Alice Two"
-	if err := gw.UpdateHumanProfile(ctx, alice.ID, storage.HumanProfilePatch{Label: &newLabel}); err != nil {
+	if err := gw.UpdatePersonProfile(ctx, alice.ID, storage.PersonProfilePatch{Label: &newLabel}); err != nil {
 		t.Fatalf("profile: %v", err)
 	}
-	prof := latestAudit(t, dsn, "principal", alice.ID, "update")
+	prof := latestAudit(t, dsn, "user", alice.ID, "update")
 	prof.wantMoved(t, "profile", "label")
 	prof.wantHeld(t, "profile", "label", "Alice")
 	prof.wantHeld(t, "profile", "username", "alice")
 
-	if err := gw.SetPrincipalAvatar(ctx, root.ID, alice.ID, "AAAAavatarbytes", all); err != nil {
+	if err := gw.SetUserAvatar(ctx, root.ID, alice.ID, "AAAAavatarbytes", all); err != nil {
 		t.Fatalf("avatar: %v", err)
 	}
-	av := latestAudit(t, dsn, "principal", alice.ID, "set_avatar")
+	av := latestAudit(t, dsn, "user", alice.ID, "set_avatar")
 	av.wantMoved(t, "set avatar", "has_avatar")
 	av.wantHeld(t, "set avatar", "has_avatar", false)
 	av.wantNoPlaintext(t, "set avatar", "AAAAavatarbytes")
-	if err := gw.ClearPrincipalAvatar(ctx, root.ID, alice.ID, all); err != nil {
+	if err := gw.ClearUserAvatar(ctx, root.ID, alice.ID, all); err != nil {
 		t.Fatalf("clear avatar: %v", err)
 	}
-	clr := latestAudit(t, dsn, "principal", alice.ID, "clear_avatar")
+	clr := latestAudit(t, dsn, "user", alice.ID, "clear_avatar")
 	clr.wantMoved(t, "clear avatar", "has_avatar")
 	clr.wantHeld(t, "clear avatar", "has_avatar", true)
 
 	const hash = "$argon2id$hashmarker"
-	if err := gw.SetPrincipalPassword(ctx, root.ID, alice.ID, hash, all); err != nil {
+	if err := gw.SetUserPassword(ctx, root.ID, alice.ID, hash, all); err != nil {
 		t.Fatalf("reset password: %v", err)
 	}
 	reset := latestAudit(t, dsn, "credential", alice.ID, "reset_password")
 	reset.wantNoPlaintext(t, "reset password", hash, "hashmarker")
 
-	if err := gw.ArchivePrincipal(ctx, root.ID, alice.ID, all); err != nil {
+	if err := gw.ArchiveUser(ctx, root.ID, alice.ID, all); err != nil {
 		t.Fatalf("archive: %v", err)
 	}
-	arch := latestAudit(t, dsn, "principal", alice.ID, "archive")
+	arch := latestAudit(t, dsn, "user", alice.ID, "archive")
 	arch.wantMoved(t, "archive", "archived")
 	arch.wantHeld(t, "archive", "archived", false)
 	arch.wantHeld(t, "archive", "active", true)
 
-	if err := gw.PurgePrincipal(ctx, root.ID, alice.ID, all); err != nil {
+	if err := gw.PurgeUser(ctx, root.ID, alice.ID, all); err != nil {
 		t.Fatalf("purge: %v", err)
 	}
-	purge := latestAudit(t, dsn, "principal", alice.ID, "purge")
+	purge := latestAudit(t, dsn, "user", alice.ID, "purge")
 	purge.wantHeld(t, "purge", "username", "alice")
 	purge.wantHeld(t, "purge", "email", "a@example.test")
 	purge.wantHeld(t, "purge", "label", "Alice Two")
-	purge.wantHeld(t, "purge", "kind", "human")
+	purge.wantHeld(t, "purge", "kind", "person")
 	purge.wantHeld(t, "purge", "archived", true)
 	purge.wantNoPlaintext(t, "purge", hash, "hashmarker")
 }

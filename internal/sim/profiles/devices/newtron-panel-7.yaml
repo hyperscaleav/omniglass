@@ -20,7 +20,7 @@ name: newtron-panel-7
 manufacturer: Newtron
 model: "Panel 7"
 device_type: touchpanel
-# Case-study hostname role. Hostnames come from the system-profile
+# Case-study hostname slot. Hostnames come from the system-profile
 # suffix ("touch-panel"); slug_prefix only seeds the internal HostID
 # slug. Kept aligned with the case-study name.
 slug_prefix: touch-panel
@@ -176,7 +176,7 @@ interfaces:
         doc: { summary: "Factory reset panel" }
         mutations: *newtron_factory_reset_mutations
 
-  # NVP: the newtron-nvp driver's line protocol (TCP 51325, CRLF lines, no
+  # NVP: the newtron-panel-nvp driver's line protocol (TCP 51325, CRLF lines, no
   # banner).
   - name: nvp
     protocol: tcp
@@ -244,7 +244,7 @@ interfaces:
 
   # NVP as datagrams (#1037): the same line protocol over UDP, one line per
   # datagram, the proving face for the udp transport. Each source address is
-  # its own session, so a node's endpoint, which sends every request from its
+  # its own session, so an outpost's endpoint, which sends every request from its
   # own bound port, is the destination SUBSCRIBE INPUT pushes to. The face
   # drops a seeded share of datagrams each way (loss_pct), so the driver's
   # retries are exercised on a real wire with no NET_ADMIN. The NVP verbs are

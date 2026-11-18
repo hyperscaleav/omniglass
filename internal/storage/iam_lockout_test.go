@@ -37,7 +37,7 @@ func TestLoginLockout(t *testing.T) {
 	all := scope.Set{All: true}
 
 	pwHash, _ := auth.HashPassword("orange-boat-42x")
-	if _, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice", PasswordHash: pwHash}, all); err != nil {
+	if _, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice", PasswordHash: pwHash}, all); err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 
@@ -49,7 +49,7 @@ func TestLoginLockout(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 	expireLock := func() {
-		if _, err := conn.Exec(ctx, `update human set locked_until = now() - interval '1 hour' where username = 'alice'`); err != nil {
+		if _, err := conn.Exec(ctx, `update person set locked_until = now() - interval '1 hour' where username = 'alice'`); err != nil {
 			t.Fatalf("expire lock: %v", err)
 		}
 	}

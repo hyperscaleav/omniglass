@@ -205,7 +205,7 @@ func footprintSystems(fleet lab.Fleet, counted int) int {
 
 func (h *harness) measure(ctx context.Context) (Report, error) {
 	// The containers are found by the project's labels: a scale scenario
-	// runs a node per site, which the ready file does not list.
+	// runs an outpost per site, which the ready file does not list.
 	l, err := h.discoverScale(ctx)
 	if err != nil {
 		return Report{}, err
@@ -268,10 +268,10 @@ func (h *harness) measure(ctx context.Context) (Report, error) {
 		if err != nil {
 			return Report{}, err
 		}
-		w = FoldNodes(w)
+		w = FoldOutposts(w)
 		run.Windows = append(run.Windows, w)
 		h.say("window %d of %d: %s metric rows a minute, %.0f millicores in all", i, h.cfg.Windows,
-			count(w.MetricRowsPerMinute), w.Containers["server"].Millicores+w.Containers["node"].Millicores+w.Containers["db"].Millicores)
+			count(w.MetricRowsPerMinute), w.Containers["server"].Millicores+w.Containers["outpost"].Millicores+w.Containers["db"].Millicores)
 		db0, use0 = db1, use1
 	}
 

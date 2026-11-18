@@ -13,10 +13,10 @@ import (
 // endpoints a loader handed it and names the endpoints a disruptive command
 // closes the gates of. These tests feed it rows directly, no database.
 
-const holdNode = "node-a"
+const holdOutpost = "outpost-a"
 
 func ep(id, comp string, oob bool) storage.HoldEndpoint {
-	return storage.HoldEndpoint{ID: id, ComponentID: comp, Node: holdNode, OutOfBand: oob}
+	return storage.HoldEndpoint{ID: id, ComponentID: comp, Outpost: holdOutpost, OutOfBand: oob}
 }
 
 func edge(dependent, upstream, kind, outlet string) storage.HoldEdge {
@@ -42,7 +42,7 @@ func assertHold(t *testing.T, got []string, want ...string) {
 func TestHoldSetRebootSkipsOutOfBand(t *testing.T) {
 	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
-		Target: "codec", Node: holdNode,
+		Target: "codec", Outpost: holdOutpost,
 		Endpoints: []storage.HoldEndpoint{ep("codec-api", "codec", false), ep("codec-bmc", "codec", true)},
 	})
 	assertHold(t, got, "codec-api")
@@ -53,7 +53,7 @@ func TestHoldSetRebootSkipsOutOfBand(t *testing.T) {
 func TestHoldSetRebootFollowsHostChain(t *testing.T) {
 	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
-		Target: "codec", Node: holdNode,
+		Target: "codec", Outpost: holdOutpost,
 		Edges: []storage.HoldEdge{
 			edge("panel", "codec", "host", ""),
 			edge("cam", "panel", "host", ""),
@@ -72,7 +72,7 @@ func TestHoldSetRebootFollowsHostChain(t *testing.T) {
 func TestHoldSetRebootIgnoresContainmentAndPath(t *testing.T) {
 	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
-		Target: "chassis", Node: holdNode,
+		Target: "chassis", Outpost: holdOutpost,
 		Edges: []storage.HoldEdge{edge("behind-gw", "chassis", "path", "")},
 		Endpoints: []storage.HoldEndpoint{
 			ep("chassis-api", "chassis", false),
@@ -89,7 +89,7 @@ func TestHoldSetRebootIgnoresContainmentAndPath(t *testing.T) {
 func TestHoldSetPowerFollowsOutlet(t *testing.T) {
 	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
-		Target: "pdu", Node: holdNode, Power: true, Outlet: "2",
+		Target: "pdu", Outpost: holdOutpost, Power: true, Outlet: "2",
 		Edges: []storage.HoldEdge{
 			edge("amp", "pdu", "power", "2"),
 			edge("dsp", "pdu", "power", "3"),
@@ -107,13 +107,13 @@ func TestHoldSetPowerFollowsOutlet(t *testing.T) {
 
 // A host cycle that slipped past the create check (two racing creates)
 // terminates with each endpoint held once, and an endpoint placed on another
-// node is that node's to gate.
-func TestHoldSetHostCycleTerminatesAndStaysOnNode(t *testing.T) {
+// outpost is that outpost's to gate.
+func TestHoldSetHostCycleTerminatesAndStaysOnOutpost(t *testing.T) {
 	t.Parallel()
 	far := ep("b-far", "b", false)
-	far.Node = "node-b"
+	far.Outpost = "outpost-b"
 	got := storage.ResolveHoldSet(storage.HoldInput{
-		Target: "a", Node: holdNode,
+		Target: "a", Outpost: holdOutpost,
 		Edges: []storage.HoldEdge{
 			edge("b", "a", "host", ""),
 			edge("a", "b", "host", ""),
@@ -128,7 +128,7 @@ func TestHoldSetHostCycleTerminatesAndStaysOnNode(t *testing.T) {
 func TestHoldSetPowerWithoutOutletHoldsNothing(t *testing.T) {
 	t.Parallel()
 	got := storage.ResolveHoldSet(storage.HoldInput{
-		Target: "pdu", Node: holdNode, Power: true,
+		Target: "pdu", Outpost: holdOutpost, Power: true,
 		Edges:     []storage.HoldEdge{edge("amp", "pdu", "power", "2")},
 		Endpoints: []storage.HoldEndpoint{ep("pdu-snmp", "pdu", false), ep("amp-api", "amp", false)},
 	})

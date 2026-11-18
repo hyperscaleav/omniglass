@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import type { QueryClient } from "@tanstack/solid-query";
 import { api, getToken, setToken, clearToken } from "../api/client";
 
-// The impersonation client: an admin views/acts as another principal. The server
+// The impersonation client: an admin views/acts as another user. The server
 // mints a bearer token; we swap it in for the current session (remembering the
 // real admin token to restore on stop) and drive a persistent acting-as banner.
 // The server is the authority: it enforces the escalation guard, view-as
@@ -27,7 +27,7 @@ const [actingAs, setActingAs] = createSignal<ActingAs | null>(readMeta());
 // actingAs is the reactive acting-as state (null when not impersonating).
 export { actingAs };
 
-// impersonate starts a view-as / act-as session as the target principal: it mints
+// impersonate starts a view-as / act-as session as the target user: it mints
 // the token, saves the real admin token, swaps to the impersonation token, and
 // refetches everything so the app renders as the target.
 export async function impersonate(
@@ -36,12 +36,12 @@ export async function impersonate(
   targetName: string,
   mode: "view_as" | "act_as",
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const { data, error, response } = await api.POST("/principals/{id}:impersonate", {
+  const { data, error, response } = await api.POST("/users/{id}:impersonate", {
     params: { path: { id } },
     body: { mode },
   });
   if (error || !data?.token) {
-    if (response.status === 403) return { ok: false, message: "You cannot impersonate this principal (it exceeds your authority)." };
+    if (response.status === 403) return { ok: false, message: "You cannot impersonate this user (it exceeds your authority)." };
     if (response.status === 422) return { ok: false, message: "You cannot impersonate yourself." };
     return { ok: false, message: "Could not start impersonation." };
   }
@@ -50,10 +50,10 @@ export async function impersonate(
   const meta: ActingAs = { target: targetName, mode };
   localStorage.setItem(META_KEY, JSON.stringify(meta));
   setActingAs(meta);
-  // Clear, not just invalidate: the principal changed, so every cached query is
-  // now the wrong principal's. Invalidate would keep the stale data visible while
+  // Clear, not just invalidate: the user changed, so every cached query is
+  // now the wrong user's. Invalidate would keep the stale data visible while
   // refetching (and keep it forever if the refetch is refused, e.g. impersonating
-  // a no-grant user); clearing drops it so nothing cross-principal can paint.
+  // a no-grant user); clearing drops it so nothing cross-user can paint.
   qc.clear();
   // The impersonation token is persisted, so a hard reload to Home reboots the app
   // as the target: the permission-driven sidebar rebuilds from the target's grants,
@@ -73,8 +73,8 @@ export async function stopImpersonating(qc: QueryClient): Promise<void> {
   localStorage.removeItem(REAL_TOKEN_KEY);
   localStorage.removeItem(META_KEY);
   setActingAs(null);
-  // Same as impersonate(): the principal changed back, so drop every cached query
-  // rather than show the impersonated principal's rows during the refetch.
+  // Same as impersonate(): the user changed back, so drop every cached query
+  // rather than show the impersonated user's rows during the refetch.
   qc.clear();
   // Reboot to Home so the admin's own sidebar and access rebuild from scratch.
   reboot();

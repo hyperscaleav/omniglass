@@ -50,7 +50,7 @@ func TestComponentReparent(t *testing.T) {
 
 	// Clear to root: an empty parent lifts mid to a root component. all is an
 	// all-scoped grant, so the new authorization guard on clearing to root does
-	// not fire here; TestScopedPrincipalCannotLiftToRoot covers the refusal.
+	// not fire here; TestScopedUserCannotLiftToRoot covers the refusal.
 	after, err = gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("")}, all, all, all)
 	if err != nil {
 		t.Fatalf("clear parent: %v", err)
@@ -100,15 +100,15 @@ func TestComponentRelocate(t *testing.T) {
 	}
 }
 
-// TestScopedPrincipalCannotLiftToRoot is the load-bearing new case (#627 Task
+// TestScopedUserCannotLiftToRoot is the load-bearing new case (#627 Task
 // 13): the ADR's whole justification is that a PATCH clearing parent_id used
 // to lift a row out of every subtree scope with no check, while CREATING the
 // same root already required an all-scoped grant. A component-scoped (not
-// all-scoped) principal must be refused the clear-to-root move even though the
-// component itself sits inside its own move scope, and the same principal must
+// all-scoped) user must be refused the clear-to-root move even though the
+// component itself sits inside its own move scope, and the same user must
 // still be able to reparent within its own subtree (proving the refusal is
 // specific to root, not a blanket denial).
-func TestScopedPrincipalCannotLiftToRoot(t *testing.T) {
+func TestScopedUserCannotLiftToRoot(t *testing.T) {
 	t.Parallel()
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -120,7 +120,7 @@ func TestScopedPrincipalCannotLiftToRoot(t *testing.T) {
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "lift-sibling", ParentName: strptr("lift-root-a")}, all)
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "lift-target", ParentName: strptr("lift-root-a")}, all)
 
-	// Scoped to root-a's own subtree only, never all: exactly the principal the
+	// Scoped to root-a's own subtree only, never all: exactly the user the
 	// ADR describes, who can already write everything inside root-a.
 	scoped := scope.Set{IDs: []string{rootA.ID}}
 
@@ -131,13 +131,13 @@ func TestScopedPrincipalCannotLiftToRoot(t *testing.T) {
 		t.Fatalf("scoped clear-to-root err = %v, want ErrComponentForbidden", err)
 	}
 
-	// The same principal can still reparent WITHIN its own subtree: the refusal
+	// The same user can still reparent WITHIN its own subtree: the refusal
 	// above is specific to root, not a blanket denial of the move capability.
 	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("lift-sibling")}, scoped, scoped, all); err != nil {
 		t.Fatalf("scoped reparent within own subtree: %v", err)
 	}
 
-	// An all-scoped principal CAN clear the same component to root: the guard is
+	// An all-scoped user CAN clear the same component to root: the guard is
 	// specifically about scope, not a general prohibition on lift-to-root.
 	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("")}, all, all, all); err != nil {
 		t.Fatalf("all-scoped clear-to-root: %v", err)

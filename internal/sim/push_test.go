@@ -88,7 +88,7 @@ func TestBookingsAtRefusesAMalformedDay(t *testing.T) {
 // The push face renders the booking-service batch from a fixed clock
 // (#1743): the owner it is rendered for, the service's source, the meetings
 // left as booking-count and the place's state as booking-state, the batch
-// the retired simnode pusher sent.
+// the retired simoutpost pusher sent.
 func TestPushFaceRendersTheBookingServiceBatch(t *testing.T) {
 	d := bookingService(t, time.Date(2026, 10, 29, 13, 30, 0, 0, time.UTC))
 	body, err := d.RenderPush("sys-1")

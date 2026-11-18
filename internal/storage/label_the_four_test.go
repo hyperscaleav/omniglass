@@ -16,7 +16,7 @@ import (
 //
 //   - the ORDER a list comes back in, which is a property of the VALUE. Postgres
 //     sorts NULL last under a default ASC and the empty string FIRST, and #756
-//     found seven registries already shipping their unlabelled rows at the top
+//     found seven catalogs already shipping their unlabelled rows at the top
 //     of the picker because of exactly that. A new list is guilty until a test
 //     says otherwise.
 //   - the INDEPENDENCE of the label from the address, which is the whole point
@@ -101,7 +101,7 @@ func TestAnUnlabelledTagSortsLast(t *testing.T) {
 //
 // A tag's name is fixed at creation: `UpdateTag` replaces the governance fields
 // and the name is not among them, and there is no `:rename` custom method the
-// way component, system, location and principal_group have one. So the rename
+// way component, system, location and user_group have one. So the rename
 // half of the contract is proved the only way this table permits, by driving the
 // update that DOES exist and asserting the name it lands on is the one it
 // started with. The label half is the same statement from the other side: an
@@ -495,7 +495,7 @@ func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
 	}
 
 	// A patch that says nothing about the label leaves it alone, which is what
-	// makes a node reassignment safe.
+	// makes an outpost reassignment safe.
 	kept, err := gw.UpdateEndpoint(ctx, "", first.ID, storage.EndpointPatch{Params: []byte(`{"target":"10.0.0.9"}`)}, all, all)
 	if err != nil {
 		t.Fatalf("retarget: %v", err)

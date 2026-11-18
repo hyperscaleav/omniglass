@@ -190,11 +190,11 @@ func TestIdentityBindingArcIsExclusive(t *testing.T) {
 
 // Owner kinds other than component and system are refused before anything
 // resolves, and the match key must be a registered property type.
-func TestIdentityBindingRefusesPlacesNodesAndUnknownKeys(t *testing.T) {
+func TestIdentityBindingRefusesPlacesOutpostsAndUnknownKeys(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newBindingFixture(t, ctx)
-	for _, kind := range []string{"location", "node", "platform"} {
+	for _, kind := range []string{"location", "outpost", "platform"} {
 		_, err := f.gw.PutIdentityBinding(ctx, "", "ucc-cloud", "ucc-room-id", "R-1", storage.IdentityBindingOwner{Kind: kind, Name: "anything"}, f.allScopes())
 		if !errors.Is(err, storage.ErrIdentityBindingOwnerKind) {
 			t.Errorf("owner kind %s = %v, want ErrIdentityBindingOwnerKind", kind, err)

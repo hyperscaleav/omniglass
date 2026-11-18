@@ -71,8 +71,8 @@ func TestEveryReadingKeyIsAPlatformKey(t *testing.T) {
 	var rt Runtime
 	rt.Readings(Process{CPU: time.Second})
 	for _, r := range rt.Readings(Process{Goroutines: 1, HeapBytes: 1, GCs: 1, LastGCPause: time.Millisecond, CPU: 2 * time.Second, FDs: 3}) {
-		if !writerclass.NodeSelf(r.Key) {
-			t.Errorf("%s is not a declared node-self platform key", r.Key)
+		if !writerclass.OutpostSelf(r.Key) {
+			t.Errorf("%s is not a declared outpost-self platform key", r.Key)
 		}
 	}
 }
@@ -103,7 +103,7 @@ func TestRuntimeReadsCPUAsTheDeltaOncePrimed(t *testing.T) {
 }
 
 // TestRuntimeSamplerReadsEveryKeyNonnegative: the sampler the server and the
-// node share reads every generic process key off this process, none negative.
+// outpost share reads every generic process key off this process, none negative.
 func TestRuntimeSamplerReadsEveryKeyNonnegative(t *testing.T) {
 	t.Parallel()
 	runtime.GC()

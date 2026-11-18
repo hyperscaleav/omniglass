@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, fireEvent } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import LogsPanel from "./LogsPanel";
-import { LOGS_KEY, NODE_LOGS_KEY, type ComponentLogs, type NodeLogs } from "../lib/logs";
+import { LOGS_KEY, OUTPOST_LOGS_KEY, type ComponentLogs, type OutpostLogs } from "../lib/logs";
 
 // The panel is read-only: every row is a real API field, nothing derived. Data is
 // seeded into the query cache so no server is needed.
@@ -87,16 +87,16 @@ describe("LogsPanel", () => {
     expect(getByText(/no log lines in the last 24 hours/i)).toBeTruthy();
   });
 
-  it("serves a node's self-logs from an explicit source and title", () => {
-    const node: NodeLogs = {
-      node: "site-a",
-      logs: [{ ts: nowIso, source: "node", severity: "info", facility: "collection", message: "worklist pulled" }],
+  it("serves an outpost's self-logs from an explicit source and title", () => {
+    const outpost: OutpostLogs = {
+      outpost: "site-a",
+      logs: [{ ts: nowIso, source: "outpost", severity: "info", facility: "collection", message: "worklist pulled" }],
     };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...NODE_LOGS_KEY(node.node)], node);
+    qc.setQueryData([...OUTPOST_LOGS_KEY(outpost.outpost)], outpost);
     const { getByText } = render(() => (
       <QueryClientProvider client={qc}>
-        <LogsPanel name={node.node} title="Self-logs" queryKey={NODE_LOGS_KEY(node.node)} queryFn={() => Promise.resolve(node)} />
+        <LogsPanel name={outpost.outpost} title="Self-logs" queryKey={OUTPOST_LOGS_KEY(outpost.outpost)} queryFn={() => Promise.resolve(outpost)} />
       </QueryClientProvider>
     ));
     expect(getByText("Self-logs")).toBeTruthy();
@@ -104,15 +104,15 @@ describe("LogsPanel", () => {
     expect(getByText(/collection/)).toBeTruthy();
   });
 
-  // A node's self-log read takes no filter: the controls belong to a
+  // An outpost's self-log read takes no filter: the controls belong to a
   // component's (and a system's) read alone.
-  it("offers no filter on a node's self-logs", () => {
-    const node: NodeLogs = { node: "site-b", logs: [{ ts: nowIso, message: "connected" }] };
+  it("offers no filter on an outpost's self-logs", () => {
+    const outpost: OutpostLogs = { outpost: "site-b", logs: [{ ts: nowIso, message: "connected" }] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...NODE_LOGS_KEY(node.node)], node);
+    qc.setQueryData([...OUTPOST_LOGS_KEY(outpost.outpost)], outpost);
     const { queryByLabelText } = render(() => (
       <QueryClientProvider client={qc}>
-        <LogsPanel name={node.node} queryKey={NODE_LOGS_KEY(node.node)} queryFn={() => Promise.resolve(node)} />
+        <LogsPanel name={outpost.outpost} queryKey={OUTPOST_LOGS_KEY(outpost.outpost)} queryFn={() => Promise.resolve(outpost)} />
       </QueryClientProvider>
     ));
     expect(queryByLabelText("Severity at least")).toBeNull();
@@ -178,7 +178,7 @@ describe("LogsPanel filters", () => {
     const own = new Date(Date.now() - 3 * 3600_000).toISOString();
     const { getByText } = mount({
       component: "disp-1",
-      logs: [{ ts: own, received_at: nowIso, message: "booted before the node read it" }],
+      logs: [{ ts: own, received_at: nowIso, message: "booted before the outpost read it" }],
     });
     expect(getByText(/arrived/)).toBeTruthy();
   });

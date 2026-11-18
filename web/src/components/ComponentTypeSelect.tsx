@@ -5,7 +5,7 @@ import type { ComponentType } from "../lib/component_types";
 // ComponentTypeSelect: TreeSelect over the component_type tree, so the nesting
 // (mic > wireless-mic) reads in the open list and the closed value is the bare
 // label. Shared by the product classification picker (Products.tsx) and the
-// registry admin page's parent picker (ComponentTypes.tsx), the two places a
+// catalog admin page's parent picker (ComponentTypes.tsx), the two places a
 // caller chooses a node in this tree. The option value is the type's name.
 export default function ComponentTypeSelect(p: {
   types: ComponentType[];

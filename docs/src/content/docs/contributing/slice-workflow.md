@@ -16,10 +16,10 @@ per approved definition) while this lifecycle holds inside each slice: see
 | Stage | Practice | Gate |
 |---|---|---|
 | **Define** | a [feature issue](https://github.com/hyperscaleav/omniglass/issues/new/choose) under an epic: the outcome, the thin cut, the deferrals, the test plan, and the permission and scope it touches | **hard gate**: issue filed and scope approved before any branch |
-| **Design** | read the [architecture spine](/architecture/) (the docs are the spec); locate the seam; name the thin cut | the cut is explicit |
+| **Design** | read the capability's page, rebuilt or not yet (the docs are the spec); locate the seam; name the thin cut | the cut is explicit |
 | **Branch** | a git worktree off `origin/main` under `.claude/worktrees/`, never a commit on `main` | only after Define is approved |
 | **Build** | [test-first](/contributing/test-driven/): the failing test, then the feature, committing each increment. A slice cuts every entry point it touches, **API + CLI + UI**: the CLI command is generated from the OpenAPI (`make gen`); the UI view is built where the entity is live, or rendered as an honest stub where its backend does not exist yet | RED then GREEN; all three surfaces present (stub allowed) |
-| **Document** | the teaching [docs ship with it](/contributing/docs-with-everything/): the **architecture** page (the model) and, when the slice ships or changes an operator surface, its **operator guide** in `/guides/` (the how-to); plus a build-progress note on the status page, the page's **status badge advanced** to its new floor, and a [decision-log](/architecture/decisions/) entry for any divergence | docs in the same PR; badge advanced; divergence logged |
+| **Document** | the teaching [docs ship with it](/contributing/docs-with-everything/): the **architecture** page (the model) and, when the slice ships or changes an operator surface, its **operator guide** in `/guides/` (the how-to); plus a build-progress note on the status page, a rebuilt page's **status badge advanced** to its new floor, and a [decision-log](/architecture/decisions/) entry for any divergence | docs in the same PR; badge advanced; divergence logged |
 | **Validate** | `make test` green (run fresh), `make gen` clean, no drift | green, fresh |
 | **Demo** | the feature recorded working, on the PR: a [terminal demo](/contributing/demos/) for CLI and API behavior, a walkthrough for a console flow, tagged in the PR body (`demo: <id>`) and recorded by the `run:demo` label, which writes its clip into the body | the tag and the clip, or `demo: none (<reason>)` |
 | **Review** | a reviewer pass over the diff, findings addressed; a security lens when it touches authz, secrets, the edge, or an invariant | findings cleared |
@@ -47,7 +47,7 @@ Not a vibe at each gate, a check:
   database-backed behavior, and a green claim is not evidence until the tier actually executed.
 - **Docs ship with the feature.** The page that teaches the concept lands in the same PR, the
   architecture-of-record stays consistent, and any divergence is stated, never silent.
-- **Status moves with the code.** A slice that advances a page flips its **status badge** to the new
+- **Status moves with the code.** A slice that advances a rebuilt page flips its **status badge** to the new
   floor (`Design` to `Partial` to `Built`), adds the [build log](/architecture/build-log/) entry, and records any
   divergence from the design both inline on the page and in the [decision log](/architecture/decisions/),
   the ADR numbered by the slice's issue (a decision on issue #NNNN is ADR-NNNN).
