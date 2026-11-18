@@ -21,7 +21,7 @@ import { createSignal } from "solid-js";
 // different name is refused rather than renumbered.
 
 // FleetKind is the three entities whose names the platform can own. The
-// registry pages (products, vendors, types, users) are not here: their names
+// catalog pages (products, vendors, types, users) are not here: their names
 // have no generator and stay globally unique, so a create form there derives the
 // name from the label instead (lib/entities.ts's createIdentity).
 export type FleetKind = "component" | "system" | "location";

@@ -11,7 +11,7 @@ import (
 
 // DefaultWorklistWorkers is how many worklist pulls the server builds at once
 // when it is not told otherwise (#1577). Measured against the 1,000-system
-// lab, eight brought 18 nodes' pulls from 5.12 s in series to 1.30 s; past
+// lab, eight brought 18 outposts' pulls from 5.12 s in series to 1.30 s; past
 // about eight the database is the limit.
 const DefaultWorklistWorkers = 8
 
@@ -19,7 +19,7 @@ const DefaultWorklistWorkers = 8
 // pull is refused as busy. The subscription never blocks on the queue: a
 // blocked callback would leave later pulls in NATS's own buffer, stamped on
 // delivery rather than arrival, and the deadline would no longer be the
-// node's.
+// outpost's.
 const worklistQueueDepth = 256
 
 // defaultWorklistBudget is the budget of a pull that states none.
@@ -41,7 +41,7 @@ func worklistWorkers(want, dbPool int) int {
 	return max(want, 1)
 }
 
-// worklistDeadline is when a pull's node stops waiting: its arrival plus the
+// worklistDeadline is when a pull's outpost stops waiting: its arrival plus the
 // budget its header states, or defaultWorklistBudget.
 func worklistDeadline(hdr nats.Header, arrived time.Time) time.Time {
 	budget, ok := collection.WorklistRequestTimeout(hdr)
@@ -51,17 +51,17 @@ func worklistDeadline(hdr nats.Header, arrived time.Time) time.Time {
 	return arrived.Add(budget)
 }
 
-// worklistPull is one node's pull, waiting for a worker.
+// worklistPull is one outpost's pull, waiting for a worker.
 type worklistPull struct {
-	node     string
+	outpost  string
 	subject  string
 	respond  respondFunc
 	deadline time.Time
 }
 
-// pullOf is msg, a node's pull on the worklist subject, as the pool holds it.
-func pullOf(node string, msg *nats.Msg, deadline time.Time) worklistPull {
-	return worklistPull{node: node, subject: msg.Subject, deadline: deadline, respond: func(data []byte, hdr nats.Header) error {
+// pullOf is msg, an outpost's pull on the worklist subject, as the pool holds it.
+func pullOf(outpost string, msg *nats.Msg, deadline time.Time) worklistPull {
+	return worklistPull{outpost: outpost, subject: msg.Subject, deadline: deadline, respond: func(data []byte, hdr nats.Header) error {
 		return msg.RespondMsg(&nats.Msg{Subject: msg.Reply, Data: data, Header: hdr})
 	}}
 }
@@ -90,7 +90,7 @@ func (s *Server) startWorklistPool(n int) {
 }
 
 // queueWorklistPull hands a pull to the pool without waiting. A pull that
-// finds the queue full is refused as busy, so its node fails fast and backs
+// finds the queue full is refused as busy, so its outpost fails fast and backs
 // off rather than waiting out a budget the pool cannot meet; one that
 // arrives once the pool has stopped is dropped.
 func (s *Server) queueWorklistPull(p worklistPull) {
@@ -100,21 +100,21 @@ func (s *Server) queueWorklistPull(p worklistPull) {
 	default:
 		s.worklistCounts.busy.Add(1)
 		slog.Warn("worklist pull refused, the responder's queue is full", "facility", "worklist",
-			"node", p.node, "subject", p.subject, "queued", len(s.worklistQueue))
-		s.refuseWorklist(p.node, p.subject, "worklist responder is busy", p.respond)
+			"outpost", p.outpost, "subject", p.subject, "queued", len(s.worklistQueue))
+		s.refuseWorklist(p.outpost, p.subject, "worklist responder is busy", p.respond)
 	}
 }
 
-// serveWorklistPull answers one queued pull at now, under its node's
-// deadline: one whose node stopped waiting while it queued is dropped unread.
+// serveWorklistPull answers one queued pull at now, under its outpost's
+// deadline: one whose outpost stopped waiting while it queued is dropped unread.
 func (s *Server) serveWorklistPull(ctx context.Context, p worklistPull, now time.Time) {
 	if !now.Before(p.deadline) {
 		s.worklistCounts.expired.Add(1)
-		slog.Warn("worklist pull expired while it queued, its node stopped waiting", "facility", "worklist",
-			"node", p.node, "subject", p.subject, "late", now.Sub(p.deadline).String())
+		slog.Warn("worklist pull expired while it queued, its outpost stopped waiting", "facility", "worklist",
+			"outpost", p.outpost, "subject", p.subject, "late", now.Sub(p.deadline).String())
 		return
 	}
 	bctx, done := context.WithDeadline(ctx, p.deadline)
 	defer done()
-	s.answerWorklist(bctx, p.node, p.subject, s.nc.MaxPayload(), p.respond, now)
+	s.answerWorklist(bctx, p.outpost, p.subject, s.nc.MaxPayload(), p.respond, now)
 }

@@ -12,24 +12,24 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/simhub"
 )
 
-// The ring brackets only nodes whose simulator pulled inside the connected
-// window: a simulator that went quiet drops out, so its node warms up again
+// The ring brackets only outposts whose simulator pulled inside the connected
+// window: a simulator that went quiet drops out, so its outpost warms up again
 // when it comes back.
-func TestSimLoopNodes(t *testing.T) {
+func TestSimLoopOutposts(t *testing.T) {
 	t.Parallel()
 	hub := &fakeHub{Registry: simhub.New()}
 	hub.Pulled("site-a", collection.SimCapabilities{}, nil)
 	hub.Pulled("site-b", collection.SimCapabilities{}, nil)
-	if got := api.SimLoopNodes(hub, time.Now)(); !slices.Equal(got, []string{"site-a", "site-b"}) {
-		t.Fatalf("connected = %v, want both nodes", got)
+	if got := api.SimLoopOutposts(hub, time.Now)(); !slices.Equal(got, []string{"site-a", "site-b"}) {
+		t.Fatalf("connected = %v, want both outposts", got)
 	}
 	later := func() time.Time { return time.Now().Add(5 * time.Minute) }
-	if got := api.SimLoopNodes(hub, later)(); len(got) != 0 {
+	if got := api.SimLoopOutposts(hub, later)(); len(got) != 0 {
 		t.Fatalf("quiet for 5m = %v, want none", got)
 	}
 }
 
-// A node's device reads are every device its simulator was handed, with the
+// An outpost's device reads are every device its simulator was handed, with the
 // hits it reported by protocol and whether the simulator impairs it; a
 // device handed but never hit reads with no hits.
 func TestSimLoopSourceObservesDevices(t *testing.T) {
@@ -42,7 +42,7 @@ func TestSimLoopSourceObservesDevices(t *testing.T) {
 		},
 		Impairments: &collection.SimImpairmentStatus{Available: true, Impaired: []string{"c-hit"}},
 	})
-	_, devices, err := api.NewSimLoopSource(hub, nil, closedloop.NodeCadence{}).Observe(context.Background(), "site-a")
+	_, devices, err := api.NewSimLoopSource(hub, nil, closedloop.OutpostCadence{}).Observe(context.Background(), "site-a")
 	if err != nil {
 		t.Fatalf("observe: %v", err)
 	}
@@ -55,11 +55,11 @@ func TestSimLoopSourceObservesDevices(t *testing.T) {
 	}
 }
 
-// A node with no simulator answers the hub's error, so the ring says why.
+// An outpost with no simulator answers the hub's error, so the ring says why.
 func TestSimLoopSourceNoSimulator(t *testing.T) {
 	t.Parallel()
 	hub := &fakeHub{Registry: simhub.New()}
-	if _, _, err := api.NewSimLoopSource(hub, nil, closedloop.NodeCadence{}).Observe(context.Background(), "site-z"); err == nil {
-		t.Fatal("observe of a node with no simulator answered no error")
+	if _, _, err := api.NewSimLoopSource(hub, nil, closedloop.OutpostCadence{}).Observe(context.Background(), "site-z"); err == nil {
+		t.Fatal("observe of an outpost with no simulator answered no error")
 	}
 }

@@ -30,7 +30,7 @@ func TestNoTestUsesAReleasedPort(t *testing.T) {
 	// The uses that cannot be avoided, each with why. A stale entry fails,
 	// so the list never outlives the code it excuses.
 	allowed := map[string]string{
-		"internal/node/datagram_test.go:TestAUDPSocketRebindsOnlyWhenWhatItDependsOnChanges":                       "the code under test binds the listen port it is told, so the test must name one; a taken port fails the bind and the pick retries",
+		"internal/outpost/datagram_test.go:TestAUDPSocketRebindsOnlyWhenWhatItDependsOnChanges":                    "the code under test binds the listen port it is told, so the test must name one; a taken port fails the bind and the pick retries",
 		"internal/collection/udp_integration_test.go:TestDatagramBindsTheEndpointsListenPortAndItsRequestsShareIt": "the code under test binds the listen port it is told, so the test must name one; a taken port fails the bind and the pick retries",
 		"internal/nettest/refused_test.go:TestAReleasedPortCanBeTakenInTheGap":                                     "the contrast that proves the race nettest.RefusedAddr closes",
 	}

@@ -3,7 +3,7 @@
 # driver (what talks to it), a kind (device/app/service), and the component_type
 # it is classified under (the taxonomy above product; component_types.yaml,
 # seeded first). vendor_id, driver_id, and component_type must resolve against
-# their catalogs. The registry lists alphabetically by label.
+# their catalogs. The catalog lists alphabetically by label.
 #
 # The SKUs are FICTIONAL (the omniglass-lab brand universe; the demo fleet is
 # not sponsored), but each is shaped like the real device class it stands for:
@@ -148,7 +148,7 @@ products:
   - id: newtron-panel-7
     label: Newtron Panel 7
     vendor_id: newtron
-    driver_id: newtron-nvp
+    driver_id: newtron-panel-nvp
     kind: device
     component_type: touch-panel
   - id: newtron-slate-5
@@ -192,7 +192,7 @@ products:
   - id: tessellate-census-c1
     label: Tessellate Census C1
     vendor_id: tessellate
-    driver_id: http-json
+    driver_id: tessellate-census-http
     kind: device
     component_type: occupancy-sensor
   # Shinra Cloud: the meeting platform's account-wide plane (the simulator's
@@ -215,13 +215,13 @@ products:
     driver_id: recording-service-api
     kind: service
     component_type: generic-service
-  # The platform's own parts (#1094). Every node's platform component is one
-  # of these; node registration creates it, never an operator.
-  - id: omniglass-node
-    label: Omniglass Node
+  # The platform's own parts (#1094). Every outpost's platform component is one
+  # of these; outpost registration creates it, never an operator.
+  - id: omniglass-outpost
+    label: Omniglass Outpost
     vendor_id: omniglass
     kind: app
-    component_type: omniglass-node
+    component_type: omniglass-outpost
   # Every server's platform component is one of these; the server's boot
   # creates it (#1627).
   - id: omniglass-server

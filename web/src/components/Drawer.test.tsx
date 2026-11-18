@@ -117,4 +117,33 @@ describe("Drawer action rail", () => {
     expect(screen.getByRole("button", { name: "Done" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create token" })).toBeNull();
   });
+
+  // A conversation's composer is no form submit: the body owns it, pinned under
+  // the scroll so the transcript scrolls and the composer stays (#1167).
+  it("pins a footer slot below the scrolling body", () => {
+    render(() => (
+      <Drawer open={true} onClose={() => {}} title="omnibot" footer={<textarea aria-label="Message" />}>
+        <div>transcript</div>
+      </Drawer>
+    ));
+    const box = screen.getByLabelText("Message");
+    const body = screen.getByText("transcript").parentElement!;
+    expect(body.contains(box)).toBe(false);
+    expect(body.nextElementSibling?.contains(box)).toBe(true);
+  });
+
+  // Omnibot opens over whatever page the person is on, a blade included
+  // (#2162): a drawer marked above sits over the blade stack, whose blades
+  // stack upward from z-index 61.
+  it("sits over the blade stack when marked above", () => {
+    render(() => (
+      <Drawer open={true} onClose={() => {}} title="omnibot" above>
+        <div>transcript</div>
+      </Drawer>
+    ));
+    const content = screen.getByRole("dialog");
+    const overlay = content.previousElementSibling as HTMLElement;
+    expect(Number(content.style.zIndex)).toBeGreaterThan(61 + 100);
+    expect(Number(overlay.style.zIndex)).toBe(Number(content.style.zIndex));
+  });
 });

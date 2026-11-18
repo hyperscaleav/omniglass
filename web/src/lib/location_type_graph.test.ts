@@ -4,8 +4,8 @@ import { ROOT_PLACEMENT } from "./location_types";
 
 // Location types are customer data (ADR-0102): a fleet may run campus, building,
 // floor, room, or plot, sector, coordinate, or anything else. Everything the
-// console decides about a type's place in the hierarchy is read off the
-// registry's own allowed_parent_types, never off a type's name.
+// console decides about a type's position in the hierarchy is read off the
+// catalog's own allowed_parent_types, never off a type's name.
 
 const t = (name: string, parents: string[]) => ({ name, allowed_parent_types: parents });
 
@@ -25,7 +25,7 @@ describe("typeRanks", () => {
   });
 
   it("ranks a type after every type it may sit under, so a looser placement does not lift it", () => {
-    // The shipped registry, as seeded: a building may sit at the root, a room
+    // The shipped catalog, as seeded: a building may sit at the root, a room
     // under a campus. Ranking by the shortest road would put buildings level
     // with campuses and rooms level with floors.
     const d = typeRanks([

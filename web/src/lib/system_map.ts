@@ -1,19 +1,19 @@
 // The system map's pure core (#791, ADR-0128): the standard declares WHERE a
-// role position sits (normalized 2D against an aspect); the system's staffing
+// slot position sits (normalized 2D against an aspect); the system's staffing
 // says WHO is there. A marker is the join, and an empty position is a marker
 // too (a dashed ring): the map shows the room as built, gaps included.
 import type { SlotVM, SystemZoomVM } from "./system_zoom";
 
 export type StandardMapDecl = {
   aspect: number;
-  positions: { role: string; position: number; x: number; y: number }[];
+  positions: { slot: string; position: number; x: number; y: number }[];
 };
 
 export type MapMarker = {
   x: number;
   y: number;
-  role: string;
-  roleLabel: string;
+  slot: string;
+  slotLabel: string;
   position: number;
   positionLabel?: string;
   occupant?: { name: string; componentId: string; down: boolean };
@@ -36,21 +36,21 @@ export function parseStandardMap(raw: string | undefined | null): StandardMapDec
 export function mapMarkers(decl: StandardMapDecl, vm: SystemZoomVM): MapMarker[] {
   const activeSlots: SlotVM[] = [
     ...vm.unconditional.filter((s) => s.active),
-    ...vm.choices.flatMap((c) => c.alternates.flatMap((a) => a.roles.filter((r) => r.active))),
+    ...vm.choices.flatMap((c) => c.alternates.flatMap((a) => a.slots.filter((r) => r.active))),
   ];
   const byRole = new Map(activeSlots.map((s) => [s.name, s]));
   const markers: MapMarker[] = [];
   for (const p of decl.positions) {
-    const slot = byRole.get(p.role);
-    // A position for a role the build in use does not carry stays off the
+    const slot = byRole.get(p.slot);
+    // A position for a slot the build in use does not carry stays off the
     // map: the declaration may cover both alternates of a choice.
     if (!slot) continue;
     const occ = slot.occupants.find((o) => o.position === p.position);
     markers.push({
       x: p.x,
       y: p.y,
-      role: p.role,
-      roleLabel: slot.label,
+      slot: p.slot,
+      slotLabel: slot.label,
       position: p.position,
       positionLabel: occ?.positionLabel,
       occupant: occ ? { name: occ.name, componentId: occ.componentId, down: occ.down } : undefined,

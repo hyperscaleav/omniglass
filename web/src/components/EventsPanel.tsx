@@ -22,7 +22,7 @@ import RuleLink from "./RuleLink";
 //
 // An event a rule derived (#951) names the rule, linking to it, and when it
 // opened or resolved an alarm it carries that alarm's timeline toggle, so the
-// row leads to both the rule that wrote it and the incident it moved.
+// row leads to both the rule that wrote it and the alarm it moved.
 function EventRow(p: { ev: ComponentEvent; component: string }) {
   const [open, setOpen] = createSignal(false);
   const timelines = createTimelineToggles();

@@ -3,13 +3,13 @@
 # kestrel-api driver, whose set-volume binding settles from the bar's reply.
 # Issuing from the bar's Activity tab raises a toast that follows the command
 # live (queued, awaiting its reply, settled) and opens its row, where the arc,
-# the reply and what carried it read in place. The briefing place holds one
+# the reply and what carried it read in place. The briefing location holds one
 # system, so its address lands on that system.
 title: Issue a command and follow it
 description: Tell a video bar its volume from its Activity tab, watch the toast follow the command until the bar's reply settles it, and open the command to read its reply and timing.
 steps:
   - goto: /locations/briefing
-    caption: The Briefing Room's system. Its video bar is collected by a node over https.
+    caption: The Briefing Room's system. Its video bar is collected by an outpost over https.
   - click: 'button:has([data-label]:text-is("Video Bar 1"))'
     caption: Open the video bar.
   - click: 'aside[data-blade] button[aria-label=Expand]'
@@ -23,7 +23,7 @@ steps:
   - type: { target: 'form input', text: '0.35' }
     caption: The value it should hold.
   - click: { role: button, name: Issue, exact: true }
-    caption: Issue it. The node takes it from its queue and sends it to the bar.
+    caption: Issue it. The outpost takes it from its queue and sends it to the bar.
   - wait: { selector: '[data-testid=command-toast]:has-text("settled")', timeout: 20000 }
     caption: The toast follows it live. The bar's reply confirmed the change, so it settled.
     hold: 1500

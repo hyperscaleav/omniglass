@@ -6,7 +6,7 @@ summary: "The telemetry stream files each node's batches under a partition of it
 refs: [1896, 311, 1585, 1623]
 ---
 
-- **Date:** 2026-11-14 | **Status:** Accepted | **Pages:** [messaging](/architecture/messaging/#streams-and-consumers), [workers](/architecture/workers/)
+- **Date:** 2026-11-14 | **Status:** Accepted; the drain's live node amended by [ADR-2008](#adr-2008-a-node-with-no-worklist-does-not-hold-the-labs-drain) | **Pages:** [messaging](/architecture/messaging/#streams-and-consumers), [workers](/architecture/workers/)
 - **Decision:** (#1896, amending [ADR-0311](#adr-0311-a-telemetry-batch-lands-once-in-one-transaction-under-its-receipt) point 3.)
   1. **A lane per partition.** `OG_TELEMETRY` stores a node's batch published on
      `og.v1.telemetry.<node>` as `og.v1.telemetry.<p>.<node>`, where `p` is the stream's

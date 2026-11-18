@@ -1,6 +1,6 @@
 ---
-title: Nodes and reachability
-description: "Enrolling a collection node, adding a transport-named endpoint to a component, and reading the per-endpoint reachability and the log events a node reports."
+title: Outposts and reachability
+description: "Enrolling a collection outpost, adding a transport-named endpoint to a component, and reading the per-endpoint reachability and the log events an outpost reports."
 walkthroughs:
   - id: set-up-monitoring
   - id: fix-an-endpoint-in-place
@@ -10,78 +10,78 @@ walkthroughs:
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
-node** runs the probes, a component's **endpoint** is the API the node reaches for, the component's
+outpost** runs the probes, a component's **endpoint** is the API the outpost reaches for, the component's
 **Reachability** panel shows the verdict, and its **Events** and **Logs** panels show recent occurrences
-the node ships back. This page walks the console surfaces; the model behind them is
+the outpost ships back. This page walks the console surfaces; the model behind them is
 [data collection](/architecture/collection/), and every action here has the same
 [scope](/guides/operator/#what-you-see-is-your-scope) and permission checks as the rest of the console.
 
-## Nodes
+## Outposts
 
-**Nodes** under Admin in the sidebar (with `node:read`, which must be **all-scope**, since a node is
-fleet-wide, so a location-scoped operator cannot list nodes) is the collection-daemon
-inventory. Each row reads the way every list in the console reads: the node's **label** on the
+**Outposts** under Admin in the sidebar (with `outpost:read`, which must be **all-scope**, since an outpost is
+fleet-wide, so a location-scoped operator cannot list outposts) is the collection-daemon
+list. Each row reads the way every list in the console reads: the outpost's **label** on the
 first line and its **name** beneath it (shown only when the two differ), then a **liveness pill** (up,
 down, or never, derived from its last heartbeat against the server's down window), the relative
-last-heartbeat time, and its tags. A row opens the node's detail.
+last-heartbeat time, and its tags. A row opens the outpost's detail.
 
-- With `node:create` and `node:enroll`, **New node** registers a node (the name is its
+- With `outpost:create` and `outpost:enroll`, **New outpost** registers an outpost (the name is its
   fleet address) and mints its **enrollment token**. The form also takes an optional
   **label** and **location**. The token is a secret shown **once**, in a
   copy-to-clipboard field with a "shown once, cannot be retrieved again" warning. Copy it now
-  and hand it to the node deployment; the node presents it to claim its NATS credential. The
+  and hand it to the outpost deployment; the outpost presents it to claim its NATS credential. The
   server stores only a hash of the token and never logs it.
-- The detail is **read-edit-save**, like a component or location. With `node:update`, **Edit**
-  changes the node's **label**, **description**, and **location** (a descriptive
+- The detail is **read-edit-save**, like a component or location. With `outpost:update`, **Edit**
+  changes the outpost's **label**, **description**, and **location** (a descriptive
   placement picked from the fleet's locations, not a scope); the **name is immutable** (it is
   the fleet address and enrollment identity). The location clears if that location is deleted.
-- The detail carries a **Tags** panel: with `node:update`, edit mode adds and removes governed
-  [tags](/guides/admin/tags/) (keys whose vocabulary allows nodes), the same tag editor the
-  component and location details use. The node list shows a Tags column and filters by any tag key.
-- With `node:delete`, **Delete** (the destructive action, left of the footer) **decommissions** the node after a confirm: its endpoints, derived tasks, tags, and enrollment are removed. The telemetry it collected for components stays.
+- The detail carries a **Tags** panel: with `outpost:update`, edit mode adds and removes governed
+  [tags](/guides/admin/tags/) (keys whose vocabulary allows outposts), the same tag editor the
+  component and location details use. The outpost list shows a Tags column and filters by any tag key.
+- With `outpost:delete`, **Delete** (the destructive action, left of the footer) **decommissions** the outpost after a confirm: its endpoints, derived tasks, tags, and enrollment are removed. The telemetry it collected for components stays.
 - **Enroll** (or **Re-enroll**, if it is already enrolled) is a secondary action in the detail's
   kebab: it re-mints the token, invalidating the previous one.
-- The detail also shows whether the node is enrolled and when it last sent a heartbeat.
+- The detail also shows whether the outpost is enrolled and when it last sent a heartbeat.
 
-The node detail also carries a read-only **Self-logs** panel (backed by `GET /nodes/{name}/logs`,
-gated by `node:read`): the node's own recent operational log lines, newest first, over the last
-24 hours, so a node that is up but misbehaving explains itself without a shell on the box.
+The outpost detail also carries a read-only **Self-logs** panel (backed by `GET /outposts/{name}/logs`,
+gated by `outpost:read`): the outpost's own recent operational log lines, newest first, over the last
+24 hours, so an outpost that is up but misbehaving explains itself without a shell on the box.
 
 ### Getting a first verdict from the command line
 
-An empty install ships no node, so an endpoint added to a component reads a null verdict until a
-node probes it. The console path above and this CLI path do the same things, in this order:
+An empty install ships no outpost, so an endpoint added to a component reads a null verdict until a
+outpost probes it. The console path above and this CLI path do the same things, in this order:
 
 ```sh
-# 1. Register the node, then mint its enrollment token (shown once).
-omniglass node create --name edge-1
-omniglass node enroll edge-1
+# 1. Register the outpost, then mint its enrollment token (shown once).
+omniglass outpost create --name edge-1
+omniglass outpost enroll edge-1
 
-# 2. Run the node with that token, in its own terminal or service. It claims its
+# 2. Run the outpost with that token, in its own terminal or service. It claims its
 #    credential, pulls its worklist and starts probing.
-omniglass node run --server http://localhost:8080 --name edge-1 --token <token>
+omniglass outpost run --server http://localhost:8080 --name edge-1 --token <token>
 
-# 3. Assign the endpoint to the node. The endpoint's id and name are in the reachability read.
-omniglass endpoint update <endpoint> --node edge-1
+# 3. Assign the endpoint to the outpost. The endpoint's id and name are in the reachability read.
+omniglass endpoint update <endpoint> --outpost edge-1
 
-# 4. Read the verdict. The first probe lands within a probe interval of the node's next worklist pull.
+# 4. Read the verdict. The first probe lands within a probe interval of the outpost's next worklist pull.
 omniglass component reachability list <component>
 ```
 
-Until step 3, the endpoint's row carries `"verdict": null` and `"pending": "no-node"`: nothing is
+Until step 3, the endpoint's row carries `"verdict": null` and `"pending": "no-outpost"`: nothing is
 assigned to probe it. After step 3 and before the first probe lands, it reads `"pending":
 "awaiting-probe"`, and the field is gone once a verdict exists. The console's Endpoints panel says
-the same beneath the row, with a link to the Nodes page (or, once a node is assigned, to that node's
-blade). If it stays at `awaiting-probe`, the node is not running or not enrolled: check its liveness
-pill on **Nodes**.
+the same beneath the row, with a link to the Outposts page (or, once an outpost is assigned, to that outpost's
+blade). If it stays at `awaiting-probe`, the outpost is not running or not enrolled: check its liveness
+pill on **Outposts**.
 
 ## Endpoints
 
-An endpoint is an **API on a component** that a node reaches for, and it lives **on the
+An endpoint is an **API on a component** that an outpost reaches for, and it lives **on the
 component**: there is no standalone Endpoints surface. Open a component from the Fleet
 list's **Components** tab (with `endpoint:read`) and its endpoints read as a panel on the
 detail, each
-showing the endpoint's **label** over its transport name, its reachability, its node placement, and
+showing the endpoint's **label** over its transport name, its reachability, its outpost placement, and
 its probed target. An endpoint is **named by its transport**: you pick the wire it speaks over and
 the endpoint takes that transport as its name, unique within its component, so one component can
 have one `tcp` and one `http` (and an `https` beside them), and a second endpoint of a transport it
@@ -100,7 +100,7 @@ without one reads its transport name exactly.
     responded-but-not-authenticated are visible states; an http probe never sends a credential), `udp` proves its rung with its
     driver's request, so attach a driver rather than probe it bare, and `snmp` proves its rung
     with a standard get carrying its driver's community, so it too needs a driver, never a standalone
-    probe; there is no free-text name), a node placement, and a target (`host:port` for the
+    probe; there is no free-text name), an outpost placement, and a target (`host:port` for the
     tcp-family transports, `host` for icmp).
   - **Attach a driver**: pick a **driver** (only drivers whose declarative spec exists are
     offered) and fill the **inputs** its spec declares: a host, a port with its default
@@ -121,41 +121,41 @@ without one reads its transport name exactly.
 
   The owning component is the one you are on. Either face **derives the endpoint's tasks**
   for you, so a fresh endpoint is working collection with no second step.
-- With `endpoint:update`, editing an endpoint changes its **node placement** and where it
+- With `endpoint:update`, editing an endpoint changes its **outpost placement** and where it
   connects: a bare probe's **target**, or an attached driver's **inputs** (its host, its port, the
   name of the secret it authenticates with), edited in place and checked against the driver, with
   no re-attach. The transport (and so the name) is fixed at creation.
 - With `endpoint:delete`, deleting an endpoint removes it and **cascades its derived task**.
 
 Setting up monitoring on a component nothing collects from yet is both faces in turn: the SNMP
-driver for what the component reports, then a probe for reachability, each placed on a node, with
+driver for what the component reports, then a probe for reachability, each placed on an outpost, with
 reachability and samples arriving on the component's view seconds later. The view refreshes on its
 own as they land, so there is nothing to reload. The walkthrough runs against a simulated
-component, so the node is really collecting.
+component, so the outpost is really collecting.
 
 ::walkthrough{#set-up-monitoring}
 
 A driver attached with a mistake (an address typed one octet short) is fixed on the endpoint itself:
-correct the input, save, and the node reconnects at its next check-in, so samples arrive seconds
+correct the input, save, and the outpost reconnects at its next check-in, so samples arrive seconds
 later.
 
 ::walkthrough{#fix-an-endpoint-in-place}
 
 Because an endpoint belongs to a component, it inherits that component's scope: an endpoint
-on a component outside your scope is not shown. A node **purge cascades** its endpoints and
+on a component outside your scope is not shown. An outpost **purge cascades** its endpoints and
 their derived tasks.
 
 ## Tasks
 
-A task is the **collection work** a node runs, and it is **derived**, not authored: creating an
+A task is the **collection work** an outpost runs, and it is **derived**, not authored: creating an
 endpoint creates its one poll task. A task has **no name**: it is a binding, a **function**
 running over an **endpoint**, so it reads as its endpoint (the anchor) plus that function,
-never a redundant label. There is no standalone Tasks surface. A node's derived tasks read as a
-**panel on the node's detail** (open a node from **Nodes**, with `task:read`): each
+never a redundant label. There is no standalone Tasks surface. An outpost's derived tasks read as a
+**panel on the outpost's detail** (open an outpost from **Outposts**, with `task:read`): each
 shows its endpoint, the function it runs (the built-in **reachability** check, or a driver
-function carried whole in the task's spec: `snmp-generic/scalars`, `newtron-nvp/status`, a
-standing listener), and an **enabled** state; the node it runs on follows its endpoint's
-placement. To change what a node
+function carried whole in the task's spec: `snmp-generic/scalars`, `newtron-panel-nvp/status`, a
+standing listener), and an **enabled** state; the outpost it runs on follows its endpoint's
+placement. To change what an outpost
 collects, add or remove the **endpoint**; there is no task create, edit, or delete.
 
 ## Reachability
@@ -164,7 +164,7 @@ Every component's detail carries an **Endpoints** panel showing composed reachab
 of its endpoints reachable, and why. One row per endpoint shows the endpoint (its label, or its
 transport name where it has none) and its address, a **verdict
 pill** (responding, down, stale, or unknown, the last for an endpoint with no verdict yet,
-whose row says why beneath it: no node is assigned to probe it, or its node has not landed a first
+whose row says why beneath it: no outpost is assigned to probe it, or its outpost has not landed a first
 probe; a verdict is stored only when it changes, so the
 pill ages an endpoint by when the server last received anything its task delivered, its **last
 seen**, and an endpoint answering every probe stays responding however long ago it last changed
@@ -180,7 +180,7 @@ credential was actually tried). Hover or focus a rung for what it checks and wha
 rung a refusal holds wears the refusal glyph and the rungs above it read untried, while the rungs
 below keep their readings: an endpoint whose login was refused still shows its ping and its
 transport answering. A down endpoint also shows a plain-language **why** line. Every value is a
-real reading from the node, and the panel is also the authoring surface: its header carries **Add
+real reading from the outpost, and the panel is also the authoring surface: its header carries **Add
 endpoint** (with `endpoint:create`) and each row that maps to an endpoint a **Manage** affordance
 opening that endpoint's detail.
 
@@ -199,7 +199,7 @@ A **tls** or **https** endpoint's breakdown adds three rows, each teaching itsel
 transport rung, the TLS handshake answered, and how long it took), the **certificate** (its days
 left, amber inside a month and red once expired, and its expiry date; while a certificate is
 refused it says so rather than show the last accepted one's) and **trust**, how the endpoint
-judges the certificate: verified against the node's roots, pinned on first use (with the key it
+judges the certificate: verified against the outpost's roots, pinned on first use (with the key it
 pins), or **not verified**. Skipping verification is an operator's choice, never a driver's default,
 so its row reads it in amber and the endpoint's row wears **unverified** without being expanded. The
 mode is one of the endpoint's driver inputs (`tls-mode`), edited on the endpoint's detail like its
@@ -218,7 +218,7 @@ ping and its transport keep reporting ([http and https](/architecture/collection
 
 A driver whose component signs in once (a form login that sets a cookie, a JSON login that answers
 a token) logs in before its first request and keeps that session for every poll and command after,
-in the node's memory alone: never in the database, the console or a log line. When the component
+in the outpost's memory alone: never in the database, the console or a log line. When the component
 forgets the session (a reboot, an idle timeout) the next request logs in exactly once more, and the
 endpoint stays up. A wrong password is one login attempt: the endpoint reads **rejected**, class
 `auth`, with the component's reason (`auth: the login was sent back to the login page (302 to
@@ -237,8 +237,8 @@ fix the secret ([a server-sent events stream](/architecture/collection/#a-server
 A **websocket** or **wss** endpoint (the seeded Kestrel control socket driver is one) holds one
 socket that carries everything: its session pill reads **up** while the socket is open, a change the
 component pushes lands the moment it happens, and its polls and commands ride the same socket, each
-answered by the reply that carries back the id the node gave it. A dropped socket, or one whose
-component stops answering the node's pings, reads **recovering** and comes back with its
+answered by the reply that carries back the id the outpost gave it. A dropped socket, or one whose
+component stops answering the outpost's pings, reads **recovering** and comes back with its
 subscription sent again; a component that refuses the upgrade's credential reads **rejected** with
 the reason after one attempt, until you fix the secret. A wss endpoint pins its component's key as
 an https endpoint does, and **Trust this key** works the same way
@@ -250,8 +250,8 @@ follows. A component
 that answers ping but not the request reads down, and its why line says the request goes
 unanswered (the service is down, the port is closed, or the datagrams are lost); one that blocks
 ping but answers reads up. A lost datagram is re-sent within the endpoint's timeout, so a little
-loss never reads down. The endpoint binds its own port on the node (its driver's `listen-port`
-input, else one the node picks), which the component's pushes arrive on; edit it on the endpoint's
+loss never reads down. The endpoint binds its own port on the outpost (its driver's `listen-port`
+input, else one the outpost picks), which the component's pushes arrive on; edit it on the endpoint's
 detail like its host or port ([udp](/architecture/collection/#udp)).
 
 To author a reachability check, add an **endpoint** to the component (above), from this
@@ -266,18 +266,18 @@ An endpoint whose driver holds its connection open (a line protocol over `tcp`, 
 `ssh`) is a **session**, and its state wears a pill beside the ladder on the component's
 **Collection** card, on the **Endpoints** panel, and on the endpoint's own detail: **establishing**
 (the first connection, dialing then logging in), **up** (held and logged in; polls and commands
-borrow it), **recovering** (it dropped and the node is redialing on a backoff), **down** (five
-attempts in a row failed; the node keeps redialing slowly, so a component that returns comes back
+borrow it), **recovering** (it dropped and the outpost is redialing on a backoff), **down** (five
+attempts in a row failed; the outpost keeps redialing slowly, so a component that returns comes back
 on its own) or **rejected** (the component refused in a way retrying cannot fix, such as a wrong
-password, a changed host key or a certificate; the node dials no more). Rejected is amber with a refusal glyph,
-apart from down's red, because it is the one state the node will not leave without someone acting.
+password, a changed host key or a certificate; the outpost dials no more). Rejected is amber with a refusal glyph,
+apart from down's red, because it is the one state the outpost will not leave without someone acting.
 Beside the pill is how long ago the state changed. A state is stored only when it changes, so the
 pill is judged by the endpoint's last seen: an endpoint that has delivered nothing for a while
 turns the pill grey, and its tooltip says what it last read.
 
-A **down** or **rejected** session also says **why**, in the node's words for down and, for
+A **down** or **rejected** session also says **why**, in the outpost's words for down and, for
 rejected, the refusal's class and the component's own text (`auth: auth rejected`), scrubbed by the
-node of anything it sent, so a credential never reaches the console. A rejected session offers two
+outpost of anything it sent, so a credential never reaches the console. A rejected session offers two
 ways out:
 
 - **Retry**, with `endpoint:retry` (operators hold it), redials once with the endpoint as it is: the
@@ -289,39 +289,39 @@ ways out:
   endpoint, whose own notice offers **Edit credential** (with `endpoint:update`), its edit face with
   the secret input focused. Pointing the login at the secret holding the right credential, rotating
   that secret's value, or correcting the address or port changes what the endpoint connects with,
-  so the refusal no longer holds and the node tries again at its next check-in, with no retry.
+  so the refusal no longer holds and the outpost tries again at its next check-in, with no retry.
 
 A component whose console password was rotated while its endpoint kept the old secret reads
 rejected; pointing the login at the rotated secret brings the session up seconds later. The
-walkthrough runs against a simulated touch panel, so the node really logs in.
+walkthrough runs against a simulated touch panel, so the outpost really logs in.
 
 ::walkthrough{#fix-a-rejected-session}
 
 #### A changed key
 
-An `ssh` endpoint pins the host key its component presents: the node trusts the first key it sees,
+An `ssh` endpoint pins the host key its component presents: the outpost trusts the first key it sees,
 and every later connection must present the same one. A component that presents another (it was
 reinstalled, its hardware was swapped, or something sits in the middle answering in its place)
 reads **rejected** before anything logs in, and the notice says **The host key changed** and names
 both keys: the **pinned** one and the one the component **offered** instead. Both come from the
-node's refusal as data, so what the console shows is exactly what the node refused.
+outpost's refusal as data, so what the console shows is exactly what the outpost refused.
 
 **Trust this key**, with `endpoint:retry`, makes the offered key the new pin. It confirms first:
 the confirm shows both keys again, and **Why a key changes** names the three causes, each
 explained on hover, since only the first two are safe to trust. Compare the offered key with the
 one the component's own console shows before trusting a change nobody can account for. On
-confirming, the node redials onto the new pin once and the session comes up; the audit log records
+confirming, the outpost redials onto the new pin once and the session comes up; the audit log records
 the key replaced, the key trusted, and who trusted it. The confirm sends exactly the key it shows:
 if the offer on record moves while it is open, the confirm says so and will not send, and the server
-refuses any key other than the one the refusal on record names. That record is the node's last word,
-and a refused node dials no more, so a component that changed again since (its own console shows a
-third key) needs a **Retry** first: the node reads the key it offers now, and that is the one to
+refuses any key other than the one the refusal on record names. That record is the outpost's last word,
+and a refused outpost dials no more, so a component that changed again since (its own console shows a
+third key) needs a **Retry** first: the outpost reads the key it offers now, and that is the one to
 trust. Without the permission the
 button is greyed and its tooltip says so, while the two keys still read, so a viewer can tell an
 operator what changed. **Retry** stays beside it for the rarer case where the original component
 came back.
 
-In the simulated fleet, the touch panel in the place named `briefing` pins the key it had before it
+In the simulated fleet, the touch panel in the location named `briefing` pins the key it had before it
 was reimaged, so it reads rejected for a changed host key; trusting the offered key brings it up.
 
 ::walkthrough{#trust-a-changed-host-key}
@@ -331,26 +331,26 @@ was reimaged, so it reads rejected for a changed host key; trusting the offered 
 An endpoint that holds no session is still checked by its reachability probe, and a probe can be
 refused in a way retrying cannot fix too: an snmp agent answering `authorizationError` for the
 endpoint's community, a udp reply its driver declares terminal, a tls certificate that fails
-verification, or the ssh probe's credential. The node gates the endpoint exactly as it gates a
+verification, or the ssh probe's credential. The outpost gates the endpoint exactly as it gates a
 session, and the row says so the same way, with no session pill beside the ladder: the held rung
 wears the refusal glyph, and beneath the row **Why it was refused** gives the class and the
 component's own words (`auth: the agent answered authorizationError for the community`), with
 **Retry** and the way into the endpoint, whose own notice offers **Edit credential** with the secret
 input focused (an snmp endpoint's `community`). A changed key the probe met names both keys and
-offers **Trust this key**, as above. Retry holds its spinner until the refusal moves: the node lifts
+offers **Trust this key**, as above. Retry holds its spinner until the refusal moves: the outpost lifts
 the gate at its next check-in and tries once, and a refusal met again sets it anew. Without
 `endpoint:retry` the button is greyed and its tooltip says so, while the reason still reads. Where
 the gate holds the endpoint's polls too (any refusal at the transport rung, and a credential every
 poll carries: an snmp community, or an http or https driver's credential), the Collection card reads
 **polls stopped** beside it. An **http** or **https** endpoint holds no session unless its driver
-holds the component's event stream (above; a login's session lives in its node's memory, never as a
+holds the component's event stream (above; a login's session lives in its outpost's memory, never as a
 held connection), and its refusals read the same with or without one: a 401 to a request carrying its
 credential gates it, class `auth`, with the reason `auth: the component refused the credential
 (401)`, a login the component refuses gates it the same way with its own reason (`auth: the login
 was sent back to the login page (302 to /login)`), and an https certificate the endpoint refuses
 gates it at the handshake, a changed key offering **Trust this key**.
 
-In the simulated fleet, the touch panel in the place named `auditorium` answers SNMP, and its
+In the simulated fleet, the touch panel in the location named `auditorium` answers SNMP, and its
 endpoint reads its community from a secret holding the one the panel's agent refuses, so it reads
 refused, class `auth`; pointing its `community` input at `sim-community` lifts the gate.
 
@@ -373,11 +373,11 @@ where the time the line states differs from when it arrived, the row says when i
 panel orders and windows the lines by their arrival, so a component whose clock reset still shows
 what it logged today. Two
 filters narrow the read: **At least** a severity (that level and every more severe one) and
-**From** a source, its choices the sources the window carries. The system workspace's Logs section
+**From** a source, its choices the sources the window carries. The system detail view's Logs section
 takes the same filters. Most log lines never become events.
 
 Where a reachability verdict is a sampled state, an event or a log line is a past occurrence, so the
 panels are read differently: the verdict answers "is it reachable *now*", the logs and events answer
 "what did it *say*, and when". Both land under the same [scope](/guides/operator/#what-you-see-is-your-scope) and owner
 checks as every other reading, so an out-of-scope component's events and logs are a non-disclosing 404,
-exactly like its reachability. Every value is a real occurrence from the node.
+exactly like its reachability. Every value is a real occurrence from the outpost.

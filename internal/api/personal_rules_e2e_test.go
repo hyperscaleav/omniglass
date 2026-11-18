@@ -16,9 +16,9 @@ import (
 func TestAViewerSubscribesThemselvesToWhatTheyCanSee(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t)
-	p.human("alice", "viewer", "all", "")
-	p.human("bob", "viewer", "component", p.comps["display-2"])
-	p.human("rita", "reader", "all", "")
+	p.person("alice", "viewer", "all", "")
+	p.person("bob", "viewer", "component", p.comps["display-2"])
+	p.person("rita", "reader", "all", "")
 
 	rule := map[string]any{"name": "my-displays", "on": []string{"raised"}, "when": "severity_rank >= 40", "channels": []string{"inbox"}}
 	p.c.do(p.toks["rita"], http.MethodPost, "/auth/me/action-rules", rule, http.StatusForbidden)
@@ -66,14 +66,14 @@ func TestAViewerSubscribesThemselvesToWhatTheyCanSee(t *testing.T) {
 func TestAMemberOptsOutOfAGroupPageOnlyWhereAllowed(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t)
-	p.human("alice", "viewer", "all", "")
-	p.human("bob", "viewer", "all", "")
-	p.c.do(p.owner, http.MethodPost, "/principal-groups", map[string]any{"name": "on-call"}, http.StatusCreated)
+	p.person("alice", "viewer", "all", "")
+	p.person("bob", "viewer", "all", "")
+	p.c.do(p.owner, http.MethodPost, "/user-groups", map[string]any{"name": "on-call"}, http.StatusCreated)
 	for _, u := range []string{"alice", "bob"} {
-		p.c.do(p.owner, http.MethodPost, "/principal-groups/on-call/members", map[string]any{"principal_id": u}, http.StatusNoContent)
+		p.c.do(p.owner, http.MethodPost, "/user-groups/on-call/members", map[string]any{"user_id": u}, http.StatusNoContent)
 	}
-	p.c.do(p.owner, http.MethodPost, "/notification-targets", map[string]any{"name": "on-call-page", "kind": "principal_group",
-		"principal_group": "on-call", "channels": []string{"inbox"}}, http.StatusCreated)
+	p.c.do(p.owner, http.MethodPost, "/notification-targets", map[string]any{"name": "on-call-page", "kind": "user_group",
+		"user_group": "on-call", "channels": []string{"inbox"}}, http.StatusCreated)
 	p.c.do(p.owner, http.MethodPost, "/action-rules", map[string]any{"name": "page-on-call", "on": []string{"raised"},
 		"targets": []string{"on-call-page"}}, http.StatusCreated)
 	p.c.do(p.toks["alice"], http.MethodPost, "/action-rules/page-on-call:optOut", nil, http.StatusConflict)
@@ -94,7 +94,7 @@ func TestAMemberOptsOutOfAGroupPageOnlyWhereAllowed(t *testing.T) {
 func TestADraftSubscriptionIsTestedBeforeItIsSaved(t *testing.T) {
 	t.Parallel()
 	p := newPeople(t)
-	p.human("bob", "viewer", "component", p.comps["display-2"])
+	p.person("bob", "viewer", "component", p.comps["display-2"])
 	p.c.do(p.owner, http.MethodPost, "/components/display-1/alarms", map[string]any{"severity": "high", "message": "no video"}, http.StatusCreated)
 	p.c.do(p.owner, http.MethodPost, "/components/display-2/alarms", map[string]any{"severity": "high", "message": "no audio"}, http.StatusCreated)
 	var tested struct {

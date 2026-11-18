@@ -15,11 +15,11 @@ func linearShape(systems int) (int, int, error) { return 1 + systems/10, 3 * sys
 
 var testCost = CostModel{
 	Base:      Footprint{MemMiB: 100, CPU: 1},
-	Node:      Footprint{MemMiB: 10, CPU: 0.1},
+	Outpost:   Footprint{MemMiB: 10, CPU: 0.1},
 	Component: Footprint{MemMiB: 1, CPU: 0.01},
 }
 
-func TestEstimateAddsANodePerSiteAndACostPerComponent(t *testing.T) {
+func TestEstimateAddsAOutpostPerSiteAndACostPerComponent(t *testing.T) {
 	got := testCost.Estimate(3, 300)
 	if got.MemMiB != 100+30+300 || got.CPU < 4.29 || got.CPU > 4.31 {
 		t.Fatalf("estimate %+v, want 430 MiB and 4.3 cores", got)

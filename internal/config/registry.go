@@ -22,7 +22,7 @@ type Var struct {
 	// none. The authoritative default lives with the consuming code.
 	Default string `json:"default,omitempty"`
 	// Scope is where the variable applies: "server" (the server process and the
-	// container/Helm guides), "node" (the edge process), "cli" (the operator CLI,
+	// container/Helm guides), "outpost" (the edge process), "cli" (the operator CLI,
 	// surfaced through the generated CLI reference instead of the server tables),
 	// or "test" (test harness only).
 	Scope string `json:"scope"`
@@ -53,13 +53,15 @@ var Registry = []Var{
 	{Key: "OMNIGLASS_NATS_STORE_DIR", Default: "temp dir", Scope: "server",
 		Doc: "JetStream store directory"},
 	{Key: "OMNIGLASS_NATS_URL", Default: "the bus's bound address", Scope: "server",
-		Doc: "bus URL the node-claim exchange advertises to nodes; unset, the URL of the address the bus bound (loopback for a wildcard host such as 0.0.0.0)"},
+		Doc: "bus URL the outpost-claim exchange advertises to outposts; unset, the URL of the address the bus bound (loopback for a wildcard host such as 0.0.0.0)"},
 	{Key: "OMNIGLASS_DATA_DIR", Default: ".omniglass", Scope: "server",
 		Doc: "local non-Postgres server state (notably the fallback encryption key)"},
 	{Key: "OMNIGLASS_SETTINGS_FILE", Scope: "server",
 		Doc: "optional operator settings file (JSON or YAML), the layer between code defaults and the DB override"},
 	{Key: "OMNIGLASS_READY_FILE", Scope: "server",
 		Doc: "path the server writes once it serves: a JSON object of the addresses it bound (addr, nats_addr) and the bus URL it advertises (nats_url), for a supervisor or test that asked for port 0; cleared at boot, removed at a graceful shutdown"},
+	{Key: "OMNIGLASS_OMNIBOT_REPLAY", Scope: "server",
+		Doc: "path to a recorded model the server's omnibot plays, turn by turn as each conversation stands, for a demo or a test; unset, the server has no model and a run is refused"},
 	{Key: "OMNIGLASS_ENCRYPTION_KEY", Scope: "server",
 		Doc: "base64 32-byte encryption key, the key-encryption key every secret is sealed under at rest; wins over the key file"},
 	{Key: "OMNIGLASS_ENCRYPTION_KEY_FILE", Scope: "server",
@@ -73,31 +75,31 @@ var Registry = []Var{
 	{Key: "OMNIGLASS_SERVER_NAME", Default: "the hostname", Scope: "server",
 		Doc: "the server's identity: the name its own platform component, which carries its request and query timing, is ensured under at boot; set it when servers share a hostname or a server moves hosts"},
 	// The closed loop on Platform health (#1647, ADR-1647): how often the
-	// server brackets each node with a simulator, and the cadence it assumes
-	// for those nodes, which it is not told. omniglass lab run sets all three
+	// server brackets each outpost with a simulator, and the cadence it assumes
+	// for those outposts, which it is not told. omniglass lab run sets all three
 	// from its cadence profile.
 	{Key: "OMNIGLASS_CLOSED_LOOP_BRACKET", Default: "1m", Scope: "server",
-		Doc: "how often the server brackets each node with a connected simulator for Platform health's sliding window, ten brackets long; 1s to 1m, and a value outside that fails the boot"},
+		Doc: "how often the server brackets each outpost with a connected simulator for Platform health's sliding window, ten brackets long; 1s to 1m, and a value outside that fails the boot"},
 	{Key: "OMNIGLASS_CLOSED_LOOP_HEARTBEAT", Default: "30s", Scope: "server",
-		Doc: "the check-in interval the closed loop assumes for each node with a simulator, to count which poll targets were due over its window; set it to the nodes' --heartbeat"},
+		Doc: "the check-in interval the closed loop assumes for each outpost with a simulator, to count which poll targets were due over its window; set it to the outposts' --heartbeat"},
 	{Key: "OMNIGLASS_CLOSED_LOOP_PROBE_EVERY", Default: "every check-in", Scope: "server",
-		Doc: "the reachability-probe interval the closed loop assumes for each node with a simulator; set it to the nodes' --probe-every"},
+		Doc: "the reachability-probe interval the closed loop assumes for each outpost with a simulator; set it to the outposts' --probe-every"},
 	// The ingest lanes (#1896, ADR-1896): the telemetry stream files each
-	// node's batches under a partition of its name, one lane a partition.
+	// outpost's batches under a partition of its name, one lane a partition.
 	{Key: "OMNIGLASS_INGEST_PARTITIONS", Default: "4", Scope: "server",
-		Doc: "how many ingest lanes land node telemetry side by side, each node's batches always on one lane and in the order it sent them; 1 to 64, held under the database pool less one, and a value outside that range fails the boot; change it with the telemetry backlog drained, or a node's batches held across the change may land out of order"},
+		Doc: "how many ingest lanes land outpost telemetry side by side, each outpost's batches always on one lane and in the order it sent them; 1 to 64, held under the database pool less one, and a value outside that range fails the boot; change it with the telemetry backlog drained, or an outpost's batches held across the change may land out of order"},
 	{Key: "OMNIGLASS_SERVER", Scope: "cli",
-		Doc: "server base URL the CLI and the node use when --server is omitted, read when the command runs"},
+		Doc: "server base URL the CLI and the outpost use when --server is omitted, read when the command runs"},
 	{Key: "OMNIGLASS_TOKEN", Scope: "cli",
 		Doc: "bearer token the CLI uses when --token is omitted, read when the command runs and never printed by help"},
-	{Key: "OMNIGLASS_NODE_NAME", Scope: "node",
-		Doc: "the node's registered name, used by omniglass node run and sim run when --name is omitted"},
-	{Key: "OMNIGLASS_NODE_TOKEN", Scope: "node",
-		Doc: "the node's enrollment token, used by omniglass node run and sim run when --token is omitted, read when the command runs and never printed by help"},
-	{Key: "OMNIGLASS_NODE_SESSION_DIALS", Default: "16", Scope: "node",
-		Doc: "how many held sessions omniglass node run lets make their first dial and handshake at once when --session-dials is omitted (a redial takes no slot); a session waiting for a slot reads establishing"},
-	{Key: "OMNIGLASS_LANE_WORKERS", Scope: "node",
-		Doc: "how many endpoint lanes omniglass node run runs at once, each sending one request to its endpoint at a time, when --lane-workers is omitted"},
+	{Key: "OMNIGLASS_OUTPOST_NAME", Scope: "outpost",
+		Doc: "the outpost's registered name, used by omniglass outpost run and sim run when --name is omitted"},
+	{Key: "OMNIGLASS_OUTPOST_TOKEN", Scope: "outpost",
+		Doc: "the outpost's enrollment token, used by omniglass outpost run and sim run when --token is omitted, read when the command runs and never printed by help"},
+	{Key: "OMNIGLASS_OUTPOST_SESSION_DIALS", Default: "16", Scope: "outpost",
+		Doc: "how many held sessions omniglass outpost run lets make their first dial and handshake at once when --session-dials is omitted (a redial takes no slot); a session waiting for a slot reads establishing"},
+	{Key: "OMNIGLASS_LANE_WORKERS", Default: "auto", Scope: "outpost",
+		Doc: "how many endpoint lanes omniglass outpost run runs at once, each sending one request to its endpoint at a time, when --lane-workers is omitted; auto sizes them from the CPU and memory the outpost may use"},
 	// omniglass lab run finds its Docker daemon the way the docker CLI does
 	// (#1194): these three, then the platform's default socket or pipe.
 	{Key: "DOCKER_HOST", Scope: "cli",
@@ -108,14 +110,14 @@ var Registry = []Var{
 		Doc: "the docker CLI's config directory, where omniglass lab run reads the current context and the context store"},
 	{Key: "OMNIGLASS_LAB_IMAGE", Scope: "cli",
 		Doc: "the omniglass image omniglass lab run runs when --image is omitted; one that is not the binary's own build is warned about"},
-	{Key: "OMNIGLASS_LAB_NODE_TOKEN_HASH", Scope: "cli",
-		Doc: "set by omniglass lab run for its seed one-off: the hash of the node token it minted for this run, never set by hand"},
-	{Key: "OMNIGLASS_LAB_SITE_NODE_TOKEN_HASHES", Scope: "cli",
-		Doc: "set by omniglass lab run for a scale lab's seed one-off: each site node's name and the hash of the token it minted for it this run (node=hash, comma-separated), never set by hand"},
+	{Key: "OMNIGLASS_LAB_OUTPOST_TOKEN_HASH", Scope: "cli",
+		Doc: "set by omniglass lab run for its seed one-off: the hash of the outpost token it minted for this run, never set by hand"},
+	{Key: "OMNIGLASS_LAB_SITE_OUTPOST_TOKEN_HASHES", Scope: "cli",
+		Doc: "set by omniglass lab run for a scale lab's seed one-off: each site outpost's name and the hash of the token it minted for it this run (outpost=hash, comma-separated), never set by hand"},
 	{Key: "OMNIGLASS_LAB_PUSHER_TOKENS", Scope: "cli",
 		Doc: "set by omniglass lab run for its seed one-off: each declared pusher's name and the hash and non-secret prefix of the token it minted for it this run (name=hash:prefix, comma-separated), never set by hand"},
 	{Key: "OMNIGLASS_SIM_PUSHERS", Scope: "cli",
-		Doc: "the outside actors omniglass node run --simulate runs as emulator devices with a push face: each pusher's name, profile and token (name=profile:token, comma-separated); set by omniglass lab run, read when the command runs and never printed by help"},
+		Doc: "the outside actors omniglass outpost run --simulate runs as emulator devices with a push face: each pusher's name, profile and token (name=profile:token, comma-separated); set by omniglass lab run, read when the command runs and never printed by help"},
 	{Key: "OMNIGLASS_TEST_ADMIN_DSN", Scope: "test",
 		Doc: "points the storage test harness at an existing admin database instead of a testcontainer"},
 }

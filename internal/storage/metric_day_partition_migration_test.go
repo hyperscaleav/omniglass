@@ -61,6 +61,7 @@ func standMonthLayout(t *testing.T) (*storage.PG, *pgx.Conn, string) {
 	// Half an hour before the last hour, so no sample sits on a window's edge
 	// as the clock moves between the reads before and after.
 	anchor := time.Now().UTC().Truncate(time.Hour).Add(-30 * time.Minute)
+	spellSeries(t, conn, "node", "outpost")
 	cols := `ts, owner_kind, component_id, metric_type_id, instance, provenance, value, source_rule, source_rule_version, source_rule_id`
 	owner := `'component', (select id from component where name = 'swap-c1'), (select id from metric_type where name = 'swap-rtt')`
 	mustExec(t, conn, storagetest.WideMetricInsert(cols,
@@ -71,12 +72,41 @@ func standMonthLayout(t *testing.T) (*storage.PG, *pgx.Conn, string) {
 		`values ($1::timestamptz, `+owner+`, '', 'calculated', 42, 'avg-rule', 3, gen_random_uuid()),
 			('2026-08-20T00:00:00Z', `+owner+`, '', 'observed', 7, null, null, null),
 			('2026-08-31T23:59:59Z', `+owner+`, '', 'observed', 8, null, null, null)`), anchor.Add(-90*time.Minute))
+	spellSeries(t, conn, "outpost", "node")
 	gw, err := storage.NewPG(ctx, dsn)
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
 	t.Cleanup(gw.Close)
 	return gw, conn, dsn
+}
+
+// spellSeries renames metric_series' columns that spell one noun to spell
+// another. Below the swap the collecting process is still a node (#2059
+// renames it an outpost later), but the planting SQL and the gateway's
+// readers spell it outpost, so they run with the columns spelled their way,
+// spelled back before migrating.
+func spellSeries(t *testing.T, conn *pgx.Conn, from, to string) {
+	t.Helper()
+	mustExec(t, conn, `do $$
+		declare c text;
+		begin
+			for c in select column_name from information_schema.columns
+				where table_schema = 'public' and table_name = 'metric_series' and column_name ~ '(^|_)`+from+`(_|$)' loop
+				execute format('alter table metric_series rename column %I to %I', c,
+					regexp_replace(c, '(^|_)`+from+`(_|$)', '\1`+to+`\2', 'g'));
+			end loop;
+		end $$`)
+}
+
+// spellSettings respells the settings table and its user column. Below #2075
+// and #2079 it is setting_override keyed by principal_id, but the readers
+// resolve platform settings from setting_binding through user_id, so they run
+// with it spelled their way, spelled back before migrating.
+func spellSettings(t *testing.T, conn *pgx.Conn, fromTable, fromCol, toTable, toCol string) {
+	t.Helper()
+	mustExec(t, conn, `alter table `+fromTable+` rename column `+fromCol+` to `+toCol)
+	mustExec(t, conn, `alter table `+fromTable+` rename to `+toTable)
 }
 
 // metricReads is every metric reader's answer over the planted series, as
@@ -121,7 +151,11 @@ func TestMetricDayPartitionsKeepEveryRow(t *testing.T) {
 	// swap: below it they read an empty stand-in, dropped before migrating.
 	mustExec(t, conn, `create table metric_block (series_id bigint, span_start timestamptz, span text, offset_ms int4[],
 		value float8[], source_rule text, source_rule_version bigint, source_rule_id uuid)`)
+	spellSeries(t, conn, "node", "outpost")
+	spellSettings(t, conn, "setting_override", "principal_id", "setting_binding", "user_id")
 	reads := metricReads(t, gw)
+	spellSettings(t, conn, "setting_binding", "user_id", "setting_override", "principal_id")
+	spellSeries(t, conn, "outpost", "node")
 	mustExec(t, conn, `drop table metric_block`)
 	for name, v := range reads {
 		if v == "null" || v == "[]" || strings.Contains(v, `"Buckets":null`) {

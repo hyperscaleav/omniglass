@@ -1,10 +1,9 @@
 ---
 title: Time
 description: "The one primitive that manufactures events from the passage of time, so the rest of the pipeline stays purely event-driven."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
 sidebar:
-  badge:
-    text: Design
-    variant: caution
+  hidden: true
 ---
 
 ::::design[Target design: the time primitive, tracked in #419]
@@ -36,7 +35,7 @@ woken by a ticker with a crash-recovery backstop), each due row's fire realized 
 - **recurring** (a schedule): reschedule the next `fire_at` after firing. Digests, synthetic
   checks, SLA calendar resets.
 - **armed and cancellable** (a relative one-shot): armed by an event, fires later, cancelled if
-  the condition clears. The `for`-duration sustain, runbook waits, escalation delays.
+  the rule clears. The `for`-duration sustain, runbook waits, escalation delays.
 - **reset-on-arrival** (a watchdog): pushed to `now + tolerance` on each sample, fires if it
   lapses. No-data and staleness.
 
@@ -143,16 +142,16 @@ The recurring trigger config and the clock singleton's pending-fire working set;
 
 ::::note[Built: a metric's timestamp is whole milliseconds (#1526)]
 A metric sample's `ts` carries no digits
-below the millisecond, on `metric` and on `metric_declared`, from the node to the stored row:
+below the millisecond, on `metric` and on `metric_declared`, from the outpost to the stored row:
 
-- **The node** truncates every metric sample's `ts` to the millisecond where a batch leaves it (the
+- **The outpost** truncates every metric sample's `ts` to the millisecond where a batch leaves it (the
   spool), so no probe or driver has to remember to.
 - **The ingest** truncates again before the row lands. It truncates rather than refuses, so a spool
-  replayed from an older node lands instead of failing its batch.
+  replayed from an older outpost lands instead of failing its batch.
 - **Existing rows** were truncated in place by a migration, and a row written with no `ts` takes the
   database's `now()` on its millisecond.
 
-The reason is the clock, not the storage. A node's clock is NTP-synced, accurate to a few
+The reason is the clock, not the storage. An outpost's clock is NTP-synced, accurate to a few
 milliseconds, so microsecond digits in a `ts` are noise. And a raw row and the compacted block that
 later holds it (int4 millisecond offsets, #1265) then agree exactly, with no rounding rule between
 them.

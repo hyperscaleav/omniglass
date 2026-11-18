@@ -7,16 +7,16 @@ import { DRIVERS_KEY, type Driver } from "../lib/drivers";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// Drivers is the driver registry on the flat FlatList surface (the driver
+// Drivers is the driver catalog on the flat FlatList surface (the driver
 // picker on the product form). Data is seeded into the query cache so no
-// server is needed. Registry rows carry a uuid id and the name in
+// server is needed. Catalog rows carry a uuid id and the name in
 // name (ADR-0062); the console addresses rows by the handle.
 const seed: Driver[] = [
   { id: uuidFor("drv-snmp-generic"), name: "snmp-generic", label: "Generic SNMP", official: true, version: "1.0.0" },
   { id: uuidFor("drv-acme-driver"), name: "acme-driver", label: "Acme Driver", official: false },
 ];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });

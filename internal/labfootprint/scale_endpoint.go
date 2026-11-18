@@ -17,7 +17,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
-// endpointReads bounds how many nodes' observations are read at once.
+// endpointReads bounds how many outposts' observations are read at once.
 const endpointReads = 8
 
 // drainPoll is how often the marks ask whether the ingest lanes have drained,
@@ -29,7 +29,7 @@ const (
 )
 
 // endpointMark is one end of the closed loop's window: the database's clock
-// and every node's bracketed observation, read after it at the start and
+// and every outpost's bracketed observation, read after it at the start and
 // before it at the end, so the receipts the clock bounds fall inside the
 // reads; and Drained, the database's clock once the ingest lanes have landed
 // every batch the bus acknowledged before the mark's reads.
@@ -39,7 +39,7 @@ type endpointMark struct {
 	Obs     map[string]collection.EndpointObservation
 }
 
-// markStart reads the database's clock, then every node's observation, then
+// markStart reads the database's clock, then every outpost's observation, then
 // waits for the lanes to drain past the reads: what they landed until then can
 // be batches from before the window.
 func (h *harness) markStart(ctx context.Context, l scaleLab) (endpointMark, error) {
@@ -59,7 +59,7 @@ func (h *harness) markStart(ctx context.Context, l scaleLab) (endpointMark, erro
 	return endpointMark{At: at, Drained: drained, Obs: obs}, err
 }
 
-// markEnd reads every node's observation, then the database's clock, then
+// markEnd reads every outpost's observation, then the database's clock, then
 // waits for the lanes to drain past it, so every batch acknowledged inside
 // the window has landed before its receipts are counted.
 func (h *harness) markEnd(ctx context.Context, l scaleLab) (endpointMark, error) {
@@ -92,7 +92,7 @@ func (h *harness) drainedPast(ctx context.Context, at time.Time) (time.Time, err
 			return clock, nil
 		}
 		if time.Now().After(deadline) {
-			return time.Time{}, fmt.Errorf("the ingest lanes did not land a sample from every live node probed after %s within %s", at.Format(time.RFC3339), drainBound)
+			return time.Time{}, fmt.Errorf("the ingest lanes did not land a sample from every live outpost probed after %s within %s", at.Format(time.RFC3339), drainBound)
 		}
 		if err := sleep(ctx, drainPoll); err != nil {
 			return time.Time{}, err
@@ -127,8 +127,8 @@ func parseEpoch(out string) (time.Time, error) {
 	return time.Unix(sec, nsec).UTC(), nil
 }
 
-// readEndpoints reads each node's endpoint observation through the API, a
-// few at a time. A scale lab's node service is named for its node.
+// readEndpoints reads each outpost's endpoint observation through the API, a
+// few at a time. A scale lab's outpost service is named for its outpost.
 func (h *harness) readEndpoints(ctx context.Context, l scaleLab) (map[string]collection.EndpointObservation, error) {
 	var (
 		mu   sync.Mutex
@@ -137,21 +137,21 @@ func (h *harness) readEndpoints(ctx context.Context, l scaleLab) (map[string]col
 		errs []error
 		sem  = make(chan struct{}, endpointReads)
 	)
-	for node := range l.nodes {
+	for outpost := range l.outposts {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			var obs collection.EndpointObservation
-			err := h.get(ctx, h.env["LAB_HOST_URL"]+"/api/v1/nodes/"+url.PathEscape(node)+"/simulation/observation", &obs)
+			err := h.get(ctx, h.env["LAB_HOST_URL"]+"/api/v1/outposts/"+url.PathEscape(outpost)+"/simulation/observation", &obs)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				errs = append(errs, fmt.Errorf("read %s's endpoint observation: %w", node, err))
+				errs = append(errs, fmt.Errorf("read %s's endpoint observation: %w", outpost, err))
 				return
 			}
-			out[node] = obs
+			out[outpost] = obs
 		}()
 	}
 	wg.Wait()
@@ -162,20 +162,20 @@ func (h *harness) readEndpoints(ctx context.Context, l scaleLab) (map[string]col
 	return out, nil
 }
 
-// nodeCadences reads each node container's heartbeat and probe interval off
+// outpostCadences reads each outpost container's heartbeat and probe interval off
 // its command.
-func (h *harness) nodeCadences(ctx context.Context, l scaleLab) (map[string]closedloop.NodeCadence, error) {
-	out := map[string]closedloop.NodeCadence{}
-	for node, id := range l.nodes {
+func (h *harness) outpostCadences(ctx context.Context, l scaleLab) (map[string]closedloop.OutpostCadence, error) {
+	out := map[string]closedloop.OutpostCadence{}
+	for outpost, id := range l.outposts {
 		r, err := h.dc.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
 		if err != nil {
-			return nil, fmt.Errorf("read %s's command: %w", node, err)
+			return nil, fmt.Errorf("read %s's command: %w", outpost, err)
 		}
 		var cmd []string
 		if r.Container.Config != nil {
 			cmd = r.Container.Config.Cmd
 		}
-		out[node] = ParseNodeCadence(cmd)
+		out[outpost] = ParseOutpostCadence(cmd)
 	}
 	return out, nil
 }
@@ -194,15 +194,15 @@ func endpointWindow(start, end endpointMark) (time.Duration, error) {
 	return w, nil
 }
 
-// endpointBrackets closes the loop on every node: the two marks, the
-// receipts each node's batches left between them, and the poll targets each
-// node held.
-func (h *harness) endpointBrackets(ctx context.Context, l scaleLab, start, end endpointMark) ([]closedloop.NodeBracket, error) {
+// endpointBrackets closes the loop on every outpost: the two marks, the
+// receipts each outpost's batches left between them, and the poll targets each
+// outpost held.
+func (h *harness) endpointBrackets(ctx context.Context, l scaleLab, start, end endpointMark) ([]closedloop.OutpostBracket, error) {
 	window, err := endpointWindow(start, end)
 	if err != nil {
 		return nil, err
 	}
-	cadence, err := h.nodeCadences(ctx, l)
+	cadence, err := h.outpostCadences(ctx, l)
 	if err != nil {
 		return nil, err
 	}
@@ -214,19 +214,19 @@ func (h *harness) endpointBrackets(ctx context.Context, l scaleLab, start, end e
 	if err != nil {
 		return nil, err
 	}
-	var brackets []closedloop.NodeBracket
-	for node := range l.nodes {
-		out, err := h.psql(ctx, receiptCountQuery(node, start.At, start.Drained, end.At))
+	var brackets []closedloop.OutpostBracket
+	for outpost := range l.outposts {
+		out, err := h.psql(ctx, receiptCountQuery(outpost, start.At, start.Drained, end.At))
 		if err != nil {
-			return nil, fmt.Errorf("count %s's receipts: %w", node, err)
+			return nil, fmt.Errorf("count %s's receipts: %w", outpost, err)
 		}
 		receipts, err := parseReceiptCount(out)
 		if err != nil {
 			return nil, err
 		}
-		brackets = append(brackets, closedloop.NodeBracket{Node: node, Start: start.Obs[node], End: end.Obs[node],
-			Receipts: receipts, Targets: targets[node], Window: window})
+		brackets = append(brackets, closedloop.OutpostBracket{Outpost: outpost, Start: start.Obs[outpost], End: end.Obs[outpost],
+			Receipts: receipts, Targets: targets[outpost], Window: window})
 	}
-	sort.Slice(brackets, func(i, j int) bool { return brackets[i].Node < brackets[j].Node })
+	sort.Slice(brackets, func(i, j int) bool { return brackets[i].Outpost < brackets[j].Outpost })
 	return brackets, nil
 }

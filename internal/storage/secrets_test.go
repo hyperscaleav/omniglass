@@ -34,9 +34,9 @@ func secretGateway(t *testing.T) (storage.Gateway, string) {
 	return gw, dsn
 }
 
-// TestSecretRegistrySeed asserts the boot seed installs the official secret_types
+// TestSecretCatalogSeed asserts the boot seed installs the official secret_types
 // with their per-field shape intact.
-func TestSecretRegistrySeed(t *testing.T) {
+func TestSecretCatalogSeed(t *testing.T) {
 	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()

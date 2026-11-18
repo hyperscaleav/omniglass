@@ -1,6 +1,6 @@
 // Package lab is `omniglass lab run`: one command that brings up a working
 // omniglass on Docker, as one compose project of three containers (Postgres,
-// the server, and an edge node running the simulator in process) serving the
+// the server, and an edge outpost running the simulator in process) serving the
 // seeded dev fleet, and tears it down on Ctrl-C.
 //
 // It has two parts. The planner (this file) is pure: it turns the options
@@ -22,8 +22,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hyperscaleav/omniglass/internal/node"
-	"github.com/hyperscaleav/omniglass/internal/simnode"
+	"github.com/hyperscaleav/omniglass/internal/outpost"
+	"github.com/hyperscaleav/omniglass/internal/simoutpost"
 )
 
 // Defaults for the options a user does not set.
@@ -32,8 +32,8 @@ const (
 	DefaultPort     = 8080
 	DefaultListen   = "127.0.0.1"
 	DefaultScenario = "dev"
-	// The node the dev seed places every simulated component on.
-	NodeName = "edge-hq"
+	// The outpost the dev seed places every simulated component on.
+	OutpostName = "edge-hq"
 	// ServerName is the server's fixed identity: a container's hostname is
 	// new each run, and this keeps one server platform component across
 	// restarts on a kept database, the one a seed writes history onto.
@@ -57,10 +57,10 @@ const (
 	pgDataDir   = "/var/lib/postgresql"
 	consolePort = 8080
 	busPort     = 4222
-	// The unprivileged pinger needs the node's groups admitted: root, and
+	// The unprivileged pinger needs the outpost's groups admitted: root, and
 	// distroless nonroot (65532). The range stays inside the groups a standard
 	// rootless Docker maps (0 to 65536), since the kernel refuses a range
-	// naming an unmapped group and the node would never start (#1506).
+	// naming an unmapped group and the outpost would never start (#1506).
 	pingGroupRange = "0 65535"
 )
 
@@ -129,36 +129,36 @@ func FleetOf(labels map[string]string) (Fleet, error) {
 	return f, nil
 }
 
-// Cadence is a cadence profile (#1277): how often the lab's node checks in
+// Cadence is a cadence profile (#1277): how often the lab's outpost checks in
 // and probes reachability. The lab's own profiles keep a change in the
-// console visible within seconds; `default` runs the node at the product's
+// console visible within seconds; `default` runs the outpost at the product's
 // own defaults, so the lab footprint can measure what a real deployment
 // costs beside what a lab does.
 type Cadence struct {
 	Name string
-	// Heartbeat is the node's check-in interval, and the interval of a
+	// Heartbeat is the outpost's check-in interval, and the interval of a
 	// driver poll that declares no schedule of its own (#1634).
 	Heartbeat string
-	// ProbeEvery is the reachability probe interval, on the node's own
+	// ProbeEvery is the reachability probe interval, on the outpost's own
 	// timer, apart from its check-in (#1634).
 	ProbeEvery string
-	// WorklistEvery is how often the node pulls its worklist (#1577), apart
+	// WorklistEvery is how often the outpost pulls its worklist (#1577), apart
 	// from its check-in, so a short check-in does not rebuild every
 	// worklist as often.
 	WorklistEvery string
-	// SimPoll is how often the node's simulator re-pulls its component
+	// SimPoll is how often the outpost's simulator re-pulls its component
 	// list: a lab's profiles every 2s, so a component added in the console
 	// answers within seconds; `default` at the simulator's own default, so a
 	// measurement of the product's cadence carries as little of the
 	// simulator's own traffic as it can.
 	SimPoll string
 	// ReportSeconds is the platform's collection report window the lab's
-	// seed sets (collection.report_seconds, #1646), so the node's delivery
+	// seed sets (collection.report_seconds, #1646), so the outpost's delivery
 	// and poll figures and the server's land within a walkthrough's minute.
 	// Zero leaves the platform's own setting, as a learner's lab and a
 	// measurement at the product's defaults do.
 	ReportSeconds int
-	// ClosedLoopBracket is how often the lab's server brackets its node for
+	// ClosedLoopBracket is how often the lab's server brackets its outpost for
 	// Platform health's closed loop (#1647), its window ten of them: a
 	// learner's lab every 10s, so the window fills in under two minutes; a
 	// script's every 1s, so a walkthrough sees an impairment open a gap and
@@ -181,9 +181,10 @@ func CadenceProfiles() []Cadence {
 	return []Cadence{
 		// A learner's lab may run for days, and a probe on every 2s check-in
 		// wrote most of its rows (#1273), so it probes every 10s.
-		// A change in the console reaches the node at its next pull, so the
-		// lab pulls every 5s: within seconds, without a 1,000-system lab
-		// rebuilding every site's worklist every 2s (#1577).
+		// A console change nudges its outpost to pull at once (#1945, #1997);
+		// the lab still pulls every 5s, so a lost nudge costs seconds,
+		// without a 1,000-system lab rebuilding every site's worklist
+		// every 2s (#1577).
 		{Name: CadenceLab, Heartbeat: "2s", ProbeEvery: "10s", WorklistEvery: "5s", SimPoll: "2s", ClosedLoopBracket: "10s",
 			For: "a learner's lab: a change in the console shows within seconds"},
 		// A script's throwaway lab lives for minutes and probes every 2s, so
@@ -196,8 +197,8 @@ func CadenceProfiles() []Cadence {
 		// clear inside its budget (#1647).
 		{Name: CadenceWalkthrough, Heartbeat: "2s", ProbeEvery: "2s", WorklistEvery: "2s", SimPoll: "2s", ReportSeconds: 10, ClosedLoopBracket: "1s",
 			For: "a script's throwaway lab: a walkthrough waiting on a probe's verdict sees it within seconds"},
-		{Name: CadenceDefault, Heartbeat: node.DefaultHeartbeat.String(), ProbeEvery: node.DefaultProbeEvery.String(), WorklistEvery: node.DefaultWorklistEvery.String(), SimPoll: simnode.DefaultPoll.String(), ClosedLoopBracket: "1m",
-			For: "the product's own defaults: what a deployment's node runs at"},
+		{Name: CadenceDefault, Heartbeat: outpost.DefaultHeartbeat.String(), ProbeEvery: outpost.DefaultProbeEvery.String(), WorklistEvery: outpost.DefaultWorklistEvery.String(), SimPoll: simoutpost.DefaultPoll.String(), ClosedLoopBracket: "1m",
+			For: "the product's own defaults: what a deployment's outpost runs at"},
 	}
 }
 
@@ -246,18 +247,18 @@ type Options struct {
 	// 0 lets Docker pick one, for a second lab beside the first.
 	Listen string
 	Port   int
-	// Image is the omniglass image the server, node and seed run.
+	// Image is the omniglass image the server, outpost and seed run.
 	Image string
 	// Scenario is the dev seed's fleet.
 	Scenario string
-	// NodeToken is the node's enrollment token, minted per run: the lab
-	// re-enrolls its node every time, so it stores no node secret.
-	NodeToken     string
-	NodeTokenHash string
+	// OutpostToken is the outpost's enrollment token, minted per run: the lab
+	// re-enrolls its outpost every time, so it stores no outpost secret.
+	OutpostToken     string
+	OutpostTokenHash string
 	// Pushers are the outside actors the scenario declares (#1743), each
 	// with its token minted per run the same way: the emulator on the
-	// pusher's node holds the plaintext, and the seed grants the pusher's
-	// principal and sets its credential from the hash and non-secret
+	// pusher's outpost holds the plaintext, and the seed grants the pusher's
+	// user and sets its credential from the hash and non-secret
 	// prefix. Both lab kinds take them.
 	Pushers []Pusher
 	Owner   Owner
@@ -267,11 +268,11 @@ type Options struct {
 	// recorders and the probe, #1197) rather than a learner: every resource
 	// is labeled as such, and its volumes go at teardown.
 	Ephemeral bool
-	// NoNode makes a lab whose pages hold still, for a script that
+	// NoOutpost makes a lab whose pages hold still, for a script that
 	// photographs them (the docs screenshots, #1267): the seed lays the scenario's fleet down without the
-	// simulated fleet's wiring and enrolls no node, so no node runs and
+	// simulated fleet's wiring and enrolls no outpost, so no outpost runs and
 	// nothing collects. Only a throwaway lab may run without one.
-	NoNode bool
+	NoOutpost bool
 	// PlatformHistory seeds an hour of the server's own platform figures
 	// before the lab comes up (#1790), so a capture of platform health draws
 	// full lines instead of the few minutes a fresh lab has. It is a
@@ -279,15 +280,15 @@ type Options struct {
 	// throwaway lab takes it, and never a scale lab, whose figures are the
 	// measurement.
 	PlatformHistory bool
-	// Cadence names the node's cadence profile (CadenceProfiles); empty is
+	// Cadence names the outpost's cadence profile (CadenceProfiles); empty is
 	// the lab's own.
 	Cadence string
-	// Systems and SiteNodes make a scale lab (#1554): the scale lab
-	// scenario Scenario resolved at Systems systems, with one node per site
-	// in place of the one dev node. The seed lays the plan down and enrolls
-	// each site's node with its token's hash.
-	Systems   int
-	SiteNodes []SiteNode
+	// Systems and SiteOutposts make a scale lab (#1554): the scale lab
+	// scenario Scenario resolved at Systems systems, with one outpost per site
+	// in place of the one dev outpost. The seed lays the plan down and enrolls
+	// each site's outpost with its token's hash.
+	Systems      int
+	SiteOutposts []SiteOutpost
 	// InduceUnregistered makes one simulated device of a scale lab answer a
 	// property key no driver registers (#1698), so the delivery table reads
 	// a property loss caused by refused-unregistered. Off by default; the
@@ -299,10 +300,10 @@ type Options struct {
 	SharedBuffersMiB int64
 }
 
-// SiteNode is one site's node in a scale lab: its name, the enrollment
+// SiteOutpost is one site's outpost in a scale lab: its name, the enrollment
 // token minted for it this run, and how many simulated components the plan
 // places on it.
-type SiteNode struct {
+type SiteOutpost struct {
 	Name       string
 	Token      string
 	TokenHash  string
@@ -311,7 +312,7 @@ type SiteNode struct {
 
 // A scale lab's shared_buffers (#1930): at most a quarter of the host and
 // at most what the fleet leaves spare, no less than Postgres's own default
-// and no more than 8 GB, so the nodes beside it keep theirs; a host not read
+// and no more than 8 GB, so the outposts beside it keep theirs; a host not read
 // gets a size an 8 GB laptop carries.
 const (
 	sharedBuffersFloorMiB   = 128
@@ -365,7 +366,7 @@ func postgresCmd(buffersMiB int64) []string {
 }
 
 // Scale reports whether the options make a scale lab.
-func (o Options) Scale() bool { return len(o.SiteNodes) > 0 }
+func (o Options) Scale() bool { return len(o.SiteOutposts) > 0 }
 
 // Mount is a named volume mounted into a container.
 type Mount struct {
@@ -397,9 +398,12 @@ type Service struct {
 	Sysctls map[string]string
 	Mounts  []Mount
 	Publish *Publish
+	// NetworkOf is the container whose network namespace this one shares,
+	// loopback included; empty joins the lab network under Name.
+	NetworkOf string
 	// Health is a container healthcheck command (exec form), if any.
 	Health []string
-	// Restart is the restart policy: the node restarts if it crashes.
+	// Restart is the restart policy: the outpost restarts if it crashes.
 	Restart string
 	// OneOff marks a run-once container (compose's oneoff label).
 	OneOff bool
@@ -407,6 +411,9 @@ type Service struct {
 	// Role says what the container is for, in a learner's words: the lab
 	// guide's topology table reads it.
 	Role string
+	// CPUs and MemoryBytes cap the container (#1892); zero is no cap.
+	CPUs        float64
+	MemoryBytes int64
 }
 
 // Volume is a named volume the project keeps across runs.
@@ -432,35 +439,35 @@ type Spec struct {
 	DB            Service
 	Seed          Service
 	Server        Service
-	// Node is the lab's one node; a scale lab has none, and runs Nodes,
+	// Outpost is the lab's one outpost; a scale lab has none, and runs Outposts,
 	// one per site, instead.
-	Node  Service
-	Nodes []Service
+	Outpost  Service
+	Outposts []Service
 }
 
 // Services are the project's containers in start order.
 func (s Spec) Services() []Service {
 	out := []Service{s.DB, s.Seed, s.Server}
-	if s.Node.Name != "" {
-		out = append(out, s.Node)
+	if s.Outpost.Name != "" {
+		out = append(out, s.Outpost)
 	}
-	return append(out, s.Nodes...)
+	return append(out, s.Outposts...)
 }
 
 // WithImage is the spec with the omniglass image's services (the seed, the
-// server and every node) running image, which a run pins to the image ID its
+// server and every outpost) running image, which a run pins to the image ID its
 // preflight checked. Pure: the receiver is unchanged.
 func (s Spec) WithImage(image string) Spec {
 	s.Seed.Image, s.Server.Image = image, image
-	if s.Node.Name != "" {
-		s.Node.Image = image
+	if s.Outpost.Name != "" {
+		s.Outpost.Image = image
 	}
-	nodes := make([]Service, len(s.Nodes))
-	for i, n := range s.Nodes {
+	outposts := make([]Service, len(s.Outposts))
+	for i, n := range s.Outposts {
 		n.Image = image
-		nodes[i] = n
+		outposts[i] = n
 	}
-	s.Nodes = nodes
+	s.Outposts = outposts
 	return s
 }
 
@@ -510,10 +517,10 @@ func Plan(o Options) (Spec, error) {
 	if err != nil {
 		return Spec{}, err
 	}
-	if o.Scale() && (o.NoNode || o.Systems <= 0) {
-		return Spec{}, fmt.Errorf("a scale lab runs a node per site at a size: it needs --systems and cannot run with --no-node")
+	if o.Scale() && (o.NoOutpost || o.Systems <= 0) {
+		return Spec{}, fmt.Errorf("a scale lab runs an outpost per site at a size: it needs --systems and cannot run with --no-outpost")
 	}
-	if err := checkPusherNodes(o); err != nil {
+	if err := checkPusherOutposts(o); err != nil {
 		return Spec{}, err
 	}
 	if o.InduceUnregistered && !o.Scale() {
@@ -525,8 +532,8 @@ func Plan(o Options) (Spec, error) {
 	if o.PlatformHistory && !o.Ephemeral {
 		return Spec{}, fmt.Errorf("--platform-history seeds made-up platform figures for a capture, so it needs --ephemeral: a learner's lab reads its own")
 	}
-	if o.NoNode && !o.Ephemeral {
-		return Spec{}, fmt.Errorf("a lab with no node is a script's, so it needs --ephemeral: a learner's lab keeps its fleet, and one seeded without the simulated wiring would never collect")
+	if o.NoOutpost && !o.Ephemeral {
+		return Spec{}, fmt.Errorf("a lab with no outpost is a script's, so it needs --ephemeral: a learner's lab keeps its fleet, and one seeded without the simulated wiring would never collect")
 	}
 	owner := map[string]string{
 		LabelLab: o.Project, LabelLabHost: o.Owner.Host, LabelLabPID: strconv.Itoa(o.Owner.PID), LabelLabPIDNS: o.Owner.PIDNS,
@@ -589,13 +596,13 @@ func Plan(o Options) (Spec, error) {
 		Labels: svc("db", false),
 		Role:   "Postgres, the lab's own database. On the lab network only, never published.",
 	}
-	seedCmd := []string{"lab", "seed", "--scenario", o.Scenario, "--node", NodeName,
+	seedCmd := []string{"lab", "seed", "--scenario", o.Scenario, "--outpost", OutpostName,
 		"--user", LoginUser, "--password", LoginPassword}
-	if o.NoNode {
-		seedCmd = append(seedCmd, "--no-node")
+	if o.NoOutpost {
+		seedCmd = append(seedCmd, "--no-outpost")
 	} else if cadence.ReportSeconds > 0 {
-		// A lab with no node has no collection to report, and its pages
-		// hold still for the docs shots, so only a lab with its node sets
+		// A lab with no outpost has no collection to report, and its pages
+		// hold still for the docs shots, so only a lab with its outpost sets
 		// the window.
 		seedCmd = append(seedCmd, "--report-seconds", strconv.Itoa(cadence.ReportSeconds))
 	}
@@ -603,7 +610,7 @@ func Plan(o Options) (Spec, error) {
 		seedCmd = append(seedCmd, "--platform-history")
 	}
 	pusherTokens := PusherTokensEnv + "=" + FormatPusherTokens(o.Pushers)
-	seedEnv := append(append([]string{}, appEnv...), "OMNIGLASS_LAB_NODE_TOKEN_HASH="+o.NodeTokenHash, pusherTokens)
+	seedEnv := append(append([]string{}, appEnv...), "OMNIGLASS_LAB_OUTPOST_TOKEN_HASH="+o.OutpostTokenHash, pusherTokens)
 	if o.Scale() {
 		seedCmd = []string{"lab", "seed", "--scenario", o.Scenario, "--systems", strconv.Itoa(o.Systems),
 			"--user", LoginUser, "--password", LoginPassword}
@@ -612,10 +619,10 @@ func Plan(o Options) (Spec, error) {
 		}
 		if !o.Ephemeral {
 			// A kept scale lab (#1633): the seed keeps the fleet its
-			// database already holds and re-enrolls the site nodes.
+			// database already holds and re-enrolls the site outposts.
 			seedCmd = append(seedCmd, "--keep")
 		}
-		seedEnv = append(append([]string{}, appEnv...), SiteNodeTokenHashesEnv+"="+FormatSiteNodeTokenHashes(o.SiteNodes), pusherTokens)
+		seedEnv = append(append([]string{}, appEnv...), SiteOutpostTokenHashesEnv+"="+FormatSiteOutpostTokenHashes(o.SiteOutposts), pusherTokens)
 	}
 	spec.Seed = Service{
 		Name: "seed", Container: o.Project + "-seed-run-1", Image: o.Image,
@@ -625,7 +632,7 @@ func Plan(o Options) (Spec, error) {
 		OneOff: true,
 		Labels: svc("seed", true),
 		Role: "Runs once per lab start: migrates, marks the database as a lab's, seeds the fleet and the " +
-			"login on the first run, and enrolls the node afresh.",
+			"login on the first run, and enrolls the outpost afresh.",
 	}
 	if o.Scale() {
 		spec.DB.Cmd = postgresCmd(o.SharedBuffersMiB)
@@ -639,7 +646,7 @@ func Plan(o Options) (Spec, error) {
 			"OMNIGLASS_NATS_URL=nats://server:"+strconv.Itoa(busPort),
 			"OMNIGLASS_NATS_STORE_DIR="+dataDir+"/nats",
 			"OMNIGLASS_SERVER_NAME="+ServerName,
-			// The closed loop's bracket, and the cadence the node runs at,
+			// The closed loop's bracket, and the cadence the outpost runs at,
 			// which a server is otherwise not told (#1647).
 			"OMNIGLASS_CLOSED_LOOP_BRACKET="+cadence.ClosedLoopBracket,
 			"OMNIGLASS_CLOSED_LOOP_HEARTBEAT="+cadence.Heartbeat,
@@ -649,21 +656,28 @@ func Plan(o Options) (Spec, error) {
 		Restart: "on-failure",
 		Labels:  svc("server", false),
 		Role: "The control plane and the console, in lab mode. Its console is the one published port; " +
-			"its bus listens on the lab network for the node.",
+			"its bus listens on the lab network for the outpost.",
 	}
-	nodeCmd := []string{"node", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat,
+	if !o.Scale() {
+		// The seed writes the lab's omnibot recording (#2121); a scale
+		// lab's seed writes none, so its server is not pointed at one.
+		spec.Server.Env = append(spec.Server.Env, "OMNIGLASS_OMNIBOT_REPLAY="+OmnibotReplayPath)
+	}
+	outpostCmd := []string{"outpost", "run", "--simulate", "--impairments", "--heartbeat", cadence.Heartbeat,
 		"--probe-every", cadence.ProbeEvery, "--worklist-every", cadence.WorklistEvery, "--poll", cadence.SimPoll}
-	nodeService := func(service, name, token, role string) Service {
+	outpostService := func(service, name, token string, components int, role string) Service {
+		memory := OutpostMemoryLimit(components)
 		return Service{
 			Name: service, Container: o.Project + "-" + service + "-1", Image: o.Image,
-			Cmd: nodeCmd,
+			Cmd: outpostCmd,
 			Env: []string{
 				"OMNIGLASS_SERVER=http://server:" + strconv.Itoa(consolePort),
-				"OMNIGLASS_NODE_NAME=" + name,
-				"OMNIGLASS_NODE_TOKEN=" + token,
-				simnode.PushersEnv + "=" + simnode.FormatPushers(nodePushers(o.Pushers, name)),
+				"OMNIGLASS_OUTPOST_NAME=" + name,
+				"OMNIGLASS_OUTPOST_TOKEN=" + token,
+				simoutpost.PushersEnv + "=" + simoutpost.FormatPushers(outpostPushers(o.Pushers, name)),
+				GoMemLimitEnv(memory),
 			},
-			// Distroless grants an added capability to root only, so the node
+			// Distroless grants an added capability to root only, so the outpost
 			// runs as root inside its own container, to hold NET_ADMIN for the
 			// impairments; it reaches that container's namespace, never the
 			// host's.
@@ -673,25 +687,28 @@ func Plan(o Options) (Spec, error) {
 			Restart: "on-failure",
 			Labels:  svc(service, false),
 			Role:    role,
+			// An edge box's CPU, and memory for the site it serves.
+			CPUs:        OutpostCPUs,
+			MemoryBytes: memory,
 		}
 	}
 	services := []*Service{&spec.DB, &spec.Seed, &spec.Server}
 	if o.Scale() {
-		// One node per site, each its own container with its own loopback,
+		// One outpost per site, each its own container with its own loopback,
 		// where its simulator serves that site's components.
-		spec.Nodes = make([]Service, len(o.SiteNodes))
-		for i, n := range o.SiteNodes {
-			spec.Nodes[i] = nodeService(n.Name, n.Name, n.Token, fmt.Sprintf(
-				"The edge node %s with the simulator in its own process, serving its site's %d simulated components on its loopback.",
+		spec.Outposts = make([]Service, len(o.SiteOutposts))
+		for i, n := range o.SiteOutposts {
+			spec.Outposts[i] = outpostService(n.Name, n.Name, n.Token, n.Components, fmt.Sprintf(
+				"The edge outpost %s with the simulator in its own process, serving its site's %d simulated components on its loopback.",
 				n.Name, n.Components))
-			services = append(services, &spec.Nodes[i])
+			services = append(services, &spec.Outposts[i])
 		}
 	} else {
-		spec.Node = nodeService("node", NodeName, o.NodeToken,
-			"The edge node "+NodeName+" with the simulator in its own process: the simulated components "+
+		spec.Outpost = outpostService("outpost", OutpostName, o.OutpostToken, 0,
+			"The edge outpost "+OutpostName+" with the simulator in its own process: the simulated components "+
 				"sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, "+
 				"reaches only this container's network.")
-		services = append(services, &spec.Node)
+		services = append(services, &spec.Outpost)
 	}
 	// compose lists a container as its project's only when it carries a
 	// config hash (and warns without a config-files label), so each service
@@ -703,23 +720,23 @@ func Plan(o Options) (Spec, error) {
 	return spec, nil
 }
 
-// SiteNodeTokenHashesEnv carries a scale lab's node enrollment token hashes
-// to its seed, as FormatSiteNodeTokenHashes writes them.
-const SiteNodeTokenHashesEnv = "OMNIGLASS_LAB_SITE_NODE_TOKEN_HASHES"
+// SiteOutpostTokenHashesEnv carries a scale lab's outpost enrollment token hashes
+// to its seed, as FormatSiteOutpostTokenHashes writes them.
+const SiteOutpostTokenHashesEnv = "OMNIGLASS_LAB_SITE_OUTPOST_TOKEN_HASHES"
 
-// FormatSiteNodeTokenHashes writes each site node's token hash as
-// name=hash, comma separated; ParseSiteNodeTokenHashes reads it back.
-func FormatSiteNodeTokenHashes(nodes []SiteNode) string {
-	parts := make([]string, len(nodes))
-	for i, n := range nodes {
+// FormatSiteOutpostTokenHashes writes each site outpost's token hash as
+// name=hash, comma separated; ParseSiteOutpostTokenHashes reads it back.
+func FormatSiteOutpostTokenHashes(outposts []SiteOutpost) string {
+	parts := make([]string, len(outposts))
+	for i, n := range outposts {
 		parts[i] = n.Name + "=" + n.TokenHash
 	}
 	return strings.Join(parts, ",")
 }
 
-// ParseSiteNodeTokenHashes reads FormatSiteNodeTokenHashes back, by node
+// ParseSiteOutpostTokenHashes reads FormatSiteOutpostTokenHashes back, by outpost
 // name.
-func ParseSiteNodeTokenHashes(s string) (map[string]string, error) {
+func ParseSiteOutpostTokenHashes(s string) (map[string]string, error) {
 	out := map[string]string{}
 	if s == "" {
 		return out, nil
@@ -727,7 +744,7 @@ func ParseSiteNodeTokenHashes(s string) (map[string]string, error) {
 	for _, part := range strings.Split(s, ",") {
 		name, hash, ok := strings.Cut(part, "=")
 		if !ok || name == "" || hash == "" {
-			return nil, fmt.Errorf("lab: %s: %q is not name=hash", SiteNodeTokenHashesEnv, part)
+			return nil, fmt.Errorf("lab: %s: %q is not name=hash", SiteOutpostTokenHashesEnv, part)
 		}
 		out[name] = hash
 	}
@@ -735,41 +752,41 @@ func ParseSiteNodeTokenHashes(s string) (map[string]string, error) {
 }
 
 // Pusher is one outside actor a lab runs (#1743): a pusher its scenario
-// declared, the profile its emulator device runs, the node whose emulator
-// runs it, and the token minted for its principal this run. Token reaches
-// that node's env alone; TokenHash and TokenPrefix reach the seed.
+// declared, the profile its emulator device runs, the outpost whose emulator
+// runs it, and the token minted for its user this run. Token reaches
+// that outpost's env alone; TokenHash and TokenPrefix reach the seed.
 type Pusher struct {
-	Name, Profile, Node    string
+	Name, Profile, Outpost string
 	Token                  string
 	TokenHash, TokenPrefix string
 }
 
-// nodePushers is the pushers the named node's emulator runs. Pure.
-func nodePushers(ps []Pusher, node string) []simnode.Pusher {
-	var out []simnode.Pusher
+// outpostPushers is the pushers the named outpost's emulator runs. Pure.
+func outpostPushers(ps []Pusher, outpost string) []simoutpost.Pusher {
+	var out []simoutpost.Pusher
 	for _, p := range ps {
-		if p.Node == node {
-			out = append(out, simnode.Pusher{Name: p.Name, Profile: p.Profile, Token: p.Token})
+		if p.Outpost == outpost {
+			out = append(out, simoutpost.Pusher{Name: p.Name, Profile: p.Profile, Token: p.Token})
 		}
 	}
 	return out
 }
 
-// checkPusherNodes refuses a pusher planned onto a node the lab does not
-// run: its principal would be seeded and nothing would ever push for it.
-func checkPusherNodes(o Options) error {
-	nodes := map[string]bool{}
+// checkPusherOutposts refuses a pusher planned onto an outpost the lab does not
+// run: its user would be seeded and nothing would ever push for it.
+func checkPusherOutposts(o Options) error {
+	outposts := map[string]bool{}
 	switch {
 	case o.Scale():
-		for _, n := range o.SiteNodes {
-			nodes[n.Name] = true
+		for _, n := range o.SiteOutposts {
+			outposts[n.Name] = true
 		}
-	case !o.NoNode:
-		nodes[NodeName] = true
+	case !o.NoOutpost:
+		outposts[OutpostName] = true
 	}
 	for _, p := range o.Pushers {
-		if !nodes[p.Node] {
-			return fmt.Errorf("lab: pusher %s is planned onto node %s, which this lab does not run", p.Name, p.Node)
+		if !outposts[p.Outpost] {
+			return fmt.Errorf("lab: pusher %s is planned onto outpost %s, which this lab does not run", p.Name, p.Outpost)
 		}
 	}
 	return nil
@@ -816,13 +833,17 @@ func ParsePusherTokens(s string) (map[string]PusherToken, error) {
 }
 
 // configHash is a service's compose config hash: the sha256 of what it runs
-// (its image, command, user, capabilities and sysctls; never its env, which
-// carries the node's token).
+// (its image, command, user, capabilities, sysctls and caps; never its env,
+// which carries the outpost's token). An uncapped service hashes as it did
+// before caps existed.
 func configHash(s Service) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s\x00%q\x00%s\x00%q", s.Image, s.Cmd, s.User, s.CapAdd)
 	for _, k := range SortedKeys(s.Sysctls) {
 		fmt.Fprintf(h, "\x00%s=%s", k, s.Sysctls[k])
+	}
+	if s.CPUs != 0 || s.MemoryBytes != 0 {
+		fmt.Fprintf(h, "\x00cpus=%g\x00memory=%d", s.CPUs, s.MemoryBytes)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

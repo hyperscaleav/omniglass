@@ -14,35 +14,38 @@ import (
 
 // ungated is the explicit allow-list of operations that carry NO capability
 // gate, by design: the public liveness probe, and the authn-only identity
-// endpoint (any authenticated principal may read its own /auth/me). Every other
-// operation MUST reject a no-permission principal. Keep this list short and
+// endpoint (any authenticated user may read its own /auth/me). Every other
+// operation MUST reject a no-permission user. Keep this list short and
 // justified; a new entry is a security decision.
 var ungated = map[string]bool{
-	"POST /nodes:claim":                  true, // public by necessity: the node is not yet a principal; the enrollment token is the authentication, exchanged for its NATS credential
-	"POST /webhooks/{token}":             true, // public by necessity (ADR-1024): the sender is not a principal; the endpoint's declared scheme is the authentication, and the write is bound to the token's one endpoint
-	"GET /webhooks/{token}":              true, // public by necessity (ADR-1024): a sender verifying its URL before it posts; an unknown token is the receiver's identical 404
-	"HEAD /webhooks/{token}":             true, // public by necessity (ADR-1024): the same verification, headers only
-	"GET /healthz":                       true, // public, no auth
-	"GET /auth/status":                   true, // public: drives the login screen's bootstrap hint
-	"GET /auth/me":                       true, // authn-only: returns the caller's own principal
-	"GET /auth/me/avatar":                true, // authn-only, self-scoped: reads only the caller's own profile picture
-	"PATCH /auth/me":                     true, // authn-only, self-scoped: edits only the caller's own profile
-	"POST /auth/login":                   true, // public by necessity: it establishes a session
-	"POST /auth/logout":                  true, // public: clearing a session must always succeed
-	"POST /auth/me:changePassword":       true, // authn-only, self-scoped: changes only the caller's own password
-	"POST /auth/me:setAvatar":            true, // authn-only, self-scoped: sets only the caller's own profile picture
-	"POST /auth/me:removeAvatar":         true, // authn-only, self-scoped: clears only the caller's own profile picture
-	"GET /auth/me/sessions":              true, // authn-only, self-scoped: lists only the caller's own sessions
-	"POST /auth/me/sessions/{id}:revoke": true, // authn-only, self-scoped: revokes only the caller's own (a foreign id is a 404)
-	"POST /auth/me/sessions:revokeAll":   true, // authn-only, self-scoped: bulk-revokes only the caller's own, keeping the current one
-	"POST /auth/me/tokens":               true, // authn-only, self-scoped: mints a token only for the caller
-	"POST /auth/me:stopImpersonation":    true, // authn-only, self-scoped: ends only the caller's own impersonation session (identified by the request token)
-	"GET /settings/me":                   true, // authn-only: the caller's own client-visible effective settings (feeds the SPA at boot)
+	"POST /outposts:claim":                    true, // public by necessity: the outpost is not yet a user; the enrollment token is the authentication, exchanged for its NATS credential
+	"POST /webhooks/{token}":                  true, // public by necessity (ADR-1024): the sender is not a user; the endpoint's declared scheme is the authentication, and the write is bound to the token's one endpoint
+	"GET /webhooks/{token}":                   true, // public by necessity (ADR-1024): a sender verifying its URL before it posts; an unknown token is the receiver's identical 404
+	"HEAD /webhooks/{token}":                  true, // public by necessity (ADR-1024): the same verification, headers only
+	"GET /healthz":                            true, // public, no auth
+	"GET /auth/status":                        true, // public: drives the login screen's bootstrap hint
+	"GET /auth/me":                            true, // authn-only: returns the caller's own user
+	"GET /auth/me/agent-policy":               true, // authn-only: the install's agent policy and whether it governs the caller; refusing it would hide why an agent is refused
+	"GET /auth/me/avatar":                     true, // authn-only, self-scoped: reads only the caller's own profile picture
+	"PATCH /auth/me":                          true, // authn-only, self-scoped: edits only the caller's own profile
+	"POST /auth/login":                        true, // public by necessity: it establishes a session
+	"POST /auth/logout":                       true, // public: clearing a session must always succeed
+	"POST /auth/me:changePassword":            true, // authn-only, self-scoped: changes only the caller's own password
+	"POST /auth/me:setAvatar":                 true, // authn-only, self-scoped: sets only the caller's own profile picture
+	"POST /auth/me:removeAvatar":              true, // authn-only, self-scoped: clears only the caller's own profile picture
+	"GET /auth/me/sessions":                   true, // authn-only, self-scoped: lists only the caller's own sessions
+	"POST /auth/me/sessions/{id}:revoke":      true, // authn-only, self-scoped: revokes only the caller's own (a foreign id is a 404)
+	"POST /auth/me/sessions:revokeAll":        true, // authn-only, self-scoped: bulk-revokes only the caller's own, keeping the current one
+	"GET /auth/oauth-clients/{id}":            true, // authn-only, self-scoped: a client's public registration and the roles the caller holds
+	"POST /auth/oauth-clients/{id}:authorize": true, // authn-only, self-scoped: issues a code for the caller only, each role one the caller covers
+	"POST /auth/me/tokens":                    true, // authn-only, self-scoped: mints a token only for the caller
+	"POST /auth/me:stopImpersonation":         true, // authn-only, self-scoped: ends only the caller's own impersonation session (identified by the request token)
+	"GET /settings/me":                        true, // authn-only: the caller's own client-visible effective settings (feeds the SPA at boot)
 }
 
 // TestEveryRouteIsGated is the no-unguarded-route guard. It enumerates every
 // operation in the generated OpenAPI and drives it with an AUTHENTICATED but
-// zero-permission principal: a capability-gated route must answer 403. A new
+// zero-permission user: a capability-gated route must answer 403. A new
 // route that forgets its `require(...)` gate would answer something else and
 // fail here, so authorization coverage scales with the surface automatically
 // instead of relying on per-route discipline.
@@ -56,9 +59,9 @@ func TestEveryRouteIsGated(t *testing.T) {
 	}
 	defer gw.Close()
 
-	// An authenticated principal with NO grants: authn passes, every capability
+	// An authenticated user with NO grants: authn passes, every capability
 	// check fails.
-	noGrant := principalWithGrants(t, ctx, dsn, "no-grant", nil)
+	noGrant := userWithGrants(t, ctx, dsn, "no-grant", nil)
 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
@@ -84,7 +87,7 @@ func TestEveryRouteIsGated(t *testing.T) {
 			}
 			code, _ := c.send(noGrant, op.method, reqPath, body)
 			if code != http.StatusForbidden {
-				t.Errorf("%s with a no-permission principal = %d, want 403 (route appears ungated)", key, code)
+				t.Errorf("%s with a no-permission user = %d, want 403 (route appears ungated)", key, code)
 			}
 		})
 	}
@@ -102,7 +105,7 @@ type apiOp struct {
 	// condPerm is the x-omniglass-conditional-permission stamp: the SECOND
 	// permission a route enforces because of a reference the request carries (a
 	// component create naming a system, which writes that system's membership; a
-	// membership or role-assignment route naming a component, which writes onto
+	// membership or slot-assignment route naming a component, which writes onto
 	// it). Empty for a route with no such condition.
 	condPerm string
 }
@@ -148,7 +151,7 @@ func operations(t *testing.T, gw storage.Gateway) []apiOp {
 }
 
 // TestEveryGateIsPublished is the companion to TestEveryRouteIsGated: that guard
-// proves every route enforces a permission (403 for a no-grant principal); this
+// proves every route enforces a permission (403 for a no-grant user); this
 // one proves every enforced permission is PUBLISHED in the generated OpenAPI as
 // the x-omniglass-permission extension, and that the ungated routes carry no such
 // stamp. Together they make "gated" and "stamped" the same set, so the spec is a

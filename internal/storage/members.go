@@ -11,10 +11,10 @@ import (
 
 // Membership sentinels. Occupied is the delete-refused answer, kept distinct from
 // the generic ErrReferenced because here the gateway DOES know the cause: a
-// membership is only ever held open by a role assignment.
+// membership is only ever held open by a slot assignment.
 var (
 	ErrMemberNotFound = errors.New("storage: component is not a member of this system")
-	ErrMemberOccupied = errors.New("storage: member still fills a role in this system")
+	ErrMemberOccupied = errors.New("storage: member still fills a slot in this system")
 )
 
 // Member is a component's binding to a system. IsPrimary marks the one that
@@ -48,7 +48,7 @@ type Member struct {
 
 var memberCols = `m.id, s.name, c.name, s.id, c.id, m.is_primary,
 	(select count(*) from system_member peer where peer.component_id = m.component_id), ` +
-	latestVerdict("component_id", "c")
+	latestComponentVerdict("c")
 
 // memberFrom joins both ends back to their names, because a membership is
 // displayed as "this component, in this system" and the arc now stores ids.
@@ -115,7 +115,7 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 // addMemberTx is the insert on its own, so the assignment path can bind a
 // component into the system it is being staffed into within the same transaction
 // rather than making the operator say it twice. Takes both ids directly: every
-// caller (AddMember, AssignRole) has already resolved them, so there is no
+// caller (AddMember, AssignSlot) has already resolved them, so there is no
 // name left to re-derive an id from, ambiguously or otherwise (#627).
 func addMemberTx(ctx context.Context, q txQuerier, systemID, componentID string) error {
 	// Whether this membership becomes the default is decided by reading the
@@ -131,8 +131,8 @@ func addMemberTx(ctx context.Context, q txQuerier, systemID, componentID string)
 	// The primary is the row's own absence of competition: it is the default only
 	// when this component has no membership yet. The platform guard (#1625)
 	// rides the same statement, so a create into a system pays no extra round
-	// trip for it: the platform system admits no member this way (node
-	// registration and a server's boot write their own), and a node's or a
+	// trip for it: the platform system admits no member this way (outpost
+	// registration and a server's boot write their own), and an outpost's or a
 	// server's platform component joins no other system. The insert lands only when neither holds.
 	var platformSystem, platformComponent bool
 	if err := q.QueryRow(ctx, `
@@ -160,7 +160,7 @@ func addMemberTx(ctx context.Context, q txQuerier, systemID, componentID string)
 }
 
 // RemoveMember unbinds a component from a system. Refused while the component
-// still fills a role there: removing it would leave the system staffed by a
+// still fills a slot there: removing it would leave the system staffed by a
 // non-member, which is the contradiction this table exists to make impossible.
 //
 // componentRead and componentAction are the caller's component:read and
@@ -186,11 +186,11 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	}
 	var staffing int
 	if err := tx.QueryRow(ctx, `
-		select count(*) from system_role_assignment
+		select count(*) from system_slot_assignment
 		where system_id = $1::uuid
 		  and component_id = $2::uuid`,
 		systemID, componentID).Scan(&staffing); err != nil {
-		return fmt.Errorf("storage: count member roles: %w", err)
+		return fmt.Errorf("storage: count member slots: %w", err)
 	}
 	if staffing > 0 {
 		return ErrMemberOccupied
@@ -449,14 +449,14 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 // and then componentAction, the caller's component:read and component:update
 // sets: out of componentRead is ErrComponentNotFound, readable but out of
 // componentAction ErrComponentForbidden. It used to resolve by existence alone,
-// which let a principal scoped to one system bind a component it could not even
+// which let a user scoped to one system bind a component it could not even
 // read, make that system the component's primary, and inject its own system-band
 // variables and tags onto it through the cascade. A membership writes onto both
 // of its ends, so it costs a write on both. Ambiguity is judged inside
 // componentRead, so a refusal's candidates are rows this caller may read and need
 // no redaction.
 //
-// AddMember and assignRoleTx's component only: a write naming a component that is
+// AddMember and assignSlotTx's component only: a write naming a component that is
 // already bound here resolves it among the members (resolveMembershipEndsForRemoval).
 func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, read, action, componentRead, componentAction scope.Set) (systemID, componentID string, err error) {
 	sys, err := resolveScoped(ctx, q, systemConfig, systemName, read, action)

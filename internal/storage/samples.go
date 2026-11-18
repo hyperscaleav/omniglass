@@ -16,7 +16,7 @@ import (
 )
 
 // MetricSampleWrite is one observed metric to persist. OwnerKind picks the
-// arc; OwnerID is the fleet address (component/system/location/node name).
+// arc; OwnerID is the fleet address (component/system/location/outpost name).
 // Instance discriminates many values of one key on one owner (default "").
 type MetricSampleWrite struct {
 	OwnerKind string
@@ -40,10 +40,10 @@ type MetricSample struct {
 }
 
 // MetricTime is a metric sample's ts as it is stored: whole milliseconds
-// (#1526). Node clocks are NTP-synced, accurate to a few milliseconds, so the
+// (#1526). Outpost clocks are NTP-synced, accurate to a few milliseconds, so the
 // digits below are noise; a raw row and the compacted block that later holds it
 // (int4 millisecond offsets, #1265) then agree exactly. It truncates rather
-// than refuses, so a spool replayed from an older node lands. The metric lane
+// than refuses, so a spool replayed from an older outpost lands. The metric lane
 // only: the property, event and log lanes keep the ts they were sent.
 func MetricTime(ts time.Time) time.Time { return ts.Truncate(time.Millisecond) }
 
@@ -60,17 +60,17 @@ func ownerColumn(kind string) (string, error) {
 		return "system_id", nil
 	case "location":
 		return "location_id", nil
-	case "node":
-		return "node_id", nil
+	case "outpost":
+		return "outpost_id", nil
 	default:
 		return "", ErrUnknownOwnerKind
 	}
 }
 
 // InsertMetricSamples writes observed metric rows in one transaction, for w:
-// a node's lane (NodeWriter) or the push lane (PushWriter). Each row sets
+// an outpost's lane (OutpostWriter) or the push lane (PushWriter). Each row sets
 // exactly its owner arc column (the CHECK enforces the rest) and provenance
-// observed. Callers apply reject-not-project (collection.Registry) before
+// observed. Callers apply reject-not-project (collection.Catalog) before
 // calling; this is the durable write, and it refuses the whole batch, writing
 // nothing, when a key's writer class does not admit w (ADR-0161).
 func (p *PG) InsertMetricSamples(ctx context.Context, w KeyWriter, evs []MetricSampleWrite) error {
@@ -305,7 +305,7 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 	// metricInsertSQL lands metric samples in one statement: $1..$7 are the
 	// samples' ts, owner kinds, owner ids, type names, instances, values and
 	// sources, in the batch's order; $8 the provenance, $9..$11 a calculated
-	// sample's rule lineage, $12 the collecting node (null for none), $13 a
+	// sample's rule lineage, $12 the collecting outpost (null for none), $13 a
 	// fanned sample's conduit (source_conduit_id, #1282; null for none).
 	//
 	// A sample dated in an hour the trend compaction has announced (#1276: a
@@ -338,17 +338,17 @@ func (p *PG) writeMetricSets(ctx context.Context, tx pgx.Tx, sets []metricSet) e
 		select s.id, s.owner_id, s.metric_type_id, s.instance, s.source
 		from k join metric_series s on s.owner_id = k.owner and s.metric_type_id = k.type_id
 			and s.instance = k.instance and s.provenance = $8::text and s.source = k.source
-			and s.collector_node_id is not distinct from $12::uuid
+			and s.collector_outpost_id is not distinct from $12::uuid
 			and s.source_conduit_id is not distinct from $13::uuid
 	),
 	fresh as (
-		insert into metric_series (metric_type_id, owner_kind, component_id, system_id, location_id, node_id,
-			instance, provenance, source, collector_node_id, source_conduit_id)
+		insert into metric_series (metric_type_id, owner_kind, component_id, system_id, location_id, outpost_id,
+			instance, provenance, source, collector_outpost_id, source_conduit_id)
 		select k.type_id, k.owner_kind,
 			case when k.owner_kind = 'component' then k.owner end,
 			case when k.owner_kind = 'system' then k.owner end,
 			case when k.owner_kind = 'location' then k.owner end,
-			case when k.owner_kind = 'node' then k.owner end,
+			case when k.owner_kind = 'outpost' then k.owner end,
 			k.instance, $8::text, k.source, $12::uuid, $13::uuid
 		from k
 		where not exists (select 1 from known n where n.owner_id = k.owner and n.metric_type_id = k.type_id
@@ -583,7 +583,7 @@ func (p *PG) LatestMetric(ctx context.Context, componentRef, key string) (*Metri
 // a layer's detail must resolve one interface's latest value, not the newest
 // across every interface as LatestMetric does; the probe states themselves
 // live in the property lane (LatestProperty, #1592). Observed only (ADR-0161):
-// the panel reads each as the node's own observation, so no other provenance
+// the panel reads each as the outpost's own observation, so no other provenance
 // stands in for it.
 func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instance string) (*MetricSample, error) {
 	// See LatestMetric: an unknown component folds into nil-no-error, matching

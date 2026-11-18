@@ -16,7 +16,7 @@ import (
 )
 
 // TestReachabilityNamesTheUpstreamAGateIsHeldBy drives the read of an
-// endpoint held by a path upstream (#1652): the node publishes the upstream
+// endpoint held by a path upstream (#1652): the outpost publishes the upstream
 // component's id as the reason's source, and the read serves it beside the
 // component's name, so an operator reads which upstream is down without a
 // second lookup. A source that names no component the caller can read
@@ -63,7 +63,7 @@ func TestReachabilityNamesTheUpstreamAGateIsHeldBy(t *testing.T) {
 	const gone = "00000000-0000-4000-8000-000000000001"
 	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Microsecond)
 	prop := func(instance, value string) storage.PropertySampleWrite {
-		return storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "panel-1", Key: "endpoint-rejection", Instance: instance, Value: value, Source: "node", TS: at}
+		return storage.PropertySampleWrite{OwnerKind: "component", OwnerID: "panel-1", Key: "endpoint-rejection", Instance: instance, Value: value, Source: "outpost", TS: at}
 	}
 	if err := insertProperties(ctx, gw, []storage.PropertySampleWrite{
 		prop("telnet", "upstream "+since.Format(time.RFC3339)+" "+upstream.ID),

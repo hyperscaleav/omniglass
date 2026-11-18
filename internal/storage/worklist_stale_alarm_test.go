@@ -11,7 +11,7 @@ import (
 )
 
 // TestWorklistStaleOpensAndClears proves the seeded worklist-stale rule
-// (#1868) on a claimed node's platform component, where the node writes its
+// (#1868) on a claimed outpost's platform component, where the outpost writes its
 // worklist-pull-loss-ratio each report window: a window with some pulls
 // served opens nothing, every pull refused past the 2 minute sustain opens a
 // warning, and the first window with a served pull clears it.
@@ -21,21 +21,21 @@ func TestWorklistStaleOpensAndClears(t *testing.T) {
 		t.Skip("integration test needs Postgres")
 	}
 	gw, ctx, dsn := platformGatewayDSN(t)
-	platformNode(t, ctx, gw, "edge-stale")
+	platformOutpost(t, ctx, gw, "edge-stale")
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close(ctx) })
-	if _, err := conn.Exec(ctx, `update node set enrolled_at = now() where name = 'edge-stale'`); err != nil {
+	if _, err := conn.Exec(ctx, `update outpost set enrolled_at = now() where name = 'edge-stale'`); err != nil {
 		t.Fatalf("claim edge-stale: %v", err)
 	}
-	checkins, err := gw.NodeCheckins(ctx)
+	checkins, err := gw.OutpostCheckins(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(checkins) != 1 || checkins[0].Node != "edge-stale" {
-		t.Fatalf("node checkins = %+v, want the one claimed node", checkins)
+	if len(checkins) != 1 || checkins[0].Outpost != "edge-stale" {
+		t.Fatalf("outpost checkins = %+v, want the one claimed outpost", checkins)
 	}
 	comp := checkins[0].ComponentID
 
@@ -56,7 +56,7 @@ func TestWorklistStaleOpensAndClears(t *testing.T) {
 	loss(0.5)
 	sweep(3 * time.Minute)
 	if n := open(); n != 0 {
-		t.Fatalf("a window with half its pulls served opened %d worklist-stale alarms; the node still took a worklist", n)
+		t.Fatalf("a window with half its pulls served opened %d worklist-stale alarms; the outpost still took a worklist", n)
 	}
 	loss(1)
 	sweep(time.Minute)

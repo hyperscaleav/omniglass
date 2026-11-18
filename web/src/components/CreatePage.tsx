@@ -9,13 +9,13 @@ import { CREATE_KIND } from "../lib/templates";
 
 // CreatePage is /<kind>s/create for the fleet kinds: the one form, empty, on
 // its own address (#826), with Explore as the way back since the outline is
-// where every place, system and component is listed (#861). ?under= prefills
+// where every location, system and component is listed (#861). ?under= prefills
 // placement, which is how a row's + creates where the operator stands. Saving
 // hands off to the new row's workspace, already editing.
 //
 // The page offers two ways in (#1329): from scratch, the default, or from a
-// template of the kind (a place template for a location), carrying ?under= as
-// the template's default place. The template face binds a form slot, so the page
+// template of the kind (a location template for a location), carrying ?under= as
+// the template's default location. The template face binds a form slot, so the page
 // hosts one and draws its rail inline, as the scratch form draws its own.
 export default function CreatePage(props: { kind: "location" | "system" | "component" }) {
   const navigate = useNavigate();
@@ -45,7 +45,7 @@ export default function CreatePage(props: { kind: "location" | "system" | "compo
           <div class="flex flex-col gap-5" data-testid="create-from-template">
             <h2 class="text-lg font-semibold tracking-tight">New {props.kind} from a template</h2>
             <FormActionsContext.Provider value={actions}>
-              <TemplateCreate kind={CREATE_KIND[props.kind]} place={under()} onDone={(href) => navigate(href)} />
+              <TemplateCreate kind={CREATE_KIND[props.kind]} location={under()} onDone={(href) => navigate(href)} />
               <FormActionBar actions={actions} inline />
             </FormActionsContext.Provider>
           </div>

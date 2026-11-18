@@ -140,7 +140,7 @@ func batchLanding(ev *ogv1.TelemetryBatch) landing {
 // the window mean of ingest-lag over each batch's newest and oldest sample,
 // the window max of ingest-lag-max over its oldest, and its samples into
 // ingest-sample-count. The lag is server time minus the sample's ts, so a
-// node clock ahead of the server reads short (even negative) and one behind
+// outpost clock ahead of the server reads short (even negative) and one behind
 // reads long: kept as read, the skew is the clock's to fix (#419). A batch
 // with no samples observes nothing.
 func observeLanding(m pipelineMetrics, now time.Time, l landing) {
@@ -159,7 +159,7 @@ func observeLanding(m pipelineMetrics, now time.Time, l landing) {
 // committed records a batch whose transaction has just landed it: one more
 // batch, the samples it landed and their lag, at the moment it committed. A
 // batch its receipt held to a no-op (LandResult.Landed false: a redelivery or
-// a replay) landed nothing and is never recorded, and a node tick's landing
+// a replay) landed nothing and is never recorded, and an outpost tick's landing
 // is only its groups that landed, never one the fence or the gateway dropped.
 func (s *Server) committed(l landing) {
 	s.metrics.count(writerclass.IngestBatchCount, "", 1)
@@ -201,7 +201,7 @@ func (s *Server) request(path string, err error) {
 }
 
 // failOnce says when a failing path's warning is news: the first failure for
-// a key, and not again until that key has succeeded, so a node heartbeating
+// a key, and not again until that key has succeeded, so an outpost heartbeating
 // into a database that is down logs once, not every beat.
 type failOnce struct {
 	mu      sync.Mutex
@@ -229,21 +229,21 @@ func (f *failOnce) ok(key string) {
 	delete(f.failing, key)
 }
 
-// heartbeatFailLog is the warning a node's heartbeat write failure logs, once
+// heartbeatFailLog is the warning an outpost's heartbeat write failure logs, once
 // per run of failures.
-const heartbeatFailLog = "heartbeat not recorded, the node may read as silent"
+const heartbeatFailLog = "heartbeat not recorded, the outpost may read as silent"
 
-// recordHeartbeat records node's heartbeat, counting it and its failure.
-func (s *Server) recordHeartbeat(ctx context.Context, node string) {
-	err := s.store.RecordHeartbeat(ctx, node)
+// recordHeartbeat records outpost's heartbeat, counting it and its failure.
+func (s *Server) recordHeartbeat(ctx context.Context, outpost string) {
+	err := s.store.RecordHeartbeat(ctx, outpost)
 	s.request(requestHeartbeat, err)
 	if err != nil {
-		if s.heartbeatFail.failed(node) {
-			slog.Warn(heartbeatFailLog, "facility", "bus", "node", node, "error", err.Error())
+		if s.heartbeatFail.failed(outpost) {
+			slog.Warn(heartbeatFailLog, "facility", "bus", "outpost", outpost, "error", err.Error())
 		}
 		return
 	}
-	s.heartbeatFail.ok(node)
+	s.heartbeatFail.ok(outpost)
 }
 
 // sweep runs one sweep, recording its duration, that it ran, and whether it
@@ -327,6 +327,7 @@ func (s *Server) Sampler() platformmetric.Sampler {
 			m.max(writerclass.BusWorklistReplyBytesMax, "", float64(b))
 		}
 		s.sampleConsumer(ctx, m)
+		m.gauge(writerclass.RuleSweepAge, "", s.sweepClock.Age(now).Seconds())
 		for _, rd := range s.flow.Take().Readings() {
 			m.gauge(rd.Key, rd.Instance, rd.Value)
 		}

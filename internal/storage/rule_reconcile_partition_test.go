@@ -85,7 +85,7 @@ func TestReconcileReadsSkipAFinishedDay(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "slow", SampleKey: "http-response-time",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: "slow", SampleKey: "http-response-time",
 		Fire: criteria("gt", 30), Severity: "warning"}, f.all); err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestReconcileFiresOnALateSampleOnce(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), f.all
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "late", SampleKey: "http-response-time",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: "late", SampleKey: "http-response-time",
 		Fire: criteria("gt", 30), Severity: "warning"}, all); err != nil {
 		t.Fatal(err)
 	}
