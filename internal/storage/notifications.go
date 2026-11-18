@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -202,11 +203,23 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 	if err != nil || len(rs) == 0 {
 		return err
 	}
+	// The shipped rule's when is platform alone (#1987), and most transitions
+	// are on fleet components: the platform flag is read first, so a rule
+	// that can hold only on a platform component costs no facts elsewhere.
+	platform, err := isPlatformComponent(ctx, tx, componentID)
+	if err != nil {
+		return err
+	}
+	if !platform {
+		if rs = slices.DeleteFunc(rs, func(r queuedRule) bool { return platformOnly(r.when) }); len(rs) == 0 {
+			return nil
+		}
+	}
 	facts, _, err := p.alarmFacts(ctx, tx, componentID, alarmID, transition)
 	if err != nil {
 		return fmt.Errorf("storage: notification facts for alarm %s: %w", alarmID, err)
 	}
-	in, err := actionInput(ctx, tx, facts)
+	in, err := actionInput(ctx, tx, platform, facts)
 	if err != nil {
 		return err
 	}
@@ -385,7 +398,7 @@ func rowsFor(r queuedRule, status string, people map[string][]recipient) []queue
 			continue
 		}
 		for _, p := range people[id] {
-			if r.targetKinds[i] == TargetUserGroup && r.optedOut[p.id] {
+			if expandsToPeople(r.targetKinds[i]) && r.optedOut[p.id] {
 				continue
 			}
 			for _, ch := range p.channels {
@@ -493,10 +506,15 @@ func rulesOn(ctx context.Context, q querier, transition string) ([]queuedRule, e
 	return out, rows.Err()
 }
 
+// platformOnly reports whether a rule's when is the platform flag alone, so
+// it cannot hold on a component that is not one of Omniglass's own.
+func platformOnly(when string) bool { return strings.TrimSpace(when) == "platform" }
+
 // actionInput is the action site's input for a fact map: the facts in
-// snake_case, and the severity's rank.
-func actionInput(ctx context.Context, q querier, f sandbox.Data) (rules.ActionInput, error) {
-	in := rules.ActionInput{
+// snake_case, the severity's rank, and whether the component is one of
+// Omniglass's own (#1987), read by the caller.
+func actionInput(ctx context.Context, q querier, platform bool, f sandbox.Data) (rules.ActionInput, error) {
+	in := rules.ActionInput{Platform: platform,
 		Component: f["Component"], ComponentLabel: f["ComponentLabel"], ComponentType: f["ComponentType"], Location: f["Location"],
 		Severity: f["Severity"], SeverityLabel: f["SeverityLabel"], Message: f["Message"], Transition: f["Transition"],
 		RaisedAt: f["RaisedAt"], ClearedAt: f["ClearedAt"], Rule: f["Rule"], Link: f["Link"],

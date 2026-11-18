@@ -56,7 +56,7 @@ running server from the command line, see [the CLI](/guides/cli/).
 
 To try it first, with nothing to set up but Docker, run `omniglass lab run`: it brings up a working
 omniglass, its own Postgres and an edge outpost collecting from a simulated fleet, prints the console's
-address and the login, and removes it all on Ctrl-C. The [lab guide](/guides/lab/) walks through it.
+address and the login, and removes it all on Ctrl-C. [Your first ten minutes](/start/first-ten-minutes/) walks through it.
 
 ## Run a simulator
 
@@ -64,7 +64,7 @@ The same binary simulates components. The simplest way is to let the outpost run
 `omniglass outpost run --simulate` runs the simulator in the outpost's own process, serving every component
 placed on that outpost whose product it has a profile for, each on its own loopback address
 ([simulation](/architecture/simulation/), and the operator's walk-through in
-[simulate a fleet](/guides/operator/simulation/)). One process means one network namespace, so the
+[simulate a fleet](/operator/simulation/)). One process means one network namespace, so the
 simulated components sit on the loopback the outpost collects from by construction, and one identity:
 the simulator uses the outpost's own name and token, with no second enrollment.
 
@@ -152,7 +152,7 @@ they reach only its own container's namespace. In a container the simulator bind
 the fleet is seeded unlifted. It prints the console's address, on `127.0.0.1:8080` (sign in as
 `dev`/`dev`), and tears everything down on Ctrl-C, keeping the data for the next run. Breaking a
 component on purpose works there as in
-[simulate a fleet](/guides/operator/simulation/#break-it-on-purpose). The [lab guide](/guides/lab/)
+[simulate a fleet](/operator/simulation/#break-it-on-purpose). The [lab guide](/guides/lab/)
 covers what runs, with which privilege, and why Docker is required.
 
 The demo pipeline records on the same lab ([#1197](https://github.com/hyperscaleav/omniglass/issues/1197)),

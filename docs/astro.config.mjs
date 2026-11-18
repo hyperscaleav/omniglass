@@ -45,13 +45,24 @@ export default defineConfig({
   // The monolithic "the console" guide was split into per-flow operator pages.
   // Keep its old URL alive for external links and bookmarks.
   redirects: {
-    '/guides/console/': '/guides/operator/',
+    '/guides/console/': '/operator/',
     '/architecture/datapoints/': '/architecture/properties/',
     // The joint Types guide split into one page per catalog (#598); the old
     // URL lands on the location half, which inherited most of its content.
     '/guides/admin/types/': '/guides/admin/location-types/',
     // Find things in your fleet folded into the outline guide (#861).
-    '/guides/operator/inventory/': '/guides/operator/fleet/',
+    '/guides/operator/inventory/': '/operator/fleet/',
+    // The operator guide became the Operator section (#2157); alarms and
+    // commands moved off the entity page onto their own.
+    '/guides/operator/': '/operator/',
+    '/guides/operator/sign-in/': '/operator/sign-in/',
+    '/guides/operator/fleet/': '/operator/fleet/',
+    '/guides/operator/entities/': '/operator/entities/',
+    '/guides/operator/notifications/': '/operator/notifications/',
+    '/guides/operator/templates/': '/operator/templates/',
+    '/guides/operator/collection/': '/operator/collection/',
+    '/guides/operator/platform-health/': '/operator/platform-health/',
+    '/guides/operator/simulation/': '/operator/simulation/',
     // Walkthroughs became one of a demo's two recorders (#1132).
     '/contributing/walkthroughs/': '/contributing/demos/',
     // The collecting process became the outpost (ADR-2031, #2059).
@@ -146,12 +157,11 @@ export default defineConfig({
           // section deletes it and its entry here (ADR-2087.2). The group leaves with the last one.
           label: 'Being rebuilt',
           items: [
-            { label: 'Try omniglass in five minutes', slug: 'guides/lab' },
+            { label: 'The lab', slug: 'guides/lab' },
             {
               label: 'Architecture',
               collapsed: true,
               items: [
-                { label: 'Why Omniglass', slug: 'architecture/why' },
                 // the fleet model, then the shapes it pins
                 { label: 'Core entities', slug: 'architecture/core-entities' },
                 // the journey, in the order the data travels
@@ -218,17 +228,9 @@ export default defineConfig({
               ],
             },
             {
-              label: 'Operator guide',
+              label: 'CLI and agents',
               collapsed: true,
               items: [
-                { label: 'Overview', slug: 'guides/operator' },
-                { label: 'Sign in and your profile', slug: 'guides/operator/sign-in' },
-                { label: 'Explore your fleet', slug: 'guides/operator/fleet' },
-                { label: 'Work with an entity', slug: 'guides/operator/entities' },
-                { label: 'Your inbox and alarm subscriptions', slug: 'guides/operator/notifications' },
-                { label: 'Start from a template', slug: 'guides/operator/templates' },
-                { label: 'Nodes and reachability', slug: 'guides/operator/collection' },
-                { label: 'Simulate a fleet', slug: 'guides/operator/simulation' },
                 { label: 'The CLI', slug: 'guides/cli' },
                 { label: 'Connect an agent', slug: 'guides/agents' },
               ],

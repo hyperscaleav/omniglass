@@ -1205,7 +1205,7 @@ type Gateway interface {
 	ListNotificationTargets(ctx context.Context, read scope.Set) ([]NotificationTarget, error)
 	GetNotificationTarget(ctx context.Context, ref string, read scope.Set) (*NotificationTarget, error)
 	// Binding a secret takes the caller's right to bind it (SecretUse, secret:bind);
-	// binding a group or a person the user directory's read (PeopleUse).
+	// binding a group, a person or a role the directory's read (PeopleUse).
 	CreateNotificationTarget(ctx context.Context, actorID string, spec NotificationTargetSpec, create scope.Set, use SecretUse, people PeopleUse) (*NotificationTarget, error)
 	UpdateNotificationTarget(ctx context.Context, actorID, ref string, patch NotificationTargetPatch, action scope.Set, use SecretUse) (*NotificationTarget, error)
 	DeleteNotificationTarget(ctx context.Context, actorID, ref string, action scope.Set) error
@@ -1223,6 +1223,11 @@ type Gateway interface {
 	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error)
 	// The action rule (#618): reads catalog-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
+	// UpsertNotificationTarget and UpsertActionRule install the shipped
+	// routing from the boot seed (#1987), marked official: authoritative on
+	// what ships, the enabled switch the operator's.
+	UpsertNotificationTarget(ctx context.Context, spec NotificationTargetSpec) error
+	UpsertActionRule(ctx context.Context, spec ActionRuleSpec) error
 	GetActionRule(ctx context.Context, ref string) (*ActionRule, error)
 	CreateActionRule(ctx context.Context, actorID string, spec ActionRuleSpec, create scope.Set) (*ActionRule, error)
 	UpdateActionRule(ctx context.Context, actorID, ref string, patch ActionRulePatch, action scope.Set) (*ActionRule, error)

@@ -563,7 +563,7 @@ omniglass driver rename barco-snmp --name barco-projector-snmp      # re-derives
 omniglass driver delete barco-snmp                                  # refused (422) if official, or while an endpoint is attached through it
 ```
 
-An **official** row, for example the `crestron` vendor, is read-only: `update`, `delete` and `rename`
+An **official** row, for example the `boreal` vendor, is read-only: `update`, `delete` and `rename`
 all 422. A vendor's `website` is validated to an `http`/`https` scheme on write; any other scheme (for
 example `javascript:`) is a 422.
 
@@ -587,7 +587,7 @@ omniglass product update barco-ub12 --label "Barco UB12 Pro"
 omniglass product delete barco-ub12                                 # 422 if official, 409 if a component points at it
 ```
 
-An **official** product, for example `cisco-room-bar`, is read-only: `update`, `delete` and
+An **official** product, for example `kestrel-vroom`, is read-only: `update`, `delete` and
 `rename` all 422. A product still referenced by a **component** (`component.product_id`) cannot be deleted (409);
 an unknown vendor, driver, parent, or component_type id is a 422.
 
@@ -764,14 +764,29 @@ omniglass notification list --status failed                          # scoped by
 omniglass notification retry <id>                                     # notification:retry, an operator's
 omniglass notification-target create --name on-call-page --kind user_group --user-group on-call --channels '["inbox","email"]'
 omniglass notification-target create --name ops-mailbox --kind email --addresses '["ops@example.com"]'
+omniglass notification-target create --name site-admins --kind role --role admin --channels '["inbox","email"]'  # whoever holds admin, read at each alarm
 omniglass auth me notification list --unread                          # your own inbox, scoped as you read now
 omniglass auth me notification markAllRead
 omniglass sim mail --listen 0.0.0.0:2525 --out /tmp/mail.jsonl         # a mail relay simulator for a lab
 ```
 
+A fresh install already routes its own alarms: the shipped `platform-alarms-to-admins` rule sends every
+alarm on the reserved `platform` system to two shipped `role` targets, `platform-admins` (role `admin`) and
+`platform-owners` (role `owner`, which does not inherit admin), in the console inbox
+([role targets](/architecture/alarms-actions/#role-targets-and-the-shipped-platform-routing)). The rows
+are official: the boot seed puts what it ships back on every start, and an edit of it or a delete is a
+409. Silence the routing with `enabled`, which a restart keeps, or add a target of your own beside the
+shipped ones; grant `admin` to the people who run the install.
+
+```sh
+omniglass action-rule get platform-alarms-to-admins | jq -c '{when, targets, enabled}'
+omniglass action-rule update platform-alarms-to-admins --enabled=false           # survives a restart
+omniglass action-rule update platform-alarms-to-admins --targets '["platform-admins","platform-owners","ops-chat"]'
+```
+
 A noisy alarm is snoozed for `1m` to `7d`, and the snooze carries to the alarm raised again after
 it: every notification about it is written `suppressed` until then, and an alarm still raised when
-the snooze ends is announced again ([snoozing](/guides/operator/entities/#snoozing-silencing-a-noisy-alarm-for-a-while)).
+the snooze ends is announced again ([snoozing](/operator/alarms/#snoozing-silencing-a-noisy-alarm-for-a-while)).
 
 ```sh
 a=$(omniglass component alarm list panel-2 | jq -r '.alarms[0].id')
@@ -786,7 +801,7 @@ A classifier **declares** which properties its instances carry; an instance **se
 are the same three verbs, and the contract commands hang off the classifier that owns them:
 
 ```sh
-omniglass product property list cisco-room-bar                         # a product's contract
+omniglass product property list kestrel-vroom                          # a product's contract
 omniglass standard property list huddle-room                           # a standard's contract
 omniglass location-type property list room                             # a location type's contract
 omniglass standard property update huddle-room room-capacity --default-value 6 --required=true
@@ -822,7 +837,7 @@ omniglass metric-type get tcp-connect-time | jq .retention_days
 ## Platform health
 
 `omniglass platform health` answers one question from a terminal: is Omniglass keeping up? It reads
-the platform view (the read behind the console's [Platform health](/guides/operator/platform-health/)
+the platform view (the read behind the console's [Platform health](/operator/platform-health/)
 page) through the API alone, with `--server` and `--token`, so it reads any deployment you hold a
 token for, and it reduces that view to one table:
 
