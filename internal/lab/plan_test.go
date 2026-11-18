@@ -2,6 +2,7 @@ package lab
 
 import (
 	"github.com/hyperscaleav/omniglass/internal/closedloop"
+	"github.com/hyperscaleav/omniglass/internal/config"
 	"github.com/hyperscaleav/omniglass/internal/outpost"
 	"github.com/hyperscaleav/omniglass/internal/simoutpost"
 
@@ -995,5 +996,31 @@ func TestPlanOmnibotKeyGoesToTheSeedAlone(t *testing.T) {
 	sc.OmnibotKey = "ghp-lab-key"
 	if _, err := Plan(sc); err == nil || !strings.Contains(err.Error(), "--omnibot-key-env") {
 		t.Fatalf("a scale lab with a model key: err = %v, want a refusal naming --omnibot-key-env", err)
+	}
+}
+
+// Every OMNIGLASS_ variable a lab hands a service is one the binary may read:
+// config.Get panics on an undeclared key, so a seed handed one it reads
+// undeclared stops the lab before it is ready (#2109).
+func TestPlanHandsOnlyDeclaredVariables(t *testing.T) {
+	declared := map[string]bool{}
+	for _, v := range config.Registry {
+		declared[v.Key] = true
+	}
+	o := testOptions()
+	o.OmnibotKey = "ghp-lab-key"
+	for _, opts := range []Options{o, scaleOptions()} {
+		s, err := Plan(opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, svc := range s.Services() {
+			for _, e := range svc.Env {
+				key, _, _ := strings.Cut(e, "=")
+				if strings.HasPrefix(key, "OMNIGLASS_") && !declared[key] {
+					t.Errorf("%s is handed %s, which internal/config/registry.go does not declare", svc.Name, key)
+				}
+			}
+		}
 	}
 }
