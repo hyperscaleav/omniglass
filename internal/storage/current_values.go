@@ -100,7 +100,7 @@ func (p *PG) reconcileProperties(ctx context.Context, q querier, ownerKind, arc 
 // instances (worstCaseValue). arc is a resolved, scope-checked arc, so the
 // series reads bind it directly rather than re-resolving the owner per key.
 func (p *PG) reconcileKey(ctx context.Context, q querier, ownerKind, col, arc, key string, want json.RawMessage) (*PropertyReconciliation, error) {
-	observed, err := readPropertyValues(ctx, q, arc, key, observedPropertySQL(col), ownerKind, arc, key, transportNames())
+	observed, err := readPropertyValues(ctx, q, arc, key, observedPropertySQL(col), ownerKind, arc, key, transportNames(), nativeKeys())
 	if err != nil {
 		return nil, err
 	}

@@ -6,7 +6,7 @@ summary: "Amends ADR-1577's first-pull rule. A node heartbeats and sends its nod
 refs: [1882, 1577, 1868]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [platform health](/guides/operator/platform-health/)
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [nodes](/architecture/nodes/), [platform health](/operator/platform-health/)
 - **Decision:** (#1882, amending the first-pull rule of
   [ADR-1577](#adr-1577-a-nodes-worklist-is-compressed-served-by-a-bounded-responder-and-retried-without-exiting).)
   The node builds its node-self report before its first pull and runs that pull on a goroutine of

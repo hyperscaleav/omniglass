@@ -7,6 +7,11 @@ metadata:
     app.kubernetes.io/component: server
 spec:
   replicas: {{ .Values.server.replicas }}
+  # One server owns one bus and one data volume: the old pod stops before the
+  # new one starts, so two never share the JetStream store (and a
+  # ReadWriteOnce claim is never wanted on two nodes at once).
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "omniglass.selectorLabels" . | nindent 6 }}
@@ -17,6 +22,13 @@ spec:
         {{- include "omniglass.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: server
     spec:
+      # The image runs as nonroot (65532); a fresh volume is group-owned by it
+      # so the server can write its data directory. Ownership is fixed only
+      # when the volume's root is wrong, not re-walked over the JetStream store
+      # on every start.
+      securityContext:
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
       # Init containers gate the server on schema (and, for previews, an owner)
       # instead of Helm pre-install hooks: a bundled Postgres in the same release
       # is not up during pre-install, so a hook-Job migrate would race the DB.
@@ -63,6 +75,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "omniglass.fullname" . }}-dsn
                   key: dsn
+            {{- include "omniglass.encryptionKeyEnv" . | nindent 12 }}
         {{- end }}
       containers:
         - name: server
@@ -80,6 +93,16 @@ spec:
                   key: dsn
             - name: OMNIGLASS_SECURE_COOKIES
               value: {{ .Values.server.secureCookies | quote }}
+            {{- include "omniglass.encryptionKeyEnv" . | nindent 12 }}
+            # The image's data directory, on the data volume, with the embedded
+            # JetStream store under it (the lab's layout).
+            - name: OMNIGLASS_DATA_DIR
+              value: /var/lib/omniglass
+            - name: OMNIGLASS_NATS_STORE_DIR
+              value: /var/lib/omniglass/nats
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/omniglass
           readinessProbe:
             httpGet:
               path: /api/v1/healthz
@@ -94,3 +117,11 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.server.resources | nindent 12 }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "omniglass.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

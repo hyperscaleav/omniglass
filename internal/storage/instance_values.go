@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/hyperscaleav/omniglass/internal/collection/probekeys"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/transport"
 )
@@ -24,7 +25,7 @@ import (
 
 // latestObservedPerInstanceSQL reads the newest observed row of each live
 // instance of one key on an owner arc ($1 owner kind, $2 arc, $3 key, $4 the
-// transport names), newest first. The instances are walked one index probe
+// transport names, $5 the native probe keys), newest first. The instances are walked one index probe
 // at a time and each one's newest row is a probe of its own (the series index
 // leads with owner, type and instance, the walk readCalcInput makes), never a
 // read of the key's whole history, which on the metric lane is the firehose.
@@ -56,7 +57,7 @@ func latestObservedPerInstanceSQL(lane, value, col string) string {
 				order by ts desc, id desc limit 1) n
 		where i.instance is not null and n.value is not null
 		  and %[4]s
-		order by n.ts desc, n.id desc`, lane, value, col, liveInstanceSQL("i.instance", "$1", "$2", "$4"))
+		order by n.ts desc, n.id desc`, lane, value, col, liveInstanceSQL("i.instance", "$1", "$2", "$4", "$3", "$5"))
 }
 
 // latestObservedMetricPerInstanceSQL is latestObservedPerInstanceSQL on the
@@ -67,7 +68,7 @@ var latestObservedMetricPerInstanceSQL = `select x.value, x.ts, x.provenance, x.
 		select distinct on (s.instance) n.value, n.ts, n.id, s.provenance, s.instance
 		from metric_series s cross join lateral (` + metricNewestSQL("s.id") + `) n
 		where ` + metricSeriesWhere("s", "$1", "$2::uuid", "(select k.id from metric_type_in_effect() k where k.name = $3)") + `
-		  and s.provenance = 'observed' and ` + liveInstanceSQL("s.instance", "$1", "$2::uuid", "$4") + `
+		  and s.provenance = 'observed' and ` + liveInstanceSQL("s.instance", "$1", "$2::uuid", "$4", "$3", "$5") + `
 		order by s.instance, n.ts desc, n.id desc) x
 	order by x.ts desc, x.id desc`
 
@@ -81,15 +82,42 @@ var latestObservedMetricPerInstanceSQL = `select x.value, x.ts, x.provenance, x.
 // endpoint since deleted (a changed transport is a delete and a new endpoint),
 // whose last reading is frozen, since nothing prunes a series' latest row. Age
 // cannot tell it apart, because a property is transition-only and a live,
-// unchanged value carries an old ts. Only a component has endpoints, so on any
-// other owner an instance naming a transport is never live. Each argument is a
-// SQL expression: the instance, the owner kind, the owner's arc (its uuid),
-// and the transport names as a text array (transportNames).
-func liveInstanceSQL(instance, ownerKind, arc, transports string) string {
+// unchanged value carries an old ts. So is an endpoint that still exists
+// whose driver's current spec no longer emits the key (#1217): nothing
+// refreshes the key on it, so its last reading is as frozen as a deleted
+// endpoint's (driverEmitsSQL). A native probe key is the node's own, not a
+// driver's emit, so it stays live on its endpoint, and an endpoint with no
+// driver has no spec to have dropped a key. Only a component has endpoints, so
+// on any other owner an instance naming a transport is never live. Each
+// argument is a SQL expression: the instance, the owner kind, the owner's arc
+// (its uuid), the transport names as a text array (transportNames), the key's
+// name, and the native probe keys as a text array (probekeys.Native).
+func liveInstanceSQL(instance, ownerKind, arc, transports, key, native string) string {
 	return fmt.Sprintf(`(%[1]s = '' or not (%[1]s = any(%[4]s::text[]))
-		       or exists (select 1 from endpoint e where %[2]s = 'component' and e.component = %[3]s and e.name = %[1]s))`,
-		instance, ownerKind, arc, transports)
+		       or exists (select 1 from endpoint e
+			where %[2]s = 'component' and e.component = %[3]s and e.name = %[1]s
+			  and (e.driver_id is null or %[5]s = any(%[6]s::text[]) or %[7]s)))`,
+		instance, ownerKind, arc, transports, key, native, driverEmitsSQL("e.driver_id", key))
 }
+
+// driverEmitsSQL is whether the driver a row names (a driver id expression)
+// still emits key in its current spec: a poll's or a listener's emit of that
+// name (Poll.Emits, Listener.Emits in internal/driver/spec.go), read off the
+// spec column so a spec update or a seeded upgrade that drops the emit takes
+// effect on the next read with nothing to re-derive. It is the one place that
+// says what a driver emits, so the per-port form (#430), where a driver names
+// the instance of its own emit (`name[instance]`), extends it by matching the
+// bracketed instance as well, not by a second liveness test beside it.
+func driverEmitsSQL(driverID, key string) string {
+	return fmt.Sprintf(`exists (select 1 from driver d where d.id = %[1]s
+				and (jsonb_path_exists(d.spec, '$.polls[*].emits[*] ? (@.name == $k)', jsonb_build_object('k', %[2]s))
+				  or jsonb_path_exists(d.spec, '$.listeners[*].emits[*] ? (@.name == $k)', jsonb_build_object('k', %[2]s))))`,
+		driverID, key)
+}
+
+// nativeKeys is every key a native probe writes (probekeys.Native), the keys
+// liveInstanceSQL keeps live on their own endpoint whatever its driver emits.
+func nativeKeys() []string { return probekeys.Native() }
 
 // transportNames is every registered transport's name, the vocabulary an
 // endpoint's name is drawn from (latestObservedPerInstanceSQL's $4).
@@ -144,7 +172,7 @@ func (p *PG) latestObservedValues(ctx context.Context, q querier, ownerKind, own
 	} else if err != nil {
 		return nil, err
 	}
-	return readPropertyValues(ctx, q, ownerID, key, observedPropertySQL(col), ownerKind, arc, key, transportNames())
+	return readPropertyValues(ctx, q, ownerID, key, observedPropertySQL(col), ownerKind, arc, key, transportNames(), nativeKeys())
 }
 
 // readPropertyValues runs a per-instance property read whose rows are
@@ -184,7 +212,7 @@ func (p *PG) latestObservedMetricValues(ctx context.Context, q querier, ownerKin
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := q.Query(ctx, latestObservedMetricPerInstanceSQL, ownerKind, arc, key, transportNames())
+	rows, err := q.Query(ctx, latestObservedMetricPerInstanceSQL, ownerKind, arc, key, transportNames(), nativeKeys())
 	if err != nil {
 		return nil, fmt.Errorf("storage: latest metric values %s/%s: %w", ownerID, key, err)
 	}

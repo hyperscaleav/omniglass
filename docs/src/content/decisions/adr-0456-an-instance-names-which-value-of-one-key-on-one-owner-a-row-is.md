@@ -42,9 +42,9 @@ refs: [456, 430, 1020]
      so it names an endpoint since deleted (a changed transport is a delete and a new endpoint), and
      its last reading is frozen, since nothing prunes a series' latest row. An owner-level read
      leaves it out; its rows stay readable on their own series. Age cannot be the test, because a
-     property is transition-only and a live, unchanged value carries an old `ts`. One residual is
-     stated: an endpoint that still exists but no longer emits the key keeps its last reading live
-     (#1217). When driver-named instances land (#430), the liveness rule must cover them too, since
+     property is transition-only and a live, unchanged value carries an old `ts`. So is an endpoint
+     that still exists but whose driver's current spec no longer emits the key (#1217), and a native
+     probe key stays live on its own endpoint. When driver-named instances land (#430), the liveness rule must cover them too, since
      an instance naming no transport would then no longer mean a series no lane writes.
   4. **Reconciliation** (want, told, is): `is` resolves across every observed instance,
      worst-case. Drift is any observed instance disagreeing with want; `is` is then the newest

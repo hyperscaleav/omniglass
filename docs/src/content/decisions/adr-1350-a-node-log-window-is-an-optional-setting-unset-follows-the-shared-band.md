@@ -6,7 +6,7 @@ summary: "A node's own logs (node_log) may keep each severity band for a window 
 refs: [1350, 1351, 417, 1265, 270]
 ---
 
-- **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/#retention-what-is-kept-and-for-how-long), [settings](/architecture/settings/), [admin guide](/guides/admin/)
+- **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/#retention-what-is-kept-and-for-how-long), [settings](/architecture/settings/), [platform settings](/admin/settings/)
 - **Decision:** (#1350 step 1, ruled 2026-10-28: shared bands for now, an install-wide node override first, per node later through the cascade.)
   1. **Four optional settings.** `retention.node_log_<band>_days`, one per band of `logline.RetentionBands`, each held to the range every window is (1 to 36,500; 0 and past the ceiling are a 422). A test holds every band to an override of its own, so a band added later cannot silently ignore one.
   2. **Unset is absence, not a sentinel.** The fields carry no `default` tag and `omitempty`, so they are absent from the effective document and not required in the published schema. The reader (`NodeLogDays`) takes a nonzero value and otherwise the shared band's, so a zero reads as unset. The API refuses a 0 (as it refuses every window below 1), so only the operator file, which is parsed but not validated, can hold one, and there it follows the shared band rather than being refused as a 0 on a shared window is. A stored value above the ceiling or below zero is refused by the pass like any window.

@@ -12,7 +12,7 @@ form: bullet
   reads a row's **effective** value (a component matches on a tag it inherits from its system or location,
   not only a direct binding), autocompletes the values already in use for that key, and offers two new
   **value-less** operators, **is set** (`?`) and **is absent** (`!?`), that test only whether the tag is
-  present. These land in the shared [`lib/predicate`](/guides/operator/fleet/#finding-one-thing) engine (an
+  present. These land in the shared [`lib/predicate`](/operator/fleet/#finding-one-thing) engine (an
   `exists` / `absent` `OpKey` carrying a `valueless` flag, threaded through `opsFor`, `matchOp`,
   `buildPredicate`, and `tokenToChip`) so every FilterBar inherits them, plus a `tagFilterKeys` helper that
   projects one `FilterKey` per tag key present on the loaded rows; the FilterBar keeps those presence facets

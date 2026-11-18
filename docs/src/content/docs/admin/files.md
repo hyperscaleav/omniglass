@@ -1,6 +1,11 @@
 ---
 title: Files
 description: "The Files directory under Values: upload, find, download, and delete the opaque bytes kept with a fleet, deduplicated and content-addressed, with a sensitive tier for confidential ones."
+sidebar:
+  order: 6
+  badge:
+    text: Built
+    variant: success
 screenshots:
   - id: files
     path: /web/files
@@ -52,7 +57,7 @@ reclaims space rather than leaking it.
 A file can be marked **Sensitive** (shown by a badge in the list). A sensitive file, a competitive
 quote, or a config with internal detail, is visible only to the **admin tier**: it is hidden from an
 ordinary lister and cannot be opened or downloaded without that tier, the same rule a sensitive
-[secret](/guides/admin/secrets/) follows. Ordinary files are shared with anyone who can read files.
+[secret](/admin/secrets/) follows. Ordinary files are shared with anyone who can read files.
 Marking a file sensitive, and seeing one, both need the admin tier; you cannot create a sensitive file
 without it.
 

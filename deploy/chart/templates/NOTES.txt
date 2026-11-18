@@ -27,3 +27,25 @@ Omniglass release {{ .Release.Name }} is installed in namespace {{ .Release.Name
 
 NOTE: postgres.enabled is false, so the server dials the externalDsn you supplied.
 {{- end }}
+{{- $keySecret := include "omniglass.encryptionKeySecret" . }}
+
+BACK UP THE ENCRYPTION KEY. Every secret Omniglass stores in Postgres is sealed
+under the key in Secret {{ $keySecret }}; lose it and those secrets cannot be
+read back, by anyone. Read it out now and keep it somewhere outside this cluster:
+
+     kubectl -n {{ .Release.Namespace }} get secret {{ $keySecret }} -o jsonpath='{.data.encryption-key}' | base64 -d
+{{- if not .Values.encryptionKey.existingSecret }}
+
+The chart generated this key once and reuses it on every upgrade. helm uninstall
+keeps the Secret, so a reinstall of release {{ .Release.Name }} into this namespace finds
+the same key; deleting the Secret by hand loses it.
+{{- end }}
+{{- if .Values.persistence.enabled }}
+
+Durable state (the data directory and the bus's unlanded telemetry) is on
+PersistentVolumeClaim {{ include "omniglass.fullname" . }}-data, which helm uninstall also keeps.
+{{- else }}
+
+persistence.enabled is false: the data directory is an emptyDir, so telemetry the
+bus accepted but had not yet written to Postgres is lost when the pod restarts.
+{{- end }}

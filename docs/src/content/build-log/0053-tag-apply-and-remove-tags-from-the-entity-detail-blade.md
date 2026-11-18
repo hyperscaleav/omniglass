@@ -14,7 +14,7 @@ form: bullet
   Tags directory's create form ([#192](https://github.com/hyperscaleav/omniglass/issues/192)'s `CreateTagForm`, now
   exported) in a drawer and returns with the minted key selected. Writes are immediate (each is the entity's own
   `:setTag` / `:removeTag` write, gated by its `:update`), so there is no separate Save; the affordances hide without
-  the permission. The resolved cascade (inherited tags) stays in the directory [Tags column](/guides/operator/fleet/#finding-one-thing),
+  the permission. The resolved cascade (inherited tags) stays in the directory [Tags column](/operator/fleet/#finding-one-thing),
   not the panel. Proven by a `tagdraft` unit suite (applies_to filtering, already-bound exclusion, exact-match and
   coin eligibility, value validity) and a `TagAdder` render test (chips, the update-gated add row and per-chip remove,
   the read-only and empty states). The full winner-plus-shadowed cascade provenance in the blade, the dynamic tag
