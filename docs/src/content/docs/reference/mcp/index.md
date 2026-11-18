@@ -47,9 +47,9 @@ for it: the strictest of the class, the caller's roles and an override on the to
 | [`update-component`](#update-component) | Update a component | `component:update` | destructive |
 | [`list-component-alarms`](#list-component-alarms) | List a component's alarms | `component:read` | read-only, idempotent |
 | [`acknowledge-component-alarm`](#acknowledge-component-alarm) | Acknowledge an alarm | `alarm:acknowledge` | adds |
-| [`snooze-component-alarm`](#snooze-component-alarm) | Snooze an alarm's condition | `alarm:snooze` | adds |
+| [`snooze-component-alarm`](#snooze-component-alarm) | Snooze an alarm | `alarm:snooze` | adds |
 | [`get-component-alarm-timeline`](#get-component-alarm-timeline) | Read an alarm's timeline | `alarm:read` | read-only, idempotent |
-| [`unsnooze-component-alarm`](#unsnooze-component-alarm) | End an alarm's condition's snooze | `alarm:snooze` | adds |
+| [`unsnooze-component-alarm`](#unsnooze-component-alarm) | End an alarm's snooze | `alarm:snooze` | adds |
 | [`list-component-commands`](#list-component-commands) | List a component's commands | `command:read` | read-only, idempotent |
 | [`get-component-command`](#get-component-command) | Read a command | `command:read` | read-only, idempotent |
 | [`issue-component-command`](#issue-component-command) | Issue a command to a component | `command:issue` | destructive, open-world |
@@ -363,7 +363,7 @@ What is currently wrong with this component, newest first, with the component's 
 |---|---|---|---|
 | `include_cleared` | boolean | no | Include cleared alarms, so the list is the history rather than what is wrong now |
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
-| `unacknowledged` | boolean | no | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended |
+| `unacknowledged` | boolean | no | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended |
 
 ## `acknowledge-component-alarm`
 
@@ -383,9 +383,9 @@ Records that a human has seen this alarm, and changes nothing else. The alarm st
 
 ## `snooze-component-alarm`
 
-Snooze an alarm's condition
+Snooze an alarm
 
-Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
 
 - Route: `POST /api/v1/components/{name}/alarms/{id}:snooze`
 - Gate: `alarm:snooze`
@@ -394,8 +394,8 @@ Snoozes the alarm's condition, its component and dedup_key, for a duration from 
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `duration` | string | yes | How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer |
-| `id` | string | yes | The alarm id: any alarm of the condition to snooze |
+| `duration` | string | yes | How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer |
+| `id` | string | yes | The alarm id: any alarm of the dedup key to snooze |
 | `name` | string | yes | The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) |
 
 ## `get-component-alarm-timeline`
@@ -416,9 +416,9 @@ The alarm's history in one list, oldest first: the events that carry it (an even
 
 ## `unsnooze-component-alarm`
 
-End an alarm's condition's snooze
+End an alarm's snooze
 
-Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
 
 - Route: `POST /api/v1/components/{name}/alarms/{id}:unsnooze`
 - Gate: `alarm:snooze`
@@ -1039,7 +1039,7 @@ Mints a webhook endpoint's token anew (#1024): a post bearing the old one answer
 
 List event rules
 
-Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
 
 - Route: `GET /api/v1/event-rules`
 - Gate: `rule:read`
@@ -1066,7 +1066,7 @@ Returns one event rule by name, with its live state as counts over the component
 
 Get an event rule's live state
 
-What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.
+What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.
 
 - Route: `GET /api/v1/event-rules/{name}/state`
 - Gate: `rule:read`
@@ -1452,7 +1452,7 @@ Patches a system's label, standard, or system_type. The name is not patchable: r
 
 List a system's members' alarms
 
-Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
 
 - Route: `GET /api/v1/systems/{name}/alarms`
 - Gate: `system:read`

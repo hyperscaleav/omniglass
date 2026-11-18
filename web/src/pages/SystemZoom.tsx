@@ -40,7 +40,7 @@ import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimelin
 import RuleLink from "../components/RuleLink";
 import SeverityBadge from "../components/SeverityBadge";
 import AcknowledgeButton from "../components/AcknowledgeButton";
-import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
+import { stretchReasons, memberAlarmRows, stretchesOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
@@ -218,7 +218,7 @@ export default function SystemZoom() {
   }));
   const logLines = () => logsQ.data?.logs ?? [];
   // The history's now: the coarse clock, but never behind the report's own
-  // last edge, which a poll can bring in between two ticks (an incident that
+  // last edge, which a poll can bring in between two ticks (a stretch that
   // opened seconds ago would otherwise have a negative length and vanish).
   const historyNow = createMemo(() => {
     const t = health.data?.transitions ?? [];
@@ -228,7 +228,7 @@ export default function SystemZoom() {
     timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.verdict })), health.data?.verdict ?? null, historyNow()),
   );
   const uptime = createMemo(() => uptimePct(verdictSpans()));
-  const incidentList = createMemo(() => incidentsOf(verdictSpans(), historyNow()));
+  const stretches = createMemo(() => stretchesOf(verdictSpans(), historyNow()));
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
   const uptimeTone = () => {
@@ -237,8 +237,8 @@ export default function SystemZoom() {
     const v = Number(u);
     return v >= 99 ? "good" : v >= 95 ? "warn" : "bad";
   };
-  const [openIncident, setOpenIncident] = createSignal<number | null>(null);
-  const incidents = createMemo(() => {
+  const [openStretch, setOpenStretch] = createSignal<number | null>(null);
+  const windowAlarms = createMemo(() => {
     const byComponent = new Map<string, NonNullable<typeof alarmHistory.data>>();
     for (const a of alarmHistory.data ?? []) byComponent.set(a.component_id, [...(byComponent.get(a.component_id) ?? []), a]);
     const members: MemberAlarms[] = memberIds().map((m) => ({
@@ -246,11 +246,11 @@ export default function SystemZoom() {
       componentId: m.componentId,
       alarms: byComponent.get(m.componentId) ?? [],
     }));
-    return incidentRows(members, historyNow(), 30 * 24, scale().levels);
+    return memberAlarmRows(members, historyNow(), 30 * 24, scale().levels);
   });
   const otherAlarms = createMemo(() => {
-    const inIncident = new Set(incidentList().flatMap((inc) => incidentReasons(inc, incidents()).map((r) => r.id)));
-    return incidents().filter((r) => !inIncident.has(r.id));
+    const inStretch = new Set(stretches().flatMap((inc) => stretchReasons(inc, windowAlarms()).map((r) => r.id)));
+    return windowAlarms().filter((r) => !inStretch.has(r.id));
   });
   const comps = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const prods = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
@@ -397,10 +397,10 @@ export default function SystemZoom() {
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
                 <HealthHistory compact transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
                 <div class="relative mt-1 h-2">
-                  <For each={incidents()}>
+                  <For each={windowAlarms()}>
                     {(inc) => (
                       <span
-                        data-testid={`incident-marker-${inc.id}`}
+                        data-testid={`alarm-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
                         classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
                         style={{ left: `${markerX(inc.raisedAt, historyNow(), 30 * 24 * 3600_000) * 100}%` }}
@@ -413,16 +413,16 @@ export default function SystemZoom() {
             </div>
 
             <div>
-              <Eyebrow label="Incidents" hint="One entry per contiguous stretch away from healthy, however many verdict changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
-              <Show when={incidentList().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
-                <ul data-testid="incident-list" class="mt-2 flex flex-col gap-2">
-                  <For each={incidentList()}>
+              <Eyebrow label="Health history" hint="One entry per contiguous stretch away from healthy, however many verdict changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
+              <Show when={stretches().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
+                <ul data-testid="stretch-list" class="mt-2 flex flex-col gap-2">
+                  <For each={stretches()}>
                     {(inc, idx) => {
-                      const reasons = () => incidentReasons(inc, incidents());
-                      const open = () => openIncident() === idx();
+                      const reasons = () => stretchReasons(inc, windowAlarms());
+                      const open = () => openStretch() === idx();
                       return (
                         <li
-                          data-testid={`incident-${idx()}`}
+                          data-testid={`stretch-${idx()}`}
                           class="rounded-box border"
                           classList={{
                             "border-error/45 bg-error/5": inc.worst === "outage",
@@ -431,7 +431,7 @@ export default function SystemZoom() {
                             "border-base-300": inc.worst === "healthy",
                           }}
                         >
-                          <button type="button" class="flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-left text-sm" onClick={() => setOpenIncident(open() ? null : idx())}>
+                          <button type="button" class="flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-left text-sm" onClick={() => setOpenStretch(open() ? null : idx())}>
                             <HealthBadge verdict={inc.worst} size="xs" />
                             <span class="font-medium">
                               {inc.worst === "incomplete" ? "Commissioning" : inc.worst === "outage" ? "Outage" : "Degraded"}

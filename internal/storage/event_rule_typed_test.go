@@ -24,24 +24,24 @@ func TestEventRuleTypedAndOptionalAlarm(t *testing.T) {
 	gw, all := f.gw, scope.Set{All: true}
 
 	info, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "hot-note", SampleKey: "room-temperature",
-		Fire: criteria("gt", 30), FireEventType: "condition-started"}, all)
+		Fire: criteria("gt", 30), FireEventType: "rule-fired"}, all)
 	if err != nil {
 		t.Fatalf("an informational rule: %v", err)
 	}
-	if info.Severity != "" || info.FireEventType != "condition-started" || info.ClearEventType != "" {
-		t.Fatalf("created %+v, want no severity, fire condition-started, no clear type", info)
+	if info.Severity != "" || info.FireEventType != "rule-fired" || info.ClearEventType != "" {
+		t.Fatalf("created %+v, want no severity, fire rule-fired, no clear type", info)
 	}
 	paged, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "hot-page", SampleKey: "room-temperature",
-		Fire: criteria("gt", 40), Severity: "high", FireEventType: "condition-started", ClearEventType: "condition-ended"}, all)
-	if err != nil || paged.Severity != "high" || paged.ClearEventType != "condition-ended" {
+		Fire: criteria("gt", 40), Severity: "high", FireEventType: "rule-fired", ClearEventType: "rule-cleared"}, all)
+	if err != nil || paged.Severity != "high" || paged.ClearEventType != "rule-cleared" {
 		t.Fatalf("an alarm-raising rule %+v (%v), want high with the generic pair", paged, err)
 	}
 
 	for name, bad := range map[string]storage.EventRuleSpec{
 		"no fire type":      {Name: "t1", SampleKey: "room-temperature", Fire: criteria("gt", 1)},
 		"unknown fire type": {Name: "t2", SampleKey: "room-temperature", Fire: criteria("gt", 1), FireEventType: "no-such-type"},
-		"unknown clear":     {Name: "t3", SampleKey: "room-temperature", Fire: criteria("gt", 1), FireEventType: "condition-started", ClearEventType: "no-such-type"},
-		"unknown level":     {Name: "t4", SampleKey: "room-temperature", Fire: criteria("gt", 1), FireEventType: "condition-started", Severity: "critical"},
+		"unknown clear":     {Name: "t3", SampleKey: "room-temperature", Fire: criteria("gt", 1), FireEventType: "rule-fired", ClearEventType: "no-such-type"},
+		"unknown level":     {Name: "t4", SampleKey: "room-temperature", Fire: criteria("gt", 1), FireEventType: "rule-fired", Severity: "critical"},
 	} {
 		if _, err := gw.CreateEventRule(ctx, "", bad, all); !errors.Is(err, storage.ErrEventRuleInvalid) {
 			t.Errorf("%s: err %v, want ErrEventRuleInvalid", name, err)
@@ -68,7 +68,7 @@ func TestEventRuleTypedAndOptionalAlarm(t *testing.T) {
 			t.Errorf("%s: err %v, want ErrEventRuleInvalid", name, err)
 		}
 	}
-	if got, err := gw.GetEventRule(ctx, "hot-note", all); err != nil || got.Severity != "" || got.FireEventType != "condition-started" {
+	if got, err := gw.GetEventRule(ctx, "hot-note", all); err != nil || got.Severity != "" || got.FireEventType != "rule-fired" {
 		t.Fatalf("read back %+v (%v)", got, err)
 	}
 
@@ -96,13 +96,13 @@ func TestEventRuleTypedAndOptionalAlarm(t *testing.T) {
 }
 
 // TestOfficialRuleCarriesTheGenericPair proves the boot seed lands the
-// official condition-started and condition-ended event types and gives the
+// official rule-fired and rule-cleared event types and gives the
 // official reachability rule that pair.
 func TestOfficialRuleCarriesTheGenericPair(t *testing.T) {
 	t.Parallel()
 	f := newHealthFixture(t)
 	ctx := context.Background()
-	for _, name := range []string{"condition-started", "condition-ended"} {
+	for _, name := range []string{"rule-fired", "rule-cleared"} {
 		et, err := f.gw.GetEventType(ctx, name)
 		if err != nil || !et.Official {
 			t.Fatalf("event type %s = %+v (%v), want an official type", name, et, err)
@@ -112,13 +112,13 @@ func TestOfficialRuleCarriesTheGenericPair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.FireEventType != "condition-started" || r.ClearEventType != "condition-ended" || r.Severity != "high" {
-		t.Fatalf("the official rule = %+v, want high with condition-started and condition-ended", r)
+	if r.FireEventType != "rule-fired" || r.ClearEventType != "rule-cleared" || r.Severity != "high" {
+		t.Fatalf("the official rule = %+v, want high with rule-fired and rule-cleared", r)
 	}
 }
 
 // TestInformationalRuleRaisesNoAlarm proves a rule with no severity opens no
-// alarm when its condition holds, on any path that acts on a rule (the
+// alarm when its expression holds, on any path that acts on a rule (the
 // ingest, the sweep that ends a sustain, the reconcile pass), and moves no
 // verdict.
 func TestInformationalRuleRaisesNoAlarm(t *testing.T) {
@@ -126,7 +126,7 @@ func TestInformationalRuleRaisesNoAlarm(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "note-down", SampleKey: "endpoint-reachable",
-		Fire: criteria("eq", "down"), FireSustain: 10 * time.Second, FireEventType: "condition-started",
+		Fire: criteria("eq", "down"), FireSustain: 10 * time.Second, FireEventType: "rule-fired",
 		Selector: storage.EventRuleSelector{Components: []string{"bar-1"}}},
 		f.all); err != nil {
 		t.Fatal(err)
@@ -184,7 +184,8 @@ func TestEventTypeEditKeepsStreaks(t *testing.T) {
 }
 
 // TestEventRuleTypeBackfill proves an upgrade gives every existing rule the
-// generic pair (condition-started fires, condition-ended clears), creating
+// generic pair (rule-fired fires, rule-cleared clears; the backfill wrote
+// them as rule-fired and rule-cleared and #2082 renamed them), creating
 // the two types when the boot seed has not yet run, and that a fresh database
 // gets neither type from a migration (the boot seed owns them).
 func TestEventRuleTypeBackfill(t *testing.T) {
@@ -193,7 +194,7 @@ func TestEventRuleTypeBackfill(t *testing.T) {
 		t.Skip("integration test needs Postgres")
 	}
 	fresh := connectDSN(t, storagetest.NewDSN(t))
-	if n := count(t, fresh, `select count(*) from event_type where name in ('condition-started', 'condition-ended')`); n != 0 {
+	if n := count(t, fresh, `select count(*) from event_type where name in ('rule-fired', 'rule-cleared', 'rule-fired', 'rule-cleared')`); n != 0 {
 		t.Fatalf("a fresh database holds %d generic types from a migration, want 0 (the boot seed lands them)", n)
 	}
 
@@ -210,8 +211,8 @@ func TestEventRuleTypeBackfill(t *testing.T) {
 	}
 	fire := scalar(t, conn, `select t.name from event_rule r join event_type t on t.id = r.fire_event_type_id where r.name = 'old-rule'`)
 	clear := scalar(t, conn, `select t.name from event_rule r join event_type t on t.id = r.clear_event_type_id where r.name = 'old-rule'`)
-	if fire != "condition-started" || clear != "condition-ended" {
-		t.Fatalf("the upgraded rule fires %q and clears %q, want condition-started and condition-ended", fire, clear)
+	if fire != "rule-fired" || clear != "rule-cleared" {
+		t.Fatalf("the upgraded rule fires %q and clears %q, want rule-fired and rule-cleared", fire, clear)
 	}
 	if got := scalar(t, conn, `select is_nullable from information_schema.columns where table_name = 'event_rule' and column_name = 'fire_event_type_id'`); got != "NO" {
 		t.Fatalf("fire_event_type_id nullable = %s, want NO after the backfill", got)
@@ -223,18 +224,18 @@ func TestEventRuleTypeBackfill(t *testing.T) {
 		t.Fatalf("event.alarm_id nullable = %s, want YES", got)
 	}
 
-	// The condition table cascades like the streak table: a row goes with its
+	// The firing table cascades like the streak table: a row goes with its
 	// component.
 	mustExec(t, conn, `insert into component (name, product_id) values ('cond-c', (select id from product where name = 'generic-device'))`)
-	mustExec(t, conn, `insert into event_rule_condition (rule_id, component_id, instance, since)
+	mustExec(t, conn, `insert into event_rule_firing (rule_id, component_id, instance, since)
 		values ((select id from event_rule where name = 'old-rule'), (select id from component where name = 'cond-c'), 'tcp', now())`)
-	if _, err := conn.Exec(context.Background(), `insert into event_rule_condition (rule_id, component_id, instance, since)
+	if _, err := conn.Exec(context.Background(), `insert into event_rule_firing (rule_id, component_id, instance, since)
 		values ((select id from event_rule where name = 'old-rule'), (select id from component where name = 'cond-c'), 'tcp', now())`); err == nil {
-		t.Fatal("a second condition row for the same rule, component and instance was accepted")
+		t.Fatal("a second firing for the same rule, component and instance was accepted")
 	}
 	mustExec(t, conn, `delete from component where name = 'cond-c'`)
-	if n := count(t, conn, `select count(*) from event_rule_condition`); n != 0 {
-		t.Fatalf("%d condition rows outlived their component, want 0", n)
+	if n := count(t, conn, `select count(*) from event_rule_firing`); n != 0 {
+		t.Fatalf("%d firings outlived their component, want 0", n)
 	}
 }
 

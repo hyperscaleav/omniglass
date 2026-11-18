@@ -762,9 +762,9 @@ omniglass auth me notification markAllRead
 omniglass sim mail --listen 0.0.0.0:2525 --out /tmp/mail.jsonl         # a mail relay simulator for a lab
 ```
 
-A noisy alarm's condition is snoozed from any alarm of it, for `1m` to `7d`: every notification about
-it is written `suppressed` until then, and a condition still raised when the snooze ends is announced
-again ([snoozing](/guides/operator/entities/#snoozing-silencing-a-noisy-condition-for-a-while)).
+A noisy alarm is snoozed for `1m` to `7d`, and the snooze carries to the alarm raised again after
+it: every notification about it is written `suppressed` until then, and an alarm still raised when
+the snooze ends is announced again ([snoozing](/guides/operator/entities/#snoozing-silencing-a-noisy-alarm-for-a-while)).
 
 ```sh
 a=$(omniglass component alarm list panel-2 | jq -r '.alarms[0].id')

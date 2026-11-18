@@ -65,7 +65,7 @@ func TestAnOperatorSnoozesAndUnsnoozesInScope(t *testing.T) {
 	if got.SnoozedUntil != nil || got.SnoozedBy != "" {
 		t.Errorf("unsnooze returned %+v, want no snooze", got)
 	}
-	// Unsnoozing a condition that is not snoozed is a 200 that writes nothing.
+	// Unsnoozing an alarm that is not snoozed is a 200 that writes nothing.
 	f.c.do(f.responder, http.MethodPost, snoozePath(f.mine, f.mineAlarm, "unsnooze"), nil, http.StatusOK)
 }
 

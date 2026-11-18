@@ -182,7 +182,7 @@ var IdentityShapes = map[string]TableIdentity{
 
 	// Id only.
 	"alarm":        {Shape: ShapeIDOnly},
-	"alarm_snooze": {Shape: ShapeIDOnly, Reason: "a snooze on an alarm condition, keyed by component and dedup key; it is set and ended through an alarm, never named"},
+	"alarm_snooze": {Shape: ShapeIDOnly, Reason: "a snooze on an alarm, keyed by component and dedup key; it is set and ended through an alarm, never named"},
 	// A person's omnibot conversation (#2113): its owner types the name, unique
 	// among their own, and only they ever see it.
 	"assistant_conversation": {Shape: ShapeKeyBearing,
@@ -216,22 +216,22 @@ var IdentityShapes = map[string]TableIdentity{
 	// names or addresses it.
 	"lab_mark": {Shape: ShapeIDOnly},
 	// One row per impaired simulated component, keyed by that component's uuid.
-	"sim_impairment":       {Shape: ShapeIDOnly},
-	"event_rule_state":     {Shape: ShapeIDOnly, Reason: "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name"},
-	"event_rule_live":      {Shape: ShapeIDOnly, Reason: "when a rule last judged a sample, keyed by the rule's uuid; nothing addresses it by name"},
-	"event_rule_condition": {Shape: ShapeIDOnly, Reason: "a rule's condition in force, keyed by rule, component and instance; nothing addresses it by name"},
-	"calc_pending":         {Shape: ShapeIDOnly, Reason: "a calc rule's pending work on an owner, keyed by rule and owner; nothing addresses it by name"},
-	"calc_rule_state":      {Shape: ShapeIDOnly, Reason: "a calc rule's last outcome on an owner, keyed by rule and owner; nothing addresses it by name"},
-	"calc_rule_input":      {Shape: ShapeIDOnly, Reason: "one input of a calc rule, keyed by rule and position; its alias is an expression's binding, not an address"},
-	"endpoint_live":        {Shape: ShapeIDOnly, Reason: "when an endpoint last delivered a batch, keyed by the endpoint's uuid; nothing addresses it by name"},
-	"action_rule_target":   {Shape: ShapeIDOnly, Reason: "a target an action rule sends to, keyed by rule and target; nothing addresses it by name"},
-	"action_rule_opt_out":  {Shape: ShapeIDOnly, Reason: "a person opted out of a rule, keyed by rule and user; nothing addresses it by name"},
-	"notification":         {Shape: ShapeIDOnly, Reason: "one message on its way, keyed by its uuid (the Idempotency-Key a receiver sees); nothing addresses it by name"},
-	"webhook_token":        {Shape: ShapeIDOnly, Reason: "a webhook endpoint's token binding, keyed by the endpoint's uuid and found by the token's digest; nothing addresses it by name"},
-	"unclaimed_source":     {Shape: ShapeIDOnly, Reason: "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name"},
-	"identity_binding":     {Shape: ShapeIDOnly, Reason: "a conduit's identity tied to its owner, addressed by its conduit, match key and value; nothing names it"},
-	"unbound_identity":     {Shape: ShapeIDOnly, Reason: "an identity a conduit reported that no binding places, one row per conduit, match key and value; read as the conduit's list, never addressed by name"},
-	"system_slot_product":  {Shape: ShapeIDOnly}, "system_slot_type": {Shape: ShapeIDOnly},
+	"sim_impairment":      {Shape: ShapeIDOnly},
+	"event_rule_state":    {Shape: ShapeIDOnly, Reason: "a rule's pending streak, keyed by rule, component and instance; nothing addresses it by name"},
+	"event_rule_live":     {Shape: ShapeIDOnly, Reason: "when a rule last judged a sample, keyed by the rule's uuid; nothing addresses it by name"},
+	"event_rule_firing":   {Shape: ShapeIDOnly, Reason: "one place a rule is firing, keyed by rule, component and instance; nothing addresses it by name"},
+	"calc_pending":        {Shape: ShapeIDOnly, Reason: "a calc rule's pending work on an owner, keyed by rule and owner; nothing addresses it by name"},
+	"calc_rule_state":     {Shape: ShapeIDOnly, Reason: "a calc rule's last outcome on an owner, keyed by rule and owner; nothing addresses it by name"},
+	"calc_rule_input":     {Shape: ShapeIDOnly, Reason: "one input of a calc rule, keyed by rule and position; its alias is an expression's binding, not an address"},
+	"endpoint_live":       {Shape: ShapeIDOnly, Reason: "when an endpoint last delivered a batch, keyed by the endpoint's uuid; nothing addresses it by name"},
+	"action_rule_target":  {Shape: ShapeIDOnly, Reason: "a target an action rule sends to, keyed by rule and target; nothing addresses it by name"},
+	"action_rule_opt_out": {Shape: ShapeIDOnly, Reason: "a person opted out of a rule, keyed by rule and user; nothing addresses it by name"},
+	"notification":        {Shape: ShapeIDOnly, Reason: "one message on its way, keyed by its uuid (the Idempotency-Key a receiver sees); nothing addresses it by name"},
+	"webhook_token":       {Shape: ShapeIDOnly, Reason: "a webhook endpoint's token binding, keyed by the endpoint's uuid and found by the token's digest; nothing addresses it by name"},
+	"unclaimed_source":    {Shape: ShapeIDOnly, Reason: "a sender no endpoint claims, one row per listener host, transport and source address; read as a list, never addressed by name"},
+	"identity_binding":    {Shape: ShapeIDOnly, Reason: "a conduit's identity tied to its owner, addressed by its conduit, match key and value; nothing names it"},
+	"unbound_identity":    {Shape: ShapeIDOnly, Reason: "an identity a conduit reported that no binding places, one row per conduit, match key and value; read as the conduit's list, never addressed by name"},
+	"system_slot_product": {Shape: ShapeIDOnly}, "system_slot_type": {Shape: ShapeIDOnly},
 	"tag_binding": {Shape: ShapeIDOnly},
 	// catalog_shadow holds an operator's version of a shipped catalog row
 	// (#655, ADR-0095). Nobody names it: it is addressed by the row it shadows,

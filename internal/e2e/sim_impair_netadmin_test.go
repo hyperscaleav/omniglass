@@ -297,10 +297,10 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	// Each alarm the rule opened was opened by a fire event carrying it, once.
 	waitFor(t, "an alarm per endpoint", func() bool { return ruleAlarms() == 2 })
 	opened := ruleAlarmIDs()
-	fired := ruleEvents("condition-started")
+	fired := ruleEvents("rule-fired")
 	for _, id := range opened {
 		if fired[id] != 1 {
-			t.Fatalf("alarm %s was opened by %d condition-started events (all: %v), want exactly 1 carrying it", id, fired[id], fired)
+			t.Fatalf("alarm %s was opened by %d rule-fired events (all: %v), want exactly 1 carrying it", id, fired[id], fired)
 		}
 	}
 
@@ -311,10 +311,10 @@ func TestImpairingASimulatedDeviceShowsInCollection(t *testing.T) {
 	waitFor(t, "both endpoints to read up again", both("up"))
 	waitFor(t, "the reachability alarms to clear", func() bool { return ruleAlarms() == 0 })
 	// Each was resolved by a clear event carrying it, once.
-	cleared := ruleEvents("condition-ended")
+	cleared := ruleEvents("rule-cleared")
 	for _, id := range opened {
 		if cleared[id] != 1 {
-			t.Fatalf("alarm %s was resolved by %d condition-ended events (all: %v), want exactly 1 carrying it", id, cleared[id], cleared)
+			t.Fatalf("alarm %s was resolved by %d rule-cleared events (all: %v), want exactly 1 carrying it", id, cleared[id], cleared)
 		}
 	}
 	waitFor(t, "the system to read healthy again", func() bool { return verdict() == "healthy" })

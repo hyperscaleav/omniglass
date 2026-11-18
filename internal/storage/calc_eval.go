@@ -1150,7 +1150,7 @@ func markSystemCalcRules(ctx context.Context, tx pgx.Tx, systemIDs ...string) er
 // markComponentCalcRules is markSystemCalcRules for a component whose
 // product changed, and with it the type its rules select by (#1015): every
 // enabled component rule selecting it is marked there when it holds a value
-// of one of the rule's inputs (the condition a written rule marks by, so a
+// of one of the rule's inputs (the criterion a written rule marks by, so a
 // rule it came into computes over the values already stored), and a rule
 // that no longer selects it drops its mark and state there. Selection is the
 // event rules' component matcher, the one the serve rechecks by.
@@ -1226,7 +1226,7 @@ func (p *PG) markComponentCalcRules(ctx context.Context, tx pgx.Tx, componentID 
 }
 
 // calcInputHeldSQL is the predicate that a component holds a stored value of
-// one of a calc rule's inputs, the condition a rule marks a component by:
+// one of a calc rule's inputs, the criterion a rule marks a component by:
 // rule and component are SQL expressions for their ids.
 func calcInputHeldSQL(rule, component string) string {
 	return `exists (select 1 from calc_rule_input i where i.rule_id = ` + rule + ` and (

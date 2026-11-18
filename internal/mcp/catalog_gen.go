@@ -183,7 +183,7 @@ var catalog = []tooldef.Def{
 		QueryParams: []string{"include_cleared", "unacknowledged"},
 		Annotations: tooldef.Annotations{ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false},
 		Class:       tooldef.ClassRead,
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"include_cleared\":{\"description\":\"Include cleared alarms, so the list is the history rather than what is wrong now\",\"type\":\"boolean\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"unacknowledged\":{\"description\":\"Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended\",\"type\":\"boolean\"}},\"required\":[\"name\"],\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"include_cleared\":{\"description\":\"Include cleared alarms, so the list is the history rather than what is wrong now\",\"type\":\"boolean\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"},\"unacknowledged\":{\"description\":\"Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended\",\"type\":\"boolean\"}},\"required\":[\"name\"],\"type\":\"object\"}",
 	},
 	{
 		Name:        "acknowledge-component-alarm",
@@ -199,8 +199,8 @@ var catalog = []tooldef.Def{
 	},
 	{
 		Name:        "snooze-component-alarm",
-		Title:       "Snooze an alarm's condition",
-		Description: "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
+		Title:       "Snooze an alarm",
+		Description: "Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.",
 		Method:      "POST",
 		Path:        "/components/{name}/alarms/{id}:snooze",
 		Permission:  "alarm:snooze",
@@ -208,7 +208,7 @@ var catalog = []tooldef.Def{
 		BodyParams:  []string{"duration"},
 		Annotations: tooldef.Annotations{ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false},
 		Class:       tooldef.ClassWrite,
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"duration\":{\"description\":\"How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer\",\"type\":\"string\"},\"id\":{\"description\":\"The alarm id: any alarm of the condition to snooze\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"duration\",\"id\",\"name\"],\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"duration\":{\"description\":\"How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer\",\"type\":\"string\"},\"id\":{\"description\":\"The alarm id: any alarm of the dedup key to snooze\",\"type\":\"string\"},\"name\":{\"description\":\"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)\",\"type\":\"string\"}},\"required\":[\"duration\",\"id\",\"name\"],\"type\":\"object\"}",
 	},
 	{
 		Name:        "get-component-alarm-timeline",
@@ -224,8 +224,8 @@ var catalog = []tooldef.Def{
 	},
 	{
 		Name:        "unsnooze-component-alarm",
-		Title:       "End an alarm's condition's snooze",
-		Description: "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.",
+		Title:       "End an alarm's snooze",
+		Description: "Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.",
 		Method:      "POST",
 		Path:        "/components/{name}/alarms/{id}:unsnooze",
 		Permission:  "alarm:snooze",
@@ -682,7 +682,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-event-rule",
 		Title:       "List event rules",
-		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
+		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 		Method:      "GET",
 		Path:        "/event-rules",
 		Permission:  "rule:read",
@@ -705,7 +705,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "get-event-rule-state",
 		Title:       "Get an event rule's live state",
-		Description: "What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.",
+		Description: "What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.",
 		Method:      "GET",
 		Path:        "/event-rules/{name}/state",
 		Permission:  "rule:read",
@@ -1001,7 +1001,7 @@ var catalog = []tooldef.Def{
 	{
 		Name:        "list-system-alarms",
 		Title:       "List a system's members' alarms",
-		Description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 		Method:      "GET",
 		Path:        "/systems/{name}/alarms",
 		Permission:  "system:read",

@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { CreateEventRuleInputBody, CriteriaBody, CriteriaInput, EventRuleBody, EventRuleStateOutputBody, RuleConditionBody, RuleOpenAlarmBody, RuleStreakBody, UpdateEventRuleInputBody } from "../api/api.gen";
+import type { CreateEventRuleInputBody, CriteriaBody, CriteriaInput, EventRuleBody, EventRuleStateOutputBody, RuleFiringBody, RuleOpenAlarmBody, RuleStreakBody, UpdateEventRuleInputBody } from "../api/api.gen";
 import type { SeverityLevel } from "./severity";
 import type { PreviewEventRule } from "./expressions";
 import { rel } from "./format";
@@ -30,7 +30,7 @@ export type RuleLane = EventRule["sample_lane"];
 export type RuleState = EventRuleStateOutputBody;
 export type RuleOpenAlarm = RuleOpenAlarmBody;
 export type RuleStreak = RuleStreakBody;
-export type RuleCondition = RuleConditionBody;
+export type RuleFiring = RuleFiringBody;
 export type CreateEventRule = CreateEventRuleInputBody;
 export type UpdateEventRule = UpdateEventRuleInputBody;
 
@@ -43,10 +43,10 @@ export async function listEventRules(): Promise<EventRule[]> {
   return (data?.event_rules ?? []) as EventRule[];
 }
 
-export async function getRuleState(name: string): Promise<{ conditions: RuleCondition[]; open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
+export async function getRuleState(name: string): Promise<{ firings: RuleFiring[]; open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
   const { data, error } = await api.GET("/event-rules/{name}/state", { params: { path: { name } } });
   if (error) throw error;
-  return { conditions: data?.conditions ?? [], open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
+  return { firings: data?.firings ?? [], open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
 }
 
 // judgedWords says when a rule last judged an arriving sample (#929): the
@@ -229,8 +229,8 @@ export function defaultSeverity(levels: SeverityLevel[] | undefined): string {
 // The official generic event types a rule writes when it needs no semantic
 // type of its own (#948): a new rule starts on them until the form offers the
 // catalog (#951).
-export const GENERIC_FIRE_EVENT_TYPE = "condition-started";
-export const GENERIC_CLEAR_EVENT_TYPE = "condition-ended";
+export const GENERIC_FIRE_EVENT_TYPE = "rule-fired";
+export const GENERIC_CLEAR_EVENT_TYPE = "rule-cleared";
 
 export function emptyDraft(severity = ""): RuleDraft {
   return {
@@ -338,10 +338,10 @@ export function validateDraft(d: RuleDraft, editing?: string): DraftErrors {
   else {
     const f = readValue(d.fireValue, d.lane);
     if (d.fireExpr !== null) {
-      if (!d.fireExpr.trim()) e.fireExpr = "An expression that is true when the condition starts.";
+      if (!d.fireExpr.trim()) e.fireExpr = "An expression that is true when the rule fires.";
     } else if (f.error) e.fireValue = f.error;
     if (d.clearMode === "custom" && d.clearExpr !== null) {
-      if (!d.clearExpr.trim()) e.clearExpr = "An expression that is true when the condition ends.";
+      if (!d.clearExpr.trim()) e.clearExpr = "An expression that is true when it clears.";
     } else if (d.clearMode === "custom") {
       const c = readValue(d.clearValue, d.lane);
       if (c.error) e.clearValue = c.error;
@@ -351,7 +351,7 @@ export function validateDraft(d: RuleDraft, editing?: string): DraftErrors {
   if (fs) e.fireSustain = fs;
   const cs = readDuration(d.clearSustain);
   if (cs) e.clearSustain = cs;
-  if (!d.fireEventType) e.fireEventType = "The event the rule writes when its condition starts.";
+  if (!d.fireEventType) e.fireEventType = "The event the rule writes when it fires.";
   return e;
 }
 

@@ -73,7 +73,7 @@ describe("EventsPanel", () => {
       events: [
         {
           ts: nowIso,
-          key: "condition-started",
+          key: "rule-fired",
           event_type_id: "0192a5f0-3333-7000-8000-0000000000a3",
           origin: "derived",
           message: "Reachability lost",
@@ -100,7 +100,7 @@ describe("EventsPanel", () => {
       events: [
         {
           ts: nowIso,
-          key: "condition-ended",
+          key: "rule-cleared",
           event_type_id: "0192a5f0-3333-7000-8000-0000000000a3",
           origin: "derived",
           message: "Old watch",

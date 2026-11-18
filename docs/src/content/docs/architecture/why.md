@@ -125,8 +125,8 @@ Each stop is a page:
    a signal you can see and a fix you can push.
 4. **[Health](/architecture/health/)** rolls the signals up the system tree into the one answer that
    matters.
-5. **[Alarms and actions](/architecture/alarms-actions/)** detect a condition, hold it until it
-   resolves, and respond.
+5. **[Alarms and actions](/architecture/alarms-actions/)** detect a fault, hold an alarm until it
+   clears, and respond.
 
 The [overview](/architecture/) is the map of the whole journey.
 

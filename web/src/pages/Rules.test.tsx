@@ -27,14 +27,14 @@ const reach: EventRule = {
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { expr: 'value == "down"' }, clear_criteria: { expr: 'value == "up"' },
   fire_sustain: "15s", clear_sustain: "0s", severity: "high",
-  fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: true, version: 1,
-  open_alarms: 1, pending_streaks: 1, conditions_in_force: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
+  fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, official: true, version: 1,
+  open_alarms: 1, pending_streaks: 1, firing: 1, last_judged_at: new Date(Date.now() - 30_000).toISOString(),
 };
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot", label: "Too hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
   fire_criteria: { expr: "value > 40.0" }, clear_criteria: { expr: "value < 35.0" }, fire_sustain: "1m0s", clear_sustain: "30s",
-  severity: "average", fire_event_type: "condition-started", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
+  severity: "average", fire_event_type: "rule-fired", enabled: false, official: false, version: 2, open_alarms: 0, pending_streaks: 0, firing: 0,
 };
 // A rule whose component type and component were deleted after it was written:
 // it matches nothing by them, and stays editable.
@@ -63,28 +63,28 @@ const locationOwner: Me = {
 
 const display = uuidFor("comp-display-1");
 const reachState = {
-  conditions: [{ component: "display-1", component_id: display, instance: "icmp", since: new Date(Date.now() - 60_000).toISOString() }],
+  firings: [{ component: "display-1", component_id: display, instance: "icmp", since: new Date(Date.now() - 60_000).toISOString() }],
   open: [{ alarm_id: uuidFor("alarm-1"), component: "display-1", component_id: display, instance: "icmp", severity: "high", raised_at: new Date(Date.now() - 60_000).toISOString() }],
   pending: [{ component: "codec-1", component_id: uuidFor("comp-codec-1"), instance: "http", pending: "fire" as const, since: new Date(Date.now() - 5_000).toISOString() }],
   last_judged_at: new Date(Date.now() - 10_000).toISOString(),
 };
 
 const eventTypes: EventTypeRow[] = [
-  { name: "condition-started", label: "Condition Started", official: true },
-  { name: "condition-ended", label: "Condition Ended", official: true },
+  { name: "rule-fired", label: "Rule Fired", official: true },
+  { name: "rule-cleared", label: "Rule Cleared", official: true },
   { name: "call-started", label: "Call Started", official: true },
 ];
 // An informational rule: no severity, so it raises no alarm; it holds one
-// condition in force.
+// firing.
 const watch: EventRule = {
   id: uuidFor("rule-input-watch"), name: "input-watch", label: "Input watch",
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { expr: 'value == "down"' }, fire_sustain: "0s", clear_sustain: "0s",
-  fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: false, version: 1,
-  open_alarms: 0, pending_streaks: 0, conditions_in_force: 1,
+  fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, official: false, version: 1,
+  open_alarms: 0, pending_streaks: 0, firing: 1,
 };
 const watchState = {
-  conditions: [{ component: "display-1", component_id: display, instance: "tcp", since: new Date(Date.now() - 90_000).toISOString() }],
+  firings: [{ component: "display-1", component_id: display, instance: "tcp", since: new Date(Date.now() - 90_000).toISOString() }],
   open: [], pending: [],
 };
 
@@ -109,7 +109,7 @@ function mount(me: Me = admin, rules: EventRule[] = [reach, hot], opts: { state?
   qc.setQueryData([...EVENT_RULES_KEY], rules);
   if (opts.state !== false) {
     qc.setQueryData([...ruleStateKey("reachability-lost")], reachState);
-    for (const r of rules.filter((x) => x.name !== "reachability-lost")) qc.setQueryData([...ruleStateKey(r.name)], { conditions: [], open: [], pending: [] });
+    for (const r of rules.filter((x) => x.name !== "reachability-lost")) qc.setQueryData([...ruleStateKey(r.name)], { firings: [], open: [], pending: [] });
   }
   qc.setQueryData([...severityLevelsKey], levels);
   qc.setQueryData([...PROPERTIES_KEY], properties);
@@ -138,7 +138,7 @@ function catchWrites() {
       writes.push({ method: req.method, url: req.url, body });
       return req.method === "DELETE" ? new Response(null, { status: 204 }) : json({ ...hot, ...(body as object) });
     }
-    if (req.url.endsWith("/state")) return json({ conditions: [], open: [], pending: [] });
+    if (req.url.endsWith("/state")) return json({ firings: [], open: [], pending: [] });
     return json({ event_rules: [reach, hot] });
   });
   return writes;
@@ -265,11 +265,11 @@ describe("Rules page", () => {
       if (req.url.includes(":timeline")) {
         expect(req.url).toContain(`/components/${display}/alarms/${uuidFor("alarm-1")}:timeline`);
         return json({ component: display, alarm_id: uuidFor("alarm-1"), entries: [
-          { at: reachState.open[0].raised_at, kind: "event", what: "condition-started", rule: "reachability-lost", instance: "icmp" },
+          { at: reachState.open[0].raised_at, kind: "event", what: "rule-fired", rule: "reachability-lost", instance: "icmp" },
           { at: reachState.open[0].raised_at, kind: "audit", what: "raise", rule: "reachability-lost" },
         ] });
       }
-      return json({ conditions: [], open: [], pending: [] });
+      return json({ firings: [], open: [], pending: [] });
     });
     mount();
     fireEvent.click(screen.getByText("Reachability lost"));
@@ -279,7 +279,7 @@ describe("Rules page", () => {
     const list = await waitFor(() => within(open).getByRole("list", { name: "Timeline of Reachability lost" }));
     const items = within(list).getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items).toHaveLength(2);
-    expect(items[0]).toContain("condition-started");
+    expect(items[0]).toContain("rule-fired");
     expect(items[1]).toContain("raised");
   });
 
@@ -293,7 +293,7 @@ describe("Rules page", () => {
   it("caps a long live list at eight rows and counts the rest", async () => {
     const { qc } = mount();
     const open = Array.from({ length: 11 }, (_, i) => ({ ...reachState.open[0], alarm_id: uuidFor(`alarm-cap-${i}`) }));
-    qc.setQueryData([...ruleStateKey("reachability-lost")], { conditions: [], open, pending: [] });
+    qc.setQueryData([...ruleStateKey("reachability-lost")], { firings: [], open, pending: [] });
     fireEvent.click(screen.getByText("Reachability lost"));
     const b = await blade();
     const region = within(b).getByRole("region", { name: "Open alarms" });
@@ -380,7 +380,7 @@ describe("Rules page", () => {
       name: "reach-flap", sample_key: "endpoint-reachable",
       fire_criteria: { op: "ne", value: "up" }, fire_sustain: "45s", clear_sustain: "0s",
       // The default level: the worst that does not take its component out.
-      severity: "average", fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, selector: { component_types: [], components: [] },
+      severity: "average", fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, selector: { component_types: [], components: [] },
     });
   });
 
@@ -400,7 +400,7 @@ describe("Rules page", () => {
       }
       if (req.url.endsWith("/event-rules:preview")) return json(preview);
       if (req.method === "POST") return json({ ...hot, ...(body as object) });
-      if (req.url.endsWith("/state")) return json({ conditions: [], open: [], pending: [] });
+      if (req.url.endsWith("/state")) return json({ firings: [], open: [], pending: [] });
       return json({ event_rules: [reach, hot] });
     });
     return reqs;
@@ -605,7 +605,7 @@ describe("Rules page", () => {
     const writes: { method: string; url: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "GET") return req.url.endsWith("/state") ? json({ conditions: [], open: [], pending: [] }) : json({ event_rules: [reach, hot] });
+      if (req.method === "GET") return req.url.endsWith("/state") ? json({ firings: [], open: [], pending: [] }) : json({ event_rules: [reach, hot] });
       writes.push({ method: req.method, url: req.url, body: await req.clone().json() });
       if (req.url.includes(":rename")) return json({ title: "Conflict", status: 409, detail: "an event rule already has that name" }, 409);
       return json({ ...hot, label: "Too warm" });
@@ -718,10 +718,10 @@ describe("Rules page", () => {
     expect([...sev.options].map((o) => o.textContent)).toContain("None (informational)");
     fireEvent.change(sev, { target: { value: "" } });
     const fireType = screen.getByLabelText("Fire event type") as HTMLSelectElement;
-    expect(fireType.value).toBe("condition-started");
-    expect([...fireType.options].map((o) => o.value)).toEqual(["condition-started", "condition-ended", "call-started"]);
+    expect(fireType.value).toBe("rule-fired");
+    expect([...fireType.options].map((o) => o.value)).toEqual(["rule-fired", "rule-cleared", "call-started"]);
     const clearType = screen.getByLabelText("Clear event type") as HTMLSelectElement;
-    expect(clearType.value).toBe("condition-ended");
+    expect(clearType.value).toBe("rule-cleared");
     expect([...clearType.options].map((o) => o.textContent)).toContain("No clear event");
     fireEvent.change(clearType, { target: { value: "" } });
     const submit = screen.getByText("Create rule").closest("button") as HTMLButtonElement;
@@ -731,23 +731,23 @@ describe("Rules page", () => {
     const body = writes[0].body as Record<string, unknown>;
     expect(body.severity).toBeUndefined();
     expect(body.clear_event_type).toBeUndefined();
-    expect(body.fire_event_type).toBe("condition-started");
+    expect(body.fire_event_type).toBe("rule-fired");
   });
 
-  it("shows an informational rule as such, with its condition in force, on the list and the blade", async () => {
+  it("shows an informational rule as such, firing, on the list and the blade", async () => {
     mount(admin, [reach, hot, watch], { state: false });
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.url.endsWith("/event-rules/input-watch/state")) return json(watchState);
-      return json({ conditions: [], open: [], pending: [] });
+      return json({ firings: [], open: [], pending: [] });
     });
     const row = screen.getByText("Input watch").closest("tr") as HTMLElement;
     expect(within(row).getByText("informational")).toBeTruthy();
-    expect(within(row).getByText("1 in force")).toBeTruthy();
+    expect(within(row).getByText("1 firing")).toBeTruthy();
     fireEvent.click(screen.getByText("Input watch"));
     const b = await blade();
     expect(within(b).getByText("informational")).toBeTruthy();
-    const conds = within(b).getByRole("region", { name: "Conditions in force" });
+    const conds = within(b).getByRole("region", { name: "Firing" });
     expect(await within(conds).findByText("display-1")).toBeTruthy();
     expect(within(conds).getByText("tcp")).toBeTruthy();
   });
@@ -770,7 +770,7 @@ describe("Rules page", () => {
       const b = await blade();
       expect(within(b).getByText("reachability-lost")).toBeTruthy();
       // Its live state reads by the rule's current name.
-      const conds = within(b).getByRole("region", { name: "Conditions in force" });
+      const conds = within(b).getByRole("region", { name: "Firing" });
       expect(await within(conds).findByText("display-1")).toBeTruthy();
     } finally {
       window.history.pushState({}, "", "/");
@@ -807,7 +807,7 @@ describe("Rules page", () => {
           await gate;
           return json({ event_rules: [reach, hot] });
         }
-        return json({ conditions: [], open: [], pending: [] });
+        return json({ firings: [], open: [], pending: [] });
       });
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       qc.setQueryData([...severityLevelsKey], levels);

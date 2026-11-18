@@ -298,7 +298,7 @@ persist: "persistence consumer\nbatch sink (async)" { class: node }
 tables: "metric · state · log\nsample tables" { class: node; shape: cylinder }
 sched: "schedule + timer\n(leader-elected clock)" { class: node }
 pg: "event · alarm\n(PG)" { class: node; shape: cylinder }
-alarm: "alarm\none incident · new row per open\n(event_rule, owner)" { class: node }
+alarm: "alarm\none fault · new row per open\n(event_rule, owner)" { class: node }
 cdc: "JetStream\nrecord/state lane" { class: node; shape: queue }
 actions: "action_rule consumer\nnotify · command\nremediate-verify-escalate" { class: node }
 itsm: "ITSM (action target)" { class: node }

@@ -83,7 +83,7 @@ func ImpactVerdict(impact string) Verdict {
 // Component is a component as the rollup sees it: only its own current
 // verdict, from its active alarms. An alarm impairs a component wholesale
 // now (#626): there is no per-capability degradation left to resolve, so a
-// component's condition is the whole of what a slot it occupies can see.
+// component's own state is the whole of what a slot it occupies can see.
 type Component struct {
 	Name    string
 	Verdict Verdict

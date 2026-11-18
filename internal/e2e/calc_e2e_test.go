@@ -105,7 +105,7 @@ func TestCalcRuleEndToEnd(t *testing.T) {
 	must("calc-rule", "create", "--name", "tcp-dial", "--owner-kind", "component",
 		"--inputs", `[{"alias":"dial","key":"tcp-connect-time"}]`, "--reduce", `{"expr":"max(dial)"}`, "--output-key", "tcp-dial-peak")
 	must("event-rule", "create", "--name", "port-up", "--sample-key", "tcp-dial-peak",
-		"--fire-criteria", `{"expr":"value > 0.0"}`, "--severity", "high", "--fire-event-type", "condition-started")
+		"--fire-criteria", `{"expr":"value > 0.0"}`, "--severity", "high", "--fire-event-type", "rule-fired")
 
 	simCtx, stopSim := context.WithCancel(ctx)
 	defer stopSim()

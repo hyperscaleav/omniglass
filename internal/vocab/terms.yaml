@@ -276,6 +276,19 @@ terms:
     schema: EventRuleBody
     permission: rule
     nav: /event-rules
+  # What a rule holds between its fire and its clear (ADR-2038). Condition is
+  # banned only in the rule's sense (a condition a rule held, an alarm's
+  # condition, the condition-started type); the English condition (a
+  # precondition, a race, the condition a guard checks) keeps the word.
+  - word: firing
+    plural: firings
+    definition: One stretch of a rule's criteria holding on a component, from the moment it fires until it clears.
+    audience: admin
+    retired:
+      - word: condition
+        pattern: '(?i)\bcondition-(?:started|ended)\b|\balarm(?:''s)? conditions?\b|\bconditions? (?:is |was )?(?:in force|snoozed|started|ended)\b|\brule(?:''s)? conditions?\b'
+        origin: ADR-2038
+        replacement: firing (a rule fires and clears; the type is rule-fired or rule-cleared), or the alarm's identity (component and dedup key) for a snooze
   - word: calc rule
     plural: calc rules
     definition: A rule that derives a new value from other signals on each owner it applies to.
@@ -300,6 +313,23 @@ terms:
     schema: AlarmBody
     permission: alarm
     nav: /alarms
+    retired:
+      # An incident is the ITSM's record (ADR-2038), whose Omniglass handle is a
+      # ticket; a system's unhealthy stretches are its health history. The ITSM's
+      # own incident keeps the word.
+      - word: incident
+        pattern: '(?i)\bincidents?\b'
+        origin: ADR-2038
+        replacement: alarm (a raised problem), health history (a system's unhealthy stretches), or ticket (the ITSM's record)
+        allow: '(?i)\bincident write-ups?\b|\bITSM(?:''s)? incidents?\b'
+      # Alert as the alarm's noun. The RFC 5424 level beside its neighbors, a
+      # quoted or code-spanned value, a daisyUI alert class, a role="alert", an
+      # alerts@ address and the pop-up the alarm metaphor contrasts keep it.
+      - word: alert
+        pattern: '(?i)(?:^|[^-\w"`])alerts?(?:$|[^-\w"`@])'
+        origin: ADR-2038
+        replacement: alarm (a raised problem, held until it clears)
+        allow: '(?i)\b(?:error|critical),? alert,? (?:and|or) emergency\b|\bpop-up \*alert\*'
   - word: notification
     plural: notifications
     definition: One message about an alarm sent on one channel, such as a webhook, an email or the inbox.

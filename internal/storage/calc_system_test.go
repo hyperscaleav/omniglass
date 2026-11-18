@@ -148,7 +148,7 @@ func TestCalcSystemRule(t *testing.T) {
 	// Event rules do not judge system-owned samples yet (#1002): an event
 	// rule on the output raises nothing for a system.
 	if _, err := r.gw.CreateEventRule(r.ctx, "", storage.EventRuleSpec{Name: "hot-output", SampleKey: "avg-temp",
-		Fire: rules.Criteria{Expr: "value > 0.0"}, Severity: "high", FireEventType: "condition-started"}, r.all); err != nil {
+		Fire: rules.Criteria{Expr: "value > 0.0"}, Severity: "high", FireEventType: "rule-fired"}, r.all); err != nil {
 		t.Fatal(err)
 	}
 	r.temp("m1", "", 31)

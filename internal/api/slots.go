@@ -97,7 +97,7 @@ type effectiveSlotBody struct {
 	// outage: this answers "did enough components sign up", short answers
 	// "is enough of it actually occupying the slot". Both are correct under
 	// their own definition.
-	Understaffed int `json:"understaffed" doc:"How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure"`
+	Understaffed int `json:"understaffed" doc:"How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own health. See the health read's short for the occupancy-aware figure"`
 }
 
 func toEffectiveSlotBody(e *storage.EffectiveSlot) effectiveSlotBody {

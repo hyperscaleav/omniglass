@@ -12,7 +12,7 @@ Of the three rule families below, the **`event_rule`** is built (#819,
 [ADR-0144](/architecture/decisions/#adr-0144-alarms-are-raised-by-event-rules-at-a-severity-level-from-a-ranked-registry)):
 its own table with typed columns, evaluated in the ingest transaction rather than on a JetStream
 consumer, and documented on [alarms and actions](/architecture/alarms-actions/#the-event_rule). It
-writes its typed fire and clear events at each edge of its condition, its alarm optional
+writes its typed fire and clear events as it fires and clears, its alarm optional
 ([ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)).
 The **`calc_rule` catalog** is built (#995, [ADR-0147](/architecture/decisions/#adr-0147-a-calc-rule-is-a-typed-sibling-registry-checked-acyclic-at-authoring)):
 rules are authored, type-checked and kept acyclic, below. **Component and system rules run** (#996,

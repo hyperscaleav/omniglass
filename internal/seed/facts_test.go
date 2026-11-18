@@ -235,7 +235,7 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		// The retention pass's lane behind past its catch-up passes (#1629).
 		{Name: "retention-behind", SampleKey: "retention-behind", Fire: "value == 1", Clear: "value == 0", FireSustain: "5m", Severity: "warning"},
 	} {
-		w.FireEventType, w.ClearEventType = "condition-started", "condition-ended"
+		w.FireEventType, w.ClearEventType = "rule-fired", "rule-cleared"
 		r := rules[w.Name]
 		if r.Label == "" || r.Description == "" {
 			t.Errorf("event rule %s has no label or description: %+v", w.Name, r)

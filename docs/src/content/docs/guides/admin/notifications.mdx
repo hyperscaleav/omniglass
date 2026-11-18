@@ -184,13 +184,13 @@ than a sentence: its target, a status pill, and the **action rule** that queued 
 ```
 notify  ops-chat  [sent]         action rule page-ops
 notify  ops-chat  [failed]       action rule page-ops   the receiver answered 503 (3 attempts)   [Retry]
-notify  ops-chat  [snoozed]      action rule page-ops   the condition is snoozed until 2026-10-29 14:30 UTC by root
+notify  ops-chat  [snoozed]      action rule page-ops   the alarm is snoozed until 2026-10-29 14:30 UTC by root
 notify  ops-chat  [on its way]   action rule page-ops
 ```
 
 **On its way** while it is queued, **sent** when the receiver answered 2xx, **failed** with the reason
-when it gave up, **snoozed** with the reason when the alarm's
-condition was [snoozed](/guides/operator/entities/#snoozing-silencing-a-noisy-condition-for-a-while)
+when it gave up, **snoozed** with the reason when the alarm
+was [snoozed](/guides/operator/entities/#snoozing-silencing-a-noisy-alarm-for-a-while)
 (a snoozed row is final: it is never sent or retried). The same pill, in the same words, marks each row
 of an action rule's or a target's recent notifications. The action rule is labelled, not a "by": the
 rule queued the message, and who snoozed the alarm is on the timeline's own **snoozed by** audit line.

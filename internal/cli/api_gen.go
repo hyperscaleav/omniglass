@@ -1706,7 +1706,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "create <name>",
 						Short:   "Raise an alarm on a component",
-						Long:    "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm create <name> --severity severity",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1724,7 +1724,7 @@ func generatedCommands() []*cobra.Command {
 							return runAPICommand(cmd, "POST", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition")
+					cmd.Flags().StringVar(&fDedupKey, "dedup-key", "", "What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing")
 					cmd.Flags().StringVar(&fMessage, "message", "", "What is wrong, for the operator reading it later")
 					cmd.Flags().StringVar(&fSeverity, "severity", "", "How bad it is: a severity level by name (see /severity-levels); a level at or above high puts the component itself in outage")
 					_ = cmd.MarkFlagRequired("severity")
@@ -1775,7 +1775,7 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().BoolVar(&qIncludeCleared, "include-cleared", false, "Include cleared alarms, so the list is the history rather than what is wrong now")
-					cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended")
+					cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended")
 					return cmd
 				}()
 				return cmd
@@ -1785,8 +1785,8 @@ func generatedCommands() []*cobra.Command {
 					var fDuration string
 					cmd := &cobra.Command{
 						Use:     "snooze <name> <id>",
-						Short:   "Snooze an alarm's condition",
-						Long:    "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Short:   "Snooze an alarm",
+						Long:    "Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm snooze <name> <id> --duration duration",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1798,7 +1798,7 @@ func generatedCommands() []*cobra.Command {
 							return runAPICommand(cmd, "POST", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fDuration, "duration", "", "How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer")
+					cmd.Flags().StringVar(&fDuration, "duration", "", "How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer")
 					_ = cmd.MarkFlagRequired("duration")
 					return cmd
 				}()
@@ -1825,8 +1825,8 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "unsnooze <name> <id>",
-						Short:   "End an alarm's condition's snooze",
-						Long:    "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Short:   "End an alarm's snooze",
+						Long:    "Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.\n\nArguments:\n  <name>  The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass component alarm unsnooze <name> <id>",
 						Args:    pathArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -3740,7 +3740,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an event rule",
-					Long:    "Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
+					Long:    "Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.",
 					Example: "  omniglass event-rule create --fire-criteria <json> --fire-event-type fire_event_type --name name --sample-key sample_key",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3792,13 +3792,13 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)")
-				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none")
+				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when it clears, by name (rule-cleared is the generic one); absent, it writes none")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "A Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Defaults to true")
-				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that starts the condition: {expr}, or the short form {op, value}")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria the rule fires on: {expr}, or the short form {op, value}")
 				_ = cmd.MarkFlagRequired("fire-criteria")
-				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when its condition starts, by name (condition-started is the generic one)")
+				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when it fires, by name (rule-fired is the generic one)")
 				_ = cmd.MarkFlagRequired("fire-event-type")
 				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "A Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
@@ -3852,7 +3852,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List event rules",
-					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
+					Long:    "Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 					Example: "  omniglass event-rule list",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3902,9 +3902,9 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria it ends on; absent, the negation of fire_criteria")
+				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria it clears on; absent, the negation of fire_criteria")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "Accepted and ignored, like fire_sustain")
-				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria its condition starts on: {expr}, or the short form {op, value}")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria it fires on: {expr}, or the short form {op, value}")
 				_ = cmd.MarkFlagRequired("fire-criteria")
 				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone")
 				cmd.Flags().StringVar(&fSampleKey, "sample-key", "", "The property or metric the candidate rule reads")
@@ -3920,7 +3920,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "rename <name>",
 					Short:   "Rename an event rule",
-					Long:    "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
+					Long:    "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.",
 					Example: "  omniglass event-rule rename <name> --name name",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3948,7 +3948,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "Get an event rule's live state",
-						Long:    "What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.",
+						Long:    "What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.",
 						Example: "  omniglass event-rule state list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -4033,13 +4033,13 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fClearCriteria, "clear-criteria", "", "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)")
-				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when its condition ends, by name; empty writes none")
+				cmd.Flags().StringVar(&fClearEventType, "clear-event-type", "", "The event type the rule writes when it clears, by name; empty writes none")
 				cmd.Flags().BoolVar(&fClearNegates, "clear-negates", false, "Drop the clear criteria, so the rule clears on the negation of its fire criteria")
 				cmd.Flags().StringVar(&fClearSustain, "clear-sustain", "", "How long the clear criteria must hold, a Go duration; empty is 0s")
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the rule watches for and why")
 				cmd.Flags().BoolVar(&fEnabled, "enabled", false, "Whether the rule evaluates; defaults to true on create")
-				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria that starts the condition: {expr}, or the short form {op, value}")
-				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when its condition starts, by name; it cannot be emptied")
+				cmd.Flags().StringVar(&fFireCriteria, "fire-criteria", "", "The criteria the rule fires on: {expr}, or the short form {op, value}")
+				cmd.Flags().StringVar(&fFireEventType, "fire-event-type", "", "The event type the rule writes when it fires, by name; it cannot be emptied")
 				cmd.Flags().StringVar(&fFireSustain, "fire-sustain", "", "How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s")
 				cmd.Flags().StringVar(&fLabel, "label", "", "A human label; also the alarm message when message is empty")
 				cmd.Flags().StringVar(&fMessage, "message", "", "The alarm message; empty uses the label or the name")
@@ -5452,7 +5452,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "retry <id>",
 					Short:   "Retry a failed notification",
-					Long:    "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
+					Long:    "Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.",
 					Example: "  omniglass notification retry <id>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -7804,7 +7804,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a system's members' alarms",
-						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
+						Long:    "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.\n\nArguments:\n  <name>  The system's name, or a dotted address (e.g. boi.17c.$sys.av); a name more than one row you can see answers to is refused with a 404 listing each match; pass its uuid or its dotted address instead.",
 						Example: "  omniglass system alarm list <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {

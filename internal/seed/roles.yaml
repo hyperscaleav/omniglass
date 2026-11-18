@@ -64,7 +64,7 @@ roles:
       # their alarms (#714, #1498), so granting it there would ship a capability
       # that acknowledges nothing in the shape the role is granted in.
       - "alarm:acknowledge"
-      # alarm:snooze silences an alarm's condition's notifications for a
+      # alarm:snooze silences an alarm's notifications for a
       # bounded time (#1318, ADR-1318). The role that acknowledges is the role
       # that snoozes, and for the same reason it is NOT on deploy: it resolves
       # on the component tier's alarm scope, which a location-scoped deploy
