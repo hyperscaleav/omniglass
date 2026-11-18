@@ -18,6 +18,6 @@ export const SYSTEM_PAGE_READS: readonly string[] = [
   "/systems/{system}/metrics",
   "/systems/{system}/metrics/{metric}/samples?hours=24&resolution=300",
   "/systems/{system}/metrics/{metric}/samples?hours=24&resolution=300&instance={instance}",
-  "/systems/{system}/roles",
+  "/systems/{system}/slots",
   "/views/fleet",
 ];

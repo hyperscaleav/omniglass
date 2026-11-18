@@ -11,7 +11,7 @@ import (
 )
 
 // TestEveryReservedKeyHasExactlyOneClass: the reserved family partitions its
-// names. Every node-only key from probekeys is node-probe, every platform key
+// names. Every outpost-only key from probekeys is outpost-probe, every platform key
 // is platform, every command lifecycle event is command-lifecycle, no name is
 // in two, and the family is exactly those three sets.
 func TestEveryReservedKeyHasExactlyOneClass(t *testing.T) {
@@ -30,15 +30,15 @@ func TestEveryReservedKeyHasExactlyOneClass(t *testing.T) {
 		_, platformKey := platform[key]
 		_, lifecycleKey := commandLifecycle[key]
 		in := 0
-		for _, member := range []bool{probekeys.IsNodeOnly(key), platformKey, lifecycleKey} {
+		for _, member := range []bool{probekeys.IsOutpostOnly(key), platformKey, lifecycleKey} {
 			if member {
 				in++
 			}
 		}
 		if in != 1 {
-			t.Errorf("%s is node-only %v, platform %v and command-lifecycle %v; want exactly one", key, probekeys.IsNodeOnly(key), platformKey, lifecycleKey)
+			t.Errorf("%s is outpost-only %v, platform %v and command-lifecycle %v; want exactly one", key, probekeys.IsOutpostOnly(key), platformKey, lifecycleKey)
 		}
-		want := NodeProbe
+		want := OutpostProbe
 		switch {
 		case platformKey:
 			want = Platform
@@ -57,9 +57,9 @@ func TestEveryReservedKeyHasExactlyOneClass(t *testing.T) {
 			t.Errorf("command lifecycle event %s names no doc", key)
 		}
 	}
-	for _, key := range probekeys.NodeOnly() {
+	for _, key := range probekeys.OutpostOnly() {
 		if !slices.Contains(names, key) {
-			t.Errorf("node-only %s is not reserved", key)
+			t.Errorf("outpost-only %s is not reserved", key)
 		}
 	}
 	if !slices.Contains(names, probekeys.CollectionFailed) {
@@ -71,8 +71,8 @@ func TestEveryReservedKeyHasExactlyOneClass(t *testing.T) {
 		}
 	}
 	for key, why := range pinnable {
-		if c, _ := Reserved(key); c != NodeProbe || strings.TrimSpace(why) == "" {
-			t.Errorf("pinnable %s is class %q with reason %q; a pin is a node-probe key's, with its path", key, c, why)
+		if c, _ := Reserved(key); c != OutpostProbe || strings.TrimSpace(why) == "" {
+			t.Errorf("pinnable %s is class %q with reason %q; a pin is an outpost-probe key's, with its path", key, c, why)
 		}
 	}
 }
@@ -97,11 +97,11 @@ func TestReservedFailsClosed(t *testing.T) {
 // TestAdmits pins the whole ruling, class by writer: the table is the spec.
 func TestAdmits(t *testing.T) {
 	want := map[Class][]Writer{
-		NodeProbe:        {Node},
+		OutpostProbe:     {Outpost},
 		Platform:         {Process},
 		CommandLifecycle: {Command},
 		Calc:             {CalcRule, Operator},
-		Collected:        {Node, Push, Fanout, Command, CommandReply, Operator, EventRule},
+		Collected:        {Outpost, Push, Fanout, Command, CommandReply, Operator, EventRule},
 	}
 	for _, c := range Classes() {
 		for _, w := range Writers() {
@@ -111,18 +111,18 @@ func TestAdmits(t *testing.T) {
 			}
 		}
 	}
-	// The one declared row a node-probe key admits: a key pin, on the keys a
+	// The one declared row an outpost-probe key admits: a key pin, on the keys a
 	// transport's pin rides (the ssh host key, the tls certificate) alone.
 	pins := []string{probekeys.SSHHostKey, probekeys.TLSCertificate}
-	for _, key := range probekeys.NodeOnly() {
+	for _, key := range probekeys.OutpostOnly() {
 		want := slices.Contains(pins, key)
-		if got := Admits(NodeProbe, KeyPin, key); got != want {
-			t.Errorf("Admits(node-probe, key-pin, %s) = %v, want %v", key, got, want)
+		if got := Admits(OutpostProbe, KeyPin, key); got != want {
+			t.Errorf("Admits(outpost-probe, key-pin, %s) = %v, want %v", key, got, want)
 		}
 		if Pinnable(key) != want {
 			t.Errorf("Pinnable(%s) = %v, want %v", key, !want, want)
 		}
-		if Admits(NodeProbe, Operator, key) {
+		if Admits(OutpostProbe, Operator, key) {
 			t.Errorf("an operator's plain declared value is admitted on %s; only the :retry pin is", key)
 		}
 	}
@@ -152,9 +152,9 @@ func TestOf(t *testing.T) {
 		calcOwned bool
 		want      Class
 	}{
-		{probekeys.EndpointReachable, false, NodeProbe},
-		{probekeys.EndpointReachable, true, NodeProbe},
-		{probekeys.CollectionFailed, false, NodeProbe},
+		{probekeys.EndpointReachable, false, OutpostProbe},
+		{probekeys.EndpointReachable, true, OutpostProbe},
+		{probekeys.CollectionFailed, false, OutpostProbe},
 		{Health, true, Platform},
 		{CommandIssued, false, CommandLifecycle},
 		{"avg-temp", true, Calc},
@@ -177,14 +177,14 @@ func TestRefusalNamesKeyAndWriter(t *testing.T) {
 		rule string
 		want string
 	}{
-		{NodeProbe, "tcp-open", Push, "", "only the node"},
-		{NodeProbe, "tcp-open", Node, "", "endpoint whose task it ran"},
+		{OutpostProbe, "tcp-open", Push, "", "only the outpost"},
+		{OutpostProbe, "tcp-open", Outpost, "", "endpoint whose task it ran"},
 		{Platform, Health, Push, "", "the health rollup"},
 		{CommandLifecycle, CommandIssued, Push, "", "a command's issue"},
-		{CommandLifecycle, CommandIssued, Node, "", "a command's issue"},
+		{CommandLifecycle, CommandIssued, Outpost, "", "a command's issue"},
 		{Calc, "avg-temp", Push, "temp-avg", "the calc rule temp-avg"},
 		{Collected, "video-input", CalcRule, "", "calc-rule"},
-		{NodeProbe, "tcp-open", Fanout, "", "only the node"},
+		{OutpostProbe, "tcp-open", Fanout, "", "only the outpost"},
 		{Calc, "avg-temp", Fanout, "temp-avg", "the calc rule temp-avg"},
 		{Platform, Health, Fanout, "", "the health rollup"},
 	} {
@@ -258,7 +258,7 @@ func TestCommandOutcomeEvents(t *testing.T) {
 }
 
 // The webhook receiver's counts (#1369) are platform keys: the server counts
-// the posts it accepts and refuses, so neither a node nor a push may write
+// the posts it accepts and refuses, so neither an outpost nor a push may write
 // them, and the process writes them through the gateway.
 func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
 	for _, key := range []string{WebhookPostCount, WebhookRefusalCount} {
@@ -268,7 +268,7 @@ func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
 		if !Admits(Platform, Process, key) {
 			t.Errorf("the process may not write %s", key)
 		}
-		for _, w := range []Writer{Node, Push, Operator} {
+		for _, w := range []Writer{Outpost, Push, Operator} {
 			if Admits(Platform, w, key) {
 				t.Errorf("%s may write %s, which only the webhook receiver counts", w, key)
 			}
@@ -277,40 +277,40 @@ func TestTheWebhookCountsArePlatformKeys(t *testing.T) {
 }
 
 // The platform's self-monitoring keys (#1625) are platform keys with no
-// prefix, written by the process alone. A node's self-report lane admits only
-// the keys a node reports of itself: never health, a webhook count, or the
-// server's checkin-age, so a node cannot speak for another writer.
-func TestTheNodeSelfKeysArePlatformKeys(t *testing.T) {
-	keys := NodeSelfKeys()
+// prefix, written by the process alone. An outpost's self-report lane admits only
+// the keys an outpost reports of itself: never health, a webhook count, or the
+// server's checkin-age, so an outpost cannot speak for another writer.
+func TestTheOutpostSelfKeysArePlatformKeys(t *testing.T) {
+	keys := OutpostSelfKeys()
 	if len(keys) != 20 {
-		t.Fatalf("node-self keys %v, want the 20 a node reports of itself", keys)
+		t.Fatalf("outpost-self keys %v, want the 20 an outpost reports of itself", keys)
 	}
 	for _, key := range append(keys, CheckinAge) {
-		if strings.Contains(key, ".") || strings.HasPrefix(key, "platform") || strings.HasPrefix(key, "node-") {
+		if strings.Contains(key, ".") || strings.HasPrefix(key, "platform") || strings.HasPrefix(key, "outpost-") {
 			t.Errorf("%s carries a prefix; platform keys carry none", key)
 		}
 		if c, ok := Reserved(key); !ok || c != Platform {
 			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
 		}
-		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+		if !Admits(Platform, Process, key) || Admits(Platform, Outpost, key) || Admits(Platform, Push, key) {
 			t.Errorf("%s: only the process writes a platform key", key)
 		}
 	}
 	for _, key := range keys {
-		if !NodeSelf(key) {
-			t.Errorf("%s is not admitted on the node-self lane", key)
+		if !OutpostSelf(key) {
+			t.Errorf("%s is not admitted on the outpost-self lane", key)
 		}
 	}
 	for _, key := range []string{Health, WebhookPostCount, CheckinAge, "poll-duration", "TICK-DURATION", "made-up"} {
-		if NodeSelf(key) {
-			t.Errorf("the node-self lane admits %s", key)
+		if OutpostSelf(key) {
+			t.Errorf("the outpost-self lane admits %s", key)
 		}
 	}
 }
 
 // TestTheRetentionKeysArePlatformKeys (#1629): the retention pass's figures
 // are platform keys with no prefix, written by the process alone, and none is
-// a key a node reports of itself.
+// a key an outpost reports of itself.
 func TestTheRetentionKeysArePlatformKeys(t *testing.T) {
 	keys := RetentionKeys()
 	want := []string{DatabaseBytes, MetricBlockMarkLag, MetricOldestDayAge, MetricPartitionCount,
@@ -324,18 +324,18 @@ func TestTheRetentionKeysArePlatformKeys(t *testing.T) {
 		if c, ok := Reserved(key); !ok || c != Platform {
 			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
 		}
-		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) || Admits(Platform, Operator, key) {
+		if !Admits(Platform, Process, key) || Admits(Platform, Outpost, key) || Admits(Platform, Push, key) || Admits(Platform, Operator, key) {
 			t.Errorf("%s: only the process writes a retention key", key)
 		}
-		if NodeSelf(key) {
-			t.Errorf("the node-self lane admits %s", key)
+		if OutpostSelf(key) {
+			t.Errorf("the outpost-self lane admits %s", key)
 		}
 	}
 }
 
 // TestServerKeysAreTheProcesssAlone: the server's request and database keys
-// (#1627) are platform keys only the process writes, and a node naming one on
-// its node-self lane is refused like any key not its own.
+// (#1627) are platform keys only the process writes, and an outpost naming one on
+// its outpost-self lane is refused like any key not its own.
 func TestServerKeysAreTheProcesssAlone(t *testing.T) {
 	keys := []string{HTTPRequestCount, HTTPRequestDuration, HTTPRequestDurationMax, DBSlowQueryCount,
 		DBPoolAcquired, DBPoolIdle, DBPoolTotal, DBPoolMax, DBPoolWaitCount, DBPoolWaitDuration}
@@ -343,18 +343,18 @@ func TestServerKeysAreTheProcesssAlone(t *testing.T) {
 		if c, ok := Reserved(key); !ok || c != Platform {
 			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
 		}
-		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+		if !Admits(Platform, Process, key) || Admits(Platform, Outpost, key) || Admits(Platform, Push, key) {
 			t.Errorf("%s: only the process writes a server key", key)
 		}
-		if NodeSelf(key) {
-			t.Errorf("the node-self lane admits %s", key)
+		if OutpostSelf(key) {
+			t.Errorf("the outpost-self lane admits %s", key)
 		}
 	}
 }
 
 // TestServerPipelineKeysAreTheProcesssAlone: the server's pipeline keys
-// (#1628) are platform keys only the process writes, and a node naming one on
-// its node-self lane is refused.
+// (#1628) are platform keys only the process writes, and an outpost naming one on
+// its outpost-self lane is refused.
 func TestServerPipelineKeysAreTheProcesssAlone(t *testing.T) {
 	keys := []string{IngestLag, IngestLagMax, IngestBatchCount, IngestSampleCount, IngestLaneBusy,
 		BusConsumerPending, BusConsumerAckPending, BusConsumerRedelivered, BusTelemetryAckFailureCount,
@@ -365,23 +365,23 @@ func TestServerPipelineKeysAreTheProcesssAlone(t *testing.T) {
 		if c, ok := Reserved(key); !ok || c != Platform {
 			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
 		}
-		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+		if !Admits(Platform, Process, key) || Admits(Platform, Outpost, key) || Admits(Platform, Push, key) {
 			t.Errorf("%s: only the process writes a pipeline key", key)
 		}
-		if NodeSelf(key) {
-			t.Errorf("the node-self lane admits %s", key)
+		if OutpostSelf(key) {
+			t.Errorf("the outpost-self lane admits %s", key)
 		}
 	}
 	for _, key := range []string{ProcessCPUSeconds, ProcessFDCount} {
-		if !NodeSelf(key) {
-			t.Errorf("%s is a generic process key a node reports of itself", key)
+		if !OutpostSelf(key) {
+			t.Errorf("%s is a generic process key an outpost reports of itself", key)
 		}
 	}
 }
 
-// A node's command queue (#1626) is platform keys the process writes. The
+// An outpost's command queue (#1626) is platform keys the process writes. The
 // server measures the queue and the wire, so only the pull-failure count, the
-// one fact the node alone sees, rides the node-self lane.
+// one fact the outpost alone sees, rides the outpost-self lane.
 func TestTheCommandQueueKeysArePlatformKeys(t *testing.T) {
 	server := []string{CommandPendingCount, CommandPendingAge, CommandDispatchLatency, CommandExecutionLatency,
 		CommandRedeliveryCount, CommandStuckCount, CommandExpiredCount}
@@ -392,24 +392,24 @@ func TestTheCommandQueueKeysArePlatformKeys(t *testing.T) {
 		if !Admits(Platform, Process, key) {
 			t.Errorf("the process may not write %s", key)
 		}
-		for _, w := range []Writer{Node, Push, Operator, CalcRule} {
+		for _, w := range []Writer{Outpost, Push, Operator, CalcRule} {
 			if Admits(Platform, w, key) {
 				t.Errorf("%s may write %s", w, key)
 			}
 		}
 	}
 	for _, key := range server {
-		if NodeSelf(key) {
-			t.Errorf("the node-self lane admits %s, which the server measures", key)
+		if OutpostSelf(key) {
+			t.Errorf("the outpost-self lane admits %s, which the server measures", key)
 		}
 	}
-	if !NodeSelf(CommandPullFailureCount) {
-		t.Errorf("the node-self lane refuses %s", CommandPullFailureCount)
+	if !OutpostSelf(CommandPullFailureCount) {
+		t.Errorf("the outpost-self lane refuses %s", CommandPullFailureCount)
 	}
 }
 
 // TestTheServerIdentityKeysAreTheBootsAlone: the server's build and start
-// time (#1644) are platform keys only the server's boot writes, so a node's
+// time (#1644) are platform keys only the server's boot writes, so an outpost's
 // probe lane or a push naming either is refused with the platform-key reason,
 // which names the boot as the key's writer.
 func TestTheServerIdentityKeysAreTheBootsAlone(t *testing.T) {
@@ -420,7 +420,7 @@ func TestTheServerIdentityKeysAreTheBootsAlone(t *testing.T) {
 		if !Admits(Platform, Process, key) {
 			t.Errorf("the process may not write %s", key)
 		}
-		for _, w := range []Writer{Node, Push, Fanout, Operator, CalcRule} {
+		for _, w := range []Writer{Outpost, Push, Fanout, Operator, CalcRule} {
 			if Admits(Platform, w, key) {
 				t.Errorf("%s may write %s", w, key)
 			}
@@ -428,14 +428,14 @@ func TestTheServerIdentityKeysAreTheBootsAlone(t *testing.T) {
 				t.Errorf("Refusal(%s by %s) = %q", key, w, got)
 			}
 		}
-		if NodeSelf(key) {
-			t.Errorf("the node-self lane admits %s", key)
+		if OutpostSelf(key) {
+			t.Errorf("the outpost-self lane admits %s", key)
 		}
 	}
 }
 
 // TestTheDeliveryKeysAreEveryHopsOwn: a hop's delivery keys (#1659) are
-// platform keys the process alone writes, of itself: a node on its node-self
+// platform keys the process alone writes, of itself: an outpost on its outpost-self
 // lane, the server on its own component. They replace the folded drop and
 // failure counts, which are no longer declared.
 func TestTheDeliveryKeysAreEveryHopsOwn(t *testing.T) {
@@ -443,11 +443,11 @@ func TestTheDeliveryKeysAreEveryHopsOwn(t *testing.T) {
 		if c, ok := Reserved(key); !ok || c != Platform {
 			t.Errorf("%s resolves to %q (%v), want platform", key, c, ok)
 		}
-		if !Admits(Platform, Process, key) || Admits(Platform, Node, key) || Admits(Platform, Push, key) {
+		if !Admits(Platform, Process, key) || Admits(Platform, Outpost, key) || Admits(Platform, Push, key) {
 			t.Errorf("%s: only the process writes a delivery key", key)
 		}
-		if !NodeSelf(key) {
-			t.Errorf("the node-self lane refuses %s", key)
+		if !OutpostSelf(key) {
+			t.Errorf("the outpost-self lane refuses %s", key)
 		}
 	}
 	for _, key := range []string{"spool-drop-count", "publish-failure-count", "bus-telemetry-drop-count"} {

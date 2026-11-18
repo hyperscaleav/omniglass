@@ -69,7 +69,10 @@ type Sender struct {
 	last *outcome
 }
 
+// outcome is one beat's result against the target it went to; a move to
+// another target is a change of outcome even when both succeed.
 type outcome struct {
+	target string
 	ok     bool
 	status int
 	reason string
@@ -83,7 +86,10 @@ func New(store Store, opts egress.Options, server, build string) *Sender {
 
 // Beat sends one heartbeat, if the settings name a target. A send the
 // receiver refused, or that the egress contract did, is an error carrying the
-// reason; no target is not an error, the heartbeat is off.
+// reason; no target is not an error, the heartbeat is off. A target the
+// heartbeat will not use (disabled, its secret not unsealing, or no hmac key
+// to sign with) is refused before any request and the refusal audited: a beat
+// never goes out unsigned.
 func (s *Sender) Beat(ctx context.Context) error {
 	hb, err := s.store.HeartbeatSettings(ctx)
 	if err != nil {
@@ -96,11 +102,9 @@ func (s *Sender) Beat(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("heartbeat target %q: %w", hb.Target, err)
 	}
-	if !ts.Enabled {
-		return fmt.Errorf("heartbeat target %q is disabled", hb.Target)
-	}
-	if ts.CredentialMissing {
-		return fmt.Errorf("heartbeat target %q: its secret no longer unseals; bind it again", hb.Target)
+	if reason := refusal(ts); reason != "" {
+		s.audit(ctx, outcome{target: ts.TargetID, reason: reason})
+		return fmt.Errorf("heartbeat target %q: %s", hb.Target, reason)
 	}
 	pol, err := s.store.EgressPolicy(ctx)
 	if err != nil {
@@ -116,19 +120,33 @@ func (s *Sender) Beat(ctx context.Context) error {
 		return err
 	}
 	res := egress.New(pol, s.opts).Post(ctx, req)
-	s.audit(ctx, ts.TargetID, outcome{res.OK, res.Status, res.Reason})
+	s.audit(ctx, outcome{ts.TargetID, res.OK, res.Status, res.Reason})
 	if !res.OK {
 		return fmt.Errorf("heartbeat to %q failed: %s", hb.Target, res.Reason)
 	}
 	return nil
 }
 
+// refusal is why the heartbeat will not send to ts, or empty when it will.
+// Pure.
+func refusal(ts *storage.TargetSend) string {
+	switch {
+	case !ts.Enabled:
+		return "the target is disabled"
+	case ts.CredentialMissing:
+		return "its secret no longer unseals; bind it again"
+	case ts.HMACKey == "":
+		return "it has no hmac-key secret bound, and a heartbeat is never sent unsigned"
+	}
+	return ""
+}
+
 // audit records o when it differs from the previous beat's outcome.
-func (s *Sender) audit(ctx context.Context, targetID string, o outcome) {
+func (s *Sender) audit(ctx context.Context, o outcome) {
 	if s.last != nil && *s.last == o {
 		return
 	}
-	if err := s.store.AuditHeartbeat(ctx, targetID, o.ok, o.status, o.reason); err != nil {
+	if err := s.store.AuditHeartbeat(ctx, o.target, o.ok, o.status, o.reason); err != nil {
 		slog.Warn("heartbeat audit failed", "facility", "heartbeat", "error", err.Error())
 		return
 	}

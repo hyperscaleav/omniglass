@@ -36,6 +36,19 @@ type backlogStore struct {
 	blocks   storage.BlockCompaction
 	blockErr error
 	folds    []storage.BlockFold
+	// The assistant namespace and the error its read answers with.
+	assistant    settings.AssistantSettings
+	assistantErr error
+}
+
+func (b *backlogStore) AssistantSettings(context.Context) (settings.AssistantSettings, error) {
+	return b.assistant, b.assistantErr
+}
+
+// PruneAssistantConversations is the conversation lane of the same store,
+// keyed "assistant_conversation".
+func (b *backlogStore) PruneAssistantConversations(ctx context.Context, before time.Time, limit int) (int64, error) {
+	return b.PruneSamples(ctx, "assistant_conversation", before, limit)
 }
 
 // CompactMetricBlocks records itself as a call on the lane "block", beside the
@@ -125,7 +138,7 @@ func defaultWindows() settings.RetentionSettings {
 // own window, through the same chunked loop as the sample lanes.
 func TestARetentionPassPrunesEachLogBandToItsWindow(t *testing.T) {
 	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
-	store := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"log_line/debug": 7, "node_log/error": 2}}
+	store := &backlogStore{windows: defaultWindows(), backlog: map[string]int64{"log_line/debug": 7, "outpost_log/error": 2}}
 	rep, err := retentionPass(context.Background(), store, now, 100, 10, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +147,7 @@ func TestARetentionPassPrunesEachLogBandToItsWindow(t *testing.T) {
 	for _, c := range store.calls {
 		cutoff[c.lane] = c.before
 	}
-	for _, table := range []string{"log_line", "node_log"} {
+	for _, table := range []string{"log_line", "outpost_log"} {
 		for band, days := range map[string]int{"debug": 3, "info": 14, "warning": 30, "error": 90} {
 			lane := table + "/" + band
 			if want := now.AddDate(0, 0, -days); !cutoff[lane].Equal(want) {
@@ -142,8 +155,8 @@ func TestARetentionPassPrunesEachLogBandToItsWindow(t *testing.T) {
 			}
 		}
 	}
-	if rep.Deleted["log_line/debug"] != 7 || rep.Deleted["node_log/error"] != 2 {
-		t.Errorf("report %+v, want 7 log_line debug and 2 node_log error lines removed", rep.Deleted)
+	if rep.Deleted["log_line/debug"] != 7 || rep.Deleted["outpost_log/error"] != 2 {
+		t.Errorf("report %+v, want 7 log_line debug and 2 outpost_log error lines removed", rep.Deleted)
 	}
 }
 
@@ -386,14 +399,14 @@ func TestRetentionPassSummarizesTheFinishedDaysAfterTheDrop(t *testing.T) {
 	}
 }
 
-// A node override (#1350) moves node_log's band and only node_log's: with the
-// node debug window at 1 day, node_log/debug is cut 1 day back while
+// An outpost override (#1350) moves outpost_log's band and only outpost_log's: with the
+// outpost debug window at 1 day, outpost_log/debug is cut 1 day back while
 // log_line/debug keeps the shared 3, and an unset band follows the shared
 // window on both tables.
-func TestARetentionPassPrunesNodeLogsByTheirOverride(t *testing.T) {
+func TestARetentionPassPrunesOutpostLogsByTheirOverride(t *testing.T) {
 	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 	w := defaultWindows()
-	w.NodeDebugLogDays = 1
+	w.OutpostDebugLogDays = 1
 	store := &backlogStore{windows: w, backlog: map[string]int64{}}
 	if _, err := retentionPass(context.Background(), store, now, 100, 10, 0); err != nil {
 		t.Fatal(err)
@@ -402,26 +415,26 @@ func TestARetentionPassPrunesNodeLogsByTheirOverride(t *testing.T) {
 	for _, c := range store.calls {
 		cutoff[c.lane] = c.before
 	}
-	for lane, days := range map[string]int{"node_log/debug": 1, "log_line/debug": 3, "node_log/info": 14, "log_line/info": 14, "node_log/error": 90} {
+	for lane, days := range map[string]int{"outpost_log/debug": 1, "log_line/debug": 3, "outpost_log/info": 14, "log_line/info": 14, "outpost_log/error": 90} {
 		if want := now.AddDate(0, 0, -days); !cutoff[lane].Equal(want) {
 			t.Errorf("%s cutoff %v, want %d days back", lane, cutoff[lane], days)
 		}
 	}
 }
 
-// A node override stored out of range (past the settings validator) is
+// An outpost override stored out of range (past the settings validator) is
 // refused like any window, not read as "follow the shared band".
-func TestARetentionPassRefusesANodeOverrideOutOfRange(t *testing.T) {
+func TestARetentionPassRefusesAOutpostOverrideOutOfRange(t *testing.T) {
 	w := defaultWindows()
-	w.NodeErrorLogDays = settings.RetentionMaxDays + 1
+	w.OutpostErrorLogDays = settings.RetentionMaxDays + 1
 	store := &backlogStore{windows: w, backlog: map[string]int64{}}
 	_, err := retentionPass(context.Background(), store, time.Now(), 100, 10, 0)
 	if err == nil {
-		t.Fatal("pass took a node override past the ceiling, want it refused")
+		t.Fatal("pass took an outpost override past the ceiling, want it refused")
 	}
 	for _, c := range store.calls {
-		if c.lane == "node_log/error" {
-			t.Errorf("node_log/error pruned with an out-of-range override")
+		if c.lane == "outpost_log/error" {
+			t.Errorf("outpost_log/error pruned with an out-of-range override")
 		}
 	}
 }
@@ -491,5 +504,35 @@ func TestRetentionPassFoldsBlocksAfterTrends(t *testing.T) {
 	if err == nil || rep.Deleted["metric"] != 1 || nextRetentionWait(rep) != sampleRetentionCatchUp {
 		t.Errorf("a failed fold: err %v, metric deleted %d, wait %v; want reported, pruned, and a pass in a minute",
 			err, rep.Deleted["metric"], nextRetentionWait(rep))
+	}
+}
+
+// Stored omnibot conversations are pruned by assistant.conversation_days
+// (#2113), and a failed read of that namespace loses only their lane.
+func TestARetentionPassPrunesConversationsToTheirOwnWindow(t *testing.T) {
+	now := time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+	store := &backlogStore{windows: defaultWindows(), assistant: settings.AssistantSettings{ConversationDays: 30},
+		backlog: map[string]int64{"assistant_conversation": 3}}
+	rep, err := retentionPass(context.Background(), store, now, 100, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Deleted["assistant_conversation"] != 3 {
+		t.Fatalf("deleted %v, want the three idle conversations", rep.Deleted)
+	}
+	for _, c := range store.calls {
+		if c.lane == "assistant_conversation" && !c.before.Equal(now.AddDate(0, 0, -30)) {
+			t.Fatalf("conversation cutoff %v, want 30 days back", c.before)
+		}
+	}
+
+	store = &backlogStore{windows: defaultWindows(), assistantErr: errors.New("boom"),
+		backlog: map[string]int64{"assistant_conversation": 3, "log_line/debug": 2}}
+	rep, err = retentionPass(context.Background(), store, now, 100, 10, 0)
+	if err == nil || !strings.Contains(err.Error(), "assistant") {
+		t.Fatalf("a failed assistant read = %v, want it reported", err)
+	}
+	if rep.Deleted["assistant_conversation"] != 0 || rep.Deleted["log_line/debug"] != 2 {
+		t.Fatalf("deleted %v, want the conversations skipped and the other lanes pruned", rep.Deleted)
 	}
 }

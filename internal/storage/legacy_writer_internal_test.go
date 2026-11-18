@@ -8,7 +8,7 @@ import (
 )
 
 // TestRulingEmits pins the worklist's pure strip: every emit the ruling
-// refuses (a node-probe key in any casing, the platform's health, a command's
+// refuses (an outpost-probe key in any casing, the platform's health, a command's
 // lifecycle event, a calc rule's output) leaves a baked spec, the rest stay in
 // order, and a spec with nothing to drop, or one that does not parse, comes
 // back byte for byte.

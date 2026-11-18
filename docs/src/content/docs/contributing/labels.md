@@ -33,7 +33,7 @@ The subsystem a change touches, named to match the architecture glossary. The se
 subsystems land; today:
 
 `area:foundation` `area:api` `area:storage` `area:auth` `area:identity`
-`area:collection` `area:expr` `area:messaging` `area:ui` `area:node` `area:lab` `area:docs`
+`area:collection` `area:expr` `area:messaging` `area:ui` `area:outpost` `area:lab` `area:docs`
 
 Purely descriptive: it filters the issue list by subsystem. An issue can carry more than
 one.
@@ -180,7 +180,7 @@ owns the moment:
 | a finding is filed | `/file-bug` | `scripts/board.sh add <n>`: Backlog |
 | a loop starts | `/run-feature-loop` | `scripts/board.sh add <n>` for each sub-issue, then `set <definition> "In Progress"` |
 | a slice starts | `/run-feature-loop` | `scripts/board.sh set <n> "In Progress"` |
-| the PR opens | `/ship-slice` | `scripts/board.sh set <n> "In Review"` |
+| the PR opens | `/ship-slice` | `scripts/board.sh set <n> "In Review"`; a dispatcher session leaves it to the dispatcher (below) |
 | the day's slice starts, then its PR opens | `/autopilot` | the same two moves, listed in the day report |
 
 The board's own workflows move it too, and two of them meet those moves at the same
@@ -225,6 +225,12 @@ scripts/board.sh show 1191               # its Status, Priority and Iteration
 - **Done closes the issue.** With Auto-close issue on, `set <n> Done` closes the issue as
   well as moving it, which is why no skill makes that move: merging closes the issue, and
   closing moves it to Done.
+- **A dispatcher session leaves In Review to the dispatcher.** The harness sets `AGENT_ROLE`
+  on every session it launches. With it set, `set <n> "In Review"` changes nothing, prints one
+  line saying the dispatcher moves the ticket after its gate, and exits 0. The dispatcher moves
+  a ticket to AI Review only while the board still says `In Progress`, so a session that moved
+  its own ticket would strand it with no reviewer. Every other move, and every move without
+  `AGENT_ROLE`, is unchanged.
 - **In Review before it exists.** Until the board has an `In Review` status, a move to it
   lands on `In Progress` with one warning.
 - **Errors a caller can act on.** A token without the `project` scope, an issue the repository

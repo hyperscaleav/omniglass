@@ -20,6 +20,14 @@
 .DEFAULT_GOAL := all
 BUILD_ID := $(shell c=$$(git rev-parse --short HEAD 2>/dev/null || echo unknown); \
 	if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then c="$$c-dirty-$$(date -u +%Y%m%dT%H%M%SZ)"; fi; echo $$c)
+# Screenshot builds stamp the newest release tag instead of BUILD_ID: a dirty
+# build id is long and time-stamped, and the Version tile on Platform health
+# would otherwise shift every baseline with it.
+SHOTS_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null || echo $(BUILD_ID))
+# A tag is a semver, which the lab takes for a release binary and would run by
+# image digest; point it at the local image this build just tagged instead.
+docs-shots docs-shots-check: BUILD_ID := $(SHOTS_VERSION)
+docs-shots docs-shots-check: export OMNIGLASS_LAB_IMAGE := omniglass:dev-$(SHOTS_VERSION)
 HOST_OS := $(shell uname -s | tr '[:upper:]' '[:lower:]' | sed -e 's/^mingw.*/windows/' -e 's/^msys.*/windows/' -e 's/^cygwin.*/windows/')
 HOST_ARCH := $(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
 all:
@@ -34,7 +42,7 @@ lab: all
 	./bin/omniglass lab run $(LAB_ARGS)
 
 # The lab against a real daemon (internal/lab's integration test): it comes
-# up, publishes one loopback port, keeps privilege on the node, collects, takes
+# up, publishes one loopback port, keeps privilege on the outpost, collects, takes
 # an impairment, tears down leaving no container and no network, keeps its
 # estate across a re-run, reaps a killed run, and starts over with --fresh.
 # The measuring tests run the ladder's smoke size, corporate at 20 systems
@@ -51,8 +59,8 @@ LAB_RUN ?= Integration
 test-lab-image:
 	OMNIGLASS_LAB_TEST=1 OMNIGLASS_LAB_TEST_BUILD=$(LAB_BUILD) OMNIGLASS_LAB_IMAGE=$(LAB_IMAGE) go test -tags labintegration -count=1 -p 1 -timeout 60m -v -run '$(LAB_RUN)' ./internal/lab/ ./internal/labfootprint/
 
-# The scale lab (#1554): a scale lab scenario at a size, one node per site,
-# checked by scripts/scale-lab.sh (a node container per site, every simulated
+# The scale lab (#1554): a scale lab scenario at a size, one outpost per site,
+# checked by scripts/scale-lab.sh (an outpost container per site, every simulated
 # component at its own loopback address, the containers' memory and CPU, and
 # a teardown that leaves nothing). Outside make test and CI: it builds the
 # image and stands up thousands of simulated devices. SYSTEMS sets the size,
@@ -129,6 +137,7 @@ gen: gen-proto
 	go run ./cmd/cligen
 	go run ./cmd/mcpgen
 	go run ./cmd/docsgen
+	go run ./cmd/vocabgen
 	go run ./cmd/erdgen
 	go run ./cmd/seedgen
 	go run ./cmd/writerclassgen
@@ -305,7 +314,7 @@ bench:
 	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/... ./internal/bus/...
 
 # The ingest footprint (#1272): the standard workload delivered through the real
-# telemetry handler over the dev scenario's fleet, printing what one node batch
+# telemetry handler over the dev scenario's fleet, printing what one outpost batch
 # costs the database (statements, rows per observation, heap and index bytes
 # per row, receipt bytes, WAL bytes per observation, and the statements of one
 # batch). Then the block footprint (#1528): what the compacted tier's blocks
@@ -444,24 +453,14 @@ clean-testcontainers:
 
 # ---- release ---------------------------------------------------------------
 # Releases are cut only by the release workflow (.github/workflows/release.yml),
-# which builds the image and stamps its digest into the binaries (#1257); there
-# is no local publish target. `release-plan` is the local dry-run preview: it
-# prints the next version and the generated notes and publishes nothing. Run it
-# from an up-to-date `main`. semantic-release reads the conventional-commit
-# subjects since the last tag (.releaserc.json drives the plugins).
-SEMANTIC_RELEASE := npx --yes -p semantic-release@24 \
-	-p @semantic-release/commit-analyzer \
-	-p @semantic-release/release-notes-generator \
-	-p @semantic-release/github semantic-release
-
-# The token is resolved inside the recipe shell at runtime (prefer an exported
-# GITHUB_TOKEN, else the gh CLI), never stored in a make variable, so it is
-# never echoed into the build log. The recipe is `@`-silenced and fails fast
-# with an actionable message when no token is available.
+# dispatched on a release/<major>.<minor> branch, which builds the image and
+# stamps its digest into the binaries (#1257); there is no local publish target.
+# `release-plan` is the local preview: run from a release branch, it prints the
+# tag the next dispatch would cut, from the branch name and the tags (#2139).
+# FINAL=1 previews the final release of the newest candidate instead.
 release-plan:
-	@token="$${GITHUB_TOKEN:-$$(gh auth token)}"; \
-	  [ -n "$$token" ] || { echo "release: no GITHUB_TOKEN set and gh is not authenticated (run: gh auth login)"; exit 1; }; \
-	  GITHUB_TOKEN="$$token" $(SEMANTIC_RELEASE) --dry-run --no-ci
+	@git fetch --quiet --tags origin
+	@go run ./cmd/releaseversion -branch "$$(git branch --show-current)" $(if $(FINAL),-final)
 
 # Local dry build of the release matrix (all OS/arch archives + checksums), with
 # no tag and no publish, to validate .goreleaser.yaml. SBOM is skipped (needs

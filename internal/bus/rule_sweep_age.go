@@ -10,13 +10,22 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// peerSweepEvery is how often the server writes its peers' rule sweep ages
-// (#1986). A peer's age is read from the shared database, so a pass adds at
-// most this much staleness to it, well inside the 30 s the rule-sweep-stalled
-// rule tolerates. peerSweepTimeout bounds one pass.
+// peerSweepEvery is how often the server marks itself seen and writes its
+// peers' rule sweep ages (#1986). A peer's age is read from the shared
+// database, so a pass adds at most this much staleness to it, well inside the
+// 30 s the rule-sweep-stalled rule tolerates. peerSweepTimeout bounds one
+// pass.
+//
+// peerSeenWithin is how recently a peer must have marked itself seen to be
+// judged: two passes, so one slow pass does not drop a live peer. It stays
+// under the rule's 30 s by more than a sweep period, so a peer that dies
+// healthy (its last sweep at most one 5 s period before its last mark) drops
+// out of the read before its stamp could age past the threshold, and no live
+// server raises an alarm on a dead one that nothing would clear.
 const (
 	peerSweepEvery   = 10 * time.Second
 	peerSweepTimeout = 8 * time.Second
+	peerSeenWithin   = 2 * peerSweepEvery
 )
 
 // sweepClock is when this server's event rule sweep last completed. The sweep
@@ -61,12 +70,15 @@ func peerSweepAges(ages []storage.ServerSweepAge, own string, now time.Time) []s
 	return out
 }
 
-// recordPeerSweepAges writes every peer server's rule sweep age at now, so a
-// live server raises rule-sweep-stalled for a peer whose sweep has stalled
-// (#1986). A peer that stopped cleanly holds no stamp and is not judged; one
-// that died keeps its stamp, which ages.
+// recordPeerSweepAges marks this server seen, then writes every live peer
+// server's rule sweep age at now, so a live server raises rule-sweep-stalled
+// for a peer whose sweep has stalled (#1986). A peer that stopped cleanly
+// holds no stamp, and one that died is no longer seen; neither is judged.
 func (s *Server) recordPeerSweepAges(ctx context.Context, now time.Time) error {
-	ages, err := s.store.ServerSweepAges(ctx)
+	if err := s.store.MarkServerSeen(ctx, s.platformComponentID); err != nil {
+		return err
+	}
+	ages, err := s.store.ServerSweepAges(ctx, peerSeenWithin)
 	if err != nil {
 		return err
 	}
@@ -75,6 +87,18 @@ func (s *Server) recordPeerSweepAges(ctx context.Context, now time.Time) error {
 		return nil
 	}
 	return s.store.RecordPlatformMetrics(ctx, rows)
+}
+
+// ruleSweepTick runs one event rule sweep and stamps it only when it
+// completes, so a sweep that fails ages as a stalled one does.
+func (s *Server) ruleSweepTick(ctx context.Context) {
+	if err := s.sweep(writerclass.SweepEventRule, func() error {
+		return s.store.SweepEventRules(ctx, time.Now())
+	}); err != nil {
+		slog.Warn("event rule sweep failed", "facility", "rules", "error", err.Error())
+		return
+	}
+	s.stampRuleSweep(ctx, time.Now())
 }
 
 // stampRuleSweep records a completed sweep: on the clock this server reports
@@ -91,9 +115,11 @@ func (s *Server) stampRuleSweep(ctx context.Context, at time.Time) {
 	}
 }
 
-// startPeerSweepAges writes the peers' sweep ages every peerSweepEvery on a
-// goroutine of its own, as the check-in age timer does. Without a platform
-// component there is no one to compare against and it does not start.
+// startPeerSweepAges marks the server seen and writes the peers' sweep ages
+// every peerSweepEvery on a goroutine of its own, as the check-in age timer
+// does: apart from the sweep, so a stalled sweep leaves the server seen and
+// judged. Without a platform component there is no one to compare against
+// and it does not start.
 func (s *Server) startPeerSweepAges() {
 	if s.platformComponentID == "" {
 		return
@@ -121,7 +147,7 @@ func (s *Server) startPeerSweepAges() {
 	}()
 }
 
-// releaseRuleSweep clears this server's stamp as it stops cleanly, so a peer
+// releaseRuleSweep clears this server's stamps as it stops cleanly, so a peer
 // does not alarm on a server that was told to stop.
 func (s *Server) releaseRuleSweep() {
 	if s.platformComponentID == "" {

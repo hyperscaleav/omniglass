@@ -31,6 +31,7 @@ type fakeStore struct {
 }
 
 type auditRow struct {
+	target string
 	ok     bool
 	status int
 	reason string
@@ -52,10 +53,10 @@ func (f *fakeStore) PlatformAlarmCount(context.Context) (int, error) {
 	defer f.mu.Unlock()
 	return f.open, nil
 }
-func (f *fakeStore) AuditHeartbeat(_ context.Context, _ string, ok bool, status int, reason string) error {
+func (f *fakeStore) AuditHeartbeat(_ context.Context, targetID string, ok bool, status int, reason string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.audits = append(f.audits, auditRow{ok, status, reason})
+	f.audits = append(f.audits, auditRow{targetID, ok, status, reason})
 	return nil
 }
 
@@ -187,6 +188,51 @@ func TestBeatRefusesADisabledTargetAndAMissingCredential(t *testing.T) {
 	st.target.Enabled, st.target.CredentialMissing = true, true
 	if err := s.Beat(context.Background()); err == nil || r.count() != 0 {
 		t.Errorf("beat with a credential that does not unseal = %v, %d requests; want an error and none sent", err, r.count())
+	}
+	// Each refusal is audited against the target, the two apart by reason.
+	if len(st.audits) != 2 || st.audits[0].ok || st.audits[1].ok || st.audits[0].target != "t1" ||
+		st.audits[1].target != "t1" || st.audits[0].reason == "" || st.audits[0].reason == st.audits[1].reason {
+		t.Errorf("audit rows = %+v, want one refusal for the disabled target and one for the credential", st.audits)
+	}
+}
+
+// A webhook target with no secret bound would sign with an empty key: the
+// heartbeat refuses it rather than send unsigned, and audits the refusal.
+func TestBeatRefusesATargetWithNoSigningKey(t *testing.T) {
+	t.Parallel()
+	r := newReceiver(t)
+	st := storeFor(t, r, 60)
+	st.target.HMACKey = ""
+	s := New(st, egress.Options{}, "omniglass-a", "v1")
+	if err := s.Beat(context.Background()); err == nil || r.count() != 0 {
+		t.Errorf("beat to a target with no hmac key = %v, %d requests; want an error and none sent", err, r.count())
+	}
+	if len(st.audits) != 1 || st.audits[0].ok || st.audits[0].target != "t1" || st.audits[0].reason == "" {
+		t.Errorf("audit rows = %+v, want one refusal against the target", st.audits)
+	}
+}
+
+// Pointing the heartbeat at another target is a change of outcome even when
+// both succeed, so the move is audited.
+func TestBeatAuditsAChangeOfTarget(t *testing.T) {
+	t.Parallel()
+	r := newReceiver(t)
+	st := storeFor(t, r, 60)
+	s := New(st, egress.Options{}, "omniglass-a", "v1")
+	if err := s.Beat(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Beat(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	st.mu.Lock()
+	st.target = &storage.TargetSend{TargetID: "t2", Name: "other", URL: r.srv.URL, Kind: storage.ChannelWebhook, Enabled: true, HMACKey: "other-key"}
+	st.mu.Unlock()
+	if err := s.Beat(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(st.audits) != 2 || st.audits[0].target != "t1" || st.audits[1].target != "t2" || !st.audits[1].ok {
+		t.Errorf("audit rows = %+v, want one success on t1 and one on t2", st.audits)
 	}
 }
 

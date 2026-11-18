@@ -4,12 +4,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import type { JSX } from "solid-js";
 import { useLogin, useTokenLogin, useLogout, useUpdateProfile, useChangePassword, can, type Me } from "./auth";
 import { getToken, setToken } from "../api/client";
+import { addSubjects, tray } from "./handover";
 
 // can() is a pure UI hint over the flattened permissions. The server joins a
 // resource's actions into one string ("create,update,delete"), so can() must
 // split the list, not compare it whole.
 describe("can", () => {
-  const me = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+  const me = (permissions: string[]): Me => ({ user: { id: "p", kind: "person" }, permissions, grants: [] });
   it("matches an action inside a comma-joined permission", () => {
     expect(can(me(["location:create,update,delete"]), "location", "update")).toBe(true);
     expect(can(me(["location:create,update,delete"]), "location", "delete")).toBe(true);
@@ -25,7 +26,7 @@ describe("can", () => {
   // three-token `:admin` permission. Regression: owner's only grant is `>`, and a
   // splitting matcher left every gated nav tab hidden for the owner.
   it("treats `>` as the whole-fleet superuser (owner)", () => {
-    expect(can(me([">"]), "principal", "read")).toBe(true);
+    expect(can(me([">"]), "user", "read")).toBe(true);
     expect(can(me([">"]), "role", "read")).toBe(true);
     expect(can(me([">"]), "audit", "read", "admin")).toBe(true);
     expect(can(me([">"]), "anything", "delete")).toBe(true);
@@ -34,8 +35,8 @@ describe("can", () => {
     // A resource:action holder can read that resource (floor) but not reach an :admin tier.
     expect(can(me(["*:read"]), "location", "read")).toBe(true);
     expect(can(me(["*:read"]), "audit", "read", "admin")).toBe(false);
-    expect(can(me(["principal:*"]), "principal", "delete")).toBe(true);
-    expect(can(me(["principal:*"]), "principal", "delete", "admin")).toBe(false);
+    expect(can(me(["user:*"]), "user", "delete")).toBe(true);
+    expect(can(me(["user:*"]), "user", "delete", "admin")).toBe(false);
   });
   it("resolves an explicit :admin tier and its read floor", () => {
     expect(can(me(["audit:read:admin"]), "audit", "read", "admin")).toBe(true);
@@ -49,7 +50,7 @@ describe("can", () => {
   // `platform` is in the sensitive set on the server (internal/rbac/rbac.go): it is
   // install-wide AUTHORITY, not fleet reach, so a bare resource wildcard must not
   // name it. The console mirrors that set, or it would offer the tier controls to a
-  // principal the server refuses.
+  // user the server refuses.
   it("keeps a bare resource wildcard away from the install-wide platform permission", () => {
     expect(can(me(["*:update"]), "platform", "update")).toBe(false);
     expect(can(me(["*:*"]), "platform", "create")).toBe(false);
@@ -74,7 +75,7 @@ function wrapper(props: { children: JSX.Element }) {
   return <QueryClientProvider client={qc}>{props.children}</QueryClientProvider>;
 }
 
-const me = { principal: { id: "p1", kind: "human" }, permissions: [], grants: [] };
+const me = { user: { id: "p1", kind: "person" }, permissions: [], grants: [] };
 
 describe("auth hooks", () => {
   beforeEach(() => {
@@ -136,8 +137,9 @@ describe("auth hooks", () => {
     expect(getToken()).toBe(""); // a rejected token is not left behind
   });
 
-  it("useLogout posts logout and drops the stored token", async () => {
+  it("useLogout posts logout, drops the stored token and empties omnibot's tray", async () => {
     setToken("ogp_session_token");
+    addSubjects([{ kind: "component", ref: "hq.lobby.display-1" }]);
     const calls: { url: string; method: string }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const req = input as Request;
@@ -149,6 +151,7 @@ describe("auth hooks", () => {
 
     expect(calls.some((c) => c.url.endsWith("/auth/logout") && c.method === "POST")).toBe(true);
     expect(getToken()).toBe("");
+    expect(tray()).toEqual([]); // the next person to sign in does not inherit it
   });
 
   it("useUpdateProfile PATCHes the label", async () => {

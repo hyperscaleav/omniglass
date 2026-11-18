@@ -21,7 +21,7 @@ import (
 // What survives from the two-rule design is the thing worth keeping: the table must be
 // DECLARED to bear a name at all. Before that, a caller picked between validators by
 // hand at thirteen sites and nothing checked the choice matched the table, which is how
-// system_role reached production unvalidated. A table nobody classified still cannot
+// system_slot reached production unvalidated. A table nobody classified still cannot
 // validate, and that is deliberate.
 
 // MaxEntityNameLen bounds every name. The keyspace ceiling of 128 existed because

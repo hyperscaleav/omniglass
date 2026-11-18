@@ -17,14 +17,15 @@ import {
 import { useSeverity } from "../lib/severity";
 import { entityLabel } from "../lib/entities";
 import SeverityBadge from "./SeverityBadge";
+import { alarmSubject, stamped } from "../lib/handover";
 import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
 
 // AlarmsPanel: what is wrong with this component, and what was.
 //
 // An alarm is where fleet health starts, and it impairs its component's own
 // verdict wholesale (#626): any active alarm degrades it, one at an outage
-// severity level (high and above) is an outage. A system role the component fills no longer counts it toward quorum
-// while it is down, so the role can drop below quorum and its impact becomes
+// severity level (high and above) is an outage. A system slot the component fills no longer counts it toward quorum
+// while it is down, so the slot can drop below quorum and its impact becomes
 // the system's verdict.
 //
 // Clearing keeps the row rather than deleting it, so the panel shows recently
@@ -47,7 +48,7 @@ import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
 // would put a triage act behind the guard for a different kind of act.
 
 //
-// Severity is the registry's (#917): the raise form offers its levels, least to
+// Severity is the catalog's (#917): the raise form offers its levels, least to
 // most severe, each saying what it does to this component, and the badges render
 // each level's label and color through SeverityBadge.
 
@@ -69,7 +70,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
 
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
-  // The chosen level, by name. Empty means "the default": the registry's least
+  // The chosen level, by name. Empty means "the default": the catalog's least
   // severe level, so a raise nobody tuned is the mildest one, never an outage.
   const [chosen, setChosen] = createSignal("");
   const severity = () => chosen() || scale().levels[0]?.name || "";
@@ -125,13 +126,13 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
         <span class="shrink-0 text-[10.5px] text-base-content/40">what is wrong here, and what it takes down</span>
       </div>
       <p class="text-[11px] text-base-content/50">
-        An alarm records a condition on this component and takes its own verdict down (any active alarm degrades it,
-        one at an outage level is an outage). Any role it fills stops counting it toward quorum while it stays down, which is
+        An alarm is raised on this component when a rule fires with a severity, and takes its own verdict down (any active alarm degrades it,
+        one at an outage level is an outage). Any slot it fills stops counting it toward quorum while it stays down, which is
         how a fault on a box becomes a verdict on a system.
       </p>
       <p class="text-[11px] text-base-content/50">
         Acknowledging is separate from clearing: it records that a human has seen the alarm and changes nothing else,
-        so the component stays exactly as broken as it was. What is raised is a fact about the condition; who has
+        so the component stays exactly as broken as it was. What is raised is a fact about the fault; who has
         looked is a fact about a person.
       </p>
 
@@ -155,7 +156,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
         <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300">
           <For each={active()}>
             {(a) => (
-              <div class="flex flex-col gap-1.5 px-3 py-2.5">
+              <div class="flex flex-col gap-1.5 px-3 py-2.5" data-subject-kind={stamped(alarmSubject(a))?.kind} data-subject-ref={stamped(alarmSubject(a))?.ref}>
                 <div class="flex flex-wrap items-baseline gap-2">
                   <SeverityBadge name={a.severity} />
                   <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}</span>
@@ -263,7 +264,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
           <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-dashed border-base-300">
             <For each={cleared()}>
               {(a) => (
-                <div class="flex flex-col gap-1.5 px-3 py-2">
+                <div class="flex flex-col gap-1.5 px-3 py-2" data-subject-kind={stamped(alarmSubject(a))?.kind} data-subject-ref={stamped(alarmSubject(a))?.ref}>
                   <div class="flex flex-wrap items-baseline gap-2">
                     <span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-2 opacity-70">
                       <SeverityBadge name={a.severity} />
@@ -271,14 +272,14 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                       <span class="shrink-0 text-[11px] text-base-content/45">
                         raised {rel(a.raised_at)}
                         <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)}</Show>
-                        {/* An incident that came and went with nobody looking is worth
+                        {/* An alarm that came and went with nobody looking is worth
                             seeing in the history: it is the one that got no attention. */}
                         <Show when={!a.acknowledged}> · never acknowledged</Show>
                       </span>
                     </span>
-                    {/* A snooze belongs to the condition, so a cleared alarm can
-                        carry one: silencing a condition that just cleared is how
-                        a flapping one is quieted. */}
+                    {/* A snooze is stored on the component and dedup key, so a
+                        cleared alarm can carry one: snoozing an alarm that just
+                        cleared is how a flapping one is quieted. */}
                     <SnoozedBadge alarm={a} />
                     <SnoozeControl component={props.component} alarm={a} surface={surface} allowed={!!props.canSnooze} />
                     {timelines.button(a.id, a.message)}

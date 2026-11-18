@@ -54,10 +54,10 @@ func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, er
 func (UnimplementedGateway) IssueBearerCredential(context.Context, BearerIssue) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*Principal, error) {
+func (UnimplementedGateway) AuthenticateBearer(context.Context, []byte) (*User, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ResolvePrincipalRef(context.Context, string) (string, error) {
+func (UnimplementedGateway) ResolveUserRef(context.Context, string) (string, error) {
 	return "", nil
 }
 
@@ -68,29 +68,29 @@ func (UnimplementedGateway) ResolveUsername(context.Context, string) (string, er
 func (UnimplementedGateway) BeginImpersonation(context.Context, string, string, string, time.Duration) (string, *ImpersonationSession, error) {
 	return "", nil, nil
 }
-func (UnimplementedGateway) AuthenticateImpersonation(context.Context, []byte) (*Principal, string, string, string, error) {
+func (UnimplementedGateway) AuthenticateImpersonation(context.Context, []byte) (*User, string, string, string, error) {
 	return nil, "", "", "", nil
 }
 func (UnimplementedGateway) EndImpersonation(context.Context, string) error { return nil }
-func (UnimplementedGateway) AuthenticatePassword(context.Context, string, string) (*Principal, error) {
+func (UnimplementedGateway) AuthenticatePassword(context.Context, string, string) (*User, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) SetPassword(context.Context, string, string) (bool, error) {
 	return false, nil
 }
-func (UnimplementedGateway) UpdateHumanProfile(context.Context, string, HumanProfilePatch) error {
+func (UnimplementedGateway) UpdatePersonProfile(context.Context, string, PersonProfilePatch) error {
 	return nil
 }
-func (UnimplementedGateway) ListPrincipals(context.Context, scope.Set, bool) ([]Principal, error) {
+func (UnimplementedGateway) ListUsers(context.Context, scope.Set, bool) ([]User, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetPrincipal(context.Context, string, scope.Set) (*Principal, error) {
+func (UnimplementedGateway) GetUser(context.Context, string, scope.Set) (*User, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateHumanPrincipal(context.Context, string, HumanSpec, scope.Set) (*Principal, error) {
+func (UnimplementedGateway) CreatePerson(context.Context, string, PersonSpec, scope.Set) (*User, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdatePrincipalHuman(context.Context, string, string, AdminHumanPatch, scope.Set) (*Principal, error) {
+func (UnimplementedGateway) UpdatePerson(context.Context, string, string, AdminPersonPatch, scope.Set) (*User, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateGrant(context.Context, string, string, GrantSpec, scope.Set) (*Grant, error) {
@@ -122,7 +122,7 @@ func (UnimplementedGateway) RemoveGroupMember(context.Context, string, string, s
 func (UnimplementedGateway) ListGroupMembers(context.Context, string, scope.Set) ([]GroupMember, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListGroupsForPrincipal(context.Context, string, scope.Set) ([]Group, error) {
+func (UnimplementedGateway) ListGroupsForUser(context.Context, string, scope.Set) ([]Group, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateGroupGrant(context.Context, string, string, GrantSpec, scope.Set) (*Grant, error) {
@@ -134,33 +134,33 @@ func (UnimplementedGateway) RevokeGroupGrant(context.Context, string, string, st
 func (UnimplementedGateway) ListGroupGrants(context.Context, string, scope.Set) ([]Grant, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SetPrincipalActive(context.Context, string, string, bool, scope.Set) error {
+func (UnimplementedGateway) SetUserActive(context.Context, string, string, bool, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ArchivePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) ArchiveUser(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) RestorePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) RestoreUser(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) PurgePrincipal(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) PurgeUser(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) SetPrincipalPassword(context.Context, string, string, string, scope.Set) error {
+func (UnimplementedGateway) SetUserPassword(context.Context, string, string, string, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) SetOwnAvatar(context.Context, string, string) error { return nil }
 func (UnimplementedGateway) ClearOwnAvatar(context.Context, string) error       { return nil }
-func (UnimplementedGateway) SetPrincipalAvatar(context.Context, string, string, string, scope.Set) error {
+func (UnimplementedGateway) SetUserAvatar(context.Context, string, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ClearPrincipalAvatar(context.Context, string, string, scope.Set) error {
+func (UnimplementedGateway) ClearUserAvatar(context.Context, string, string, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) GetHumanAvatar(context.Context, string) (string, bool, error) {
+func (UnimplementedGateway) GetPersonAvatar(context.Context, string) (string, bool, error) {
 	return "", false, nil
 }
-func (UnimplementedGateway) GetPrincipalAvatar(context.Context, string, scope.Set) (string, bool, error) {
+func (UnimplementedGateway) GetUserAvatar(context.Context, string, scope.Set) (string, bool, error) {
 	return "", false, nil
 }
 func (UnimplementedGateway) RevokeBearer(context.Context, []byte) error { return nil }
@@ -176,7 +176,27 @@ func (UnimplementedGateway) RevokeBearersByPurpose(context.Context, string, stri
 func (UnimplementedGateway) RevokeBearersByPurposeExcept(context.Context, string, string, string, [][]byte) (int, error) {
 	return 0, nil
 }
-func (UnimplementedGateway) AnyHuman(context.Context) (bool, error)    { return false, nil }
+func (UnimplementedGateway) RegisterOAuthClient(context.Context, string, []string) (OAuthClient, error) {
+	return OAuthClient{}, nil
+}
+func (UnimplementedGateway) GetOAuthClient(context.Context, string) (OAuthClient, bool, error) {
+	return OAuthClient{}, false, nil
+}
+func (UnimplementedGateway) GetOAuthClientByURL(context.Context, string) (OAuthClient, bool, error) {
+	return OAuthClient{}, false, nil
+}
+func (UnimplementedGateway) UpsertOAuthMetadataClient(context.Context, string, string, []string) (OAuthClient, error) {
+	return OAuthClient{}, nil
+}
+func (UnimplementedGateway) CreateOAuthCode(context.Context, OAuthCode) error { return nil }
+func (UnimplementedGateway) ConsumeOAuthCode(context.Context, []byte) (OAuthCode, bool, error) {
+	return OAuthCode{}, false, nil
+}
+func (UnimplementedGateway) IssueOAuthToken(context.Context, OAuthTokenIssue) error { return nil }
+func (UnimplementedGateway) RefreshOAuthToken(context.Context, OAuthRefresh) (OAuthRefreshOutcome, error) {
+	return OAuthRefreshRefused, nil
+}
+func (UnimplementedGateway) AnyPerson(context.Context) (bool, error)   { return false, nil }
 func (UnimplementedGateway) ListRoles(context.Context) ([]Role, error) { return nil, nil }
 func (UnimplementedGateway) ListAuditLog(context.Context, AuditFilter) ([]AuditEntry, error) {
 	return nil, nil
@@ -458,7 +478,7 @@ func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Du
 func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) error {
 	return nil
 }
-func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) error {
+func (UnimplementedGateway) InsertOutpostLogs(context.Context, []OutpostLogWrite) error {
 	return nil
 }
 func (UnimplementedGateway) LandBatch(context.Context, IngestBatch) (LandResult, error) {
@@ -482,16 +502,16 @@ func (UnimplementedGateway) ListComponentLogSources(context.Context, string, tim
 func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Duration, int, LogFilter) ([]LogLine, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListNodeLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
+func (UnimplementedGateway) ListOutpostLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set, scope.Set) (*Node, error) {
+func (UnimplementedGateway) CreateOutpost(context.Context, string, OutpostSpec, scope.Set, scope.Set) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateNode(context.Context, string, string, NodePatch, scope.Set, scope.Set, scope.Set) (*Node, error) {
+func (UnimplementedGateway) UpdateOutpost(context.Context, string, string, OutpostPatch, scope.Set, scope.Set, scope.Set) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteNode(context.Context, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) DeleteOutpost(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) EnsurePlatform(context.Context) error {
@@ -500,23 +520,23 @@ func (UnimplementedGateway) EnsurePlatform(context.Context) error {
 func (UnimplementedGateway) EnsureServerComponent(context.Context, string) (string, error) {
 	return "", nil
 }
-func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Node, error) {
+func (UnimplementedGateway) SetEnrollmentToken(context.Context, string, string, string, scope.Set) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ClaimNode(context.Context, string, string) (*Node, error) {
+func (UnimplementedGateway) ClaimOutpost(context.Context, string, string) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) AuthenticateNode(context.Context, string, string) (bool, error) {
+func (UnimplementedGateway) AuthenticateOutpost(context.Context, string, string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { return nil }
 func (UnimplementedGateway) RecordOrphanedBatches(context.Context, string, int64, time.Time) error {
 	return nil
 }
-func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
+func (UnimplementedGateway) OutpostWorklist(context.Context, string) (Worklist, error) {
 	return Worklist{}, nil
 }
-func (UnimplementedGateway) PendingNodeCommands(context.Context, string) ([]CommandDelivery, error) {
+func (UnimplementedGateway) PendingOutpostCommands(context.Context, string) ([]CommandDelivery, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) RecordCommandExecution(context.Context, string, int64, string, string) error {
@@ -529,7 +549,7 @@ func (UnimplementedGateway) GetSimImpairment(context.Context, string) (impair.Im
 func (UnimplementedGateway) SetSimImpairment(context.Context, string, string, impair.Impairment) (impair.Impairment, error) {
 	return impair.Impairment{}, nil
 }
-func (UnimplementedGateway) ComponentSimNode(context.Context, string) (string, error) {
+func (UnimplementedGateway) ComponentSimOutpost(context.Context, string) (string, error) {
 	return "", nil
 }
 func (UnimplementedGateway) SimAddressesInUse(context.Context) (map[string]bool, error) {
@@ -545,13 +565,13 @@ func (UnimplementedGateway) CreatePlan(context.Context, string, Plan, PlanScopes
 func (UnimplementedGateway) WithSimAddressLock(_ context.Context, fn func() error) error {
 	return fn()
 }
-func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
+func (UnimplementedGateway) OutpostSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) WorklistChanges(context.Context) (<-chan string, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) NodeSimWebhooks(context.Context, string) (map[string]SimWebhook, error) {
+func (UnimplementedGateway) OutpostSimWebhooks(context.Context, string) (map[string]SimWebhook, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
@@ -560,10 +580,10 @@ func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (T
 func (UnimplementedGateway) ResolveTaskOwners(context.Context, string, []string) (map[string]TaskOwner, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetNode(context.Context, string, scope.Set) (*Node, error) {
+func (UnimplementedGateway) GetOutpost(context.Context, string, scope.Set) (*Outpost, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListNodes(context.Context, scope.Set) ([]Node, error) {
+func (UnimplementedGateway) ListOutposts(context.Context, scope.Set) ([]Outpost, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpsertVendor(context.Context, Vendor) error    { return nil }
@@ -649,7 +669,7 @@ func (UnimplementedGateway) UpdateProduct(context.Context, string, string, Produ
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteProduct(context.Context, string, string) error { return nil }
-func (UnimplementedGateway) RenameRegistry(context.Context, string, string, string, string) (string, error) {
+func (UnimplementedGateway) RenameCatalog(context.Context, string, string, string, string) (string, error) {
 	return "", nil
 }
 func (UnimplementedGateway) UpsertSecretType(context.Context, SecretType) error { return nil }
@@ -812,12 +832,16 @@ func (UnimplementedGateway) CollectionSettings(context.Context) (settings.Collec
 func (UnimplementedGateway) DatabaseSettings(context.Context) (settings.DatabaseSettings, error) {
 	return settings.DatabaseSettings{}, nil
 }
+func (UnimplementedGateway) AgentSettings(context.Context) (settings.AgentSettings, error) {
+	return settings.AgentSettings{}, nil
+}
 func (UnimplementedGateway) RecordPlatformMetrics(context.Context, []PlatformMetric) error {
 	return nil
 }
 func (UnimplementedGateway) StampRuleSweep(context.Context, string) error   { return nil }
+func (UnimplementedGateway) MarkServerSeen(context.Context, string) error   { return nil }
 func (UnimplementedGateway) ReleaseRuleSweep(context.Context, string) error { return nil }
-func (UnimplementedGateway) ServerSweepAges(context.Context) ([]ServerSweepAge, error) {
+func (UnimplementedGateway) ServerSweepAges(context.Context, time.Duration) ([]ServerSweepAge, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) HeartbeatSettings(context.Context) (settings.HeartbeatSettings, error) {
@@ -830,7 +854,7 @@ func (UnimplementedGateway) PlatformAlarmCount(context.Context) (int, error) { r
 func (UnimplementedGateway) AuditHeartbeat(context.Context, string, bool, int, string) error {
 	return nil
 }
-func (UnimplementedGateway) NodeCheckins(context.Context) ([]NodeCheckin, error) {
+func (UnimplementedGateway) OutpostCheckins(context.Context) ([]OutpostCheckin, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CommandQueueHealth(context.Context, time.Time) (CommandQueueRead, error) {
@@ -877,19 +901,19 @@ func (UnimplementedGateway) DownloadFile(context.Context, string, bool) (*File, 
 	return nil, nil, nil
 }
 func (UnimplementedGateway) DeleteFile(context.Context, string, string, bool) error { return nil }
-func (UnimplementedGateway) GetSettingOverrides(context.Context, string) ([]SettingOverride, error) {
+func (UnimplementedGateway) GetSettingBindings(context.Context, string) ([]SettingBinding, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpsertSettingOverride(context.Context, string, string, string, map[string]any, []string) (*SettingOverride, error) {
+func (UnimplementedGateway) UpsertSettingBinding(context.Context, string, string, string, map[string]any, []string) (*SettingBinding, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) MergePatchSettingOverride(context.Context, string, string, string, map[string]any) (*SettingOverride, error) {
+func (UnimplementedGateway) MergePatchSettingBinding(context.Context, string, string, string, map[string]any) (*SettingBinding, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteSettingOverride(context.Context, string, string, string) error {
+func (UnimplementedGateway) DeleteSettingBinding(context.Context, string, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) DeleteAllSettingOverrides(context.Context, string, string) error {
+func (UnimplementedGateway) DeleteAllSettingBindings(context.Context, string, string) error {
 	return nil
 }
 func (UnimplementedGateway) Close() {}
@@ -919,7 +943,7 @@ func (UnimplementedGateway) DeleteLocationTypeProperty(context.Context, string, 
 	return nil
 }
 
-func (UnimplementedGateway) EffectiveRoles(context.Context, string, scope.Set) ([]EffectiveRole, error) {
+func (UnimplementedGateway) EffectiveSlots(context.Context, string, scope.Set) ([]EffectiveSlot, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ListMembers(context.Context, string, scope.Set) ([]Member, error) {
@@ -955,22 +979,22 @@ func (UnimplementedGateway) ListComponentDependencies(context.Context, string, s
 func (UnimplementedGateway) DeleteComponentDependency(context.Context, string, string, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
+func (UnimplementedGateway) AssignSlot(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) UnassignRole(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
+func (UnimplementedGateway) UnassignSlot(context.Context, string, string, string, string, scope.Set, scope.Set, scope.Set, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) SwapPositions(context.Context, string, string, string, int, int, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ListSystemRoles(context.Context, string, string) ([]SystemRole, error) {
+func (UnimplementedGateway) ListSystemSlots(context.Context, string, string) ([]SystemSlot, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SetSystemRole(context.Context, string, string, string, SystemRoleSpec) (*SystemRole, error) {
+func (UnimplementedGateway) SetSystemSlot(context.Context, string, string, string, SystemSlotSpec) (*SystemSlot, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteSystemRole(context.Context, string, string, string, string) error {
+func (UnimplementedGateway) DeleteSystemSlot(context.Context, string, string, string, string) error {
 	return nil
 }
 func (UnimplementedGateway) ResolveAlternate(context.Context, string, string, string) (string, error) {
@@ -1029,6 +1053,10 @@ func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Durat
 }
 
 func (UnimplementedGateway) ListSystemAlarms(context.Context, string, time.Duration, int) ([]Alarm, error) {
+	return nil, nil
+}
+
+func (UnimplementedGateway) ListFleetAlarms(context.Context, scope.Set, AlarmFilter, int) ([]Alarm, error) {
 	return nil, nil
 }
 
@@ -1266,7 +1294,7 @@ func (UnimplementedGateway) NotificationBacklog(context.Context) (int, error)   
 func (UnimplementedGateway) MailRelay(context.Context) (*MailRelay, string, error) {
 	return nil, "no mail relay is configured", nil
 }
-func (UnimplementedGateway) MergePatchNotificationSettings(context.Context, string, map[string]any, SecretUse) (*SettingOverride, error) {
+func (UnimplementedGateway) MergePatchNotificationSettings(context.Context, string, map[string]any, SecretUse) (*SettingBinding, error) {
 	return nil, nil
 }
 
@@ -1288,14 +1316,41 @@ func (UnimplementedGateway) DeletePersonalRule(context.Context, string, string, 
 func (UnimplementedGateway) TestPersonalRule(context.Context, string, string, RuleDraft, scope.Set, int) ([]RuleMatch, error) {
 	return nil, ErrActionRuleNotFound
 }
+func (UnimplementedGateway) CreateAssistantConversation(context.Context, string, string, string) (*AssistantConversation, error) {
+	return nil, ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) ListAssistantConversations(context.Context, string) ([]AssistantConversation, error) {
+	return []AssistantConversation{}, nil
+}
+func (UnimplementedGateway) GetAssistantConversation(context.Context, string, string) (*AssistantConversation, []AssistantMessage, error) {
+	return nil, nil, ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) AppendAssistantMessages(context.Context, string, string, string, AssistantAppend) (*AssistantConversation, error) {
+	return nil, ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) ClaimAssistantRun(context.Context, string, string, AssistantRunClaim) error {
+	return ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) ReleaseAssistantRun(context.Context, string, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) DeleteAssistantConversation(context.Context, string, string, string) error {
+	return ErrAssistantConversationNotFound
+}
+func (UnimplementedGateway) PruneAssistantConversations(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
+func (UnimplementedGateway) AssistantSettings(context.Context) (settings.AssistantSettings, error) {
+	return settings.AssistantSettings{}, nil
+}
 func (UnimplementedGateway) SetRuleOptOut(context.Context, string, string, string, bool) (*ActionRule, error) {
 	return nil, ErrActionRuleNotFound
 }
 
-func (UnimplementedGateway) EnsureServicePrincipal(context.Context, string, string) (string, error) {
+func (UnimplementedGateway) EnsureMachine(context.Context, string, string) (string, error) {
 	return "", nil
 }
-func (UnimplementedGateway) SetServiceToken(context.Context, string, string, []byte, string) (bool, error) {
+func (UnimplementedGateway) SetMachineToken(context.Context, string, string, []byte, string) (bool, error) {
 	return false, nil
 }
 func (UnimplementedGateway) EnsureRole(context.Context, string, Role) error { return nil }

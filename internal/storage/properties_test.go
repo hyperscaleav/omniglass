@@ -110,13 +110,13 @@ func TestPropertyCRUD(t *testing.T) {
 	}
 }
 
-// TestRegistryNamesAreUniqueAcrossBothRegistries pins the fence that stops the
-// registry-shadowing bug at its source. property_type and event_type are separate
+// TestCatalogNamesAreUniqueAcrossBothCatalogs pins the fence that stops the
+// catalog-shadowing bug at its source. property_type and event_type are separate
 // tables with separate uniqueness, so a name could land in both, and a name in
 // both resolves to NOTHING at ingest: the snapshot refuses it rather than picking
 // a winner, so every sample carrying it disappears silently. Refusing at create is
 // the only moment an operator can be told, while they still have the name in hand.
-func TestRegistryNamesAreUniqueAcrossBothRegistries(t *testing.T) {
+func TestCatalogNamesAreUniqueAcrossBothCatalogs(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -131,14 +131,14 @@ func TestRegistryNamesAreUniqueAcrossBothRegistries(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// video-input is seeded as a state property, so the event registry must refuse it.
+	// video-input is seeded as a state property, so the event catalog must refuse it.
 	if _, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{
 		Name: "video-input", Label: "Video Input",
 	}); !errors.Is(err, storage.ErrEventTypeExists) {
 		t.Fatalf("CreateEventType on an existing property name = %v, want ErrEventTypeExists", err)
 	}
 
-	// The mirror: call-started is a seeded event type, so the property registry
+	// The mirror: call-started is a seeded event type, so the property catalog
 	// must refuse it.
 	if _, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{
 		Name: "call-started", Label: "Call Started", DataType: "string",
@@ -165,7 +165,7 @@ func TestRegistryNamesAreUniqueAcrossBothRegistries(t *testing.T) {
 		t.Fatalf("CreateMetricType on an existing event type name = %v, want ErrMetricTypeExists", err)
 	}
 
-	// A free name in either registry is unaffected.
+	// A free name in either catalog is unaffected.
 	if _, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{
 		Name: "cable-unplugged", Label: "Cable Unplugged",
 	}); err != nil {

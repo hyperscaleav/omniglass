@@ -1,4 +1,4 @@
-# The ship-with command_type registry (ADR-0063): the driver-owned catalog of what a
+# The ship-with command_type catalog (ADR-0063): the driver-owned catalog of what a
 # component can be told, the "do" half of the telemetry model. A settleable command
 # names one target arm, target_property_type or target_metric_type, never both (it
 # opens an intended value and settles when observed matches); a fire-and-forget
@@ -21,11 +21,11 @@ command_types:
     label: Reboot
     description: >-
       Tell a component to restart. A fire-and-forget command: it opens no
-      intended value, so its node's execution report settles or fails it, and it
+      intended value, so its outpost's execution report settles or fails it, and it
       times out when no report arrives within its delivery window. A disruptive
       one: its delivery closes the gates of its hold set on that
-      node (the component's in-band endpoints and those of what it hosts), the
-      node runs nothing against them for the quiet period, then each reopens
+      outpost (the component's in-band endpoints and those of what it hosts), the
+      outpost runs nothing against them for the quiet period, then each reopens
       on its own first up verdict, with the hold as the backstop for one that
       never reads up.
     settle_window_seconds: 0
@@ -41,9 +41,9 @@ command_types:
     description: >-
       Switch one outlet of a PDU off. A fire-and-forget command and a power
       command: its delivery closes the gates of what that outlet feeds on the
-      node (every endpoint of a component with a power dependency on the
+      outpost (every endpoint of a component with a power dependency on the
       outlet, its out-of-band ones included, and the in-band endpoints of what
-      those host), never the PDU's own, so the node sends nothing to a
+      those host), never the PDU's own, so the outpost sends nothing to a
       component while its power is cut. Each reopens on its own first up
       verdict after the quiet period, with the hold as the backstop for one
       that stays dark.

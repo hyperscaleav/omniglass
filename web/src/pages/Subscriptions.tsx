@@ -50,7 +50,7 @@ const HINTS = {
   page: "Rules you write for yourself: when an alarm you can see is raised or cleared and the rule's when holds, you are told on the channels you pick. You are only ever told about alarms on components you can read.",
   list: "You are only ever told about alarms on components you can read, judged at the moment the alarm moves, before the when runs.",
   on: "Which edges of an alarm tell you: when it is raised, when it clears, or both.",
-  when: "A predicate over the alarm's facts (component, place, severity_rank, message, rule and more). Empty always holds: every alarm you can see tells you.",
+  when: "A predicate over the alarm's facts (component, location, severity_rank, message, rule and more). Empty always holds: every alarm you can see tells you.",
   channels: "Inbox puts an entry in your console inbox (the bell in the top bar). Email sends to the address in your directory entry.",
   enabled: "A paused subscription queues nothing; resuming it tells you from the next transition on, never about what it missed.",
   test: "Judges this draft against your most recent alarms on components you can read, each edge the draft fires on. It writes and sends nothing.",
@@ -238,7 +238,7 @@ export default function Subscriptions(): JSX.Element {
           {(target) => (
             <SubscriptionForm
               rule={target === "new" ? undefined : target}
-              hasEmail={!!me.data?.human?.email}
+              hasEmail={!!me.data?.person?.email}
               onDone={(saved) => {
                 setEditing(null);
                 setNote({ tone: "success", text: `Saved ${entityLabel(saved)}.` });

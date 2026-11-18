@@ -12,19 +12,19 @@ import (
 )
 
 // EndpointObservation takes the three reads a scale lab reconciles (#1639):
-// what the simulator beside node observed, what the node tallied sending,
-// then the simulator again. The node's read sits between the two simulator
+// what the simulator beside outpost observed, what the outpost tallied sending,
+// then the simulator again. The outpost's read sits between the two simulator
 // reads, so a request in transit is inside the bracket and never a false
 // gap. Each read is bounded by the simulator-operation timeout.
-func (s *Server) EndpointObservation(ctx context.Context, node string) (collection.EndpointObservation, error) {
+func (s *Server) EndpointObservation(ctx context.Context, outpost string) (collection.EndpointObservation, error) {
 	var o collection.EndpointObservation
-	if err := s.readObservation(ctx, collection.SimobsSubject(node), ErrNoSimulator, &o.SimBefore); err != nil {
+	if err := s.readObservation(ctx, collection.SimobsSubject(outpost), ErrNoSimulator, &o.SimBefore); err != nil {
 		return o, err
 	}
-	if err := s.readObservation(ctx, collection.RequestTallySubject(node), ErrNodeAbsent, &o.Node); err != nil {
+	if err := s.readObservation(ctx, collection.RequestTallySubject(outpost), ErrOutpostAbsent, &o.Outpost); err != nil {
 		return o, err
 	}
-	if err := s.readObservation(ctx, collection.SimobsSubject(node), ErrNoSimulator, &o.SimAfter); err != nil {
+	if err := s.readObservation(ctx, collection.SimobsSubject(outpost), ErrNoSimulator, &o.SimAfter); err != nil {
 		return o, err
 	}
 	return o, nil

@@ -7,17 +7,19 @@
    "description": "Read-only access to everything, and subscribing yourself to the alarms you can see. The floor every other role inherits.",
    "declared": [
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ],
    "effective": [
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
    "id": "operator",
    "label": "Operator",
-   "description": "Day-to-day operations: create or edit components, endpoints (retry an endpoint's rejected session, or run its poll now), secrets, variables, the property, metric, event, command and notification catalogs, issue commands in scope, preview a driver spec through a node, and impair simulated devices. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
+   "description": "Day-to-day operations: create or edit components, endpoints (retry an endpoint's rejected session, or run its poll now), secrets, variables, the property, metric, event, command and notification catalogs, issue commands in scope, preview a driver spec through an outpost, and impair simulated devices. Sees, reveals and binds the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
    "inherits": [
     "viewer"
    ],
@@ -25,7 +27,7 @@
     "component:create,update,rename,move",
     "endpoint:create,update,retry,run",
     "driver:preview",
-    "secret:read,reveal,create,update",
+    "secret:read,reveal,bind,create,update",
     "variable:create,update",
     "property_type:create,update",
     "metric_type:create,update",
@@ -52,6 +54,7 @@
     "driver:preview",
     "secret:read",
     "secret:reveal",
+    "secret:bind",
     "secret:create",
     "secret:update",
     "variable:create",
@@ -75,7 +78,8 @@
     "file:create",
     "file:delete",
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
@@ -89,7 +93,7 @@
     "location:create,update,rename,move",
     "system:create,update,rename,move",
     "component:create,update,rename,move",
-    "secret:read,reveal,create,update",
+    "secret:read,reveal,bind,create,update",
     "file:create"
    ],
    "effective": [
@@ -107,17 +111,19 @@
     "component:move",
     "secret:read",
     "secret:reveal",
+    "secret:bind",
     "secret:create",
     "secret:update",
     "file:create",
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
    "id": "admin",
    "label": "Administrator",
-   "description": "Manages the fleet, users, roles, and grants: full create, update, and delete on locations, systems, and components, and on principals, credentials, grants, and roles. Deliberately NOT the superuser: it cannot grant a role above its own tier, so it cannot make itself owner. Inherits Operator.",
+   "description": "Manages the fleet, users, roles, and grants: full create, update, and delete on locations, systems, and components, and on users, credentials, grants, and roles. Deliberately NOT the superuser: it cannot grant a role above its own tier, so it cannot make itself owner. Inherits Operator.",
    "inherits": [
     "operator"
    ],
@@ -127,18 +133,18 @@
     "task:*",
     "system:create,update,delete,rename,move",
     "location:create,update,delete,rename,move",
-    "principal:*",
-    "principal:read:admin",
-    "principal:purge:admin",
+    "user:*",
+    "user:read:admin",
+    "user:purge:admin",
     "secret:\u003e",
     "file:\u003e",
     "variable:*",
     "platform:*",
     "settings:read,update",
-    "principal_grant:*",
-    "principal_group:*",
-    "principal_group:read:admin",
-    "node:*",
+    "user_grant:*",
+    "user_group:*",
+    "user_group:read:admin",
+    "outpost:*",
     "role:read:admin",
     "audit:read:admin",
     "property_type:*",
@@ -173,19 +179,19 @@
     "location:delete",
     "location:rename",
     "location:move",
-    "principal:*",
-    "principal:read:admin",
-    "principal:purge:admin",
+    "user:*",
+    "user:read:admin",
+    "user:purge:admin",
     "secret:\u003e",
     "file:\u003e",
     "variable:*",
     "platform:*",
     "settings:read",
     "settings:update",
-    "principal_grant:*",
-    "principal_group:*",
-    "principal_group:read:admin",
-    "node:*",
+    "user_grant:*",
+    "user_group:*",
+    "user_group:read:admin",
+    "outpost:*",
     "role:read:admin",
     "audit:read:admin",
     "property_type:*",
@@ -235,6 +241,7 @@
     "driver:preview",
     "secret:read",
     "secret:reveal",
+    "secret:bind",
     "secret:create",
     "secret:update",
     "variable:create",
@@ -258,7 +265,8 @@
     "file:create",
     "file:delete",
     "*:read",
-    "notification:subscribe"
+    "notification:subscribe",
+    "assistant:use"
    ]
   },
   {
@@ -308,7 +316,7 @@
    "name": "session-state",
    "data_type": "string",
    "label": "Session State",
-   "description": "A held session's state per endpoint: establishing (the first connection is being made), up (the connection is held and polls borrow it), recovering (a held connection dropped and the node is reconnecting with a bounded, jittered backoff), down (the attempt budget is spent; the node keeps retrying at the capped pace), rejected (a refusal retrying cannot fix, such as a wrong credential or a changed host key; the node dials no more until the endpoint changes or an operator retries). Written on transitions only; session-reason carries why."
+   "description": "A held session's state per endpoint: establishing (the first connection is being made), up (the connection is held and polls borrow it), recovering (a held connection dropped and the outpost is reconnecting with a bounded, jittered backoff), down (the attempt budget is spent; the outpost keeps retrying at the capped pace), rejected (a refusal retrying cannot fix, such as a wrong credential or a changed host key; the outpost dials no more until the endpoint changes or an operator retries). Written on transitions only; session-reason carries why."
   },
   {
    "name": "session-reason",
@@ -320,13 +328,13 @@
    "name": "ssh-host-key",
    "data_type": "string",
    "label": "SSH Host Key",
-   "description": "The SHA256 fingerprint of the host key an ssh session trusts, per endpoint. The node records the first key it sees (trust on first use) and every connection that matches it; a changed key is refused, and the session reads rejected with class host-key naming both fingerprints until an operator retries the endpoint with the new key, which lands here as the declared value."
+   "description": "The SHA256 fingerprint of the host key an ssh session trusts, per endpoint. The outpost records the first key it sees (trust on first use) and every connection that matches it; a changed key is refused, and the session reads rejected with class host-key naming both fingerprints until an operator retries the endpoint with the new key, which lands here as the declared value."
   },
   {
    "name": "tls-certificate",
    "data_type": "string",
    "label": "TLS Certificate Key",
-   "description": "The SHA256 fingerprint of the public key a tls endpoint pins, per endpoint, in the form ssh fingerprints a host key in. In pin mode the node records the first key it is offered (trust on first use), and records it again while the server does not yet deliver it back as the pin; a renewal that keeps the key is no change, and a changed key is refused, the session reading rejected with class certificate naming both fingerprints, until an operator retries the endpoint with the new key, which lands here as the declared value."
+   "description": "The SHA256 fingerprint of the public key a tls endpoint pins, per endpoint, in the form ssh fingerprints a host key in. In pin mode the outpost records the first key it is offered (trust on first use), and records it again while the server does not yet deliver it back as the pin; a renewal that keeps the key is no change, and a changed key is refused, the session reading rejected with class certificate naming both fingerprints, until an operator retries the endpoint with the new key, which lands here as the declared value."
   },
   {
    "name": "tls-certificate-expiry",
@@ -344,13 +352,13 @@
    "name": "endpoint-rejection-reason",
    "data_type": "string",
    "label": "Endpoint Rejection Reason",
-   "description": "Why an endpoint's gate holds: the refusal's class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the node of anything it sent. Written beside endpoint-rejection whenever the node records a gate, held session or not, so an endpoint gated by its reachability probe alone still says why it was refused. A gate a restarted node adopts writes none, and the read serves the reason only while a gate holds."
+   "description": "Why an endpoint's gate holds: the refusal's class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the outpost of anything it sent. Written beside endpoint-rejection whenever the outpost records a gate, held session or not, so an endpoint gated by its reachability probe alone still says why it was refused. A gate a restarted outpost adopts writes none, and the read serves the reason only while a gate holds."
   },
   {
    "name": "health",
    "data_type": "string",
    "label": "Health",
-   "description": "The rolled-up health verdict for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's roles, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check. incomplete ranks between healthy and degraded and means a commissioning gap: a role short because its hardware was never installed, which no alarm will ever fire for."
+   "description": "The rolled-up health verdict for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's slots, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check. incomplete ranks between healthy and degraded and means a commissioning gap: a slot short because its hardware was never installed, which no alarm will ever fire for."
   },
   {
    "name": "server-version",
@@ -555,7 +563,7 @@
    "unit": "ms",
    "precision": 3,
    "label": "Poll CPU Time",
-   "description": "Mean CPU the kernel charged the endpoint's driver poll runs over the report window, read from each run's thread clock, so time waiting on the device is not in it; absent when no poll ran or the node's platform has no thread clock."
+   "description": "Mean CPU the kernel charged the endpoint's driver poll runs over the report window, read from each run's thread clock, so time waiting on the device is not in it; absent when no poll ran or the outpost's platform has no thread clock."
   },
   {
    "name": "poll-failure-count",
@@ -585,7 +593,7 @@
    "name": "poll-skipped-count",
    "data_type": "int",
    "label": "Skipped Polls",
-   "description": "The endpoint's due driver polls the node skipped in the report window because the poll's last run was still in flight; counted, never queued; reported only when nonzero."
+   "description": "The endpoint's due driver polls the outpost skipped in the report window because the poll's last run was still in flight; counted, never queued; reported only when nonzero."
   },
   {
    "name": "push-message-count",
@@ -616,7 +624,7 @@
    "data_type": "float",
    "unit": "s",
    "label": "Check-in Age",
-   "description": "Seconds since the node's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the node is silent."
+   "description": "Seconds since the outpost's last heartbeat reached the server (since its enrollment, before its first), written by the server every platform tick; keeps growing while the outpost is silent."
   },
   {
    "name": "rule-sweep-age",
@@ -629,7 +637,7 @@
    "name": "worklist-task-count",
    "data_type": "int",
    "label": "Worklist Tasks",
-   "description": "Tasks in the worklist the node installed, sampled on each install."
+   "description": "Tasks in the worklist the outpost installed, sampled on each install."
   },
   {
    "name": "worklist-pull-loss-ratio",
@@ -637,14 +645,14 @@
    "unit": "ratio",
    "precision": 3,
    "label": "Worklist Pull Loss",
-   "description": "The share of the node's worklist pulls over the report window that the bus refused or the node could not read, so the node ran its last worklist; a window with no pull carries the last pull's outcome. 0 is healthy, 1 is a node running a stale worklist."
+   "description": "The share of the outpost's worklist pulls over the report window that the bus refused or the outpost could not read, so the outpost ran its last worklist; a window with no pull carries the last pull's outcome. 0 is healthy, 1 is an outpost running a stale worklist."
   },
   {
    "name": "tick-duration",
    "data_type": "float",
    "unit": "ms",
    "label": "Tick Duration",
-   "description": "The longest pass the node's dispatcher took over one heartbeat window, sampled each heartbeat."
+   "description": "The longest pass the outpost's dispatcher took over one heartbeat window, sampled each heartbeat."
   },
   {
    "name": "tick-overrun-count",
@@ -678,31 +686,31 @@
    "unit": "ratio",
    "precision": 3,
    "label": "Worker Busy",
-   "description": "Share of the node's worker time spent running polls, probes, commands and runs over the report window; near 1 every worker is busy and dues start to wait. Reported every window, 0 when idle."
+   "description": "Share of the outpost's worker time spent running polls, probes, commands and runs over the report window; near 1 every worker is busy and dues start to wait. Reported every window, 0 when idle."
   },
   {
    "name": "lane-worker-count",
    "data_type": "int",
    "label": "Lane Workers",
-   "description": "How many endpoint lanes the node runs at once, each one request in flight to its endpoint; sized at boot from the CPU and memory the node may use unless an operator set it. Reported every window."
+   "description": "How many endpoint lanes the outpost runs at once, each one request in flight to its endpoint; sized at boot from the CPU and memory the outpost may use unless an operator set it. Reported every window."
   },
   {
    "name": "spool-batch-count",
    "data_type": "int",
    "label": "Spool Depth",
-   "description": "Batches waiting in the node's spool for the bus, sampled each tick."
+   "description": "Batches waiting in the outpost's spool for the bus, sampled each tick."
   },
   {
    "name": "delivery-in-count",
    "data_type": "int",
    "label": "Delivery In",
-   "description": "Items that reached a hop over the report window, one sample per kind as the instance (metric, property, event, log); a node counts its spool, the server its ingest. At a node's schedule/{kind} instance it counts the runs due on the schedule that produce that kind. Written every window, 0 when quiet."
+   "description": "Items that reached a hop over the report window, one sample per kind as the instance (metric, property, event, log); an outpost counts its spool, the server its ingest. At an outpost's schedule/{kind} instance it counts the runs due on the schedule that produce that kind. Written every window, 0 when quiet."
   },
   {
    "name": "delivery-out-count",
    "data_type": "int",
    "label": "Delivery Out",
-   "description": "Items a hop handed on over the report window, one sample per kind as the instance (metric, property, event, log); a node counts what the bus acknowledged, the server what it stored, coalesced, or had already landed. At a node's schedule/{kind} instance it counts the runs made of those due. Written every window, 0 when quiet."
+   "description": "Items a hop handed on over the report window, one sample per kind as the instance (metric, property, event, log); an outpost counts what the bus acknowledged, the server what it stored, coalesced, or had already landed. At an outpost's schedule/{kind} instance it counts the runs made of those due. Written every window, 0 when quiet."
   },
   {
    "name": "delivery-loss-ratio",
@@ -710,13 +718,13 @@
    "unit": "ratio",
    "precision": 3,
    "label": "Delivery Loss",
-   "description": "The share of a hop's items that came in and never went out over the report window, one sample per kind as the instance (metric, property, event, log); at a node's schedule/{kind} instance, the share of runs due that were skipped. 0 is healthy, and a quiet window writes 0."
+   "description": "The share of a hop's items that came in and never went out over the report window, one sample per kind as the instance (metric, property, event, log); at an outpost's schedule/{kind} instance, the share of runs due that were skipped. 0 is healthy, and a quiet window writes 0."
   },
   {
    "name": "session-held-count",
    "data_type": "int",
    "label": "Sessions Held",
-   "description": "Device sessions the node holds, one sample per session state as the instance, sampled each tick."
+   "description": "Device sessions the outpost holds, one sample per session state as the instance, sampled each tick."
   },
   {
    "name": "process-goroutine-count",
@@ -743,7 +751,7 @@
    "data_type": "float",
    "unit": "s",
    "label": "CPU Time",
-   "description": "CPU time the Omniglass process spent since its previous sample (each tick on a node, each report window on the server), as the Go runtime estimates it rather than the kernel's account; divided by that interval it is the cores the process kept busy."
+   "description": "CPU time the Omniglass process spent since its previous sample (each tick on an outpost, each report window on the server), as the Go runtime estimates it rather than the kernel's account; divided by that interval it is the cores the process kept busy."
   },
   {
    "name": "process-fd-count",
@@ -912,7 +920,7 @@
    "data_type": "float",
    "unit": "s",
    "label": "Ingest Lag",
-   "description": "Mean time from a sample's timestamp to its batch's commit on the server, over the newest and oldest sample of each batch landed in the report window; the node's clock stamps the sample, so a skewed node clock reads as lag."
+   "description": "Mean time from a sample's timestamp to its batch's commit on the server, over the newest and oldest sample of each batch landed in the report window; the outpost's clock stamps the sample, so a skewed outpost clock reads as lag."
   },
   {
    "name": "ingest-lag-max",
@@ -931,7 +939,7 @@
    "name": "ingest-sample-count",
    "data_type": "int",
    "label": "Samples Landed",
-   "description": "Samples the server's committed telemetry batches landed over the report window; a node group the fence or the gateway dropped counts none."
+   "description": "Samples the server's committed telemetry batches landed over the report window; an outpost group the fence or the gateway dropped counts none."
   },
   {
    "name": "ingest-lane-busy",
@@ -980,26 +988,26 @@
    "name": "bus-worklist-pull-count",
    "data_type": "int",
    "label": "Worklist Pulls",
-   "description": "Node worklist pulls the server answered over the report window, one sample per outcome as the instance (served, read-failed, oversize, respond-failed, expired, abandoned, busy)."
+   "description": "Outpost worklist pulls the server answered over the report window, one sample per outcome as the instance (served, read-failed, oversize, respond-failed, expired, abandoned, busy)."
   },
   {
    "name": "bus-worklist-reply-bytes-max",
    "data_type": "int",
    "unit": "bytes",
    "label": "Worklist Reply Size (max)",
-   "description": "The largest worklist reply the server holds sized for any node, at the end of the report window; nearing the bus payload limit means a reply will be refused as oversize."
+   "description": "The largest worklist reply the server holds sized for any outpost, at the end of the report window; nearing the bus payload limit means a reply will be refused as oversize."
   },
   {
    "name": "bus-request-count",
    "data_type": "int",
    "label": "Bus Requests",
-   "description": "Node requests the server handled on the bus over the report window, one sample per path as the instance (heartbeat, command-pull, command-report)."
+   "description": "Outpost requests the server handled on the bus over the report window, one sample per path as the instance (heartbeat, command-pull, command-report)."
   },
   {
    "name": "bus-request-failure-count",
    "data_type": "int",
    "label": "Bus Request Failures",
-   "description": "Node requests on the bus the server failed to serve over the report window, one sample per path as the instance; a share of bus-request-count, written 0 beside a window of requests that all succeeded."
+   "description": "Outpost requests on the bus the server failed to serve over the report window, one sample per path as the instance; a share of bus-request-count, written 0 beside a window of requests that all succeeded."
   },
   {
    "name": "calc-pending-depth",
@@ -1082,28 +1090,28 @@
    "name": "command-pending-count",
    "data_type": "int",
    "label": "Pending Commands",
-   "description": "Commands waiting for the node, the ones its next pull would take and the ones it took that await their execution report, sampled each platform tick."
+   "description": "Commands waiting for the outpost, the ones its next pull would take and the ones it took that await their execution report, sampled each platform tick."
   },
   {
    "name": "command-pending-age",
    "data_type": "float",
    "unit": "s",
    "label": "Oldest Pending Command",
-   "description": "Seconds the oldest command waiting for the node has waited since its issue, sampled each platform tick; zero while none waits."
+   "description": "Seconds the oldest command waiting for the outpost has waited since its issue, sampled each platform tick; zero while none waits."
   },
   {
    "name": "command-dispatch-latency",
    "data_type": "float",
    "unit": "ms",
    "label": "Command Dispatch Latency",
-   "description": "Time from a command's issue to the first time a node took it, one sample per command at that take; a command no node takes writes none and counts as expired."
+   "description": "Time from a command's issue to the first time an outpost took it, one sample per command at that take; a command no outpost takes writes none and counts as expired."
   },
   {
    "name": "command-execution-latency",
    "data_type": "float",
    "unit": "ms",
    "label": "Command Execution Latency",
-   "description": "Time from a command's first take to the node's execution report, one sample per command at the report."
+   "description": "Time from a command's first take to the outpost's execution report, one sample per command at the report."
   },
   {
    "name": "command-redelivery-count",
@@ -1115,19 +1123,19 @@
    "name": "command-stuck-count",
    "data_type": "int",
    "label": "Stuck Commands",
-   "description": "Commands the node took that have had no execution report for longer than the redelivery wait, still inside the delivery window, sampled each platform tick."
+   "description": "Commands the outpost took that have had no execution report for longer than the redelivery wait, still inside the delivery window, sampled each platform tick."
   },
   {
    "name": "command-expired-count",
    "data_type": "int",
    "label": "Expired Commands",
-   "description": "Commands that aged past the delivery window unexecuted over the platform tick's window, instance undelivered (no node took it) or unexecuted (taken, never reported); written every tick, zero when none."
+   "description": "Commands that aged past the delivery window unexecuted over the platform tick's window, instance undelivered (no outpost took it) or unexecuted (taken, never reported); written every tick, zero when none."
   },
   {
    "name": "command-pull-failure-count",
    "data_type": "int",
    "label": "Command Pull Failures",
-   "description": "Pulls of the node's command queue that failed (no answer, or one it could not read), over the report window; reported every window, 0 when quiet."
+   "description": "Pulls of the outpost's command queue that failed (no answer, or one it could not read), over the report window; reported every window, 0 when quiet."
   },
   {
    "name": "room-temperature",
@@ -1350,7 +1358,7 @@
   {
    "name": "command-timed-out",
    "label": "Command Timed Out",
-   "description": "A command's settle window closed with no evidence either way: no reply that decided it and no observation of its target. Its message says where it stopped (never taken by a node, delivered with no report, or answered with nothing observed after)."
+   "description": "A command's settle window closed with no evidence either way: no reply that decided it and no observation of its target. Its message says where it stopped (never taken by an outpost, delivered with no report, or answered with nothing observed after)."
   },
   {
    "name": "call-ended",
@@ -1373,14 +1381,14 @@
    "description": "A collection task could not use what it had: an unusable config or a payload that did not parse. Carries the task identity in its payload, so the failure names its work; the alternative is a silent skip nobody sees."
   },
   {
-   "name": "condition-started",
-   "label": "Condition Started",
-   "description": "An event rule's condition came into force on a component: the generic fire event for a rule that needs no semantic type of its own. Written once at the edge, after the rule's fire sustain, never per sample while the condition holds."
+   "name": "rule-fired",
+   "label": "Rule Fired",
+   "description": "An event rule fired on a component and endpoint: the generic fire event for a rule that needs no semantic type of its own. Written once at the edge, after the rule's fire sustain, never per sample while the rule stays fired."
   },
   {
-   "name": "condition-ended",
-   "label": "Condition Ended",
-   "description": "An event rule's condition left force: condition-started's closing half, written once when the rule's clear criteria has held for its clear sustain. The pair brackets how long the condition held."
+   "name": "rule-cleared",
+   "label": "Rule Cleared",
+   "description": "An event rule cleared where it had fired: rule-fired's closing half, written once when the rule's clear criteria has held for its clear sustain. The pair brackets how long the firing lasted."
   }
  ],
  "command_types": [
@@ -1392,12 +1400,12 @@
   {
    "name": "reboot",
    "label": "Reboot",
-   "description": "Tell a component to restart. A fire-and-forget command: it opens no intended value, so its node's execution report settles or fails it, and it times out when no report arrives within its delivery window. A disruptive one: its delivery closes the gates of its hold set on that node (the component's in-band endpoints and those of what it hosts), the node runs nothing against them for the quiet period, then each reopens on its own first up verdict, with the hold as the backstop for one that never reads up."
+   "description": "Tell a component to restart. A fire-and-forget command: it opens no intended value, so its outpost's execution report settles or fails it, and it times out when no report arrives within its delivery window. A disruptive one: its delivery closes the gates of its hold set on that outpost (the component's in-band endpoints and those of what it hosts), the outpost runs nothing against them for the quiet period, then each reopens on its own first up verdict, with the hold as the backstop for one that never reads up."
   },
   {
    "name": "outlet-off",
    "label": "Outlet Off",
-   "description": "Switch one outlet of a PDU off. A fire-and-forget command and a power command: its delivery closes the gates of what that outlet feeds on the node (every endpoint of a component with a power dependency on the outlet, its out-of-band ones included, and the in-band endpoints of what those host), never the PDU's own, so the node sends nothing to a component while its power is cut. Each reopens on its own first up verdict after the quiet period, with the hold as the backstop for one that stays dark."
+   "description": "Switch one outlet of a PDU off. A fire-and-forget command and a power command: its delivery closes the gates of what that outlet feeds on the outpost (every endpoint of a component with a power dependency on the outlet, its out-of-band ones included, and the in-band endpoints of what those host), never the PDU's own, so the outpost sends nothing to a component while its power is cut. Each reopens on its own first up verdict after the quiet period, with the hold as the backstop for one that stays dark."
   },
   {
    "name": "outlet-on",
@@ -1426,14 +1434,14 @@
    "label": "Alarm raised",
    "description": "Says an alarm opened: what is wrong, where, and how bad. The message an action rule on raised sends unless it names another type.",
    "subject": "[{{.SeverityLabel}}] {{.ComponentLabel}}: {{.Message}}",
-   "text": "{{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}} raised a {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}{{if .Rule}} by the rule {{.Rule}}{{end}}.\n{{if .Link}}{{.Link}}{{end}}"
+   "text": "{{.ComponentLabel}}{{if .Location}} at {{.Location}}{{end}} raised a {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}{{if .Rule}} by the rule {{.Rule}}{{end}}.\n{{if .Link}}{{.Link}}{{end}}"
   },
   {
    "name": "alarm-cleared",
    "label": "Alarm cleared",
    "description": "Says an alarm closed, so whoever was told it opened is told it is over. The message an action rule on cleared sends unless it names another type.",
    "subject": "[Cleared] {{.ComponentLabel}}: {{.Message}}",
-   "text": "{{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}} cleared its {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}, cleared at {{.ClearedAt}}.\n{{if .Link}}{{.Link}}{{end}}"
+   "text": "{{.ComponentLabel}}{{if .Location}} at {{.Location}}{{end}} cleared its {{.SeverityLabel}} alarm: {{.Message}}\nRaised at {{.RaisedAt}}, cleared at {{.ClearedAt}}.\n{{if .Link}}{{.Link}}{{end}}"
   }
  ],
  "secret_types": [
@@ -1595,7 +1603,7 @@
   },
   {
    "name": "tls",
-   "description": "TLS: the line protocol over a TLS connection, held exactly as it is over tcp; the probe runs the handshake (responds) and reports the certificate's expiry, verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
+   "description": "TLS: the line protocol over a TLS connection, held exactly as it is over tcp; the probe runs the handshake (responds) and reports the certificate's expiry, verified against the outpost's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
    "built": true,
    "rung": "handshake",
@@ -1616,7 +1624,7 @@
   },
   {
    "name": "udp",
-   "description": "UDP: the line protocol as datagrams, one line each, stateless: the probe sends the driver's named request and an answer is the rung (an open udp port cannot be detected), a refused port reads refused, and a lost datagram is retried; each endpoint binds its own local port (its driver's listen-port input, else one the node picks), which its requests, replies and pushes share.",
+   "description": "UDP: the line protocol as datagrams, one line each, stateless: the probe sends the driver's named request and an answer is the rung (an open udp port cannot be detected), a refused port reads refused, and a lost datagram is retried; each endpoint binds its own local port (its driver's listen-port input, else one the outpost picks), which its requests, replies and pushes share.",
    "held": false,
    "built": true,
    "rung": "request",
@@ -1672,7 +1680,7 @@
   },
   {
    "name": "http",
-   "description": "HTTP: a driver's polls and commands send real requests (method, path, query, headers, body) and read JSON, XML, HTML or text answers, authenticated by the endpoint's declared scheme (basic, bearer, an API key, digest) or a login whose session the node keeps; a declared server-sent events stream is held as a session, its events landing through the listeners; the probe draws a real response off the API without a credential (responds), any status counting as an answer.",
+   "description": "HTTP: a driver's polls and commands send real requests (method, path, query, headers, body) and read JSON, XML, HTML or text answers, authenticated by the endpoint's declared scheme (basic, bearer, an API key, digest) or a login whose session the outpost keeps; a declared server-sent events stream is held as a session, its events landing through the listeners; the probe draws a real response off the API without a credential (responds), any status counting as an answer.",
    "held": true,
    "built": true,
    "rung": "connect",
@@ -1690,7 +1698,7 @@
   },
   {
    "name": "https",
-   "description": "HTTPS: http over a TLS connection, its own entry so a component can serve a plain web port beside a TLS one, a server-sent events stream held over it as over http; the probe runs the handshake (responds), reports the certificate's expiry, then draws a response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
+   "description": "HTTPS: http over a TLS connection, its own entry so a component can serve a plain web port beside a TLS one, a server-sent events stream held over it as over http; the probe runs the handshake (responds), reports the certificate's expiry, then draws a response, the certificate verified against the outpost's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
    "built": true,
    "rung": "handshake",
@@ -1712,7 +1720,7 @@
   },
   {
    "name": "websocket",
-   "description": "WebSocket: a held session whose messages are text frames, routed as a line session's are: a frame sent to arm a subscription on every connection, pushes landing through the listeners, and a request answered by the frame carrying back an id the node mints into it, whatever pushes interleave; the upgrade rides the endpoint's scheme (basic, bearer, an API key) or a login whose cookie the node keeps, and the session is kept alive by ping and pong; the probe is http's, a credential-free GET / whose answer, any status, is the rung (responds), so reachability stays observed beneath a refused upgrade.",
+   "description": "WebSocket: a held session whose messages are text frames, routed as a line session's are: a frame sent to arm a subscription on every connection, pushes landing through the listeners, and a request answered by the frame carrying back an id the outpost mints into it, whatever pushes interleave; the upgrade rides the endpoint's scheme (basic, bearer, an API key) or a login whose cookie the outpost keeps, and the session is kept alive by ping and pong; the probe is http's, a credential-free GET / whose answer, any status, is the rung (responds), so reachability stays observed beneath a refused upgrade.",
    "held": true,
    "built": true,
    "rung": "connect",
@@ -1730,7 +1738,7 @@
   },
   {
    "name": "wss",
-   "description": "WSS: websocket over a TLS connection, its own entry so a component can serve a plain socket beside a TLS one; the probe is https's: it runs the handshake (responds), reports the certificate's expiry, then draws a credential-free response, the certificate verified against the node's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
+   "description": "WSS: websocket over a TLS connection, its own entry so a component can serve a plain socket beside a TLS one; the probe is https's: it runs the handshake (responds), reports the certificate's expiry, then draws a credential-free response, the certificate verified against the outpost's roots, pinned to the public key on first use, or (by the operator's explicit choice) not verified.",
    "held": true,
    "built": true,
    "rung": "handshake",
@@ -1769,7 +1777,7 @@
   },
   {
    "name": "webhook",
-   "description": "Webhook: a push transport the server hosts, not one a node dials: a component or a cloud service posts each message to the endpoint's own URL (/api/v1/webhooks/ and a token the server mints, held as a secret), authenticated by the scheme its driver declares (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned) and mapped by its listeners onto any lane; nothing is dialed, so it has no reachability ladder and reads last heard.",
+   "description": "Webhook: a push transport the server hosts, not one an outpost dials: a component or a cloud service posts each message to the endpoint's own URL (/api/v1/webhooks/ and a token the server mints, held as a secret), authenticated by the scheme its driver declares (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned) and mapped by its listeners onto any lane; nothing is dialed, so it has no reachability ladder and reads last heard.",
    "held": false,
    "built": true
   }
@@ -2139,11 +2147,11 @@
    "icon": "server"
   },
   {
-   "id": "omniglass-node",
-   "label": "Omniglass Node",
+   "id": "omniglass-outpost",
+   "label": "Omniglass Outpost",
    "parent_id": "platform",
-   "stem": "node",
-   "abbrev": "node",
+   "stem": "outpost",
+   "abbrev": "outpost",
    "icon": "cpu"
   },
   {
@@ -2185,52 +2193,52 @@
    "icon": "layers"
   },
   {
-   "id": "room",
-   "label": "Room",
+   "id": "collaboration",
+   "label": "Collaboration",
    "parent_id": "av",
-   "stem": "room",
-   "abbrev": "rm",
+   "stem": "collaboration",
+   "abbrev": "collab",
    "icon": "door-open"
   },
   {
    "id": "board",
-   "label": "Boardroom",
-   "parent_id": "room",
+   "label": "Board Meeting",
+   "parent_id": "collaboration",
    "stem": "boardroom",
    "abbrev": "br"
   },
   {
    "id": "class",
-   "label": "Classroom",
-   "parent_id": "room",
+   "label": "Teaching",
+   "parent_id": "collaboration",
    "stem": "classroom",
    "abbrev": "cls"
   },
   {
    "id": "meeting",
-   "label": "Meeting Room",
-   "parent_id": "room",
+   "label": "Meeting",
+   "parent_id": "collaboration",
    "stem": "meeting",
    "abbrev": "mtg"
   },
   {
    "id": "training",
-   "label": "Training Room",
-   "parent_id": "room",
+   "label": "Training",
+   "parent_id": "collaboration",
    "stem": "training",
    "abbrev": "trn"
   },
   {
    "id": "conference",
-   "label": "Conference Room",
-   "parent_id": "room",
+   "label": "Conference",
+   "parent_id": "collaboration",
    "stem": "conference",
    "abbrev": "conf"
   },
   {
    "id": "huddle",
-   "label": "Huddle Room",
-   "parent_id": "room",
+   "label": "Huddle",
+   "parent_id": "collaboration",
    "stem": "huddle",
    "abbrev": "hud"
   },
@@ -2280,7 +2288,7 @@
    "label": "Auditorium",
    "description": "The hall-scale chain with no conferencing: projection, stage and podium microphones, a DSP and amplifier rack, speakers and cameras.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "projection",
       "label": "Projection",
@@ -2375,73 +2383,73 @@
      "aspect": 1.8,
      "positions": [
       {
-       "role": "projection",
+       "slot": "projection",
        "position": 1,
        "x": 0.5,
        "y": 0.06
       },
       {
-       "role": "confidence-display",
+       "slot": "confidence-display",
        "position": 1,
        "x": 0.85,
        "y": 0.12
       },
       {
-       "role": "podium-mic",
+       "slot": "podium-mic",
        "position": 1,
        "x": 0.2,
        "y": 0.22
       },
       {
-       "role": "stage-mic",
+       "slot": "stage-mic",
        "position": 1,
        "x": 0.4,
        "y": 0.2
       },
       {
-       "role": "stage-mic",
+       "slot": "stage-mic",
        "position": 2,
        "x": 0.6,
        "y": 0.2
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 1,
        "x": 0.15,
        "y": 0.4
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 2,
        "x": 0.85,
        "y": 0.4
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 3,
        "x": 0.15,
        "y": 0.75
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 4,
        "x": 0.85,
        "y": 0.75
       },
       {
-       "role": "camera",
+       "slot": "camera",
        "position": 1,
        "x": 0.35,
        "y": 0.94
       },
       {
-       "role": "camera",
+       "slot": "camera",
        "position": 2,
        "x": 0.65,
        "y": 0.94
       },
       {
-       "role": "touch-control",
+       "slot": "touch-control",
        "position": 1,
        "x": 0.08,
        "y": 0.3
@@ -2456,7 +2464,7 @@
    "label": "Classroom",
    "description": "The light teaching space: a display, an instructor microphone and touch control.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "class-display",
       "label": "Main Display",
@@ -2491,19 +2499,19 @@
      "aspect": 1.4,
      "positions": [
       {
-       "role": "class-display",
+       "slot": "class-display",
        "position": 1,
        "x": 0.5,
        "y": 0.07
       },
       {
-       "role": "instructor-mic",
+       "slot": "instructor-mic",
        "position": 1,
        "x": 0.5,
        "y": 0.3
       },
       {
-       "role": "touch-control",
+       "slot": "touch-control",
        "position": 1,
        "x": 0.14,
        "y": 0.6
@@ -2518,7 +2526,7 @@
    "label": "Digital Sign",
    "description": "A signage point: a panel and the media player that drives it. The parent of the sized variants.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "panel",
       "label": "Panel",
@@ -2542,7 +2550,7 @@
    "label": "Divisible Conference",
    "description": "One side of a combinable space: two displays and two room microphones each, with one DSP and amplifier rack shared by both sides, the shared-component quorum case.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -2612,7 +2620,7 @@
    "description": "Digital Sign with its panel pinned to a 55-inch display. Create Digital Sign from its template first.",
    "standard": {
     "parent": "digital-sign",
-    "roles": [
+    "slots": [
      {
       "name": "panel",
       "label": "Panel",
@@ -2635,13 +2643,13 @@
      "aspect": 1.2,
      "positions": [
       {
-       "role": "panel",
+       "slot": "panel",
        "position": 1,
        "x": 0.5,
        "y": 0.12
       },
       {
-       "role": "player",
+       "slot": "player",
        "position": 1,
        "x": 0.5,
        "y": 0.3
@@ -2657,7 +2665,7 @@
    "description": "Digital Sign with its panel pinned to a 75-inch display. Create Digital Sign from its template first.",
    "standard": {
     "parent": "digital-sign",
-    "roles": [
+    "slots": [
      {
       "name": "panel",
       "label": "Panel",
@@ -2700,7 +2708,7 @@
       ]
      }
     ],
-    "roles": [
+    "slots": [
      {
       "name": "main-display",
       "label": "Main Display",
@@ -2776,43 +2784,43 @@
      "aspect": 1.3,
      "positions": [
       {
-       "role": "main-display",
+       "slot": "main-display",
        "position": 1,
        "x": 0.5,
        "y": 0.06
       },
       {
-       "role": "conf-bar",
+       "slot": "conf-bar",
        "position": 1,
        "x": 0.5,
        "y": 0.14
       },
       {
-       "role": "conf-codec",
+       "slot": "conf-codec",
        "position": 1,
        "x": 0.12,
        "y": 0.9
       },
       {
-       "role": "conf-camera",
+       "slot": "conf-camera",
        "position": 1,
        "x": 0.5,
        "y": 0.2
       },
       {
-       "role": "conf-dsp",
+       "slot": "conf-dsp",
        "position": 1,
        "x": 0.24,
        "y": 0.9
       },
       {
-       "role": "conf-amp",
+       "slot": "conf-amp",
        "position": 1,
        "x": 0.36,
        "y": 0.9
       },
       {
-       "role": "conf-mic",
+       "slot": "conf-mic",
        "position": 1,
        "x": 0.5,
        "y": 0.55
@@ -2827,7 +2835,7 @@
    "label": "Meeting Room",
    "description": "A meeting space's full chain: a video bar at the front, a main display, touch control and a scheduling panel. The parent of the sized variants, with no display pinned.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -2874,7 +2882,7 @@
    "description": "Meeting Room with its main display pinned to a 55-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -2919,25 +2927,25 @@
      "aspect": 1.5,
      "positions": [
       {
-       "role": "main-display",
+       "slot": "main-display",
        "position": 1,
        "x": 0.5,
        "y": 0.06
       },
       {
-       "role": "video-bar",
+       "slot": "video-bar",
        "position": 1,
        "x": 0.5,
        "y": 0.14
       },
       {
-       "role": "touch-control",
+       "slot": "touch-control",
        "position": 1,
        "x": 0.5,
        "y": 0.55
       },
       {
-       "role": "scheduling-panel",
+       "slot": "scheduling-panel",
        "position": 1,
        "x": 0.06,
        "y": 0.9
@@ -2953,7 +2961,7 @@
    "description": "Meeting Room with its main display pinned to a 65-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -3003,7 +3011,7 @@
    "description": "Meeting Room with its main display pinned to a 75-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -3053,7 +3061,7 @@
    "description": "Meeting Room with its main display pinned to an 86-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -3103,7 +3111,7 @@
    "description": "Meeting Room with its main display pinned to a 98-inch panel. Create Meeting Room from its template first.",
    "standard": {
     "parent": "meeting-room",
-    "roles": [
+    "slots": [
      {
       "name": "video-bar",
       "label": "Video Bar",
@@ -3152,7 +3160,7 @@
    "label": "Training Room",
    "description": "The full teaching chain: two front displays, voice lift and program audio through a rack, capture cameras at the back, and a people counter for occupancy.",
    "standard": {
-    "roles": [
+    "slots": [
      {
       "name": "front-display",
       "label": "Front Display",
@@ -3272,79 +3280,79 @@
      "aspect": 1.6,
      "positions": [
       {
-       "role": "front-display",
+       "slot": "front-display",
        "position": 1,
        "x": 0.32,
        "y": 0.06
       },
       {
-       "role": "front-display",
+       "slot": "front-display",
        "position": 2,
        "x": 0.68,
        "y": 0.06
       },
       {
-       "role": "podium-mic",
+       "slot": "podium-mic",
        "position": 1,
        "x": 0.12,
        "y": 0.2
       },
       {
-       "role": "ceiling-mic",
+       "slot": "ceiling-mic",
        "position": 1,
        "x": 0.35,
        "y": 0.45
       },
       {
-       "role": "ceiling-mic",
+       "slot": "ceiling-mic",
        "position": 2,
        "x": 0.65,
        "y": 0.45
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 1,
        "x": 0.25,
        "y": 0.3
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 2,
        "x": 0.75,
        "y": 0.3
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 3,
        "x": 0.25,
        "y": 0.7
       },
       {
-       "role": "speakers",
+       "slot": "speakers",
        "position": 4,
        "x": 0.75,
        "y": 0.7
       },
       {
-       "role": "camera",
+       "slot": "camera",
        "position": 1,
        "x": 0.35,
        "y": 0.93
       },
       {
-       "role": "camera",
+       "slot": "camera",
        "position": 2,
        "x": 0.65,
        "y": 0.93
       },
       {
-       "role": "touch-control",
+       "slot": "touch-control",
        "position": 1,
        "x": 0.12,
        "y": 0.3
       },
       {
-       "role": "scheduling-panel",
+       "slot": "scheduling-panel",
        "position": 1,
        "x": 0.05,
        "y": 0.9
@@ -3361,7 +3369,7 @@
    "system": {
     "standard": "ds55",
     "system_type": "sign",
-    "roles": {
+    "slots": {
      "panel": {
       "component": "boreal-edge-55"
      },
@@ -3379,7 +3387,7 @@
    "system": {
     "standard": "mr55",
     "system_type": "meeting",
-    "roles": {
+    "slots": {
      "main-display": {
       "component": "boreal-edge-55"
      },
@@ -3396,11 +3404,11 @@
    }
   },
   {
-   "kind": "place_template",
+   "kind": "location_template",
    "name": "meeting-floor",
    "label": "A floor of meeting rooms",
    "description": "A floor with two Meeting Room 55 spaces and a Digital Sign 55 by the lifts.",
-   "place": {
+   "location": {
     "type": "floor",
     "label": "Meeting floor",
     "systems": [
@@ -3409,7 +3417,7 @@
       "label": "Lift lobby sign"
      }
     ],
-    "places": [
+    "locations": [
      {
       "type": "room",
       "name": "mr-1",
@@ -4064,10 +4072,10 @@
    "kind": "service"
   },
   {
-   "id": "omniglass-node",
-   "label": "Omniglass Node",
+   "id": "omniglass-outpost",
+   "label": "Omniglass Outpost",
    "vendor_id": "omniglass",
-   "component_type": "omniglass-node",
+   "component_type": "omniglass-outpost",
    "kind": "app"
   },
   {
@@ -4100,15 +4108,15 @@
  "label_rules": [
   {
    "entity_kind": "component",
-   "template": "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
+   "rule": "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
   },
   {
    "entity_kind": "system",
-   "template": "{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}"
+   "rule": "{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}"
   },
   {
    "entity_kind": "location",
-   "template": "{{title (words .Name)}}"
+   "rule": "{{title (words .Name)}}"
   }
  ],
  "severity_levels": [
@@ -4158,8 +4166,8 @@
    "clear": "value == \"up\"",
    "fire_sustain": "15s",
    "severity": "high",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "ingest-lag-high",
@@ -4170,19 +4178,19 @@
    "clear": "value \u003c= 30",
    "fire_sustain": "2m",
    "severity": "warning",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
-   "name": "node-silent",
-   "label": "Node silent",
-   "description": "A claimed node has not checked in for more than 90 seconds, three missed heartbeats.",
+   "name": "outpost-silent",
+   "label": "Outpost silent",
+   "description": "A claimed outpost has not checked in for more than 90 seconds, three missed heartbeats.",
    "sample_key": "checkin-age",
    "fire": "value \u003e 90",
    "clear": "value \u003c= 90",
    "severity": "high",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "rule-sweep-stalled",
@@ -4192,20 +4200,20 @@
    "fire": "value \u003e 30",
    "clear": "value \u003c= 30",
    "severity": "high",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "worklist-stale",
    "label": "Worklist stale",
-   "description": "Every worklist pull the node made for two minutes was refused, so it is running its last worklist and misses every change since.",
+   "description": "Every worklist pull the outpost made for two minutes was refused, so it is running its last worklist and misses every change since.",
    "sample_key": "worklist-pull-loss-ratio",
    "fire": "value == 1",
    "clear": "value \u003c 1",
    "fire_sustain": "2m",
    "severity": "warning",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "disk-nearly-full",
@@ -4216,8 +4224,8 @@
    "clear": "value \u003c= 0.85",
    "fire_sustain": "2m",
    "severity": "warning",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   },
   {
    "name": "retention-behind",
@@ -4228,8 +4236,8 @@
    "clear": "value == 0",
    "fire_sustain": "5m",
    "severity": "warning",
-   "fire_event_type": "condition-started",
-   "clear_event_type": "condition-ended"
+   "fire_event_type": "rule-fired",
+   "clear_event_type": "rule-cleared"
   }
  ],
  "platform_figures": [
@@ -4237,7 +4245,7 @@
    "key": "checkin-age",
    "group": "Checkin",
    "rules": [
-    "node-silent"
+    "outpost-silent"
    ]
   },
   {

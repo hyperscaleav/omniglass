@@ -11,11 +11,15 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
+// seenWithin is how recently a peer must have been seen to be judged, as
+// the bus's peer timer reads it.
+const seenWithin = 20 * time.Second
+
 // sweepAgeOf is the age the shared database holds for the server whose
-// platform component is comp, and whether it holds one.
+// platform component is comp, and whether it holds one for a live server.
 func sweepAgeOf(t *testing.T, ctx context.Context, gw *storage.PG, comp string) (time.Duration, bool) {
 	t.Helper()
-	ages, err := gw.ServerSweepAges(ctx)
+	ages, err := gw.ServerSweepAges(ctx, seenWithin)
 	if err != nil {
 		t.Fatalf("read server sweep ages: %v", err)
 	}
@@ -33,7 +37,7 @@ func sweepAgeOf(t *testing.T, ctx context.Context, gw *storage.PG, comp string) 
 // component. A sweep that stops stamping ages past 30 s and opens the alarm
 // on A, severity high, with no sustain; the stamp resuming reads back young
 // and clears it. A server that stopped cleanly released its stamp and is not
-// judged.
+// judged, and nor is one that died: it stops being seen.
 func TestRuleSweepStalledOpensFromAPeersRead(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
@@ -56,6 +60,14 @@ func TestRuleSweepStalledOpensFromAPeersRead(t *testing.T) {
 	}
 	if err := gw.StampRuleSweep(ctx, b.ID); err != nil {
 		t.Fatalf("stamp B's sweep: %v", err)
+	}
+	if _, ok := sweepAgeOf(t, ctx, gw, a.ID); ok {
+		t.Fatal("a server whose peer timer has not run is judged; it is not yet seen alive")
+	}
+	for _, c := range []string{a.ID, b.ID} {
+		if err := gw.MarkServerSeen(ctx, c); err != nil {
+			t.Fatalf("mark %s seen: %v", c, err)
+		}
 	}
 	if age, ok := sweepAgeOf(t, ctx, gw, a.ID); !ok || age > 5*time.Second {
 		t.Fatalf("A's age right after its stamp = %v (held %v), want about zero", age, ok)
@@ -112,7 +124,27 @@ func TestRuleSweepStalledOpensFromAPeersRead(t *testing.T) {
 		t.Fatalf("a resumed sweep left %d rule-sweep-stalled alarms open, want it cleared", n)
 	}
 
-	// A stops cleanly: its stamp is released, so no peer judges it.
+	// A dies: its stamps stay, but it is no longer seen. Once its last seen
+	// passes the window it drops out of the read, so no peer raises a
+	// rule-sweep-stalled that nothing would ever clear.
+	if _, err := conn.Exec(ctx, `update platform_server set rule_swept_at = now() - interval '120 seconds',
+		seen_at = now() - interval '125 seconds' where platform_component_id = $1`, a.ID); err != nil {
+		t.Fatalf("age A's stamps: %v", err)
+	}
+	if _, ok := sweepAgeOf(t, ctx, gw, a.ID); ok {
+		t.Error("a server no longer seen is still judged by its peers")
+	}
+	if _, ok := sweepAgeOf(t, ctx, gw, b.ID); !ok {
+		t.Error("a live peer dropped out of the read with the dead one")
+	}
+
+	// A stops cleanly: its stamps are released, so no peer judges it.
+	if err := gw.StampRuleSweep(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.MarkServerSeen(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := gw.ReleaseRuleSweep(ctx, a.ID); err != nil {
 		t.Fatal(err)
 	}

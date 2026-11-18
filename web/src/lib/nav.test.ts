@@ -6,16 +6,16 @@ const Dummy = () => null;
 
 // A real nav gate: filter the live nav through the actual can() over a set of
 // permission strings, exactly as the sidebar does, and read a section's children.
-const meWith = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+const meWith = (permissions: string[]): Me => ({ user: { id: "p", kind: "person" }, permissions, grants: [] });
 const section = (label: string, permissions: string[]): string[] =>
   filterNav(navItems, (tokens) => can(meWith(permissions), ...tokens)).find((i) => i.label === label)?.children?.map((c) => c.label) ?? [];
-// The rail entries a principal keeps, by top-level label (the Catalog entry is a
+// The rail entries a user keeps, by top-level label (the Catalog entry is a
 // single leaf now, so it is addressed here rather than through children).
 const rail = (permissions: string[]) =>
   filterNav(navItems, (tokens) => can(meWith(permissions), ...tokens)).map((i) => i.label);
 
 describe("filterNav", () => {
-  it("keeps every tab for a principal that can read everything", () => {
+  it("keeps every tab for a user that can read everything", () => {
     const out = filterNav(navItems, () => true);
     expect(out.length).toBe(navItems.length);
   });
@@ -46,40 +46,42 @@ describe("filterNav", () => {
     expect(labels).not.toContain("Inventory");
     expect(labels).toContain("Explore");
     // The index entries left the rail but not the app: each keeps its gate and
-    // identity through OFF_RAIL, like the catalog registries before them.
+    // identity through OFF_RAIL, like the catalogs before them.
     for (const top of ["Components", "Systems", "Locations"]) expect(labels).not.toContain(top);
   });
 
-  // Nodes and Platform health (#1644) are administration, so both doors sit
-  // under Admin (#1767) behind node:read: enrolling a node is an admin's job,
-  // and Status's rows are the node list. Platform health keeps its page name;
+  // Outposts and Platform health (#1644) are administration, so both doors sit
+  // under Admin (#1767) behind outpost:read: enrolling an outpost is an admin's job,
+  // and Status's rows are the outpost list. Platform health keeps its page name;
   // only the door is one word.
-  it("keeps Nodes and Status under Admin, and only for a node:read holder", () => {
-    expect(rail([">"])).not.toContain("Nodes");
-    expect(section("Admin", ["node:read"])).toContain("Nodes");
-    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Nodes");
-    expect(routeTokens("/web/nodes")).toEqual(["node", "read"]);
-    expect(sectionLabel("/web/nodes")).toBe("Nodes");
+  it("keeps Outposts and Status under Admin, and only for an outpost:read holder", () => {
+    expect(rail([">"])).not.toContain("Outposts");
+    expect(section("Admin", ["outpost:read"])).toContain("Outposts");
+    expect(section("Admin", ["component:read", "system:read"])).not.toContain("Outposts");
+    expect(routeTokens("/web/outposts")).toEqual(["outpost", "read"]);
+    expect(sectionLabel("/web/outposts")).toBe("Outposts");
     expect(rail([">"])).not.toContain("Status");
     expect(rail([">"])).not.toContain("Platform health");
-    expect(section("Admin", ["node:read"])).toContain("Status");
+    expect(section("Admin", ["outpost:read"])).toContain("Status");
     expect(section("Admin", ["component:read", "system:read"])).not.toContain("Status");
-    expect(routeTokens("/web/platform")).toEqual(["node", "read"]);
+    expect(routeTokens("/web/platform")).toEqual(["outpost", "read"]);
     expect(sectionLabel("/web/platform")).toBe("Status");
   });
 
   // Every sidebar tab is one word (#1767): a group, a leaf, and a group's child.
   // A tab needing two words is a sign it names a page rather than a door.
+  // User groups is the one exception: IAM gave up the bare word group (ADR-2036)
+  // and no single word names a set of users without colliding with the fleet's.
   it("labels every sidebar tab with one word", () => {
     const labels = navItems.flatMap((i) => [i.label, ...(i.children ?? []).map((c) => c.label)]);
-    expect(labels.filter((l) => /\s/.test(l))).toEqual([]);
+    expect(labels.filter((l) => /\s/.test(l) && l !== "User groups")).toEqual([]);
   });
 
-  it("on the real nav, a principal who can read none of the fleet kinds loses Explore but keeps Nodes", () => {
+  it("on the real nav, a user who can read none of the fleet kinds loses Explore but keeps Outposts", () => {
     const out = filterNav(navItems, (tokens) => !["location", "system", "component"].includes(tokens[0]));
     expect(out.map((i) => i.label)).not.toContain("Explore");
-    // gated on node:read, which this filter allows
-    expect(out.find((i) => i.label === "Admin")!.children!.map((c) => c.label)).toContain("Nodes");
+    // gated on outpost:read, which this filter allows
+    expect(out.find((i) => i.label === "Admin")!.children!.map((c) => c.label)).toContain("Outposts");
   });
 
   // The owner regression (owner's only grant is the `>` tail): every gated tab must
@@ -99,18 +101,18 @@ describe("filterNav", () => {
     expect(section("Admin", [">"])).toContain("Audit");
   });
 
-  // The Users, Roles, and Groups directories are admin-tier reads
+  // The Users, Roles, and User groups directories are admin-tier reads
   // (<resource>:read:admin), matching the server routes: a viewer's *:read cannot
   // reach them, while admin's explicit read:admin grants (and owner's >) do.
-  it("hides Users, Roles, and Groups from a *:read principal, keeps them for admin", () => {
+  it("hides Users, Roles, and User groups from a *:read user, keeps them for admin", () => {
     const floor = section("Admin", ["*:read"]);
     expect(floor).not.toContain("Users");
     expect(floor).not.toContain("Roles");
-    expect(floor).not.toContain("Groups");
-    const adm = section("Admin", ["principal:read:admin", "role:read:admin", "principal_group:read:admin"]);
+    expect(floor).not.toContain("User groups");
+    const adm = section("Admin", ["user:read:admin", "role:read:admin", "user_group:read:admin"]);
     expect(adm).toContain("Users");
     expect(adm).toContain("Roles");
-    expect(adm).toContain("Groups");
+    expect(adm).toContain("User groups");
   });
 
   // Secrets is a sensitive resource: the server takes secret off the *:read floor,
@@ -126,11 +128,11 @@ describe("filterNav", () => {
   });
 
   // The Catalog rail entry is ungated (the browse page permission-filters its
-  // own rows), so every principal keeps it, floor viewer included. The #598
+  // own rows), so every user keeps it, floor viewer included. The #598
   // guarantee moved with the gates: what a floor viewer must not reach is the
   // /secret-types ROUTE, and that gate now lives in the off-rail map (asserted
   // under routeTokens below), not a rail child.
-  it("keeps the single Catalog entry for every principal, floor viewer included", () => {
+  it("keeps the single Catalog entry for every user, floor viewer included", () => {
     expect(rail(["*:read"])).toContain("Catalog");
     expect(rail([])).toContain("Catalog");
     expect(rail([">"])).toContain("Catalog");
@@ -142,7 +144,7 @@ describe("filterNav", () => {
 // but a literal grant, a resource wildcard, and owner's `>` do. Mirrors
 // internal/rbac/rbac_test.go so the console hides exactly what the server denies.
 describe("can (sensitive resources)", () => {
-  const me = (permissions: string[]): Me => ({ principal: { id: "p", kind: "human" }, permissions, grants: [] });
+  const me = (permissions: string[]): Me => ({ user: { id: "p", kind: "person" }, permissions, grants: [] });
   it("keeps secret off the bare * wildcard but honors literal, resource-wildcard, and owner grants", () => {
     expect(can(me(["*:read"]), "secret", "read")).toBe(false);
     expect(can(me(["*:*"]), "secret", "read")).toBe(false);
@@ -166,12 +168,12 @@ describe("routeTokens", () => {
     expect(routeTokens("/web/locations")).toEqual(["location", "read"]);
     expect(routeTokens("/web/components")).toEqual(["component", "read"]);
     expect(routeTokens("/web/systems")).toEqual(["system", "read"]);
-    expect(routeTokens("/web/users")).toEqual(["principal", "read", "admin"]);
+    expect(routeTokens("/web/users")).toEqual(["user", "read", "admin"]);
     expect(routeTokens("/web/roles")).toEqual(["role", "read", "admin"]);
-    expect(routeTokens("/web/groups")).toEqual(["principal_group", "read", "admin"]);
+    expect(routeTokens("/web/user-groups")).toEqual(["user_group", "read", "admin"]);
     expect(routeTokens("/web/secrets")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/audit")).toEqual(["audit", "read", "admin"]); // the admin tier
-    // The split registries (#598): each page's URL carries its own gate, and
+    // The split catalogs (#598): each page's URL carries its own gate, and
     // /secret-types requires the same secret resource its API route stamps, so
     // the route guard blocks a floor viewer from the URL the sidebar hid.
     expect(routeTokens("/web/location-types")).toEqual(["location_type", "read"]);
@@ -208,7 +210,7 @@ describe("routeTokens", () => {
 
 describe("nav IA rework", () => {
   it("keeps the operator-set values under Values and the re-homed index routes gated off-rail", () => {
-    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Config", "Files"]);
+    expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Declared", "Files"]);
     // The old index URLs redirect into the fleet's list face, but their detail
     // routes remain, so the gates and top-bar identities must survive the move.
     expect(routeTokens("/web/locations")).toEqual(["location", "read"]);
@@ -225,11 +227,11 @@ describe("nav IA rework", () => {
   });
 
   it("keeps governance plus the Settings soon-stub under Admin for an owner", () => {
-    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "Groups", "Audit", "Nodes", "Status", "Settings"]);
+    expect(section("Admin", [">"])).toEqual(["Users", "Roles", "User groups", "Audit", "Outposts", "Status", "Settings"]);
   });
 
-  it("shows a bare *:read viewer only Nodes, Status and the ungated Settings under Admin", () => {
-    expect(section("Admin", ["*:read"])).toEqual(["Nodes", "Status", "Settings"]);
+  it("shows a bare *:read viewer only Outposts, Status and the ungated Settings under Admin", () => {
+    expect(section("Admin", ["*:read"])).toEqual(["Outposts", "Status", "Settings"]);
   });
 
   it("keeps moved entries' gates and leaves the stubs ungated", () => {
@@ -237,13 +239,13 @@ describe("nav IA rework", () => {
     expect(routeTokens("/web/variables")).toEqual(["variable", "read"]);
     expect(routeTokens("/web/config")).toBeNull();
     expect(routeTokens("/web/settings")).toBeNull();
-    expect(routeTokens("/web/nodes")).toEqual(["node", "read"]); // node directory is live, gated on node:read
+    expect(routeTokens("/web/outposts")).toEqual(["outpost", "read"]); // outpost directory is live, gated on outpost:read
   });
 });
 
 // The Catalog rail collapsed to a single browse entry (the single-surface
 // prototype): one live, ungated, resource-less leaf at /catalog, declared the
-// same way Home and Explore are. The registries left the rail but not the app:
+// same way Home and Explore are. The catalogs left the rail but not the app:
 // each keeps its route, its top-bar identity, and its gate through OFF_RAIL.
 describe("Catalog single entry", () => {
   const cat = navItems.find((i) => i.label === "Catalog")!;
@@ -257,19 +259,19 @@ describe("Catalog single entry", () => {
     expect(routeTokens("/web/catalog")).toBeNull();
   });
 
-  it("keeps every former registry page reachable off-rail with its gate intact", () => {
+  it("keeps every former catalog page reachable off-rail with its gate intact", () => {
     const paths = OFF_RAIL.map((o) => o.path);
     for (const p of ["/products", "/vendors", "/drivers", "/component-types", "/standards", "/system-types", "/location-types", "/secret-types", "/metrics", "/properties", "/event-types", "/command-types", "/tags"]) {
       expect(paths).toContain(p);
     }
     // The gates did not loosen when the rail entries vanished: the sensitive
-    // registry still demands secret:read (#598), the plain one its own read.
+    // catalog still demands secret:read (#598), the plain one its own read.
     expect(routeTokens("/web/secret-types")).toEqual(["secret", "read"]);
     expect(routeTokens("/web/products")).toEqual(["product", "read"]);
     expect(routeTokens("/web/tags")).toEqual(["tag", "read"]);
   });
 
-  it("labels the off-rail pages by their own registry word in the top bar", () => {
+  it("labels the off-rail pages by their own catalog word in the top bar", () => {
     expect(sectionLabel("/web/catalog")).toBe("Catalog");
     expect(sectionLabel("/web/location-types")).toBe("Location types");
     expect(sectionLabel("/web/secret-types")).toBe("Secret types");
@@ -283,7 +285,7 @@ describe("Catalog single entry", () => {
 
   it("keeps every off-rail page's identity for bookmarks and stubs", () => {
     expect(lookupNav("/web/products").label).toBe("Products");
-    expect(lookupNav("/web/rules").label).toBe("Rules");
+    expect(lookupNav("/web/event-rules").label).toBe("Event rules");
     expect(lookupNav("/web/log-types").label).toBe("Logs");
   });
 
@@ -311,7 +313,7 @@ describe("Catalog single entry", () => {
       "/location-types": ["location_type", "read"],
       "/secret-types": ["secret", "read"],
       "/tags": ["tag", "read"],
-      "/rules": ["rule", "read"],
+      "/event-rules": ["rule", "read"],
       "/calc-rules": ["rule", "read"],
       "/severity-levels": ["severity_level", "read"],
       "/notifications": ["notification_type", "read"],
@@ -361,20 +363,20 @@ describe("the fleet rail entry (#633)", () => {
   it("stays for any fleet-kind reader, like the sidebar promises (#798)", () => {
     expect(rail(["location:read"])).toContain("Explore");
     expect(rail(["component:read"])).toContain("Explore");
-    expect(rail(["node:read"])).not.toContain("Explore");
+    expect(rail(["outpost:read"])).not.toContain("Explore");
   });
 });
 
 // The fleet door is an any-of gate (#798 review): the one entry replaced three
 // sidebar entries with three different resources, so it must open for a
-// principal who can read ANY of them, or a system-only reader would lose the
+// user who can read ANY of them, or a system-only reader would lose the
 // systems index entirely. The faces inside permission-filter themselves.
 describe("the fleet any-of gate", () => {
   it("opens for location, system, or component read alone, closes for none", () => {
     for (const r of ["location", "system", "component"]) {
       expect(routeAllowed("/web/explore", (t) => t[0] === r), r).toBe(true);
     }
-    expect(routeAllowed("/web/explore", (t) => t[0] === "node")).toBe(false);
+    expect(routeAllowed("/web/explore", (t) => t[0] === "outpost")).toBe(false);
   });
 
   it("keeps simple gates exact through the same door", () => {
@@ -387,7 +389,7 @@ describe("the fleet any-of gate", () => {
 
   it("keeps Explore in the rail for a system-only reader and drops it for neither", () => {
     expect(filterNav(navItems, (t) => t[0] === "system").map((i) => i.label)).toContain("Explore");
-    expect(filterNav(navItems, (t) => t[0] === "node").map((i) => i.label)).not.toContain("Explore");
+    expect(filterNav(navItems, (t) => t[0] === "outpost").map((i) => i.label)).not.toContain("Explore");
   });
 });
 

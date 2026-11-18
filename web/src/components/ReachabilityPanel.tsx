@@ -117,7 +117,7 @@ function TlsRows(p: { tls: ReachTLS; responsive?: boolean; refused: boolean }) {
         <Show when={!p.refused && p.responsive && p.tls.handshake_ms !== undefined}>
           <span class="text-base-content/40">· {p.tls.handshake_ms!.toFixed(1)} ms</span>
         </Show>
-        <InfoTip label="the tls handshake" text="The transport rung for tls: the node opens the port, then runs the TLS handshake and judges the certificate the component offers. A certificate it refuses holds this rung, and nothing above it is tried." />
+        <InfoTip label="the tls handshake" text="The transport rung for tls: the outpost opens the port, then runs the TLS handshake and judges the certificate the component offers. A certificate it refuses holds this rung, and nothing above it is tried." />
       </div>
       <div class="flex items-center gap-2" data-testid="tls-cert" data-tone={tone()}>
         <span class={`inline-block size-2 shrink-0 rounded-full ${TONE_DOT[tone()]}`} />
@@ -191,7 +191,7 @@ function GateBreakdown(p: { iface: ReachEndpoint }) {
           </Show>
           <InfoTip
             label="the request rung"
-            text="The transport rung where an open port cannot be detected (udp, snmp): the node sends the driver's named request (for snmp, a get of a standard OID with the endpoint's community) and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused; a v2c agent drops a wrong community silently, so it reads not answered too. With no port to open, this rung is the endpoint's verdict."
+            text="The transport rung where an open port cannot be detected (udp, snmp): the outpost sends the driver's named request (for snmp, a get of a standard OID with the endpoint's community) and an answer proves the protocol. Silence reads not answered (timed out), and a port the host reports closed reads refused; a v2c agent drops a wrong community silently, so it reads not answered too. With no port to open, this rung is the endpoint's verdict."
           />
         </div>
       </Show>
@@ -303,9 +303,9 @@ function EndpointRow(p: { iface: ReachEndpoint; component: string; manageId?: st
       </Show>
       <Show when={open()}>
         <GateBreakdown iface={p.iface} />
-        <Show when={p.iface.node}>
+        <Show when={p.iface.outpost}>
           <div class="border-t border-base-300 bg-base-200/40 px-3 py-1.5 text-[11px] text-base-content/45">
-            probed by <span class="font-data text-base-content/60">{p.iface.node}</span>
+            probed by <span class="font-data text-base-content/60">{p.iface.outpost}</span>
             <Show when={lastSeenAt(p.iface)}>
               {(ts) => <>{" "}· last checked {rel(ts(), now())}</>}
             </Show>

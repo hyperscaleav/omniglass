@@ -18,7 +18,7 @@ func SetTelemetryAckWait(d time.Duration) (restore func()) {
 	return func() { telemetryAckWait = prior }
 }
 
-// SetOrphanWindow sets how often one node's orphaned batches are warned about
+// SetOrphanWindow sets how often one outpost's orphaned batches are warned about
 // and how often their count reaches the store, for a test of #1200; the
 // returned func restores both. It applies to a Server built after it.
 func SetOrphanWindow(window, flush time.Duration) (restore func()) {
@@ -68,7 +68,7 @@ func (s *Server) DeletePartitionDurables(ctx context.Context) error {
 	return nil
 }
 
-// UnpartitionTelemetryStream stores node batches under the node's own subject
+// UnpartitionTelemetryStream stores outpost batches under the outpost's own subject
 // again, as the stream did before it filed them by partition.
 func (s *Server) UnpartitionTelemetryStream(ctx context.Context) error {
 	js, err := jetstream.New(s.nc)
@@ -133,7 +133,7 @@ func SetTelemetryNakDelay(d time.Duration) (restore func()) {
 // client reads it from the server.
 func (s *Server) MaxPayload() int64 { return s.nc.MaxPayload() }
 
-// AsTick is a one-task batch as the node tick that carries it (#1582): its
+// AsTick is a one-task batch as the outpost tick that carries it (#1582): its
 // task's rows in the tick's one group.
 func AsTick(ev *ogv1.TelemetryBatch) *ogv1.TelemetryBatch { return asTick(ev) }
 

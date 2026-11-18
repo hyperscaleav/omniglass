@@ -35,7 +35,7 @@ func TestImpersonationSession(t *testing.T) {
 	}
 	root, _ := gw.AuthenticateBearer(ctx, zeros)
 	all := scope.Set{All: true}
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice"}, all)
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice"}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
@@ -67,13 +67,13 @@ func TestImpersonationSession(t *testing.T) {
 	}
 
 	// Disabling the target kills the session (both parties must be active).
-	if err := gw.SetPrincipalActive(ctx, root.ID, alice.ID, false, all); err != nil {
+	if err := gw.SetUserActive(ctx, root.ID, alice.ID, false, all); err != nil {
 		t.Fatalf("disable alice: %v", err)
 	}
 	if _, _, _, _, err := gw.AuthenticateImpersonation(ctx, auth.HashToken(token)); !errors.Is(err, storage.ErrCredentialNotFound) {
 		t.Fatalf("disabled target: want ErrCredentialNotFound, got %v", err)
 	}
-	if err := gw.SetPrincipalActive(ctx, root.ID, alice.ID, true, all); err != nil {
+	if err := gw.SetUserActive(ctx, root.ID, alice.ID, true, all); err != nil {
 		t.Fatalf("re-enable alice: %v", err)
 	}
 
