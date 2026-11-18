@@ -66,3 +66,11 @@ This pass is a per-slice gate ([feature loops](../../../docs/src/content/docs/co
 it runs over the slice diff before the slice merges inward, findings fixed or refuted
 with evidence in the sub-issue's closing comment. `/ship-slice` gate 7 then covers the
 rolled-up diff before the PR.
+
+## In CI
+
+agent-review runs this skill as parallel lenses (`scripts/agent-review.sh lenses`): three
+catalog shards (step 2), the invariants (step 3) and the neighbor check (step 5), each in its
+own job and context. A lens does only its part, posts nothing, and returns its survivors as
+JSON; the workflow posts them as one review. The guide is
+[agents in CI](../../../docs/src/content/docs/contributing/agents-in-ci.md).
