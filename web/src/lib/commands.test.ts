@@ -36,7 +36,7 @@ function command(over: Partial<Command> = {}): Command {
     issued_at: "2026-10-25T10:00:00Z",
     endpoint: "wss",
     endpoint_id: "e-1",
-    node: "edge-hq",
+    outpost: "edge-hq",
     driver: "kestrel-ws",
     issuer: "dev",
     issuer_id: "p-1",
@@ -73,14 +73,14 @@ describe("intendedText and observedText", () => {
 });
 
 describe("phaseHint", () => {
-  it("says where an in-flight command waits, naming its node and target", () => {
-    expect(phaseHint(command())).toMatch(/queue for node edge-hq/);
+  it("says where an in-flight command waits, naming its outpost and target", () => {
+    expect(phaseHint(command())).toMatch(/queue for outpost edge-hq/);
     expect(phaseHint(command({ phase: "awaiting-reply" }))).toMatch(/reply settles it/);
     expect(phaseHint(command({ phase: "delivered", settle_mode: "observation" }))).toMatch(/next observation of volume/);
     expect(phaseHint(command({ phase: "awaiting-observation" }))).toMatch(/reads 42/);
   });
   it("carries the reason once terminal", () => {
-    expect(phaseHint(command({ status: "timed-out", phase: "timed-out", reason: "queued for node edge-dark" }))).toMatch(/edge-dark/);
+    expect(phaseHint(command({ status: "timed-out", phase: "timed-out", reason: "queued for outpost edge-dark" }))).toMatch(/edge-dark/);
   });
 });
 

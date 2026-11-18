@@ -11,15 +11,15 @@ import (
 )
 
 // Creating from a template (#827, ADR-0827): a component, a system or a subtree of
-// places written from a template, as one storage.Plan the planned create
+// locations written from a template, as one storage.Plan the planned create
 // lands whole. This file only reads (the catalog, and the fleet's own
 // standards, products, types and drivers) and turns a template plus the
 // caller's request into that plan; the write, the scope checks and the audit
 // rows are storage.CreatePlan's, each piece the ordinary create.
 
 // ErrInvalid is a request or a template the fleet cannot create from: a
-// fill no product of the right type answers, a place type the fleet lacks or
-// refuses, an attach with no node. Its message names what to fix.
+// fill no product of the right type answers, a location type the fleet lacks or
+// refuses, an attach with no outpost. Its message names what to fix.
 var ErrInvalid = errors.New("template: cannot create from the template")
 
 func invalid(format string, args ...any) error {
@@ -37,23 +37,23 @@ type ComponentRequest struct {
 	Name     string
 	Label    string
 	Location *string
-	// Node places the endpoint; required when Inputs carries an address.
-	Node   string
-	Inputs Inputs
+	// Outpost places the endpoint; required when Inputs carries an address.
+	Outpost string
+	Inputs  Inputs
 }
 
-// PlannedPiece reports one component a plan creates: the role it fills (in
+// PlannedPiece reports one component a plan creates: the slot it fills (in
 // a system), its product, and whether it attaches, so an answer can list
 // what is still to attach.
 type PlannedPiece struct {
-	Role     string
+	Slot     string
 	Product  string
 	Attached bool
 }
 
 // componentPiece is the plan of one component from a component template or
 // a bare product, attached when the supplied inputs carry an address.
-func componentPiece(ctx context.Context, gw storage.Gateway, c *Catalog, compTemplate, product string, inputs Inputs, node string) (storage.PlannedComponent, PlannedPiece, error) {
+func componentPiece(ctx context.Context, gw storage.Gateway, c *Catalog, compTemplate, product string, inputs Inputs, outpost string) (storage.PlannedComponent, PlannedPiece, error) {
 	var preset map[string]string
 	var values Values
 	driver := ""
@@ -76,8 +76,8 @@ func componentPiece(ctx context.Context, gw storage.Gateway, c *Catalog, compTem
 		}
 		return pc, piece, nil
 	}
-	if node == "" {
-		return pc, piece, invalid("attaching a %s needs the node its endpoint is placed on", product)
+	if outpost == "" {
+		return pc, piece, invalid("attaching a %s needs the outpost its endpoint is placed on", product)
 	}
 	if driver == "" {
 		prod, err := gw.GetProduct(ctx, product)
@@ -99,8 +99,8 @@ func componentPiece(ctx context.Context, gw storage.Gateway, c *Catalog, compTem
 	for k, v := range inputs {
 		merged[k] = v
 	}
-	n := node
-	pc.Endpoints = []storage.EndpointSpec{{Driver: &driver, Inputs: merged, Node: &n}}
+	n := outpost
+	pc.Endpoints = []storage.EndpointSpec{{Driver: &driver, Inputs: merged, Outpost: &n}}
 	piece.Attached = true
 	return pc, piece, nil
 }
@@ -112,7 +112,7 @@ func PlanComponent(ctx context.Context, gw storage.Gateway, c *Catalog, req Comp
 	if err != nil {
 		return storage.Plan{}, PlannedPiece{}, err
 	}
-	pc, piece, err := componentPiece(ctx, gw, c, t.Name, "", req.Inputs, req.Node)
+	pc, piece, err := componentPiece(ctx, gw, c, t.Name, "", req.Inputs, req.Outpost)
 	if err != nil {
 		return storage.Plan{}, piece, err
 	}
@@ -130,8 +130,8 @@ type SystemRequest struct {
 	Name     string
 	Label    string
 	Location *string
-	Node     string
-	// Attach is the inputs per role, one entry per component of the role
+	Outpost  string
+	// Attach is the inputs per slot, one entry per component of the slot
 	// in order; a component with none lands unattached.
 	Attach map[string][]Inputs
 }
@@ -147,35 +147,35 @@ type SystemPlan struct {
 }
 
 // PlanSystem turns a system template and a request into a plan of one
-// system, its standard (created from its template when absent) and a component per role, each
-// role filled to its quorum with the product the template names for it.
+// system, its standard (created from its template when absent) and a component per slot, each
+// slot filled to its quorum with the product the template names for it.
 func PlanSystem(ctx context.Context, gw storage.Gateway, c *Catalog, req SystemRequest) (SystemPlan, error) {
 	t, err := c.GetKind(req.Template, KindSystem)
 	if err != nil {
 		return SystemPlan{}, err
 	}
-	ps, out, err := plannedSystem(ctx, gw, c, t, req.Standard, req.Attach, req.Node)
+	ps, out, err := plannedSystem(ctx, gw, c, t, req.Standard, req.Attach, req.Outpost)
 	if err != nil {
 		return out, err
 	}
 	ps.System.Name, ps.System.Label, ps.System.LocationName = req.Name, req.Label, req.Location
 	out.Plan.Template = t.Name
 	out.Plan.Systems = []storage.PlannedSystem{ps}
-	for role := range req.Attach {
-		if t.System.Roles[role] == (RoleFill{}) {
-			return out, invalid("the request attaches role %s, which %s does not fill", role, t.Name)
+	for slot := range req.Attach {
+		if t.System.Slots[slot] == (SlotFill{}) {
+			return out, invalid("the request attaches slot %s, which %s does not fill", slot, t.Name)
 		}
 	}
 	return out, nil
 }
 
 // plannedSystem plans one system from a system template: its standard
-// (resolving whether it is created from its template), the planner's fill of each role, and the
+// (resolving whether it is created from its template), the planner's fill of each slot, and the
 // components. It sets everything but the system's own name, label and
-// place.
-func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Template, standard string, attach map[string][]Inputs, node string) (storage.PlannedSystem, SystemPlan, error) {
+// location.
+func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Template, standard string, attach map[string][]Inputs, outpost string) (storage.PlannedSystem, SystemPlan, error) {
 	out := SystemPlan{Standard: standard}
-	var roles []systemplan.Role
+	var slots []systemplan.Slot
 	if out.Standard == "" {
 		out.Standard = t.System.Standard
 	}
@@ -183,12 +183,12 @@ func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Templ
 	switch {
 	case err == nil:
 		out.Standard = held.Name
-		rs, err := gw.ListSystemRoles(ctx, "standard", held.Name)
+		rs, err := gw.ListSystemSlots(ctx, "standard", held.Name)
 		if err != nil {
-			return storage.PlannedSystem{}, out, fmt.Errorf("template: read %s's roles: %w", held.Name, err)
+			return storage.PlannedSystem{}, out, fmt.Errorf("template: read %s's slots: %w", held.Name, err)
 		}
 		for _, r := range rs {
-			roles = append(roles, systemplan.Role{Name: r.Name, Quorum: r.Quorum, Capacity: r.Capacity,
+			slots = append(slots, systemplan.Slot{Name: r.Name, Quorum: r.Quorum, Capacity: r.Capacity,
 				AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts, Alternate: r.Alternate})
 		}
 	case errors.Is(err, storage.ErrTypeNotFound) && standard == "":
@@ -202,12 +202,12 @@ func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Templ
 		}
 		out.Plan.Standards = chain
 		out.CreatesStandards = true
-		for _, r := range st.Standard.Roles {
+		for _, r := range st.Standard.Slots {
 			alt := ""
 			if r.Choice != "" {
 				alt = r.Choice + "/" + r.Alternate
 			}
-			roles = append(roles, systemplan.Role{Name: r.Name, Quorum: r.Quorate(), Capacity: r.Capacity,
+			slots = append(slots, systemplan.Slot{Name: r.Name, Quorum: r.Quorate(), Capacity: r.Capacity,
 				AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts, Alternate: alt})
 		}
 	case errors.Is(err, storage.ErrTypeNotFound):
@@ -217,33 +217,33 @@ func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Templ
 	}
 
 	declared := map[string]bool{}
-	for _, r := range roles {
+	for _, r := range slots {
 		declared[r.Name] = true
 	}
 	fills := map[string]string{}
-	for _, role := range sortedKeys(t.System.Roles) {
-		if !declared[role] {
-			return storage.PlannedSystem{}, out, invalid("%s fills role %s, which standard %s does not declare", t.Name, role, out.Standard)
+	for _, slot := range sortedKeys(t.System.Slots) {
+		if !declared[slot] {
+			return storage.PlannedSystem{}, out, invalid("%s fills slot %s, which standard %s does not declare", t.Name, slot, out.Standard)
 		}
-		f := t.System.Roles[role]
+		f := t.System.Slots[slot]
 		if f.Component != "" {
 			ct, err := c.GetKind(f.Component, KindComponent)
 			if err != nil {
 				return storage.PlannedSystem{}, out, err
 			}
-			fills[role] = ct.Component.Product
+			fills[slot] = ct.Component.Product
 		} else {
-			fills[role] = f.Product
+			fills[slot] = f.Product
 		}
 	}
-	plan, err := planFills(ctx, gw, roles, fills)
+	plan, err := planFills(ctx, gw, slots, fills)
 	if err != nil {
 		return storage.PlannedSystem{}, out, err
 	}
 	var short []string
-	for _, f := range plan.Roles {
+	for _, f := range plan.Slots {
 		if f.Count == 0 {
-			short = append(short, fmt.Sprintf("%s (%s)", f.Role, f.Reason))
+			short = append(short, fmt.Sprintf("%s (%s)", f.Slot, f.Reason))
 		}
 	}
 	if len(short) > 0 {
@@ -259,21 +259,21 @@ func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Templ
 	for _, name := range t.System.Properties.Names() {
 		ps.Properties = append(ps.Properties, storage.PlannedValue{Name: name, Value: t.System.Properties[name]})
 	}
-	for _, f := range plan.Roles {
-		if n := len(attach[f.Role]); n > f.Count {
-			return storage.PlannedSystem{}, out, invalid("the request attaches %d components to role %s, which takes %d", n, f.Role, f.Count)
+	for _, f := range plan.Slots {
+		if n := len(attach[f.Slot]); n > f.Count {
+			return storage.PlannedSystem{}, out, invalid("the request attaches %d components to slot %s, which takes %d", n, f.Slot, f.Count)
 		}
-		fill := t.System.Roles[f.Role]
+		fill := t.System.Slots[f.Slot]
 		for i := 0; i < f.Count; i++ {
 			var in Inputs
-			if i < len(attach[f.Role]) {
-				in = attach[f.Role][i]
+			if i < len(attach[f.Slot]) {
+				in = attach[f.Slot][i]
 			}
-			pc, piece, err := componentPiece(ctx, gw, c, fill.Component, fill.Product, in, node)
+			pc, piece, err := componentPiece(ctx, gw, c, fill.Component, fill.Product, in, outpost)
 			if err != nil {
 				return storage.PlannedSystem{}, out, err
 			}
-			pc.Role, piece.Role = f.Role, f.Role
+			pc.Slot, piece.Slot = f.Slot, f.Slot
 			ps.Components = append(ps.Components, pc)
 			out.Pieces = append(out.Pieces, piece)
 		}
@@ -281,9 +281,9 @@ func plannedSystem(ctx context.Context, gw storage.Gateway, c *Catalog, t *Templ
 	return ps, out, nil
 }
 
-// planFills runs the shared planner with each role's one candidate, the
+// planFills runs the shared planner with each slot's one candidate, the
 // product the template names for it.
-func planFills(ctx context.Context, gw storage.Gateway, roles []systemplan.Role, fills map[string]string) (systemplan.SystemPlan, error) {
+func planFills(ctx context.Context, gw storage.Gateway, slots []systemplan.Slot, fills map[string]string) (systemplan.SystemPlan, error) {
 	products, err := gw.ListProducts(ctx)
 	if err != nil {
 		return systemplan.SystemPlan{}, fmt.Errorf("template: list products: %w", err)
@@ -303,13 +303,13 @@ func planFills(ctx context.Context, gw storage.Gateway, roles []systemplan.Role,
 		ps = append(ps, systemplan.Product{Name: p.Name, ComponentType: p.ComponentType})
 		known[p.Name] = true
 	}
-	for _, role := range sortedKeys(fills) {
-		if !known[fills[role]] {
-			return systemplan.SystemPlan{}, invalid("role %s is filled with product %s, which this fleet's catalog does not hold", role, fills[role])
+	for _, slot := range sortedKeys(fills) {
+		if !known[fills[slot]] {
+			return systemplan.SystemPlan{}, invalid("slot %s is filled with product %s, which this fleet's catalog does not hold", slot, fills[slot])
 		}
 	}
-	return systemplan.PlanSystem(roles, ps, systemplan.Catalog{
-		Candidate: func(role, product string) bool { return fills[role] == product },
+	return systemplan.PlanSystem(slots, ps, systemplan.Catalog{
+		Candidate: func(slot, product string) bool { return fills[slot] == product },
 		Within: func(have, accepted string) bool {
 			a, ok1 := byName[have]
 			b, ok2 := byName[accepted]
@@ -323,10 +323,10 @@ func planFills(ctx context.Context, gw storage.Gateway, roles []systemplan.Role,
 	}), nil
 }
 
-// PlaceRequest is POST /locations:createFromTemplate's input.
-type PlaceRequest struct {
+// LocationRequest is POST /locations:createFromTemplate's input.
+type LocationRequest struct {
 	Template string
-	// Parent is the place the subtree sits under; empty for a new top.
+	// Parent is the location the subtree sits under; empty for a new top.
 	Parent *string
 	// Name and Label name the subtree's root; an empty name takes the
 	// template's, else its type's name rule mints one.
@@ -334,29 +334,29 @@ type PlaceRequest struct {
 	Label string
 }
 
-// PlacePlan is a place template's plan: what CreatePlan lands, and a piece
-// per component of the systems it carries (none attached: a place template
+// LocationPlan is a location template's plan: what CreatePlan lands, and a piece
+// per component of the systems it carries (none attached: a location template
 // attaches nothing, so every component is listed as still to attach).
-type PlacePlan struct {
+type LocationPlan struct {
 	Plan   storage.Plan
 	Pieces []PlannedPiece
 }
 
-// PlanPlaces turns a place template and a request into a plan of a subtree
-// of places and the systems in them. Every place's type must be one the
-// fleet holds, and each nested place's type must allow its parent's (the
+// PlanLocations turns a location template and a request into a plan of a subtree
+// of locations and the systems in them. Every location's type must be one the
+// fleet holds, and each nested location's type must allow its parent's (the
 // fleet's effective allowed_parent_types, a fork of a shipped type
 // included); the root's placement under the parent is the create's own
 // check. Nothing is keyed on any particular type.
-func PlanPlaces(ctx context.Context, gw storage.Gateway, c *Catalog, req PlaceRequest) (PlacePlan, error) {
-	t, err := c.GetKind(req.Template, KindPlace)
+func PlanLocations(ctx context.Context, gw storage.Gateway, c *Catalog, req LocationRequest) (LocationPlan, error) {
+	t, err := c.GetKind(req.Template, KindLocation)
 	if err != nil {
-		return PlacePlan{}, err
+		return LocationPlan{}, err
 	}
-	out := PlacePlan{Plan: storage.Plan{Template: t.Name}}
+	out := LocationPlan{Plan: storage.Plan{Template: t.Name}}
 	created := map[string]bool{}
-	var walk func(p *Place, key, parentKey, parentType string, root bool) error
-	walk = func(p *Place, key, parentKey, parentType string, root bool) error {
+	var walk func(p *Location, key, parentKey, parentType string, root bool) error
+	walk = func(p *Location, key, parentKey, parentType string, root bool) error {
 		lt, err := gw.GetLocationType(ctx, p.Type)
 		if errors.Is(err, storage.ErrTypeNotFound) {
 			return invalid("%s names location type %s, which this fleet does not hold", t.Name, p.Type)
@@ -383,7 +383,7 @@ func PlanPlaces(ctx context.Context, gw storage.Gateway, c *Catalog, req PlaceRe
 		if root {
 			spec.ParentName = req.Parent
 		}
-		out.Plan.Places = append(out.Plan.Places, storage.PlannedPlace{Key: key, ParentKey: parentKey, Location: spec})
+		out.Plan.Locations = append(out.Plan.Locations, storage.PlannedLocation{Key: key, ParentKey: parentKey, Location: spec})
 		for _, s := range p.Systems {
 			st, err := c.GetKind(s.Template, KindSystem)
 			if err != nil {
@@ -393,7 +393,7 @@ func PlanPlaces(ctx context.Context, gw storage.Gateway, c *Catalog, req PlaceRe
 			if err != nil {
 				return err
 			}
-			ps.PlaceKey, ps.System.Label = key, s.Label
+			ps.LocationKey, ps.System.Label = key, s.Label
 			for _, f := range sp.Plan.Standards {
 				if !created[f.Name] {
 					created[f.Name] = true
@@ -403,14 +403,14 @@ func PlanPlaces(ctx context.Context, gw storage.Gateway, c *Catalog, req PlaceRe
 			out.Plan.Systems = append(out.Plan.Systems, ps)
 			out.Pieces = append(out.Pieces, sp.Pieces...)
 		}
-		for i := range p.Places {
-			if err := walk(&p.Places[i], fmt.Sprintf("%s.%d", key, i), key, p.Type, false); err != nil {
+		for i := range p.Locations {
+			if err := walk(&p.Locations[i], fmt.Sprintf("%s.%d", key, i), key, p.Type, false); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
-	if err := walk(t.Place, "0", "", "", true); err != nil {
+	if err := walk(t.Location, "0", "", "", true); err != nil {
 		return out, err
 	}
 	return out, nil

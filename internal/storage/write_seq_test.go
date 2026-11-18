@@ -51,7 +51,7 @@ func TestAuditOrderSurvivesClockStep(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	for _, u := range []string{"first", "second", "third"} {
-		if _, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: u}, all); err != nil {
+		if _, err := gw.CreatePerson(ctx, owner.ID, storage.PersonSpec{Username: u}, all); err != nil {
 			t.Fatalf("create %s: %v", u, err)
 		}
 	}
@@ -61,7 +61,7 @@ func TestAuditOrderSurvivesClockStep(t *testing.T) {
 	if _, err := conn.Exec(ctx, `
 		update audit_log set id = '00000000-0000-7000-8000-000000000002',
 		                     ts = ts - interval '1 hour'
-		where resource_id = (select principal_id::text from human where username = 'second')`); err != nil {
+		where resource_id = (select user_id::text from person where username = 'second')`); err != nil {
 		t.Fatalf("simulate step: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestAuditOrderSurvivesClockStep(t *testing.T) {
 	}
 	var got []string
 	for _, e := range entries {
-		if e.Resource != "principal" {
+		if e.Resource != "user" {
 			continue
 		}
 		var img struct {
@@ -88,10 +88,10 @@ func TestAuditOrderSurvivesClockStep(t *testing.T) {
 	}
 }
 
-// TestPrincipalOrderSurvivesClockStep creates two humans, jumps the first one's
+// TestUserOrderSurvivesClockStep creates two humans, jumps the first one's
 // created_at an hour forward (the step), and asserts the directory still lists
 // them in creation order. Skipped under -short.
-func TestPrincipalOrderSurvivesClockStep(t *testing.T) {
+func TestUserOrderSurvivesClockStep(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -118,20 +118,20 @@ func TestPrincipalOrderSurvivesClockStep(t *testing.T) {
 		t.Fatalf("resolve owner: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "later-human"}, all); err != nil {
+	if _, err := gw.CreatePerson(ctx, owner.ID, storage.PersonSpec{Username: "later-human"}, all); err != nil {
 		t.Fatalf("create human: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
-		update principal set created_at = created_at + interval '1 hour'
-		where id = (select principal_id from human where username = 'root')`); err != nil {
+		update users set created_at = created_at + interval '1 hour'
+		where id = (select user_id from person where username = 'root')`); err != nil {
 		t.Fatalf("simulate step: %v", err)
 	}
 
-	list, err := gw.ListPrincipals(ctx, all, false)
+	list, err := gw.ListUsers(ctx, all, false)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(list) != 2 || list[0].Human == nil || list[0].Human.Username != "root" || list[1].Human == nil || list[1].Human.Username != "later-human" {
+	if len(list) != 2 || list[0].Person == nil || list[0].Person.Username != "root" || list[1].Person == nil || list[1].Person.Username != "later-human" {
 		t.Fatalf("directory order after clock step: want root then later-human, got %+v", list)
 	}
 }

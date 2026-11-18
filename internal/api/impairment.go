@@ -38,7 +38,7 @@ func registerImpairmentRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/impairment",
 		Summary:     "Get what is broken on a simulated device",
-		Description: "The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.",
+		Description: "The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its outpost when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.",
 	}, "simulation", "read"), func(ctx context.Context, in *impairmentPathInput) (*impairmentOutput, error) {
 		id, err := gw.ResolveActionTarget(ctx, "component", in.Name, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "simulation", "read"))
 		if err != nil {
@@ -56,7 +56,7 @@ func registerImpairmentRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPut,
 		Path:        "/components/{name}/impairment",
 		Summary:     "Break or repair a simulated device",
-		Description: "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.",
+		Description: "Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's outpost applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.",
 	}, "simulation", "update"), func(ctx context.Context, in *setImpairmentInput) (*impairmentOutput, error) {
 		id, err := gw.ResolveActionTarget(ctx, "component", in.Name, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "simulation", "update"))
 		if err != nil {

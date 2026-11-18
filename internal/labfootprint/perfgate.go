@@ -339,7 +339,7 @@ func exactFamilies() []exactFamily {
 				}
 				return out
 			}},
-		{Family: "worklist_loss", About: "each node's worst share of worklist pulls refused or unreadable (#1868), per node",
+		{Family: "worklist_loss", About: "each outpost's worst share of worklist pulls refused or unreadable (#1868), per outpost",
 			Read: func(r ScaleReport) []exactReading {
 				if gap := r.worklistGap(); gap != "" {
 					return []exactReading{{Name: "worklist_loss", Missing: true, Note: "not measured: " + gap}}
@@ -352,8 +352,8 @@ func exactFamilies() []exactFamily {
 					}
 					out = append(out, x)
 				}
-				// A node that reported nothing fails its reading: every
-				// running node reports the ratio every window.
+				// An outpost that reported nothing fails its reading: every
+				// running outpost reports the ratio every window.
 				for _, n := range r.WorklistUnreported {
 					out = append(out, exactReading{Name: "worklist_loss/" + n, Missing: true,
 						Note: n + " reported no worklist pull loss in the window"})
@@ -361,7 +361,7 @@ func exactFamilies() []exactFamily {
 				slices.SortFunc(out, func(a, b exactReading) int { return strings.Compare(a.Name, b.Name) })
 				return out
 			}},
-		{Family: "delivery_unsettled_boots", About: "node boots whose batches had not all settled when the read ran out",
+		{Family: "delivery_unsettled_boots", About: "outpost boots whose batches had not all settled when the read ran out",
 			Read: func(r ScaleReport) []exactReading {
 				return []exactReading{{Name: "delivery_unsettled_boots", Value: float64(len(r.DeliveryUnsettled)), Note: unsettledNote(r)}}
 			}},
@@ -384,7 +384,7 @@ func deliverySubject(d DeliveryRow) string {
 // deliveryFigure is a delivery row's exact figure name,
 // delivery_loss/<hop>/<kind>, the sim hop's naming its protocol in place of
 // the kind. A push-lane row (#1696) names its lane first, so it is never
-// folded into the node lane's row for the same hop and kind.
+// folded into the outpost lane's row for the same hop and kind.
 func deliveryFigure(d DeliveryRow) string {
 	if d.Lane == LanePush {
 		return fmt.Sprintf("delivery_loss/%s/%s/%s", d.Lane, d.Hop, deliverySubject(d))
@@ -409,7 +409,7 @@ func lossNote(d DeliveryRow) string {
 // the rest.
 const unsettledNamed = 3
 
-// unsettledNote names the run's unsettled boots, the first few by node and
+// unsettledNote names the run's unsettled boots, the first few by outpost and
 // boot, with the read's own note on why, empty when every boot settled.
 func unsettledNote(r ScaleReport) string {
 	if len(r.DeliveryUnsettled) == 0 {
@@ -417,7 +417,7 @@ func unsettledNote(r ScaleReport) string {
 	}
 	var named []string
 	for _, u := range r.DeliveryUnsettled[:min(len(r.DeliveryUnsettled), unsettledNamed)] {
-		named = append(named, fmt.Sprintf("node %s boot %s", u.Node, u.Boot))
+		named = append(named, fmt.Sprintf("outpost %s boot %s", u.Outpost, u.Boot))
 	}
 	note := "no ratio read from " + strings.Join(named, ", ")
 	if more := len(r.DeliveryUnsettled) - unsettledNamed; more > 0 {
@@ -544,12 +544,12 @@ func invalidRuns(in PerfInputs, runs []ScaleReport) []string {
 		if r.Endpoints == nil {
 			continue
 		}
-		for _, n := range r.Endpoints.Nodes {
+		for _, n := range r.Endpoints.Outposts {
 			if n.Restarted {
-				add(i, fmt.Sprintf("node %s restarted or changed fleet during the window", n.Node))
+				add(i, fmt.Sprintf("outpost %s restarted or changed fleet during the window", n.Outpost))
 			}
 			if n.Impaired {
-				add(i, fmt.Sprintf("node %s carried an impairment: a gated lab is never impaired, so a fault was left on", n.Node))
+				add(i, fmt.Sprintf("outpost %s carried an impairment: a gated lab is never impaired, so a fault was left on", n.Outpost))
 			}
 		}
 		for _, g := range r.Endpoints.GapTotals {

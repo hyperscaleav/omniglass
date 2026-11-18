@@ -10,8 +10,8 @@ import { METRICS_KEY } from "../lib/metric_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// The Location Types page is the place classifier registry alone on the shared
-// FlatList: one registry, one query, no secret_type anywhere on its path (#598
+// The Location Types page is the location classifier catalog alone on the shared
+// FlatList: one catalog, one query, no secret_type anywhere on its path (#598
 // split the old joint Types page). A shipped row is official and editable, since
 // the edit FORKS it (#703, ADR-0095); a custom row is writable for a caller
 // holding location_type:*, and its detail carries the location type's
@@ -35,8 +35,8 @@ const catalog: PropertyRow[] = [
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -60,7 +60,7 @@ function mount(me: Me = admin) {
 describe("LocationTypes page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists the registry rows, alphabetical by label", () => {
+  it("lists the catalog rows, alphabetical by label", () => {
     mount();
     expect(screen.getByText("campus")).toBeTruthy();
     expect(screen.getByText("wing")).toBeTruthy();
@@ -147,7 +147,7 @@ describe("LocationTypes page", () => {
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
-      // The post-save invalidation refetches the registry query alone.
+      // The post-save invalidation refetches the catalog query alone.
       return new Response(JSON.stringify({ location_types: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
 
@@ -262,7 +262,7 @@ describe("LocationTypes page", () => {
     expect(within(blade).getByLabelText("Property to declare")).toBeTruthy();
   });
 
-  // The three-state origin a fork-adopting registry shows, and the one action
+  // The three-state origin a fork-adopting catalog shows, and the one action
   // that only a forked shipped row carries.
   it("reads origin three ways and offers Restore only on a forked shipped row", async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -634,12 +634,12 @@ describe("LocationTypes page", () => {
 // #598: the old joint Types page fanned /location-types and /secret-types out
 // behind one query and threw if EITHER failed, so a plain *:read viewer (no
 // secret:read; secret is a sensitive resource off the viewer floor) lost the
-// location registry it was entitled to. The split page must render from
+// location catalog it was entitled to. The split page must render from
 // /location-types alone and never have /secret-types on its path.
-describe("LocationTypes for a viewer-floor principal (#598)", () => {
+describe("LocationTypes for a viewer-floor user (#598)", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders the registry from /location-types alone, never fetching /secret-types", async () => {
+  it("renders the catalog from /location-types alone, never fetching /secret-types", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.url.includes("/location-types")) {
@@ -651,7 +651,7 @@ describe("LocationTypes for a viewer-floor principal (#598)", () => {
       // Anything else is what the server would say to this viewer: forbidden.
       return new Response(JSON.stringify({ title: "Forbidden", status: 403 }), { status: 403, headers: { "Content-Type": "application/json" } });
     });
-    // No seeded registry cache: the page fetches, as the console does live.
+    // No seeded catalog cache: the page fetches, as the console does live.
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...ME_KEY], viewer);
     render(() => (

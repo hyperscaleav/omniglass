@@ -218,11 +218,11 @@ func TestBuildCommandPathParams(t *testing.T) {
 		wantPath string
 		wantArgs []string
 	}{
-		{"item get", "/principals/{id}", "get", "/api/v1/principals/%s", []string{"id"}},
-		{"collection list", "/principals", "get", "/api/v1/principals", nil},
-		{"nested collection", "/principals/{id}/grants", "get", "/api/v1/principals/%s/grants", []string{"id"}},
-		{"custom method archive", "/principals/{id}:archive", "post", "/api/v1/principals/%s:archive", []string{"id"}},
-		{"custom method resetPassword", "/principals/{id}:resetPassword", "post", "/api/v1/principals/%s:resetPassword", []string{"id"}},
+		{"item get", "/users/{id}", "get", "/api/v1/users/%s", []string{"id"}},
+		{"collection list", "/users", "get", "/api/v1/users", nil},
+		{"nested collection", "/users/{id}/grants", "get", "/api/v1/users/%s/grants", []string{"id"}},
+		{"custom method archive", "/users/{id}:archive", "post", "/api/v1/users/%s:archive", []string{"id"}},
+		{"custom method resetPassword", "/users/{id}:resetPassword", "post", "/api/v1/users/%s:resetPassword", []string{"id"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -248,15 +248,15 @@ func TestBuildCommandPathParams(t *testing.T) {
 // TestBuildCommandQueryParams asserts that an operation's OpenAPI query
 // parameters become optional cobra flags: snake_case names map to kebab-case
 // flags, the OpenAPI type picks the flag setter, and a required param is marked
-// required. The principal-list op (kind + include_archived) is the worked case.
+// required. The user-list op (kind + include_archived) is the worked case.
 func TestBuildCommandQueryParams(t *testing.T) {
 	op := operation{Parameters: []param{
-		{Name: "kind", In: "query", Description: "Optionally filter by principal kind", Schema: paramSchema{Type: "string"}},
-		{Name: "include_archived", In: "query", Description: "Include archived principals", Schema: paramSchema{Type: "boolean"}},
+		{Name: "kind", In: "query", Description: "Optionally filter by user kind", Schema: paramSchema{Type: "string"}},
+		{Name: "include_archived", In: "query", Description: "Include archived users", Schema: paramSchema{Type: "boolean"}},
 		{Name: "page", In: "query", Required: true, Schema: paramSchema{Type: "integer"}},
 		{Name: "id", In: "path", Schema: paramSchema{Type: "string"}}, // must be ignored
 	}}
-	cmd := buildCommand(spec{}, "/api/v1", "/principals", "get", op)
+	cmd := buildCommand(spec{}, "/api/v1", "/users", "get", op)
 
 	if len(cmd.Query) != 3 {
 		t.Fatalf("Query = %+v, want 3 query fields (path param excluded)", cmd.Query)
@@ -296,13 +296,13 @@ func TestBuildCommandQueryParams(t *testing.T) {
 // query string.
 func TestRenderQueryFlags(t *testing.T) {
 	op := operation{
-		OperationID: "list-principals",
-		Summary:     "List principals",
+		OperationID: "list-users",
+		Summary:     "List users",
 		Parameters: []param{
-			{Name: "include_archived", In: "query", Description: "Include archived principals", Schema: paramSchema{Type: "boolean"}},
+			{Name: "include_archived", In: "query", Description: "Include archived users", Schema: paramSchema{Type: "boolean"}},
 		},
 	}
-	cmd := buildCommand(spec{}, "/api/v1", "/principals", "get", op)
+	cmd := buildCommand(spec{}, "/api/v1", "/users", "get", op)
 	roots, err := tree([]command{cmd})
 	if err != nil {
 		t.Fatalf("tree: %v", err)
@@ -324,16 +324,16 @@ func TestRenderQueryFlags(t *testing.T) {
 	}
 }
 
-// TestTypeRegistryCommandNames pins the naming rule on the registries: a resource
+// TestTypeCatalogCommandNames pins the naming rule on the catalogs: a resource
 // is ONE kebab-case noun, and a space beneath it means the thing it owns. So the
-// registry and its property contract share `location-type`, and neither needs an
+// catalog and its property contract share `location-type`, and neither needs an
 // override.
 //
 // It previously asserted `type <kind> <verb>`, from when the CRUD sat under a
 // `/types` umbrella while the contract sat on a flat `/location-types`. That gave
 // one entity two command groups; ADR-0060 retired the umbrella. The standard
 // catalog has always been the shape the others now have.
-func TestTypeRegistryCommandNames(t *testing.T) {
+func TestTypeCatalogCommandNames(t *testing.T) {
 	cases := []struct {
 		opID, path, method string
 		want               []string
@@ -394,13 +394,13 @@ func TestExampleShowsThePathParamExample(t *testing.T) {
 func TestArgHelpSaysHowToDisambiguateARepeatedName(t *testing.T) {
 	const opRaw = `{"operationId":"list-system-alarms","description":"Lists the alarms.","parameters":[
 	  {"name":"name","in":"path","required":true,"description":"The system's name, or a dotted address (e.g. boi.17c.$sys.av)","schema":{"type":"string"}},
-	  {"name":"node","in":"path","required":true,"description":"The node's name","schema":{"type":"string"}}
+	  {"name":"outpost","in":"path","required":true,"description":"The outpost's name","schema":{"type":"string"}}
 	]}`
 	var op operation
 	if err := json.Unmarshal([]byte(opRaw), &op); err != nil {
 		t.Fatalf("op: %v", err)
 	}
-	cmd := buildCommand(spec{}, "/api/v1", "/systems/{name}/nodes/{node}/alarms", "get", op)
+	cmd := buildCommand(spec{}, "/api/v1", "/systems/{name}/outposts/{outpost}/alarms", "get", op)
 	if !strings.HasPrefix(cmd.Long, "Lists the alarms.\n\nArguments:\n") {
 		t.Errorf("long = %q, want the description then an Arguments section", cmd.Long)
 	}
@@ -409,8 +409,8 @@ func TestArgHelpSaysHowToDisambiguateARepeatedName(t *testing.T) {
 			t.Errorf("long = %q, want %q", cmd.Long, want)
 		}
 	}
-	if strings.Contains(cmd.Long, "<node>") {
-		t.Errorf("long = %q, documents <node>, which has no address form", cmd.Long)
+	if strings.Contains(cmd.Long, "<outpost>") {
+		t.Errorf("long = %q, documents <outpost>, which has no address form", cmd.Long)
 	}
 	if got := buildCommand(spec{}, "/api/v1", "/healthz", "get", operation{Description: "ok"}).Long; got != "ok" {
 		t.Errorf("long of an argless command = %q, want it untouched", got)

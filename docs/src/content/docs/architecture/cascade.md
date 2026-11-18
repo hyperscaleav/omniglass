@@ -1,16 +1,12 @@
 ---
 title: Cascade
-description: How effective settings (config, variables, tags, rule-sets) are resolved for any entity and how the resolve view explains why a given value won.
-sidebar:
-  badge:
-    text: Partial
-    variant: note
+description: How effective settings (declared values, variables, tags, rule-sets) are resolved for any entity and how the resolve view explains why a given value won.
 ---
 
 :::note[Partial]
 The **binding chain** is built for the three cells that ride it: a [tag](/architecture/tags/), a
 [variable](/architecture/variables/), and a secret each own a value on the exclusive arc
-`platform | location | system | component` (the tag arc has a fifth kind, `node`) and resolve
+`platform | location | system | component` (the tag arc has a fifth kind, `outpost`) and resolve
 most-specific-wins down the location, system, and component trees (union-on-key for tags), the
 least-specific tier named **`platform`** and gated by its own `platform:<action>` permission
 ([ADR-0057](/architecture/decisions/#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier)).
@@ -26,11 +22,11 @@ accumulation with suppression, and the fall-through-to-declaration provenance in
 :::
 
 The cascade lets an operator set a value once, high up, have it apply everywhere below while staying
-overridable on any one entity, and then explain exactly why a given value won.
+shadowable on any one entity, and then explain exactly why a given value won.
 
 ## What it resolves
 
-The effective **config and variables** ([config and credentials](/architecture/variables/)),
+The effective **declared values and variables** ([variables, secrets, and declared values](/architecture/variables/)),
 **tags**, and **rule-sets** for any entity, with a first-class **resolve view** explaining every
 effective value: the winning source and what it shadowed. The order is deliberately hand-tuned (not
 derivable from a single rule), so the resolve view is the safety net, not an afterthought.
@@ -39,15 +35,15 @@ derivable from a single rule), so the resolve view is the safety net, not an aft
 
 In operator terms:
 
-- **Set once, override where it matters.** HQ's devices need a different credential, so it is set
-  at the HQ location and overrides the product's binding for everything there, no product edit; a
-  place three levels down inherits the nearest setting. *(deployment beats classifier bindings;
+- **Set once, shadow where it matters.** HQ's devices need a different credential, so it is set
+  at the HQ location and shadows the product's binding for everything there, no product edit; a
+  location three levels down inherits the nearest setting. *(deployment beats classifier bindings;
   deepest location wins)*
 - **Composition tightens the part.** "Standard Huddle Room" polls codecs every 30s, tighter than
   the codec's own product's 60s, and every codec placed in a huddle room picks that up. *(the
   system's standard beats the component's product)*
 - **"Why did it get this?"** The resolve view shows the "Old-firmware Room Kits" group (weight 450)
-  shadowing the product's 30s ([worked example](#worked-example)). *(the effective-config resolve
+  shadowing the product's 30s ([worked example](#worked-example)). *(the effective-value resolve
   view)*
 
 The cross-cutting cases (a fleet-wide fix that auto-clears, a policy as a floor, a hand-picked set)
@@ -74,10 +70,10 @@ component tree        chassis -> card -> ...                   (deepest wins, = 
   ([identity and access](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope)).
 - **There is no root location.** The location tree is a forest with N unparented tops, and a top is
   an ordinary location: binding at `earth` misses `mars`, and a top added next quarter starts
-  uncovered. A tier above today's tops is a new `location_type` and a real node, never a magic one;
+  uncovered. A tier above today's tops is a new `location_type` and a real outpost, never a magic one;
   "everything" is `platform`, not a location.
-- **Philosophy: deployment beats the classifier.** HQ's location credential overrides what the Room
-  Kit product binds; "Standard Huddle Room" overrides what the bare Room Kit binds.
+- **Philosophy: deployment beats the classifier.** HQ's location credential shadows what the Room
+  Kit product binds; "Standard Huddle Room" shadows what the bare Room Kit binds.
 - **Classifiers are the leaf's base.** Ancestor nodes contribute their **instance** bindings, not
   their classifiers (a chassis hands a card its chassis-wide credential; the card keeps its own
   product's).
@@ -120,8 +116,8 @@ it lands, it lands as another declaration-side column, not a rung.
 
 ## Combinators (by what is resolved)
 
-- **config / variables -> scalar override**: the deepest/highest source wins; one value.
-- **tags -> union on name, override on value**: names accumulate; for a given
+- **declared values / variables -> scalar shadow**: the deepest/highest source wins; one value.
+- **tags -> union on name, shadow on value**: names accumulate; for a given
   name, the winning source's value wins.
 - **rules** (`calc_rule` / `event_rule`) -> **additive
   accumulation + explicit suppression**: a leaf is governed by the union of rules
@@ -129,7 +125,7 @@ it lands, it lands as another declaration-side column, not a rung.
 
 ## Groups overlay the cascade, placed by weight
 
-The structural tree handles config by position and kind; **[groups](/architecture/groups/)** handle
+The structural tree handles values by position and kind; **[groups](/architecture/groups/)** handle
 it by attribute or hand-picked set, cutting across the tree. The cascade does not define groups; it
 consumes them by **weight** on the one specificity scale.
 
@@ -137,7 +133,7 @@ consumes them by **weight** on the one specificity scale.
 **One specificity scale.** Structural layers auto-derive a specificity from position, weight-free:
 `platform` lowest, then the classifier bands (product, standard), then the location / system / component trees by depth, then
 the entity's own **instance** at the ceiling. A **group's weight is its specificity on that same
-scale**: a high weight beats deployment (a must-apply override), a low weight loses to it. The
+scale**: a high weight beats deployment (a must-apply binding), a low weight loses to it. The
 instance ceiling beats any group; equal specificity breaks by creation order. A typed group applies
 at its own level: a component-group to components directly, a system-group reaching a component
 **through the system layer** of its cascade.
@@ -160,20 +156,20 @@ first field, a structural segment never overruns into another however deep a tre
 many group weights stack. The single specificity numbers elsewhere on this page (`0`, `100`, the
 `300s`, the `400s`) are a **presentation-only** flattening of that key for the resolve view.
 
-## The registry is outside the cascade
+## The catalog is outside the cascade
 
 `property_type` defines **identity** (kind, unit, validation, fusion_policy) for every property,
-which the cascade never overrides (policy, not ontology). A type's **default** lives on that
+which the cascade never shadows (policy, not ontology). A type's **default** lives on that
 declaration too, off the cascade: what the value is when no layer bound anything, not a rung the
 layers compete with, reported by the resolve view as a declaration.
 
 ## Structural multi-membership (a component in N systems)
 
 Distinct from group membership. A component belongs to zero or more systems through
-[`system_member`](/architecture/core-entities/#membership-what-a-role-attaches-to), and the
+[`system_member`](/architecture/core-entities/#membership-what-a-slot-attaches-to), and the
 resolution **takes the system to resolve against**: given one, it resolves against that system, and
 only if the component is a member of it (naming a system it has no binding to must not lend it
-configuration). That is the "config differs per system" case, a **per-system effective view**
+configuration). That is the "value differs per system" case, a **per-system effective view**
 computed on demand rather than merged chains.
 
 Asked with **no system in hand**, the chain is seeded from the component's **primary** membership:
@@ -203,7 +199,7 @@ reports the **declaration** ("no binding; the type declares 60s") as its own pro
 bottom entry in the shadowed list.
 
 For rule-sets: the accumulated set, each rule tagged with its source and any **suppressions**. One
-view explains both override (variables / tags) and accumulation (rules).
+view explains both shadowing (variables / tags) and accumulation (rules).
 
 ## Worked example
 
@@ -255,7 +251,7 @@ synthetic root location.
 
 Service Depot is that argument made concrete rather than hypothetical. It was added to the seed
 later than the other three, it is a **building** at the top with rooms straight off it (no campus
-above, no floor between, which the type registry allows and the model has never required), and it
+above, no floor between, which the type catalog allows and the model has never required), and it
 came up covered by exactly one thing: the `platform` binding. Every location-tier binding written
 before it existed still misses it.
 
@@ -269,7 +265,7 @@ the false-firing `high_memory` alarm).
 
 ## Resolution, in one line
 
-Build the entity's ordered layer path, place matching groups on it by weight, fold
-variables (override) / tags (union + override) / rules (additive + suppress) down the
+Build the entity's ordered layer path, location matching groups on it by weight, fold
+variables (shadow) / tags (union + shadow) / rules (additive + suppress) down the
 combined specificity order, fall through to the type's declaration where the fold is
 empty, and emit effective values with provenance.

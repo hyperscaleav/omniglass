@@ -1,6 +1,6 @@
 # The official drivers, seeded idempotently at boot. A driver is the
 # implementation that gets/emits/sets a product's signals; a product points at
-# one. The registry lists alphabetically by label. Starter set,
+# one. The catalog lists alphabetically by label. Starter set,
 # operator-extensible later; tune freely. Fictional-brand drivers match the
 # omniglass-lab device surfaces: Kestrel speaks an HTTP JSON device API,
 # Newtron a vendor control protocol, Boreal and the audio rack SNMP.
@@ -341,7 +341,7 @@ drivers:
       # request behind basic auth, switching one outlet on or off by its id.
       # It carries the PDU's commands, and reads only the identity the JSON
       # document's agent block names (the poll that carries its login to the
-      # node); ferrite-pdu-snmp reads the outlets, so its next status poll
+      # outpost); ferrite-pdu-snmp reads the outlets, so its next status poll
       # shows the switch. Both
       # commands are fire-and-forget, settled at their issue, so no reply
       # settles them; settling against the outlet's state waits on one
@@ -563,7 +563,7 @@ drivers:
       # use, the upgrade carrying basic auth. One held socket carries it all:
       # the subscription armed on every connection, the pushes the listeners
       # land, and the polls and commands, each answered by the frame that
-      # carries back the id the node mints into it, whatever pushes arrive
+      # carries back the id the outpost mints into it, whatever pushes arrive
       # between.
       transport: wss
       inputs:
@@ -602,7 +602,7 @@ drivers:
           emits:
             - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
       polls:
-        # A get is a frame; reply.correlate names the field the node writes
+        # A get is a frame; reply.correlate names the field the outpost writes
         # a fresh id into, and the answer is the frame carrying it back.
         - name: volume
           schedule: { every: 60s }
@@ -659,7 +659,7 @@ drivers:
       # The NVP conversation is line-oriented over a held TCP session: the
       # subscribes arm on establish (and re-arm on every recover), and the
       # device pushes lines the listeners claim by prefix. The standing
-      # listen tasks are what make the node hold the endpoint's session
+      # listen tasks are what make the outpost hold the endpoint's session
       # (#816): the subscribes are sent on every connection before it reads
       # up, the pushes land with no poll involved, and the status poll and
       # set-input command borrow the same connection (#817).
@@ -868,10 +868,10 @@ drivers:
         - { name: host, kind: string, required: true }
         - { name: port, kind: number, default: "51327" }
         # The local port this endpoint binds, which its requests leave from
-        # and the panel's pushes arrive on (#1037). No default: the node
+        # and the panel's pushes arrive on (#1037). No default: the outpost
         # binds a port of its own and the panel pushes to the source of
         # SUBSCRIBE INPUT. Set it where the component is configured with a
-        # fixed destination, and open the node's firewall for it.
+        # fixed destination, and open the outpost's firewall for it.
         - { name: listen-port, kind: number }
       # The same NVP conversation as datagrams. An open udp port cannot be
       # detected, so the transport rung is GET INPUT answered: an answer
@@ -1023,7 +1023,7 @@ drivers:
       # The Newtron panel's https API sits behind its sign-in page (#1114).
       # The login is the session's auth step, carried over to http: one form
       # post naming the login secret's fields, the session cookie the panel
-      # sets kept in the node's memory alone, and a redirect back to /login
+      # sets kept in the outpost's memory alone, and a redirect back to /login
       # read as the session lapsing, which logs in once more and replays.
       # The panel sending the login itself back to /login is a wrong
       # password: one attempt, and the endpoint reads rejected.
@@ -1058,7 +1058,7 @@ drivers:
       version: 1
       # The Boreal display's web admin answers HTTP digest (#1114): the
       # password never crosses the wire, only a hash of it with the
-      # display's nonce. The node holds the challenge and answers each
+      # display's nonce. The outpost holds the challenge and answers each
       # request preemptively; a nonce the display calls stale is answered
       # afresh, and an answer refused outright is a wrong password.
       transport: http

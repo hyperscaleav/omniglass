@@ -27,9 +27,9 @@ type EventRuleSelector struct {
 // alarms (#918, #819, #948): it reads one sample key on its lane, fires when
 // FireCriteria holds for FireSustain, clears when ClearCriteria (or, when
 // nil, the negation of FireCriteria) holds for ClearSustain. It names the
-// event type it writes when its condition starts (FireEventType, required)
+// event type it writes when it fires (FireEventType, required)
 // and, optionally, when it ends (ClearEventType, "" for none), both by name
-// from the event_type registry. Severity is the level its alarm is raised at,
+// from the event_type catalog. Severity is the level its alarm is raised at,
 // by name; "" is an informational rule, which raises no alarm. Version bumps
 // on every update. Official rules ship with the boot seed and are read-only.
 type EventRule struct {
@@ -61,9 +61,9 @@ type EventRule struct {
 	// waiting out a sustain. EventRuleState lists them.
 	OpenAlarms     int `json:"-"`
 	PendingStreaks int `json:"-"`
-	// ConditionsInForce counts the conditions the rule holds in force
+	// Firing counts the firings the rule holds
 	// (#951), informational or not.
-	ConditionsInForce int `json:"-"`
+	Firing int `json:"-"`
 	// LastJudgedAt is when an ingest batch last judged a sample by the rule,
 	// to within liveStampEvery; nil when it never has. A fact about the
 	// rule, naming no component.
@@ -218,7 +218,7 @@ func invalidRule(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrEventRuleInvalid, fmt.Sprintf(format, a...))
 }
 
-// maxSustain bounds a sustain: a year is past any condition worth holding an
+// maxSustain bounds a sustain: a year is past any firing worth holding an
 // alarm open for, and well inside what a duration and an interval both hold.
 const maxSustain = 365 * 24 * time.Hour
 
@@ -236,7 +236,7 @@ type ruleChecks struct {
 
 var checkAll = ruleChecks{key: true, criteria: true, selector: true}
 
-// prepareEventRule validates a rule against the registries and resolves its
+// prepareEventRule validates a rule against the catalogs and resolves its
 // selector's components to ids, setting the lane its key reads.
 func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleChecks) error {
 	if err := ValidateName("event_rule", r.Name); err != nil {
@@ -310,11 +310,11 @@ func checkSampleWindow(r EventRule, j *rules.Judge) error {
 // name always resolves and an unchanged one never blocks an edit.
 func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
 	if r.FireEventType == "" {
-		return invalidRule("a rule names the event type it writes when its condition starts (fire_event_type)")
+		return invalidRule("a rule names the event type it writes when it fires (fire_event_type)")
 	}
 	resolve := func(field, name string) (string, error) {
 		// A rule's event is the rule's: never a key another writer owns
-		// (ADR-0161), such as the node's collection-failed.
+		// (ADR-0161), such as the outpost's collection-failed.
 		if c, ok := writerclass.Reserved(name); ok {
 			return "", invalidRule("%s %q: %s", field, name, writerclass.Refusal(c, name, writerclass.EventRule, ""))
 		}
@@ -342,7 +342,7 @@ func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
 }
 
 func resolveRuleLane(ctx context.Context, q querier, r *EventRule) error {
-	// The lane is the one the ingest registry resolves the name to (#1307,
+	// The lane is the one the ingest catalog resolves the name to (#1307,
 	// #1432): the search path, local then og. A shipped rule resolves inside og
 	// (resolveIn), the catalog it shipped against.
 	holders, err := nameHolders(ctx, q, r.SampleKey)
@@ -373,7 +373,7 @@ var ErrSampleKeyNotFound = errors.New("storage: sample key is not a registered p
 
 // SampleKeyType reads which lane a sample key reads and, for a property, its
 // data type ("" for a metric): what types the value an expression over its
-// samples reads (#958). A registry read: no scope, like the registries.
+// samples reads (#958). A catalog read: no scope, like the catalogs.
 func (p *PG) SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error) {
 	r := EventRule{SampleKey: key}
 	if err := resolveRuleLane(ctx, p.pool, &r); err != nil {
@@ -417,7 +417,7 @@ type selectorError struct{ msg string }
 func (e selectorError) Error() string { return e.msg }
 
 // resolveSelector checks a rule's selector (an event rule's or a calc
-// rule's) against the registries and resolves its components to ids. An
+// rule's) against the catalogs and resolves its components to ids. An
 // entry kept already holds is carried over unresolved; only an entry new to
 // the rule must exist (a selectorError when it does not).
 func resolveSelector(ctx context.Context, q querier, sel *EventRuleSelector, kept EventRuleSelector) error {
@@ -501,13 +501,13 @@ func ruleArgs(r EventRule) ([]byte, []byte, any, error) {
 	return sel, fire, clear, nil
 }
 
-// ruleInForceSQL is every condition a rule holds in force, as the evaluator
-// judges it (conditionInForce): its condition rows, and an alarm it holds
+// ruleInForceSQL is every firing a rule holds, as the evaluator
+// judges it (firingInForce): its firing row, and an alarm it holds
 // open on a series with no row behind it (an older binary's, mid-upgrade),
 // since the alarm opened, its instance parsed from its key under either rule
 // segment (ruleKeyInstance: the uuid, or an older replica's name). Columns:
-// rule_id, component_id, instance, since. The live state reads it, so open alarms never outnumber conditions.
-var ruleInForceSQL = `(select rule_id, component_id, instance, since from event_rule_condition
+// rule_id, component_id, instance, since. The live state reads it, so open alarms never outnumber firings.
+var ruleInForceSQL = `(select rule_id, component_id, instance, since from event_rule_firing
 	union all
 	select o.rule_id, o.component_id, o.instance, o.since from (
 		select a.raised_by_rule_id as rule_id, a.component_id, a.raised_at as since,
@@ -515,12 +515,11 @@ var ruleInForceSQL = `(select rule_id, component_id, instance, since from event_
 		from alarm a
 		where a.cleared_at is null and a.raised_by_rule_id is not null and a.dedup_key like 'rule:%'
 	) o
-	where not exists (select 1 from event_rule_condition c where c.rule_id = o.rule_id and c.component_id = o.component_id
+	where not exists (select 1 from event_rule_firing c where c.rule_id = o.rule_id and c.component_id = o.component_id
 		and c.instance = o.instance))`
 
 // ruleCountsJoin aggregates every rule's live state once, joined to the rule
-// rows by id: open alarms it raised, its pending streaks, and its conditions
-// in force, each counted only on a component the filter admits.
+// rows by id: open alarms it raised, its pending streaks, and its firings, each counted only on a component the filter admits.
 func ruleCountsJoin(f readFilter) string {
 	return ` left join (select raised_by_rule_id as rule_id, count(*) as n from alarm
 		where cleared_at is null and raised_by_rule_id is not null and ` + f.Pred("component_id") + `
@@ -532,7 +531,7 @@ func ruleCountsJoin(f readFilter) string {
 }
 
 // ListEventRules lists every rule, by name, each with its live state as
-// counts in the same query. Rules read like a registry, so every rule is
+// counts in the same query. Rules read like a catalog, so every rule is
 // listed whatever the caller's scope; the counts are scoped, counting only
 // the alarms and streaks on components the visible component read scope
 // admits.
@@ -552,7 +551,7 @@ func (p *PG) ListEventRules(ctx context.Context, visible scope.Set) ([]EventRule
 		if err != nil {
 			return nil, err
 		}
-		r.OpenAlarms, r.PendingStreaks, r.ConditionsInForce, r.LastJudgedAt = open, pending, inForce, judged
+		r.OpenAlarms, r.PendingStreaks, r.Firing, r.LastJudgedAt = open, pending, inForce, judged
 		p.withCriteriaNotes(&r)
 		out = append(out, r)
 	}
@@ -568,7 +567,7 @@ func countRuleState(ctx context.Context, q querier, r *EventRule, visible scope.
 			and `+f.Pred("component_id")+`),
 		(select count(*) from event_rule_state where rule_id = $1 and `+f.Pred("component_id")+`),
 		(select count(*) from `+ruleInForceSQL+` k where k.rule_id = $1 and `+f.Pred("k.component_id")+`)`,
-		args...).Scan(&r.OpenAlarms, &r.PendingStreaks, &r.ConditionsInForce); err != nil {
+		args...).Scan(&r.OpenAlarms, &r.PendingStreaks, &r.Firing); err != nil {
 		return fmt.Errorf("storage: count event rule %q state: %w", r.Name, err)
 	}
 	return nil
@@ -786,10 +785,10 @@ func (p *PG) UpdateEventRule(ctx context.Context, actorID, name string, patch Ev
 //
 // Separate from the patch because a rename is a separate act (ADR-0076): it
 // breaks only the references held outside the platform. Inside, nothing
-// moves: an alarm's raised_by_rule_id and dedup key, a condition, a streak,
+// moves: an alarm's raised_by_rule_id and dedup key, a firing, a streak,
 // an event's derived_by_rule_id and the audit rows all hold the uuid. So a
 // rename is not a material change and bumps no version: streaks keep running
-// and conditions stay in force. An event keeps the name it was written under
+// and firings stay. An event keeps the name it was written under
 // in source_rule; the rule's next events carry the new one.
 func (p *PG) RenameEventRule(ctx context.Context, actorID, name, newName string, action scope.Set) (*EventRule, error) {
 	if !action.All {
@@ -839,11 +838,11 @@ func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, action s
 	if err != nil {
 		return err
 	}
-	// A rule deleted ends every condition it holds in force first, each with
+	// A rule deleted ends every firing it holds first, each with
 	// its clear event and the alarm it resolves: once it is gone nothing
 	// would ever end them. The events keep the rule's name once its id is set
 	// null by the delete.
-	if err := p.endRuleConditions(ctx, tx, actorID, old, nil); err != nil {
+	if err := p.endRuleFirings(ctx, tx, actorID, old, nil); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `delete from event_rule where id = $1`, old.ID); err != nil {
@@ -857,16 +856,16 @@ func (p *PG) DeleteEventRule(ctx context.Context, actorID, name string, action s
 
 // settleRuleWrite brings a rule's live state in line with a write, in the
 // write's transaction; old is nil for a rule just inserted. A rule disabled
-// ends every condition it holds in force (each with its clear event and the
+// ends every firing it holds (each with its clear event and the
 // alarm it resolves) and drops every streak. A rule created, enabled, or
 // materially changed (what it reads, how it judges, which components, how
-// long) starts its streaks over, ends its conditions on components it no
+// long) starts its streaks over, ends its firings on components it no
 // longer selects, and primes from each series' newest sample, so a
-// condition that already holds is not lost on an input that sends nothing
+// firing that already holds is not lost on an input that sends nothing
 // further. A cosmetic edit (label, description, message, severity, event
-// types) leaves streaks and conditions alone: a sustain measured against the
+// types) leaves streaks and firings alone: a sustain measured against the
 // same judgment is still one. A severity turned on or off carries to the
-// conditions in force (settleSeverity), on a cosmetic or a material edit.
+// firings (settleSeverity), on a cosmetic or a material edit.
 //
 // The caller holds the rule's row (FOR UPDATE, or the insert's own lock)
 // before settle takes any series or health lock, the lock order
@@ -878,7 +877,7 @@ func (p *PG) settleRuleWrite(ctx context.Context, tx pgx.Tx, actorID string, old
 		if !wasOn {
 			return nil
 		}
-		if err := p.endRuleConditions(ctx, tx, actorID, updated, nil); err != nil {
+		if err := p.endRuleFirings(ctx, tx, actorID, updated, nil); err != nil {
 			return err
 		}
 		return resetRuleStreaks(ctx, tx, updated.ID)
@@ -892,15 +891,15 @@ func (p *PG) settleRuleWrite(ctx context.Context, tx pgx.Tx, actorID string, old
 		}
 		if wasOn && !sameRuleJSON(old.Selector, updated.Selector) {
 			m := newRuleMatcher(p, nil)
-			if err := p.endRuleConditions(ctx, tx, actorID, updated, func(o *ruleOwner) (bool, error) {
+			if err := p.endRuleFirings(ctx, tx, actorID, updated, func(o *ruleOwner) (bool, error) {
 				return m.selects(ctx, tx, updated, o)
 			}); err != nil {
 				return err
 			}
 		}
 	}
-	// Prime before a severity turned on reaches the conditions in force: a
-	// condition the edited rule no longer holds ends first, so the edit never
+	// Prime before a severity turned on reaches the firings: a
+	// firing the edited rule no longer holds ends first, so the edit never
 	// raises and resolves the same alarm in one transaction.
 	if err := p.primeRule(ctx, tx, updated); err != nil {
 		return err

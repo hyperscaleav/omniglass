@@ -31,15 +31,15 @@ const reach: EventRule = {
   selector: { component_types: [], components: [] }, sample_key: "endpoint-reachable", sample_lane: "property",
   fire_criteria: { expr: 'value == "down"' }, clear_criteria: { expr: 'value == "up"' },
   fire_sustain: "15s", clear_sustain: "0s", sample_window: "0s", severity: "high",
-  fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, official: true, version: 1,
-  open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
+  fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, official: true, version: 1,
+  open_alarms: 0, pending_streaks: 0, firing: 0,
 };
 
 const hot: EventRule = {
   id: uuidFor("rule-too-hot"), name: "too-hot",
   selector: { component_types: ["display"], components: [] }, sample_key: "temperature-c", sample_lane: "metric",
   fire_criteria: { expr: "value > 40.0" }, fire_sustain: "1m0s", clear_sustain: "30s", sample_window: "0s",
-  severity: "average", fire_event_type: "condition-started", enabled: true, official: false, version: 3, open_alarms: 0, pending_streaks: 0, conditions_in_force: 0,
+  severity: "average", fire_event_type: "rule-fired", enabled: true, official: false, version: 3, open_alarms: 0, pending_streaks: 0, firing: 0,
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -206,7 +206,7 @@ describe("the bodies a draft sends", () => {
     expect(createBody(d)).toEqual({
       name: "too-hot", sample_key: "temperature-c",
       fire_criteria: { op: "gt", value: 40 }, fire_sustain: "1m", clear_sustain: "0s",
-      severity: "average", fire_event_type: "condition-started", clear_event_type: "condition-ended", enabled: true, selector: { component_types: ["display"], components: [] },
+      severity: "average", fire_event_type: "rule-fired", clear_event_type: "rule-cleared", enabled: true, selector: { component_types: ["display"], components: [] },
     });
   });
 
@@ -268,7 +268,7 @@ describe("the data layer", () => {
 
   it("reads a rule's live state, nulls as empty", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ open: null, pending: null }));
-    expect(await getRuleState("reachability-lost")).toEqual({ conditions: [], open: [], pending: [] });
+    expect(await getRuleState("reachability-lost")).toEqual({ firings: [], open: [], pending: [] });
   });
 
   it("PATCHes by name and throws the problem body on refusal", async () => {

@@ -142,8 +142,8 @@ func TestRetentionSamplesOmitWhatThePassDidNotDo(t *testing.T) {
 // name retentionLanes gives it, so a lane added later reports with no change.
 func TestRetentionSamplesKeyEveryLaneByItsName(t *testing.T) {
 	now := time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC)
-	lanes := []string{"metric/fan-speed", "property/power-state", "log_line/warn", "node_log/warn", "some_future_lane"}
-	rep := retentionReport{Deleted: map[string]int64{}, Behind: []string{"node_log/warn"}}
+	lanes := []string{"metric/fan-speed", "property/power-state", "log_line/warn", "outpost_log/warn", "some_future_lane"}
+	rep := retentionReport{Deleted: map[string]int64{}, Behind: []string{"outpost_log/warn"}}
 	for i, l := range lanes {
 		rep.Deleted[l] = int64(i + 1)
 	}
@@ -153,7 +153,7 @@ func TestRetentionSamplesKeyEveryLaneByItsName(t *testing.T) {
 			t.Errorf("deleted count for %s = %v (%v), want %d", l, v, ok, i+1)
 		}
 		behind := 0.0
-		if l == "node_log/warn" {
+		if l == "outpost_log/warn" {
 			behind = 1
 		}
 		if v, ok := got[writerclass.RetentionBehind+"|"+l]; !ok || v != behind {

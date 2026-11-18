@@ -21,7 +21,7 @@ import (
 // sizes the status read gives. Held behind past the seeded rule's sustain,
 // the sweep opens a warning alarm on that lane alone; the next uncapped pass
 // removes the other 15, reads the lane caught up, and the alarm clears. A
-// node's platform component stands in for the server's (#1627).
+// outpost's platform component stands in for the server's (#1627).
 func TestARetentionPassReportsOnItsPlatformComponent(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -42,14 +42,14 @@ func TestARetentionPassReportsOnItsPlatformComponent(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "srv-stand-in"}, all, all)
-	if err != nil || node.PlatformComponentID == nil {
-		t.Fatalf("create node: %v (platform component %v)", err, node)
+	outpost, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "srv-stand-in"}, all, all)
+	if err != nil || outpost.PlatformComponentID == nil {
+		t.Fatalf("create outpost: %v (platform component %v)", err, outpost)
 	}
-	comp := *node.PlatformComponentID
+	comp := *outpost.PlatformComponentID
 
 	// Behind is about the metric lane here, not the compactions: stand their
-	// marks at their targets, as the node_log test does, so neither has work.
+	// marks at their targets, as the outpost_log test does, so neither has work.
 	t0 := time.Now().Add(-2 * time.Second).UTC()
 	trendMark := t0.Add(-storage.MetricTrendHorizon).Truncate(time.Hour)
 	if _, err := conn.Exec(ctx, `insert into metric_trend_mark (id, announced_through, compacted_through)
@@ -144,7 +144,7 @@ func TestARetentionPassReportsOnItsPlatformComponent(t *testing.T) {
 	if got := values(writerclass.RetentionBehind, "metric"); len(got) != 1 || got[0] != 1 {
 		t.Errorf("behind on the metric lane %v, want 1 after a capped pass", got)
 	}
-	for _, table := range []string{"metric", "metric_trend", "metric_block", "property", "log_line", "node_log"} {
+	for _, table := range []string{"metric", "metric_trend", "metric_block", "property", "log_line", "outpost_log"} {
 		if got := values(writerclass.TableBytes, table); len(got) != 1 || got[0] < 0 {
 			t.Errorf("%s sized %v, want one non-negative read", table, got)
 		}

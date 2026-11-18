@@ -1,12 +1,12 @@
 ---
 title: Standards
-description: "The Standards catalog: the blueprint a system conforms to, its variants, the properties it declares, and the roles a conforming system must staff; a standard is created from a template into a row you own outright."
+description: "The Standards catalog: the contract a system is built to, its variants, the properties it declares, and the slots a conforming system must staff; a standard is created from a template into a row you own outright."
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Systems: Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
-is the directory of **standards**: the blueprints your systems are built against. A **Huddle Room**, a
+is the directory of **standards**: the contracts your systems are built to. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
 [system](/guides/operator/fleet/) that **conforms** to one. Each row shows the **name** (the
 operator-facing name, for example `huddle-room`), the **label**, its **parent
@@ -16,23 +16,23 @@ by the database, the internal address the handle resolves to
 
 A standard is the **system-side counterpart of a [product](/guides/admin/products/)**. A product says
 what a component *is* and what it carries; a standard says what a system is built to be and what it
-carries. It was formerly a bare label registry that carried no contract, and its promotion into a
+carries. It was formerly a bare label catalog that carried no contract, and its promotion into a
 first-class catalog entity is why it has its own page and its own `standard:*` permission rather than
-sitting under the shared type registry
+sitting under the shared type catalog
 ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
 
 **A standard is not a system type.** They are two axes and a system can carry either, both, or
 neither. The **[system type](/architecture/core-entities/#catalog-reference-data-system_type)**
-(Catalog, under Systems: Types) is the coarse genus of what kind of space a system **is**, a
-boardroom, a classroom, a video wall; the standard is the blueprint it is **built to**. One fleet
-holds ten signage standards and six classroom standards under a single coarse type, which is why the
-classifier is its own registry rather than a use of a standard's own parent-variant chain
+(Catalog, under Systems: Types) says what a system is **for**, meeting,
+teaching, signage; the standard is the contract it is **built to**. One fleet
+holds ten signage standards and six classroom standards under a single type, which is why the
+classifier is its own catalog rather than a use of a standard's own parent-variant chain
 ([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
 
 - **Conforming is optional.** A system points at a standard through its **Standard** field, and
-  leaving it empty is legitimate: a **one-off system** that matches no blueprint carries only its own
+  leaving it empty is legitimate: a **one-off system** that matches no standard carries only its own
   values, exactly as a component with no product does.
-- **Variants use parent standard.** A specific blueprint that refines a broader one points at it with
+- **Variants use parent standard.** A specific standard that refines a broader one points at it with
   **parent standard** (a Large Classroom under Classroom). A standard with no parent is a base
   standard.
 - **New standard** (with `standard:create`, an admin permission) opens a create drawer: give it a
@@ -59,11 +59,11 @@ examples you create a standard of your own from
 <SeededSet kind="templates" of="standard_template" />
 
 In the console, the **New standard** drawer offers **From scratch** (the form above) or **From a
-template**: pick one of the standard templates, read the roles and choices it would write, give the
+template**: pick one of the standard templates, read the slots and choices it would write, give the
 standard a name if you want one of your own, and **Create standard** lands on your new standard's panel
 with a note that it is yours now ([starting from a template](/guides/operator/templates/)). Creating one from a template (with
 `standard:create`, `POST /standards:createFromTemplate`) writes one
-standard, **not official and not read-only**, carrying the template's roles, choices, property and
+standard, **not official and not read-only**, carrying the template's slots, choices, property and
 metric contract lines and map, in one write:
 
 ```sh
@@ -120,32 +120,32 @@ From the CLI the contract is `omniglass standard property list meeting-room`,
 `omniglass standard property update meeting-room <property>`, and
 `omniglass standard property delete meeting-room <property>`.
 
-## Roles: what a conforming system needs filled
+## Slots: what a conforming system needs filled
 
-A contract says what a system **carries**. A **role** says what it **needs filled**: a room microphone, a
-main display, a confidence monitor. Declare a role on a standard and **every conforming system inherits
+A contract says what a system **carries**. A **slot** says what it **needs filled**: a room microphone, a
+main display, a confidence monitor. Declare a slot on a standard and **every conforming system inherits
 it**, the same live inheritance the contract has, so a standard is not only a shape but a **checklist**
 that says which rooms are short a component.
 
-A role in this sense is a **slot in a room**, and it has nothing to do with the
+A slot is a **position in a room**, and it has nothing to do with the
 [roles under Admin](/guides/admin/access/) that grant people access. Different word, different namespace,
 no overlap.
 
-The standard's blade carries a **Roles** panel beside its contract. Each role has:
+The standard's blade carries a **Slots** panel beside its contract. Each slot has:
 
 - a **name** (its address within the standard, e.g. `room-mic`) and a **label**;
-- a **quorum**, how many components should fill it. Two ceiling mics is **one role with quorum 2**, not
-  two roles. The minimum is one, since a role no component need fill is not a role;
+- a **quorum**, how many components should fill it. Two ceiling mics is **one slot with quorum 2**, not
+  two slots. The minimum is one, since a slot no component need fill is not a slot;
 - **accepted types**, the [component types](/architecture/core-entities/#catalog-reference-data-component_type)
   a filling component's product may be classified under (self or a descendant); empty accepts any
   type. Optionally **pinned products**, narrowing further to specific products within an accepted
-  type; empty accepts any product of an accepted type. This is the **typed-slot guard**: a role
+  type; empty accepts any product of an accepted type. This is the **typed-slot guard**: a slot
   wanting `video-bar` accepts the shipped Kestrel VRoom and any other product classified under it,
   but not a display;
 - an **impact**, what the room loses when this slot is not being filled properly.
 
 **Impact is the health knob, and it belongs to the slot.** The same broken box matters differently
-depending on the job it was doing, so the judgement lives on the role rather than on the device:
+depending on the job it was doing, so the judgement lives on the slot rather than on the device:
 
 | impact | means | reach for it when |
 |---|---|---|
@@ -156,90 +156,90 @@ depending on the job it was doing, so the judgement lives on the role rather tha
 A dead **confidence monitor** is not a dead **main display**, and this is where you say so. Set the main
 display to **outage** and the confidence monitor to **none**, and a failed confidence monitor stops paging
 anybody about a room that is running fine. What that impact does downstream is the
-[health rollup](/architecture/health/): a role short of its quorum contributes its impact, and the system
+[health rollup](/architecture/health/): a slot short of its quorum contributes its impact, and the system
 takes the worst one.
 
-**Quorum is your redundancy setting**, and it pairs with impact. A role wanting **one** mic with **two**
-assigned survives losing either of them, because one working mic still meets the quorum. A role wanting
+**Quorum is your redundancy setting**, and it pairs with impact. A slot wanting **one** mic with **two**
+assigned survives losing either of them, because one working mic still meets the quorum. A slot wanting
 **two** with two assigned is impaired the moment either one fails. Redundancy is not a separate switch, it
 is the gap between what you staffed and what you need.
 
-Declaring is **idempotent**, so saving a role that already exists revises it in place, and the accepted
+Declaring is **idempotent**, so saving a slot that already exists revises it in place, and the accepted
 types and pinned products each **replace** the previous set wholesale (drop one by leaving it out).
-**Withdrawing** a role (with `standard:delete`, from edit mode like every contract control) also removes
+**Withdrawing** a slot (with `standard:delete`, from edit mode like every contract control) also removes
 every assignment conforming systems made to it, so withdraw only when the slot itself is gone, not when
 one room's component changed. Changing a quorum or an impact **re-evaluates every conforming system
 immediately**, so a retune shows up in the fleet's health without waiting for anything to poll.
 
-A standard created from a template arrives with the template's roles, and they are the worked example:
+A standard created from a template arrives with the template's slots, and they are the worked example:
 `meeting-room`'s **Video Bar** (accepts `video-bar`) and **Main Display** (accepts `display`), among
 others. Like the standard itself they are yours once created, so retuning a quorum to what your rooms
 actually run is never reverted by a restart or a release.
 
-From the CLI: `omniglass standard role list meeting-room`,
-`omniglass standard role update meeting-room <role> --label <label> --quorum <n> --accepted-types <types>
---pinned-products <ids> --impact <outage|degraded|none>`, and `omniglass standard role delete meeting-room <role>`.
+From the CLI: `omniglass standard slot list meeting-room`,
+`omniglass standard slot update meeting-room <slot> --label <label> --quorum <n> --accepted-types <types>
+--pinned-products <ids> --impact <outage|degraded|none>`, and `omniglass standard slot delete meeting-room <slot>`.
 
 ## Staff a system against its standard
 
-Declaring the role is half of it; the other half happens on the system. Open a system from
-[Explore](/guides/operator/fleet/) and its detail carries a **Roles** panel showing **every role it
+Declaring the slot is half of it; the other half happens on the system. Open a system from
+[Explore](/guides/operator/fleet/) and its detail carries a **Slots** panel showing **every slot it
 needs filled**: the ones inherited from its standard and any declared on the system itself, each marked
 with where it came from.
 
 1. **Conform the system to the standard.** A system's **Standard** field is what makes it inherit;
-   a [one-off system](/guides/operator/entities/) that conforms to nothing sees only roles declared
+   a [one-off system](/guides/operator/entities/) that conforms to nothing sees only slots declared
    directly on it.
-2. **Assign a component to the role.** Each role lists the components filling it and lets you add
-   another. The picker is scoped to what you can see, and assignment is idempotent. Staffing a role
+2. **Assign a component to the slot.** Each slot lists the components filling it and lets you add
+   another. The picker is scoped to what you can see, and assignment is idempotent. Staffing a slot
    makes the component a member of the system and writes onto it, so it takes `component:update` over
    the component as well as `system:update` over the system: a component you can see but not edit is
    refused with the scope named, and the same holds for unassigning one.
-3. **Read the understaffed count.** A role wanting two components with one assigned reads as short by
+3. **Read the understaffed count.** A slot wanting two components with one assigned reads as short by
    one, immediately, without any monitoring running: staffing is a fact about what you have entered. The
    room's **[health](/guides/operator/entities/#health-on-a-system-or-location)** asks the second question,
    of the components that **are** assigned, how many can currently do the job, and routes the answer up
-   through the role's impact.
-4. **Unassign when a component moves out.** The role goes back to understaffed until something else
-   fills it. A component that is currently staffing a role **cannot be deleted**; unassign it first, so
+   through the slot's impact.
+4. **Unassign when a component moves out.** The slot goes back to understaffed until something else
+   fills it. A component that is currently staffing a slot **cannot be deleted**; unassign it first, so
    the system never silently loses a slot.
 
-**A component that cannot fill the role is refused, and told why.** Assigning a display to a role that
+**A component that cannot fill the slot is refused, and told why.** Assigning a display to a slot that
 accepts `video-bar` fails with a message naming both parties:
 
 ```
-component "panel-1" is a display; role "Table microphone" wants a video-bar
+component "panel-1" is a display; slot "Table microphone" wants a video-bar
 ```
 
 Pinning products narrows further: a right-type, wrong-product component is refused by name too:
 
 ```
-component "panel-3" is product "other-display"; role "Main Display" wants product boreal-edge-55
+component "panel-3" is product "other-display"; slot "Main Display" wants product boreal-edge-55
 ```
 
 That is the whole point of the typed-slot guard. Your next move is in the message: either you
-picked the wrong component, or the role's accepted types (or pinned products) need widening.
+picked the wrong component, or the slot's accepted types (or pinned products) need widening.
 
-Roles declared **directly on a system** work identically and are edited from the same panel; use them for
-what one room needs and the blueprint does not. A role inherited from the standard is withdrawn on the
-**standard**, not on the system that inherits it. A system role **cannot reuse a name** its standard
-already declares, since a role is addressed by its name within the system and the name has to mean one
+Slots declared **directly on a system** work identically and are edited from the same panel; use them for
+what one room needs and the standard does not. A slot inherited from the standard is withdrawn on the
+**standard**, not on the system that inherits it. A slot declared on the system **cannot reuse a name** its standard
+already declares, since a slot is addressed by its name within the system and the name has to mean one
 slot there: declaring one, declaring the same name on the standard after a room took it, or moving a room
 onto a standard that declares a name the room declares itself is refused, naming both. A second slot
 takes a second name.
 
 **Moving a room to another standard keeps it staffed.** Change a system's **Standard** and each
-component filling an inherited role carries across to the new standard's role of the same name, as long
-as it is still the kind of component that role accepts and the role has room. Anything else is
-released: it stays a member of the room with no role, ready to be restaffed, unbound or deleted, and the
-room's roles panel and health read the new standard at once. Clearing the Standard (making the room a
-one-off) releases every inherited role's staffing; roles declared on the room itself keep theirs. Moving
+component filling an inherited slot carries across to the new standard's slot of the same name, as long
+as it is still the kind of component that slot accepts and the slot has room. Anything else is
+released: it stays a member of the room with no slot, ready to be restaffed, unbound or deleted, and the
+room's slots panel and health read the new standard at once. Clearing the Standard (making the room a
+one-off) releases every inherited slot's staffing; slots declared on the room itself keep theirs. Moving
 back later reactivates nothing, so restaff what you want back.
 
-From the CLI: `omniglass system role list <name>`, `omniglass system role update <name> <role>`,
-`omniglass system role delete <name> <role>`, `omniglass system role assignment update <name> <role> <component>`,
-and `omniglass system role assignment delete <name> <role> <component>`.
+From the CLI: `omniglass system slot list <name>`, `omniglass system slot update <name> <slot>`,
+`omniglass system slot delete <name> <slot>`, `omniglass system slot assignment update <name> <slot> <component>`,
+and `omniglass system slot assignment delete <name> <slot> <component>`.
 
-Once the roles are declared and staffed, the whole loop (raise an alarm, watch the room go degraded, find
+Once the slots are declared and staffed, the whole loop (raise an alarm, watch the room go degraded, find
 the cause, clear it, read the history) is on
 [Work with an entity](/guides/operator/entities/#health-on-a-system-or-location).

@@ -63,20 +63,20 @@ func TestParseAddressSystemPath(t *testing.T) {
 	}
 }
 
-// A role address switches plane twice: $sys to reach the owning system, then
-// $role for its role. Not in the task's required list but the grammar
+// A slot address switches plane twice: $sys to reach the owning system, then
+// $slot for its slot. Not in the task's required list but the grammar
 // explicitly reserves the accessor, so it is covered here.
-func TestParseAddressSystemRolePath(t *testing.T) {
+func TestParseAddressSystemSlotPath(t *testing.T) {
 	t.Parallel()
-	addr, err := storage.ParseAddress("boi.17c.$sys.av.$role.primary-dsp")
+	addr, err := storage.ParseAddress("boi.17c.$sys.av.$slot.primary-dsp")
 	if err != nil {
 		t.Fatalf("ParseAddress: %v", err)
 	}
 	want := &storage.Address{
 		Root: []string{"boi", "17c"},
-		Kind: storage.AddressRole,
+		Kind: storage.AddressSlot,
 		Tail: []string{"av"},
-		Role: "primary-dsp",
+		Slot: "primary-dsp",
 	}
 	if !reflect.DeepEqual(addr, want) {
 		t.Errorf("ParseAddress = %+v, want %+v", addr, want)
@@ -191,11 +191,11 @@ func TestParseAddressAccessorWithNothingAfterIsInvalid(t *testing.T) {
 	}
 }
 
-func TestParseAddressRoleOutsideSystemPathIsInvalid(t *testing.T) {
+func TestParseAddressSlotOutsideSystemPathIsInvalid(t *testing.T) {
 	t.Parallel()
-	_, err := storage.ParseAddress("boi.17c.$comp.dsp-1.$role.primary-dsp")
+	_, err := storage.ParseAddress("boi.17c.$comp.dsp-1.$slot.primary-dsp")
 	if err == nil {
-		t.Fatal("ParseAddress accepted $role within a component path")
+		t.Fatal("ParseAddress accepted $slot within a component path")
 	}
 	var invalid *storage.ErrInvalidAddress
 	if !errors.As(err, &invalid) {
@@ -211,23 +211,23 @@ func TestParseAddressMidPathAccessorIsInvalid(t *testing.T) {
 	}
 }
 
-// RejectAddressForm is the companion check for the 22 registry routes whose
-// names stay a single global kebab token (node, tag, and the four lane
+// RejectAddressForm is the companion check for the 22 catalog routes whose
+// names stay a single global kebab token (outpost, tag, and the four lane
 // types): #627's address grammar covers only component/system/location, and
 // a dotted ref sent to one of these must be refused explicitly, never fall
 // through to a bare 404 that never says why it missed.
-func TestRejectAddressFormRefusesADottedRefForARegistryKind(t *testing.T) {
+func TestRejectAddressFormRefusesADottedRefForACatalogKind(t *testing.T) {
 	t.Parallel()
-	err := storage.RejectAddressForm("node", "boi.17c")
+	err := storage.RejectAddressForm("outpost", "boi.17c")
 	if err == nil {
-		t.Fatal("RejectAddressForm accepted a dotted ref for a single-token registry")
+		t.Fatal("RejectAddressForm accepted a dotted ref for a single-token catalog")
 	}
 	var notAccepted *storage.ErrAddressNotAccepted
 	if !errors.As(err, &notAccepted) {
 		t.Fatalf("got %T, want *storage.ErrAddressNotAccepted", err)
 	}
-	if notAccepted.Kind != "node" {
-		t.Errorf("Kind = %q, want %q", notAccepted.Kind, "node")
+	if notAccepted.Kind != "outpost" {
+		t.Errorf("Kind = %q, want %q", notAccepted.Kind, "outpost")
 	}
 	if !strings.Contains(err.Error(), "single token") {
 		t.Errorf("message %q does not say a name of this kind is a single token", err.Error())
@@ -237,15 +237,15 @@ func TestRejectAddressFormRefusesADottedRefForARegistryKind(t *testing.T) {
 func TestRejectAddressFormRefusesALeadingAccessor(t *testing.T) {
 	t.Parallel()
 	if err := storage.RejectAddressForm("tag", "$comp.foo"); err == nil {
-		t.Fatal("RejectAddressForm accepted a leading accessor for a single-token registry")
+		t.Fatal("RejectAddressForm accepted a leading accessor for a single-token catalog")
 	}
 }
 
 func TestRejectAddressFormPassesOrdinaryNamesAndUUIDs(t *testing.T) {
 	t.Parallel()
 	const uuid = "019f8754-3a1b-7c2d-8e4f-5a6b7c8d9e0f"
-	for _, ref := range []string{"node-1", uuid, "icmp-rtt-avg"} {
-		if err := storage.RejectAddressForm("node", ref); err != nil {
+	for _, ref := range []string{"outpost-1", uuid, "icmp-rtt-avg"} {
+		if err := storage.RejectAddressForm("outpost", ref); err != nil {
 			t.Errorf("RejectAddressForm(%q) = %v, want nil", ref, err)
 		}
 	}

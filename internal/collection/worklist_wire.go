@@ -13,16 +13,16 @@ import (
 )
 
 // The worklist pull's headers (#1577, ADR-1577). The request carries the
-// node's budget; the reply carries how its body is encoded, or the reason the
+// outpost's budget; the reply carries how its body is encoded, or the reason the
 // server could not build it.
 const (
-	// WorklistTimeoutHeader is the node's budget for one pull, a Go duration
-	// ("5s"). It is a duration, not a deadline, so the node's clock and the
+	// WorklistTimeoutHeader is the outpost's budget for one pull, a Go duration
+	// ("5s"). It is a duration, not a deadline, so the outpost's clock and the
 	// server's need not agree: the server's deadline is the request's arrival
 	// plus the budget, the way gRPC's grpc-timeout header works.
 	WorklistTimeoutHeader = "Omniglass-Timeout"
 	// WorklistErrorHeader names why the server sent no worklist. A reply that
-	// carries it has no body, and the node keeps the worklist it has.
+	// carries it has no body, and the outpost keeps the worklist it has.
 	WorklistErrorHeader = "Omniglass-Error"
 	// ContentEncodingHeader is "gzip" on a compressed reply.
 	ContentEncodingHeader = "Content-Encoding"
@@ -34,7 +34,7 @@ const (
 const WorklistCompressAbove = 64 * 1024
 
 // worklistInflateLimit bounds what one compressed reply may inflate to, so a
-// corrupt body cannot exhaust the node's memory.
+// corrupt body cannot exhaust the outpost's memory.
 const worklistInflateLimit = 256 << 20
 
 // EncodeWorklistBody is the reply body for an encoded worklist, gzipped when

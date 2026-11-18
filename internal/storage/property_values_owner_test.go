@@ -50,7 +50,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 		t.Fatalf("system inherits the standard default: want HR-1 unset from-contract, got %+v", got)
 	}
 
-	// The system's own value overrides the standard's default.
+	// The system's own value shadows the standard's default.
 	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "model-number", "", json.RawMessage(`"HR-2"`), all, all); err != nil {
 		t.Fatalf("override on system: %v", err)
 	}

@@ -275,7 +275,7 @@ func TestCalcRuleReservedAliasBackfill(t *testing.T) {
 	// Every name the calc site reserves today is in one of the reserving
 	// migrations' lists: the first, or a later one for names reserved since.
 	reserving := up
-	for _, later := range []string{"migrations/20261116021500_calc_rule_alias_reserved_trend.sql"} {
+	for _, later := range []string{"migrations/20261118050100_calc_rule_alias_reserved_trend.sql"} {
 		raw, err := db.FS.ReadFile(later)
 		if err != nil {
 			t.Fatal(err)
@@ -300,7 +300,7 @@ func TestCalcRuleTrendAliasBackfill(t *testing.T) {
 		t.Skip("integration test needs Postgres")
 	}
 	dsn := storagetest.NewDSN(t)
-	if err := migrate.RollbackBelow(dsn, "20261116021500"); err != nil {
+	if err := migrate.RollbackBelow(dsn, "20261118050100"); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
@@ -330,7 +330,7 @@ func TestCalcRuleTrendAliasBackfill(t *testing.T) {
 	if got := enabled(); got != want {
 		t.Fatalf("after the migration %s, want %s", got, want)
 	}
-	raw, err := db.FS.ReadFile("migrations/20261116021500_calc_rule_alias_reserved_trend.sql")
+	raw, err := db.FS.ReadFile("migrations/20261118050100_calc_rule_alias_reserved_trend.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

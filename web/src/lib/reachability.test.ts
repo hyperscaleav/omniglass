@@ -34,7 +34,7 @@ describe("verdictWord", () => {
 // The verdict is stored on change only, so its ts is the last TRANSITION.
 // An endpoint's freshness is the server's own stamp, last_seen: when ingest
 // last landed a batch it delivered, whatever the batch carried and whatever
-// time a node wrote on its samples (#931, #933).
+// time an outpost wrote on its samples (#931, #933).
 describe("an endpoint's freshness is the server's last_seen (#931, #933)", () => {
   const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
     ({ endpoint: "tcp", transport: "tcp", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
@@ -48,7 +48,7 @@ describe("an endpoint's freshness is the server's last_seen (#931, #933)", () =>
   it("keeps a down verdict's word while it is fresh", () => {
     expect(endpointWord(ep({ verdict: { value: "down", ts: ago(400_000) }, last_seen: ago(2_000) }), now)).toBe("down");
   });
-  it("is stale once last_seen is past the window, however new a node dated its samples", () => {
+  it("is stale once last_seen is past the window, however new an outpost dated its samples", () => {
     const e = ep({ verdict: { value: "up", ts: ago(-3_600_000) }, layers: [layer(-3_600_000)], last_seen: ago(STALENESS_WINDOW_MS + 1_000) });
     expect(lastSeenAt(e)).toBe(ago(STALENESS_WINDOW_MS + 1_000));
     expect(endpointWord(e, now)).toBe("stale");
@@ -162,7 +162,7 @@ describe("reason", () => {
     expect(reason(iface, now)).not.toMatch(/does not answer/i);
   });
   // A gated udp endpoint's request was answered with a refusal retrying
-  // cannot fix, and the node sends nothing more (review of #1037, finding 5):
+  // cannot fix, and the outpost sends nothing more (review of #1037, finding 5):
   // the why says that, never "unanswered".
   it("explains a gated request rung as refused, not unanswered", () => {
     const iface: ReachEndpoint = {
@@ -213,15 +213,15 @@ describe("pendingNotice", () => {
   const ep = (over: Partial<ReachEndpoint>): ReachEndpoint =>
     ({ endpoint: "tcp", transport: "tcp", verdict: null, layers: [], history: [], ...over }) as ReachEndpoint;
 
-  it("sends an endpoint no node probes to the node list", () => {
-    const n = pendingNotice(ep({ pending: "no-node" }));
-    expect(n?.text).toMatch(/no node is assigned/i);
-    expect(n?.href).toBe("/nodes");
+  it("sends an endpoint no outpost probes to the outpost list", () => {
+    const n = pendingNotice(ep({ pending: "no-outpost" }));
+    expect(n?.text).toMatch(/no outpost is assigned/i);
+    expect(n?.href).toBe("/outposts");
   });
-  it("sends an endpoint awaiting its first probe to its node's blade", () => {
-    const n = pendingNotice(ep({ pending: "awaiting-probe", node: "edge 1" }));
+  it("sends an endpoint awaiting its first probe to its outpost's blade", () => {
+    const n = pendingNotice(ep({ pending: "awaiting-probe", outpost: "edge 1" }));
     expect(n?.text).toContain("edge 1");
-    expect(n?.href).toBe("/nodes?n=edge%201");
+    expect(n?.href).toBe("/outposts?n=edge%201");
   });
   it("says nothing of a row with a verdict or no reason", () => {
     expect(pendingNotice(ep({}))).toBeNull();

@@ -55,7 +55,7 @@ type factsNamed struct {
 
 // factsTransport renders the code registry (internal/transport, ADR-0073) into
 // the same facts artifact the seeded YAMLs feed: the transports are build-time
-// facts of the binary, so the docs table derives from the registry rather than
+// facts of the binary, so the docs table derives from the catalog rather than
 // restating it.
 type factsTransport struct {
 	Name        string `json:"name"`
@@ -72,11 +72,11 @@ type factsTransport struct {
 }
 
 // factsLabelRule is one global label rule (#682) as the docs render it: the
-// entity kind and the template this release ships for it. An operator's own
+// entity kind and the rule this release ships for it. An operator's own
 // override is fleet data and is deliberately not a shipped fact.
 type factsLabelRule struct {
 	EntityKind string `json:"entity_kind"`
-	Template   string `json:"template"`
+	Rule       string `json:"rule"`
 }
 
 type factsLocationType struct {
@@ -95,7 +95,7 @@ type factsNameRule struct {
 	BareFirst bool   `json:"bare_first,omitempty"`
 }
 
-// factsTypeNode is one row of an INHERITING classification registry
+// factsTypeNode is one row of an INHERITING classification catalog
 // (component_type, system_type) as the docs render it (#678).
 //
 // The blank facts are rendered blank, `omitempty` and all: a child that states
@@ -269,7 +269,7 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: label rules: %w", err)
 	}
 	for _, r := range rules.LabelRules {
-		doc.LabelRules = append(doc.LabelRules, factsLabelRule{EntityKind: r.EntityKind, Template: r.Template})
+		doc.LabelRules = append(doc.LabelRules, factsLabelRule{EntityKind: r.EntityKind, Rule: r.Rule})
 	}
 
 	var props propertyTypesDoc

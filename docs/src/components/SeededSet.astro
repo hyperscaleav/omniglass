@@ -31,13 +31,13 @@ if (kind === 'templates' && of && rows.length === 0) {
 if (probes && rows.length === 0) {
   throw new Error('SeededSet: no transport declares probe keys (docs/src/generated/seed.json lacks them: run make gen)');
 }
-// A place template's subtree, flattened depth-first for its row.
-function placeLines(p, depth = 0) {
+// A location template's subtree, flattened depth-first for its row.
+function locationLines(p, depth = 0) {
   const here = `${'  '.repeat(depth)}${p.type}${p.name ? ` ${p.name}` : ''}${(p.systems ?? []).length ? `: ${p.systems.map((s) => s.template).join(', ')}` : ''}`;
-  return [here, ...(p.places ?? []).flatMap((c) => placeLines(c, depth + 1))];
+  return [here, ...(p.locations ?? []).flatMap((c) => locationLines(c, depth + 1))];
 }
 
-// The inheriting registries (component_type, system_type) are nested by
+// The inheriting catalogs (component_type, system_type) are nested by
 // parent_id, so they are laid out depth-first from the roots in declaration
 // order rather than printed flat. Depth is climbed rather than assumed from
 // adjacency: a subtype declared away from its parent still lands under it.
@@ -134,14 +134,14 @@ if (nested && tree.length !== rows.length) {
     </table>
   ) : kind === 'templates' && of === 'standard_template' ? (
     <table class="seeded-set">
-      <thead><tr><th>Template</th><th>Variant of</th><th>Roles a fork declares</th></tr></thead>
+      <thead><tr><th>Template</th><th>Variant of</th><th>Slots a fork declares</th></tr></thead>
       <tbody>
         {rows.map((t) => (
           <tr>
             <td><code>{t.name}</code> ({t.label})</td>
             <td>{t.standard.parent ? <code>{t.standard.parent}</code> : ''}</td>
             <td>
-              {t.standard.roles.map((r) => (
+              {t.standard.slots.map((r) => (
                 <span><code>{r.name}</code> (quorum {r.quorum || 1}{r.accepted_types?.length ? `, accepts ${r.accepted_types.join(' + ')}` : ''}{r.pinned_products?.length ? `, pins ${r.pinned_products.join(' + ')}` : ''}) </span>
               ))}
             </td>
@@ -158,10 +158,10 @@ if (nested && tree.length !== rows.length) {
             <td><code>{t.name}</code> ({t.label})</td>
             <td><code>{t.kind}</code></td>
             <td>
-              {t.standard ? <>a standard{t.standard.parent ? <>, a variant of <code>{t.standard.parent}</code></> : ''}, with {t.standard.roles.length} roles</> : null}
+              {t.standard ? <>a standard{t.standard.parent ? <>, a variant of <code>{t.standard.parent}</code></> : ''}, with {t.standard.slots.length} slots</> : null}
               {t.component ? <>a <code>{t.component.product}</code> component{Object.keys(t.component.attach?.inputs ?? {}).length ? <>, its driver preset with {Object.keys(t.component.attach.inputs).map((k) => <code>{k} </code>)}</> : ''}</> : null}
-              {t.system ? <>a system on <code>{t.system.standard}</code>, filling {Object.entries(t.system.roles).map(([role, f]) => <span><code>{role}</code> with <code>{f.component ?? f.product}</code> </span>)}</> : null}
-              {t.place ? <pre>{placeLines(t.place).join('\n')}</pre> : null}
+              {t.system ? <>a system on <code>{t.system.standard}</code>, filling {Object.entries(t.system.slots).map(([slot, f]) => <span><code>{slot}</code> with <code>{f.component ?? f.product}</code> </span>)}</> : null}
+              {t.location ? <pre>{locationLines(t.location).join('\n')}</pre> : null}
             </td>
           </tr>
         ))}

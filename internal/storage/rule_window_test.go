@@ -52,7 +52,7 @@ func TestWindowedRuleFiresOnATrend(t *testing.T) {
 	}
 	spec := func(name string) storage.EventRuleSpec {
 		return storage.EventRuleSpec{Name: name, SampleKey: "room-temperature", Fire: exprCriteria(trendFire),
-			Clear: ptrCriteria(exprCriteria(trendClear)), SampleWindow: time.Hour, Severity: "high", FireEventType: "condition-started"}
+			Clear: ptrCriteria(exprCriteria(trendClear)), SampleWindow: time.Hour, Severity: "high", FireEventType: "rule-fired"}
 	}
 
 	series("rise-before", rise)
@@ -118,7 +118,7 @@ func TestSampleWindowIsChecked(t *testing.T) {
 		{"missing", "room-temperature", trendFire, 0},
 	} {
 		_, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "window-" + tc.name, SampleKey: tc.key,
-			Fire: exprCriteria(tc.fire), SampleWindow: tc.window, FireEventType: "condition-started"}, scope.Set{All: true})
+			Fire: exprCriteria(tc.fire), SampleWindow: tc.window, FireEventType: "rule-fired"}, scope.Set{All: true})
 		if !errors.Is(err, storage.ErrEventRuleInvalid) {
 			t.Errorf("%s: err %v, want ErrEventRuleInvalid", tc.name, err)
 		}

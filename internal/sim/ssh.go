@@ -325,7 +325,7 @@ func (d *Device) sshPort() int {
 // generateHostKey produces an ephemeral ed25519 host key. Demo posture,
 // the client ignores host key verification with InsecureIgnoreHostKey.
 // deviceSSHHostKey is the device's ssh host key, derived from its id (#1370)
-// as its https key is, so a key a node pinned on first use survives a
+// as its https key is, so a key an outpost pinned on first use survives a
 // simulator restart, as a real device keeps its key across a reboot. A
 // rotation (a reimaged device) draws a random one.
 func deviceSSHHostKey(deviceID string) (ssh.Signer, error) {

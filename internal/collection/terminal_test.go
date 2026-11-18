@@ -8,7 +8,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// A changed host key is refused with both keys as data (#1078): the node
+// A changed host key is refused with both keys as data (#1078): the outpost
 // publishes them beside the gate, so the console names the pinned and the
 // offered key and trusts the exact one it showed, never one parsed out of the
 // reason. The reason keeps naming both, for the property's own series and the

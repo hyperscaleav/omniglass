@@ -138,7 +138,7 @@ func TestCheckInvocationRejectsDoubledSegments(t *testing.T) {
 
 	bad := [][]string{
 		{"component", "component", "effective-tag", "list", "codec-1"},
-		{"principal", "principal", "avatar", "list"},
+		{"user", "user", "avatar", "list"},
 		{"component", "component", "reachability", "list", "disp-1"},
 		{"nonexistent-noun", "list"},
 	}
@@ -150,10 +150,10 @@ func TestCheckInvocationRejectsDoubledSegments(t *testing.T) {
 
 	good := [][]string{
 		{"component", "effective-tag", "list", "codec-1"},
-		{"principal", "avatar", "list"},
+		{"user", "avatar", "list"},
 		{"location", "get", "hq"},
 		{"component"}, // a bare group mention in prose is fine
-		{"node", "enroll", "field-1"},
+		{"outpost", "enroll", "field-1"},
 	}
 	for _, words := range good {
 		if err := checkInvocation(idx, words); err != nil {

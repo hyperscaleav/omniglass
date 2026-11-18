@@ -1,6 +1,6 @@
-# The component_type taxonomy: the hierarchical registry a product is
+# The component_type taxonomy: the hierarchical catalog a product is
 # classified by (partially reverses ADR-0047's retirement of the flat
-# component_type registry, recorded as such: the reintroduced shape sits above
+# component_type catalog, recorded as such: the reintroduced shape sits above
 # product, not beside component). Official (ON CONFLICT DO UPDATE,
 # authoritative), unlike location_types.yaml's seed-if-absent example content.
 #
@@ -259,18 +259,18 @@ component_types:
     abbrev: net
     icon: network
   # The platform's own parts (#1094): what Omniglass itself runs as, each one a
-  # component in the reserved platform system. A node is the first; the server
+  # component in the reserved platform system. An outpost is the first; the server
   # joins in a later slice.
   - id: platform
     label: Platform
     stem: platform
     abbrev: plat
     icon: server
-  - id: omniglass-node
-    label: Omniglass Node
+  - id: omniglass-outpost
+    label: Omniglass Outpost
     parent_id: platform
-    stem: node
-    abbrev: node
+    stem: outpost
+    abbrev: outpost
     icon: cpu
   - id: omniglass-server
     label: Omniglass Server

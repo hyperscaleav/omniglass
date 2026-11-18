@@ -1,6 +1,6 @@
 // The omniglass brand lockup. BrandMark is the real og-icon (a triad of ringed
-// nodes around a central hub, with the inner edges masked out where they meet a
-// node), themed off --color-primary so it tracks the light/dark toggle. The
+// outposts around a central hub, with the inner edges masked out where they meet a
+// outpost), themed off --color-primary so it tracks the light/dark toggle. The
 // wordmark is all caps. Shared by the sidebar and the login screen.
 
 export function BrandMark(props: { size?: number }) {

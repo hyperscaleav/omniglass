@@ -16,11 +16,11 @@ Type `s='harbor.pavilion-b.suite-b4.$sys.demo-huddle'`
 Enter
 Wait
 Hide
-Type `demo_hush 'for side in left right; do omniglass component create --name "huddle-panel-$side" --product generic-device --location harbor.pavilion-b.suite-b4 >/dev/null && omniglass system role update "$s" "$side" --quorum 1 --impact none >/dev/null && omniglass system role assignment update "$s" "$side" "harbor.pavilion-b.suite-b4.\$comp.huddle-panel-$side" >/dev/null; done'`
+Type `demo_hush 'for side in left right; do omniglass component create --name "huddle-panel-$side" --product generic-device --location harbor.pavilion-b.suite-b4 >/dev/null && omniglass system slot update "$s" "$side" --quorum 1 --impact none >/dev/null && omniglass system slot assignment update "$s" "$side" "harbor.pavilion-b.suite-b4.\$comp.huddle-panel-$side" >/dev/null; done'`
 Enter
 Wait
 Show
-Type `omniglass system role list "$s" | jq -c '.roles[] | {role: .name, filled: .assigned_to}'`
+Type `omniglass system slot list "$s" | jq -c '.slots[] | {slot: .name, filled: .assigned_to}'`
 Enter
 Wait
 

@@ -4,20 +4,20 @@
 // The Storage Gateway checks every sample and event write against it, the way it
 // injects scope on every query, so no route can forget to.
 //
-// Three classes form the reserved system family, fixed and internal: node-probe
-// (the keys a node's own probes and session machine write, declared in
+// Three classes form the reserved system family, fixed and internal: outpost-probe
+// (the keys an outpost's own probes and session machine write, declared in
 // probekeys), platform (keys only the Omniglass process itself writes: the
 // health rollup's verdict, the webhook receiver's counts, and its
-// self-monitoring, a node's self-report among it) and
+// self-monitoring, an outpost's self-report among it) and
 // command-lifecycle (the events a command's own lifecycle writes:
 // command-issued, and its terminal command-settled, command-failed or
 // command-timed-out). Their names are declared in code and reserved against
 // operator-created types. The other two are resolved from the catalogs: calc (a
 // calc rule names the key as its output) and collected (every other key: a
-// driver's emits on the node lane, a push, the observers fusion reconciles by
+// driver's emits on the outpost lane, a push, the observers fusion reconciles by
 // source).
 //
-// A leaf: storage, the push route, the node lane and the driver spec all read
+// A leaf: storage, the push route, the outpost lane and the driver spec all read
 // this one ruling.
 package writerclass
 
@@ -33,10 +33,10 @@ import (
 // Class is a key's writer class.
 type Class string
 
-// The writer classes. NodeProbe, Platform and CommandLifecycle are the
+// The writer classes. OutpostProbe, Platform and CommandLifecycle are the
 // reserved system family.
 const (
-	NodeProbe        Class = "node-probe"
+	OutpostProbe     Class = "outpost-probe"
 	Platform         Class = "platform"
 	CommandLifecycle Class = "command-lifecycle"
 	Calc             Class = "calc"
@@ -44,11 +44,11 @@ const (
 )
 
 // Classes is every writer class, the reserved family first.
-func Classes() []Class { return []Class{NodeProbe, Platform, CommandLifecycle, Calc, Collected} }
+func Classes() []Class { return []Class{OutpostProbe, Platform, CommandLifecycle, Calc, Collected} }
 
 // Reserved reports a class of the reserved system family: fixed, internal, its
 // keys declared in code and their names closed to operator-created types.
-func (c Class) Reserved() bool { return c == NodeProbe || c == Platform || c == CommandLifecycle }
+func (c Class) Reserved() bool { return c == OutpostProbe || c == Platform || c == CommandLifecycle }
 
 // Writer is the entry point a write comes through, which the gateway matches
 // against the key's class. Each writer fixes the provenance it writes.
@@ -56,20 +56,20 @@ type Writer string
 
 // The writers.
 const (
-	// Node is the node lane: a node's own collection (its probes, its session
+	// Outpost is the outpost lane: an outpost's own collection (its probes, its session
 	// machine, the drivers it runs), observed, bound to the endpoint its task
 	// ran against.
-	Node Writer = "node"
+	Outpost Writer = "outpost"
 	// Push is the telemetry push lane, observed.
 	Push Writer = "push"
 	// Fanout is a conduit's value fanned out to the owner an identity
-	// binding names (#1282, ADR-1282), on the node lane or the webhook lane,
+	// binding names (#1282, ADR-1282), on the outpost lane or the webhook lane,
 	// observed. It speaks only for a collected key, held to an owner the
 	// conduit's bindings name.
 	Fanout Writer = "fan-out"
 	// CalcRule is a calc rule's tick writing its own output, calculated.
 	CalcRule Writer = "calc-rule"
-	// Process is the Omniglass process itself (the server, later a node of
+	// Process is the Omniglass process itself (the server, later an outpost of
 	// itself): the health rollup today, calculated.
 	Process Writer = "process"
 	// Command is a command issue: its intended value and its caused event.
@@ -88,7 +88,7 @@ const (
 
 // Writers is every writer.
 func Writers() []Writer {
-	return []Writer{Node, Push, Fanout, CalcRule, Process, Command, CommandReply, Operator, KeyPin, EventRule}
+	return []Writer{Outpost, Push, Fanout, CalcRule, Process, Command, CommandReply, Operator, KeyPin, EventRule}
 }
 
 // Health is the platform key the health rollup writes: the rolled-up verdict
@@ -97,7 +97,7 @@ const Health = "health"
 
 // The webhook receiver's counts (#1369): an endpoint's webhook posts the
 // server accepted, and those it refused, over a report window. The server
-// counts them, so they are the process's to write, never a node's or a
+// counts them, so they are the process's to write, never an outpost's or a
 // push's.
 const (
 	WebhookPostCount    = "webhook-post-count"
@@ -106,7 +106,7 @@ const (
 
 // The platform's self-monitoring keys (#1094, #1625), with no prefix: the
 // platform class reserves them by name, as it does health. CheckinAge is the
-// server's reading of a node's last check-in; the rest a node reports of
+// server's reading of an outpost's last check-in; the rest an outpost reports of
 // itself, on its own platform component. The process-* keys are generic: any
 // Omniglass process reports them of itself.
 const (
@@ -232,10 +232,10 @@ const serverPipelineWriter = "the server's pipeline recorder"
 // serverSelfWriter is what writes the server's request and database keys.
 const serverSelfWriter = "the server's request and database recorder"
 
-// A node's command queue (#1626): what waits for the node, how long the
+// An outpost's command queue (#1626): what waits for the outpost, how long the
 // oldest has waited, each command's issue-to-dispatch and dispatch-to-execute
 // latency, its redeliveries, the commands stuck dispatched and those that
-// aged out unexecuted. The server reads them off the command rows; a node
+// aged out unexecuted. The server reads them off the command rows; an outpost
 // counts only the pulls of its queue that failed.
 const (
 	CommandPendingCount     = "command-pending-count"
@@ -249,7 +249,7 @@ const (
 )
 
 // The instances of command-expired-count: a command that aged out before any
-// node took it, and one taken but never reported executed.
+// outpost took it, and one taken but never reported executed.
 const (
 	CommandExpiredUndelivered = "undelivered"
 	CommandExpiredUnexecuted  = "unexecuted"
@@ -277,7 +277,7 @@ const serverDiskWriter = "the server's data directory disk sampler"
 // A hop's delivery (#1659): the items per kind that arrived at it and the
 // items it handed on, and the loss between them, each one series per
 // telemetry kind (the kind is the instance), written every window, zero when
-// quiet. The node writes its spool's side on its node-self report; the
+// quiet. The outpost writes its spool's side on its outpost-self report; the
 // server writes its ingest's side on its own component.
 const (
 	DeliveryInCount   = "delivery-in-count"
@@ -286,18 +286,18 @@ const (
 )
 
 // deliveryWriter is what writes a hop's delivery keys: any Omniglass process
-// that is a hop, of itself. A node reports them on its node-self lane, so they
-// are node-self keys too.
-const deliveryWriter = "a hop, of itself (a node's spool on its node-self report, the server's ingest on its own component)"
+// that is a hop, of itself. An outpost reports them on its outpost-self lane, so they
+// are outpost-self keys too.
+const deliveryWriter = "a hop, of itself (an outpost's spool on its outpost-self report, the server's ingest on its own component)"
 
-// nodeSelfWriter is what writes a node's self-report: the node, of itself,
-// landed by the process on the node's platform component.
-const nodeSelfWriter = "a node, of itself (its node-self report)"
+// outpostSelfWriter is what writes an outpost's self-report: the outpost, of itself,
+// landed by the process on the outpost's platform component.
+const outpostSelfWriter = "an outpost, of itself (its outpost-self report)"
 
 // processSelfWriter is what writes the generic process-* keys: any Omniglass
-// process, of itself. A node reports them on its node-self lane, so they are
-// node-self keys too; the server lands them on its own component.
-const processSelfWriter = "a process, of itself (a node on its node-self report, the server on its own component)"
+// process, of itself. An outpost reports them on its outpost-self lane, so they are
+// outpost-self keys too; the server lands them on its own component.
+const processSelfWriter = "a process, of itself (an outpost on its outpost-self report, the server on its own component)"
 
 // platform maps each platform key to the part of the process that writes it.
 // A key only the Omniglass process writes about itself joins here with its
@@ -307,17 +307,17 @@ var platform = map[string]string{
 	WebhookPostCount:      "the webhook receiver",
 	WebhookRefusalCount:   "the webhook receiver",
 	CheckinAge:            "the server's check-in timer",
-	WorklistTaskCount:     nodeSelfWriter,
-	WorklistPullLossRatio: nodeSelfWriter,
-	TickDuration:          nodeSelfWriter,
-	TickOverrunCount:      nodeSelfWriter,
-	ScheduleLateness:      nodeSelfWriter,
-	ScheduleGapExcess:     nodeSelfWriter,
-	ScheduleSkipCount:     nodeSelfWriter,
-	WorkerBusyFraction:    nodeSelfWriter,
-	LaneWorkerCount:       nodeSelfWriter,
-	SpoolBatchCount:       nodeSelfWriter,
-	SessionHeldCount:      nodeSelfWriter,
+	WorklistTaskCount:     outpostSelfWriter,
+	WorklistPullLossRatio: outpostSelfWriter,
+	TickDuration:          outpostSelfWriter,
+	TickOverrunCount:      outpostSelfWriter,
+	ScheduleLateness:      outpostSelfWriter,
+	ScheduleGapExcess:     outpostSelfWriter,
+	ScheduleSkipCount:     outpostSelfWriter,
+	WorkerBusyFraction:    outpostSelfWriter,
+	LaneWorkerCount:       outpostSelfWriter,
+	SpoolBatchCount:       outpostSelfWriter,
+	SessionHeldCount:      outpostSelfWriter,
 	ProcessGoroutineCount: processSelfWriter,
 	ProcessHeapSize:       processSelfWriter,
 	ProcessGCPause:        processSelfWriter,
@@ -389,7 +389,7 @@ var platform = map[string]string{
 	// The server's data directory disk (#1707).
 	DataDirDiskUsedRatio: serverDiskWriter,
 
-	// A node's command queue (#1626).
+	// An outpost's command queue (#1626).
 	CommandPendingCount:     "the server's command queue timer",
 	CommandPendingAge:       "the server's command queue timer",
 	CommandDispatchLatency:  "the command wire, at a command's first dispatch",
@@ -397,25 +397,25 @@ var platform = map[string]string{
 	CommandRedeliveryCount:  "the server's command queue timer",
 	CommandStuckCount:       "the server's command queue timer",
 	CommandExpiredCount:     "the server's command queue timer",
-	CommandPullFailureCount: nodeSelfWriter,
+	CommandPullFailureCount: outpostSelfWriter,
 }
 
-// NodeSelf reports a platform key a node may report of itself on the
-// node-self lane (#1625), exactly (the wire carries the declared name). A
-// node's self-report never speaks for another writer's key: a node naming
+// OutpostSelf reports a platform key an outpost may report of itself on the
+// outpost-self lane (#1625), exactly (the wire carries the declared name). A
+// outpost's self-report never speaks for another writer's key: an outpost naming
 // health or checkin-age on the lane is refused like any undeclared key.
-func NodeSelf(key string) bool { return nodeSelf(platform[key]) }
+func OutpostSelf(key string) bool { return outpostSelf(platform[key]) }
 
-// nodeSelf reports a writer whose keys a node reports of itself.
-func nodeSelf(by string) bool {
-	return by == nodeSelfWriter || by == processSelfWriter || by == deliveryWriter
+// outpostSelf reports a writer whose keys an outpost reports of itself.
+func outpostSelf(by string) bool {
+	return by == outpostSelfWriter || by == processSelfWriter || by == deliveryWriter
 }
 
 // PlatformKeys is every platform key, whoever writes it, sorted.
 func PlatformKeys() []string { return platformKeysWhere(func(string) bool { return true }) }
 
-// NodeSelfKeys is every key a node reports of itself, sorted.
-func NodeSelfKeys() []string { return platformKeysWhere(nodeSelf) }
+// OutpostSelfKeys is every key an outpost reports of itself, sorted.
+func OutpostSelfKeys() []string { return platformKeysWhere(outpostSelf) }
 
 // RetentionKeys is every key the retention pass reports, sorted (#1629).
 func RetentionKeys() []string {
@@ -448,7 +448,7 @@ const (
 )
 
 // commandLifecycle maps each event of a command's lifecycle to what it says.
-// Only a command writes one: a push, a node, a driver or an event rule landing
+// Only a command writes one: a push, an outpost, a driver or an event rule landing
 // one would put a command on the timeline that nobody issued, or settle one
 // nobody's evidence decided.
 var commandLifecycle = map[string]string{
@@ -472,39 +472,39 @@ func CommandOutcomeEvent(status string) (string, bool) {
 	return "", false
 }
 
-// pinnable are the node-probe keys an operator may also declare, each with its
-// path: a declared row is never the node's observation (the reads serve only
+// pinnable are the outpost-probe keys an operator may also declare, each with its
+// path: a declared row is never the outpost's observation (the reads serve only
 // observed rows), and this one is a control input the worklist hands back.
 var pinnable = map[string]string{
 	probekeys.SSHHostKey:     "an operator's pin, set with an ssh endpoint's :retry (ADR-0157)",
 	probekeys.TLSCertificate: "an operator's pin, set with a tls endpoint's :retry (ADR-0160)",
 }
 
-// Pinnable reports a node-probe key an operator may pin through :retry: the
+// Pinnable reports an outpost-probe key an operator may pin through :retry: the
 // key a transport's key pin rides.
 func Pinnable(key string) bool { return pinnable[key] != "" }
 
 // admits is the whole ruling: the writers each class admits.
 //
-//   - node-probe: the node lane alone (and KeyPin on a pinnable key): a
+//   - outpost-probe: the outpost lane alone (and KeyPin on a pinnable key): a
 //     push, a calc rule, a command, an operator or an event rule never writes
-//     what the console reads as the node's own observation.
+//     what the console reads as the outpost's own observation.
 //   - platform: the process alone.
 //   - command-lifecycle: a command alone, its issue landing command-issued
 //     and its terminal status the outcome event.
 //   - calc: the rule that outputs it, and an operator's declared value, which
 //     resolves ahead of the calculated one by design (properties page).
-//   - collected: every observer (the node lane carrying a driver's emits, a
+//   - collected: every observer (the outpost lane carrying a driver's emits, a
 //     push, a conduit's value fanned out to its bound owner, a command's
 //     reply), a command's intended value, an operator's
 //     declared value, an event rule's event. A calc rule never: its output is a
 //     key it owns, so a collected key is never one.
 var admits = map[Class][]Writer{
-	NodeProbe:        {Node},
+	OutpostProbe:     {Outpost},
 	Platform:         {Process},
 	CommandLifecycle: {Command},
 	Calc:             {CalcRule, Operator},
-	Collected:        {Node, Push, Fanout, Command, CommandReply, Operator, EventRule},
+	Collected:        {Outpost, Push, Fanout, Command, CommandReply, Operator, EventRule},
 }
 
 // Admits reports whether w may write key, whose class is c.
@@ -512,7 +512,7 @@ func Admits(c Class, w Writer, key string) bool {
 	if slices.Contains(admits[c], w) {
 		return true
 	}
-	return c == NodeProbe && w == KeyPin && pinnable[key] != ""
+	return c == OutpostProbe && w == KeyPin && pinnable[key] != ""
 }
 
 // Reserved returns the reserved class a key's name holds, if any. It matches
@@ -520,8 +520,8 @@ func Admits(c Class, w Writer, key string) bool {
 // probekeys ruling does: a variant is refused as reserved should a lookup that
 // would refuse it as unregistered ever loosen.
 func Reserved(name string) (Class, bool) {
-	if probekeys.IsNodeOnly(name) {
-		return NodeProbe, true
+	if probekeys.IsOutpostOnly(name) {
+		return OutpostProbe, true
 	}
 	if _, ok := platformKey(name); ok {
 		return Platform, true
@@ -558,7 +558,7 @@ func platformKey(name string) (string, bool) {
 // ReservedNames is every reserved key, every reserved class, sorted, a fresh
 // slice.
 func ReservedNames() []string {
-	out := probekeys.NodeOnly()
+	out := probekeys.OutpostOnly()
 	for k := range platform {
 		out = append(out, k)
 	}
@@ -586,11 +586,11 @@ func Of(name string, calcOwned bool) Class {
 // writer that owns it. rule names the calc rule a calc key belongs to.
 func Refusal(c Class, key string, w Writer, rule string) string {
 	switch c {
-	case NodeProbe:
-		if w == Node {
-			return key + " is a native probe key: a node writes it only under the endpoint whose task it ran"
+	case OutpostProbe:
+		if w == Outpost {
+			return key + " is a native probe key: an outpost writes it only under the endpoint whose task it ran"
 		}
-		return key + " is a native probe key, a node's own observation: only the node writes it"
+		return key + " is a native probe key, an outpost's own observation: only the outpost writes it"
 	case Platform:
 		by := "the Omniglass process"
 		if k, ok := platformKey(key); ok {
@@ -611,7 +611,7 @@ func Refusal(c Class, key string, w Writer, rule string) string {
 
 // classDoc is each class in one line, for the docs render.
 var classDoc = map[Class]string{
-	NodeProbe:        "what a node's own probes and session machine write: the node's account of an endpoint",
+	OutpostProbe:     "what an outpost's own probes and session machine write: the outpost's account of an endpoint",
 	Platform:         "what only the Omniglass process writes about itself or its rollups",
 	CommandLifecycle: "the events a command's own lifecycle writes on its owner's timeline",
 	Calc:             "a key a calc rule names as its output",
@@ -620,11 +620,11 @@ var classDoc = map[Class]string{
 
 // writerDoc is each writer in one line, for the docs render.
 var writerDoc = map[Writer]string{
-	Node:         "the node lane, under the endpoint whose task the node ran",
+	Outpost:      "the outpost lane, under the endpoint whose task the outpost ran",
 	Push:         "the telemetry push lane",
 	Fanout:       "a conduit's value fanned out to the owner its identity binding names (ADR-1282)",
 	CalcRule:     "the calc rule's tick",
-	Process:      "the Omniglass process: the health rollup, the webhook receiver, and the platform's self-monitoring, a node's self-report landed on its platform component",
+	Process:      "the Omniglass process: the health rollup, the webhook receiver, and the platform's self-monitoring, an outpost's self-report landed on its platform component",
 	Command:      "a command's intended value and caused event",
 	CommandReply: "a command's reply, read through its driver binding",
 	Operator:     "an operator's declared value",
@@ -642,7 +642,7 @@ type ClassFact struct {
 	Pins     []PinFact    `json:"pins,omitempty"`
 }
 
-// PinFact is the one declared row a node-probe key admits: the key, the
+// PinFact is the one declared row an outpost-probe key admits: the key, the
 // writer that may pin it, and its path.
 type PinFact struct {
 	Key    string `json:"key"`
@@ -664,8 +664,8 @@ func Facts() []ClassFact {
 	for _, c := range Classes() {
 		f := ClassFact{Class: c, Reserved: c.Reserved(), Doc: classDoc[c]}
 		switch c {
-		case NodeProbe:
-			f.Keys = probekeys.NodeOnly()
+		case OutpostProbe:
+			f.Keys = probekeys.OutpostOnly()
 			for _, k := range slices.Sorted(maps.Keys(pinnable)) {
 				f.Pins = append(f.Pins, PinFact{Key: k, Writer: KeyPin, Doc: pinnable[k]})
 			}

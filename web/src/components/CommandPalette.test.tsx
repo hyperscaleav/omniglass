@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildCommands, matches } from "./CommandPalette";
+import { buildCommands, matches, withAsk } from "./CommandPalette";
 
 // The palette flattens every destination the caller may reach to one searchable
-// list: the nav IA plus the catalog registries, which left the rail for the
+// list: the nav IA plus the catalogs, which left the rail for the
 // shell's subrail (#625) and would otherwise be unfindable by name (#628). Both
 // halves are judged through the same `allow` the sidebar and the subrail use, so
 // the palette can never offer a jump the route guard would bounce.
@@ -17,7 +17,7 @@ describe("command palette source", () => {
     expect(buildCommands(allowAll)).toContainEqual(expect.objectContaining({ label: "Catalog", path: "/catalog" }));
   });
 
-  it("lists the per-registry pages the rail dropped, tagged by catalog group", () => {
+  it("lists the per-catalog pages the rail dropped, tagged by catalog group", () => {
     const commands = buildCommands(allowAll);
     expect(commands).toContainEqual(expect.objectContaining({ label: "Products", path: "/products", group: "Catalog · Components" }));
     expect(commands).toContainEqual(expect.objectContaining({ label: "Metrics", path: "/metrics", group: "Catalog · Telemetry" }));
@@ -37,13 +37,13 @@ describe("command palette source", () => {
     expect(commands.filter((c) => ["/locations", "/systems", "/components"].includes(c.path))).toEqual([]);
   });
 
-  it("lists a routed registry, and each Templates slot filtered to its kinds (#1329)", () => {
+  it("lists a routed catalog, and each Templates slot filtered to its kinds (#1329)", () => {
     const commands = buildCommands(allowAll);
-    expect(commands).toContainEqual(expect.objectContaining({ label: "Rules", path: "/rules", group: "Catalog · Actions" }));
+    expect(commands).toContainEqual(expect.objectContaining({ label: "Event rules", path: "/event-rules", group: "Catalog · Actions" }));
     expect(commands.filter((c) => c.label === "Templates").map((c) => [c.group, c.path])).toEqual([
       ["Catalog · Components", "/templates?kind=component_template"],
       ["Catalog · Systems", "/templates?kind=standard_template,system_template"],
-      ["Catalog · Locations", "/templates?kind=place_template"],
+      ["Catalog · Locations", "/templates?kind=location_template"],
     ]);
     expect(commands.every((c) => c.path)).toBe(true);
   });
@@ -74,17 +74,49 @@ describe("command palette source", () => {
     expect(hits.map((c) => c.path)).toContain("/metrics");
   });
 
-  it("matches a registry by its own name: 'products' finds the registry page", () => {
+  it("matches a catalog by its own name: 'products' finds the catalog page", () => {
     const hits = buildCommands(allowAll).filter((c) => matches(c, "products"));
     expect(hits.map((c) => c.path)).toContain("/products");
   });
 
-  it("matches every registry on 'catalog', and a lane on its section", () => {
+  it("matches every catalog on 'catalog', and a lane on its section", () => {
     const commands = buildCommands(allowAll);
     const catalog = commands.filter((c) => matches(c, "catalog")).map((c) => c.path);
     expect(catalog).toEqual(expect.arrayContaining(["/catalog", "/products", "/metrics", "/tags"]));
     const telemetry = commands.filter((c) => matches(c, "telemetry")).map((c) => c.path);
     expect(telemetry).toEqual(expect.arrayContaining(["/metrics", "/properties", "/event-types"]));
     expect(telemetry).not.toContain("/products");
+  });
+});
+
+// The palette's last row hands the query to omnibot (#1167), for a person who
+// may run it: a question the palette has no destination for still has an answer.
+describe("asking omnibot from the palette", () => {
+  const found = [{ label: "Alarms", path: "/alarms" }];
+
+  it("ends the results with the query as a prompt", () => {
+    expect(withAsk(found, "why is amp-9 down", true).at(-1)).toEqual({ label: "Ask omnibot: why is amp-9 down", ask: true });
+  });
+
+  it("offers it with no query too", () => {
+    expect(withAsk([], "", true)).toEqual([{ label: "Ask omnibot", ask: true }]);
+  });
+
+  it("offers to triage each gathered alarm, ahead of the ask row", () => {
+    const tray = [
+      { kind: "alarm", ref: "mic-1/icmp-unreachable" },
+      { kind: "system", ref: "boardroom" },
+    ];
+    expect(withAsk([], "", true, tray)).toEqual([
+      { label: "Triage alarm mic-1/icmp-unreachable", triage: tray[0] },
+      { label: "Ask omnibot", ask: true },
+    ]);
+    expect(withAsk([], "mic", true, tray).map((r) => r.label)).toEqual(["Triage alarm mic-1/icmp-unreachable", "Ask omnibot: mic"]);
+    expect(withAsk([], "amp", true, tray).map((r) => r.label)).toEqual(["Ask omnibot: amp"]);
+    expect(withAsk([], "", false, tray)).toEqual([]);
+  });
+
+  it("is not offered to someone who may not run omnibot", () => {
+    expect(withAsk(found, "x", false)).toEqual(found);
   });
 });

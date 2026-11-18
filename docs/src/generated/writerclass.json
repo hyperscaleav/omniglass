@@ -1,8 +1,8 @@
 [
   {
-    "class": "node-probe",
+    "class": "outpost-probe",
     "reserved": true,
-    "doc": "what a node's own probes and session machine write: the node's account of an endpoint",
+    "doc": "what an outpost's own probes and session machine write: the outpost's account of an endpoint",
     "keys": [
       "collection-failed",
       "endpoint-authenticated",
@@ -38,8 +38,8 @@
     ],
     "admits": [
       {
-        "writer": "node",
-        "doc": "the node lane, under the endpoint whose task the node ran"
+        "writer": "outpost",
+        "doc": "the outpost lane, under the endpoint whose task the outpost ran"
       }
     ],
     "pins": [
@@ -148,7 +148,7 @@
     "admits": [
       {
         "writer": "process",
-        "doc": "the Omniglass process: the health rollup, the webhook receiver, and the platform's self-monitoring, a node's self-report landed on its platform component"
+        "doc": "the Omniglass process: the health rollup, the webhook receiver, and the platform's self-monitoring, an outpost's self-report landed on its platform component"
       }
     ]
   },
@@ -190,8 +190,8 @@
     "doc": "every other key: what a driver's emits, a push, a command or an operator say",
     "admits": [
       {
-        "writer": "node",
-        "doc": "the node lane, under the endpoint whose task the node ran"
+        "writer": "outpost",
+        "doc": "the outpost lane, under the endpoint whose task the outpost ran"
       },
       {
         "writer": "push",

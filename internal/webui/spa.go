@@ -176,6 +176,11 @@ func serveIndex(w http.ResponseWriter, r *http.Request, fsys fs.FS) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
+	// No other site may frame the console, so none can overlay a button
+	// such as the OAuth consent page's Approve (#2048). The header is the
+	// standard; X-Frame-Options covers the browsers that predate it.
+	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+	w.Header().Set("X-Frame-Options", "DENY")
 	_, _ = w.Write(b)
 }
 

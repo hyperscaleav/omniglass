@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { bucketLayout, chartLayout, nearestPoint, type ChartBucket, type ChartPoint, type ChartSample } from "../lib/chart";
 import { fmtTime } from "../lib/format";
+import { stamped, type Subject } from "../lib/handover";
 
 // The timeseries chart (#794): one series, drawn from chartLayout's pure
 // geometry. Single series, so no legend (the row or title names it); a 2px
@@ -24,6 +25,9 @@ export default function TimeseriesChart(props: {
   windowMs: number;
   unit?: string;
   spark?: boolean;
+  // What the chart is when the person hands it to omnibot (#2122): a metric,
+  // by its owner's name and the metric's.
+  subject?: Subject;
 }) {
   const W = () => (props.spark ? 160 : 640);
   const H = () => (props.spark ? 36 : 170);
@@ -70,6 +74,8 @@ export default function TimeseriesChart(props: {
     >
       <svg
         data-testid={props.spark ? "sparkline" : "timeseries-chart"}
+        data-subject-kind={stamped(props.subject)?.kind}
+        data-subject-ref={stamped(props.subject)?.ref}
         viewBox={`0 0 ${W()} ${H()}`}
         class={props.spark ? "h-9 w-40" : "w-full max-w-3xl"}
         role="img"

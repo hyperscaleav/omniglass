@@ -13,12 +13,13 @@ import { slotStrip } from "../lib/slot_strip";
 import { entityLabel } from "../lib/entities";
 import { fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
+import { stamped } from "../lib/handover";
 
-// SystemSummary (#872): one system at a place holding several, in brief. What
+// SystemSummary (#872): one system at a location holding several, in brief. What
 // it is (label, standard), whether it needs somebody (verdict, since-when,
 // the why), its slot arithmetic only while something is missing, and how
 // many components it holds. Choosing it opens the system's own view, where
-// its place is the card of context.
+// its location is the card of context.
 //
 // It takes the system's id, not its object, and reads the object itself: a
 // fresh fleet read can hand back a new object for the same system, and a
@@ -45,6 +46,8 @@ export default function SystemSummary(props: { systemId: string }) {
     <button
       type="button"
       data-testid={`system-summary-${props.systemId}`}
+      data-subject-kind={stamped({ kind: "system", ref: system()?.name ?? "" })?.kind}
+      data-subject-ref={stamped({ kind: "system", ref: system()?.name ?? "" })?.ref}
       class="card flex cursor-pointer flex-col gap-2 border border-base-300 bg-base-200 p-4 text-left text-sm hover:border-primary/50"
       onClick={() => navigate(`/systems/${props.systemId}`)}
     >

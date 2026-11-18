@@ -73,7 +73,7 @@ func TestMatchMatches(t *testing.T) {
 	}
 }
 
-// A rendered command keeps its binding's reply shape, so the node can match
+// A rendered command keeps its binding's reply shape, so the outpost can match
 // the device's answer over a held session.
 func TestRenderRequestKeepsTheReplyShape(t *testing.T) {
 	req, err := driver.RenderRequest(driver.Request{Line: "SET INPUT ${value}", Reply: &driver.Reply{Prefix: "INPUT "}}, "hdmi3", nil)
