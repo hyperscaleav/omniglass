@@ -44,9 +44,10 @@ declares. A new transport's row, such as snmp's, appears with its registry entry
 
 ## What "the docs" means here
 
-The site is laid out by audience, one directory per section, and each section's sidebar is
-generated from its directory, so a new page needs no config edit (it orders itself with
-`sidebar.order`):
+The site is laid out by audience, one directory per section, and each section's sidebar except
+Reference's is generated from its directory, so a new page needs no config edit (it orders itself
+with `sidebar.order`). Reference is listed in the config: its pages come from generators, so a new
+one is a generator change that adds its entry in the same PR:
 
 - **Start here** (`/start/`): what Omniglass is, the model in one pass, the first ten minutes.
 - **Operator** (`/operator/`): running the fleet from the console and the CLI.

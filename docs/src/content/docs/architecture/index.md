@@ -7,7 +7,7 @@ sidebar:
 ---
 
 **For:** contributors and evaluators who want to know how Omniglass is built: one page per
-subsystem, each badged at its true floor, the architecture of record. **In this section:** this
+subsystem, each rebuilt page badged with its status, the architecture of record. **In this section:** this
 overview, the [implementation status](/architecture/status/) grid, the
 [roadmap](/architecture/roadmap/), the [decision log](/architecture/decisions/) and the
 [build log](/architecture/build-log/). The subsystem pages are being rebuilt (#2161); until then the
