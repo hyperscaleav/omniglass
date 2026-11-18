@@ -120,7 +120,7 @@ func TestReconcileHealsDeadlockAbort(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx, all := context.Background(), scope.Set{All: true}
 	// A collected key: one batch carrying two of its series is a push's (or
-	// a driver's instanced series), where a node-probe key's batch is one
+	// a driver's instanced series), where an outpost-probe key's batch is one
 	// endpoint's alone (ADR-0161).
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "dl", SampleKey: "video-input",
 		Fire: criteria("eq", "hdmi1"), Clear: ptrCriteria(criteria("eq", "hdmi2")), Severity: "high"}, all); err != nil {

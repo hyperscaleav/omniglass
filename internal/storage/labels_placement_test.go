@@ -43,7 +43,7 @@ func makeRoomWithLabel(t *testing.T, gw *storage.PG, ctx context.Context, name, 
 
 // The architect's worked example, end to end and with nothing mocked: a rule
 // that reads the system's type, the location, and the component's own type
-// produces "Boardroom 204B Display".
+// produces "Board Meeting 204B Display".
 func TestTheWorkedExampleReadsPlacement(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)
@@ -62,8 +62,8 @@ func TestTheWorkedExampleReadsPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if c.Label != "Boardroom 204B Display" {
-		t.Fatalf("label = %q, want %q", c.Label, "Boardroom 204B Display")
+	if c.Label != "Board Meeting 204B Display" {
+		t.Fatalf("label = %q, want %q", c.Label, "Board Meeting 204B Display")
 	}
 }
 
@@ -94,8 +94,8 @@ func TestThePlacementKeysAreExactlyTwoOnComponentAndOneOnSystem(t *testing.T) {
 	if got := cd["LocationLabel"]; got != "Room A" {
 		t.Errorf("component LocationLabel = %q, want %q", got, "Room A")
 	}
-	if got := cd["SystemTypeLabel"]; got != "Boardroom" {
-		t.Errorf("component SystemTypeLabel = %q, want %q", got, "Boardroom")
+	if got := cd["SystemTypeLabel"]; got != "Board Meeting" {
+		t.Errorf("component SystemTypeLabel = %q, want %q", got, "Board Meeting")
 	}
 
 	sd, err := gw.ExportSystemLabelData(ctx, s.ID)
@@ -216,8 +216,8 @@ func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read system: %v", err)
 	}
-	if afterSys.Label != "Room 204b Boardroom" {
-		t.Fatalf("system after the rename = %q, want %q", afterSys.Label, "Room 204b Boardroom")
+	if afterSys.Label != "Room 204b Board Meeting" {
+		t.Fatalf("system after the rename = %q, want %q", afterSys.Label, "Room 204b Board Meeting")
 	}
 
 	// And only those: a row in another room is not touched at all, neither its
@@ -296,8 +296,8 @@ func TestReclassifyingASystemRestampsItsMembers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create member: %v", err)
 	}
-	if member.Label != "Boardroom Display" {
-		t.Fatalf("before = %q, want %q", member.Label, "Boardroom Display")
+	if member.Label != "Board Meeting Display" {
+		t.Fatalf("before = %q, want %q", member.Label, "Board Meeting Display")
 	}
 	if _, err := gw.UpdateSystem(ctx, "", s.ID, storage.SystemPatch{SystemTypeID: strptr("huddle")}, all, all); err != nil {
 		t.Fatalf("reclassify: %v", err)
@@ -306,8 +306,8 @@ func TestReclassifyingASystemRestampsItsMembers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read: %v", err)
 	}
-	if after.Label != "Huddle Room Display" {
-		t.Fatalf("after the reclassify = %q, want %q", after.Label, "Huddle Room Display")
+	if after.Label != "Huddle Display" {
+		t.Fatalf("after the reclassify = %q, want %q", after.Label, "Huddle Display")
 	}
 }
 
@@ -341,32 +341,32 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	if err := gw.AddMember(ctx, "", board.Name, c.ID, all, all, all, all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
-	if got := labelOf(t, gw, ctx, c.ID); got != "[Boardroom]" {
-		t.Fatalf("after the bind = %q, want %q", got, "[Boardroom]")
+	if got := labelOf(t, gw, ctx, c.ID); got != "[Board Meeting]" {
+		t.Fatalf("after the bind = %q, want %q", got, "[Board Meeting]")
 	}
 
 	// a second membership does not steal the default, so nothing moves
 	if err := gw.AddMember(ctx, "", huddle.Name, c.ID, all, all, all, all); err != nil {
 		t.Fatalf("add second member: %v", err)
 	}
-	if got := labelOf(t, gw, ctx, c.ID); got != "[Boardroom]" {
-		t.Fatalf("after the second bind = %q, want %q: a later membership is not the default", got, "[Boardroom]")
+	if got := labelOf(t, gw, ctx, c.ID); got != "[Board Meeting]" {
+		t.Fatalf("after the second bind = %q, want %q: a later membership is not the default", got, "[Board Meeting]")
 	}
 
 	// re-defaulting moves it
 	if err := gw.SetPrimaryMember(ctx, "", huddle.Name, c.ID, all, all, all, all); err != nil {
 		t.Fatalf("set primary: %v", err)
 	}
-	if got := labelOf(t, gw, ctx, c.ID); got != "[Huddle Room]" {
-		t.Fatalf("after the re-default = %q, want %q", got, "[Huddle Room]")
+	if got := labelOf(t, gw, ctx, c.ID); got != "[Huddle]" {
+		t.Fatalf("after the re-default = %q, want %q", got, "[Huddle]")
 	}
 
 	// unbinding the default promotes the sole survivor, which moves it again
 	if err := gw.RemoveMember(ctx, "", huddle.Name, c.ID, all, all, all, all); err != nil {
 		t.Fatalf("remove member: %v", err)
 	}
-	if got := labelOf(t, gw, ctx, c.ID); got != "[Boardroom]" {
-		t.Fatalf("after the unbind = %q, want %q", got, "[Boardroom]")
+	if got := labelOf(t, gw, ctx, c.ID); got != "[Board Meeting]" {
+		t.Fatalf("after the unbind = %q, want %q", got, "[Board Meeting]")
 	}
 
 	// and unbinding the last one leaves no system at all
@@ -393,15 +393,15 @@ func TestMovingASystemRestampsItsOwnLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	if s.Label != "Room From Boardroom" {
-		t.Fatalf("before = %q, want %q", s.Label, "Room From Boardroom")
+	if s.Label != "Room From Board Meeting" {
+		t.Fatalf("before = %q, want %q", s.Label, "Room From Board Meeting")
 	}
 	moved, err := gw.MoveSystem(ctx, "", s.ID, storage.SystemMove{LocationName: &to}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
-	if moved.Label != "Room To Boardroom" {
-		t.Fatalf("after the move = %q, want %q", moved.Label, "Room To Boardroom")
+	if moved.Label != "Room To Board Meeting" {
+		t.Fatalf("after the move = %q, want %q", moved.Label, "Room To Board Meeting")
 	}
 }
 
@@ -628,8 +628,8 @@ func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
 		}
 	}
 	sysChanges = operator
-	if len(sysChanges) != 1 || sysChanges[0].To != "Boardroom at Room A" {
-		t.Fatalf("system recompute = %+v, want one row labelled %q", sysChanges, "Boardroom at Room A")
+	if len(sysChanges) != 1 || sysChanges[0].To != "Board Meeting at Room A" {
+		t.Fatalf("system recompute = %+v, want one row labelled %q", sysChanges, "Board Meeting at Room A")
 	}
 	// A location recompute does not stop at locations: moving a location's
 	// label stales every row placed at it, and the returned set says so rather
@@ -663,10 +663,10 @@ func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
 func TestTheVerbRefusesAnUnknownKind(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)
-	if _, err := gw.PreviewLabelRecompute(ctx, "node", all, all); err == nil {
+	if _, err := gw.PreviewLabelRecompute(ctx, "outpost", all, all); err == nil {
 		t.Fatalf("preview over an unknown kind succeeded, want a refusal")
 	}
-	if _, err := gw.RecomputeLabels(ctx, "", "node", all, all); err == nil {
+	if _, err := gw.RecomputeLabels(ctx, "", "outpost", all, all); err == nil {
 		t.Fatalf("apply over an unknown kind succeeded, want a refusal")
 	}
 }
@@ -977,12 +977,12 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 	}
 }
 
-// Staffing a role IS membership (AssignRole binds the component into the system
+// Staffing a slot IS membership (AssignSlot binds the component into the system
 // on the operator's behalf), so it is a label write path with no membership
 // call in it. It gets its own test rather than a line in the invariant loop,
-// because a role assignment needs a standard, and the fixture that gives it one
+// because a slot assignment needs a standard, and the fixture that gives it one
 // would drown the loop it sits in.
-func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
+func TestStaffingASlotRestampsTheComponentItBinds(t *testing.T) {
 	t.Parallel()
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.SystemTypeLabel}}]"); err != nil {
@@ -1004,11 +1004,11 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 	if bar.Label != "[]" {
 		t.Fatalf("an unbound component reads %q, want %q", bar.Label, "[]")
 	}
-	if err := gw.AssignRole(ctx, "", s.Name, "conf-bar", bar.ID, all, all, all, all); err != nil {
-		t.Fatalf("assign role: %v", err)
+	if err := gw.AssignSlot(ctx, "", s.Name, "conf-bar", bar.ID, all, all, all, all); err != nil {
+		t.Fatalf("assign slot: %v", err)
 	}
-	if got := labelOf(t, gw, ctx, bar.ID); got != "[Boardroom]" {
-		t.Fatalf("after staffing a role = %q, want %q: the implicit membership is a label write path too", got, "[Boardroom]")
+	if got := labelOf(t, gw, ctx, bar.ID); got != "[Board Meeting]" {
+		t.Fatalf("after staffing a slot = %q, want %q: the implicit membership is a label write path too", got, "[Board Meeting]")
 	}
 	assertNoLabelDrift(t, gw, ctx)
 }
@@ -1018,7 +1018,7 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 // membership with it, and a component whose PRIMARY membership was one of them
 // reads a different .SystemTypeLabel from that instant. Slice 5 derived its
 // write paths from the data map and caught every EXPLICIT mover of a primary
-// membership (AddMember, RemoveMember, SetPrimaryMember, AssignRole); this is
+// membership (AddMember, RemoveMember, SetPrimaryMember, AssignSlot); this is
 // the implicit one the database performs on the gateway's behalf.
 func TestDeletingASystemRestampsItsMembers(t *testing.T) {
 	t.Parallel()
@@ -1039,8 +1039,8 @@ func TestDeletingASystemRestampsItsMembers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if c.Label != "[Boardroom]" {
-		t.Fatalf("a bound component reads %q, want %q", c.Label, "[Boardroom]")
+	if c.Label != "[Board Meeting]" {
+		t.Fatalf("a bound component reads %q, want %q", c.Label, "[Board Meeting]")
 	}
 	if err := gw.DeleteSystem(ctx, "", s.ID, all, all); err != nil {
 		t.Fatalf("delete system: %v", err)
@@ -1101,8 +1101,8 @@ func TestDeletingASystemPromotesTheSoleSurvivingMembership(t *testing.T) {
 	if !ms[0].IsPrimary {
 		t.Fatalf("the sole surviving membership is not the default: a component with one system carries an unanswered question")
 	}
-	if got := labelOf(t, gw, ctx, c.ID); got != "[Huddle Room]" {
-		t.Fatalf("after the delete the component reads %q, want %q", got, "[Huddle Room]")
+	if got := labelOf(t, gw, ctx, c.ID); got != "[Huddle]" {
+		t.Fatalf("after the delete the component reads %q, want %q", got, "[Huddle]")
 	}
 	assertNoLabelDrift(t, gw, ctx)
 }

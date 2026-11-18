@@ -15,7 +15,7 @@ import (
 
 // The action rule surface (#618, #1321): the subscription that wires an
 // alarm transition to a notification. A rule, so it rides rule:* (decision 1
-// of #618): reads registry-shaped on the viewer floor, writes all-scope like
+// of #618): reads catalog-shaped on the viewer floor, writes all-scope like
 // an event rule's, since a rule watches the whole fleet.
 
 type actionRuleBody struct {
@@ -63,7 +63,7 @@ type createActionRuleInput struct {
 		Label            string   `json:"label,omitempty" required:"false" doc:"A human label"`
 		Description      string   `json:"description,omitempty" required:"false" doc:"What it is for"`
 		On               []string `json:"on" minItems:"1" doc:"The alarm transitions it fires on: raised, cleared, or both. Acknowledging an alarm is never one"`
-		When             string   `json:"when,omitempty" required:"false" doc:"A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column"`
+		When             string   `json:"when,omitempty" required:"false" doc:"A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column"`
 		NotificationType string   `json:"notification_type,omitempty" required:"false" doc:"The notification type to send, by name or uuid; absent sends the official one for the transition"`
 		Targets          []string `json:"targets" minItems:"1" doc:"The notification targets to send to, by name or uuid"`
 		OptOutAllowed    bool     `json:"opt_out_allowed,omitempty" required:"false" doc:"Let a member of a group it targets opt out of it for themselves (default false)"`

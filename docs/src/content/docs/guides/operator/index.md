@@ -3,7 +3,7 @@ title: Operator guide
 description: "Operating an Omniglass fleet day to day: signing in, finding things, working with entities, and the scope that decides what you see."
 ---
 
-This is the how-to for **operating the fleet**: reading and running the inventory of locations,
+This is the how-to for **operating the fleet**: reading and running the locations,
 systems, and components you are responsible for. It is a different job from **administering the
 platform** (managing who can sign in and what they can do), which is the [admin
 guide](/guides/admin/), and from **standing the platform up**, which is
@@ -20,45 +20,48 @@ There are two ways to operate, and they are the same API with the same checks be
 
 - **[Sign in and your profile](/guides/operator/sign-in/)**: getting in with a password or a
   bearer token, and managing your own label, picture, and password.
-- **[Explore your fleet](/guides/operator/fleet/)**: the outline of every place, the systems
+- **[Explore your fleet](/guides/operator/fleet/)**: the outline of every location, the systems
   that sit there and what is in them; finding one thing with the chip filter; and the
-  detail view each system opens, with its place as context.
+  detail view each system opens, with its location as context.
 - **[Work with an entity](/guides/operator/entities/)**: opening a blade, drilling into
   children, and creating, editing, or deleting.
 - **[Your inbox and alarm subscriptions](/guides/operator/notifications/)**: the alarms you are
   told about, and subscribing yourself to the ones you care about.
-- **[Nodes and reachability](/guides/operator/collection/)**: enrolling a collection node,
+- **[Outposts and reachability](/guides/operator/collection/)**: enrolling a collection outpost,
   adding a protocol-named endpoint to a component, and reading its reachability and events.
 - **[Platform health](/guides/operator/platform-health/)**: whether Omniglass itself is well, the
   build running and its uptime, each server's request timing, ingest lag, queues and retention,
-  and each node's check-in, schedule and command queue.
-- **[Simulate a fleet](/guides/operator/simulation/)**: running the device simulator beside a node,
+  and each outpost's check-in, schedule and command queue.
+- **[Simulate a fleet](/guides/operator/simulation/)**: running the device simulator beside an outpost,
   watching the collector reach its devices, exercising and adding a device, and breaking one on
   purpose.
 
 ## Getting around
 
-- The **sidebar** is the information architecture: Explore (the one door into the fleet), Nodes,
+- The **sidebar** is the information architecture: Explore (the one door into the fleet), Outposts,
   and sections grouped into Values, Catalog, and Admin. **Catalog is a single entry** opening the catalog area: a subrail on the
-  left groups the registries by the fleet noun they serve (Telemetry, Actions, Components,
-  Systems, Locations, Metadata), and clicking an entry opens that registry's own page beside it,
+  left groups the catalogs by the fleet noun they serve (Telemetry, Actions, Components,
+  Systems, Locations, Metadata), and clicking an entry opens that catalog's own page beside it,
   at its own URL. A guide path names the group and the entry: **Catalog, under Locations: Types**.
   A live entry is full strength with its live row count; one whose backend has not landed yet is
   dimmed with a **soon** tag (clickable when its stub page exists, with a short note on what it
   will do and, where one exists, the issue tracking it). The subrail's first entry, **Overview** (`/catalog`), is the
-  landing: one card per group, teaching what it holds, with live registry counts linking to each
+  landing: one card per group, teaching what it holds, with live catalog counts linking to each
   page; you see only the groups and entries you can enter.
-- The **top bar** shows the current section and a **Search (⌘K)** button. The console is
+- The **top bar** shows the current section, a **Search (⌘K)** button, and, if you may use the
+  assistant, an **Ask omnibot** button that opens [omnibot](/guides/agents/#omnibot-in-the-console). The console is
   dark-only today; the theme is an [Admin > Settings](/guides/admin/) value resolved by the
   settings engine, not a per-session toggle.
 - Press **⌘K** (or Ctrl-K) to open the command palette and jump to any section by name. Arrow
   keys move the selection, Enter navigates, Esc closes. This is a global jump, distinct from a
   page's own [filter](/guides/operator/fleet/#finding-one-thing). It searches every destination you can
   reach: the sidebar's own sections and, though the sidebar shows Catalog as one entry, each
-  catalog registry by its own name, tagged with its group (typing `products` jumps straight to
+  catalog by its own name, tagged with its group (typing `products` jumps straight to
   **Catalog, under Components: Products**). Typing a group name finds everything under it, so
   `telemetry` lists Metrics, Properties, and Events. The palette offers only what you may read,
-  the same rule that hides a sidebar tab.
+  the same rule that hides a sidebar tab. If you may use the assistant, its last row is **Ask omnibot**
+  (**Ask omnibot: <your text>** once you type), which opens omnibot with that text as a draft, sent
+  only when you send it.
 - You only see what you can use: a tab you have no read grant for is **hidden**, and an
   action you cannot perform does not render. The same permission map also **guards the route**,
   so a hidden tab is an unreachable URL: typing or bookmarking a page you cannot read redirects

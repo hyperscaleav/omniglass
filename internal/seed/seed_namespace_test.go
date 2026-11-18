@@ -207,7 +207,7 @@ func TestEveryOfficialCatalogIsNamespacedAndTheSeedWritesOnlyOg(t *testing.T) {
 // TestTheSeedMirrorsTheReservedKeysIntoSQL holds reserved_key to the code's
 // list (#1447): every name writerclass reserves is in it after a boot, and a
 // name the code no longer reserves is gone after the next, so the search path
-// never refuses a key the registry would resolve.
+// never refuses a key the catalog would resolve.
 func TestTheSeedMirrorsTheReservedKeysIntoSQL(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

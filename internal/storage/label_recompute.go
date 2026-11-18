@@ -200,7 +200,7 @@ func labelScanQuery(tbl scopeTable, cols string, read, action scope.Set, n label
 //
 // It is flat in row count by construction. The classification half is resolved
 // once per DISTINCT product (component) or per distinct classifier pair (system,
-// location), both of which are bounded by the registry rather than by the
+// location), both of which are bounded by the catalog rather than by the
 // fleet; the placement half is one statement for the whole page; the global
 // rule and the acronym dictionary are read once each. The counting instrument
 // from #650 is what holds that to being true rather than intended.

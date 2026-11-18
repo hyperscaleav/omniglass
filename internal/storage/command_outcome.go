@@ -40,7 +40,7 @@ func recordOutcome(ctx context.Context, q txQuerier, id int64, o settlementOutco
 	err := q.QueryRow(ctx, `update command c set status = $2, settled_at = $3, settled_by = $4, reason = nullif($5, ''),
 			observed_value = $6, observed_at = $7
 		where c.id = $1 and c.status = 'issued'
-		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.node_id)::text, c.instance,
+		returning c.owner_kind, coalesce(c.component_id, c.system_id, c.location_id, c.outpost_id)::text, c.instance,
 			(select name from command_type where id = c.command_type_id)`,
 		id, o.status, now, o.by, o.reason, obsValue, obsAt).Scan(&ownerKind, &arc, &instance, &commandType)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -146,17 +146,17 @@ func (p *PG) observationOutcome(ctx context.Context, q querier, ct *CommandType,
 	return settlementOutcome{status: "timed-out", by: SettledByWindow, reason: stop.words(ct)}, nil
 }
 
-// commandStopFacts is how far a command got: delivered to a node, executed
+// commandStopFacts is how far a command got: delivered to an outpost, executed
 // (and with what error), and carried by an endpoint (the one it rides,
-// commandRideSQL) placed on a node.
+// commandRideSQL) placed on an outpost.
 type commandStopFacts struct {
 	delivered, executed, carried bool
-	execErr, endpoint, node      string
+	execErr, endpoint, outpost   string
 }
 
 // words is the timeout reason the facts give (timeoutWords).
 func (f commandStopFacts) words(ct *CommandType) string {
-	return timeoutWords(ct.Name, targetKey(ct), windowText(ct.SettleWindowSeconds), f.delivered, f.executed, f.carried, f.execErr, f.endpoint, f.node)
+	return timeoutWords(ct.Name, targetKey(ct), windowText(ct.SettleWindowSeconds), f.delivered, f.executed, f.carried, f.execErr, f.endpoint, f.outpost)
 }
 
 // commandStop reads how far a command got.
@@ -164,10 +164,10 @@ func (p *PG) commandStop(ctx context.Context, q querier, id int64) (commandStopF
 	var f commandStopFacts
 	err := q.QueryRow(ctx, `select c.dispatched_at is not null, c.executed_at is not null, coalesce(c.exec_error, ''),
 			ride.id is not null, coalesce(ride.name, ''),
-			coalesce((select n.name from node n where n.principal_id = ride.node_name), '')
+			coalesce((select n.name from outpost n where n.user_id = ride.outpost_id), '')
 		from command c join command_type ct on ct.id = c.command_type_id
 		`+commandRideSQL+`
-		where c.id = $1`, id).Scan(&f.delivered, &f.executed, &f.execErr, &f.carried, &f.endpoint, &f.node)
+		where c.id = $1`, id).Scan(&f.delivered, &f.executed, &f.execErr, &f.carried, &f.endpoint, &f.outpost)
 	if err != nil {
 		return commandStopFacts{}, fmt.Errorf("storage: where command %d stopped: %w", id, err)
 	}
@@ -176,7 +176,7 @@ func (p *PG) commandStop(ctx context.Context, q querier, id int64) (commandStopF
 
 // timeoutReason says where a command stopped when its window closed on no
 // evidence: answered with nothing observed after, delivered with no report,
-// queued for a node that never took it, or carried by no endpoint at all.
+// queued for an outpost that never took it, or carried by no endpoint at all.
 func (p *PG) timeoutReason(ctx context.Context, q querier, ct *CommandType, id int64) (string, error) {
 	f, err := p.commandStop(ctx, q, id)
 	if err != nil {
@@ -186,20 +186,20 @@ func (p *PG) timeoutReason(ctx context.Context, q querier, ct *CommandType, id i
 }
 
 // timeoutWords is timeoutReason's sentence, from the facts it read. Pure.
-func timeoutWords(commandType, target, window string, delivered, executed, carried bool, execErr, endpoint, node string) string {
+func timeoutWords(commandType, target, window string, delivered, executed, carried bool, execErr, endpoint, outpost string) string {
 	switch {
 	case executed && execErr != "":
 		return fmt.Sprintf("the execution failed (%s), and no observation of %s arrived within its %s settle window", execErr, target, window)
 	case executed:
 		return fmt.Sprintf("the component answered, but no observation of %s arrived within its %s settle window", target, window)
-	case delivered && node != "":
-		return fmt.Sprintf("delivered to node %s, which sent no execution report within its %s settle window", node, window)
+	case delivered && outpost != "":
+		return fmt.Sprintf("delivered to outpost %s, which sent no execution report within its %s settle window", outpost, window)
 	case delivered:
 		return fmt.Sprintf("delivered, but no execution report arrived within its %s settle window", window)
-	case carried && node != "":
-		return fmt.Sprintf("queued for node %s, which did not take it within its %s settle window", node, window)
+	case carried && outpost != "":
+		return fmt.Sprintf("queued for outpost %s, which did not take it within its %s settle window", outpost, window)
 	case carried:
-		return fmt.Sprintf("queued on endpoint %s, which is placed on no node, so nothing took it within its %s settle window", endpoint, window)
+		return fmt.Sprintf("queued on endpoint %s, which is placed on no outpost, so nothing took it within its %s settle window", endpoint, window)
 	default:
 		return fmt.Sprintf("no endpoint of this component has a driver that binds %s, and no observation of %s arrived within its %s settle window", commandType, target, window)
 	}
@@ -207,20 +207,20 @@ func timeoutWords(commandType, target, window string, delivered, executed, carri
 
 // deliveryTimeoutWords says where a fire-and-forget command stopped when its
 // delivery window closed with no execution report (#1630): delivered with no
-// report, queued for a node that never took it, queued on an endpoint no node
+// report, queued for an outpost that never took it, queued on an endpoint no outpost
 // holds, or carried by no endpoint at all. Such a command told nothing to a
 // series, so no sentence mentions an observation. Pure.
-func deliveryTimeoutWords(commandType string, delivered, carried bool, endpoint, node string) string {
+func deliveryTimeoutWords(commandType string, delivered, carried bool, endpoint, outpost string) string {
 	window := fmt.Sprintf("%d minute", int(CommandDeliveryWindow.Minutes()))
 	switch {
-	case delivered && node != "":
-		return fmt.Sprintf("delivered to node %s, which sent no execution report within its %s delivery window", node, window)
+	case delivered && outpost != "":
+		return fmt.Sprintf("delivered to outpost %s, which sent no execution report within its %s delivery window", outpost, window)
 	case delivered:
 		return fmt.Sprintf("delivered, but no execution report arrived within its %s delivery window", window)
-	case carried && node != "":
-		return fmt.Sprintf("queued for node %s, which did not take it within its %s delivery window", node, window)
+	case carried && outpost != "":
+		return fmt.Sprintf("queued for outpost %s, which did not take it within its %s delivery window", outpost, window)
 	case carried:
-		return fmt.Sprintf("queued on endpoint %s, which is placed on no node", endpoint)
+		return fmt.Sprintf("queued on endpoint %s, which is placed on no outpost", endpoint)
 	default:
 		return fmt.Sprintf("no endpoint of this component has a driver that binds %s", commandType)
 	}

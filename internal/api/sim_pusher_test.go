@@ -59,7 +59,7 @@ func TestTheSimulatedPusherPushesOnlyToItsOneSystem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := gw.SetServiceToken(ctx, "", "sim-booking-service", hash, prefix); err != nil || !ok {
+	if ok, err := gw.SetMachineToken(ctx, "", "sim-booking-service", hash, prefix); err != nil || !ok {
 		t.Fatalf("set the pusher's token: %v, %v", ok, err)
 	}
 	busSrv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)

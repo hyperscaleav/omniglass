@@ -20,7 +20,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// landFixture is one database with a component and a node to land batches on,
+// landFixture is one database with a component and an outpost to land batches on,
 // and a connection to count what landed.
 type landFixture struct {
 	dsn  string
@@ -47,8 +47,8 @@ func newLandFixture(t *testing.T) landFixture {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -63,7 +63,7 @@ func landOf(r storage.LandResult, err error) (bool, error) { return r.Landed, er
 
 // rows counts what has landed on each sink, so a test can say each row
 // landed exactly once.
-type landedRows struct{ metric, property, event, logLine, nodeLog int }
+type landedRows struct{ metric, property, event, logLine, outpostLog int }
 
 func (f landFixture) rows(t *testing.T) landedRows {
 	t.Helper()
@@ -73,21 +73,21 @@ func (f landFixture) rows(t *testing.T) landedRows {
 		(select count(*) from property where provenance = 'observed'),
 		(select count(*) from event where origin = 'caught'),
 		(select count(*) from log_line),
-		(select count(*) from node_log)`).Scan(&r.metric, &r.property, &r.event, &r.logLine, &r.nodeLog)
+		(select count(*) from outpost_log)`).Scan(&r.metric, &r.property, &r.event, &r.logLine, &r.outpostLog)
 	if err != nil {
 		t.Fatalf("count landed rows: %v", err)
 	}
 	return r
 }
 
-// fullBatch is one push batch on every sink a batch reaches, plus a node's
+// fullBatch is one push batch on every sink a batch reaches, plus an outpost's
 // self-log line, under id.
 func fullBatch(id, power string, ts time.Time) storage.IngestBatch {
 	return storage.IngestBatch{
 		BatchID: id,
 		Writer:  storage.PushWriter(),
-		NodeLogs: []storage.NodeLogWrite{
-			{Node: "edge-1", Source: "node", Severity: "info", Message: "worklist pulled", TS: ts},
+		OutpostLogs: []storage.OutpostLogWrite{
+			{Outpost: "edge-1", Source: "outpost", Severity: "info", Message: "worklist pulled", TS: ts},
 		},
 		LogLines: []storage.LogLineWrite{
 			{OwnerKind: "component", OwnerID: "disp-1", Source: "syslog", Severity: "info", Message: "input changed", TS: ts},
@@ -106,7 +106,7 @@ func fullBatch(id, power string, ts time.Time) storage.IngestBatch {
 
 // TestLandBatchLandsEachRowOnce is the redelivery guarantee at the gateway
 // (#311): a batch id lands once, so the same batch landed again (a JetStream
-// redelivery after an ack that never arrived, a node's retry past the
+// redelivery after an ack that never arrived, an outpost's retry past the
 // stream's duplicate window) writes nothing on any sink, log lines included,
 // and says so. Concurrent deliveries of one batch land it once too: the
 // receipt's key serializes them.
@@ -120,7 +120,7 @@ func TestLandBatchLandsEachRowOnce(t *testing.T) {
 	if err != nil || !landed {
 		t.Fatalf("first landing: landed=%v err=%v", landed, err)
 	}
-	want := landedRows{metric: 1, property: 1, event: 1, logLine: 1, nodeLog: 1}
+	want := landedRows{metric: 1, property: 1, event: 1, logLine: 1, outpostLog: 1}
 	if got := f.rows(t); got != want {
 		t.Fatalf("after the first landing: got %+v, want %+v", got, want)
 	}
@@ -167,7 +167,7 @@ func TestLandBatchLandsEachRowOnce(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("concurrent deliveries of one batch: %d landed, want exactly 1", n)
 	}
-	want = landedRows{metric: 2, property: 2, event: 2, logLine: 2, nodeLog: 2}
+	want = landedRows{metric: 2, property: 2, event: 2, logLine: 2, outpostLog: 2}
 	if got := f.rows(t); got != want {
 		t.Fatalf("after the concurrent landing: got %+v, want %+v", got, want)
 	}
@@ -179,7 +179,7 @@ func TestLandBatchLandsEachRowOnce(t *testing.T) {
 	if err != nil || !landed {
 		t.Fatalf("a new batch with repeated content: landed=%v err=%v", landed, err)
 	}
-	want = landedRows{metric: 3, property: 2, event: 3, logLine: 3, nodeLog: 3}
+	want = landedRows{metric: 3, property: 2, event: 3, logLine: 3, outpostLog: 3}
 	if got := f.rows(t); got != want {
 		t.Fatalf("after a new batch: got %+v, want %+v", got, want)
 	}
@@ -210,7 +210,7 @@ func TestLandBatchIsAllOrNothing(t *testing.T) {
 	if err != nil || !landed {
 		t.Fatalf("the corrected batch under the same id: landed=%v err=%v (the receipt must roll back with the batch)", landed, err)
 	}
-	want := landedRows{metric: 1, property: 1, event: 1, logLine: 1, nodeLog: 1}
+	want := landedRows{metric: 1, property: 1, event: 1, logLine: 1, outpostLog: 1}
 	if got := f.rows(t); got != want {
 		t.Fatalf("after the corrected batch: got %+v, want %+v", got, want)
 	}
@@ -349,23 +349,23 @@ func TestLandBatchCleansNUL(t *testing.T) {
 	b.Events[0].Message = "hdmi\x002"
 	b.Events[0].Attributes = []byte(`{"input":"hdmi\u00002"}`)
 	b.Metrics[0].Instance = "rx\x001"
-	b.NodeLogs[0].Message = "arm reply\x00"
+	b.OutpostLogs[0].Message = "arm reply\x00"
 	b.LogLines[0].Message = "line\x00"
 	landed, err := landOf(f.gw.LandBatch(ctx, b))
 	if err != nil || !landed {
 		t.Fatalf("a batch carrying NUL: landed=%v err=%v, want it landed with NUL replaced", landed, err)
 	}
-	var firmware, message, input, instance, nodeLog string
+	var firmware, message, input, instance, outpostLog string
 	if err := f.conn.QueryRow(ctx, `select
 		(select value #>> '{}' from property where property_type_id = (select id from property_type where name = 'firmware-version')),
 		(select message from event where origin = 'caught'),
 		(select attributes->>'input' from event where origin = 'caught'),
 		(select instance from `+storagetest.MetricRows+` metric),
-		(select message from node_log)`).Scan(&firmware, &message, &input, &instance, &nodeLog); err != nil {
+		(select message from outpost_log)`).Scan(&firmware, &message, &input, &instance, &outpostLog); err != nil {
 		t.Fatalf("read the landed rows: %v", err)
 	}
 	for _, c := range []struct{ got, want string }{
-		{firmware, "1.2��"}, {message, "hdmi�2"}, {input, "hdmi�2"}, {instance, "rx�1"}, {nodeLog, "arm reply�"},
+		{firmware, "1.2��"}, {message, "hdmi�2"}, {input, "hdmi�2"}, {instance, "rx�1"}, {outpostLog, "arm reply�"},
 	} {
 		if c.got != c.want {
 			t.Fatalf("landed %q, want %q", c.got, c.want)
@@ -494,14 +494,14 @@ func sameTally(t *testing.T, got, want delivery.Tally) bool {
 
 // receiptRow is one receipt's accounting columns.
 type receiptRow struct {
-	node, boot string
-	seq        int64
-	minted     time.Time
-	resolved   int64
-	deliveries int
-	ledger     delivery.Declared
-	outcome    delivery.Tally
-	termed     bool
+	outpost, boot string
+	seq           int64
+	minted        time.Time
+	resolved      int64
+	deliveries    int
+	ledger        delivery.Declared
+	outcome       delivery.Tally
+	termed        bool
 }
 
 func (f landFixture) receipt(t *testing.T, id string) receiptRow {
@@ -509,8 +509,8 @@ func (f landFixture) receipt(t *testing.T, id string) receiptRow {
 	var r receiptRow
 	var ledger []*int64
 	var outcome []int32
-	err := f.conn.QueryRow(context.Background(), `select node, boot, seq, minted, resolved, deliveries, ledger, outcome, termed
-		from telemetry_receipt where batch_id = $1`, id).Scan(&r.node, &r.boot, &r.seq, &r.minted, &r.resolved, &r.deliveries, &ledger, &outcome, &r.termed)
+	err := f.conn.QueryRow(context.Background(), `select outpost, boot, seq, minted, resolved, deliveries, ledger, outcome, termed
+		from telemetry_receipt where batch_id = $1`, id).Scan(&r.outpost, &r.boot, &r.seq, &r.minted, &r.resolved, &r.deliveries, &ledger, &outcome, &r.termed)
 	if err != nil {
 		t.Fatalf("read receipt %s: %v", id, err)
 	}
@@ -523,32 +523,32 @@ func (f landFixture) receipt(t *testing.T, id string) receiptRow {
 	return r
 }
 
-// ledgerTick is a node's tick under its ledger: task-a's rows on disp-1,
-// task-b's (refuse decides how) on disp-2, a node self-log, and an item the
+// ledgerTick is an outpost's tick under its ledger: task-a's rows on disp-1,
+// task-b's (refuse decides how) on disp-2, an outpost self-log, and an item the
 // consumer counted orphaned before the gateway saw the batch.
 func ledgerTick(f groupFixture, id string, seq uint64, ts time.Time, refuse func(storage.IngestGroup) storage.IngestGroup) storage.IngestBatch {
 	b := storage.IngestBatch{
 		BatchID: id,
-		Writer:  storage.NodeWriter("", ""),
-		Node:    "edge-1",
+		Writer:  storage.OutpostWriter("", ""),
+		Outpost: "edge-1",
 		Ledger: &delivery.Stamp{Boot: "boot-1", Seq: seq, Minted: ts, Resolved: seq - 1, Kinds: delivery.Declared{
 			delivery.Metric:   {Count: 3, Before: 3 * (seq - 1)},
 			delivery.Property: {Count: 2, Before: 2 * (seq - 1)},
 			delivery.Event:    {Count: 2, Before: 2 * (seq - 1)},
 			delivery.Log:      {Count: 3, Before: 3 * (seq - 1)},
 		}},
-		NodeLogs: []storage.NodeLogWrite{{Node: "edge-1", Source: "node", Severity: "info", Message: "tick", TS: ts}},
-		Groups:   []storage.IngestGroup{taskGroup("task-a", f.disp1, f.node, "on", ts)},
+		OutpostLogs: []storage.OutpostLogWrite{{Outpost: "edge-1", Source: "outpost", Severity: "info", Message: "tick", TS: ts}},
+		Groups:      []storage.IngestGroup{taskGroup("task-a", f.disp1, f.outpost, "on", ts)},
 	}
 	if refuse != nil {
-		b.Groups = append(b.Groups, refuse(taskGroup("task-b", f.disp2, f.node, "on", ts)))
+		b.Groups = append(b.Groups, refuse(taskGroup("task-b", f.disp2, f.outpost, "on", ts)))
 	}
 	b.Tally.Add(delivery.Metric, delivery.Orphaned, 1)
 	return b
 }
 
 // TestLandBatchRecordsItsOutcome is the receipt as the batch's accounting
-// row (#1641): a landed tick records its node, its ledger and every item's
+// row (#1641): a landed tick records its outpost, its ledger and every item's
 // outcome, the consumer's tally plus what the gateway stored, coalesced and
 // refused. A refused group's items read refused-write and its sibling's
 // stored, counted from the pass that commits alone: a refusal Postgres
@@ -592,7 +592,7 @@ func TestLandBatchRecordsItsOutcome(t *testing.T) {
 				t.Fatalf("outcome = %s, want %s", g, w)
 			}
 			r := f.receipt(t, "tick-1")
-			if r.node != "edge-1" || r.boot != "boot-1" || r.seq != 1 || !r.minted.Equal(ts) || r.resolved != 0 || r.deliveries != 1 {
+			if r.outpost != "edge-1" || r.boot != "boot-1" || r.seq != 1 || !r.minted.Equal(ts) || r.resolved != 0 || r.deliveries != 1 {
 				t.Fatalf("receipt = %+v, want edge-1 boot-1 seq 1 minted %v resolved 0, one delivery", r, ts)
 			}
 			if r.ledger[delivery.Metric] != (delivery.Count{Count: 3}) || r.ledger[delivery.Log] != (delivery.Count{Count: 3}) || len(r.ledger) != 4 {
@@ -669,11 +669,11 @@ func TestLandBatchRedeliveryCountsADelivery(t *testing.T) {
 // termOf is the Term receipt the consumer records for b, Termed whole with
 // every declared item under cause.
 func termOf(b storage.IngestBatch, cause delivery.Outcome) storage.TermedBatch {
-	return storage.TermedBatch{BatchID: b.BatchID, Node: b.Node, Ledger: *b.Ledger, Outcome: b.Ledger.Kinds.Under(cause)}
+	return storage.TermedBatch{BatchID: b.BatchID, Outpost: b.Outpost, Ledger: *b.Ledger, Outcome: b.Ledger.Kinds.Under(cause)}
 }
 
 // TestTermReceiptRecordsItsCause: a batch the server Terms whole leaves a
-// receipt with its node, its ledger and every declared item under the cause,
+// receipt with its outpost, its ledger and every declared item under the cause,
 // marked termed (#1691), so the loss table reads it under that cause.
 func TestTermReceiptRecordsItsCause(t *testing.T) {
 	t.Parallel()
@@ -685,8 +685,8 @@ func TestTermReceiptRecordsItsCause(t *testing.T) {
 		t.Fatalf("record the Term: %v", err)
 	}
 	r := f.receipt(t, "tick-1")
-	if !r.termed || r.node != "edge-1" || r.boot != "boot-1" || r.seq != 4 || !r.minted.Equal(ts) || r.resolved != 3 || r.deliveries != 1 {
-		t.Fatalf("receipt = %+v, want the batch's node and ledger, one delivery, termed", r)
+	if !r.termed || r.outpost != "edge-1" || r.boot != "boot-1" || r.seq != 4 || !r.minted.Equal(ts) || r.resolved != 3 || r.deliveries != 1 {
+		t.Fatalf("receipt = %+v, want the batch's outpost and ledger, one delivery, termed", r)
 	}
 	if !sameTally(t, r.outcome, b.Ledger.Kinds.Under(delivery.Abandoned)) || r.outcome.Count(delivery.Metric, delivery.Abandoned) != 3 {
 		t.Fatalf("outcome = %+v, want every declared item abandoned", r.outcome)
@@ -921,10 +921,10 @@ func TestReceiptPackedMigrationOverExistingReceipts(t *testing.T) {
 	}
 }
 
-// TestLandBatchRecordsTheNodesLoss (#1692): a batch whose ledger carries the
-// node's own loss account writes it on the receipt as it came, and a batch
-// whose node lost nothing leaves the column null.
-func TestLandBatchRecordsTheNodesLoss(t *testing.T) {
+// TestLandBatchRecordsTheOutpostsLoss (#1692): a batch whose ledger carries the
+// outpost's own loss account writes it on the receipt as it came, and a batch
+// whose outpost lost nothing leaves the column null.
+func TestLandBatchRecordsTheOutpostsLoss(t *testing.T) {
 	t.Parallel()
 	f := newGroupFixture(t)
 	ctx := context.Background()
@@ -933,66 +933,66 @@ func TestLandBatchRecordsTheNodesLoss(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := ledgerTick(f, "tick-3", 3, ts.Add(time.Second), nil)
-	b.Ledger.Loss = delivery.NodeLoss{
+	b.Ledger.Loss = delivery.OutpostLoss{
 		Dropped: []delivery.Drop{{Cause: delivery.SpoolOverflow, From: 2, To: 2, Items: map[delivery.Kind]uint64{delivery.Metric: 3}}},
 		Lost:    map[delivery.Outcome]map[delivery.Kind]uint64{delivery.SelfLogOverflow: {delivery.Log: 7}},
 	}
 	if _, err := f.gw.LandBatch(ctx, b); err != nil {
 		t.Fatal(err)
 	}
-	read := func(id string) *delivery.NodeLoss {
+	read := func(id string) *delivery.OutpostLoss {
 		var raw []byte
-		if err := f.conn.QueryRow(ctx, `select node_loss from telemetry_receipt where batch_id = $1`, id).Scan(&raw); err != nil {
+		if err := f.conn.QueryRow(ctx, `select outpost_loss from telemetry_receipt where batch_id = $1`, id).Scan(&raw); err != nil {
 			t.Fatalf("receipt %s: %v", id, err)
 		}
 		if raw == nil {
 			return nil
 		}
-		var n delivery.NodeLoss
+		var n delivery.OutpostLoss
 		if err := json.Unmarshal(raw, &n); err != nil {
-			t.Fatalf("receipt %s node loss %s: %v", id, raw, err)
+			t.Fatalf("receipt %s outpost loss %s: %v", id, raw, err)
 		}
 		return &n
 	}
 	if n := read("tick-1"); n != nil {
-		t.Fatalf("tick-1 node loss = %+v, want null for a node that lost nothing", n)
+		t.Fatalf("tick-1 outpost loss = %+v, want null for an outpost that lost nothing", n)
 	}
 	n := read("tick-3")
 	if n == nil {
-		t.Fatal("tick-3 carries no node loss")
+		t.Fatal("tick-3 carries no outpost loss")
 	}
 	got, _ := json.Marshal(n)
 	want, _ := json.Marshal(b.Ledger.Loss)
 	if string(got) != string(want) {
-		t.Fatalf("tick-3 node loss = %s, want %s", got, want)
+		t.Fatalf("tick-3 outpost loss = %s, want %s", got, want)
 	}
 }
 
-// TestATermReceiptKeepsTheNodesLoss: a batch the server Terms whole (#1691)
-// still carries the node's own loss account (#1692), so its Term receipt
-// records it for the node hop's read, and a later copy that lands over the
+// TestATermReceiptKeepsTheOutpostsLoss: a batch the server Terms whole (#1691)
+// still carries the outpost's own loss account (#1692), so its Term receipt
+// records it for the outpost hop's read, and a later copy that lands over the
 // Term receipt writes its own.
-func TestATermReceiptKeepsTheNodesLoss(t *testing.T) {
+func TestATermReceiptKeepsTheOutpostsLoss(t *testing.T) {
 	t.Parallel()
 	f := newGroupFixture(t)
 	ctx := context.Background()
 	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
 	b := ledgerTick(f, "tick-2", 2, ts, nil)
-	b.Ledger.Loss = delivery.NodeLoss{
+	b.Ledger.Loss = delivery.OutpostLoss{
 		Dropped: []delivery.Drop{{Cause: delivery.SpoolOverflow, From: 1, To: 1, Items: map[delivery.Kind]uint64{delivery.Metric: 3}}},
 		Lost:    map[delivery.Outcome]map[delivery.Kind]uint64{delivery.SelfLogOverflow: {delivery.Log: 4}},
 	}
 	read := func() string {
 		var raw []byte
-		if err := f.conn.QueryRow(ctx, `select node_loss from telemetry_receipt where batch_id = $1`, b.BatchID).Scan(&raw); err != nil {
+		if err := f.conn.QueryRow(ctx, `select outpost_loss from telemetry_receipt where batch_id = $1`, b.BatchID).Scan(&raw); err != nil {
 			t.Fatalf("receipt: %v", err)
 		}
 		if raw == nil {
 			return ""
 		}
-		var n delivery.NodeLoss
+		var n delivery.OutpostLoss
 		if err := json.Unmarshal(raw, &n); err != nil {
-			t.Fatalf("node loss %s: %v", raw, err)
+			t.Fatalf("outpost loss %s: %v", raw, err)
 		}
 		got, _ := json.Marshal(n)
 		return string(got)
@@ -1002,7 +1002,7 @@ func TestATermReceiptKeepsTheNodesLoss(t *testing.T) {
 		t.Fatalf("record the Term: %v", err)
 	}
 	if got := read(); got != string(want) {
-		t.Fatalf("Term receipt node loss = %q, want %s", got, want)
+		t.Fatalf("Term receipt outpost loss = %q, want %s", got, want)
 	}
 	b.Ledger.Loss.Lost[delivery.SelfLogOverflow][delivery.Log] = 6
 	want, _ = json.Marshal(b.Ledger.Loss)
@@ -1010,11 +1010,11 @@ func TestATermReceiptKeepsTheNodesLoss(t *testing.T) {
 		t.Fatalf("land the later copy: %+v, %v", landed, err)
 	}
 	if got := read(); got != string(want) {
-		t.Fatalf("landed receipt node loss = %q, want the landing's %s", got, want)
+		t.Fatalf("landed receipt outpost loss = %q, want the landing's %s", got, want)
 	}
 }
 
-// TestReceiptLandsAShortfallPastInt32 (#1699): a node whose ledger declares
+// TestReceiptLandsAShortfallPastInt32 (#1699): an outpost whose ledger declares
 // more items than int32 holds, as a counter bug would, still lands the
 // items it carried, its receipt holding the shortfall saturated rather
 // than the batch refused for it.
@@ -1025,12 +1025,12 @@ func TestReceiptLandsAShortfallPastInt32(t *testing.T) {
 	at := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
 	b := storage.IngestBatch{
 		BatchID: "og.v1.telemetry.edge-1 past-int32",
-		Writer:  storage.NodeWriter("", ""),
-		Node:    "edge-1",
+		Writer:  storage.OutpostWriter("", ""),
+		Outpost: "edge-1",
 		Ledger: &delivery.Stamp{Boot: "b1", Seq: 1, Minted: at, Kinds: delivery.Declared{
 			delivery.Log: {Count: 3_000_000_001},
 		}},
-		NodeLogs: []storage.NodeLogWrite{{Node: "edge-1", Source: "node", Severity: "info", Message: "tick", TS: at}},
+		OutpostLogs: []storage.OutpostLogWrite{{Outpost: "edge-1", Source: "outpost", Severity: "info", Message: "tick", TS: at}},
 	}
 	b.Tally.Add(delivery.Log, delivery.Missing, 3_000_000_000)
 	if res, err := f.gw.LandBatch(ctx, b); err != nil || !res.Landed {

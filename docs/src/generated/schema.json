@@ -18,11 +18,11 @@
       "default": "now()"
      },
      {
-      "name": "actor_principal_id",
+      "name": "actor_user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "verb",
@@ -50,11 +50,11 @@
       "nullable": true
      },
      {
-      "name": "real_actor_principal_id",
+      "name": "real_actor_user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "actor_username",
@@ -78,6 +78,11 @@
      },
      {
       "name": "client",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "agent",
       "type": "text",
       "nullable": true
      }
@@ -148,6 +153,39 @@
    }
   },
   "catalog": {
+   "catalog_shadow": {
+    "columns": [
+     {
+      "name": "catalog",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "row_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "image",
+      "type": "jsonb",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "component_type": {
     "columns": [
      {
@@ -527,39 +565,6 @@
      {
       "name": "product_property_product_id_property_type_id_key",
       "definition": "CREATE UNIQUE INDEX product_property_product_id_property_type_id_key ON public.product_property USING btree (product_id, property_type_id)"
-     }
-    ]
-   },
-   "registry_shadow": {
-    "columns": [
-     {
-      "name": "registry",
-      "type": "text",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "row_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true
-     },
-     {
-      "name": "image",
-      "type": "jsonb",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
      }
     ]
    },
@@ -1003,15 +1008,15 @@
      }
     ]
    },
-   "node": {
+   "outpost": {
     "columns": [
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": false,
       "pk": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "name",
@@ -1085,16 +1090,16 @@
     ],
     "uniques": [
      {
-      "name": "node_name_key",
-      "definition": "CREATE UNIQUE INDEX node_name_key ON public.node USING btree (name)"
+      "name": "outpost_name_key",
+      "definition": "CREATE UNIQUE INDEX outpost_name_key ON public.outpost USING btree (name)"
      },
      {
-      "name": "node_platform_component_id_key",
-      "definition": "CREATE UNIQUE INDEX node_platform_component_id_key ON public.node USING btree (platform_component_id)"
+      "name": "outpost_platform_component_id_key",
+      "definition": "CREATE UNIQUE INDEX outpost_platform_component_id_key ON public.outpost USING btree (platform_component_id)"
      }
     ]
    },
-   "node_log": {
+   "outpost_log": {
     "columns": [
      {
       "name": "id",
@@ -1109,11 +1114,11 @@
       "default": "now()"
      },
      {
-      "name": "node_id",
+      "name": "outpost_id",
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "node.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "source",
@@ -1468,6 +1473,108 @@
    }
   },
   "config": {
+   "assistant_conversation": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "pending",
+      "type": "jsonb",
+      "nullable": true
+     },
+     {
+      "name": "input_tokens",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "output_tokens",
+      "type": "bigint",
+      "nullable": false,
+      "default": "0"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "run_id",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "run_until",
+      "type": "timestamp with time zone",
+      "nullable": true
+     }
+    ],
+    "uniques": [
+     {
+      "name": "assistant_conversation_user_id_name_key",
+      "definition": "CREATE UNIQUE INDEX assistant_conversation_user_id_name_key ON public.assistant_conversation USING btree (user_id, name)"
+     }
+    ]
+   },
+   "assistant_message": {
+    "columns": [
+     {
+      "name": "conversation_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "assistant_conversation.id"
+     },
+     {
+      "name": "seq",
+      "type": "integer",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "role",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "body",
+      "type": "jsonb",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
    "credential": {
     "columns": [
      {
@@ -1478,11 +1585,11 @@
       "pk": true
      },
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "kind",
@@ -1534,6 +1641,28 @@
       "name": "client_ip",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "agent",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "agent_roles",
+      "type": "ARRAY",
+      "nullable": true
+     },
+     {
+      "name": "agent_channels",
+      "type": "ARRAY",
+      "nullable": true
+     },
+     {
+      "name": "oauth_client_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "oauth_client.id"
      }
     ],
     "checks": [
@@ -1545,7 +1674,7 @@
     "uniques": [
      {
       "name": "credential_one_password",
-      "definition": "CREATE UNIQUE INDEX credential_one_password ON public.credential USING btree (principal_id) WHERE (kind = 'password'::text)"
+      "definition": "CREATE UNIQUE INDEX credential_one_password ON public.credential USING btree (user_id) WHERE (kind = 'password'::text)"
      },
      {
       "name": "credential_secret_hash_key",
@@ -1585,13 +1714,13 @@
       "pk": true
      },
      {
-      "name": "default_template",
+      "name": "default_rule",
       "type": "text",
       "nullable": false,
       "default": "''::text"
      },
      {
-      "name": "template",
+      "name": "rule",
       "type": "text",
       "nullable": true
      },
@@ -1612,6 +1741,137 @@
      {
       "name": "label_rule_entity_kind_check",
       "expr": "CHECK ((entity_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text])))"
+     }
+    ]
+   },
+   "oauth_client": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "pk": true
+     },
+     {
+      "name": "client_name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "redirect_uris",
+      "type": "ARRAY",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "metadata_url",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "fetched_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     }
+    ],
+    "uniques": [
+     {
+      "name": "oauth_client_metadata_url_idx",
+      "definition": "CREATE UNIQUE INDEX oauth_client_metadata_url_idx ON public.oauth_client USING btree (metadata_url) WHERE (metadata_url IS NOT NULL)"
+     }
+    ]
+   },
+   "oauth_code": {
+    "columns": [
+     {
+      "name": "code_hash",
+      "type": "bytea",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "client_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "oauth_client.id"
+     },
+     {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "redirect_uri",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "code_challenge",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "resource",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "roles",
+      "type": "ARRAY",
+      "nullable": false
+     },
+     {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
+   "oauth_refresh": {
+    "columns": [
+     {
+      "name": "token_hash",
+      "type": "bytea",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "credential_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "credential.id"
+     },
+     {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "spent_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
      }
     ]
    },
@@ -1788,7 +2048,7 @@
      }
     ]
    },
-   "setting_override": {
+   "setting_binding": {
     "columns": [
      {
       "name": "id",
@@ -1803,7 +2063,7 @@
       "nullable": false
      },
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": true
      },
@@ -1838,14 +2098,14 @@
     ],
     "checks": [
      {
-      "name": "setting_override_scope_check",
+      "name": "setting_binding_scope_check",
       "expr": "CHECK ((scope = 'platform'::text))"
      }
     ],
     "uniques": [
      {
-      "name": "setting_override_identity",
-      "definition": "CREATE UNIQUE INDEX setting_override_identity ON public.setting_override USING btree (scope, principal_id, namespace) NULLS NOT DISTINCT"
+      "name": "setting_binding_identity",
+      "definition": "CREATE UNIQUE INDEX setting_binding_identity ON public.setting_binding USING btree (scope, user_id, namespace) NULLS NOT DISTINCT"
      }
     ]
    },
@@ -2125,11 +2385,11 @@
       "default": "now()"
      },
      {
-      "name": "node_id",
+      "name": "outpost_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "node.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "component_id",
@@ -2156,11 +2416,11 @@
     "checks": [
      {
       "name": "tag_binding_owner_arc",
-      "expr": "CHECK ((((owner_kind = 'platform'::text) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
+      "expr": "CHECK ((((owner_kind = 'platform'::text) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'outpost'::text) AND (outpost_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
      },
      {
       "name": "tag_binding_owner_kind_check",
-      "expr": "CHECK ((owner_kind = ANY (ARRAY['platform'::text, 'component'::text, 'system'::text, 'location'::text, 'node'::text])))"
+      "expr": "CHECK ((owner_kind = ANY (ARRAY['platform'::text, 'component'::text, 'system'::text, 'location'::text, 'outpost'::text])))"
      }
     ],
     "uniques": [
@@ -2173,8 +2433,8 @@
       "definition": "CREATE UNIQUE INDEX tag_binding_location_key_uuid ON public.tag_binding USING btree (tag_id, location_id) WHERE (owner_kind = 'location'::text)"
      },
      {
-      "name": "tag_binding_node_key",
-      "definition": "CREATE UNIQUE INDEX tag_binding_node_key ON public.tag_binding USING btree (tag_id, node_id) WHERE (owner_kind = 'node'::text)"
+      "name": "tag_binding_outpost_key",
+      "definition": "CREATE UNIQUE INDEX tag_binding_outpost_key ON public.tag_binding USING btree (tag_id, outpost_id) WHERE (owner_kind = 'outpost'::text)"
      },
      {
       "name": "tag_binding_platform_key",
@@ -2380,11 +2640,11 @@
       "fk_target": "component.id"
      },
      {
-      "name": "node_name",
+      "name": "outpost_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "node.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "label",
@@ -2882,14 +3142,14 @@
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "role_choice.id"
+      "fk_target": "slot_choice.id"
      },
      {
       "name": "owner_kind",
       "type": "text",
       "nullable": false,
       "fk": true,
-      "fk_target": "role_choice.owner_kind"
+      "fk_target": "slot_choice.owner_kind"
      },
      {
       "name": "standard_id",
@@ -2906,7 +3166,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "role_choice.owner_ref"
+      "fk_target": "slot_choice.owner_ref"
      },
      {
       "name": "name",
@@ -2939,15 +3199,101 @@
      }
     ]
    },
-   "human": {
+   "impersonation_session": {
     "columns": [
      {
-      "name": "principal_id",
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "token_hash",
+      "type": "bytea",
+      "nullable": false
+     },
+     {
+      "name": "target_user_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "real_actor_user_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "mode",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": false
+     },
+     {
+      "name": "revoked_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "impersonation_session_mode_check",
+      "expr": "CHECK ((mode = ANY (ARRAY['view_as'::text, 'act_as'::text])))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "impersonation_session_token_hash_key",
+      "definition": "CREATE UNIQUE INDEX impersonation_session_token_hash_key ON public.impersonation_session USING btree (token_hash)"
+     }
+    ]
+   },
+   "machine": {
+    "columns": [
+     {
+      "name": "user_id",
       "type": "uuid",
       "nullable": false,
       "pk": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     }
+    ],
+    "uniques": [
+     {
+      "name": "machine_name_key",
+      "definition": "CREATE UNIQUE INDEX machine_name_key ON public.machine USING btree (name)"
+     }
+    ]
+   },
+   "person": {
+    "columns": [
+     {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "users.id"
      },
      {
       "name": "username",
@@ -2994,263 +3340,8 @@
     ],
     "uniques": [
      {
-      "name": "human_username_key",
-      "definition": "CREATE UNIQUE INDEX human_username_key ON public.human USING btree (username)"
-     }
-    ]
-   },
-   "impersonation_session": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "token_hash",
-      "type": "bytea",
-      "nullable": false
-     },
-     {
-      "name": "target_principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "real_actor_principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "mode",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "expires_at",
-      "type": "timestamp with time zone",
-      "nullable": false
-     },
-     {
-      "name": "revoked_at",
-      "type": "timestamp with time zone",
-      "nullable": true
-     }
-    ],
-    "checks": [
-     {
-      "name": "impersonation_session_mode_check",
-      "expr": "CHECK ((mode = ANY (ARRAY['view_as'::text, 'act_as'::text])))"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "impersonation_session_token_hash_key",
-      "definition": "CREATE UNIQUE INDEX impersonation_session_token_hash_key ON public.impersonation_session USING btree (token_hash)"
-     }
-    ]
-   },
-   "principal": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "kind",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "active",
-      "type": "boolean",
-      "nullable": false,
-      "default": "true"
-     },
-     {
-      "name": "archived_at",
-      "type": "timestamp with time zone",
-      "nullable": true
-     },
-     {
-      "name": "seq",
-      "type": "bigint",
-      "nullable": false
-     }
-    ],
-    "checks": [
-     {
-      "name": "principal_kind_check",
-      "expr": "CHECK ((kind = ANY (ARRAY['human'::text, 'service'::text, 'node'::text, 'agent'::text])))"
-     }
-    ]
-   },
-   "principal_grant": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "principal_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "scope_kind",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "scope_id",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "scope_op",
-      "type": "text",
-      "nullable": false,
-      "default": "'subtree'::text"
-     },
-     {
-      "name": "group_id",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "principal_group.id"
-     },
-     {
-      "name": "role_id",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "role.id"
-     }
-    ],
-    "checks": [
-     {
-      "name": "principal_grant_scope_kind_check",
-      "expr": "CHECK ((scope_kind = ANY (ARRAY['all'::text, 'location'::text, 'system'::text, 'component'::text])))"
-     },
-     {
-      "name": "principal_grant_scope_op_check",
-      "expr": "CHECK ((scope_op = ANY (ARRAY['subtree'::text, 'subtree_excl_root'::text, 'self'::text])))"
-     },
-     {
-      "name": "principal_grant_target_ck",
-      "expr": "CHECK ((num_nonnulls(principal_id, group_id) = 1))"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "principal_grant_unique",
-      "definition": "CREATE UNIQUE INDEX principal_grant_unique ON public.principal_grant USING btree (principal_id, role_id, scope_kind, COALESCE(scope_id, ''::text), scope_op)"
-     },
-     {
-      "name": "principal_group_grant_unique",
-      "definition": "CREATE UNIQUE INDEX principal_group_grant_unique ON public.principal_grant USING btree (group_id, role_id, scope_kind, COALESCE(scope_id, ''::text), scope_op) WHERE (group_id IS NOT NULL)"
-     }
-    ]
-   },
-   "principal_group": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "name",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "label",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "description",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     }
-    ],
-    "uniques": [
-     {
-      "name": "principal_group_name_key",
-      "definition": "CREATE UNIQUE INDEX principal_group_name_key ON public.principal_group USING btree (name)"
-     }
-    ]
-   },
-   "principal_group_member": {
-    "columns": [
-     {
-      "name": "group_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "principal_group.id"
-     },
-     {
-      "name": "principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
+      "name": "person_username_key",
+      "definition": "CREATE UNIQUE INDEX person_username_key ON public.person USING btree (username)"
      }
     ]
    },
@@ -3326,7 +3417,7 @@
      }
     ]
    },
-   "role_choice": {
+   "slot_choice": {
     "columns": [
      {
       "name": "id",
@@ -3384,49 +3475,26 @@
     ],
     "checks": [
      {
-      "name": "role_choice_owner_arc_check",
+      "name": "slot_choice_owner_arc_check",
       "expr": "CHECK ((((owner_kind = 'standard'::text) AND (standard_id IS NOT NULL) AND (system_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (standard_id IS NULL))))"
      },
      {
-      "name": "role_choice_owner_kind_check",
+      "name": "slot_choice_owner_kind_check",
       "expr": "CHECK ((owner_kind = ANY (ARRAY['standard'::text, 'system'::text])))"
      }
     ],
     "uniques": [
      {
-      "name": "role_choice_name_key",
-      "definition": "CREATE UNIQUE INDEX role_choice_name_key ON public.role_choice USING btree (owner_kind, owner_ref, name)"
+      "name": "slot_choice_name_key",
+      "definition": "CREATE UNIQUE INDEX slot_choice_name_key ON public.slot_choice USING btree (owner_kind, owner_ref, name)"
      },
      {
-      "name": "role_choice_owner_key",
-      "definition": "CREATE UNIQUE INDEX role_choice_owner_key ON public.role_choice USING btree (id, owner_kind, owner_ref)"
+      "name": "slot_choice_owner_key",
+      "definition": "CREATE UNIQUE INDEX slot_choice_owner_key ON public.slot_choice USING btree (id, owner_kind, owner_ref)"
      }
     ]
    },
-   "service": {
-    "columns": [
-     {
-      "name": "principal_id",
-      "type": "uuid",
-      "nullable": false,
-      "pk": true,
-      "fk": true,
-      "fk_target": "principal.id"
-     },
-     {
-      "name": "name",
-      "type": "text",
-      "nullable": false
-     }
-    ],
-    "uniques": [
-     {
-      "name": "service_name_key",
-      "definition": "CREATE UNIQUE INDEX service_name_key ON public.service USING btree (name)"
-     }
-    ]
-   },
-   "system_role": {
+   "system_slot": {
     "columns": [
      {
       "name": "id",
@@ -3518,34 +3586,34 @@
     ],
     "checks": [
      {
-      "name": "system_role_capacity_check",
+      "name": "system_slot_capacity_check",
       "expr": "CHECK (((capacity IS NULL) OR (capacity \u003e= quorum)))"
      },
      {
-      "name": "system_role_impact_check",
+      "name": "system_slot_impact_check",
       "expr": "CHECK ((impact = ANY (ARRAY['outage'::text, 'degraded'::text, 'none'::text])))"
      },
      {
-      "name": "system_role_owner_arc_check",
+      "name": "system_slot_owner_arc_check",
       "expr": "CHECK ((((owner_kind = 'standard'::text) AND (standard_id IS NOT NULL) AND (system_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (standard_id IS NULL))))"
      },
      {
-      "name": "system_role_owner_kind_check",
+      "name": "system_slot_owner_kind_check",
       "expr": "CHECK ((owner_kind = ANY (ARRAY['standard'::text, 'system'::text])))"
      },
      {
-      "name": "system_role_quorum_check",
+      "name": "system_slot_quorum_check",
       "expr": "CHECK ((quorum \u003e= 1))"
      }
     ],
     "uniques": [
      {
-      "name": "system_role_name_key",
-      "definition": "CREATE UNIQUE INDEX system_role_name_key ON public.system_role USING btree (owner_kind, standard_id, system_id, name) NULLS NOT DISTINCT"
+      "name": "system_slot_name_key",
+      "definition": "CREATE UNIQUE INDEX system_slot_name_key ON public.system_slot USING btree (owner_kind, standard_id, system_id, name) NULLS NOT DISTINCT"
      }
     ]
    },
-   "system_role_assignment": {
+   "system_slot_assignment": {
     "columns": [
      {
       "name": "id",
@@ -3555,11 +3623,11 @@
       "pk": true
      },
      {
-      "name": "role_id",
+      "name": "slot_id",
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "system_role.id"
+      "fk_target": "system_slot.id"
      },
      {
       "name": "created_at",
@@ -3589,34 +3657,34 @@
     ],
     "checks": [
      {
-      "name": "system_role_assignment_position_check",
+      "name": "system_slot_assignment_position_check",
       "expr": "CHECK ((\"position\" \u003e= 1))"
      }
     ],
     "uniques": [
      {
-      "name": "system_role_assignment_component_key",
-      "definition": "CREATE UNIQUE INDEX system_role_assignment_component_key ON public.system_role_assignment USING btree (system_id, component_id)"
+      "name": "system_slot_assignment_component_key",
+      "definition": "CREATE UNIQUE INDEX system_slot_assignment_component_key ON public.system_slot_assignment USING btree (system_id, component_id)"
      },
      {
-      "name": "system_role_assignment_position_key",
-      "definition": "CREATE UNIQUE INDEX system_role_assignment_position_key ON public.system_role_assignment USING btree (system_id, role_id, \"position\")"
+      "name": "system_slot_assignment_position_key",
+      "definition": "CREATE UNIQUE INDEX system_slot_assignment_position_key ON public.system_slot_assignment USING btree (system_id, slot_id, \"position\")"
      },
      {
-      "name": "system_role_assignment_system_id_role_id_component_id_key",
-      "definition": "CREATE UNIQUE INDEX system_role_assignment_system_id_role_id_component_id_key ON public.system_role_assignment USING btree (system_id, role_id, component_id)"
+      "name": "system_slot_assignment_system_id_slot_id_component_id_key",
+      "definition": "CREATE UNIQUE INDEX system_slot_assignment_system_id_slot_id_component_id_key ON public.system_slot_assignment USING btree (system_id, slot_id, component_id)"
      }
     ]
    },
-   "system_role_product": {
+   "system_slot_product": {
     "columns": [
      {
-      "name": "role_id",
+      "name": "slot_id",
       "type": "uuid",
       "nullable": false,
       "pk": true,
       "fk": true,
-      "fk_target": "system_role.id"
+      "fk_target": "system_slot.id"
      },
      {
       "name": "product_id",
@@ -3628,15 +3696,15 @@
      }
     ]
    },
-   "system_role_type": {
+   "system_slot_type": {
     "columns": [
      {
-      "name": "role_id",
+      "name": "slot_id",
       "type": "uuid",
       "nullable": false,
       "pk": true,
       "fk": true,
-      "fk_target": "system_role.id"
+      "fk_target": "system_slot.id"
      },
      {
       "name": "component_type_id",
@@ -3645,6 +3713,198 @@
       "pk": true,
       "fk": true,
       "fk_target": "component_type.id"
+     }
+    ]
+   },
+   "user_grant": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "scope_kind",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "scope_id",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "scope_op",
+      "type": "text",
+      "nullable": false,
+      "default": "'subtree'::text"
+     },
+     {
+      "name": "group_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "user_group.id"
+     },
+     {
+      "name": "role_id",
+      "type": "uuid",
+      "nullable": false,
+      "fk": true,
+      "fk_target": "role.id"
+     }
+    ],
+    "checks": [
+     {
+      "name": "user_grant_scope_kind_check",
+      "expr": "CHECK ((scope_kind = ANY (ARRAY['all'::text, 'location'::text, 'system'::text, 'component'::text])))"
+     },
+     {
+      "name": "user_grant_scope_op_check",
+      "expr": "CHECK ((scope_op = ANY (ARRAY['subtree'::text, 'subtree_excl_root'::text, 'self'::text])))"
+     },
+     {
+      "name": "user_grant_target_ck",
+      "expr": "CHECK ((num_nonnulls(user_id, group_id) = 1))"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "user_grant_unique",
+      "definition": "CREATE UNIQUE INDEX user_grant_unique ON public.user_grant USING btree (user_id, role_id, scope_kind, COALESCE(scope_id, ''::text), scope_op)"
+     },
+     {
+      "name": "user_group_grant_unique",
+      "definition": "CREATE UNIQUE INDEX user_group_grant_unique ON public.user_grant USING btree (group_id, role_id, scope_kind, COALESCE(scope_id, ''::text), scope_op) WHERE (group_id IS NOT NULL)"
+     }
+    ]
+   },
+   "user_group": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "description",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "uniques": [
+     {
+      "name": "user_group_name_key",
+      "definition": "CREATE UNIQUE INDEX user_group_name_key ON public.user_group USING btree (name)"
+     }
+    ]
+   },
+   "user_group_member": {
+    "columns": [
+     {
+      "name": "group_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "user_group.id"
+     },
+     {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": false,
+      "pk": true,
+      "fk": true,
+      "fk_target": "users.id"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ]
+   },
+   "users": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "kind",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "active",
+      "type": "boolean",
+      "nullable": false,
+      "default": "true"
+     },
+     {
+      "name": "archived_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "seq",
+      "type": "bigint",
+      "nullable": false
+     }
+    ],
+    "checks": [
+     {
+      "name": "users_kind_check",
+      "expr": "CHECK ((kind = ANY (ARRAY['person'::text, 'machine'::text])))"
      }
     ]
    }
@@ -3718,11 +3978,11 @@
       "default": "now()"
      },
      {
-      "name": "owner_principal_id",
+      "name": "owner_user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "channels",
@@ -3746,7 +4006,7 @@
     "checks": [
      {
       "name": "action_rule_channels_check",
-      "expr": "CHECK ((((owner_principal_id IS NULL) AND (cardinality(channels) = 0)) OR ((owner_principal_id IS NOT NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+      "expr": "CHECK ((((owner_user_id IS NULL) AND (cardinality(channels) = 0)) OR ((owner_user_id IS NOT NULL) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
      },
      {
       "name": "action_rule_namespace_check",
@@ -3764,11 +4024,11 @@
     "uniques": [
      {
       "name": "action_rule_owner_name_key",
-      "definition": "CREATE UNIQUE INDEX action_rule_owner_name_key ON public.action_rule USING btree (owner_principal_id, name) WHERE (owner_principal_id IS NOT NULL)"
+      "definition": "CREATE UNIQUE INDEX action_rule_owner_name_key ON public.action_rule USING btree (owner_user_id, name) WHERE (owner_user_id IS NOT NULL)"
      },
      {
       "name": "action_rule_platform_name_key",
-      "definition": "CREATE UNIQUE INDEX action_rule_platform_name_key ON public.action_rule USING btree (namespace, name) WHERE (owner_principal_id IS NULL)"
+      "definition": "CREATE UNIQUE INDEX action_rule_platform_name_key ON public.action_rule USING btree (namespace, name) WHERE (owner_user_id IS NULL)"
      }
     ]
    },
@@ -3783,12 +4043,12 @@
       "fk_target": "action_rule.id"
      },
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": false,
       "pk": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "created_at",
@@ -3885,7 +4145,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "raised_by_rule_id",
@@ -3928,7 +4188,7 @@
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "created_at",
@@ -4357,11 +4617,11 @@
       "fk_target": "location.id"
      },
      {
-      "name": "node_id",
+      "name": "outpost_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "node.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "command_type_id",
@@ -4457,11 +4717,11 @@
     "checks": [
      {
       "name": "command_owner_arc_check",
-      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
+      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'outpost'::text) AND (outpost_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
      },
      {
       "name": "command_owner_kind_check",
-      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
+      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'outpost'::text])))"
      },
      {
       "name": "command_settled_by_check",
@@ -4678,11 +4938,11 @@
       "fk_target": "location.id"
      },
      {
-      "name": "node_id",
+      "name": "outpost_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "node.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "event_type_id",
@@ -4743,11 +5003,11 @@
      },
      {
       "name": "event_owner_arc_check",
-      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
+      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'outpost'::text) AND (outpost_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
      },
      {
       "name": "event_owner_kind_check",
-      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
+      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'outpost'::text])))"
      },
      {
       "name": "event_provenance_check",
@@ -5374,11 +5634,11 @@
       "fk_target": "location.id"
      },
      {
-      "name": "node_id",
+      "name": "outpost_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "node.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "owner_id",
@@ -5403,7 +5663,7 @@
       "default": "''::text"
      },
      {
-      "name": "collector_node_id",
+      "name": "collector_outpost_id",
       "type": "uuid",
       "nullable": true
      },
@@ -5416,11 +5676,11 @@
     "checks": [
      {
       "name": "metric_series_owner_arc_check",
-      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
+      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'outpost'::text) AND (outpost_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
      },
      {
       "name": "metric_series_owner_kind_check",
-      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
+      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'outpost'::text])))"
      },
      {
       "name": "metric_series_provenance_check",
@@ -5430,7 +5690,7 @@
     "uniques": [
      {
       "name": "metric_series_key",
-      "definition": "CREATE UNIQUE INDEX metric_series_key ON public.metric_series USING btree (owner_id, metric_type_id, instance, provenance, source, collector_node_id, source_conduit_id) NULLS NOT DISTINCT"
+      "definition": "CREATE UNIQUE INDEX metric_series_key ON public.metric_series USING btree (owner_id, metric_type_id, instance, provenance, source, collector_outpost_id, source_conduit_id) NULLS NOT DISTINCT"
      }
     ]
    },
@@ -5763,11 +6023,11 @@
       "default": "now()"
      },
      {
-      "name": "recipient_principal_id",
+      "name": "recipient_user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "recipient_name",
@@ -5856,18 +6116,18 @@
       "default": "now()"
      },
      {
-      "name": "principal_group_id",
+      "name": "user_group_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal_group.id"
+      "fk_target": "user_group.id"
      },
      {
-      "name": "principal_id",
+      "name": "user_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "principal.id"
+      "fk_target": "users.id"
      },
      {
       "name": "channels",
@@ -5885,7 +6145,7 @@
     "checks": [
      {
       "name": "notification_target_kind_check",
-      "expr": "CHECK ((((kind = 'webhook'::text) AND (url IS NOT NULL) AND (principal_group_id IS NULL) AND (principal_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) = 0)) OR ((kind = 'email'::text) AND (url IS NULL) AND (principal_group_id IS NULL) AND (principal_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) \u003e 0)) OR ((kind = 'principal_group'::text) AND (principal_group_id IS NOT NULL) AND (url IS NULL) AND (principal_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'principal'::text) AND (principal_id IS NOT NULL) AND (url IS NULL) AND (principal_group_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
+      "expr": "CHECK ((((kind = 'webhook'::text) AND (url IS NOT NULL) AND (user_group_id IS NULL) AND (user_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) = 0)) OR ((kind = 'email'::text) AND (url IS NULL) AND (user_group_id IS NULL) AND (user_id IS NULL) AND (secret_id IS NULL) AND (cardinality(channels) = 0) AND (cardinality(addresses) \u003e 0)) OR ((kind = 'user_group'::text) AND (user_group_id IS NOT NULL) AND (url IS NULL) AND (user_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text])) OR ((kind = 'user'::text) AND (user_id IS NOT NULL) AND (url IS NULL) AND (user_group_id IS NULL) AND (secret_id IS NULL) AND (cardinality(addresses) = 0) AND (cardinality(channels) \u003e 0) AND (channels \u003c@ ARRAY['inbox'::text, 'email'::text]))))"
      }
     ],
     "uniques": [
@@ -6050,11 +6310,11 @@
       "fk_target": "location.id"
      },
      {
-      "name": "node_id",
+      "name": "outpost_id",
       "type": "uuid",
       "nullable": true,
       "fk": true,
-      "fk_target": "node.principal_id"
+      "fk_target": "outpost.user_id"
      },
      {
       "name": "property_type_id",
@@ -6093,11 +6353,11 @@
      },
      {
       "name": "property_owner_arc_check",
-      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (node_id IS NULL)) OR ((owner_kind = 'node'::text) AND (node_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
+      "expr": "CHECK ((((owner_kind = 'component'::text) AND (component_id IS NOT NULL) AND (system_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'system'::text) AND (system_id IS NOT NULL) AND (component_id IS NULL) AND (location_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'location'::text) AND (location_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (outpost_id IS NULL)) OR ((owner_kind = 'outpost'::text) AND (outpost_id IS NOT NULL) AND (component_id IS NULL) AND (system_id IS NULL) AND (location_id IS NULL))))"
      },
      {
       "name": "property_owner_kind_check",
-      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'node'::text])))"
+      "expr": "CHECK ((owner_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text, 'outpost'::text])))"
      },
      {
       "name": "property_provenance_check",
@@ -6299,7 +6559,7 @@
       "default": "now()"
      },
      {
-      "name": "node",
+      "name": "outpost",
       "type": "text",
       "nullable": true
      },
@@ -6346,7 +6606,7 @@
       "default": "false"
      },
      {
-      "name": "node_loss",
+      "name": "outpost_loss",
       "type": "jsonb",
       "nullable": true
      }

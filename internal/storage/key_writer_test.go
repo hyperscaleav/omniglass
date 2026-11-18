@@ -19,7 +19,7 @@ import (
 )
 
 // writerFixture is a seeded gateway with one component (disp-1) carrying one
-// ssh endpoint (ssh) on node-a, and a raw connection for planting the legacy
+// ssh endpoint (ssh) on outpost-a, and a raw connection for planting the legacy
 // rows a write path no longer produces. The gateway is stood as a server
 // boots one: seeded, and its metric days rolled at the database's clock, so a
 // row planted straight into metric within the roll's days has a partition.
@@ -60,8 +60,8 @@ func newWriterFixtureAt(t *testing.T, at time.Time) writerFixture {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "outpost-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
@@ -71,16 +71,16 @@ func newWriterFixtureAt(t *testing.T, at time.Time) writerFixture {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { conn.Close(ctx) })
-	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:22"}'::jsonb),
-		('tls', 'tls', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.1:443","tls-mode":"pin"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('ssh', 'ssh', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:22"}'::jsonb),
+		('tls', 'tls', (select id from component where name = 'disp-1'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.1:443","tls-mode":"pin"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: make([]byte, 32), Prefix: "root0000"}); err != nil {
 		t.Fatalf("bootstrap owner: %v", err)
 	}
 	var actor string
-	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+	if err := conn.QueryRow(ctx, `select user_id from person where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
 	return writerFixture{ctx: ctx, gw: gw, conn: conn, actor: actor, dsn: dsn, now: now}
@@ -98,13 +98,13 @@ func (f writerFixture) count(t *testing.T, sql string, args ...any) int {
 // refused reports a write the gateway turned away for its writer.
 func refused(err error) bool { return errors.Is(err, storage.ErrKeyWriterRefused) }
 
-// TestCommandTypeRefusesANodeProbeTarget is point 1 of ADR-0161: a command
+// TestCommandTypeRefusesAOutpostProbeTarget is point 1 of ADR-0161: a command
 // opens an intended value on its target, so a command type may target only a
-// key a command may write. A node-probe key (the reachability verdict, a held
+// key a command may write. An outpost-probe key (the reachability verdict, a held
 // session's state, the trusted host key, a probe metric) and the platform's
 // health are refused at create and at retarget, naming the key, and a command
 // type stored before the refusal existed opens nothing when issued.
-func TestCommandTypeRefusesANodeProbeTarget(t *testing.T) {
+func TestCommandTypeRefusesAOutpostProbeTarget(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -155,8 +155,8 @@ func TestCommandTypeRefusesANodeProbeTarget(t *testing.T) {
 }
 
 // TestDeclaredWriteRefusesAReservedKey: an operator's declared value is never
-// a node's observation or the platform's verdict, so the declared write refuses
-// every node-probe key (the host key pin included: it lands only through the
+// an outpost's observation or the platform's verdict, so the declared write refuses
+// every outpost-probe key (the host key pin included: it lands only through the
 // endpoint's audited :retry) and health, naming the key, and writes nothing.
 func TestDeclaredWriteRefusesAReservedKey(t *testing.T) {
 	t.Parallel()
@@ -195,24 +195,24 @@ func TestDeclaredWriteRefusesAReservedKey(t *testing.T) {
 	}
 }
 
-// TestNodeProbeReadsServeOnlyObserved is point 3: the reads the reachability
-// panel and the session pill compose over serve a node-probe key's observed
+// TestOutpostProbeReadsServeOnlyObserved is point 3: the reads the reachability
+// panel and the session pill compose over serve an outpost-probe key's observed
 // series only. A declared or calculated row planted beside it (newer than the
-// node's own observation, as a write before the gateway's refusal could leave
-// one) never reads as the node's. It runs at the real clock and either side
+// outpost's own observation, as a write before the gateway's refusal could leave
+// one) never reads as the outpost's. It runs at the real clock and either side
 // of a UTC midnight, where the observation an hour back is yesterday's (#1567).
-func TestNodeProbeReadsServeOnlyObserved(t *testing.T) {
+func TestOutpostProbeReadsServeOnlyObserved(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
 	storagetest.AtEachMidnight(t, func(t *testing.T, at time.Time) {
 		t.Parallel()
-		nodeProbeReadsServeOnlyObserved(t, newWriterFixtureAt(t, at))
+		outpostProbeReadsServeOnlyObserved(t, newWriterFixtureAt(t, at))
 	})
 }
 
-func nodeProbeReadsServeOnlyObserved(t *testing.T, f writerFixture) {
+func outpostProbeReadsServeOnlyObserved(t *testing.T, f writerFixture) {
 	observedAt := f.now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
 	if _, err := f.conn.Exec(f.ctx, `
 		insert into property (ts, owner_kind, component_id, property_type_id, instance, value, provenance, source)
@@ -226,7 +226,7 @@ func nodeProbeReadsServeOnlyObserved(t *testing.T, f writerFixture) {
 		from component c, metric_type mt where c.name = 'disp-1' and mt.name = 'tcp-connect-time'`), observedAt); err != nil {
 		t.Fatalf("observed metric: %v", err)
 	}
-	// The planted rows, an hour newer than the node's.
+	// The planted rows, an hour newer than the outpost's.
 	if _, err := f.conn.Exec(f.ctx, `
 		insert into property (ts, owner_kind, component_id, property_type_id, instance, value, provenance)
 		select now(), 'component', c.id, pt.id, 'ssh', to_jsonb(v.value), 'declared'
@@ -243,7 +243,7 @@ func nodeProbeReadsServeOnlyObserved(t *testing.T, f writerFixture) {
 	for key, want := range map[string]string{"endpoint-reachable": "down", "session-state": "rejected"} {
 		got, err := f.gw.LatestProperty(f.ctx, "disp-1", key, "ssh")
 		if err != nil || got == nil || got.Value != want || got.Provenance != "observed" {
-			t.Fatalf("LatestProperty(%s) = %+v (%v), want the node's observed %q", key, got, err, want)
+			t.Fatalf("LatestProperty(%s) = %+v (%v), want the outpost's observed %q", key, got, err, want)
 		}
 	}
 	rows, err := f.gw.PropertyTransitions(f.ctx, "disp-1", "endpoint-reachable", "ssh", 0)
@@ -322,15 +322,15 @@ func TestWriterMismatchRefused(t *testing.T) {
 			{"a push of a probe metric", func() error {
 				return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("tcp-connect-time", "ssh"))
 			}},
-			{"a node on another endpoint", func() error {
-				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("tcp-connect-time", "panel"))
+			{"an outpost on another endpoint", func() error {
+				return f.gw.InsertMetricSamples(f.ctx, storage.OutpostWriter(comp.ID, "ssh"), metric("tcp-connect-time", "panel"))
 			}},
-			{"a node bound to no endpoint", func() error {
-				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, ""), metric("icmp-rtt-avg", ""))
+			{"an outpost bound to no endpoint", func() error {
+				return f.gw.InsertMetricSamples(f.ctx, storage.OutpostWriter(comp.ID, ""), metric("icmp-rtt-avg", ""))
 			}},
 			{"a push of a calc output", func() error { return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("avg-uptime", "")) }},
-			{"a node lane carrying a calc output", func() error {
-				return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("avg-uptime", "ssh"))
+			{"an outpost lane carrying a calc output", func() error {
+				return f.gw.InsertMetricSamples(f.ctx, storage.OutpostWriter(comp.ID, "ssh"), metric("avg-uptime", "ssh"))
 			}},
 			{"another rule's output", func() error { return f.gw.WriteMetricAsRule(f.ctx, uuidZero, metric("avg-uptime", "")) }},
 			{"a rule writing a collected key", func() error { return f.gw.WriteMetricAsRule(f.ctx, rule.ID, metric("uptime", "")) }},
@@ -342,11 +342,11 @@ func TestWriterMismatchRefused(t *testing.T) {
 			{"a push of health", func() error {
 				return f.gw.InsertPropertySamples(f.ctx, storage.PushWriter(), property("health", "", "healthy"))
 			}},
-			{"a node on another endpoint", func() error {
-				return f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), property("session-state", "panel", "up"))
+			{"an outpost on another endpoint", func() error {
+				return f.gw.InsertPropertySamples(f.ctx, storage.OutpostWriter(comp.ID, "ssh"), property("session-state", "panel", "up"))
 			}},
-			{"a node writing health", func() error {
-				return f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), property("health", "ssh", "healthy"))
+			{"an outpost writing health", func() error {
+				return f.gw.InsertPropertySamples(f.ctx, storage.OutpostWriter(comp.ID, "ssh"), property("health", "ssh", "healthy"))
 			}},
 			{"a rule writing the verdict", func() error {
 				return f.gw.WritePropertyAsRule(f.ctx, rule.ID, property("endpoint-reachable", "ssh", "up"))
@@ -362,8 +362,8 @@ func TestWriterMismatchRefused(t *testing.T) {
 				_, err := f.gw.LandBatch(f.ctx, storage.IngestBatch{BatchID: "refused-event", Writer: storage.PushWriter(), Events: event("collection-failed", "ssh")})
 				return err
 			}},
-			{"a node on another endpoint", func() error {
-				return f.gw.InsertEvents(f.ctx, storage.NodeWriter(comp.ID, "ssh"), event("collection-failed", "panel"))
+			{"an outpost on another endpoint", func() error {
+				return f.gw.InsertEvents(f.ctx, storage.OutpostWriter(comp.ID, "ssh"), event("collection-failed", "panel"))
 			}},
 		},
 		"recordHealth": {
@@ -381,8 +381,8 @@ func TestWriterMismatchRefused(t *testing.T) {
 		"writeLifecycleEvent": {
 			{"an event rule settling a command", func() error { return f.gw.AdmitWrite(f.ctx, "event", writerclass.EventRule, "command-settled", "") }},
 			{"a push failing a command", func() error { return f.gw.AdmitWrite(f.ctx, "event", writerclass.Push, "command-failed", "") }},
-			{"a node timing a command out", func() error {
-				return f.gw.AdmitWrite(f.ctx, "event", writerclass.Node, "command-timed-out", "ssh")
+			{"an outpost timing a command out", func() error {
+				return f.gw.AdmitWrite(f.ctx, "event", writerclass.Outpost, "command-timed-out", "ssh")
 			}},
 			{"a command's outcome on a probe key", func() error {
 				return f.gw.AdmitWrite(f.ctx, "event", writerclass.Command, "collection-failed", "ssh")
@@ -444,13 +444,13 @@ func TestWriterMismatchRefused(t *testing.T) {
 
 	// The admitted writers, through the same paths.
 	for name, write := range map[string]func() error{
-		"a node on its endpoint": func() error {
-			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), metric("tcp-connect-time", "ssh"))
+		"an outpost on its endpoint": func() error {
+			return f.gw.InsertMetricSamples(f.ctx, storage.OutpostWriter(comp.ID, "ssh"), metric("tcp-connect-time", "ssh"))
 		},
 		"a push of a collected": func() error { return f.gw.InsertMetricSamples(f.ctx, storage.PushWriter(), metric("uptime", "")) },
 		"the rule's own output": func() error { return f.gw.WriteMetricAsRule(f.ctx, rule.ID, metric("avg-uptime", "")) },
-		"a node's own failure": func() error {
-			return f.gw.InsertEvents(f.ctx, storage.NodeWriter(comp.ID, "ssh"), event("collection-failed", "ssh"))
+		"an outpost's own failure": func() error {
+			return f.gw.InsertEvents(f.ctx, storage.OutpostWriter(comp.ID, "ssh"), event("collection-failed", "ssh"))
 		},
 		"a declared collected": func() error {
 			_, err := f.gw.SetProperty(f.ctx, f.actor, "component", comp.ID, "serial-number", "", json.RawMessage(`"SN-1"`), all, all)
@@ -468,8 +468,8 @@ func TestWriterMismatchRefused(t *testing.T) {
 			_, err := f.gw.RetryEndpoint(f.ctx, f.actor, tlsID, storage.RetryPin{Certificate: "SHA256:" + strings.Repeat("e", 43)}, all, all)
 			return err
 		},
-		"a node's own tls facts": func() error {
-			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter(comp.ID, "tls"), []storage.MetricSampleWrite{
+		"an outpost's own tls facts": func() error {
+			return f.gw.InsertMetricSamples(f.ctx, storage.OutpostWriter(comp.ID, "tls"), []storage.MetricSampleWrite{
 				{OwnerKind: "component", OwnerID: comp.ID, Key: "tls-certificate-days-left", Instance: "tls", Value: 30}})
 		},
 	} {
@@ -560,7 +560,7 @@ func TestEveryCatalogKeyHasOneWriterClass(t *testing.T) {
 			t.Errorf("an operator created event type %s", name)
 		}
 	}
-	// Even before the seed: a fresh registry refuses the names by rule, not by
+	// Even before the seed: a fresh catalog refuses the names by rule, not by
 	// collision with a seeded row.
 	if _, err := f.conn.Exec(f.ctx, `delete from metric_type where name = 'tcp-connect-time'`); err != nil {
 		t.Fatalf("drop a seeded reserved type: %v", err)
@@ -573,7 +573,7 @@ func TestEveryCatalogKeyHasOneWriterClass(t *testing.T) {
 // TestDeclarationsRefuseAKeyTheirWriterDoesNot is the declaration side of
 // ADR-0161, point 2 at the gateway: a driver spec emitting a reserved key or a
 // calc rule's output is refused at its write, as is an event rule firing the
-// node's collection-failed and a calc rule taking a reserved key as its
+// outpost's collection-failed and a calc rule taking a reserved key as its
 // output; the same declarations naming a collected key are admitted.
 func TestDeclarationsRefuseAKeyTheirWriterDoesNot(t *testing.T) {
 	t.Parallel()
@@ -657,11 +657,11 @@ func TestCalcOutputAndCommandTargetExclude(t *testing.T) {
 	}
 }
 
-// TestNodeProbeSampleCannotOutliveItsTime: a node-probe sample dated ahead of
+// TestOutpostProbeSampleCannotOutliveItsTime: an outpost-probe sample dated ahead of
 // the database's clock by more than the skew is stored at the database's now,
-// so a node cannot keep its account of an endpoint current past its tenure
+// so an outpost cannot keep its account of an endpoint current past its tenure
 // (ADR-0161). A collected key keeps the time its producer sent.
-func TestNodeProbeSampleCannotOutliveItsTime(t *testing.T) {
+func TestOutpostProbeSampleCannotOutliveItsTime(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -672,37 +672,37 @@ func TestNodeProbeSampleCannotOutliveItsTime(t *testing.T) {
 		t.Fatal(err)
 	}
 	far := time.Now().UTC().AddDate(70, 0, 0)
-	node := storage.NodeWriter(comp.ID, "ssh")
-	if err := f.gw.InsertPropertySamples(f.ctx, node, []storage.PropertySampleWrite{
+	outpost := storage.OutpostWriter(comp.ID, "ssh")
+	if err := f.gw.InsertPropertySamples(f.ctx, outpost, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-reachable", Instance: "ssh", Value: "up", TS: far},
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-rejection", Instance: "ssh", Value: "authenticated auth 9f86d081", TS: far},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.gw.InsertMetricSamples(f.ctx, node, []storage.MetricSampleWrite{
+	if err := f.gw.InsertMetricSamples(f.ctx, outpost, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "tcp-connect-time", Instance: "ssh", Value: 1, TS: far}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.gw.InsertEvents(f.ctx, node, []storage.EventWrite{
+	if err := f.gw.InsertEvents(f.ctx, outpost, []storage.EventWrite{
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "collection-failed", Instance: "ssh", Message: "x", TS: far}}); err != nil {
 		t.Fatal(err)
 	}
 	if n := f.count(t, `select (select count(*) from property where ts > now() + interval '1 hour')
 		+ (select count(*) from `+storagetest.MetricRows+` metric where ts > now() + interval '1 hour')
 		+ (select count(*) from event where ts > now() + interval '1 hour')`); n != 0 {
-		t.Fatalf("%d node-probe rows kept a time seventy years ahead", n)
+		t.Fatalf("%d outpost-probe rows kept a time seventy years ahead", n)
 	}
 	// The next reading, a second from now, is the current one.
-	if err := f.gw.InsertPropertySamples(f.ctx, node, []storage.PropertySampleWrite{
+	if err := f.gw.InsertPropertySamples(f.ctx, outpost, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-reachable", Instance: "ssh", Value: "down", TS: time.Now().UTC().Add(time.Second)}}); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := f.gw.LatestProperty(f.ctx, "disp-1", "endpoint-reachable", "ssh"); err != nil || got == nil || got.Value != "down" {
 		t.Fatalf("LatestProperty = %+v (%v), want the later down", got, err)
 	}
-	// A small skew is the node's clock, kept.
+	// A small skew is the outpost's clock, kept.
 	near := time.Now().UTC().Add(30 * time.Second).Truncate(time.Millisecond)
-	if err := f.gw.InsertMetricSamples(f.ctx, node, []storage.MetricSampleWrite{
+	if err := f.gw.InsertMetricSamples(f.ctx, outpost, []storage.MetricSampleWrite{
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "tcp-connect-time", Instance: "ssh", Value: 2, TS: near}}); err != nil {
 		t.Fatal(err)
 	}
@@ -770,7 +770,7 @@ func TestHealthReadsServeOnlyTheRollup(t *testing.T) {
 }
 
 // TestLegacyRuleFiringAReservedEventLetsTheSampleLand: an event rule stored
-// before its fire type was refused (one firing the node's collection-failed)
+// before its fire type was refused (one firing the outpost's collection-failed)
 // writes no event, and the sample it judged still lands: an ingest is never
 // refused for a rule's sake.
 func TestLegacyRuleFiringAReservedEventLetsTheSampleLand(t *testing.T) {
@@ -792,12 +792,12 @@ func TestLegacyRuleFiringAReservedEventLetsTheSampleLand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(comp.ID, "ssh"), []storage.PropertySampleWrite{
+	if err := f.gw.InsertPropertySamples(f.ctx, storage.OutpostWriter(comp.ID, "ssh"), []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: comp.ID, Key: "endpoint-reachable", Instance: "ssh", Value: "down"}}); err != nil {
-		t.Fatalf("the node's sample was refused for a legacy rule's sake: %v", err)
+		t.Fatalf("the outpost's sample was refused for a legacy rule's sake: %v", err)
 	}
 	if got, err := f.gw.LatestProperty(f.ctx, "disp-1", "endpoint-reachable", "ssh"); err != nil || got == nil || got.Value != "down" {
-		t.Fatalf("LatestProperty = %+v (%v), want the node's down", got, err)
+		t.Fatalf("LatestProperty = %+v (%v), want the outpost's down", got, err)
 	}
 	if n := f.count(t, `select count(*) from event where event_type_id = (select id from event_type where name = 'collection-failed')`); n != 0 {
 		t.Fatalf("the legacy rule wrote %d collection-failed events", n)

@@ -23,7 +23,7 @@ import (
 // its accessor sigil precisely BECAUSE `$` cannot appear in a segment, so
 // `boi.17c.sys.$sys.av` parses without ambiguity and no word needs reserving.
 // That guarantee is worth exactly as much as the tables that enforce it: one
-// unvalidated registry accepting `$` is one place the grammar becomes ambiguous.
+// unvalidated catalog accepting `$` is one place the grammar becomes ambiguous.
 //
 // This test is the enforcement. Each case creates through the real gateway with a
 // segment the rule forbids and requires a refusal.
@@ -86,8 +86,8 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: s, LocationType: "room"}, all)
 			return err
 		},
-		"node": func(s string) error {
-			_, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: s}, all, all)
+		"outpost": func(s string) error {
+			_, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: s}, all, all)
 			return err
 		},
 		"location_type": func(s string) error {
@@ -122,16 +122,16 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: s, Label: "X", Stem: &stem})
 			return err
 		},
-		// A role's key arrives as a bare {role} path param on PUT
-		// /systems/{name}/roles/{role}, so an operator types it directly.
-		"system_role": func(s string) error {
-			_, err := gw.SetSystemRole(ctx, "", "system", "sysrole-host", storage.SystemRoleSpec{Name: s, Quorum: 1})
+		// A slot's key arrives as a bare {slot} path param on PUT
+		// /systems/{name}/slots/{slot}, so an operator types it directly.
+		"system_slot": func(s string) error {
+			_, err := gw.SetSystemSlot(ctx, "", "system", "sysslot-host", storage.SystemSlotSpec{Name: s, Quorum: 1})
 			return err
 		},
 		// A group name was validated only by the Huma pattern, on a looser rule that
 		// admitted . and _, and the gateway accepted anything at all. Both are now the
 		// entity rule, so the refusal is proved here like every other table's.
-		"principal_group": func(s string) error {
+		"user_group": func(s string) error {
 			_, err := gw.CreateGroup(ctx, "", storage.GroupSpec{Name: s}, all)
 			return err
 		},
@@ -147,6 +147,12 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			_, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
 				Name: s, ValueType: "string", OwnerKind: "platform", Value: json.RawMessage(`"x"`),
 			}, all)
+			return err
+		},
+		// The owner need not exist: the name is refused before any row is
+		// written.
+		"assistant_conversation": func(s string) error {
+			_, err := gw.CreateAssistantConversation(ctx, "", "00000000-0000-4000-8000-000000000001", s)
 			return err
 		},
 		"secret": func(s string) error {

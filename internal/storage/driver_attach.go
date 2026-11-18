@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hyperscaleav/omniglass/internal/scope"
 	"net"
 	"strconv"
 	"strings"
@@ -101,7 +100,7 @@ func loadDriverCatalogIn(ctx context.Context, q querier, namespace string) (cata
 	if err := rows.Err(); err != nil {
 		return cat, fmt.Errorf("storage: read emit catalogs: %w", err)
 	}
-	// A name resolves to the catalog the ingest registry resolves it to (an
+	// A name resolves to the catalog the ingest catalog resolves it to (an
 	// operator's row shadows an official one, #1307). A name that resolves to
 	// nothing (a collision) is left out, so a spec naming it is refused rather
 	// than validated against a lane ingest would not write.
@@ -226,7 +225,7 @@ func (p *PG) resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*at
 		return nil, fmt.Errorf("storage: stored spec for driver %q does not parse: %w", d.Name, err)
 	}
 
-	effective, err := p.resolveInputs(ctx, q, d, sp, es.Inputs, es.SecretRead, es.CanAdmin)
+	effective, err := p.resolveInputs(ctx, q, d, sp, es.Inputs, SecretUse{Read: es.SecretRead, Bind: es.SecretBind, CanAdmin: es.CanAdmin})
 	if err != nil {
 		return nil, err
 	}
@@ -257,15 +256,15 @@ func (p *PG) resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*at
 // resolveInputs checks supplied inputs against a driver's declared ones and
 // returns the effective set (defaults baked): an undeclared input, a missing
 // required one, a number input that is not a number, or a secret reference
-// the caller cannot use (resolved under the caller's secret read scope and
-// admin tier) refuses with ErrAttachInvalid naming the input. The attach and
-// the in-place edit (#1061) share it.
-func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver.Spec, supplied map[string]string, secretRead scope.Set, canAdmin bool) (map[string]string, error) {
+// the caller cannot see (resolved under the caller's secret read scope and
+// admin tier) refuses with ErrAttachInvalid naming the input, and one it sees
+// but may not bind (#2047) with ErrSecretForbidden. The attach, the in-place
+// edit (#1061) and the preview share it.
+func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver.Spec, supplied map[string]string, use SecretUse) (map[string]string, error) {
 	es := struct {
-		Inputs     map[string]string
-		SecretRead scope.Set
-		CanAdmin   bool
-	}{supplied, secretRead, canAdmin}
+		Inputs map[string]string
+		SecretUse
+	}{supplied, use}
 	declared := map[string]driver.Input{}
 	for _, in := range sp.Inputs {
 		declared[in.Name] = in
@@ -327,6 +326,7 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 			return nil, fmt.Errorf("storage: resolve secret reference %q: %w", ref, err)
 		}
 		var visibleTypes []string
+		bindable := false
 		for rows.Next() {
 			var ownerKind, typeName string
 			var ownerID *string
@@ -338,13 +338,18 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 			if adminSensitive && !es.CanAdmin {
 				continue
 			}
-			inScope, err := p.secretOwnerInScope(ctx, q, ownerKind, ownerID, es.SecretRead)
+			inScope, err := p.secretOwnerInScope(ctx, q, ownerKind, ownerID, es.Read)
 			if err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("storage: scope secret reference %q: %w", ref, err)
 			}
-			if inScope {
-				visibleTypes = append(visibleTypes, typeName)
+			if !inScope {
+				continue
+			}
+			visibleTypes = append(visibleTypes, typeName)
+			if bindable, err = p.secretOwnerInScope(ctx, q, ownerKind, ownerID, es.Bind); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("storage: scope secret reference %q: %w", ref, err)
 			}
 		}
 		rows.Close()
@@ -361,6 +366,10 @@ func (p *PG) resolveInputs(ctx context.Context, q querier, d *Driver, sp *driver
 			return nil, fmt.Errorf("%w: input %q references secret %q, which names more than one secret you can use", ErrAttachInvalid, in.Name, ref)
 		case visibleTypes[0] != in.SecretType:
 			return nil, fmt.Errorf("%w: input %q needs a %s secret, and %q is a %s", ErrAttachInvalid, in.Name, in.SecretType, ref, visibleTypes[0])
+		case !bindable:
+			// Seen but not bindable: binding hands the credential to the
+			// target the binding names, which is secret:bind's alone (#2047).
+			return nil, fmt.Errorf("%w: input %q references secret %q, and handing a secret to a target takes the right to bind it (secret:bind)", ErrSecretForbidden, in.Name, ref)
 		}
 	}
 
@@ -391,14 +400,14 @@ func attachParams(effective map[string]string) map[string]string {
 }
 
 // loadDriverRef resolves a driver by name or uuid inside the caller's
-// transaction, ErrTypeNotFound when absent (the registry's own sentinel, which
+// transaction, ErrTypeNotFound when absent (the catalog's own sentinel, which
 // the API tier maps to a 422 reference fault). The row is read FOR SHARE: a
 // driver update or seed upsert in flight holds a lock that conflicts, so the
 // attach waits for it and derives from the spec it commits, and one that
 // starts after waits for the attach, whose endpoint its re-derive then sees
 // (#823). Without it an attach racing an update kept the old spec for good.
 func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) {
-	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where id = (select r.id from `+refRows("driver", ref)+` r where r.`+registryRefCol(ref)+` = $1) for share`, ref))
+	d, err := scanDriver(q.QueryRow(ctx, `select `+driverCols+` from driver where id = (select r.id from `+refRows("driver", ref)+` r where r.`+catalogRefCol(ref)+` = $1) for share`, ref))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -409,7 +418,7 @@ func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) 
 }
 
 // bakeEmits resolves each emit's lane (the compile step of the authoring
-// model, ADR-0135) into the shared runtime unit the node parses back
+// model, ADR-0135) into the shared runtime unit the outpost parses back
 // (driver.BakedEmit), so the two sides can never drift on the shape. An emit
 // the writer ruling refuses (ADR-0161), which only a spec stored before the
 // refusal can carry, is never baked: the boot audit names it instead.
@@ -544,7 +553,7 @@ func deriveDriverTasks(ctx context.Context, tx pgx.Tx, endpointID string, plan *
 // written where missing, and the driver tasks it no longer derives are
 // retired. Ids are content hashes, so an unchanged function keeps its row and
 // a spec that changed nothing touches nothing; an endpoint whose tasks did
-// change has its updated_at bumped, which moves the node's config generation.
+// change has its updated_at bumped, which moves the outpost's config generation.
 func rederiveDriverTasks(ctx context.Context, tx pgx.Tx, driverID string) error {
 	d, err := scanDriver(tx.QueryRow(ctx, `select `+driverCols+` from driver where id = $1`, driverID))
 	if err != nil {

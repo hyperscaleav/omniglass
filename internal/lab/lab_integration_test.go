@@ -89,8 +89,8 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 	cfg := func(pid int) Config {
 		return Config{
 			Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: choice.Ref, Scenario: DefaultScenario,
-				NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
-				Pushers: []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Node: NodeName,
+				OutpostToken: "lab-it-outpost-token", OutpostTokenHash: tokenHash("lab-it-outpost-token"),
+				Pushers: []Pusher{{Name: "sim-booking-service", Profile: "booking-service", Outpost: OutpostName,
 					Token: "lab-it-push-token", TokenHash: tokenHash("lab-it-push-token"), TokenPrefix: "labitpsh"}},
 				Owner: Owner{Host: host, PID: pid, PIDNS: CurrentPIDNS()}},
 			Image:         choice,
@@ -118,7 +118,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Run("compose sees one project of db, server and node", func(t *testing.T) {
+	t.Run("compose sees one project of db, server and outpost", func(t *testing.T) {
 		if _, err := exec.LookPath("docker"); err != nil {
 			t.Skip("no docker CLI to ask compose")
 		}
@@ -127,7 +127,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 			t.Fatalf("docker compose ps: %v\n%s", err, out)
 		}
 		got := strings.Fields(string(out))
-		for _, want := range []string{"db", "server", "node"} {
+		for _, want := range []string{"db", "server", "outpost"} {
 			if !strings.Contains(" "+strings.Join(got, " ")+" ", " "+want+" ") {
 				t.Errorf("docker compose -p %s ps lists %v, want %s among them", project, got, want)
 			}
@@ -142,9 +142,9 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 		}
 	})
 
-	t.Run("one published port, on loopback, and NET_ADMIN on the node alone", func(t *testing.T) {
+	t.Run("one published port, on loopback, and NET_ADMIN on the outpost alone", func(t *testing.T) {
 		published := 0
-		for _, svc := range []string{"db", "server", "node"} {
+		for _, svc := range []string{"db", "server", "outpost"} {
 			st, err := eng.Inspect(ctx, lab.ID(svc))
 			if err != nil {
 				t.Fatal(err)
@@ -156,12 +156,33 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 				}
 			}
 			hasNetAdmin := strings.Contains(strings.Join(st.CapAdd, ","), "NET_ADMIN")
-			if hasNetAdmin != (svc == "node") {
-				t.Errorf("%s caps %v: NET_ADMIN belongs to the node alone", svc, st.CapAdd)
+			if hasNetAdmin != (svc == "outpost") {
+				t.Errorf("%s caps %v: NET_ADMIN belongs to the outpost alone", svc, st.CapAdd)
 			}
 		}
 		if published != 1 {
 			t.Errorf("%d published ports across the lab, want exactly 1", published)
+		}
+	})
+
+	// #1892: Docker enforces the outpost's caps, and the outpost reads them from
+	// its cgroup to size its lane pool to the one figure a capped outpost gets.
+	t.Run("the outpost runs capped and sizes its lanes to the cap", func(t *testing.T) {
+		logs, err := eng.Logs(ctx, lab.ID("outpost"), 0)
+		if err != nil {
+			t.Fatalf("outpost logs: %v\n%s", err, logs)
+		}
+		var line string
+		for l := range strings.Lines(logs) {
+			if strings.Contains(l, `msg="lane workers"`) {
+				line = l
+				break
+			}
+		}
+		for _, want := range []string{"workers=23", "cpu.max=1,", "memory.max=512MiB"} {
+			if !strings.Contains(line, want) {
+				t.Errorf("outpost lane log %q lacks %s", line, want)
+			}
 		}
 	})
 
@@ -275,7 +296,7 @@ func TestIntegrationLabOnARealDaemon(t *testing.T) {
 				Status      string `json:"status"`
 			} `json:"devices"`
 		}
-		if err := getJSON(ctx, client, lab.BaseURL+"/api/v1/nodes/"+NodeName+"/simulation", &sim); err != nil {
+		if err := getJSON(ctx, client, lab.BaseURL+"/api/v1/outposts/"+OutpostName+"/simulation", &sim); err != nil {
 			t.Fatal(err)
 		}
 		var target string
@@ -458,7 +479,7 @@ func TestIntegrationThrowawayLabHeldForAProcess(t *testing.T) {
 	file := t.TempDir() + "/lab.env"
 	cfg := Config{
 		Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: choice.Ref, Scenario: "empty",
-			NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"),
+			OutpostToken: "lab-it-outpost-token", OutpostTokenHash: tokenHash("lab-it-outpost-token"),
 			Owner: Owner{Host: host, PID: os.Getpid(), PIDNS: CurrentPIDNS()}, Ephemeral: true},
 		Image: choice, Hold: true, ReadyFile: file, WhilePID: holder.Process.Pid,
 	}
@@ -510,7 +531,7 @@ func TestIntegrationThrowawayLabHeldForAProcess(t *testing.T) {
 // Another checkout's make re-points the shared omniglass:dev tag to its own
 // build (#1422). A lab run by this binary, which selects the tag keyed to its
 // own build id, still comes up on its own build: no "built from another
-// tree" refusal, and the server and the node both run this build's image.
+// tree" refusal, and the server and the outpost both run this build's image.
 func TestIntegrationLabRunsItsOwnBuildWhileTheSharedTagMovesOn(t *testing.T) {
 	if os.Getenv("OMNIGLASS_LAB_TEST") != "1" {
 		t.Skip("the lab's integration test runs through make test-lab (it needs the image make builds)")
@@ -594,7 +615,7 @@ func TestIntegrationLabRunsItsOwnBuildWhileTheSharedTagMovesOn(t *testing.T) {
 	var out bytes.Buffer
 	l, err := runner(eng, &out, host).Run(ctx, Config{
 		Options: Options{Project: project, Listen: DefaultListen, Port: 0, Image: choice.Ref, Scenario: DefaultScenario,
-			NodeToken: "lab-it-node-token", NodeTokenHash: tokenHash("lab-it-node-token"), Ephemeral: true,
+			OutpostToken: "lab-it-outpost-token", OutpostTokenHash: tokenHash("lab-it-outpost-token"), Ephemeral: true,
 			Owner: Owner{Host: host, PID: os.Getpid(), PIDNS: CurrentPIDNS()}},
 		Image:         choice,
 		PlantedFaults: []string{"Panel SNMP", "Panel SSH", "Panel console"},
@@ -602,10 +623,10 @@ func TestIntegrationLabRunsItsOwnBuildWhileTheSharedTagMovesOn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the lab did not come up on its own build while omniglass:dev was another's: %v\n%s", err, out.String())
 	}
-	if !l.NodeRunning {
-		t.Fatalf("the lab has no node running:\n%s", out.String())
+	if !l.OutpostRunning {
+		t.Fatalf("the lab has no outpost running:\n%s", out.String())
 	}
-	for _, svc := range []Service{l.Spec.Server, l.Spec.Node} {
+	for _, svc := range []Service{l.Spec.Server, l.Spec.Outpost} {
 		if got := docker("", "inspect", "-f", "{{.Image}}", svc.Container); got != own.ID {
 			t.Errorf("the %s container runs image %s, want this build's %s", svc.Name, got, own.ID)
 		}

@@ -18,7 +18,7 @@ import (
 )
 
 // The push face (#1743): a device that is an outside actor, not a device on
-// the network, reporting by pushing. It holds a bearer token for a principal
+// the network, reporting by pushing. It holds a bearer token for a user
 // granted telemetry:push on the systems it reports for, reads those systems
 // off its own grant (GET /auth/me), and posts each one's batch through
 // POST /telemetry:push on its profile's cadence. The batch is the profile's
@@ -51,7 +51,7 @@ type pushFace struct {
 	done   chan struct{}
 }
 
-// booking is a booked place's reading at one instant: booked while a meeting
+// booking is a booked location's reading at one instant: booked while a meeting
 // runs and free between, and the meetings left in its day, the one in
 // progress included.
 type booking struct {
@@ -284,7 +284,7 @@ func (d *Device) pushOwner(ctx context.Context, server, token, owner string) err
 	return nil
 }
 
-// grantedSystems is every system the principal's grants name, off GET
+// grantedSystems is every system the user's grants name, off GET
 // /auth/me: the places it may push for, and nothing else.
 func grantedSystems(ctx context.Context, server, token string) ([]string, error) {
 	var me struct {

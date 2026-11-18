@@ -56,7 +56,7 @@ func ValidateValue(dataType string, raw, validation json.RawMessage) error {
 // ValidateSchema refuses a JSON Schema fragment that means less than it says: a
 // required list naming a property absent from the fragment's properties block is
 // silently unenforced (huma's validator consults required only while iterating a
-// node's declared properties), so such a fragment would be stored and never
+// outpost's declared properties), so such a fragment would be stored and never
 // enforce that name. Checked at every nesting level the validator recurses into
 // (properties, items, allOf/anyOf/oneOf, not, and an object-valued
 // additionalProperties), with the offending name in the
@@ -76,7 +76,7 @@ func ValidateSchema(fragment json.RawMessage) error {
 }
 
 // checkRequiredDeclared walks the schema tree the same way the validator does. A
-// node's required list is enforced only over that node's own properties, so a
+// outpost's required list is enforced only over that outpost's own properties, so a
 // name required at one level and declared at another still enforces nothing and
 // is refused where it stands.
 func checkRequiredDeclared(s *huma.Schema) error {

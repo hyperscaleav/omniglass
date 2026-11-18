@@ -1,6 +1,6 @@
 // Package health computes a fleet's health verdict from resolved inputs. The
 // rollup is a pure function on purpose: the subtle cases (quorum boundaries, a
-// role nobody staffed, a component an alarm has taken down) are where this
+// slot nobody staffed, a component an alarm has taken down) are where this
 // gets quietly wrong, and they are far easier to pin down in a unit test than
 // in SQL. Storage resolves the inputs and records the transitions; the
 // judgement lives here.
@@ -17,7 +17,7 @@ type Verdict int
 // actually broken.
 const (
 	Healthy Verdict = iota
-	// Incomplete is a role short of quorum because the hardware was never
+	// Incomplete is a slot short of quorum because the hardware was never
 	// installed, rather than because installed hardware is failing. No alarm
 	// will ever fire for it: nothing exists yet to alarm. It is deliberately
 	// not a failure, because most of a real fleet is mid-commissioning for
@@ -57,8 +57,8 @@ func ParseVerdict(s string) Verdict {
 }
 
 // Worse returns the more severe of two verdicts. Rollup is worst-wins at every
-// level: one role in outage puts its system in outage regardless of how many
-// other roles are fine.
+// level: one slot in outage puts its system in outage regardless of how many
+// other slots are fine.
 func Worse(a, b Verdict) Verdict {
 	if a > b {
 		return a
@@ -66,9 +66,9 @@ func Worse(a, b Verdict) Verdict {
 	return b
 }
 
-// ImpactVerdict maps a role's declared impact to the verdict an impaired role
+// ImpactVerdict maps a slot's declared impact to the verdict an impaired slot
 // contributes. An unrecognized impact is Degraded rather than Healthy: an
-// impaired role should never be silently harmless because of a bad value.
+// impaired slot should never be silently harmless because of a bad value.
 func ImpactVerdict(impact string) Verdict {
 	switch impact {
 	case "outage":
@@ -91,28 +91,28 @@ type Component struct {
 
 // Occupies reports whether this component currently satisfies a slot it
 // fills: a component whose own verdict is Outage (down) cannot be counted
-// toward a role's quorum, regardless of which role asked or which alarm is
+// toward a slot's quorum, regardless of which slot asked or which alarm is
 // behind it. A Degraded component still occupies: severity is how loudly to
 // page somebody, not a second threshold for staffing, so an info or warning
-// alarm never shorts a role by itself. This is the mechanism by which a
+// alarm never shorts a slot by itself. This is the mechanism by which a
 // high-severity alarm reaches a system: impair the component down to Outage, and
-// every role it occupies loses one occupant.
+// every slot it occupies loses one occupant.
 func (c Component) Occupies() bool {
 	return c.Verdict != Outage
 }
 
-// Role is a role as the rollup sees it: how many occupants it needs, what its
+// Slot is a slot as the rollup sees it: how many occupants it needs, what its
 // failure means, and who was assigned to it.
-type Role struct {
+type Slot struct {
 	Name     string
 	Quorum   int
 	Impact   string
 	Assigned []Component
 }
 
-// Satisfying counts the assigned components that currently occupy the role
+// Satisfying counts the assigned components that currently occupy the slot
 // (their own verdict is not Outage).
-func (r Role) Satisfying() int {
+func (r Slot) Satisfying() int {
 	n := 0
 	for _, c := range r.Assigned {
 		if c.Occupies() {
@@ -123,32 +123,32 @@ func (r Role) Satisfying() int {
 }
 
 // want is the quorum floor Impaired, Short, and Spare all measure against. A
-// quorum of zero or less is treated as one: a role that wants nobody is not
-// a role.
-func (r Role) want() int {
+// quorum of zero or less is treated as one: a slot that wants nobody is not
+// a slot.
+func (r Slot) want() int {
 	if r.Quorum < 1 {
 		return 1
 	}
 	return r.Quorum
 }
 
-// Impaired reports whether the role has fallen below its quorum.
-func (r Role) Impaired() bool {
+// Impaired reports whether the slot has fallen below its quorum.
+func (r Slot) Impaired() bool {
 	return r.Satisfying() < r.want()
 }
 
-// Short is how many more occupants the role needs to reach quorum; zero
+// Short is how many more occupants the slot needs to reach quorum; zero
 // once it does.
-func (r Role) Short() int {
+func (r Slot) Short() int {
 	if n := r.want() - r.Satisfying(); n > 0 {
 		return n
 	}
 	return 0
 }
 
-// Spare is how many occupants the role has beyond quorum, the depth it has
+// Spare is how many occupants the slot has beyond quorum, the depth it has
 // left before losing one would impair it; zero at or below quorum.
-func (r Role) Spare() int {
+func (r Slot) Spare() int {
 	if n := r.Satisfying() - r.want(); n > 0 {
 		return n
 	}
@@ -156,30 +156,30 @@ func (r Role) Spare() int {
 }
 
 // Down counts the assigned components that are not currently occupying the
-// role, which after #626 is exactly those whose own verdict is Outage.
-func (r Role) Down() int {
+// slot, which after #626 is exactly those whose own verdict is Outage.
+func (r Slot) Down() int {
 	return len(r.Assigned) - r.Satisfying()
 }
 
-// Contributes is the verdict this role hands its system, and it distinguishes
+// Contributes is the verdict this slot hands its system, and it distinguishes
 // two different ways of being short.
 //
-// A role whose assigned hardware is FAILING contributes what the role declared
-// that failure means: its Impact. A role that is short because the hardware was
+// A slot whose assigned hardware is FAILING contributes what the slot declared
+// that failure means: its Impact. A slot that is short because the hardware was
 // never installed contributes Incomplete instead. Impact answers "what does it
 // mean when this breaks", and an empty slot has not broken; treating the two
 // alike would let a room that was never commissioned page somebody.
 //
-// The failing case is tested first, so a role that is BOTH under-installed and
+// The failing case is tested first, so a slot that is BOTH under-installed and
 // partly alarming reports the live failure. That is the worse of the two by
 // rank, and the actionable one: somebody is already on their way to the missing
 // box, and nobody is on their way to the dead one.
-// A role that declares its own failure harmless (impact none) declares its own
+// A slot that declares its own failure harmless (impact none) declares its own
 // absence harmless too: reporting Incomplete for one would put a permanent
 // commissioning gap on every confidence monitor nobody ever intends to staff,
 // which is the same saturation Incomplete exists to prevent. An unrecognized
 // impact still reads as a gap rather than harmless, matching ImpactVerdict.
-func (r Role) Contributes() Verdict {
+func (r Slot) Contributes() Verdict {
 	if r.Down() > 0 && r.Impaired() {
 		return ImpactVerdict(r.Impact)
 	}
@@ -189,32 +189,32 @@ func (r Role) Contributes() Verdict {
 	return Healthy
 }
 
-// Alternate is one way a choice can be satisfied: a named group of roles that
+// Alternate is one way a choice can be satisfied: a named group of slots that
 // either all count toward the choice together or not at all (#626). An
-// all-in-one room's single video-bar role and a component-built room's five
-// separate roles are two alternates of the same choice: staffing either one
-// answers the choice, and the other's unstaffed roles must not read as
+// all-in-one room's single video-bar slot and a component-built room's five
+// separate slots are two alternates of the same choice: staffing either one
+// answers the choice, and the other's unstaffed slots must not read as
 // impairments of a system that chose the other way.
 type Alternate struct {
 	Name  string
-	Roles []Role
+	Slots []Slot
 }
 
-// Fraction is the share of this alternate's roles that are at quorum (not
-// Impaired). An alternate with no roles is 0, never vacuously satisfied: a
+// Fraction is the share of this alternate's slots that are at quorum (not
+// Impaired). An alternate with no slots is 0, never vacuously satisfied: a
 // choice cannot be answered by a group that declares nothing, so a naive
 // "count satisfied == count total" (0 == 0) must not read as fully satisfied.
 func (a Alternate) Fraction() float64 {
-	if len(a.Roles) == 0 {
+	if len(a.Slots) == 0 {
 		return 0
 	}
 	n := 0
-	for _, r := range a.Roles {
+	for _, r := range a.Slots {
 		if !r.Impaired() {
 			n++
 		}
 	}
-	return float64(n) / float64(len(a.Roles))
+	return float64(n) / float64(len(a.Slots))
 }
 
 // Choice is an exclusive-or group: a system satisfies it through exactly one
@@ -231,7 +231,7 @@ type Choice struct {
 // Active returns the best-satisfied alternate (the highest Fraction), ties
 // broken by declaration order (the earlier one wins, checked with strict
 // greater-than so a later tie never displaces it). An alternate with no
-// roles is skipped entirely, never eligible to be active: see Fraction.
+// slots is skipped entirely, never eligible to be active: see Fraction.
 // False when every alternate is empty, so the choice has nothing to be
 // active about.
 func (c Choice) Active() (Alternate, bool) {
@@ -239,7 +239,7 @@ func (c Choice) Active() (Alternate, bool) {
 	var active Alternate
 	found := false
 	for _, alt := range c.Alternates {
-		if len(alt.Roles) == 0 {
+		if len(alt.Slots) == 0 {
 			continue
 		}
 		if f := alt.Fraction(); f > best {
@@ -252,29 +252,29 @@ func (c Choice) Active() (Alternate, bool) {
 }
 
 // Contributes is the verdict this choice hands its system: the worst-wins
-// fold of its active alternate's own roles, the same per-role impact fold an
-// unconditional role set gets. Winning the choice does not make an
-// alternate's own roles immune to their own impact: an active alternate that
-// is itself short still contributes what its short roles declare. A choice
+// fold of its active alternate's own slots, the same per-slot impact fold an
+// unconditional slot set gets. Winning the choice does not make an
+// alternate's own slots immune to their own impact: an active alternate that
+// is itself short still contributes what its short slots declare. A choice
 // with no non-empty alternate (nothing declared on either side) contributes
-// nothing, the same as a system with no roles.
+// nothing, the same as a system with no slots.
 func (c Choice) Contributes() Verdict {
 	active, ok := c.Active()
 	if !ok {
 		return Healthy
 	}
 	v := Healthy
-	for _, r := range active.Roles {
+	for _, r := range active.Slots {
 		v = Worse(v, r.Contributes())
 	}
 	return v
 }
 
-// SystemVerdictWith rolls a system's roles into one verdict, worst-wins,
-// across two kinds of input: unconditional roles that always count, and
-// choices where only the best-satisfied alternate's roles count (#626).
+// SystemVerdictWith rolls a system's slots into one verdict, worst-wins,
+// across two kinds of input: unconditional slots that always count, and
+// choices where only the best-satisfied alternate's slots count (#626).
 // SystemVerdict is the special case with no choices.
-func SystemVerdictWith(unconditional []Role, choices []Choice) Verdict {
+func SystemVerdictWith(unconditional []Slot, choices []Choice) Verdict {
 	v := Healthy
 	for _, r := range unconditional {
 		v = Worse(v, r.Contributes())
@@ -285,11 +285,11 @@ func SystemVerdictWith(unconditional []Role, choices []Choice) Verdict {
 	return v
 }
 
-// SystemVerdict rolls a system's roles into one verdict, worst-wins. A system
-// with no roles is Healthy: nothing has been claimed about it, and claiming
+// SystemVerdict rolls a system's slots into one verdict, worst-wins. A system
+// with no slots is Healthy: nothing has been claimed about it, and claiming
 // otherwise would paint every unmodelled system as broken.
-func SystemVerdict(roles []Role) Verdict {
-	return SystemVerdictWith(roles, nil)
+func SystemVerdict(slots []Slot) Verdict {
+	return SystemVerdictWith(slots, nil)
 }
 
 // RollUp folds already-computed child verdicts into a parent, worst-wins. It is
@@ -308,10 +308,10 @@ func RollUp(children []Verdict) Verdict {
 // alarm degrades. Official levels are read-only, so the floor does not move.
 const OutageRank = 40
 
-// ComponentVerdict is a component's own health, independent of any role it
+// ComponentVerdict is a component's own health, independent of any slot it
 // fills, from the ranks of its active alarms' severity levels: degraded once
 // any alarm is active against it, and an outage when one is at or above
-// OutageRank. A component that fills no role still shows what is wrong with
+// OutageRank. A component that fills no slot still shows what is wrong with
 // it.
 func ComponentVerdict(ranks []int) Verdict {
 	v := Healthy

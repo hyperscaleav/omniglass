@@ -25,7 +25,7 @@ import {
 } from "../lib/session";
 
 // A refusal of a changed key, and the way to trust the new one (#1078). The
-// node pins the key a component presents (an ssh host key; a tls
+// outpost pins the key a component presents (an ssh host key; a tls
 // certificate's public key next, #1035) and refuses a connection that offers
 // another, publishing both keys with its gate. PinnedKeyNotice names the two
 // keys, read off the gate as data and never out of the reason; TrustKeyButton
@@ -169,7 +169,7 @@ export function TrustKeyButton(props: {
               <div class="flex flex-col gap-2">
                 <Eyebrow
                   label="Why a key changes"
-                  hint="Trust the offered key only when you know which of these happened. Trusting makes it the pin and the node redials onto it once; the audit log records both keys and who trusted."
+                  hint="Trust the offered key only when you know which of these happened. Trusting makes it the pin and the outpost redials onto it once; the audit log records both keys and who trusted."
                 />
                 <div class="flex flex-wrap gap-1.5">
                   <For each={KEY_CHANGE_CAUSES}>

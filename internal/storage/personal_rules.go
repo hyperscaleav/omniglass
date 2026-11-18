@@ -55,8 +55,8 @@ const PersonalRuleCap = 50
 // ErrPersonalRuleCap is a personal rule past PersonalRuleCap.
 var ErrPersonalRuleCap = errors.New("storage: a person may own at most 50 personal rules")
 
-// ErrPersonalRuleOwner is a personal rule for a principal that is not a
-// person: a service or a node is no one to tell.
+// ErrPersonalRuleOwner is a personal rule for a user that is not a
+// person: a service or an outpost is no one to tell.
 var ErrPersonalRuleOwner = errors.New("storage: a personal rule belongs to a person")
 
 // ListPersonalRules lists the owner's rules, by name.
@@ -65,7 +65,7 @@ func (p *PG) ListPersonalRules(ctx context.Context, ownerID string) ([]ActionRul
 	if !isUUID(ownerID) {
 		return out, nil
 	}
-	rows, err := p.pool.Query(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.owner_principal_id = $1::uuid order by r.name`, ownerID)
+	rows, err := p.pool.Query(ctx, `select `+actionRuleCols+actionRuleFrom+` where r.owner_user_id = $1::uuid order by r.name`, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list personal rules: %w", err)
 	}
@@ -135,7 +135,7 @@ func (p *PG) CreatePersonalRule(ctx context.Context, actorID, ownerID string, sp
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var human bool
-	if err := tx.QueryRow(ctx, `select exists (select 1 from human where principal_id = $1::uuid)`, ownerID).Scan(&human); err != nil {
+	if err := tx.QueryRow(ctx, `select exists (select 1 from person where user_id = $1::uuid)`, ownerID).Scan(&human); err != nil {
 		return nil, fmt.Errorf("storage: personal rule owner: %w", err)
 	}
 	if !human {
@@ -146,7 +146,7 @@ func (p *PG) CreatePersonalRule(ctx context.Context, actorID, ownerID string, sp
 	if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext('personal_rule'), hashtext($1))`, ownerID); err != nil {
 		return nil, fmt.Errorf("storage: lock personal rules: %w", err)
 	}
-	if err := tx.QueryRow(ctx, `select count(*) from action_rule where owner_principal_id = $1::uuid`, ownerID).Scan(&owned); err != nil {
+	if err := tx.QueryRow(ctx, `select count(*) from action_rule where owner_user_id = $1::uuid`, ownerID).Scan(&owned); err != nil {
 		return nil, fmt.Errorf("storage: count personal rules: %w", err)
 	}
 	if owned >= PersonalRuleCap {
@@ -157,7 +157,7 @@ func (p *PG) CreatePersonalRule(ctx context.Context, actorID, ownerID string, sp
 		return nil, err
 	}
 	var id string
-	err = tx.QueryRow(ctx, `insert into action_rule (name, label, description, on_transitions, when_expr, notification_type_id, enabled, owner_principal_id, channels)
+	err = tx.QueryRow(ctx, `insert into action_rule (name, label, description, on_transitions, when_expr, notification_type_id, enabled, owner_user_id, channels)
 		values ($1, $2, $3, $4, $5, $6::uuid, $7, $8::uuid, $9) returning id::text`,
 		spec.Name, labelOrNull(spec.Label), spec.Description, on, spec.When, typeID, enabled, ownerID, channels).Scan(&id)
 	if isUniqueViolation(err) {
@@ -227,7 +227,7 @@ func (p *PG) UpdatePersonalRule(ctx context.Context, actorID, ownerID, ref strin
 			enabled = coalesce($9, enabled),
 			channels = coalesce($10, channels),
 			updated_at = now()
-		where id = $1 and owner_principal_id = $11::uuid`, before.ID, setLabel, labelVal, patch.Description, on, patch.When, setType, typeID,
+		where id = $1 and owner_user_id = $11::uuid`, before.ID, setLabel, labelVal, patch.Description, on, patch.When, setType, typeID,
 		patch.Enabled, channels, ownerID); err != nil {
 		return nil, fmt.Errorf("storage: update personal rule %q: %w", ref, err)
 	}
@@ -259,7 +259,7 @@ func (p *PG) DeletePersonalRule(ctx context.Context, actorID, ownerID, ref strin
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `delete from action_rule where id = $1 and owner_principal_id = $2::uuid`, before.ID, ownerID); err != nil {
+	if _, err := tx.Exec(ctx, `delete from action_rule where id = $1 and owner_user_id = $2::uuid`, before.ID, ownerID); err != nil {
 		return fmt.Errorf("storage: delete personal rule %q: %w", ref, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "action_rule", before.ID, before, nil); err != nil {

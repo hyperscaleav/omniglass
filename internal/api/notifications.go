@@ -14,7 +14,7 @@ import (
 // The notification delivery surface (#618, #1321): what was sent about which
 // alarm, and the retry of one that failed. notification:read rides the viewer
 // floor, and every read is scoped by the notification's alarm's component,
-// as the alarm reads are: a principal never sees a message about a component
+// as the alarm reads are: a user never sees a message about a component
 // outside its component read scope. :retry sits with operator, beside
 // alarm:acknowledge, its action scope resolved on the component tier.
 
@@ -28,7 +28,7 @@ type notificationBody struct {
 	Type          string     `json:"notification_type" doc:"The notification type that rendered it, by name"`
 	Target        string     `json:"target" doc:"The target it goes to, by name: a webhook, or the group or person target it reached its recipient through"`
 	Channel       string     `json:"channel" enum:"webhook,inbox,email" doc:"How it travels: a webhook post, a person's console inbox (delivered by its own commit), or email"`
-	Recipient     string     `json:"recipient,omitempty" doc:"The person it is addressed to, by username: shown to that person and to holders of principal:read:admin, withheld from everyone else (see recipient_withheld)"`
+	Recipient     string     `json:"recipient,omitempty" doc:"The person it is addressed to, by username: shown to that person and to holders of user:read:admin, withheld from everyone else (see recipient_withheld)"`
 	Withheld      bool       `json:"recipient_withheld,omitempty" doc:"True when the row is addressed to a person whose name the caller may not see"`
 	ReadAt        *time.Time `json:"read_at,omitempty" doc:"When its recipient read it, for an inbox entry"`
 	Subject       string     `json:"subject" doc:"The rendered subject"`
@@ -76,7 +76,7 @@ func registerNotificationRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodGet,
 		Path:        "/notifications",
 		Summary:     "List notifications",
-		Description: "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.",
+		Description: "The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.",
 	}, "notification", "read"), func(ctx context.Context, in *listNotificationsInput) (*listNotificationsOutput, error) {
 		ns, err := gw.ListNotifications(ctx, storage.NotificationFilter{AlarmID: in.Alarm, Target: in.Target, Status: in.Status, Limit: in.Limit},
 			a.scopeFor(ctx, "component", "read"), recipientView(ctx, a))
@@ -121,11 +121,11 @@ func registerNotificationRoutes(api huma.API, a *authenticator, gw storage.Gatew
 }
 
 // recipientView is who the caller may see a person-addressed row's recipient
-// as (#1341): themselves always, everyone when they read the principal
+// as (#1341): themselves always, everyone when they read the user
 // directory (its admin-tier read on an all-scope grant).
 func recipientView(ctx context.Context, a *authenticator) storage.RecipientView {
-	v := storage.RecipientView{All: a.canReadDirectory(ctx, "principal")}
-	if pr, ok := principalFrom(ctx); ok {
+	v := storage.RecipientView{All: a.canReadDirectory(ctx, "user")}
+	if pr, ok := userFrom(ctx); ok {
 		v.Self = pr.ID
 	}
 	return v
@@ -159,7 +159,7 @@ func registerInboxRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/auth/me/notifications",
 		Summary:     "List your inbox",
-		Description: "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
+		Description: "The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.",
 	}, "notification", "read"), func(ctx context.Context, in *listInboxInput) (*listInboxOutput, error) {
 		inbox, err := gw.ListInbox(ctx, callerID(ctx), storage.InboxFilter{Unread: in.Unread, Limit: in.Limit}, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
@@ -205,10 +205,10 @@ func registerInboxRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	})
 }
 
-// callerID is the request principal's uuid; empty when unauthenticated (a
+// callerID is the request user's uuid; empty when unauthenticated (a
 // gated route never runs then).
 func callerID(ctx context.Context) string {
-	if pr, ok := principalFrom(ctx); ok {
+	if pr, ok := userFrom(ctx); ok {
 		return pr.ID
 	}
 	return ""

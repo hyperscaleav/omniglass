@@ -28,8 +28,8 @@ const seed: Secret[] = [
   { id: uuidFor("s-below"), name: "room_community", secret_type: "snmp-community", owner_kind: "location", owner_name: "room", fields: [{ name: "community", value: "••••••", secret: true }] },
 ];
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const fleetWriter: Me = { principal: { id: "u-est", kind: "human" }, human: { username: "sam" }, permissions: ["secret:>"], grants: [] };
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const fleetWriter: Me = { user: { id: "u-est", kind: "person" }, person: { username: "sam" }, permissions: ["secret:>"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
@@ -87,7 +87,7 @@ describe("Secrets page platform-tier authority", () => {
     });
   });
 
-  it("offers the Platform scope to a principal that holds the install-wide permission", async () => {
+  it("offers the Platform scope to a user that holds the install-wide permission", async () => {
     mount(owner);
     expect(await screen.findByText("poll_community")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /new secret/i }));

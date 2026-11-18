@@ -12,10 +12,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestListAndRevokeBearerCredentials proves a principal's own bearer credentials
+// TestListAndRevokeBearerCredentials proves a user's own bearer credentials
 // list with their metadata (id, prefix, created_at, expires_at) and never the
-// secret, that one is revocable by id scoped to the owning principal, and that
-// another principal's credential id is not revocable (a no-op, false). This backs
+// secret, that one is revocable by id scoped to the owning user, and that
+// another user's credential id is not revocable (a no-op, false). This backs
 // the self-service session list and revoke (issue #172, slice 1).
 func TestListAndRevokeBearerCredentials(t *testing.T) {
 	t.Parallel()
@@ -31,12 +31,12 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash1, Prefix: prefix1}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	pid, err := gw.ResolveUserRef(ctx, "root")
 	if err != nil {
 		t.Fatalf("resolve root: %v", err)
 	}
 
-	// Issue a second bearer for the same principal, a web-login session (expires_at set).
+	// Issue a second bearer for the same user, a web-login session (expires_at set).
 	_, hash2, prefix2, _ := auth.NewBearerToken()
 	future := time.Now().Add(12 * time.Hour)
 	if ok, err := gw.IssueBearerCredential(ctx, storage.BearerIssue{Username: "root", SecretHash: hash2, Prefix: prefix2, Purpose: "session", ExpiresAt: &future}); err != nil || !ok {
@@ -81,19 +81,19 @@ func TestListAndRevokeBearerCredentials(t *testing.T) {
 		t.Errorf("a different credential must not be marked current")
 	}
 
-	// A second principal cannot revoke root's credential: the revoke is scoped to the
-	// owning principal, so a mismatched principal id is a no-op that returns false and
+	// A second user cannot revoke root's credential: the revoke is scoped to the
+	// owning user, so a mismatched user id is a no-op that returns false and
 	// deletes nothing.
-	mallory, err := gw.CreateHumanPrincipal(ctx, pid, storage.HumanSpec{Username: "mallory"}, scope.Set{All: true})
+	mallory, err := gw.CreatePerson(ctx, pid, storage.PersonSpec{Username: "mallory"}, scope.Set{All: true})
 	if err != nil {
 		t.Fatalf("create mallory: %v", err)
 	}
 	sessionID := byPrefix[prefix2].ID
 	if ok, err := gw.RevokeBearerByID(ctx, mallory.ID, mallory.ID, sessionID); err != nil || ok {
-		t.Fatalf("cross-principal revoke = (%v, %v), want (false, nil)", ok, err)
+		t.Fatalf("cross-user revoke = (%v, %v), want (false, nil)", ok, err)
 	}
 	if creds, err := gw.ListBearerCredentials(ctx, pid, hash1); err != nil || len(creds) != 2 {
-		t.Fatalf("after cross-principal revoke root should still have 2 creds, got %d (err %v)", len(creds), err)
+		t.Fatalf("after cross-user revoke root should still have 2 creds, got %d (err %v)", len(creds), err)
 	}
 
 	// The owner revokes its own session by id: it drops from the list, and the
@@ -137,7 +137,7 @@ func TestBearerIdentityFields(t *testing.T) {
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: bh, Prefix: bp}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	pid, err := gw.ResolveUserRef(ctx, "root")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -192,9 +192,9 @@ func TestBearerIdentityFields(t *testing.T) {
 }
 
 // TestRevokeBearersByPurpose proves the purpose-filtered bulk revoke: it deletes
-// every bearer of one purpose for a principal (all its sessions, or all its tokens),
+// every bearer of one purpose for a user (all its sessions, or all its tokens),
 // leaves the other purpose untouched, returns the count deleted, and is scoped to the
-// owning principal so it never reaches another's credentials. This backs the admin
+// owning user so it never reaches another's credentials. This backs the admin
 // "revoke all sessions" / "revoke all tokens" blade actions (issue #172).
 func TestRevokeBearersByPurpose(t *testing.T) {
 	t.Parallel()
@@ -205,12 +205,12 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 	}
 
 	// Bootstrap an owner (its bootstrap bearer is a token), then give the same
-	// principal two sessions and one more token.
+	// user two sessions and one more token.
 	_, bh, bp, _ := auth.NewBearerToken()
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: bh, Prefix: bp}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	pid, err := gw.ResolveUserRef(ctx, "root")
 	if err != nil {
 		t.Fatalf("resolve root: %v", err)
 	}
@@ -227,8 +227,8 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 	}
 	_ = tp
 
-	// A second principal with its own session: it must survive root's bulk revoke.
-	mallory, err := gw.CreateHumanPrincipal(ctx, pid, storage.HumanSpec{Username: "mallory"}, scope.Set{All: true})
+	// A second user with its own session: it must survive root's bulk revoke.
+	mallory, err := gw.CreatePerson(ctx, pid, storage.PersonSpec{Username: "mallory"}, scope.Set{All: true})
 	if err != nil {
 		t.Fatalf("create mallory: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 		}
 	}
 
-	// Mallory's session is untouched: the revoke is scoped to the owning principal.
+	// Mallory's session is untouched: the revoke is scoped to the owning user.
 	if mc, err := gw.ListBearerCredentials(ctx, mallory.ID, mh); err != nil || len(mc) != 1 {
 		t.Fatalf("mallory should still have 1 session, got %d (err %v)", len(mc), err)
 	}
@@ -284,7 +284,7 @@ func TestRevokeBearersByPurpose(t *testing.T) {
 
 // TestRevokeBearersByPurposeExcept proves the keep-current variant: it deletes every
 // bearer of one purpose EXCEPT the credentials whose secret_hash is in keep, scoped to
-// the principal, and returns the count. This backs "revoke my other sessions" on a
+// the user, and returns the count. This backs "revoke my other sessions" on a
 // password change and the self-service "revoke all sessions" (keep the one you are on),
 // while leaving tokens untouched (issues #173, #195).
 func TestRevokeBearersByPurposeExcept(t *testing.T) {
@@ -300,7 +300,7 @@ func TestRevokeBearersByPurposeExcept(t *testing.T) {
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: bh, Prefix: bp}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	pid, err := gw.ResolveUserRef(ctx, "root")
 	if err != nil {
 		t.Fatalf("resolve root: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestListBearerCredentialsPurposeAndLiveFilter(t *testing.T) {
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: bh, Prefix: bp}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	pid, err := gw.ResolvePrincipalRef(ctx, "root")
+	pid, err := gw.ResolveUserRef(ctx, "root")
 	if err != nil {
 		t.Fatalf("resolve root: %v", err)
 	}

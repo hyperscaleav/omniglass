@@ -253,7 +253,7 @@ func TestReclassifyRecomputes(t *testing.T) {
 // component rows. Nothing wires a component_type write to a component name
 // recompute, only a component-level trigger does (a move or a reclassify of
 // THAT component, UpdateComponent/MoveComponent's own recompute above); this
-// pins that absence so a future "helpful" cascade from the registry side
+// pins that absence so a future "helpful" cascade from the catalog side
 // does not silently become the norm. Uses a CUSTOM component_type, not a
 // seeded official one: official rows are read-only (ErrTypeOfficial), so
 // this is the only way to reach UpdateComponentType's stem branch at all.
@@ -266,13 +266,13 @@ func TestComponentTypeStemEditDoesNotRecomputeExistingNames(t *testing.T) {
 	}
 
 	ct, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "registry-edit-type", Label: "Registry Edit Type", Stem: strp("orig-stem"),
+		Name: "catalog-edit-type", Label: "Catalog Edit Type", Stem: strp("orig-stem"),
 	})
 	if err != nil {
 		t.Fatalf("create custom component_type: %v", err)
 	}
 	prod, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "registry-edit-product", Label: "Registry Edit Product", Kind: "device", ComponentType: ct.Name,
+		Name: "catalog-edit-product", Label: "Catalog Edit Product", Kind: "device", ComponentType: ct.Name,
 	})
 	if err != nil {
 		t.Fatalf("create product: %v", err)
@@ -293,13 +293,13 @@ func TestComponentTypeStemEditDoesNotRecomputeExistingNames(t *testing.T) {
 
 	got, err := gw.GetComponent(ctx, c.ID, all)
 	if err != nil {
-		t.Fatalf("get component after registry edit: %v", err)
+		t.Fatalf("get component after catalog edit: %v", err)
 	}
 	if got.Name != "orig-stem-1" {
-		t.Fatalf("name after an unrelated component_type stem edit = %q, want unchanged orig-stem-1 (a registry edit recomputes nothing)", got.Name)
+		t.Fatalf("name after an unrelated component_type stem edit = %q, want unchanged orig-stem-1 (a catalog edit recomputes nothing)", got.Name)
 	}
 	if !got.NameGenerated {
-		t.Fatalf("NameGenerated after registry edit = false, want unchanged true")
+		t.Fatalf("NameGenerated after catalog edit = false, want unchanged true")
 	}
 }
 

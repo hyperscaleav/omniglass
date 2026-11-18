@@ -12,7 +12,9 @@ import { FormActionsContext, createFormActions } from "../lib/formactions";
 // buttons DO (see lib/formactions) and renders fields only; this draws the pinned
 // bar, exactly as BladeStack draws the blade's. A body that binds nothing gets no
 // bar, which is right for a read-only slide-over. headerExtra is a slot beside the
-// close button (e.g. a maximize button for a detail blade).
+// close button (e.g. a maximize button for a detail blade). footer is a slot
+// pinned under the scrolling body for a body whose input is no form submit
+// (omnibot's composer, #1167).
 export default function Drawer(props: {
   open: boolean;
   onClose: () => void;
@@ -21,6 +23,7 @@ export default function Drawer(props: {
   // A wider panel for a body that reads more than a form (a simulated
   // component's API surface and its answers, #890).
   wide?: boolean;
+  footer?: JSX.Element;
   children: JSX.Element;
 }) {
   const actions = createFormActions();
@@ -43,6 +46,9 @@ export default function Drawer(props: {
           </header>
           <FormActionsContext.Provider value={actions}>
             <div class="flex-1 overflow-auto p-5">{props.children}</div>
+            <Show when={props.footer}>
+              <div class="border-t border-base-300 p-3">{props.footer}</div>
+            </Show>
             <FormActionBar actions={actions} />
           </FormActionsContext.Provider>
         </Dialog.Content>

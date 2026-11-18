@@ -1,10 +1,11 @@
 ---
 title: "Release and CI"
-description: "The CI gates on every PR and the manual semantic-release versioning cut from main."
+description: "The CI gates on every PR and the manual release cut from a release branch."
 ---
 
 `make test` is the local gate (the [test-driven](/contributing/test-driven/) doctrine says
-validate locally, do not lean on CI). CI is the backstop and, on `main`, the release driver.
+validate locally, do not lean on CI). CI is the backstop, and the release workflow cuts each
+release from a release branch.
 Thirteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
 `docs-build`, `migrations`, `preview-comment`, `demo`, `demo-tag`, `demo-prune`, `release`, and `goreleaser`.
 
@@ -28,11 +29,11 @@ Thirteen workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-dri
   (`make test-e2e`): the console driven as an operator would against the real binary, on a
   throwaway lab, covering the CRUD round-trips plus one smoke per console route from the
   route manifest, so a PR cannot merge with a route that errors in a real browser. All of these
-  jobs also run on `main` after merge.
+  jobs also run on `main` after merge and on every push to a release branch.
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
-  because the repo squash-merges: the squash subject *is* the PR title, and semantic-release
-  reads it to decide the next version. A malformed title would either mis-version or silently
-  skip a release, so it is blocked at the PR.
+  because the repo squash-merges: the squash subject *is* the PR title, and a release's
+  generated notes list it. A malformed title would muddy the history and the notes, so it is
+  blocked at the PR. The version itself comes from the release branch, not the titles.
 - **`gen-drift.yml`** runs `make gen` and fails the PR on any diff in the committed generated
   artifacts (the OpenAPI, the cobra tree, the CLI reference, the ERD, the typed SPA client,
   the protobuf wire), the drift gate [API first](/contributing/api-first/) promises.
@@ -77,60 +78,75 @@ first commit.
 
 ## Cutting a release (manual)
 
-Releases are **not** cut automatically on merge to `main` (deliberately, for now), and there is
-exactly one way to cut one: dispatch the **release** workflow (`release.yml`) from its "Run
-workflow" button. It runs [semantic-release](https://semantic-release.gitbook.io/), which reads the
-conventional-commit subjects since the last tag, computes the next version, pushes a git tag, and
-creates a GitHub Release with generated notes; the same job then builds the release image and the
-binaries (below). There is no local publish target: a release cut from a laptop could not build
-the image first, so its binaries would carry no image digest.
+Releases are **not** cut on merge to `main`, and `main` never freezes for one. A release is cut
+from a **release branch**, `release/<major>.<minor>`, made from `main` on the day of the cut,
+and there is exactly one way to cut one: dispatch the **release** workflow (`release.yml`) on
+that branch from its "Run workflow" button (#2139). A dispatch on any other ref fails at its
+first step.
+
+- **A candidate.** A dispatch tags the branch tip as the next candidate, `v0.1.0-rc.1`, and
+  publishes it as a GitHub prerelease with its image and binaries (below). That candidate is
+  what [the soak gate](#the-soak-gate) runs.
+- **A fix.** A fix lands on `main` first, by its own PR, and reaches the branch by a cherry-pick
+  PR into `release/<major>.<minor>`. The next dispatch tags `rc.2`, and its soak starts over.
+- **The release.** Once a candidate has passed the soak, a dispatch with **final** ticked tags
+  that same commit `v0.1.0`, a full release. It is refused unless the commit is the newest
+  candidate, so what ships is exactly what soaked.
+- **A patch.** The branch lives on: after `v0.1.0`, the next candidate is `v0.1.1-rc.1`.
+
+The version comes from the branch name and the tags already cut
+(`cmd/releaseversion`), never from commit subjects, so the first `0.x` release cannot number
+itself `1.0.0` from an old breaking change. The notes are GitHub's generated notes since the
+previous final release, one line per merged PR title.
+
+Every push to a release branch runs the same CI as `main` (`test`, `image`, `gen-drift`,
+`migrations`, `docs-build`, `docs-shots`), and `image` publishes the commit's sha image, so a
+candidate has had the full CI before it is tagged. A pull request into the branch runs the
+per-PR gates as one into `main` does.
 
 **Releasing is switched off** until the repository variable `RELEASES_ENABLED` is `true`
 (Settings, Secrets and variables, Actions, Variables). While it is unset, a dispatch can only
-plan: the `dry_run` toggle works, and a dispatch without it fails at its first step, before
-semantic-release can push a tag. Every publishing step checks the flag too, so nothing reaches
-the tag, the Release, or GHCR until it is flipped (#1940).
+plan: the `dry_run` toggle works, and a dispatch without it fails at its first step, before any
+tag. Every publishing step checks the flag too, so nothing reaches the tag, the Release, or
+GHCR until it is flipped (#1940).
 
-**Before the dispatch, the candidate's build has passed [the soak gate](#the-soak-gate).**
+**The tag is pushed by the release App.** The `v* tags: created by admins only` ruleset refuses
+the workflow's own `GITHUB_TOKEN`, so the workflow mints a token from a dedicated release GitHub
+App, the one bypass on that ruleset, when the variable `RELEASE_APP_CLIENT_ID` and the secret
+`RELEASE_APP_PRIVATE_KEY` are set. Without them it pushes with `GITHUB_TOKEN`, and the push is
+refused (#1940). Release branches themselves are protected like `main` by a `release/*`
+ruleset: pull requests only, the same required checks, no force-push or deletion.
 
-To preview locally:
+To preview locally, from the release branch:
 
 ```bash
-make release-plan    # dry run: print the next version + notes, publish nothing
+make release-plan            # the tag the next dispatch cuts
+make release-plan FINAL=1    # the final release of the newest candidate
 ```
 
-| Title prefix | Release |
-|--------------|---------|
-| `feat:` | minor |
-| `fix:`, `perf:` | patch |
-| `BREAKING CHANGE:` (footer) or `feat!:` | major |
-| `docs:`, `ci:`, `chore:`, `refactor:`, `test:` | none |
-
-No changelog is ever committed back to `main`, so the release never writes to the default
-branch. The generated notes live on the GitHub Release.
-
-To switch to release-on-merge later, change the release workflow's trigger to `push` on
-`main`; `make release-plan` stays as the local preview.
+No changelog is ever committed back, so a release never writes to `main` or the branch. The
+generated notes live on the GitHub Release.
 
 ## The soak gate
 
 No release ships unless the build has run a week under the 3,000-system corporate soak without
 failing silently (#1988). This is a release blocker run by hand on a test host, never a CI job: a
 week-long run on a dedicated machine does not belong on a runner, and its scheduling is not
-automated. The steps, before the release workflow is dispatched:
+automated. The steps, between a candidate and its final release:
 
-1. Build the release candidate's image and binary from one commit, and start the soak on the test
-   host as the [soak run](/guides/lab/#a-soak-run) describes. Note the time it starts.
+1. Cut the candidate ([above](#cutting-a-release-manual)), which publishes its image and binary
+   from one commit, and start the soak on the test host with that `v<version>-rc.<n>` build, as
+   the [soak run](/guides/lab/#a-soak-run) describes. Note the time it starts.
 2. Leave it for 7 days.
-3. Judge it, from any machine that reaches the soak's server, with a token that reads nodes,
+3. Judge it, from any machine that reaches the soak's server, with a token that reads outposts,
    systems and components over everything:
 
    ```bash
    omniglass lab soak verdict --since <start> --record-dir docs/src/content/soak-records
    ```
 
-4. Commit the record the command wrote, in the release's PR. **No passing record for the
-   candidate's build, no release.** A failing verdict exits 1, names every reason, and is also
+4. Commit the record the command wrote, by a PR to `main`. **No passing record for the
+   candidate's build, no final release.** A failing verdict exits 1, names every reason, and is also
    recorded; fix the build and run a new week.
 
 The verdict is the platform's own, not a harness's figures derived again: it reads through the API
@@ -142,7 +158,7 @@ the database. It passes when all of these hold:
 | The soak ran | at least 7 days (`--since` to `--until`, now by default) |
 | A platform alarm still open | none, however old |
 | A platform alarm raised in the window | open no longer than `--tolerance` (default 30 minutes) |
-| A loss ratio on the page (each hop, kind, component and node, the newest window and the last hour, the end to end, the worklist pull) | 0 |
+| A loss ratio on the page (each hop, kind, component and outpost, the newest window and the last hour, the end to end, the worklist pull) | 0 |
 
 A reading that cannot answer fails rather than passes: no build reported, two builds among the
 servers, no loss ratio on the page, a token that cannot read the whole page, or an alarm history
@@ -171,21 +187,22 @@ machine id, never the id), which on a soak host is the machine the soak ran on.
 
 ## Binaries on the release
 
-semantic-release cuts the tag and the Release; the same job then builds and pushes the
+The release workflow cuts the tag and the Release; the same job then builds and pushes the
 multi-platform release image to GHCR, and [GoReleaser](https://goreleaser.com/) fills the
 Release with the cross-platform binaries, each stamped with that image's digest so a release
 binary's `omniglass lab run` pulls exactly the image it was released with
 ([ADR-1257](/architecture/decisions/#adr-1257-a-release-binary-pulls-its-lab-image-by-the-digest-stamped-at-release)).
-semantic-release owns the version and the notes, GoReleaser only builds artifacts and attaches
-them (its `release.mode: keep-existing` leaves the notes untouched). The matrix is `linux/amd64`,
+The workflow owns the version and the notes, GoReleaser only builds artifacts and attaches
+them (its `release.mode: keep-existing` leaves the notes untouched, and `prerelease: auto` keeps
+a candidate a prerelease). The matrix is `linux/amd64`,
 `linux/arm64`, `darwin/amd64`, `darwin/arm64`, and `windows/amd64`, plus a `checksums.txt`
 and an SBOM per archive. Because the binary is pure Go with CGO disabled, all of it
 cross-compiles from one runner; the SPA is built once by a `before` hook (`make web`) and
 embedded in every target via `-tags web`.
 
-The tag is pushed with `GITHUB_TOKEN`, which by design triggers no other workflow, so the
-image and the binaries are built inline in `release.yml` rather than by a tag-triggered
-workflow; a `v*` tag pushed any other way builds nothing. Validate a config change locally
+No workflow runs on a tag push, so the image and the binaries are built inline in
+`release.yml` rather than by a tag-triggered workflow; a `v*` tag pushed any other way builds
+nothing. Validate a config change locally
 with `make release-snapshot` (builds the whole matrix, no tag, no publish), and
 `goreleaser.yml` runs the same snapshot on any pull request that touches the release config,
 uploading the archives as downloadable workflow artifacts. A green PR snapshot is real
@@ -195,5 +212,5 @@ evidence that the release will build.
 
 A squash merge collapses a branch's commits into one, and GitHub uses the PR title as that
 commit's subject. So the PR title is the single conventional-commit that lands on `main`, and
-it is the unit both the merge model and semantic-release reason about. That is why
+it is the unit both the merge model and the release notes reason about. That is why
 `pr-title.yml` is a required check, not advisory.

@@ -1,7 +1,7 @@
 # Working in omniglass
 
 Open observability and control plane for AV/IT fleets, and a learning tool for monitoring
-itself. Single Go binary (run modes: server, node, migrate), BYO PostgreSQL. The
+itself. Single Go binary (run modes: server, outpost, migrate), BYO PostgreSQL. The
 architecture of record is the docs site under [docs/](docs/) (published at
 docs.omniglass.hyperscaleav.com); read the [architecture spine](docs/src/content/docs/architecture/index.md) before non-trivial changes.
 
@@ -90,8 +90,9 @@ cd .claude/worktrees/<type>+<short-name>
 
 - Branch prefix and PR title use the conventional-commit type (`feat`, `fix`, `docs`,
   `ci`, `chore`, `refactor`, `test`, `perf`). PR title is `<type>: <description>`; CI
-  enforces it and semantic-release reads it on merge.
-- Squash-merge. `feat:` = minor, `fix:`/`perf:` = patch, `BREAKING CHANGE:` = major.
+  enforces it and the release notes list it.
+- Squash-merge. Releases are cut from a `release/<major>.<minor>` branch, whose name sets
+  the version; a fix reaches a release branch by cherry-pick from `main`.
 - Validate locally: `make test-short` to iterate, `make test` before the PR.
 - No `--no-verify` without explicit approval.
 
@@ -171,6 +172,9 @@ Three buckets, never conflated:
 Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 `/skill-name` (ported and refined as the corresponding subsystems land):
 
+- **`/contribute`** - the router for "I want to add a feature, request one, or report a bug": picks
+  the path (`/file-bug`, `/define-work`, `/scope-protocol`, `/run-feature-loop`, or a single slice) and
+  holds the gates between them (approved issue before a branch, dedupe first, never merge).
 - **`/ship-slice`** - the pre-ship validation pass (fresh `make test`, `make gen` drift check,
   em-dash and attribution scan, a reviewer pass, docs-with-everything) and the ship-review report
   the architect approves from. Run at PR-ready.
@@ -186,7 +190,7 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 - **`/storage-schema-change`** (ported) - how dbmate migrations work (run-once, never edited,
   idempotent, the PG rename DO-block), the three buckets, the Gateway ripple, and the
   testcontainer round-trip RED->GREEN.
-- **`/canonical-datapoint`**, **`/add-collection-primitive`** - ported with the registry and
+- **`/canonical-datapoint`**, **`/add-collection-primitive`** - ported with the catalog and
   collection-engine slices.
 - **`/docs-diagram`** - authoring docs diagrams in D2 (build-time inline SVG via astro-d2):
   the d2-binary prerequisite, the colors-live-in-CSS theming contract that tracks Starlight's

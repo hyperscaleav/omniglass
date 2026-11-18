@@ -18,10 +18,10 @@ import (
 // leaves cleared_at and the component's verdict exactly where they were, and
 // clearing neither grants nor erases an acknowledgement.
 
-// ackActor inserts a service principal and returns its id, so the
+// ackActor inserts a service user and returns its id, so the
 // acknowledgement can be checked for WHO as well as WHEN. The read resolves a
-// service principal to its own identifying column, the same answer the audit
-// write denormalizes (internal/storage/principal_ident.go).
+// service user to its own identifying column, the same answer the audit
+// write denormalizes (internal/storage/user_ident.go).
 func ackActor(t *testing.T, dsn, name string) string {
 	t.Helper()
 	ctx := context.Background()
@@ -31,10 +31,10 @@ func ackActor(t *testing.T, dsn, name string) string {
 	}
 	defer conn.Close(ctx)
 	var pid string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		t.Fatalf("insert principal: %v", err)
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, name); err != nil {
+	if _, err := conn.Exec(ctx, `insert into machine (user_id, name) values ($1, $2)`, pid, name); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	return pid
@@ -78,7 +78,7 @@ func TestAcknowledgeRecordsWhoAndWhenWithoutTouchingRaisedState(t *testing.T) {
 		t.Fatal("acknowledging recorded no acknowledgement time")
 	}
 	if acked.AcknowledgedBy != "jordan-ops" {
-		t.Errorf("acknowledged by %q, want the acting principal's name %q", acked.AcknowledgedBy, "jordan-ops")
+		t.Errorf("acknowledged by %q, want the acting user's name %q", acked.AcknowledgedBy, "jordan-ops")
 	}
 	if acked.ClearedAt != nil || !acked.Active() {
 		t.Error("acknowledging cleared the alarm: an alarm's raised state belongs to its condition, not to the person who looked at it")
@@ -233,7 +233,7 @@ func TestAcknowledgeWritesItsAuditRow(t *testing.T) {
 	defer conn.Close(ctx)
 	var gotActor, gotResource, gotID, gotUsername string
 	if err := conn.QueryRow(ctx, `
-		select coalesce(actor_principal_id::text, ''), resource, coalesce(resource_id, ''), coalesce(actor_username, '')
+		select coalesce(actor_user_id::text, ''), resource, coalesce(resource_id, ''), coalesce(actor_username, '')
 		from audit_log where verb = 'acknowledge' order by ts desc limit 1`).
 		Scan(&gotActor, &gotResource, &gotID, &gotUsername); err != nil {
 		t.Fatalf("read audit row: %v", err)
@@ -242,7 +242,7 @@ func TestAcknowledgeWritesItsAuditRow(t *testing.T) {
 		t.Errorf("audit row = actor %s / %s / %s, want %s / alarm / %s", gotActor, gotResource, gotID, actor, raised.ID)
 	}
 	if gotUsername != "jordan-ops" {
-		t.Errorf("audit row names %q, want the acting principal's name", gotUsername)
+		t.Errorf("audit row names %q, want the acting user's name", gotUsername)
 	}
 }
 
@@ -410,11 +410,11 @@ func TestTheHealthReportNamesWhoAcknowledged(t *testing.T) {
 
 	var actor string
 	if err := f.conn.QueryRow(ctx,
-		`insert into principal (kind) values ('service') returning id`).Scan(&actor); err != nil {
-		t.Fatalf("insert principal: %v", err)
+		`insert into users (kind) values ('machine') returning id`).Scan(&actor); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
 	if _, err := f.conn.Exec(ctx,
-		`insert into service (principal_id, name) values ($1, 'jordan-ops')`, actor); err != nil {
+		`insert into machine (user_id, name) values ($1, 'jordan-ops')`, actor); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	if _, err := f.gw.AcknowledgeAlarm(ctx, actor, "bar-1", alarm.ID); err != nil {
@@ -425,15 +425,15 @@ func TestTheHealthReportNamesWhoAcknowledged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	if len(rep.Roles) != 1 || len(rep.Roles[0].Alarms) != 1 {
-		t.Fatalf("health report = %+v, want one role naming the one alarm", rep.Roles)
+	if len(rep.Slots) != 1 || len(rep.Slots[0].Alarms) != 1 {
+		t.Fatalf("health report = %+v, want one slot naming the one alarm", rep.Slots)
 	}
-	got := rep.Roles[0].Alarms[0]
+	got := rep.Slots[0].Alarms[0]
 	if got.ID != alarm.ID {
 		t.Fatalf("the report names alarm %s, want %s", got.ID, alarm.ID)
 	}
 	if got.AcknowledgedBy != "jordan-ops" {
-		t.Errorf("the health report says %q acknowledged the alarm, want the acting principal's name %q",
+		t.Errorf("the health report says %q acknowledged the alarm, want the acting user's name %q",
 			got.AcknowledgedBy, "jordan-ops")
 	}
 	if got.AcknowledgedAt == nil {

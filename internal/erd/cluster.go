@@ -7,11 +7,11 @@ package erd
 // the live schema must be named here (the integration test enforces it).
 var Subsystems = []Cluster{
 	{Name: "identity", Tables: []string{
-		"principal", "human", "service", "principal_grant", "principal_group",
-		"principal_group_member", "impersonation_session",
-		"role", "system_role", "system_role_assignment",
-		"system_role_type", "system_role_product",
-		"role_choice", "choice_alternate",
+		"users", "person", "machine", "user_grant", "user_group",
+		"user_group_member", "impersonation_session",
+		"role", "system_slot", "system_slot_assignment",
+		"system_slot_type", "system_slot_product",
+		"slot_choice", "choice_alternate",
 	}},
 	{Name: "fleet", Tables: []string{
 		"location", "location_type", "location_type_property", "location_type_metric",
@@ -22,11 +22,11 @@ var Subsystems = []Cluster{
 	{Name: "catalog", Tables: []string{
 		"vendor", "product", "product_property", "product_metric",
 		"component_type", "system_type", "driver", "standard", "standard_property", "standard_metric",
-		// registry_shadow holds an operator's version of a shipped registry row
+		// catalog_shadow holds an operator's version of a shipped catalog row
 		// (#655, ADR-0095). It sits with the catalog because component_type is
-		// its first adopter, though it is registry-agnostic by design and the
-		// other registries carrying `official` join it here as they adopt.
-		"registry_shadow",
+		// its first adopter, though it is catalog-agnostic by design and the
+		// other catalogs carrying `official` join it here as they adopt.
+		"catalog_shadow",
 	}},
 	{Name: "telemetry", Tables: []string{
 		"property_type", "metric_type", "metric", "metric_series", "metric_declared", "metric_trend", "metric_trend_dirty", "metric_trend_mark", "metric_block", "metric_block_mark", "property",
@@ -44,12 +44,12 @@ var Subsystems = []Cluster{
 		"reserved_key",
 	}},
 	{Name: "collection", Tables: []string{
-		"node", "task", "node_log",
+		"outpost", "task", "outpost_log",
 		// platform_server maps a server's identity to the platform component
-		// its own measures land on (#1627), as a node's row does a node's.
+		// its own measures land on (#1627), as an outpost's row does an outpost's.
 		"platform_server",
 		// sim_impairment is what an operator broke on a simulated device (#889),
-		// applied by the simulator beside its node.
+		// applied by the simulator beside its outpost.
 		"sim_impairment",
 		// The webhook transport (#1024): a webhook endpoint's token binding,
 		// and the inbox of senders no endpoint claims.
@@ -60,13 +60,22 @@ var Subsystems = []Cluster{
 		"identity_binding", "unbound_identity",
 	}},
 	{Name: "config", Tables: []string{
-		"setting_override", "variable",
+		"setting_binding", "variable",
 		// label_rule is the global tier of the label rules (#682, ADR-0098),
 		// one row per labelled entity kind. It sits with config rather than
 		// with the fleet it labels: it is platform-wide policy an operator
 		// tunes, not a row any entity points at.
 		"label_rule",
 		"secret", "secret_type", "credential",
+		// oauth_client is an MCP client that registered itself and
+		// oauth_code its code between consent and exchange (#2048); a
+		// token it earns is a credential row linked to the client, which
+		// oauth_refresh renews (#2073).
+		"oauth_client", "oauth_code", "oauth_refresh",
+		// assistant_conversation is a person's stored omnibot conversation
+		// and assistant_message its transcript (#2113), read by their owner
+		// alone.
+		"assistant_conversation", "assistant_message",
 		// lab_mark is the one row omniglass lab writes into its own database
 		// (#1195), so a lab and a real deployment refuse each other's.
 		"lab_mark",

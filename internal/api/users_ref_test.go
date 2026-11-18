@@ -1,0 +1,71 @@
+package api_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/storage"
+)
+
+// TestUserAddressByUsername proves a user route accepts a person's username
+// as well as a uuid (issue #163): getting a user by username matches getting it
+// by uuid, a :verb custom method (archive) works by username, and an unknown
+// username is a 404, the same as an unknown id. Skipped under -short.
+func TestUserAddressByUsername(t *testing.T) {
+	t.Parallel()
+	dsn := seededDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+
+	ownerTok := userWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	// Create alice, capture her uuid.
+	created := c.do(ownerTok, "POST", "/users", map[string]string{
+		"username": "alice", "password": "orange-boat-42x",
+	}, http.StatusCreated)
+	var made struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(created, &made); err != nil || made.ID == "" {
+		t.Fatalf("create alice: id missing (%v) in %s", err, created)
+	}
+
+	// Get by uuid and by username return the same user.
+	codeU, byUUID := c.send(ownerTok, "GET", "/users/"+made.ID, nil)
+	codeN, byName := c.send(ownerTok, "GET", "/users/alice", nil)
+	if codeU != 200 || codeN != 200 {
+		t.Fatalf("get by uuid/username: codes %d/%d", codeU, codeN)
+	}
+	if !bytes.Equal(byUUID, byName) {
+		t.Fatalf("get by username differs from by uuid:\n uuid: %s\n name: %s", byUUID, byName)
+	}
+	if !bytes.Contains(byName, []byte(`"username":"alice"`)) {
+		t.Fatalf("get by username missing alice: %s", byName)
+	}
+
+	// A :verb custom method resolves the username too: archive alice by name.
+	if code, body := c.send(ownerTok, "POST", "/users/alice:archive", nil); code != http.StatusNoContent {
+		t.Fatalf("archive by username: want 204, got %d (%s)", code, body)
+	}
+	// She now reads archived (get still resolves an archived user by username).
+	if code, body := c.send(ownerTok, "GET", "/users/alice", nil); code != 200 || !bytes.Contains(body, []byte(`"archived_at"`)) {
+		t.Fatalf("archived read by username: code %d body %s", code, body)
+	}
+
+	// An unknown username is a 404, the same as an unknown id.
+	if code, _ := c.send(ownerTok, "GET", "/users/nobody", nil); code != http.StatusNotFound {
+		t.Fatalf("unknown username: want 404, got %d", code)
+	}
+}

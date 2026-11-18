@@ -1,5 +1,5 @@
 ---
-title: Visualization inventory
+title: Visualization survey
 description: Every chart, sparkline, metric card, status pill, health indicator, inline-viz table and log or event list in the console today, where each gets its data, how live it is, and the dashboard widget it maps to.
 ---
 
@@ -24,7 +24,7 @@ An **entry** is one place the console draws a visualization: one component mount
 | Live behavior | `poll N s` is a `refetchInterval`; `mount+focus` is TanStack's default (fetch on mount and again when the window regains focus, no interval); `static` is read once with focus refetch off; `follows parent` means it draws what its host already fetched. |
 | Widget | The widget in epic #1826's vocabulary (metric chart, sparkline row, metric card, property distribution, property timeline, event list, log list, timeline), or `new: <name>` where the vocabulary has nothing that fits. |
 
-The poll constants, for reference: `LEAF_POLL_MS` 5 s and `LEAF_NODE_POLL_MS` 10 s
+The poll constants, for reference: `LEAF_POLL_MS` 5 s and `LEAF_OUTPOST_POLL_MS` 10 s
 (`lib/component_leaf.ts`), `SERIES_POLL_MS` 30 s (`lib/series.ts`), `ALARM_TIMELINE_POLL_MS` 5 s
 (`lib/alarms.ts`), `INBOX_POLL_MS` 30 s (`lib/inbox.ts`), `SIDEBAR_POLL_MS` 10 s and
 `PAGE_POLL_MS` 1 s (`lib/simulation.ts`), and 10 s in `RecentNotifications` and the three rule lists.
@@ -61,13 +61,13 @@ the average line; spark mode is 160 by 36 with no chrome. It is imported by exac
 | ID | Component | Pages | Primitive | Source | Live behavior | Widget |
 |---|---|---|---|---|---|---|
 | V05 | `Header` `Fact` cards: platform verdict, version, up for (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` (`lib/platformhealth.ts`, `GET /views/platform`) | poll 5 s | metric card |
-| V06 | `Stat` tiles: locations, open alarms, systems, collectors, platform verdict (`pages/Home.tsx`) | `/` | derived | `fleetView`, `listLocations`, `listNodes`, `platformView` | mount+focus | metric card |
+| V06 | `Stat` tiles: locations, open alarms, systems, collectors, platform verdict (`pages/Home.tsx`) | `/` | derived | `fleetView`, `listLocations`, `listOutposts`, `platformView` | mount+focus | metric card |
 | V07 | `uptime-kpi` card, uptime over 30 days (`pages/SystemZoom.tsx`) | `/systems/<id>` | derived | `systemHealth` transitions (`lib/health.ts`) | poll 5 s | metric card |
 | V08 | `leaf-vitals` list, the latest value per effective metric with a live dot and per-endpoint spread (`pages/ComponentLeaf.tsx`) | `/components/<id>` | metric | `effectiveMetrics` (`lib/component_leaf.ts`) | poll 5 s | metric card (no series; the only metric surface with no chart or sparkline) |
-| V09 | `Count` per registry row (`pages/CatalogOverview.tsx`) | `/catalog` | derived | each registry's own list read, on the list page's query key | mount+focus | metric card |
+| V09 | `Count` per catalog row (`pages/CatalogOverview.tsx`) | `/catalog` | derived | each catalog's own list read, on the list page's query key | mount+focus | metric card |
 | V10 | `explore-counts` line and the "need attention" count (`components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, plus `systemHealth` per troubled system (stale 30 s) | mount+focus | metric card |
 | V11 | `InboxIndicator` unread count on the top bar (`components/InboxIndicator.tsx`) | every page in the shell | event | `useUnreadCount` (`lib/inbox.ts`) | poll 30 s, and at once when an entry is marked read | metric card |
-| V12 | `RuleLive` tallies: in force, open, pending (`pages/Rules.tsx`) | `/rules` | derived | `listEventRules` | poll 10 s | metric card |
+| V12 | `RuleLive` tallies: in force, open, pending (`pages/Rules.tsx`) | `/event-rules` | derived | `listEventRules` | poll 10 s | metric card |
 | V13 | `CalcLive` tallies: computed, pending, without inputs, failing (`pages/CalcRules.tsx`) | `/calc-rules` | derived | `listCalcRules` | poll 10 s | metric card |
 
 ## Status pills and health indicators
@@ -80,20 +80,20 @@ component set; the surfaces below are where they are mounted.
 |---|---|---|---|---|---|---|
 | V14 | `HealthBadge` sm, header (`components/HealthBadge.tsx`, in `pages/SystemZoom.tsx`) | `/systems/<id>` | derived | `systemHealth` | poll 5 s | new: verdict badge |
 | V15 | `HealthBadge` sm, header (`pages/ComponentLeaf.tsx`) | `/components/<id>` | derived | the fleet view's recorded verdict | mount+focus | new: verdict badge |
-| V16 | `HealthBadge` md, node rows xs, per-server disclosure with an "N open" badge (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` | poll 5 s | new: verdict badge |
-| V17 | `HealthBadge` in the system, component and place blades (`components/EntityBlade.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>` | derived | `fleetView`, `systemHealth`, `locationHealth` | mount+focus (health reads refetch off on focus when standalone) | new: verdict badge |
+| V16 | `HealthBadge` md, outpost rows xs, per-server disclosure with an "N open" badge (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` | poll 5 s | new: verdict badge |
+| V17 | `HealthBadge` in the system, component and location blades (`components/EntityBlade.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>` | derived | `fleetView`, `systemHealth`, `locationHealth` | mount+focus (health reads refetch off on focus when standalone) | new: verdict badge |
 | V18 | `SystemSummary` card: verdict, since-line, why rows, slot text (`components/SystemSummary.tsx`) | `/locations/<id>` | derived | `fleetView`, `systemHealth` (stale 30 s) | mount+focus | new: system summary card |
 | V19 | `HealthGlyph` and `HealthSlots`, the four-slot verdict counts on each outline row (`components/Outline.tsx`, `components/OutlineWorkspace.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>` | derived | `fleetView`, the verdicts the server recorded | mount+focus | new: verdict slots |
 | V20 | `MemberRows` glyph and alarm text per member (`components/MemberRows.tsx`) | `/systems/<id>` | derived | `systemMembers` | poll 5 s | new: verdict badge |
-| V21 | `NodeTable`: liveness pill, `HealthBadge` xs, tinted figure cells, row tone (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` | poll 5 s | new: status table |
-| V22 | `StatusPill` up / down / never, in the list and the node blade (`pages/Nodes.tsx`) | `/nodes` | derived | `listNodes`, `nodeStatus` from `last_heartbeat_at` against the down window | mount+focus (the age is computed client-side) | new: status pill |
-| V23 | `SimStatusBadge` and hit counters per row, plus `NodeCard` connected and impairment pills (`pages/Simulation.tsx`, `components/SimStatusBadge.tsx`) | `/simulation` | derived | `getSimulation` (`lib/simulation.ts`) | poll 1 s | new: simulator status table |
+| V21 | `OutpostTable`: liveness pill, `HealthBadge` xs, tinted figure cells, row tone (`pages/PlatformHealth.tsx`) | `/platform` | derived | `platformView` | poll 5 s | new: status table |
+| V22 | `StatusPill` up / down / never, in the list and the outpost blade (`pages/Outposts.tsx`) | `/outposts` | derived | `listOutposts`, `nodeStatus` from `last_heartbeat_at` against the down window | mount+focus (the age is computed client-side) | new: status pill |
+| V23 | `SimStatusBadge` and hit counters per row, plus `OutpostCard` connected and impairment pills (`pages/Simulation.tsx`, `components/SimStatusBadge.tsx`) | `/simulation` | derived | `getSimulation` (`lib/simulation.ts`) | poll 1 s | new: simulator status table |
 | V24 | `SimulationSection` and `SimComponentDrawer` with `SimStatusBadge` (`components/SimulationSection.tsx`, `components/SimComponentDrawer.tsx`) | `/components/<id>`; `/simulation` (drawer) | derived | `getComponentSim` | poll 5 s (section), poll 2 s (drawer) | new: simulator status table |
 | V25 | `PlatformSimulation` gap, protocol and device tables with reading and state badges (`pages/PlatformSimulation.tsx`) | `/platform` | derived | `platformSimulation`, `getSimulation` | poll 5 s, and the sidebar cadence for the fleet read | new: simulator status table |
 | V26 | `ReachabilityPanel` row: `ReachLadder`, `SessionPill` and the responding / down / stale / unknown pill (`components/ReachabilityPanel.tsx`) | `/components/<id>` (Configure tab), blades on the four fleet routes | derived | `getReachability` (`lib/reachability.ts`) | mount+focus, refreshed by the host's poll of the same key | new: reachability ladder |
-| V27 | `ReachLadder` and `SessionPill` in the Collection section (`pages/ComponentLeaf.tsx`) | `/components/<id>` | derived | `getReachability`; `getNode` per node | poll 5 s (reach), poll 10 s (nodes) | new: reachability ladder |
+| V27 | `ReachLadder` and `SessionPill` in the Collection section (`pages/ComponentLeaf.tsx`) | `/components/<id>` | derived | `getReachability`; `getOutpost` per outpost | poll 5 s (reach), poll 10 s (outposts) | new: reachability ladder |
 | V28 | `ReachLadder` and `SessionPill` in the endpoint blade (`components/endpointBlades.tsx`) | `/explore`, `/locations/<id>`, `/systems/<id>`, `/components/<id>` | derived | `getReachability` | poll 5 s | new: reachability ladder |
-| V29 | `RolesPanel` staffing badges: understaffed, short, spare, impact, down chips (`components/RolesPanel.tsx`) | `/systems/<id>` (Configure tab), system blades | derived | `systemRoles`, `systemHealth` | mount+focus (focus refetch off) | new: role staffing badges |
+| V29 | `SlotsPanel` staffing badges: understaffed, short, spare, impact, down chips (`components/SlotsPanel.tsx`) | `/systems/<id>` (Configure tab), system blades | derived | `systemSlots`, `systemHealth` | mount+focus (focus refetch off) | new: slot staffing badges |
 | V30 | `ReconciliationPanel` drift badge (`components/ReconciliationPanel.tsx`) | `/systems/<id>` and `/components/<id>` (Configure tab), blades | property | `ownerProperties` (`lib/properties.ts`) | mount+focus (focus refetch off) | new: drift badge |
 
 ## Timelines and state-over-time strips
@@ -104,7 +104,7 @@ component set; the surfaces below are where they are mounted.
 |---|---|---|---|---|---|---|
 | V31 | `HealthHistory compact` with `incident-marker-*` triangles and the expandable `incident-list` (`components/HealthHistory.tsx`, in `pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event (recorded verdict edges) | `systemHealth` transitions | poll 5 s; the clock ticks every 60 s | timeline |
 | V32 | `AvailabilityStrip`, up / down segments with an uptime figure (`components/ReachabilityPanel.tsx`) | `/components/<id>` (Configure tab), blades on the four fleet routes | event (reachability edges) | `getReachability` history | mount+focus | timeline |
-| V33 | `AlarmTimeline`, one alarm's lifecycle with kind chips and `NotificationStatusPill` (`components/AlarmTimeline.tsx`) | `/systems/<id>`, `/components/<id>`, `/rules`, blades and the Alarms panel on the four fleet routes | event | `alarmTimeline` (`lib/alarms.ts`) | poll 5 s, focus refetch off, only while expanded | timeline |
+| V33 | `AlarmTimeline`, one alarm's lifecycle with kind chips and `NotificationStatusPill` (`components/AlarmTimeline.tsx`) | `/systems/<id>`, `/components/<id>`, `/event-rules`, blades and the Alarms panel on the four fleet routes | event | `alarmTimeline` (`lib/alarms.ts`) | poll 5 s, focus refetch off, only while expanded | timeline |
 
 ## Alarm, event and log lists
 
@@ -114,12 +114,12 @@ component set; the surfaces below are where they are mounted.
 | V35 | `incident-list` and "Other alarms" (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event | `systemAlarms`, `systemHealth` | poll 5 s | new: alarm list |
 | V36 | `leaf-alarms` "Why": `SeverityBadge`, `SnoozedBadge`, `AlarmTimeline` (`pages/ComponentLeaf.tsx`) | `/components/<id>` | event | `componentAlarmsRead` (`lib/alarms.ts`) | poll 5 s | new: alarm list |
 | V37 | `AlarmsPanel`: grouped by severity, unacknowledged badge, `AlarmTimeline` (`components/AlarmsPanel.tsx`) | `/components/<id>` (Configure tab), component blades | event | `componentAlarms` | mount+focus (focus refetch off) | new: alarm list |
-| V38 | Rule detail "Open alarms" and "conditions in force" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
+| V38 | Rule detail "Open alarms" and "conditions in force" lists with `SeverityBadge` and `AlarmTimeline` (`pages/Rules.tsx`) | `/event-rules` (blade) | event | `getRuleState` | poll 5 s | new: alarm list |
 | V39 | `events-tab` with `RuleLink` and alarm timeline toggles (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | event | `systemEvents` | poll 5 s, only while the tab is open | event list |
 | V40 | `EventsPanel`: key badge, origin badge, time (`components/EventsPanel.tsx`) | `/components/<id>` (Activity tab) | event | `getEvents` | mount+focus | event list |
 | V41 | `logs-tab` mono block with `LogFilters`, severity-coloured lines (`pages/SystemZoom.tsx`) | `/systems/<id>` (Activity tab) | log | `systemLogs` | poll 5 s, only while the tab is open | log list |
 | V42 | `LogsPanel` (`components/LogsPanel.tsx`) | `/components/<id>` (Activity tab) | log | `getLogs` | mount+focus | log list |
-| V43 | `LogsPanel` "Self-logs" with a query override (`pages/Nodes.tsx`) | `/nodes` (node blade) | log | `getNodeLogs` | mount+focus | log list |
+| V43 | `LogsPanel` "Self-logs" with a query override (`pages/Outposts.tsx`) | `/outposts` (outpost blade) | log | `getOutpostLogs` | mount+focus | log list |
 | V44 | Inbox list with the raised / cleared transition pill (`pages/Inbox.tsx`) | `/inbox` | event | `listInbox` (`lib/inbox.ts`) | mount+focus; the top-bar count (V11) polls 30 s | event list |
 | V45 | `RecentNotifications` with `NotificationStatusPill` (`components/RecentNotifications.tsx`) | `/action-rules`, `/notification-targets` (blades) | event | `listRecentNotifications` | poll 10 s | event list |
 | V46 | Audit log table with the verb badge and a before / after diff drawer (`pages/Audit.tsx`) | `/audit` | event | `listAuditLog` (`lib/audit.ts`), paged by cursor | mount+focus; loads older pages on demand | new: audit list |
@@ -155,8 +155,8 @@ what each page draws itself.
 | `Explore.tsx` | `/explore` | V10, V19 (blades only otherwise) |
 | `Files.tsx` | `/files`, `/files/<id>` | none checked: config chips only (`Sensitive`, content type) |
 | `FleetRedirect.tsx` | `/fleet`, `/locations`, `/systems`, `/components` | none checked: redirects to `/explore` |
-| `GroupDetail.tsx` | `/groups` (blade) | none checked: member list with kind chips |
-| `Groups.tsx` | `/groups` | none checked |
+| `GroupDetail.tsx` | `/user-groups` (blade) | none checked: member list with kind chips |
+| `Groups.tsx` | `/user-groups` | none checked |
 | `Home.tsx` | `/` | V06 |
 | `Inbox.tsx` | `/inbox` | V44 |
 | `LocationTypes.tsx` | `/location-types` | none checked: config chips only |
@@ -167,7 +167,7 @@ what each page draws itself.
 | `NotFound.tsx` | `*` | none checked: static page |
 | `NotificationTargets.tsx` | `/notification-targets` | V45 (enabled flag and channels are config chips) |
 | `Notifications.tsx` | `/notifications` | none checked: config chips only |
-| `Nodes.tsx` | `/nodes` | V22, V43 |
+| `Outposts.tsx` | `/outposts` | V22, V43 |
 | `PlatformHealth.tsx` | `/platform` | V01, V02, V05, V16, V21, V25, V48 |
 | `PlatformSimulation.tsx` | embedded in `/platform` | V25 |
 | `Products.tsx` | `/products` | none checked: config chips only |
@@ -175,7 +175,7 @@ what each page draws itself.
 | `Properties.tsx` | `/properties` | none checked: config chips only (data type, origin) |
 | `RoleDetail.tsx` | `/roles` (blade) | none checked: permission list |
 | `Roles.tsx` | `/roles` | none checked |
-| `Rules.tsx` | `/rules` | V12, V33, V38 |
+| `Rules.tsx` | `/event-rules` | V12, V33, V38 |
 | `SecretTypes.tsx` | `/secret-types` | none checked: config chips only |
 | `Secrets.tsx` | `/secrets` | none checked: config chips only |
 | `SectionStub.tsx` | `/alarms`, `/config`, `/dashboards`, `/learn`, `/log-types` | none checked: placeholder page (`/dashboards` is where the canvas lands) |
@@ -189,7 +189,7 @@ what each page draws itself.
 | `Systems.tsx` | `/systems/<id>` | wrapper: mounts `SystemZoom` |
 | `Tags.tsx` | `/tags` | none checked: config chips only |
 | `Templates.tsx` | `/templates` | none checked: config chips only |
-| `UserDetail.tsx` | `/users` (blade) | none checked: principal kind chips and grants |
+| `UserDetail.tsx` | `/users` (blade) | none checked: user kind chips and grants |
 | `Users.tsx` | `/users` | none checked: config chips only |
 | `Variables.tsx` | `/variables` | none checked: config chips only |
 | `Vendors.tsx` | `/vendors` | none checked: config chips only |
@@ -235,7 +235,7 @@ epic's vocabulary does not yet name; the count says how much of the console it w
 | new: status pill | 1 | V22 |
 | new: system summary card | 1 | V18 |
 | new: verdict slots | 1 | V19 |
-| new: role staffing badges | 1 | V29 |
+| new: slot staffing badges | 1 | V29 |
 | new: drift badge | 1 | V30 |
 | new: audit list | 1 | V46 |
 | new: command list | 1 | V47 |

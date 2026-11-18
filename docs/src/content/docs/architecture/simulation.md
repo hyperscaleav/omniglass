@@ -21,24 +21,24 @@ Built: the engine in `internal/sim` (ported from the retired omniglass-lab proje
 embedded catalog of device profiles, surfaces and response templates; the identity helpers
 (`internal/sim/fleet`) that give a device its serial, MAC and address and name a system; and the engine, which serves every protocol surface a device declares, with behaviors and
 computed fields over shared state, follows a changing fleet in place, and reports every
-connection and request it answers on one hit stream. Also built: the `sim run` mode beside a node
-(#887), which pulls the devices placed on the node, serves them, and reports hits the server shows
-at `GET /nodes/{name}/simulation`. Also built: the simulated dev fleet (#888), where every dev-seed
-component a profile serves gets an address and endpoints on the dev node, so the dev node
+connection and request it answers on one hit stream. Also built: the `sim run` mode beside an outpost
+(#887), which pulls the devices placed on the outpost, serves them, and reports hits the server shows
+at `GET /outposts/{name}/simulation`. Also built: the simulated dev fleet (#888), where every dev-seed
+component a profile serves gets an address and endpoints on the dev outpost, so the dev outpost
 collects for real. Also built: impairments (#889), an operator unplugging, slowing or degrading a
 simulated device through the API and CLI, applied by a simulator run with `--impairments` and
 `NET_ADMIN`, with ping made truthful. Also built: the console surfaces (#890): the fleet view, a
 device's API surface and firing any operation at it, adding a device, and the Simulation page,
-drawer and component section over them. Also built: the simulator in the node's own process,
-`omniglass node run --simulate` (#1198), and the [lab](/guides/lab/) (#1194), which runs that node
+drawer and component section over them. Also built: the simulator in the outpost's own process,
+`omniglass outpost run --simulate` (#1198), and the [lab](/guides/lab/) (#1194), which runs that outpost
 in a container of its own with every privilege the simulator can use. Also built: every
 collection method healthy in the lab (#1370): each seeded driver and each registry transport runs on
 a dev-fleet component that is no planted fault, the simulator subscribes a simulated service to its
 webhook endpoint, and a simulated booking service pushes through `POST /telemetry:push`. Also
 built: [what an endpoint observed](#what-an-endpoint-observed) (#1639), every simulated endpoint
-counting what reached it and how it answered, read beside the node's own tally so a scale lab
+counting what reached it and how it answered, read beside the outpost's own tally so a scale lab
 closes the loop. Also built: the same loop on a running server (#1647), bracketed into a sliding
-window per node and read on [Platform health](/guides/operator/platform-health/#with-a-simulator). Also
+window per outpost and read on [Platform health](/guides/operator/platform-health/#with-a-simulator). Also
 built: the [push face](#a-pusher-pushes-on-its-own-cadence) (#1743), an outside actor that reports by
 pushing as an emulator device of its profile, declared by a scenario as it declares devices, so the
 dev lab and the scale lab push through the same path. Also built: the webhook sender (#1747), a
@@ -77,7 +77,7 @@ passive speaker, an analog microphone) have nothing to collect from and are not 
 `coverage.yaml` lists them as `passive`, each with how the fleet watches it instead (an amplifier
 channel's load, a DSP input's level), and a test refuses a passive product that has a driver. A service
 can be on the network with no driver, so the converse does not hold. A second test holds the lab's own
-fleet to the same accounting: every component the dev seed places (its simulator-only ones included) is
+fleet to the same accounting: every component the dev seed lands (its simulator-only ones included) is
 simulated, listed with its issue, or passive; a component with no product is refused, since nothing
 could simulate it (#1359, #1368).
 The lab then reaches "every seeded component is collected" one profile at a time, and the list of what
@@ -124,14 +124,14 @@ The catalog defines no fleet, only the devices a fleet is made of. A fleet is on
 both are built from the platform's standards:
 
 - a **dev fleet**: the dev seed's own systems, each component a profile serves given an address and
-  endpoints on the dev node ([the dev fleet](#the-dev-fleet));
+  endpoints on the dev outpost ([the dev fleet](#the-dev-fleet));
 - a **scale lab scenario**: a manifest (`internal/lab/scenario/manifests`) that names standards from the
   template catalog, the system type each is classified under, the shipped catalog product filling each
-  of a standard's roles, and how many sites of which shape hold how many systems of each. It resolves
+  of a standard's slots, and how many sites of which shape hold how many systems of each. It resolves
   at a size to a plan, and the [lab](/guides/lab/#scale-lab-scenarios) seeds the plan. A product the
   simulator does not serve is refused, so a scenario cannot invent a device.
 
-Neither has a vocabulary of its own: a role is a standard's role, a system type a registered one, a
+Neither has a vocabulary of its own: a slot is a standard's slot, a system type a registered one, a
 product a catalog product the catalog's device profiles serve. A device's identity is the one
 function of its id wherever it is listed: `fleet.Enrich` fills the blank hostname, serial, MAC and
 address a profile leaves, and the same id yields the same serial across restarts and reseeds.
@@ -181,7 +181,7 @@ There is one bind path, so the two choices differ only in the port asked for:
 
 - **Fixed** (no map, or `sim.PrivilegedPortShift(offset)`): every face binds the port its
   profile declares, ports below 1024 lifted by the offset. This is the operator-facing simulator:
-  `omniglass sim run`, `omniglass node run --simulate` and the dev fleet, where an operator, a
+  `omniglass sim run`, `omniglass outpost run --simulate` and the dev fleet, where an operator, a
   seeded endpoint and these docs all name the same port (a display's SNMP on 161, or 10161 when a
   simulator lifts it by 10000; a panel's line protocol on 51325, above the lift).
 - **Ephemeral** (`sim.EphemeralPorts`): every face binds port 0, so the kernel hands it a free
@@ -246,7 +246,7 @@ firing `POST` at its `drop_path`. The Kestrel bar serves its control socket over
 `DropWebSockets` are what a test reads and drives. The DSP serves
 its status as namespaced XML (`GET /api/status.xml`) beside its JSON and its HTML dashboard, the
 three formats an http driver reads. A test that drives the run mode out of
-process (the end-to-end tests run `omniglass sim run` beside a node) cannot take an ephemeral
+process (the end-to-end tests run `omniglass sim run` beside an outpost) cannot take an ephemeral
 port: the run mode binds each face at its profile's port, lifted by `--port-offset`, on the
 address the endpoint targets, and has no way to tell the endpoints a port it picked, so the
 endpoints must target the profile's ports. Such a test keeps the fixed ports and claims a
@@ -278,17 +278,17 @@ traffic interleaves with it, and a test on a lossy face repeats. The panel decla
 fleet's udp endpoint always has retries at work; a test sets the share (`SetDatagramLoss`, which
 restarts the counts), a test-harness hook like the TLS ones.
 
-## Beside a node
+## Beside an outpost
 
-The simulator is its own run mode, `omniglass sim run`, that runs beside a node and shares its
-loopback, holding that node's credential: it reads the same `OMNIGLASS_SERVER`,
-`OMNIGLASS_NODE_NAME` and `OMNIGLASS_NODE_TOKEN` as `node run`, so the node's subject grant is its
-grant too. It can pull the devices behind its own node, report hits on them, and answer the
-operations the server asks of its node's simulator, never another node's
+The simulator is its own run mode, `omniglass sim run`, that runs beside an outpost and shares its
+loopback, holding that outpost's credential: it reads the same `OMNIGLASS_SERVER`,
+`OMNIGLASS_OUTPOST_NAME` and `OMNIGLASS_OUTPOST_TOKEN` as `outpost run`, so the outpost's subject grant is its
+grant too. It can pull the devices behind its own outpost, report hits on them, and answer the
+operations the server asks of its outpost's simulator, never another outpost's
 ([ADR-0142](/architecture/decisions/#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity)).
 
 On every pull (every ten seconds by default) it asks the server for each component with an
-endpoint placed on the node, with the component's product and the host its endpoints target, and
+endpoint placed on the outpost, with the component's product and the host its endpoints target, and
 serves the ones it can: a product a profile serves, at a loopback address.
 The rest it logs and leaves alone. A device added on the server starts serving on the next pull
 and a device removed goes dark, with no restart and no disturbance to the others. Each pull states
@@ -296,16 +296,16 @@ what the simulator can do where it runs (bind ports below 1024, hold `NET_ADMIN`
 applies to ports below 1024 with `--port-offset` when it cannot bind them), and about once a second it
 publishes the hits it saw and the devices it is serving.
 
-The server accepts hits only for components it handed that node, and only by a protocol a device
+The server accepts hits only for components it handed that outpost, and only by a protocol a device
 reports a hit by: `http`, `snmp`, `ssh`, `telnet`, `tcp`, `udp` and `websocket`, the wire's closed
 vocabulary beside the hit type. Two tests hold it, one to the profile schema's protocol list (less
 `icmp`, which the kernel answers, and `https`, which no face serves: https is `http` with `tls`) and
 one to the simulator's own sources, every protocol its hit emitters name and its binder serves, so
 a protocol the simulator gains fails a test until the vocabulary names it (#1366). A hit dropped for
-its protocol is told once in the server's log, naming the node and the protocol, rather than
+its protocol is told once in the server's log, naming the outpost and the protocol, rather than
 reading as a component with no hits. The server keeps the hits in memory (a live
-signal, not stored history), and joins them to the node's devices at
-`GET /nodes/{name}/simulation`, which the CLI reads as `omniglass node simulation <node>`. Each
+signal, not stored history), and joins them to the outpost's devices at
+`GET /outposts/{name}/simulation`, which the CLI reads as `omniglass outpost simulation <outpost>`. Each
 component carries a `status`, what the simulator is doing with it: `running`; `starting` (added since
 its last pull, or handed over in the last five seconds); `failed` (handed over and not started); or
 `offline` (the simulator stopped reporting). The words are the simulator's own, so they never borrow
@@ -313,24 +313,24 @@ reachability's up and down or health's verdicts. A
 connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
 as `tcp`, beside the requests it answers.
 
-The registry is per server process, and it forgets. Deleting a node (`DELETE /nodes/{name}`) drops
-its entry at once, so neither `GET /simulation` nor `GET /nodes/{name}/simulation` can name a node
+The simulator registry is per server process, and it forgets. Deleting an outpost (`DELETE /outposts/{name}`) drops
+its entry at once, so neither `GET /simulation` nor `GET /outposts/{name}/simulation` can name an outpost
 that no longer exists. A simulator that has neither pulled nor reported for a hundred seconds (ten
-of its pulls) is dropped on the next read, so one torn down without its node being deleted ages out
+of its pulls) is dropped on the next read, so one torn down without its outpost being deleted ages out
 instead of reading `offline` until the server restarts; if it is still running, its next pull
 brings it back as new. Because the hits live in one process, a server run as more than one replica
-shows a simulator's status only on the replica its node's bus session landed on, and a read that
+shows a simulator's status only on the replica its outpost's bus session landed on, and a read that
 reaches another replica sees no simulator. That is accepted while the architecture runs one
 stateless server ([scaling](/architecture/scaling/)); a shared store such as NATS KV is the path if
 it ever matters, and it is not built here.
 
 ### What an endpoint observed
 
-A hit says a device was touched; it does not say whether every request a node sent arrived, or how
+A hit says a device was touched; it does not say whether every request an outpost sent arrived, or how
 each one ended. For that, every simulated endpoint keeps an **observation**
 (`internal/sim/observe.go`): counters that never reset on read, so a reader brackets a window
 with two reads and takes the difference. It counts three units, matched one for one with what the
-node tallies sending:
+outpost tallies sending:
 
 - a **connection**, counted where a TCP face accepts it, with a gauge of those open;
 - a **request**, one exchange (an http request, an SNMP datagram, an ssh exec, a telnet or tcp line,
@@ -344,28 +344,28 @@ node tallies sending:
   open, never a request in flight, so a held stream cannot read as stuck.
 
 Beside the counters each protocol keeps a service-time histogram (fixed buckets, eight to a power of
-two of microseconds, so histograms from many nodes merge by summing and a quantile is good to an
+two of microseconds, so histograms from many outposts merge by summing and a quantile is good to an
 eighth of its octave) and the most requests it held at once in each ten-second epoch, so a reader
 takes the peak of its own window. Each face also counts how often a request found it already
-serving one: a node should never send a face two requests at once, so an overlap names the face.
+serving one: an outpost should never send a face two requests at once, so an overlap names the face.
 The hot path is a fixed row per device and a few atomic adds, no map and no allocation, and a nil
 row (a test engine with no observation) is a no-op.
 
 Counters are raised and read in an order that never shows a false gap: a request is counted in
 flight before it is counted received, and its outcome is counted before it leaves flight; a reader
-takes received, then in flight, then outcomes. The node keeps the same three units where its bytes
+takes received, then in flight, then outcomes. The outpost keeps the same three units where its bytes
 leave (`collection.RequestTally`, for http, snmp and tcp reachability today; session and stream
 traffic is #1661), and its spool counts every telemetry batch the bus acknowledged or dropped.
 
-`GET /nodes/{name}/simulation/observation` (`omniglass node simulation observation list <node>`)
-reads all three in order over the bus: the simulator, the node, the simulator again, so a request
+`GET /outposts/{name}/simulation/observation` (`omniglass outpost simulation observation list <outpost>`)
+reads all three in order over the bus: the simulator, the outpost, the simulator again, so a request
 in transit between two reads is inside the bracket, never a gap. The answer is per protocol, summed
-over the node's devices, with a count of devices that saw nothing on a protocol and a sample of
+over the outpost's devices, with a count of devices that saw nothing on a protocol and a sample of
 their ids (capped at twenty), and the overlapping faces likewise capped, so it stays the same size
 at any fleet. It needs `simulation:read` and an all-scope component read, since the totals span
-every component the node simulates. A scale lab reconciles it hop by hop
+every component the outpost simulates. A scale lab reconciles it hop by hop
 ([measuring a scale lab](/guides/lab/#measuring-a-scale-lab)), and a running server does the same
-continuously: `internal/closedloop` holds the reconcile, and its ring brackets each node with a
+continuously: `internal/closedloop` holds the reconcile, and its ring brackets each outpost with a
 connected simulator once a minute (faster on a lab) and reads the last ten brackets as a sliding
 window, shown on [Platform health](/guides/operator/platform-health/#with-a-simulator). The counters
 never reset, so a window is a difference of two reads, never a total since start.
@@ -373,37 +373,37 @@ never reset, so a window is a difference of two reads, never a total since start
 A difference only compares over one fleet, so each read also carries the simulator's
 `fleet_generation`, zero before its first sync and advanced by each sync that starts or stops a
 device, and `fleet_changing` while such a sync is binding or releasing addresses. A request the
-node sends to a device the simulator has not bound yet, or has just stopped, is sent and never
+outpost sends to a device the simulator has not bound yet, or has just stopped, is sent and never
 received, which is no loss of the path, so a window whose reads include a zero generation, a
 changing fleet, or two generations reads `restarted` until it slides past ([ADR-1895](/architecture/decisions/#adr-1895-a-window-across-a-change-to-the-sims-served-fleet-reads-restarted)). A lab's
 first windows span the simulator's first sync, and read that way rather than as loss.
 
-### In the node's own process
+### In the outpost's own process
 
-`omniglass node run --simulate` runs the same simulator inside the node's process: the node's run
+`omniglass outpost run --simulate` runs the same simulator inside the outpost's process: the outpost's run
 loop and the simulator side by side, under one context (`simnode.RunWithNode`). Loopback addresses
 belong to a network namespace, and the kernel never routes `127.0.0.0/8` off `lo`, so a separate
-`sim run` must be arranged into the node's namespace; in one process the simulated components sit on
-the loopback the node collects from by construction. Both halves already claim with the node's name
+`sim run` must be arranged into the outpost's namespace; in one process the simulated components sit on
+the loopback the outpost collects from by construction. Both halves already claim with the outpost's name
 and enrollment token, so in process they share that identity: no second enrollment and no second
-grant, and the simulator stays inside the node's subject grant, as
+grant, and the simulator stays inside the outpost's subject grant, as
 [ADR-0142](/architecture/decisions/#adr-0142-the-simulator-is-a-run-mode-beside-its-node-holding-that-nodes-identity)
-requires. `--impairments`, `--port-offset` and `--poll` are the simulator's flags and the node refuses
+requires. `--impairments`, `--port-offset` and `--poll` are the simulator's flags and the outpost refuses
 them without `--simulate`. The two halves live and die together: when either stops, the other is
 stopped, and the first real failure is the one reported.
 
-With `--impairments`, root and `NET_ADMIN` sit on the node process itself (a distroless image grants
-added capabilities to root only), so the mode belongs in a container of the node's own, where the
+With `--impairments`, root and `NET_ADMIN` sit on the outpost process itself (a distroless image grants
+added capabilities to root only), so the mode belongs in a container of the outpost's own, where the
 privilege reaches only that container's namespace. The impairments touch only the simulated
-components' addresses on `lo`; the node's traffic to the server leaves through the container's own
+components' addresses on `lo`; the outpost's traffic to the server leaves through the container's own
 interface and is never shaped or dropped. `omniglass sim run` stays, for a simulator as a process of
-its own beside a node, and for the Helm sidecar (#892).
+its own beside an outpost, and for the Helm sidecar (#892).
 
 ## The dev fleet
 
 The dev seed simulates its own fleet. Every component whose product a profile serves gets an
 address in `127.60.0.0/16` (a component keeps the address it was given, and a new one takes the
-lowest address no endpoint already targets) and endpoints on the dev node, `edge-hq`. A product whose driver
+lowest address no endpoint already targets) and endpoints on the dev outpost, `edge-hq`. A product whose driver
 has a spec gets that driver attached, with the credential its simulated face demands (an SNMP
 community, a login, an api key) seeded as a platform secret; the attach table in `internal/simfleet`
 says which driver takes which. A product whose driver
@@ -423,21 +423,21 @@ Beside those, the fixture's simulated endpoints wire the rest:
   seeded 5% of them each way).
 - **The webhooks**: the UCC platform's webhook endpoint (`ucc-webhook`),
   which the simulator subscribes the platform to ([below](#a-simulated-service-posts-from-the-start)).
-- **Every collection method healthy on one place** (#1370): the HQ boardroom runs the three drivers
+- **Every collection method healthy on one location** (#1370): the HQ boardroom runs the three drivers
   the rest of the fleet never attaches, the bar's control socket (`kestrel-ws`, JSON over wss on
   9443), the display's web admin over http digest (`boreal-edge-web`) and the panel's https API
   behind its sign-in form (`newtron-panel-web`); the healthy twins of the ssh and telnet faults (the
   right login and no stale pin); and a bare `icmp` probe. A simulated device's ssh host key, like its
-  https key, is derived from its id, so a key the node pinned on first use survives a simulator
+  https key, is derived from its id, so a key the outpost pinned on first use survives a simulator
   restart.
 - **A first-party pusher**: the fleet declares one pusher (`sim_pushers`), the booking service, an
-  emulator device of the `booking-service` profile run by the simulator beside the node. Its
+  emulator device of the `booking-service` profile run by the simulator beside the outpost. Its
   [push face](#a-pusher-pushes-on-its-own-cadence) pushes the HQ boardroom system's `booking-count`
   (meetings left in its day) and `booking-state` (`booked` or `free`) through
-  `POST /telemetry:push` on one meeting day that repeats every day. It holds a service principal
+  `POST /telemetry:push` on one meeting day that repeats every day. It holds a machine user
   whose only grant is `telemetry:push` on that one system, and reads that system off its own grant
   (`GET /auth/me`), so it pushes nowhere else and reads nothing. The lab mints its token on every
-  run, as it does the node's, and hands it to the simulator.
+  run, as it does the outpost's, and hands it to the simulator.
 
 `TestEveryCollectionMethodRunsOnAHealthyLabComponent` holds the fleet to it: every seeded driver and
 every registry transport is attached, by an endpoint that is no planted fault, on a component a
@@ -452,23 +452,23 @@ value its driver emits landed from it, and a system holding the booking service'
 Beyond the methods, `make test-lab` holds every component to its built-in and collected tiers and every system
 to a value of its own, bar the gaps `devseed.TierGaps` lists ([the lab guide](/guides/lab/#checking-that-the-lab-is-whole)).
 
-The [lab](/guides/lab/) runs the dev fleet with the node `edge-hq` serving it in process, so the
-whole loop is one command: the node polls the simulated components, the samples land on the seeded
+The [lab](/guides/lab/) runs the dev fleet with the outpost `edge-hq` serving it in process, so the
+whole loop is one command: the outpost polls the simulated components, the samples land on the seeded
 components (the worked reachability check's boardroom DSP among them, re-aimed at a simulated DSP so a
-live node finds it up, and given that DSP's driver so it reports its mute and level like any other), and a command issued to a panel (`omniglass component command issue <panel>
+live outpost finds it up, and given that DSP's driver so it reports its mute and level like any other), and a command issued to a panel (`omniglass component command issue <panel>
 --command-type set-input --value hdmi3`) changes the simulated component. The lab is where the
 simulator gets every privilege it can use: the real ports, the ping sysctl, and `NET_ADMIN` for
-impairments and truthful ping, all confined to the node's own container.
+impairments and truthful ping, all confined to the outpost's own container.
 
 :::design[Target design: the simulator as a sidecar, tracked in #892]
-In a deployment the simulator is a sidecar container in the node's pod, granted `NET_ADMIN` and the
+In a deployment the simulator is a sidecar container in the outpost's pod, granted `NET_ADMIN` and the
 unprivileged-port sysctl, so it binds the profiles' real ports and can make ping tell the truth.
 :::
 
 ## Breaking a device on purpose
 
 An **impairment** is what an operator has broken on a simulated device, recorded on the component and
-applied by the simulator beside its node, so a collector sees exactly what a failing device would
+applied by the simulator beside its outpost, so a collector sees exactly what a failing device would
 show:
 
 - **unplugged**: dark on every protocol. A connect times out (not refused), a datagram vanishes, a
@@ -485,7 +485,7 @@ show:
 impairment: a field left out reads as zero, so setting a latency on an unplugged device plugs it
 back in, and an empty set repairs it. Both
 are gated (`simulation:update`, which operators hold, and `simulation:read`), resolve the component
-in the caller's component scope, and the write is audited. The node's simulation view shows each
+in the caller's component scope, and the write is audited. The outpost's simulation view shows each
 device's impairment and the simulator's account of applying it.
 
 The simulator applies impairments only when started with `--impairments` and holding `NET_ADMIN`,
@@ -510,7 +510,7 @@ whether it holds a session open) with its HTTP routes, its commands and its SNMP
 surface its listeners serve. An operator fires any of them with
 `POST /components/{name}/simulation:fire` (or `omniglass component simulation fire <component>
 --surface nvp --command "SET INPUT hdmi2"`): the server forwards the operation over the bus to
-the simulator beside the component's node, on a subject of that node's own grant, and the
+the simulator beside the component's outpost, on a subject of that outpost's own grant, and the
 simulator answers it.
 
 The simulator answers **in process**, from the component's live state, through the same routes,
@@ -554,11 +554,11 @@ the endpoint's path and the secret its scheme signs with, and the simulator call
 subscribe route (a profile's `webhook.subscribe`, a POST taking `url`, `scheme` and `secret`) with
 the server URL it already reaches plus that path, as the service's admin would. It does so once per
 device and subscription, and again for a restarted device, whose state began again from its
-defaults. The fence is two facts the server holds and a node cannot assert: the database carries
+defaults. The fence is two facts the server holds and an outpost cannot assert: the database carries
 the lab mark, and the component sits in the simulated block (`127.60.0.0/16`), which only the seed
 allocates. A database with no lab mark hands out nothing (outside a lab, `make dev` included, a
 service is subscribed by hand through its subscribe route), a real device's webhook is never handed
-out, and a node's worklist never carries one. The UCC platform's `rooms_report` behavior then posts the batched room state every 30 seconds, so a lab's
+out, and an outpost's worklist never carries one. The UCC platform's `rooms_report` behavior then posts the batched room state every 30 seconds, so a lab's
 webhook endpoint is heard within its first minute.
 
 The **UCC platform** (`ucc-platform`) is the same vendor's account-wide plane, the face the
@@ -593,7 +593,7 @@ Some outside actors are not devices on the network at all: a scheduling platform
 reports the places it manages by pushing to Omniglass, and nothing polls it. A profile models one
 with a **push face** (#1743): a cadence (`push.every`, at least a second) and a body template
 (`push.body`) rendered for each system the pusher reports for, over the device's state, its id and
-its clock. The face holds a bearer token for a principal granted `telemetry:push` alone on those
+its clock. The face holds a bearer token for a user granted `telemetry:push` alone on those
 systems; it reads them off its own grant (`GET /auth/me`), renders each one's batch, and posts it
 through `POST /telemetry:push`, then does it again on every tick. A failed push (a server still
 coming up, an item the server refused) drops the grant it read, so the next tick reads it again,
@@ -609,15 +609,15 @@ A pusher is declared, not built in. The dev fleet's fixtures declare theirs unde
 `pushers` (a name, a profile, how many per site and how many of the site's systems each reports
 for), and the shipped `corporate` scenario declares one booking service per site over four
 systems ([the lab guide](/guides/lab/#the-manifest-format)). Either way the lab takes the
-same path: the seed grants each pusher's service principal `telemetry:push` on its systems, the
-lab mints its token on every run and sets it on the principal, and the simulator beside the
-pusher's node runs it as an emulator device holding that token. The token reaches the simulator's
+same path: the seed grants each pusher's machine user `telemetry:push` on its systems, the
+lab mints its token on every run and sets it on the user, and the simulator beside the
+pusher's outpost runs it as an emulator device holding that token. The token reaches the simulator's
 environment and nowhere else: the seed is handed its hash, and neither the plan nor a log prints
 it ([ADR-1743](/architecture/decisions/#adr-1743-an-outside-actor-is-an-emulator-device-a-scenario-declares)).
 
 A scale scenario declares a webhook sender in the same list (#1747): its profile has a webhook
 face instead of a push face, and `systems` may be omitted to scope it to every system of its site.
-The seed makes it a component rather than a principal, with an endpoint of its profile's driver, a
+The seed makes it a component rather than a user, with an endpoint of its profile's driver, a
 signing secret minted for that seed alone (each field random, sealed in the server, never printed),
 and a binding per system on the driver's room identity, valued with the system's name. Everything
 the seed needs is read from the profile and the driver spec, so a second platform is a profile and
@@ -627,13 +627,13 @@ land on the push lane with the bookings.
 ## Adding a simulated component
 
 Adding a simulated component is adding a component the simulator can serve:
-`POST /nodes/{name}/simulation/components` (`omniglass simulation add-component <node> --name panel-9
+`POST /outposts/{name}/simulation/components` (`omniglass simulation add-component <outpost> --name panel-9
 --product newtron-panel-7`) creates a component of a simulated product and the endpoint the
-collector reaches it through, placed on the node. The plan is the dev seed's, made a primitive
+collector reaches it through, placed on the outpost. The plan is the dev seed's, made a primitive
 (`internal/simfleet`): the lowest address in `127.60.0.0/16` no endpoint already targets, a driver
 attach where the driver's inputs are known (only when the platform secret it references, the
 community or the credential its face demands, exists), otherwise a reachability probe on a port the profile serves, lifted
-as that node's simulator lifts its ports. The simulator serves it from its next pull, with no
+as that outpost's simulator lifts its ports. The simulator serves it from its next pull, with no
 restart. Changing its product among the products its profile simulates keeps its endpoints valid
 (they share a driver), and deleting the component removes it from the simulation.
 
@@ -641,20 +641,20 @@ restart. Changing its product among the products its profile simulates keeps its
 
 A simulated system is built to a **standard**, the platform's own archetype, not to a separate
 simulator vocabulary. `GET /simulation/standards/{standard}:plan` (`omniglass simulation plan-system
-<standard>`) staffs each of the standard's roles with the first simulated product that fits its
+<standard>`) staffs each of the standard's slots with the first simulated product that fits its
 accepted types and pins, as many as its quorum and at least one, capped at its capacity, and takes one
-alternate per choice (the first that can be fully staffed, else the one that staffs the most). A role no simulated product fits is left
+alternate per choice (the first that can be fully staffed, else the one that staffs the most). A slot no simulated product fits is left
 short, with the reason: that list is what the simulator's catalog still lacks.
-`POST /nodes/{name}/simulation/systems` (`omniglass simulation add-system <node> --standard <standard>
+`POST /outposts/{name}/simulation/systems` (`omniglass simulation add-system <outpost> --standard <standard>
 --system-type <type>`) then creates the system, a component per staffed slot (named as an unnamed
-create names it), each at its own free address with its planned endpoint on the node, and each role
+create names it), each at its own free address with its planned endpoint on the outpost, and each slot
 assignment, in one transaction under the address lock, so the system lands whole or not at all. Every
 piece is the ordinary create with the caller's own scope and audit row. The simulator serves the
 components from its next pull. The plan and the write are the **planned-system primitive** a
 [system template](/architecture/templates/) also builds on: the pure planner
-(`internal/systemplan`) takes each role's candidate products as an input (here the products the
-simulator serves), and the planned create (`storage.CreatePlan`) lands places, systems, their
-components, endpoints, declared values and role assignments in one transaction. The simulator's catalog holds no room archetype to add one from: the lab's old archetypes and
+(`internal/systemplan`) takes each slot's candidate products as an input (here the products the
+simulator serves), and the planned create (`storage.CreatePlan`) lands locations, systems, their
+components, endpoints, declared values and slot assignments in one transaction. The simulator's catalog holds no room archetype to add one from: the lab's old archetypes and
 fleet manifests are retired (#914), and a scale lab scenario is the same standards-plus-counts
 ([fleets](#fleets)). The standard is the archetype
 ([ADR-0143](/architecture/decisions/#adr-0143-a-simulated-system-is-built-to-a-standard-with-platform-minted-names),

@@ -1,0 +1,24 @@
+data: {"type":"RUN_STARTED","threadId":"lobby","runId":"run-1"}
+
+data: {"type":"TEXT_MESSAGE_START","messageId":"run-1-1","role":"assistant"}
+
+data: {"type":"TEXT_MESSAGE_CONTENT","messageId":"run-1-1","delta":"Let me look."}
+
+data: {"type":"TEXT_MESSAGE_END","messageId":"run-1-1"}
+
+data: {"type":"TOOL_CALL_START","toolCallId":"call-1","toolCallName":"list-components"}
+
+data: {"type":"TOOL_CALL_ARGS","toolCallId":"call-1","delta":"{}"}
+
+data: {"type":"TOOL_CALL_END","toolCallId":"call-1"}
+
+data: {"type":"TOOL_CALL_RESULT","messageId":"run-1-2","toolCallId":"call-1","content":"{\"components\":[]}","role":"tool"}
+
+data: {"type":"TOOL_CALL_START","toolCallId":"call-2","toolCallName":"create-component"}
+
+data: {"type":"TOOL_CALL_ARGS","toolCallId":"call-2","delta":"{\"name\":\"lobby-display\"}"}
+
+data: {"type":"TOOL_CALL_END","toolCallId":"call-2"}
+
+data: {"type":"RUN_FINISHED","threadId":"lobby","runId":"run-1","outcome":{"type":"interrupt","interrupts":[{"id":"call-2","reason":"tool_approval","message":"omnibot asks before it runs Create a component","toolCallId":"call-2","responseSchema":{"additionalProperties":false,"properties":{"approved":{"type":"boolean"}},"required":["approved"],"type":"object"},"metadata":{"tool":"create-component","arguments":{"name":"lobby-display"},"title":"Create a component","destructive":false}}]}}
+

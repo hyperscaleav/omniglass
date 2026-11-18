@@ -1,0 +1,545 @@
+# The product vocabulary (#2029): one row per word an operator or an admin
+# reads, defined once. `make gen` renders the docs glossary from it
+# (reference/glossary.md) and stamps each term's definition on its OpenAPI
+# entity schema; the guards in this package and internal/api fail when an API
+# collection, a console nav entry or a health verdict has no term here, when a
+# nav label stops matching its term's word, and when a retired word reappears.
+#
+# Fields:
+#   word        the singular, lower case unless a proper noun
+#   plural      the plural
+#   definition  one sentence, the operator's meaning, no internals or history
+#   audience    operator | admin (who meets the word first)
+#   collection  the API path segment it maps to (/components), if any
+#   schema      the OpenAPI entity schema it describes (ComponentBody), if any
+#   permission  the permission noun (component in component:read), if any
+#   nav         the console path whose label is this word, if any
+#   nav_label   the label at nav, when it is not the capitalized plural
+#   verdict     the health verdict value it names, for a verdict term
+#   retired     words this term replaced, banned from console strings and docs
+#               prose; pattern is the regexp the denylist matches, replacement
+#               the denylist's hint when the term's word alone is not enough
+#
+# A new term goes here, never on a docs page: see contributing/docs-with-everything.
+
+terms:
+  - word: fleet
+    plural: fleets
+    definition: Everything an install manages, the locations, the systems in them and the components that make them up.
+    audience: operator
+    retired:
+      # The word boundary keeps restate, restated and restatement out of reach.
+      - word: estate
+        pattern: '(?i)\bestates?\b|\bestate-wide\b'
+        origin: ADR-0123
+        replacement: fleet (the systems an operator runs, stationed across locations), or fleet-wide
+      - word: inventory
+        pattern: '(?i)(?:^|[^-\w])inventor(?:y|ies|ied)(?:$|[^-\w])'
+        origin: "#2029"
+        replacement: fleet (everything an install manages), or the entity's own word
+  - word: location
+    plural: locations
+    definition: A place the fleet occupies, from a campus down to a room, nested under the location it sits in.
+    audience: operator
+    collection: locations
+    schema: LocationBody
+    permission: location
+    nav: /locations
+  - word: location type
+    plural: location types
+    definition: What kind of location a location is, and which kinds it may sit under.
+    audience: admin
+    collection: location-types
+    schema: LocationTypeBody
+    permission: location_type
+    nav: /location-types
+  - word: system
+    plural: systems
+    definition: The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own.
+    audience: operator
+    collection: systems
+    schema: SystemBody
+    permission: system
+    nav: /systems
+  - word: system type
+    plural: system types
+    definition: What a system is for, such as meeting, teaching or signage, never the space it sits in.
+    audience: admin
+    collection: system-types
+    schema: SystemTypeBody
+    permission: system_type
+    nav: /system-types
+  - word: standard
+    plural: standards
+    definition: The contract a system is built to, declaring the slots it fills and the properties every conforming system exposes.
+    audience: admin
+    collection: standards
+    schema: StandardBody
+    permission: standard
+    nav: /standards
+    retired:
+      # A blueprint is drawn once and followed; a standard is a contract a system keeps.
+      - word: blueprint
+        pattern: '(?i)\bblueprints?\b'
+        origin: ADR-2033
+        replacement: the contract a system is built to (a standard)
+  - word: system slot
+    plural: system slots
+    definition: A position in a system a component fills, such as a main display or a table microphone, with how many it wants and what losing it means.
+    audience: admin
+    retired:
+      # Banned in the spellings that carry the system sense (the noun, the tables, the Go types,
+      # the routes, the $role accessor, the CLI subgroup), not as a bare word: role keeps its IAM
+      # sense (the operator role, /roles, role:read) and HTML keeps its role attribute.
+      - word: system role
+        pattern: '(?i)system[ _-]?roles?|\$role\b|/(?:systems|standards)/\{[^}/]*\}/roles\b|\brole[_ ](?:choices?|assignments?)(?:\b|_)|\beffective[ _-]?roles?\b'
+        origin: ADR-2032
+        replacement: system slot, or slot with the system in view (system_slot, /systems/{name}/slots, $slot, omniglass system slot)
+  - word: component
+    plural: components
+    definition: One managed device or service, an instance of a product, placed at a location and usually a member of a system.
+    audience: operator
+    collection: components
+    schema: ComponentBody
+    permission: component
+    nav: /components
+  - word: component type
+    plural: component types
+    definition: The device class a product belongs to, such as display, projector or microphone.
+    audience: admin
+    collection: component-types
+    schema: ComponentTypeBody
+    permission: component_type
+    nav: /component-types
+  - word: product
+    plural: products
+    definition: A concrete model a vendor sells, with the driver that collects from it and the component type it is classified under.
+    audience: admin
+    collection: products
+    schema: ProductBody
+    permission: product
+    nav: /products
+  - word: vendor
+    plural: vendors
+    definition: An organization behind products, a manufacturer, an integrator or a developer.
+    audience: admin
+    collection: vendors
+    schema: VendorBody
+    permission: vendor
+    nav: /vendors
+  - word: driver
+    plural: drivers
+    definition: The declared recipe that collects from a product, what to fetch, how to read it and what it can set.
+    audience: admin
+    collection: drivers
+    schema: DriverBody
+    permission: driver
+    nav: /drivers
+  - word: endpoint
+    plural: endpoints
+    definition: A connection to a component over one transport, the API Omniglass reaches it through.
+    audience: operator
+    collection: endpoints
+    schema: EndpointBody
+    permission: endpoint
+    retired:
+      # Banned in its entity phrasings, not as a bare word: "network interface" survives as the
+      # teaching contrast on the collection page, and "user interface" is ordinary English.
+      - word: interface
+        pattern: '\binterface_type\b|\binterface-reachable\b|\ban interface\b|\bthe interface\b|\binterfaces\b'
+        origin: ADR-0134
+        replacement: endpoint (the entity), transport (the wire registry), endpoint-reachable (the datapoint)
+  - word: transport
+    plural: transports
+    definition: The wire an endpoint speaks over, such as ssh, https or snmp, built into Omniglass.
+    audience: admin
+    collection: transports
+    permission: endpoint
+  - word: outpost
+    plural: outposts
+    definition: A collection process placed near the fleet that runs tasks and commands over endpoints and reports back.
+    audience: admin
+    collection: outposts
+    schema: OutpostBody
+    permission: outpost
+    nav: /outposts
+    retired:
+      # Banned as the bare word and every identifier spelling it (node_id, OMNIGLASS_NODE_,
+      # /nodes, node:read, omniglass node), since the collector had too many phrasings to list.
+      # Allow carries the senses the word keeps: a node of a tree, the DOM or a query plan, the Node.js
+      # runtime (its node: imports, node_modules, a node script.mjs invocation), the explore
+      # ?node= parameter, the D2 shape class the diagrams share, and a grant on this node only.
+      - word: node
+        pattern: '(?i)(?:\b|_)nodes?(?:\b|_)'
+        origin: ADR-2031
+        replacement: outpost (the collecting process; OMNIGLASS_OUTPOST_, /outposts, outpost:read, omniglass outpost)
+        allow: '(?i)\bnode_modules\b|\bnode:(?:fs|path|url|os|crypto|child_process|test|assert|util|https?|net|stream|events|readline|process|buffer|zlib|module|timers|worker_threads|perf_hooks)\b|[?&]node=|\bnode\.?js\b|\bnode (?:--?[\w-]+(?:=\S+)? )*\S+\.(?:m?js|cjs|ts)\b|\bclass: node\b|\bnode: \{ style\b|\b(?:tree|leaf|root|child|parent|ancestor|descendant|sibling|dom|text|deepest|interior|ast|jsx|forest|element|graph|focusable|scan|plan) nodes?\b|\bthis node only\b'
+  - word: unclaimed source
+    plural: unclaimed sources
+    definition: A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored.
+    audience: admin
+    collection: unclaimed-sources
+    schema: UnclaimedSourceBody
+    permission: outpost
+  - word: task
+    plural: tasks
+    definition: An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint.
+    audience: admin
+    collection: tasks
+    schema: TaskBody
+    permission: task
+  - word: catalog
+    plural: catalogs
+    definition: The rows the fleet is typed by, the types, products, vendors and drivers an install ships and an admin extends.
+    audience: admin
+    nav: /catalog
+    nav_label: Catalog
+    retired:
+      # Banned where it names those rows (ADR-2035). Allow carries the lookups compiled
+      # into the binary, which keep registry: the transport registry and its entries, the
+      # expression diagnostics, the declarative env and settings namespace registries, the
+      # simulator, the console's blade and page registries, the agent skills, and a
+      # container or package registry an image is pushed to or pulled from.
+      - word: registry
+        pattern: '(?i)\bregistr(?:y|ies)\b'
+        origin: ADR-2035
+        replacement: catalog (the rows the fleet is typed by)
+        allow: '(?i)\btransport registr(?:y|ies)\b|\bregistry (?:transports?|entry|entries)\b|\bcode registry\b|\bregistry of diagnostics\b|\bgenerated registry\b|\bgenerated from the registry\b|\b(?:env|environment|namespace|simulator|blade|pages|skills?|container|npm|package|wire|permission) registry\b|\bto a registry\b|\bregistry credential\b|\basks the registry\b|\bregistry=\{\w*registry\}|\bregistry: \{'
+  - word: metric type
+    plural: metric types
+    definition: A numeric signal in the catalog, the series a sample measures, with its unit and precision.
+    audience: admin
+    collection: metric-types
+    schema: MetricTypeBody
+    permission: metric_type
+    nav: /metrics
+    nav_label: Metrics
+  - word: property type
+    plural: property types
+    definition: A categorical signal in the catalog, a value a component reports or is declared to have.
+    audience: admin
+    collection: property-types
+    schema: PropertyBody
+    permission: property_type
+    nav: /properties
+    nav_label: Properties
+  - word: event type
+    plural: event types
+    definition: A kind of discrete occurrence in the catalog, what an event is typed by.
+    audience: admin
+    collection: event-types
+    schema: EventTypeBody
+    permission: event_type
+    nav: /event-types
+    nav_label: Events
+  - word: event
+    plural: events
+    definition: One point-in-time occurrence on a component, typed by an event type.
+    audience: operator
+    schema: EventBody
+  - word: command type
+    plural: command types
+    definition: Something a component can be told to do in the catalog, with its target and how long it takes to settle.
+    audience: admin
+    collection: command-types
+    schema: CommandTypeBody
+    permission: command_type
+    nav: /command-types
+    nav_label: Commands
+  - word: command
+    plural: commands
+    definition: One instruction sent to a component, typed by a command type, and its outcome.
+    audience: operator
+    schema: CommandBody
+    permission: command
+  - word: secret type
+    plural: secret types
+    definition: A shape a secret can take, such as a password or an API key, built into Omniglass.
+    audience: admin
+    collection: secret-types
+    schema: SecretTypeBody
+    permission: secret
+    nav: /secret-types
+  - word: severity level
+    plural: severity levels
+    definition: How bad an alarm is, ranked, with its color and whether it takes its component out.
+    audience: admin
+    collection: severity-levels
+    schema: SeverityLevelBody
+    permission: severity_level
+    nav: /severity-levels
+  - word: event rule
+    plural: event rules
+    definition: A rule that watches signals and fires when its criteria hold, raising an alarm if it carries a severity.
+    audience: admin
+    collection: event-rules
+    schema: EventRuleBody
+    permission: rule
+    nav: /event-rules
+  - word: calc rule
+    plural: calc rules
+    definition: A rule that derives a new value from other signals on each owner it applies to.
+    audience: admin
+    collection: calc-rules
+    schema: CalcRuleBody
+    permission: rule
+    nav: /calc-rules
+  - word: action rule
+    plural: action rules
+    definition: A rule that decides when a notification about an alarm is sent, and to which targets.
+    audience: admin
+    collection: action-rules
+    schema: ActionRuleBody
+    permission: rule
+    nav: /action-rules
+  - word: alarm
+    plural: alarms
+    definition: A raised problem on a component, with a severity, from the moment it raises until it clears.
+    audience: operator
+    collection: alarms
+    schema: AlarmBody
+    permission: alarm
+    nav: /alarms
+  - word: notification
+    plural: notifications
+    definition: One message about an alarm sent on one channel, such as a webhook, an email or the inbox.
+    audience: operator
+    collection: notifications
+    schema: NotificationBody
+    permission: notification
+  - word: notification target
+    plural: notification targets
+    definition: Where a notification goes, a webhook, a mailbox, a user group or a person.
+    audience: admin
+    collection: notification-targets
+    schema: NotificationTargetBody
+    permission: notification_target
+    nav: /notification-targets
+  - word: notification type
+    plural: notification types
+    definition: What a notification about an alarm says, as a subject and a text.
+    audience: admin
+    collection: notification-types
+    schema: NotificationTypeBody
+    permission: notification_type
+    nav: /notifications
+    nav_label: Notifications
+  - word: variable
+    plural: variables
+    definition: A named value set at one level of the fleet and inherited below it, written into text as $var.
+    audience: operator
+    collection: variables
+    schema: VariableBody
+    permission: variable
+    nav: /variables
+  - word: secret
+    plural: secrets
+    definition: An encrypted credential set at one level of the fleet and inherited below it.
+    audience: operator
+    collection: secrets
+    schema: SecretBody
+    permission: secret
+    nav: /secrets
+  # A value set at one cascade level is a binding a deeper one shadows
+  # (ADR-2037); override is kept for the catalog's sparse edit alone, so the
+  # cascade sense is retired here with the declared-state words.
+  - word: declared value
+    plural: declared values
+    definition: The state an operator declares a component or system should hold, which reconcile compares with what the device reports.
+    audience: operator
+    nav: /config
+    nav_label: Declared
+    retired:
+      - word: declared config
+        pattern: '(?i)\bdeclared[- ]config\b'
+        origin: ADR-2037
+      - word: desired state
+        pattern: '(?i)\bdesired[- ]states?\b'
+        origin: ADR-2037
+      - word: desired value
+        pattern: '(?i)\bdesired[- ]values?\b'
+        origin: ADR-2037
+      - word: set the config
+        pattern: '(?i)\bset the config\b'
+        origin: ADR-2037
+      - word: config drift
+        pattern: '(?i)\bconfig[- ]drift\b'
+        origin: ADR-2037
+        replacement: drift (a declared value the device no longer reports)
+      - word: override on value
+        pattern: '(?i)\boverride[- ]on[- ]value\b|\boverrides the (?:platform|product|location|system|standard|component|group|user|driver)\x27s\b'
+        origin: ADR-2037
+        replacement: shadow on value (a deeper binding shadows a shallower one); override is the catalog's sparse edit alone
+  - word: file
+    plural: files
+    definition: Uploaded content kept with the fleet, such as a firmware image, a config dump or a runbook.
+    audience: operator
+    collection: files
+    schema: FileBody
+    permission: file
+    nav: /files
+  - word: tag
+    plural: tags
+    definition: An operator's key and value on a location, system or component, its key governed install-wide.
+    audience: operator
+    collection: tags
+    schema: TagBody
+    permission: tag
+    nav: /tags
+  - word: setting
+    plural: settings
+    definition: A platform or user preference, resolved from the user up to the platform default.
+    audience: admin
+    collection: settings
+    permission: settings
+    nav: /settings
+  - word: template
+    plural: templates
+    definition: An example you clone to start a standard, a component, a system or a set of locations, then own what you get.
+    audience: operator
+    collection: templates
+    schema: TemplateBody
+    permission: template
+    nav: /templates
+  - word: label
+    plural: labels
+    definition: The optional friendly string a person reads in place of a name.
+    audience: operator
+    retired:
+      # The column, the CLI flag and the two-word noun, since a page can reach for any of them.
+      - word: display name
+        pattern: '\bdisplay_names?\b|\bdisplay_name_generated\b|--display-name\b|(?i)\bdisplay names?\b'
+        origin: ADR-0118
+        replacement: label (the friendly string), or label_generated (the pen that says the platform rendered it)
+      # A template is the catalog entry you clone once; the string a label renders from is a rule.
+      - word: label template
+        pattern: '(?i)\blabel[ -]templates?\b|\bdefault_template\b'
+        origin: ADR-2033
+        replacement: label rule (the string a label renders from; the default_rule and rule columns)
+  - word: detail view
+    plural: detail views
+    definition: An entity's own page, a system with its location as context, or a location or component on its own.
+    audience: operator
+    retired:
+      - word: workspace
+        pattern: '(?i)(?:^|[^-\w])workspaces?(?:$|[^-\w])'
+        origin: "#872"
+        replacement: detail view (an entity's own page)
+  # The subject a grant is given to (ADR-2036). User group comes first so a
+  # "principal group" reports the group's replacement rather than the user's.
+  # The schema, API and CLI rename (#2075) left no identifier saying principal,
+  # so the retired words' allow keeps only a code span (history, an applied
+  # migration's name) and the English adjective.
+  - word: user group
+    plural: user groups
+    definition: A set of users granted roles together, each member inheriting the group's grants.
+    audience: admin
+    collection: user-groups
+    schema: GroupBody
+    permission: user_group
+    nav: /user-groups
+    retired:
+      - word: principal group
+        pattern: '(?i)\bprincipal[- ]groups?\b'
+        origin: ADR-2036
+        replacement: user group (a set of users granted roles together)
+        allow: '(?i)`[^`]*\bprincipal[- ]groups?\b[^`]*`'
+  - word: user
+    plural: users
+    definition: Who a role is granted to, a person who signs in or a machine user that holds tokens.
+    audience: admin
+    collection: users
+    schema: UserBody
+    permission: user
+    nav: /users
+    retired:
+      # The noun anywhere, identifiers included. A code span (history, an
+      # applied migration's name) and the English adjective (the principal
+      # reason) keep the word.
+      - word: principal
+        pattern: '(?i)\bprincipal(?:s|_\w+)?\b'
+        origin: ADR-2036
+        replacement: user (a person or a machine user)
+        allow: '(?i)`[^`]*\bprincipal(?:s|_\w+)?\b[^`]*`|\bprincipal (?:axis|axes|reasons?|surfaces?|concerns?|risks?|costs?|goals?|aims?|purposes?|ones|uses?|questions?|ways?|means)\b'
+      - word: service account
+        pattern: '(?i)\bservice[- ]accounts?\b'
+        origin: ADR-2036
+        replacement: machine user (a user with no person behind it, holding tokens)
+      # Human as the kind: the noun before a user word, and the pairing with
+      # the other kind. Human as English (a human reads, human-in-the-loop, a
+      # human identifier) keeps the word.
+      - word: human
+        pattern: '(?i)\bhuman (?:principals?|users?|members?|kinds?|accounts?|identit(?:y|ies))\b|\bhumans? (?:and|or|vs\.?|versus) (?:service|machine)\b|\b(?:service|machine)(?: users?| principals?| accounts?)? (?:and|or) humans?\b|\bhuman/service\b'
+        origin: ADR-2036
+        replacement: person (the kind of user a human signs in as; the other kind is machine)
+  - word: role
+    plural: roles
+    definition: A named bundle of permissions granted to users, which may inherit another role's.
+    audience: admin
+    collection: roles
+    schema: RoleBody
+    permission: role
+    nav: /roles
+  - word: audit event
+    plural: audit events
+    definition: One recorded privileged action or sign-in, with who did it, when and to what.
+    audience: admin
+    collection: audit-log
+    schema: AuditEventBody
+    permission: audit
+    nav: /audit
+    nav_label: Audit
+  - word: healthy
+    plural: healthy
+    definition: The health of a system whose components are all present and well.
+    audience: operator
+    verdict: healthy
+  - word: incomplete
+    plural: incomplete
+    definition: The health of a system still missing a component its standard requires, shown as Commissioning.
+    audience: operator
+    verdict: incomplete
+  - word: degraded
+    plural: degraded
+    definition: The health of a system that still works but has lost something it should have.
+    audience: operator
+    verdict: degraded
+  - word: outage
+    plural: outage
+    definition: The health of a system that cannot do its job.
+    audience: operator
+    verdict: outage
+
+# Collections and console entries that name no product noun: a page, a mechanism
+# or a stub, each with why. The coverage guards accept these and nothing else.
+not_terms:
+  - collection: auth
+    reason: sign-in and tokens, a mechanism rather than a thing an operator manages
+  - collection: healthz
+    reason: the liveness probe
+  - collection: views
+    reason: the read side that backs the console's pages
+  - collection: expressions
+    reason: the expression engine's evaluate and explain verbs
+  - collection: telemetry
+    reason: the ingest path an outpost writes samples through
+  - collection: webhooks
+    reason: inbound webhook delivery, a mechanism
+  - collection: simulation
+    reason: the lab simulator, not part of a real fleet
+  - collection: assistant
+    reason: omnibot's own state, a person's stored conversations with it, rather than a thing in the fleet
+  - nav: /
+    reason: Home
+  - nav: /explore
+    reason: Explore, the fleet's outline
+  - nav: /dashboards
+    reason: Dashboards, not yet built
+  - nav: /learn
+    reason: Learn, the teaching surface
+  - nav: /simulation
+    reason: the lab simulator
+  - nav: /platform
+    reason: Status, the platform's own health page
+  - nav: /log-types
+    reason: a stub, the log lane is untyped today

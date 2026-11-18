@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
 // The alarm write side. An alarm is component-local and impairs it wholesale
@@ -43,9 +46,9 @@ type Alarm struct {
 	// unacknowledged (the queue an operator works), raised and acknowledged
 	// (somebody is on it), or cleared having never been acknowledged.
 	// AcknowledgedBy is the acknowledger's IDENTIFIER, not their uuid and not a
-	// label: a human's username, a service account's name, or a node's name,
-	// resolved by principalIdent. It is what an operator surface renders
-	// (ADR-0062), and it reads empty once that principal is purged, while
+	// label: a person's username, a machine user's name, or an outpost's name,
+	// resolved by userIdent. It is what an operator surface renders
+	// (ADR-0062), and it reads empty once that user is purged, while
 	// audit_log keeps the identifier it denormalized.
 	AcknowledgedAt *time.Time
 	AcknowledgedBy string
@@ -105,13 +108,13 @@ var (
 	ErrAlarmInvalid = errors.New("storage: alarm is invalid")
 )
 
-// alarmCols is the read shape. acknowledged_by surfaces the acting principal's
+// alarmCols is the read shape. acknowledged_by surfaces the acting user's
 // IDENTIFIER rather than its uuid, so every alarm read hands the API something
-// an operator recognises (ADR-0062); it reads empty once that principal is
+// an operator recognises (ADR-0062); it reads empty once that user is
 // purged, which is honest, and audit_log still names them.
 //
 // The identifier sources are projected as their own columns and folded in Go
-// (principalIdent), which is where that policy lives since #564 dropped the
+// (userIdent), which is where that policy lives since #564 dropped the
 // stored function. A projection rather than a join, because one of the four
 // statements reading this shape is an UPDATE ... RETURNING: RETURNING cannot
 // left-join, and giving the UPDATE a FROM clause would change which rows it
@@ -123,8 +126,8 @@ var (
 var alarmCols = `a.id, a.component_id, (select c.name from component c where c.id = a.component_id),
 	a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at, a.raised_by_rule_id::text,
 	(select r.name from event_rule r where r.id = a.raised_by_rule_id),
-	a.acknowledged_at, ` + principalIdentCols("a.acknowledged_by") + `,
-	` + snoozeOf("snoozed_until") + `, ` + principalIdentCols(snoozeOf("snoozed_by"))
+	a.acknowledged_at, ` + userIdentCols("a.acknowledged_by") + `,
+	` + snoozeOf("snoozed_until") + `, ` + userIdentCols(snoozeOf("snoozed_by"))
 
 // snoozeOf reads one column of the snooze in force on the alarm's condition
 // (#1318): a scalar subquery on the primary key, so it rides the UPDATE ...
@@ -137,15 +140,15 @@ func snoozeOf(col string) string {
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
-	var ackUsername, ackServiceName, ackNodeName *string
-	var snzUsername, snzServiceName, snzNodeName *string
+	var ackUsername, ackServiceName, ackOutpostName *string
+	var snzUsername, snzServiceName, snzOutpostName *string
 	if err := row.Scan(&a.ID, &a.ComponentID, &a.ComponentName, &a.Severity, &a.Message,
-		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackNodeName,
-		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzNodeName); err != nil {
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.RaisedByRuleID, &a.RaisedByRule, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackOutpostName,
+		&a.SnoozedUntil, &snzUsername, &snzServiceName, &snzOutpostName); err != nil {
 		return nil, err
 	}
-	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName, ackNodeName)
-	a.SnoozedBy = principalIdent(snzUsername, snzServiceName, snzNodeName)
+	a.AcknowledgedBy = userIdent(ackUsername, ackServiceName, ackOutpostName)
+	a.SnoozedBy = userIdent(snzUsername, snzServiceName, snzOutpostName)
 	return &a, nil
 }
 
@@ -220,7 +223,7 @@ func (p *PG) raiseAlarmTx(ctx context.Context, tx pgx.Tx, actorID string, compon
 		returning id, raised_at, dedup_key`,
 		component.ID, spec.Severity, spec.Message, spec.DedupKey, ruleID).Scan(&a.ID, &a.RaisedAt, &a.DedupKey)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// The severity names a level in the registry (#917). A raise that
+		// The severity names a level in the catalog (#917). A raise that
 		// lands on an open alarm's dedup key inserts nothing, so the foreign
 		// key never checks it: check here, on this path only, so the winning
 		// raise costs no extra statement.
@@ -460,11 +463,53 @@ func (p *PG) ListSystemAlarms(ctx context.Context, systemID string, window time.
 	return out, rows.Err()
 }
 
+// ListFleetAlarms returns the active alarms across every component the caller
+// may read, in one query (#2025): the worst severity first (by the level's
+// rank), newest first within a level, capped at limit. The caller's component
+// scope is injected here through scopedListSQL, the same rooted walk every
+// scoped component list takes, so an out-of-scope alarm is never read at all.
+// An empty or wholly malformed scope is an empty list, not an error.
+func (p *PG) ListFleetAlarms(ctx context.Context, read scope.Set, filter AlarmFilter, limit int) ([]Alarm, error) {
+	if read.Empty() {
+		return []Alarm{}, nil
+	}
+	args, ok := scopedListArgs(componentTable, read)
+	if !ok {
+		return []Alarm{}, nil
+	}
+	args = append(args, filter.Unacknowledged, limit)
+	unack, lim := "$"+strconv.Itoa(len(args)-1), "$"+strconv.Itoa(len(args))
+	rows, err := p.pool.Query(ctx, `
+		with comp as (`+scopedListSQL(componentTable, "id", read)+`)
+		select `+alarmCols+`
+		from alarm a
+		left join severity_level l on l.name = a.severity
+		where a.cleared_at is null
+		  and a.component_id in (select id from comp)
+		  and (not `+unack+` or a.acknowledged_at is null)
+		order by coalesce(l.rank, 0) desc, a.raised_at desc, a.id desc
+		limit `+lim, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list fleet alarms: %w", err)
+	}
+	defer rows.Close()
+
+	out := []Alarm{}
+	for rows.Next() {
+		a, err := scanAlarm(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan fleet alarm: %w", err)
+		}
+		out = append(out, *a)
+	}
+	return out, rows.Err()
+}
+
 // activeAlarms is the health report's read: what is currently wrong with a
 // component, so the report can name the alarm behind a down occupant. Takes the
-// component's id directly (resolveHealthRoles' assignee join already has it;
-// see resolvedRole.AssignedIDs), not its name: two components can share a name
-// once #627 lands, but system_role_assignment.component_id never does.
+// component's id directly (resolveHealthSlots' assignee join already has it;
+// see resolvedSlot.AssignedIDs), not its name: two components can share a name
+// once #627 lands, but system_slot_assignment.component_id never does.
 func (p *PG) activeAlarms(ctx context.Context, q txQuerier, componentID string) ([]Alarm, error) {
 	rows, err := q.Query(ctx, `
 		select `+alarmCols+`

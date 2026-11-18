@@ -65,7 +65,7 @@ func TestSnoozeRecordsWhoAndUntilWhenOnTheCondition(t *testing.T) {
 	}
 	near(t, "snoozed_until", got.SnoozedUntil, time.Now().Add(time.Hour))
 	if got.SnoozedBy != "jordan-ops" {
-		t.Errorf("snoozed by %q, want the acting principal's name", got.SnoozedBy)
+		t.Errorf("snoozed by %q, want the acting user's name", got.SnoozedBy)
 	}
 	if got.Acknowledged() || !got.Active() {
 		t.Errorf("snoozing moved the alarm: %+v; a snooze neither acknowledges nor clears", got)

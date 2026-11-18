@@ -43,12 +43,12 @@ func TestLandBatchStampsEndpointsSeenInItsTransaction(t *testing.T) {
 	t.Cleanup(gw.Close)
 
 	ts := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
-	a := taskGroup("task-a", f.disp1, f.node, "on", ts)
+	a := taskGroup("task-a", f.disp1, f.outpost, "on", ts)
 	a.SeenEndpoint = epA
-	b := taskGroup("task-b", f.disp2, f.node, "on", ts)
+	b := taskGroup("task-b", f.disp2, f.outpost, "on", ts)
 	b.Metrics[0].OwnerID = f.disp1 // not task-b's component: refused
 	b.SeenEndpoint = epB
-	batch := storage.IngestBatch{BatchID: "tick-seen", Writer: storage.NodeWriter("", ""), SeenEndpoint: epTop,
+	batch := storage.IngestBatch{BatchID: "tick-seen", Writer: storage.OutpostWriter("", ""), SeenEndpoint: epTop,
 		Groups: []storage.IngestGroup{a, b}}
 
 	counter.Reset()

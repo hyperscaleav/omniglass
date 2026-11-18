@@ -124,7 +124,7 @@ func (p *PG) reconcileKey(ctx context.Context, q querier, ownerKind, col, arc, k
 // owner kind, $2 arc) has an observed row of or a command targeted: the keys
 // beyond the declared cascade that the properties read can carry. The reserved
 // family ($3, writerclass.ReservedNames: a native probe key, health, a command
-// lifecycle key) is left out: a probe key is the node's verdict on an
+// lifecycle key) is left out: a probe key is the outpost's verdict on an
 // endpoint, whose own surface is the reachability read (which withholds a
 // gated rung's frozen fact), and health is the rollup's, not a property an
 // operator could ask for. One probe per catalog key, each an index prefix
@@ -195,7 +195,7 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 // same-instant ties.
 //
 // The two orders are split by who supplies `ts` (#712). The observed lane
-// accepts a caller-supplied timestamp (a node backfilling, a device reporting
+// accepts a caller-supplied timestamp (an outpost backfilling, a device reporting
 // a reading it took a minute ago), so `ts` LEADS there and a late-arriving
 // older sample must not become current merely by being written last. The cost
 // of that ordering is that a database clock stepping backwards between two

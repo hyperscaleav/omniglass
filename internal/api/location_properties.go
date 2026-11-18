@@ -13,7 +13,7 @@ import (
 // The location property surface: the effective read (every property the
 // location's type declares, resolved against the location's own value, plus any
 // off-contract property set directly on it) and the two writes that set and clear
-// one declared override. The component surface's twin on the location arc, over
+// one declared value. The component surface's twin on the location arc, over
 // the same owner-generic gateway primitive. Gated by location:read /
 // location:update and scope-injected on the location arc, so an out-of-scope
 // location is a non-disclosing 404 rather than a forbidden.
@@ -34,7 +34,7 @@ type locationPropertyOutput struct {
 	Body locationPropertyBody
 }
 
-// locationPropertyValueBody is the write reply: the stored override, echoed back
+// locationPropertyValueBody is the write reply: the stored declared value, echoed back
 // so a client that just set a value holds its id without re-reading the list.
 type locationPropertyBody struct {
 	Location         string          `json:"location"`
@@ -59,16 +59,17 @@ type setLocationPropertyInput struct {
 }
 
 // registerLocationPropertyRoutes wires the per-location property surface: the
-// effective read and the set/clear of one declared override. The read is gated by
+// effective read and the set/clear of one declared value. The read is gated by
 // location:read and the writes by location:update, each carrying the matching
 // scope so the gateway resolves the location within it.
 func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-properties",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/locations/{name}/properties",
 		Summary:     "List a location's effective properties",
-		Description: "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
+		Description: "Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
 	}, "location", "read"), func(ctx context.Context, in *locationPathInput) (*locationPropertiesOutput, error) {
 		eff, err := gw.EffectiveProperties(ctx, "location", in.Name, a.scopeFor(ctx, "location", "read"))
 		if err != nil {

@@ -51,13 +51,13 @@ const levels: SeverityLevel[] = [
 const properties: PropertyRow[] = [{ name: "endpoint-reachable", data_type: "string", label: "Endpoint reachable", official: true }];
 const metrics: MetricRow[] = [{ name: "temperature-c", data_type: "float", label: "Temperature", unit: "°C", official: true }];
 
-const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
-const scoped: Me = { principal: { id: "u-hq", kind: "human" }, human: { username: "viewer-hq" }, permissions: ["*:read"], fleet_permissions: [], grants: [{ role: "viewer", scope_kind: "location", scope_id: uuidFor("loc-hq") }] };
-// Owns one place, views the fleet: rule:create is in its flattened set, but a
+const admin: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], fleet_permissions: [">"], grants: [{ role: "owner", scope_kind: "all" }] };
+const viewer: Me = { user: { id: "u-view", kind: "person" }, person: { username: "viewer" }, permissions: ["*:read"], fleet_permissions: ["*:read"], grants: [{ role: "viewer", scope_kind: "all" }] };
+const scoped: Me = { user: { id: "u-hq", kind: "person" }, person: { username: "viewer-hq" }, permissions: ["*:read"], fleet_permissions: [], grants: [{ role: "viewer", scope_kind: "location", scope_id: uuidFor("loc-hq") }] };
+// Owns one location, views the fleet: rule:create is in its flattened set, but a
 // fleet-wide rule needs it on an all-scope grant, so the server refuses it.
-const placeOwner: Me = {
-  principal: { id: "u-po", kind: "human" }, human: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
+const locationOwner: Me = {
+  user: { id: "u-po", kind: "person" }, person: { username: "owner-hq" }, permissions: [">"], fleet_permissions: ["*:read"],
   grants: [{ role: "owner", scope_kind: "location", scope_id: uuidFor("loc-hq") }, { role: "viewer", scope_kind: "all" }],
 };
 
@@ -255,7 +255,7 @@ describe("Rules page", () => {
     // (fixtures are stamped at load, so the age is matched, not pinned)
     expect(within(b).getByTestId("rule-judged").textContent).toMatch(/^1\ds ago$/);
     expect(within(b).getByText("Every component")).toBeTruthy();
-    // The level it raises at links to the severity registry beside the rules.
+    // The level it raises at links to the severity catalog beside the rules.
     expect(within(b).getByRole("link", { name: "All levels" }).getAttribute("href")).toBe("/severity-levels");
   });
 
@@ -336,8 +336,8 @@ describe("Rules page", () => {
     expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Requires rule:update");
   });
 
-  it("offers no rule write to a caller whose rule permissions stop at one place", async () => {
-    mount(placeOwner);
+  it("offers no rule write to a caller whose rule permissions stop at one location", async () => {
+    mount(locationOwner);
     expect(screen.queryByText("New rule")).toBeNull();
     fireEvent.click(screen.getByText("Too hot"));
     const b = await blade();
@@ -347,7 +347,7 @@ describe("Rules page", () => {
     expect(editBtn.disabled).toBe(true);
   });
 
-  it("lists every rule to a caller scoped to one place, like a registry, but offers it no write", () => {
+  it("lists every rule to a caller scoped to one location, like a catalog, but offers it no write", () => {
     mount(scoped);
     expect(screen.getByText("Too hot")).toBeTruthy();
     expect(screen.queryByText(/fleet-wide config/)).toBeNull();
@@ -634,7 +634,7 @@ describe("Rules page", () => {
     return writes;
   }
 
-  it("marks a selector entry the registries no longer have as deleted, with why", async () => {
+  it("marks a selector entry the catalogs no longer have as deleted, with why", async () => {
     await editStale();
     const selected = screen.getByLabelText("Selected");
     const chips = within(selected).getAllByText("deleted");
@@ -706,7 +706,7 @@ describe("Rules page", () => {
     expect(writes[0].url).toMatch(/\/event-rules\/too-hot$/);
   });
 
-  it("authors an informational rule: severity None, the event type pickers from the registry, no clear event", async () => {
+  it("authors an informational rule: severity None, the event type pickers from the catalog, no clear event", async () => {
     const writes = catchWrites();
     mount();
     fireEvent.click(screen.getByText("New rule"));
@@ -753,7 +753,7 @@ describe("Rules page", () => {
   });
 
   it("opens the rule a link names, so an event row can point at the rule that wrote it", async () => {
-    window.history.pushState({}, "", "/rules?rule=reachability-lost");
+    window.history.pushState({}, "", "/event-rules?rule=reachability-lost");
     try {
       mount();
       const b = await blade();
@@ -764,7 +764,7 @@ describe("Rules page", () => {
   });
 
   it("opens the rule a link names by uuid, so an event written before a rename still leads to its rule", async () => {
-    window.history.pushState({}, "", `/rules?rule=${reach.id}`);
+    window.history.pushState({}, "", `/event-rules?rule=${reach.id}`);
     try {
       mount();
       const b = await blade();
@@ -778,12 +778,12 @@ describe("Rules page", () => {
   });
 
   it("follows the rule a link names as it changes (back and forward), and lets go of it when the blade closes", async () => {
-    window.history.pushState({}, "", "/rules?rule=reachability-lost");
+    window.history.pushState({}, "", "/event-rules?rule=reachability-lost");
     try {
       mount();
       let b = await blade();
       expect(within(b).getByText("reachability-lost")).toBeTruthy();
-      window.history.pushState({}, "", "/rules?rule=too-hot");
+      window.history.pushState({}, "", "/event-rules?rule=too-hot");
       window.dispatchEvent(new PopStateEvent("popstate"));
       await waitFor(() => expect(within(asides()[asides().length - 1] as HTMLElement).getByText("too-hot")).toBeTruthy());
       b = asides()[asides().length - 1] as HTMLElement;
@@ -795,7 +795,7 @@ describe("Rules page", () => {
   });
 
   it("says a linked rule is not found only once the list has loaded, and reads no state for it", async () => {
-    window.history.pushState({}, "", "/rules?rule=no-such-rule");
+    window.history.pushState({}, "", "/event-rules?rule=no-such-rule");
     try {
       let release!: () => void;
       const gate = new Promise<void>((r) => { release = r; });

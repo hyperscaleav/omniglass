@@ -29,13 +29,13 @@ type PlatformMetric struct {
 // RecordPlatformMetrics lands the process's own observations as the platform
 // components' metric series, observed, written by the process (the platform
 // writer class), so the gateway refuses a key the process does not write. It
-// is the one write every server-side platform measure goes through: a node's
-// check-in age today, the server's own figures and a node's command queue in
+// is the one write every server-side platform measure goes through: an outpost's
+// check-in age today, the server's own figures and an outpost's command queue in
 // the slices after (#1626, #1627).
 //
 // Each component's rows land in a transaction of their own, as
 // RecordWebhookCounts does, so a refusal costs only its own rows: a component
-// gone since its rows were read (a node deleted between the read and the
+// gone since its rows were read (an outpost deleted between the read and the
 // write) is dropped, and every other component's rows still land. A row
 // dated into a day with no partition makes the day and is retried, as the
 // ingest's write is (a capture's seeded hour reaching back past midnight
@@ -72,36 +72,36 @@ func (p *PG) RecordPlatformMetrics(ctx context.Context, rows []PlatformMetric) e
 	return errors.Join(errs...)
 }
 
-// NodeCheckin is one claimed node's last word (#1625): its platform
+// OutpostCheckin is one claimed outpost's last word (#1625): its platform
 // component and the time it last spoke, its last heartbeat or, before its
 // first, its claim. The check-in age is the time since.
-type NodeCheckin struct {
-	Node        string
+type OutpostCheckin struct {
+	Outpost     string
 	ComponentID string
 	Since       time.Time
 }
 
-// NodeCheckins reads every claimed node that has a platform component, in
-// name order: the check-in age timer's input. A node never claimed has not
-// begun to speak, so its silence has not begun either, and is absent; a node
+// OutpostCheckins reads every claimed outpost that has a platform component, in
+// name order: the check-in age timer's input. An outpost never claimed has not
+// begun to speak, so its silence has not begun either, and is absent; an outpost
 // with no platform component (registered before the boot seed made the
 // platform) has nowhere to land its age until the next boot adopts it.
-func (p *PG) NodeCheckins(ctx context.Context) ([]NodeCheckin, error) {
+func (p *PG) OutpostCheckins(ctx context.Context) ([]OutpostCheckin, error) {
 	rows, err := p.pool.Query(ctx, `
 		select name, platform_component_id::text, coalesce(last_heartbeat_at, enrolled_at)
-		from node
+		from outpost
 		where enrolled_at is not null and platform_component_id is not null
 		order by name`)
 	if err != nil {
-		return nil, fmt.Errorf("storage: read node checkins: %w", err)
+		return nil, fmt.Errorf("storage: read outpost checkins: %w", err)
 	}
-	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (NodeCheckin, error) {
-		var c NodeCheckin
-		err := r.Scan(&c.Node, &c.ComponentID, &c.Since)
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (OutpostCheckin, error) {
+		var c OutpostCheckin
+		err := r.Scan(&c.Outpost, &c.ComponentID, &c.Since)
 		return c, err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("storage: read node checkins: %w", err)
+		return nil, fmt.Errorf("storage: read outpost checkins: %w", err)
 	}
 	return out, nil
 }
@@ -110,7 +110,7 @@ func (p *PG) NodeCheckins(ctx context.Context) ([]NodeCheckin, error) {
 // component (#1644): the build it runs (server-version) and the instant this
 // boot started it (server-started-at, RFC 3339 in UTC, a string because the
 // property lane has no timestamp type). Observed, written by the process (the
-// platform writer class), so no node, push or operator can write either.
+// platform writer class), so no outpost, push or operator can write either.
 // Transition-only: a restart moves the start time forward, and the version
 // lands again only when the build changes. A component gone since the boot
 // ensured it is ErrComponentNotFound, which the boot logs and does not fail

@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/solid-
 import Systems from "./Systems";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { SYSTEM_HEALTH_PREFIX, systemHealthKey, type FleetHealth } from "../lib/health";
-import { systemRolesKey } from "../lib/system_roles";
+import { systemSlotsKey } from "../lib/system_slots";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
 import { systemAlarmsKey } from "../lib/alarms";
@@ -24,14 +24,14 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { uuidFor } from "../lib/testids";
 import { seedSeverityLevels } from "../lib/testseverity";
-import type { EffectiveRole } from "../lib/system_zoom";
+import type { EffectiveSlot } from "../lib/system_zoom";
 
-// The system zoom's chrome (#636): one card per role with the server's own
+// The system zoom's chrome (#636): one card per slot with the server's own
 // arithmetic, choices grouped with the active alternate marked and the losing
-// build quiet, shared occupants chipped, and the no-role strip a state rather
+// build quiet, shared occupants chipped, and the no-slot strip a state rather
 // than an error. The identity route's default face (ADR-0129).
 
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 const view: FleetView = {
   locations: [
@@ -71,7 +71,7 @@ const view: FleetView = {
 
 const health: FleetHealth = {
   verdict: "incomplete",
-  roles: [
+  slots: [
     {
       name: "main-display", label: "Main Display", impact: "outage", quorum: 1, satisfying: 0, short: 1, spare: 0,
       impaired: true, active: true, assigned_to: [], down: [], alarms: [],
@@ -118,7 +118,7 @@ const declared = [
     accepted_types: ["codec"], pinned_products: [], assigned_to: [], alternate: "conferencing/component-system",
     positions: [], position_labels: [],
   },
-] as unknown as EffectiveRole[];
+] as unknown as EffectiveSlot[];
 
 function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = [], meOverride: Me = me, membersOverride?: unknown[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -130,7 +130,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
   qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("szpt-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
-  qc.setQueryData([...systemRolesKey(uuidFor("szp-sys"))], declared);
+  qc.setQueryData([...systemSlotsKey(uuidFor("szp-sys"))], declared);
   qc.setQueryData([...systemMembersKey(uuidFor("szp-sys"))], membersOverride ?? memberRowsOf(view, uuidFor("szp-sys")));
   qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
   qc.setQueryData(["system-properties", uuidFor("szp-sys")], [
@@ -175,17 +175,17 @@ afterEach(cleanup);
 
 describe("the system zoom", () => {
   // #790 reshaped the body to components-first; the behaviors the retired
-  // one-card-per-role tests pinned live on in the group and card forms below.
-  it("arithmetic renders only where a role earned a group; the 1:1 case carries none", () => {
+  // one-card-per-slot tests pinned live on in the group and card forms below.
+  it("arithmetic renders only where a slot earned a group; the 1:1 case carries none", () => {
     mount();
-    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 of 2/)).toBeTruthy();
+    expect(within(screen.getByTestId("slotgroup-room-mic")).getByText(/1 of 2/)).toBeTruthy();
     expect(within(screen.getByTestId(`member-${uuidFor("szp-c-bar")}`)).queryByText(/of \d/)).toBeNull();
   });
 
-  it("an unstaffed role and a down occupant stay visually distinct: commissioning wears incomplete, failure wears the impact", () => {
+  it("an unstaffed slot and a down occupant stay visually distinct: commissioning wears incomplete, failure wears the impact", () => {
     mount();
-    expect(within(screen.getByTestId("rolegroup-main-display")).getByText("0 of 1").className).toContain("text-incomplete");
-    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 of 2/).className).toContain("text-warning");
+    expect(within(screen.getByTestId("slotgroup-main-display")).getByText("0 of 1").className).toContain("text-incomplete");
+    expect(within(screen.getByTestId("slotgroup-room-mic")).getByText(/1 of 2/).className).toContain("text-warning");
     expect(within(screen.getByTestId(`member-${uuidFor("szp-c-mic")}`)).getByText("mic-1")).toBeTruthy();
   });
 
@@ -200,7 +200,7 @@ describe("the system zoom", () => {
     expect(within(row).getByText(/also in Overflow Room/)).toBeTruthy();
   });
 
-  it("a no-role member's card opens its component blade too (#799)", async () => {
+  it("a no-slot member's card opens its component blade too (#799)", async () => {
     mount();
     fireEvent.click(screen.getByTestId(`member-${uuidFor("szp-c-power")}`));
     const blade = await screen.findByRole("dialog");
@@ -209,7 +209,7 @@ describe("the system zoom", () => {
 
   it("a spare beyond quorum reads on the group header", () => {
     mount();
-    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 spare/)).toBeTruthy();
+    expect(within(screen.getByTestId("slotgroup-room-mic")).getByText(/1 spare/)).toBeTruthy();
   });
 
 
@@ -225,7 +225,7 @@ describe("the system zoom", () => {
     const full = {
       ...health,
       verdict: "healthy",
-      roles: (health.roles ?? []).map((r) => ({
+      slots: (health.slots ?? []).map((r) => ({
         ...r,
         satisfying: r.quorum,
         short: 0,
@@ -239,7 +239,7 @@ describe("the system zoom", () => {
     expect(within(screen.getByTestId("system-header")).queryByText(/slots filled/)).toBeNull();
   });
 
-  it("renders the active alarms worst first, above the roles, each naming its component and role", () => {
+  it("renders the active alarms worst first, above the slots, each naming its component and slot", () => {
     mount();
     const strip = screen.getByTestId("alarm-strip");
     expect(within(strip).getByText("No route to host")).toBeTruthy();
@@ -252,21 +252,21 @@ describe("the system zoom", () => {
   // The strip is where a storm is triaged from (#990): acknowledging a causing
   // alarm must not need the component's own page.
   describe("acknowledging from the Why strip", () => {
-    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
+    const viewer: Me = { user: { id: "u-v", kind: "person" }, person: { username: "v" }, permissions: ["system:read", "component:read", "location:read"], grants: [] };
     const responder: Me = { ...viewer, permissions: [...(viewer.permissions ?? []), "alarm:acknowledge"] };
     const withAck = (ack: object): FleetHealth => ({
       ...health,
-      roles: (health.roles ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, ...ack })) })),
+      slots: (health.slots ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, ...ack })) })),
     }) as FleetHealth;
 
-    it("offers Acknowledge on an unacknowledged causing alarm when the principal may", () => {
+    it("offers Acknowledge on an unacknowledged causing alarm when the user may", () => {
       mount(undefined, health, [], [], responder);
       const strip = screen.getByTestId("alarm-strip");
       expect(within(strip).getByRole("button", { name: "Acknowledge" })).toBeTruthy();
       expect(within(strip).queryByText(/acknowledged by/)).toBeNull();
     });
 
-    it("hides Acknowledge from a principal without alarm:acknowledge", () => {
+    it("hides Acknowledge from a user without alarm:acknowledge", () => {
       mount(undefined, health, [], [], viewer);
       expect(within(screen.getByTestId("alarm-strip")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
     });
@@ -304,14 +304,14 @@ describe("the system zoom", () => {
     expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-mic")}`);
   });
 
-  // The strip's tone and each marker's follow the registry's outage flag (#917).
+  // The strip's tone and each marker's follow the catalog's outage flag (#917).
   it("tones the alarm strip red when an alarm on it is at an outage level, amber otherwise", () => {
     mount();
     const strip = screen.getByTestId("alarm-strip");
     expect(strip.classList.contains("border-error/40")).toBe(true);
     expect(within(strip).getByText("High").classList.contains("badge-error")).toBe(true);
     cleanup();
-    const degrading = { ...health, roles: (health.roles ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, severity: "average" })) })) } as FleetHealth;
+    const degrading = { ...health, slots: (health.slots ?? []).map((r) => ({ ...r, alarms: (r.alarms ?? []).map((a) => ({ ...a, severity: "average" })) })) } as FleetHealth;
     mount(undefined, degrading);
     const amber = screen.getByTestId("alarm-strip");
     expect(amber.classList.contains("border-warning/40")).toBe(true);
@@ -336,7 +336,7 @@ describe("the system zoom", () => {
 });
 
 describe("the components-first body (#790)", () => {
-  it("a 1:1 occupant is one row naming its role, no group and no arithmetic", () => {
+  it("a 1:1 occupant is one row naming its slot, no group and no arithmetic", () => {
     mount();
     const row = screen.getByTestId(`member-${uuidFor("szp-c-bar")}`);
     expect(within(row).getByText("videobar-1")).toBeTruthy();
@@ -350,17 +350,17 @@ describe("the components-first body (#790)", () => {
     expect(screen.queryByText(/conferencing$/i)).toBeNull();
   });
 
-  it("an unstaffed role renders as an empty group wearing its badge and arithmetic", () => {
+  it("an unstaffed slot renders as an empty group wearing its badge and arithmetic", () => {
     mount();
-    const g = screen.getByTestId("rolegroup-main-display");
+    const g = screen.getByTestId("slotgroup-main-display");
     expect(within(g).getByText("Main Display")).toBeTruthy();
     expect(within(g).getByText(/0 of 1/)).toBeTruthy();
     expect(within(g).getAllByTestId("empty-slot").length).toBe(1);
   });
 
-  it("a short role renders as a group with its occupants inside and the gap named", () => {
+  it("a short slot renders as a group with its occupants inside and the gap named", () => {
     mount();
-    const g = screen.getByTestId("rolegroup-room-mic");
+    const g = screen.getByTestId("slotgroup-room-mic");
     expect(within(g).getByText(/1 of 2/)).toBeTruthy();
     expect(within(g).getByTestId(`member-${uuidFor("szp-c-mic")}`)).toBeTruthy();
     // Both seats are staffed; the down mic still holds its seat, so the gap
@@ -368,11 +368,11 @@ describe("the components-first body (#790)", () => {
     expect(within(g).queryAllByTestId("empty-slot").length).toBe(0);
   });
 
-  it("a no-role member is a row saying so, not a strip of chips", () => {
+  it("a no-slot member is a row saying so, not a strip of chips", () => {
     mount();
     const row = screen.getByTestId(`member-${uuidFor("szp-c-power")}`);
-    expect(within(row).getByText("no role")).toBeTruthy();
-    expect(screen.queryByTestId("no-role-strip")).toBeNull();
+    expect(within(row).getByText("no slot")).toBeTruthy();
+    expect(screen.queryByTestId("no-slot-strip")).toBeNull();
   });
 
   it("clicking a row opens the component blade; Expand promotes to the leaf (#799)", async () => {
@@ -404,9 +404,9 @@ describe("the map tab (#791)", () => {
   const MAPPED = [{
     id: uuidFor("szp-std"), name: "huddle-room", label: "Huddle Room", official: false,
     map: { aspect: 1.5, positions: [
-      { role: "room-mic", position: 1, x: 0.32, y: 0.52 },
-      { role: "room-mic", position: 2, x: 0.68, y: 0.52 },
-      { role: "main-display", position: 1, x: 0.5, y: 0.06 },
+      { slot: "room-mic", position: 1, x: 0.32, y: 0.52 },
+      { slot: "room-mic", position: 2, x: 0.68, y: 0.52 },
+      { slot: "main-display", position: 1, x: 0.5, y: 0.06 },
     ] },
   }];
 
@@ -421,7 +421,7 @@ describe("the map tab (#791)", () => {
     expect(screen.queryByTestId("system-map")).toBeNull();
   });
 
-  it("the map tab renders one marker per declared position of the build in use, occupants by label and gaps by role", () => {
+  it("the map tab renders one marker per declared position of the build in use, occupants by label and gaps by slot", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     const map = screen.getByTestId("system-map");
     const markers = within(map).getAllByTestId(/^mapmarker-/);
@@ -433,7 +433,7 @@ describe("the map tab (#791)", () => {
   // A marker is its component's type icon in its own verdict's hue (#1074,
   // the #1071 colours), its label under it: the same icon, label and verdict
   // its row shows. An empty position is a dashed ring in the no-data grey,
-  // named for its role.
+  // named for its slot.
   it("draws each occupant as its type icon in its verdict's hue, label under it, and a gap as a grey ring", () => {
     const glyph = (id: string) => screen.getByTestId(id).querySelector("[data-glyph]")!;
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
@@ -451,9 +451,9 @@ describe("the map tab (#791)", () => {
     expect(glyph("mapmarker-room-mic-1").getAttribute("class")).toContain("text-warning");
   });
 
-  // The detail rides a tooltip (#1074, tooltips not prose): the role and its
+  // The detail rides a tooltip (#1074, tooltips not prose): the slot and its
   // position, the product, the health word, and the alarm behind a red one.
-  it("reveals a marker's role, health and alarm on focus, never inline", async () => {
+  it("reveals a marker's slot, health and alarm on focus, never inline", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     const marker = screen.getByTestId("mapmarker-room-mic-2");
     expect(marker.textContent).not.toContain("Room Microphone");
@@ -468,8 +468,8 @@ describe("the map tab (#791)", () => {
   // A health poll that lands a fresh payload must not rebuild the markers
   // (#1074 review): a rebuilt marker drops keyboard focus and closes an open
   // tooltip every few seconds. Markers are keyed by their slot in the
-  // declaration, so the same position keeps its node across a poll.
-  it("keeps each marker's node across a health poll, so focus and an open tooltip survive", async () => {
+  // declaration, so the same position keeps its outpost across a poll.
+  it("keeps each marker's outpost across a health poll, so focus and an open tooltip survive", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     const before = screen.getByTestId("mapmarker-room-mic-1");
     // A real change (a new transition), so structural sharing hands the page
@@ -491,7 +491,7 @@ describe("the map tab (#791)", () => {
   });
 
   // The marker reads the row's own facts (#1074): once the component, product
-  // and type registries land, the marker carries the component's display label
+  // and type catalogs land, the marker carries the component's display label
   // (not its name slug) and the very glyph its row leads with.
   it("shows the same display label and type icon as the component's row", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
@@ -518,9 +518,9 @@ describe("the map tab (#791)", () => {
     const EDGES = [{
       ...MAPPED[0],
       map: { aspect: 1.5, positions: [
-        { role: "room-mic", position: 1, x: 0.03, y: 0.5 },
-        { role: "room-mic", position: 2, x: 0.97, y: 0.95 },
-        { role: "main-display", position: 1, x: 0.5, y: 0.3 },
+        { slot: "room-mic", position: 1, x: 0.03, y: 0.5 },
+        { slot: "room-mic", position: 2, x: 0.97, y: 0.95 },
+        { slot: "main-display", position: 1, x: 0.5, y: 0.3 },
       ] },
     }];
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], EDGES);
@@ -543,7 +543,7 @@ describe("the name-shaped address (#759's rule)", () => {
   it("keeps every search param through the uuid resolve, the tab included", async () => {
     mount(`/web/systems/boardroom?tab=map`, health, [], [
       { id: uuidFor("szp-std"), name: "huddle-room", label: "Huddle Room", official: false,
-        map: { aspect: 1.5, positions: [{ role: "room-mic", position: 1, x: 0.3, y: 0.5 }] } },
+        map: { aspect: 1.5, positions: [{ slot: "room-mic", position: 1, x: 0.3, y: 0.5 }] } },
     ]);
     await screen.findByTestId("system-map");
     expect(window.location.search).toContain("tab=map");
@@ -681,7 +681,7 @@ describe("the events and logs tabs (#793)", () => {
     const tab = screen.getByTestId("events-tab");
     const link = (await within(tab).findByText("reachability-lost")).closest("a")!;
     // By the rule's uuid, which a rename since the event (#977) has not moved.
-    expect(link.getAttribute("href")).toBe(`/web/rules?rule=${uuidFor("szp-rule")}`);
+    expect(link.getAttribute("href")).toBe(`/web/event-rules?rule=${uuidFor("szp-rule")}`);
     expect(within(tab).getByRole("button", { name: /^Timeline of / })).toBeTruthy();
   });
 
@@ -758,34 +758,34 @@ describe("the system card's header says each thing once (#872)", () => {
   });
 });
 
-describe("the place is context, the system the subject (#872)", () => {
-  it("titles a sole system's view by its place and ends the path at the place's parent", () => {
+describe("the location is context, the system the subject (#872)", () => {
+  it("titles a sole system's view by its location and ends the path at the location's parent", () => {
     mount();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Boardroom A");
     expect(within(screen.getByTestId("breadcrumb")).queryByText("Boardroom A")).toBeNull();
   });
 
-  it("shows the place as a card naming its type, without repeating its name", () => {
+  it("shows the location as a card naming its type, without repeating its name", () => {
     mount();
-    const card = screen.getByTestId("place-card");
-    expect(within(card).getByTestId("place-type").textContent).toBe("Room");
+    const card = screen.getByTestId("location-card");
+    expect(within(card).getByTestId("location-type").textContent).toBe("Room");
     expect(within(card).queryByText("Boardroom A")).toBeNull();
   });
 
   // A room holding one system IS the system: its own panel would only point
-  // back here, so the card offers none (#872 drawer audit); Configure place
+  // back here, so the card offers none (#872 drawer audit); Configure location
   // is where its form lives.
   it("offers no second panel for a sole system's room", () => {
     mount();
-    expect(within(screen.getByTestId("place-card")).queryByRole("button", { name: "Place details" })).toBeNull();
+    expect(within(screen.getByTestId("location-card")).queryByRole("button", { name: "Location details" })).toBeNull();
   });
 
-  // The place's own configuration (its properties and their cascade) lives on
-  // its Configure tab; a sole system's place lands on the system otherwise,
+  // The location's own configuration (its properties and their cascade) lives on
+  // its Configure tab; a sole system's location lands on the system otherwise,
   // so the card links straight to it (#872 review).
-  it("links to the place's own Configure from its card", async () => {
+  it("links to the location's own Configure from its card", async () => {
     mount();
-    fireEvent.click(within(screen.getByTestId("place-card")).getByRole("link", { name: "Configure place" }));
+    fireEvent.click(within(screen.getByTestId("location-card")).getByRole("link", { name: "Configure location" }));
     expect(await screen.findByTestId("location-page")).toBeTruthy();
     expect(window.location.pathname + window.location.search).toBe(`/web/locations/${uuidFor("szp-room")}?tab=configure`);
   });
@@ -799,10 +799,10 @@ describe("the place is context, the system the subject (#872)", () => {
     expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("szp-sys")}`);
   });
 
-  it("gives an unplaced system its own title and no place card", () => {
+  it("gives an unplaced system its own title and no location card", () => {
     mount(`/web/systems/${uuidFor("szp-other")}`);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Overflow Room");
-    expect(screen.queryByTestId("place-card")).toBeNull();
+    expect(screen.queryByTestId("location-card")).toBeNull();
   });
 
   it("offers Retry when a read fails, instead of a blank", async () => {
@@ -861,7 +861,7 @@ describe("the configure tab (#800)", () => {
   });
 
   it("hides Configure from a caller with no edit verb", async () => {
-    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "location:read", "component:read", "standard:read", "system_type:read", "metric_type:read"], grants: [] };
+    const viewer: Me = { user: { id: "u-v", kind: "person" }, person: { username: "v" }, permissions: ["system:read", "location:read", "component:read", "standard:read", "system_type:read", "metric_type:read"], grants: [] };
     mount(`/web/systems/${uuidFor("szp-sys")}`, health, [], [], viewer);
     await screen.findByTestId("tab-rail");
     expect(screen.queryByRole("tab", { name: "Configure" })).toBeNull();
@@ -871,34 +871,34 @@ describe("the configure tab (#800)", () => {
 
 // Slice 2 of #800: ?edit=1 means the one editor, wherever it is typed. The
 // bare param lands the workspace on Configure, already editing.
-// A sole system's place has no page of its own (#872): it configures on the
+// A sole system's location has no page of its own (#872): it configures on the
 // system's Configure tab, in its own section with its own Edit, so the room
-// is one page even when its place's properties need changing.
-describe("the place configures beside its system (#872)", () => {
-  it("carries a System section and a Place section, each its own form", async () => {
+// is one page even when its location's properties need changing.
+describe("the location configures beside its system (#872)", () => {
+  it("carries a System section and a Location section, each its own form", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
     expect(await screen.findByTestId("configure-face")).toBeTruthy();
-    const place = await screen.findByTestId("configure-face-place");
-    expect(within(place).getByText("Parent")).toBeTruthy();
-    // Place first, as the page reads: its card sits above the system's.
+    const location = await screen.findByTestId("configure-face-location");
+    expect(within(location).getByText("Parent")).toBeTruthy();
+    // Location first, as the page reads: its card sits above the system's.
     const system = screen.getByTestId("configure-face");
-    expect(place.compareDocumentPosition(system) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(location.compareDocumentPosition(system) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("?edit=place begins editing the place's form only", async () => {
-    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure&edit=place`);
-    const place = await screen.findByTestId("configure-face-place");
-    expect(await within(place).findByRole("button", { name: /save changes/i })).toBeTruthy();
+  it("?edit=location begins editing the location's form only", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure&edit=location`);
+    const location = await screen.findByTestId("configure-face-location");
+    expect(await within(location).findByRole("button", { name: /save changes/i })).toBeTruthy();
     expect(within(screen.getByTestId("configure-face")).queryByRole("button", { name: /save changes/i })).toBeNull();
   });
 
-  it("gives an unplaced system no Place section", async () => {
+  it("gives an unplaced system no Location section", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-other")}?tab=configure`);
-    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-other"))], { ...health, roles: [], transitions: [] });
-    r.qc.setQueryData([...systemRolesKey(uuidFor("szp-other"))], []);
+    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-other"))], { ...health, slots: [], transitions: [] });
+    r.qc.setQueryData([...systemSlotsKey(uuidFor("szp-other"))], []);
     r.qc.setQueryData([...systemMetricsKey(uuidFor("szp-other"))], []);
     expect(await screen.findByTestId("configure-face")).toBeTruthy();
-    expect(screen.queryByTestId("configure-face-place")).toBeNull();
+    expect(screen.queryByTestId("configure-face-location")).toBeNull();
   });
 });
 
@@ -1038,11 +1038,11 @@ describe("the system view refreshes (#940)", () => {
 
   const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
 
-  // Quiet: every role staffed, nobody down, nothing raised.
+  // Quiet: every slot staffed, nobody down, nothing raised.
   const calm = {
     ...health,
     verdict: "healthy",
-    roles: [
+    slots: [
       {
         name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 1, short: 0, spare: 0,
         impaired: false, active: true, assigned_to: ["mic-1"], down: [], alarms: [],
@@ -1050,13 +1050,13 @@ describe("the system view refreshes (#940)", () => {
     ],
     transitions: [{ ts: "2026-08-01T09:00:00Z", verdict: "healthy" }],
   } as unknown as FleetHealth;
-  // A high alarm opened on the mic: it no longer occupies its role, and the
-  // role's impact takes the system to degraded.
+  // A high alarm opened on the mic: it no longer occupies its slot, and the
+  // slot's impact takes the system to degraded.
   const raisedAt = () => new Date().toISOString();
   const moved = () => ({
     ...calm,
     verdict: "degraded",
-    roles: [
+    slots: [
       {
         name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 1, satisfying: 0, short: 1, spare: 0,
         impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
@@ -1075,7 +1075,7 @@ describe("the system view refreshes (#940)", () => {
       gets.push(new URL(url).pathname);
       if (url.endsWith("/health")) return json(moved());
       if (url.endsWith("/members")) return json({ system: "boardroom", members: memberRowsOf(view, uuidFor("szp-sys"), { "mic-1": "outage" }) });
-      if (url.endsWith("/roles")) return json({ roles: declared });
+      if (url.endsWith("/slots")) return json({ slots: declared });
       if (url.endsWith("/metrics")) return json({ metrics: [] });
       if (url.endsWith("/views/fleet")) return json(view);
       return json({});
@@ -1094,7 +1094,7 @@ describe("the system view refreshes (#940)", () => {
     expect(micLight()).toBe("outage");
     const count = (p: string) => gets.filter((g) => g.endsWith(p)).length;
     // Each of the system's own reads polled, as one request, not one per
-    // member or per role.
+    // member or per slot.
     for (const p of ["/health", "/members", "/metrics"]) {
       expect(count(p)).toBe(1);
     }
@@ -1121,7 +1121,7 @@ describe("the system view refreshes (#940)", () => {
       gets.push(new URL(url).pathname);
       if (url.endsWith("/health")) return json(calm);
       if (url.endsWith("/members")) return json({ members: memberRowsOf(big, uuidFor("szp-sys")) });
-      if (url.endsWith("/roles")) return json({ roles: declared });
+      if (url.endsWith("/slots")) return json({ slots: declared });
       if (url.endsWith("/metrics")) return json({ metrics: [] });
       if (url.endsWith("/alarms")) return json({ alarms: [] });
       if (url.endsWith("/events")) return json({ events: [] });
@@ -1139,8 +1139,8 @@ describe("the system view refreshes (#940)", () => {
     // No member is read on its own; the members' alarms are one read.
     expect(gets.filter((g) => g.startsWith("/api/v1/components/"))).toEqual([]);
     expect(gets.filter((g) => g.endsWith("/alarms"))).toEqual([`/api/v1/systems/${uuidFor("szp-sys")}/alarms`]);
-    // The whole poll: health, roles, members, metrics, alarms, events, logs.
-    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/logs", "/members", "/metrics", "/roles"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
+    // The whole poll: health, slots, members, metrics, alarms, events, logs.
+    expect([...gets].sort()).toEqual(["/alarms", "/events", "/health", "/logs", "/members", "/metrics", "/slots"].map((p) => `/api/v1/systems/${uuidFor("szp-sys")}${p}`).sort());
   });
 
   it("holds the poll while the tab is hidden", async () => {

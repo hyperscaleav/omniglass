@@ -38,15 +38,21 @@ drift no lint can see gets the periodic `/docs-audit` pass (#429).
 
 A worked example of the rule: the collection page's per-transport probe table (each transport's
 rung, its `endpoint.params` and the samples its probe lands) is rendered from the transport registry
-and the probe keys through `cmd/seedgen`, `seed.json` and `SeededSet`, and a test in `internal/node`
+and the probe keys through `cmd/seedgen`, `seed.json` and `SeededSet`, and a test in `internal/outpost`
 drives each built transport's probe and fails when what it lands differs from what its entry
 declares. A new transport's row, such as snmp's, appears with its registry entry and no doc edit.
 
 ## What "the docs" means here
 
 - **Architecture pages** (`/architecture/`) hold the model: the spine plus leaf
-  documents, and the current decisions. Each official term is defined once in the
-  [glossary](/architecture/glossary/) and not redefined in the leaves.
+  documents, and the current decisions. Each official term is defined once and not redefined in
+  the leaves. A word an operator or an admin reads (an entity, a nav label, a verdict) is a row
+  in `internal/vocab/terms.yaml`: its word and plural, a one-sentence definition, its API
+  collection, schema and permission noun, its nav entry, and any word it retired. `make gen`
+  renders the [glossary](/reference/glossary/) and the entity descriptions in the OpenAPI spec
+  from it, and the guards fail a new collection, nav entry or verdict that names no row, or a
+  retired word back in console strings or docs prose. Internal architecture terms stay in the
+  frozen [architecture glossary](/architecture/glossary/).
 - **Guides** (`/guides/`) are how-to pages for someone *using* the product, split by
   audience: the **operator guide** (running the fleet from the console and the CLI), the
   **admin guide** (managing accounts, access, audit, and config), and **deployment**
@@ -176,7 +182,7 @@ screenshots:
 
 That frontmatter is the **single source**: `make docs-shots` reads it from every page, drives
 the real console (the same binary an operator runs, never a mock, served by a throwaway lab with
-no node collecting, so the pages hold still; the capture hides the lab's banner), and writes
+no outpost collecting, so the pages hold still; the capture hides the lab's banner), and writes
 `public/screenshots/<id>.png`; the directive renders the figure from the same entry. So the
 capture list and the embed cannot drift, a `#id` with no frontmatter entry (or no captured
 image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.
@@ -255,7 +261,7 @@ the only correct answer when the enclosing cell holds something the shot exists 
 
 **Standing masks** cover console chrome that shows a count of the seed's rows, and need no
 frontmatter entry: the capture applies them to every shot wherever the element renders
-(`STANDING_MASKS` in `web/e2e/shotmasklib.mjs`). Today that is the Catalog subrail's per-registry
+(`STANDING_MASKS` in `web/e2e/shotmasklib.mjs`). Today that is the Catalog subrail's per-catalog
 counts (`data-testid="catalog-entry-count"`). A count is the seed's, not the page's, so a release
 that adds a driver or a type moves a digit on every page under the Catalog shell; without the
 standing mask each such PR failed the gate on a UI it never touched (#1482). Add a new count of

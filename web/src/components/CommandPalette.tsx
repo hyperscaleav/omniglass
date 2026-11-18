@@ -4,7 +4,7 @@ import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
 import { entryHref, visibleGroups } from "../lib/catalog";
 import { useMe, can } from "../lib/auth";
-import { Search, ArrowRight } from "./icons";
+import { Search, ArrowRight, Bot } from "./icons";
 
 // The ⌘K command palette: a global jump across the whole app (distinct from a
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
@@ -19,12 +19,12 @@ export type Command = { label: string; path: string; group?: string; section?: s
 // one the rail shows). The rail half runs through nav.ts's filterNav, the very
 // function that hides a sidebar button. The catalog half runs through
 // catalog.ts's visibleGroups, the very function the shell's subrail and the
-// Overview cards render from: the registries left the rail for that subrail
+// Overview cards render from: the catalogs left the rail for that subrail
 // (#625), and reading them from CATALOG_GROUPS is what keeps them findable by
 // name here without a second membership list to drift (#628).
 //
-// A registry wears its catalog group as a section, so the group tag reads
-// `Catalog · Telemetry` and a lane name finds its registries. A pathless soon
+// A catalog wears its catalog group as a section, so the group tag reads
+// `Catalog · Telemetry` and a lane name finds its catalogs. A pathless soon
 // slot (the Templates reservations) is no destination and is left out; a routed
 // soon slot (Rules, Notifications) jumps to its stub, exactly as the rail's own
 // unbuilt sections do.
@@ -51,7 +51,17 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
 export const matches = (c: Command, q: string): boolean =>
   c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q) || (c.section ?? "").toLowerCase().includes(q);
 
-export default function CommandPalette(props: { open: boolean; onClose: () => void }) {
+// An ask row hands the palette's query to omnibot (#1167) instead of jumping.
+export type AskRow = { label: string; ask: true };
+export type Row = Command | AskRow;
+
+// withAsk ends the results with the ask row, for a person who may run omnibot.
+export function withAsk(results: Command[], q: string, allowed: boolean): Row[] {
+  if (!allowed) return results;
+  return [...results, { label: q ? `Ask omnibot: ${q}` : "Ask omnibot", ask: true }];
+}
+
+export default function CommandPalette(props: { open: boolean; onClose: () => void; onAsk?: (prompt: string) => void }) {
   const navigate = useNavigate();
   const me = useMe();
   const commands = createMemo(() => buildCommands((tokens) => can(me.data, ...tokens)));
@@ -61,9 +71,10 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
   const optId = (i: number) => `${listId}-opt-${i}`;
 
   const results = createMemo(() => {
-    const q = query().trim().toLowerCase();
-    if (!q) return commands();
-    return commands().filter((c) => matches(c, q));
+    const raw = query().trim();
+    const q = raw.toLowerCase();
+    const found = q ? commands().filter((c) => matches(c, q)) : commands();
+    return withAsk(found, raw, !!props.onAsk && can(me.data, "assistant", "use"));
   });
 
   // Reset query + selection each time it opens; keep active in range as results change.
@@ -77,10 +88,11 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
     if (active() >= results().length) setActive(Math.max(0, results().length - 1));
   });
 
-  const go = (c: Command | undefined) => {
+  const go = (c: Row | undefined) => {
     if (!c) return;
     props.onClose();
-    navigate(c.path);
+    if ("ask" in c) props.onAsk?.(query().trim());
+    else navigate(c.path);
   };
 
   const onKey = (e: KeyboardEvent) => {
@@ -134,8 +146,11 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
                         onMouseEnter={() => setActive(i())}
                         onClick={() => go(c)}
                       >
-                        <Show when={c.group}>
-                          <span class="text-xs text-base-content/40">{c.group}</span>
+                        <Show when={"ask" in c}>
+                          <Bot size={14} />
+                        </Show>
+                        <Show when={"group" in c && c.group}>
+                          <span class="text-xs text-base-content/40">{"group" in c && c.group}</span>
                           <span class="text-base-content/30">/</span>
                         </Show>
                         <span class="flex-1">{c.label}</span>

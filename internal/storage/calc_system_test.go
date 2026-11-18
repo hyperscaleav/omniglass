@@ -13,7 +13,7 @@ import (
 
 // systemRig is an eval rig with systems: sys-1 (type kind-b) and sys-2
 // (kind-c), both subtypes of kind-a, and sys-3 (kind-z, outside kind-a),
-// each with roles, and components to staff them.
+// each with slots, and components to staff them.
 type systemRig struct {
 	*evalRig
 	ids map[string]string // system and component name -> id
@@ -41,8 +41,8 @@ func newSystemRig(t *testing.T) *systemRig {
 			t.Fatal(err)
 		}
 		r.ids[name] = s.ID
-		for _, role := range []string{"left", "right", "spare"} {
-			if _, err := r.gw.SetSystemRole(r.ctx, "", "system", name, storage.SystemRoleSpec{Name: role, Label: role, Quorum: 1, Impact: "none"}); err != nil {
+		for _, slot := range []string{"left", "right", "spare"} {
+			if _, err := r.gw.SetSystemSlot(r.ctx, "", "system", name, storage.SystemSlotSpec{Name: slot, Label: slot, Quorum: 1, Impact: "none"}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -57,9 +57,9 @@ func newSystemRig(t *testing.T) *systemRig {
 	return r
 }
 
-func (r *systemRig) assign(system, role, comp string) {
+func (r *systemRig) assign(system, slot, comp string) {
 	r.t.Helper()
-	if err := r.gw.AssignRole(r.ctx, "", system, role, comp, r.all, r.all, r.all, r.all); err != nil {
+	if err := r.gw.AssignSlot(r.ctx, "", system, slot, comp, r.all, r.all, r.all, r.all); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -90,9 +90,9 @@ func (r *systemRig) systemRule(name string, sel storage.CalcRuleSelector, reduce
 }
 
 // TestCalcSystemRule proves system rules (#997): a rule over the kind-a type
-// (subtypes included) averages each selected system's role-bound members'
+// (subtypes included) averages each selected system's slot-bound members'
 // values into a system-owned calculated sample carrying the rule's lineage;
-// a member's sample marks the systems it staffs; a member leaving its role
+// a member's sample marks the systems it staffs; a member leaving its slot
 // drops out on the next tick; a system outside the selector gets nothing.
 func TestCalcSystemRule(t *testing.T) {
 	t.Parallel()
@@ -114,8 +114,8 @@ func TestCalcSystemRule(t *testing.T) {
 	if n := count(t, r.conn, `select count(*) from `+storagetest.MetricRows+` metric where provenance = 'calculated' and component_id is not null`); n != 0 {
 		t.Fatalf("%d calculated rows on components, want none", n)
 	}
-	// A member leaving the role drops out on the next tick.
-	if err := r.gw.UnassignRole(r.ctx, "", "sys-1", "right", "m2", r.all, r.all, r.all, r.all); err != nil {
+	// A member leaving the slot drops out on the next tick.
+	if err := r.gw.UnassignSlot(r.ctx, "", "sys-1", "right", "m2", r.all, r.all, r.all, r.all); err != nil {
 		t.Fatal(err)
 	}
 	if n := count(t, r.conn, `select count(*) from calc_pending where system_id = '`+r.ids["sys-1"]+`'`); n != 1 {
@@ -314,7 +314,7 @@ func TestCalcSystemNoMembers(t *testing.T) {
 	if got := r.systemOutput("sys-1"); got != "20 kind-mean 1 system" {
 		t.Fatalf("sys-1 output %q, want 20", got)
 	}
-	if err := r.gw.UnassignRole(r.ctx, "", "sys-1", "left", "m1", r.all, r.all, r.all, r.all); err != nil {
+	if err := r.gw.UnassignSlot(r.ctx, "", "sys-1", "left", "m1", r.all, r.all, r.all, r.all); err != nil {
 		t.Fatal(err)
 	}
 	r.drain()

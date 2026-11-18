@@ -10,13 +10,13 @@ import { type BladeDef, useBladeEdit } from "../lib/blades";
 import { OFFICIAL_LOCK } from "../lib/catalog";
 
 // Secret types (Catalog > Secrets): the shapes a secret can take (snmp-community, basic-auth, and
-// the rest), read-only by design. The registry is authoritative release-owned
+// the rest), read-only by design. The catalog is authoritative release-owned
 // reference data (the boot seed upserts it, so a release can correct it), so
 // there is no create, no edit, and no delete here for anyone, owner included;
 // the blade shows each type's declared fields. The whole page is gated by
 // secret:read (a sensitive resource off the *:read viewer floor), the same
 // permission that guards the secrets whose shape it teaches: a plain viewer
-// does not see this page, and no longer loses the location registry over
+// does not see this page, and no longer loses the location catalog over
 // it (#598, which split the old joint Types page).
 
 function officialBadge(official: boolean): JSX.Element {
@@ -55,13 +55,13 @@ export default function SecretTypes() {
         empty: "No secret types.",
         rowId: (r) => r.name,
         blades: { registry: { secret_type: secretTypeBlade }, rootKind: "secret_type" },
-        // No create: the registry is seeded-only, for every caller.
+        // No create: the catalog is seeded-only, for every caller.
       }}
     />
   );
 }
 
-// secretTypeBlade renders one registry row read-only: the body binds only the
+// secretTypeBlade renders one catalog row read-only: the body binds only the
 // edit slot's lock, so the footer's Edit / Delete pair renders greyed with the
 // seeded-only reason on each tooltip, whatever the caller holds. The fields
 // list is the payload: what a secret of this type expects.
@@ -83,9 +83,9 @@ function SecretTypeBladeTitle(p: { id: string }): JSX.Element {
 function SecretTypeBladeBody(p: { id: string }): JSX.Element {
   const row = useSecretTypeRow(p.id);
 
-  // Always locked, for everyone: this registry has no write route at all, so
+  // Always locked, for everyone: this catalog has no write route at all, so
   // the reason is release ownership itself, not a permission. Same official
-  // sentence as every other registry's official rows.
+  // sentence as every other catalog's official rows.
   useBladeEdit().bind({
     locked: () => (row() ? OFFICIAL_LOCK : null),
   });

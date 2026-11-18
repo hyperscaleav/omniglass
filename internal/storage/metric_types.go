@@ -149,7 +149,7 @@ func (p *PG) UpsertMetricType(ctx context.Context, mt MetricType) error {
 }
 
 // ListMetricTypes returns every registered metric type (official and custom). No
-// scope.Set: the registry is fleet-wide reference data, not a scoped resource.
+// scope.Set: the catalog is fleet-wide reference data, not a scoped resource.
 func (p *PG) ListMetricTypes(ctx context.Context) ([]MetricType, error) {
 	rows, err := p.pool.Query(ctx, metricTypeListSQL)
 	if err != nil {
@@ -167,7 +167,7 @@ func (p *PG) ListMetricTypes(ctx context.Context) ([]MetricType, error) {
 	return out, rows.Err()
 }
 
-// GetMetricType returns one metric type by name. The registry is fleet-wide
+// GetMetricType returns one metric type by name. The catalog is fleet-wide
 // reference data, so there is no scope injection.
 func (p *PG) GetMetricType(ctx context.Context, name string) (*MetricType, error) {
 	if err := RejectAddressForm("metric_type", name); err != nil {
@@ -219,15 +219,15 @@ func (p *PG) CreateMetricType(ctx context.Context, actorID string, spec MetricTy
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Cross-registry uniqueness, the mirror of the check in CreatePropertyType: the
-	// three ingest registries (property, metric, event) share one resolution
+	// Cross-catalog uniqueness, the mirror of the check in CreatePropertyType: the
+	// three ingest catalogs (property, metric, event) share one resolution
 	// namespace, and a name in two of them resolves to nothing at ingest, so refuse
 	// it here where the operator can still choose a different one.
 	var clash bool
 	if err := tx.QueryRow(ctx,
 		`select exists (select 1 from property_type_in_effect() property_type where name = $1)
 		     or exists (select 1 from event_type_in_effect() event_type where name = $1)`, spec.Name).Scan(&clash); err != nil {
-		return nil, fmt.Errorf("storage: check registry clash for %q: %w", spec.Name, err)
+		return nil, fmt.Errorf("storage: check catalog clash for %q: %w", spec.Name, err)
 	}
 	if clash {
 		return nil, ErrMetricTypeExists
@@ -268,7 +268,7 @@ func (p *PG) UpdateMetricType(ctx context.Context, actorID, name string, patch M
 	if err := guardMetricTypeMutable(ctx, tx, name); err != nil {
 		return nil, err
 	}
-	before, err := registryAuditImage(ctx, tx, "metric_type", name)
+	before, err := catalogAuditImage(ctx, tx, "metric_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrMetricTypeNotFound
@@ -297,7 +297,7 @@ func (p *PG) UpdateMetricType(ctx context.Context, actorID, name string, patch M
 		}
 		return nil, fmt.Errorf("storage: reload metric type %q: %w", name, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "metric_type", name)
+	after, err := catalogAuditImage(ctx, tx, "metric_type", name)
 	if err != nil {
 		return nil, fmt.Errorf("storage: audit image metric_type %q: %w", name, err)
 	}
@@ -324,7 +324,7 @@ func (p *PG) DeleteMetricType(ctx context.Context, actorID, name string) error {
 	if err := guardMetricTypeMutable(ctx, tx, name); err != nil {
 		return err
 	}
-	before, err := registryAuditImage(ctx, tx, "metric_type", name)
+	before, err := catalogAuditImage(ctx, tx, "metric_type", name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrMetricTypeNotFound

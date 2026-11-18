@@ -161,7 +161,7 @@ func TestSeededFleetHoldsAPusherOnOneSystem(t *testing.T) {
 		t.Helper()
 		rows, err := conn.Query(ctx, `
 			select r.name || ' ' || r.permissions::text || ' ' || g.scope_kind || ' ' || g.scope_op || ' ' || l.name
-			from service s join principal_grant g on g.principal_id = s.principal_id
+			from machine s join user_grant g on g.user_id = s.user_id
 			join role r on r.id = g.role_id
 			left join system y on y.id::text = g.scope_id::text left join location l on l.id = y.location_id
 			where s.name = 'sim-booking-service'`)
@@ -184,7 +184,7 @@ func TestSeededFleetHoldsAPusherOnOneSystem(t *testing.T) {
 		t.Fatalf("the pusher's grants = %v, want [%s]", got, want)
 	}
 	var tokens int
-	if err := conn.QueryRow(ctx, `select count(*) from credential c join service s on s.principal_id = c.principal_id where s.name = 'sim-booking-service'`).Scan(&tokens); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from credential c join machine s on s.user_id = c.user_id where s.name = 'sim-booking-service'`).Scan(&tokens); err != nil {
 		t.Fatal(err)
 	}
 	if tokens != 0 {

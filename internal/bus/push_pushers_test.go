@@ -25,7 +25,7 @@ import (
 
 // TestAMeasuredCorporateLabReadsItsPushLane is the scale lab's push lane end
 // to end (#1743): the corporate plan seeded as the lab seeds it, each pusher
-// it declares holding a token minted for its principal, and each one an
+// it declares holding a token minted for its user, and each one an
 // emulator device of its profile pushing through the real push route. The
 // lab's delivery read over the window carries push-lane rows, the boot
 // settled by a push after it, every item stored, loss 0.
@@ -56,17 +56,17 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 		t.Fatalf("open the seed's gateway: %v", err)
 	}
 	defer seedGW.Close()
-	// The platforms are simulated on a node, as a lab's are, and only a
+	// The platforms are simulated on an outpost, as a lab's are, and only a
 	// marked lab hands a simulator its webhooks (ADR-1370).
 	all := scope.Set{All: true}
-	const node = "edge-1"
-	if _, err := seedGW.CreateNode(f.ctx, "", storage.NodeSpec{Name: node}, all, all); err != nil {
+	const outpost = "edge-1"
+	if _, err := seedGW.CreateOutpost(f.ctx, "", storage.OutpostSpec{Name: outpost}, all, all); err != nil {
 		t.Fatal(err)
 	}
 	if err := seedGW.MarkLab(f.ctx); err != nil {
 		t.Fatal(err)
 	}
-	res, err := devseed.SeedPlan(f.ctx, seedGW, "", plan, devseed.PlanOptions{Endpoints: true, NodeFor: func(string) string { return node }})
+	res, err := devseed.SeedPlan(f.ctx, seedGW, "", plan, devseed.PlanOptions{Endpoints: true, OutpostFor: func(string) string { return outpost }})
 	if err != nil {
 		t.Fatalf("seed the plan: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if ok, err := f.gw.SetServiceToken(f.ctx, "", p.Name, hash, prefix); err != nil || !ok {
+			if ok, err := f.gw.SetMachineToken(f.ctx, "", p.Name, hash, prefix); err != nil || !ok {
 				t.Fatalf("set %s's token: %v %v", p.Name, ok, err)
 			}
 			tokens[p.Name] = tok
@@ -132,12 +132,12 @@ func TestAMeasuredCorporateLabReadsItsPushLane(t *testing.T) {
 
 	// The platforms' window: each subscribed and given its site's rooms as
 	// the simulator does from its device list, then its report posted.
-	hooks, err := seedGW.NodeSimWebhooks(f.ctx, node)
+	hooks, err := seedGW.OutpostSimWebhooks(f.ctx, outpost)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(hooks) != res.Senders {
-		t.Fatalf("the node holds %d webhooks to post, want the %d platforms", len(hooks), res.Senders)
+		t.Fatalf("the outpost holds %d webhooks to post, want the %d platforms", len(hooks), res.Senders)
 	}
 	// Each platform runs the profile its plan declared, read from the plan
 	// rather than named here.

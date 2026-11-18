@@ -29,7 +29,7 @@ type EventRuleSelector struct {
 // nil, the negation of FireCriteria) holds for ClearSustain. It names the
 // event type it writes when its condition starts (FireEventType, required)
 // and, optionally, when it ends (ClearEventType, "" for none), both by name
-// from the event_type registry. Severity is the level its alarm is raised at,
+// from the event_type catalog. Severity is the level its alarm is raised at,
 // by name; "" is an informational rule, which raises no alarm. Version bumps
 // on every update. Official rules ship with the boot seed and are read-only.
 type EventRule struct {
@@ -229,7 +229,7 @@ type ruleChecks struct {
 
 var checkAll = ruleChecks{key: true, criteria: true, selector: true}
 
-// prepareEventRule validates a rule against the registries and resolves its
+// prepareEventRule validates a rule against the catalogs and resolves its
 // selector's components to ids, setting the lane its key reads.
 func prepareEventRule(ctx context.Context, q querier, r *EventRule, check ruleChecks) error {
 	if err := ValidateName("event_rule", r.Name); err != nil {
@@ -281,7 +281,7 @@ func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
 	}
 	resolve := func(field, name string) (string, error) {
 		// A rule's event is the rule's: never a key another writer owns
-		// (ADR-0161), such as the node's collection-failed.
+		// (ADR-0161), such as the outpost's collection-failed.
 		if c, ok := writerclass.Reserved(name); ok {
 			return "", invalidRule("%s %q: %s", field, name, writerclass.Refusal(c, name, writerclass.EventRule, ""))
 		}
@@ -309,7 +309,7 @@ func resolveRuleEventTypes(ctx context.Context, q querier, r *EventRule) error {
 }
 
 func resolveRuleLane(ctx context.Context, q querier, r *EventRule) error {
-	// The lane is the one the ingest registry resolves the name to (#1307,
+	// The lane is the one the ingest catalog resolves the name to (#1307,
 	// #1432): the search path, local then og. A shipped rule resolves inside og
 	// (resolveIn), the catalog it shipped against.
 	holders, err := nameHolders(ctx, q, r.SampleKey)
@@ -340,7 +340,7 @@ var ErrSampleKeyNotFound = errors.New("storage: sample key is not a registered p
 
 // SampleKeyType reads which lane a sample key reads and, for a property, its
 // data type ("" for a metric): what types the value an expression over its
-// samples reads (#958). A registry read: no scope, like the registries.
+// samples reads (#958). A catalog read: no scope, like the catalogs.
 func (p *PG) SampleKeyType(ctx context.Context, key string) (rules.Lane, string, error) {
 	r := EventRule{SampleKey: key}
 	if err := resolveRuleLane(ctx, p.pool, &r); err != nil {
@@ -384,7 +384,7 @@ type selectorError struct{ msg string }
 func (e selectorError) Error() string { return e.msg }
 
 // resolveSelector checks a rule's selector (an event rule's or a calc
-// rule's) against the registries and resolves its components to ids. An
+// rule's) against the catalogs and resolves its components to ids. An
 // entry kept already holds is carried over unresolved; only an entry new to
 // the rule must exist (a selectorError when it does not).
 func resolveSelector(ctx context.Context, q querier, sel *EventRuleSelector, kept EventRuleSelector) error {
@@ -499,7 +499,7 @@ func ruleCountsJoin(f readFilter) string {
 }
 
 // ListEventRules lists every rule, by name, each with its live state as
-// counts in the same query. Rules read like a registry, so every rule is
+// counts in the same query. Rules read like a catalog, so every rule is
 // listed whatever the caller's scope; the counts are scoped, counting only
 // the alarms and streaks on components the visible component read scope
 // admits.

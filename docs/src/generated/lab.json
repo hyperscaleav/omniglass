@@ -10,18 +10,20 @@
       "sysctls": [],
       "publish": "",
       "runs_once": false,
-      "role": "Postgres, the lab's own database. On the lab network only, never published."
+      "role": "Postgres, the lab's own database. On the lab network only, never published.",
+      "limits": ""
     },
     {
       "name": "seed",
       "image": "omniglass",
-      "command": "lab seed --scenario dev --node edge-hq --user dev --password dev",
+      "command": "lab seed --scenario dev --outpost edge-hq --user dev --password dev",
       "user": "the image's (nonroot)",
       "caps": [],
       "sysctls": [],
       "publish": "",
       "runs_once": true,
-      "role": "Runs once per lab start: migrates, marks the database as a lab's, seeds the fleet and the login on the first run, and enrolls the node afresh."
+      "role": "Runs once per lab start: migrates, marks the database as a lab's, seeds the fleet and the login on the first run, and enrolls the outpost afresh.",
+      "limits": ""
     },
     {
       "name": "server",
@@ -32,12 +34,13 @@
       "sysctls": [],
       "publish": "127.0.0.1:8080 -\u003e 8080",
       "runs_once": false,
-      "role": "The control plane and the console, in lab mode. Its console is the one published port; its bus listens on the lab network for the node."
+      "role": "The control plane and the console, in lab mode. Its console is the one published port; its bus listens on the lab network for the outpost.",
+      "limits": ""
     },
     {
-      "name": "node",
+      "name": "outpost",
       "image": "omniglass",
-      "command": "node run --simulate --impairments --heartbeat 2s --probe-every 10s --worklist-every 5s --poll 2s",
+      "command": "outpost run --simulate --impairments --heartbeat 2s --probe-every 10s --worklist-every 5s --poll 2s",
       "user": "0:0",
       "caps": [
         "NET_ADMIN"
@@ -47,7 +50,8 @@
       ],
       "publish": "",
       "runs_once": false,
-      "role": "The edge node edge-hq with the simulator in its own process: the simulated components sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, reaches only this container's network."
+      "role": "The edge outpost edge-hq with the simulator in its own process: the simulated components sit on its loopback, and it collects from them for real. NET_ADMIN, for the impairments, reaches only this container's network.",
+      "limits": "1 CPU, 512 MiB"
     }
   ],
   "volumes": [
@@ -62,9 +66,9 @@
   ],
   "walkthroughs": [
     {
-      "id": "declare-a-first-role",
-      "title": "Declare a first role",
-      "description": "Give a one-off system its first role from the console, name it, say what it accepts, and see the slot it opens.",
+      "id": "declare-a-first-slot",
+      "title": "Declare a first slot",
+      "description": "Give a one-off system its first slot from the console, name it, say what it accepts, and see the slot it opens.",
       "setup": [
         "omniglass system create --label \"Lectern cart\" --location media-lab --name lectern-cart"
       ]
@@ -76,27 +80,27 @@
       "setup": []
     },
     {
-      "id": "find-and-fix-a-place",
-      "title": "Find a place and fix its label",
-      "description": "Drill Explore down to a place, open the system it holds, and rename the place from Configure. The new label follows everywhere the place is read.",
+      "id": "find-and-fix-a-location",
+      "title": "Find a location and fix its label",
+      "description": "Drill Explore down to a location, open the system it holds, and rename the location from Configure. The new label follows everywhere the location is read.",
       "setup": []
     },
     {
       "id": "find-where-work-is-lost",
       "title": "Find where work is lost",
-      "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the node hop stays at 0, then follow a component's row to its delivery series.",
+      "description": "Read the platform's pipeline hop by hop at 0, open a hop's explainer, break a simulated panel and watch its failures land on the panel while the outpost hop stays at 0, then follow a component's row to its delivery series.",
       "setup": []
     },
     {
       "id": "fix-a-refused-probe",
       "title": "Fix a refused probe",
-      "description": "A touch panel's SNMP agent refused the endpoint's community, so the node stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.",
+      "description": "A touch panel's SNMP agent refused the endpoint's community, so the outpost stopped asking. Read why, point the endpoint at the right community, and watch the refusal lift.",
       "setup": []
     },
     {
       "id": "fix-a-rejected-session",
       "title": "Fix a rejected session",
-      "description": "A touch panel refused its console login, so the node stopped dialing it. Read why, point the endpoint at the rotated credential, and watch the session come up.",
+      "description": "A touch panel refused its console login, so the outpost stopped dialing it. Read why, point the endpoint at the rotated credential, and watch the session come up.",
       "setup": []
     },
     {
@@ -126,15 +130,21 @@
       "setup": []
     },
     {
-      "id": "keep-node-logs-for-a-day",
-      "title": "Keep a node's own logs for a day",
-      "description": "Give a node's own debug log lines a window of their own, one day, on the Settings page, while a component's debug lines keep the shared three days.",
+      "id": "keep-outpost-logs-for-a-day",
+      "title": "Keep an outpost's own logs for a day",
+      "description": "Give an outpost's own debug log lines a window of their own, one day, on the Settings page, while a component's debug lines keep the shared three days.",
+      "setup": []
+    },
+    {
+      "id": "omnibot-panel",
+      "title": "Ask omnibot from the console",
+      "description": "Open omnibot from the top bar, ask it to tag a video bar, watch its reads arrive as cards, and confirm the write it asks about.",
       "setup": []
     },
     {
       "id": "open-status-under-admin",
-      "title": "Open Nodes and Status from Admin",
-      "description": "From Home, find Nodes and Status under Admin in the sidebar, open Nodes where a new node is set up, then open Status and read the build the server runs.",
+      "title": "Open Outposts and Status from Admin",
+      "description": "From Home, find Outposts and Status under Admin in the sidebar, open Outposts where a new outpost is set up, then open Status and read the build the server runs.",
       "setup": []
     },
     {
@@ -155,13 +165,13 @@
     {
       "id": "read-platform-health",
       "title": "Read the platform's health",
-      "description": "From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the nodes and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
+      "description": "From Home, open Platform health, read the build, open a hop under where work is lost, fold the server's panels to read the outposts and the simulator's gaps, open them on the Requests panel, then follow the slowest route's figure onto its series on the server's platform component.",
       "setup": []
     },
     {
       "id": "sample-simulation",
       "title": "Read a simulated component's status",
-      "description": "The Simulation page lists every component a simulator serves beside a node. Open one to see where it is served and what has reached it.",
+      "description": "The Simulation page lists every component a simulator serves beside an outpost. Open one to see where it is served and what has reached it.",
       "setup": []
     },
     {
@@ -173,7 +183,7 @@
     {
       "id": "set-up-monitoring",
       "title": "Set up monitoring on a component",
-      "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge node, and watch reachability and samples arrive.",
+      "description": "Attach the SNMP driver and add a reachability probe to a component, both collected by an edge outpost, and watch reachability and samples arrive.",
       "setup": [
         "omniglass component create --label \"Bay 2 Display\" --location bay-2 --name bay-2-confidence-display --product boreal-edge-55"
       ]
@@ -189,7 +199,7 @@
     {
       "id": "start-from-template",
       "title": "Start a system from a template",
-      "description": "From a place, create a new system from a template instead of from scratch, read what the template creates, and land on a system that is yours, with nothing pointing back at the template.",
+      "description": "From a location, create a new system from a template instead of from scratch, read what the template creates, and land on a system that is yours, with nothing pointing back at the template.",
       "setup": []
     },
     {
@@ -203,7 +213,7 @@
     {
       "id": "trust-a-changed-host-key",
       "title": "Trust a changed host key",
-      "description": "A touch panel was reimaged, so it presents a new ssh host key and the node refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.",
+      "description": "A touch panel was reimaged, so it presents a new ssh host key and the outpost refused it. Read both keys, learn why a key changes, trust the new one, and watch the session come up.",
       "setup": []
     },
     {
@@ -251,7 +261,7 @@
       "worklist_every": "30s",
       "report_every": "",
       "closed_loop_bracket": "1m",
-      "for": "the product's own defaults: what a deployment's node runs at"
+      "for": "the product's own defaults: what a deployment's outpost runs at"
     }
   ]
 }

@@ -52,12 +52,12 @@ type alarmBody struct {
 	// and still raised, raised and unacknowledged, or cleared having never been
 	// acknowledged.
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty" doc:"When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at"`
-	AcknowledgedBy string     `json:"acknowledged_by,omitempty" doc:"Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)"`
+	AcknowledgedBy string     `json:"acknowledged_by,omitempty" doc:"Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name)"`
 	Acknowledged   bool       `json:"acknowledged" doc:"Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised"`
 	// The snooze belongs to the alarm's condition (#1318), so every alarm of
 	// the same (component, dedup_key) reads the same pair.
 	SnoozedUntil *time.Time `json:"snoozed_until,omitempty" doc:"Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"`
-	SnoozedBy    string     `json:"snoozed_by,omitempty" doc:"Who snoozed the condition, by name; empty while it is not snoozed, or once that principal has been purged (the audit log keeps the name)"`
+	SnoozedBy    string     `json:"snoozed_by,omitempty" doc:"Who snoozed the condition, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)"`
 }
 
 func toAlarmBody(a *storage.Alarm) alarmBody {
@@ -157,10 +157,53 @@ type systemAlarmsOutput struct {
 	}
 }
 
+// The fleet's alarm list (#2025) caps at fleetAlarmDefault unless the caller
+// asks for more, up to fleetAlarmMax.
+const (
+	fleetAlarmDefault = 200
+	fleetAlarmMax     = 1000
+)
+
+type listFleetAlarmsInput struct {
+	Unacknowledged bool `query:"unacknowledged" doc:"Only the alarms nobody has looked at: the queue an operator, or an agent, works"`
+	Limit          int  `query:"limit" minimum:"0" maximum:"1000" doc:"At most this many, the worst first; 0 or absent means 200"`
+}
+
+type listFleetAlarmsOutput struct {
+	Body struct {
+		Alarms []alarmBody `json:"alarms"`
+	}
+}
+
 // registerAlarmRoutes wires the component alarm surface.
 func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "list-alarms",
+		Extensions:  mcpExposed(),
+		Method:      http.MethodGet,
+		Path:        "/alarms",
+		Summary:     "List the fleet's active alarms",
+		Description: "What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.",
+	}, "component", "read"), func(ctx context.Context, in *listFleetAlarmsInput) (*listFleetAlarmsOutput, error) {
+		limit := in.Limit
+		if limit <= 0 {
+			limit = fleetAlarmDefault
+		}
+		alarms, err := gw.ListFleetAlarms(ctx, a.scopeFor(ctx, "component", "read"), storage.AlarmFilter{Unacknowledged: in.Unacknowledged}, min(limit, fleetAlarmMax))
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read fleet alarms")
+		}
+		out := &listFleetAlarmsOutput{}
+		out.Body.Alarms = make([]alarmBody, 0, len(alarms))
+		for i := range alarms {
+			out.Body.Alarms = append(out.Body.Alarms, toAlarmBody(&alarms[i]))
+		}
+		return out, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-alarms",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/alarms",
 		Summary:     "List a system's members' alarms",
@@ -222,7 +265,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/components/{name}/alarms",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Raise an alarm on a component",
-		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *raiseAlarmInput) (*alarmOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "update")
 		if err != nil {
@@ -259,6 +302,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "acknowledge-component-alarm",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:acknowledge",
 		Summary:     "Acknowledge an alarm",
@@ -266,12 +310,12 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	}, "alarm", "acknowledge"), func(ctx context.Context, in *clearAlarmInput) (*alarmOutput, error) {
 		// The ACTION scope comes from alarm:acknowledge, so only the grants whose
 		// role actually carries the acknowledgement contribute their scope: a wide
-		// component read does not widen what may be acknowledged, and a principal
+		// component read does not widen what may be acknowledged, and a user
 		// that may acknowledge in one building cannot acknowledge in another one it
 		// can merely see.
 		//
 		// The READ scope is the caller's own component:read, and it decides only
-		// which refusal that principal is owed (#736, #728): a component outside it
+		// which refusal that user is owed (#736, #728): a component outside it
 		// is still the non-disclosing 404, and a component inside it that the
 		// acknowledgement does not reach is the truthful 403. It grants nothing.
 		compID, err := gw.ResolveActionTarget(ctx, "component", in.Name,
@@ -292,6 +336,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	// between the non-disclosing 404 and the truthful 403.
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "snooze-component-alarm",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:snooze",
 		Summary:     "Snooze an alarm's condition",
@@ -315,6 +360,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "unsnooze-component-alarm",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:unsnooze",
 		Summary:     "End an alarm's condition's snooze",
@@ -349,7 +395,7 @@ type alarmTimelineEntryBody struct {
 	Attempts     int    `json:"attempts,omitempty" doc:"A notification's attempts so far"`
 	Error        string `json:"error,omitempty" doc:"Why a notification's last attempt failed, or why a suppressed one was held back"`
 	Channel      string `json:"channel,omitempty" enum:"webhook,inbox,email," doc:"How a notification travels: webhook, a person's inbox, or email"`
-	Recipient    string `json:"recipient,omitempty" doc:"The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin"`
+	Recipient    string `json:"recipient,omitempty" doc:"The person a notification is addressed to, by username: shown to that person and to holders of user:read:admin"`
 	Withheld     bool   `json:"recipient_withheld,omitempty" doc:"True when a notification is addressed to a person whose name the caller may not see"`
 }
 
@@ -368,6 +414,7 @@ type alarmTimelineOutput struct {
 func registerAlarmTimelineRoute(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-component-alarm-timeline",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/alarms/{id}:timeline",
 		Summary:     "Read an alarm's timeline",

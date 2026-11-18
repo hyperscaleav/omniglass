@@ -21,7 +21,7 @@ import {
   deleteMetricType,
 } from "../lib/metric_types";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -181,7 +181,7 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "metric_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: removeMetric }
         : undefined,
-    locked: () => registryLock(row(), me.data, "metric_type"),
+    locked: () => catalogLock(row(), me.data, "metric_type"),
   });
 
   return (

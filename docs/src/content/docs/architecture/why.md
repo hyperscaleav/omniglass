@@ -70,7 +70,7 @@ room is a first-class system, not a tag, so health, alarms, and config attach at
 operate.
 
 **It runs the health model.** Signals roll up the tree into "is the room working," and the rollup is
-role-aware: a *required* display down takes the room down, a *redundant* mic only degrades it, an
+slot-aware: a *required* display down takes the room down, a *redundant* mic only degrades it, an
 *informational* sensor does not touch it. That turns a wall of red dots into one honest answer, and
 makes a real uptime SLA possible.
 
@@ -121,7 +121,7 @@ Each stop is a page:
    it, and parses it at the edge.
 2. **[Properties](/architecture/properties/)** type every reading into one owned, canonical signal,
    the same measurement across vendors.
-3. **[Config](/architecture/variables/)** holds what a device *should* be, so drift becomes
+3. **[Declared values](/architecture/variables/)** hold what a device *should* be, so drift becomes
    a signal you can see and a fix you can push.
 4. **[Health](/architecture/health/)** rolls the signals up the system tree into the one answer that
    matters.

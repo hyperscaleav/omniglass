@@ -218,17 +218,17 @@ func conditionSnooze(ctx context.Context, q txQuerier, alarmID string, lock bool
 		}
 	}
 	var until time.Time
-	var username, serviceName, nodeName *string
-	err = q.QueryRow(ctx, `select s.snoozed_until, `+principalIdentCols("s.snoozed_by")+`
+	var username, serviceName, outpostName *string
+	err = q.QueryRow(ctx, `select s.snoozed_until, `+userIdentCols("s.snoozed_by")+`
 		from alarm_snooze s where s.component_id = $1::uuid and s.dedup_key = $2 and s.snoozed_until > now()`,
-		componentID, key).Scan(&until, &username, &serviceName, &nodeName)
+		componentID, key).Scan(&until, &username, &serviceName, &outpostName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}
 	if err != nil {
 		return "", fmt.Errorf("storage: read the snooze on alarm %s: %w", alarmID, err)
 	}
-	return SnoozeReason(until, principalIdent(username, serviceName, nodeName)), nil
+	return SnoozeReason(until, userIdent(username, serviceName, outpostName)), nil
 }
 
 // endSnoozeTx is what the end of a snooze does, by hand or at the deadline,

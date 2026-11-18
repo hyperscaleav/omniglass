@@ -16,7 +16,7 @@ import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
 import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
-import PlaceCard from "../components/PlaceCard";
+import LocationCard from "../components/LocationCard";
 import TemplateNotice from "../components/TemplateNotice";
 import AcknowledgeButton from "../components/AcknowledgeButton";
 import SnoozeButton, { SnoozedBadge } from "../components/SnoozeButton";
@@ -37,28 +37,28 @@ import { effectiveProperties, effectivePropertiesKey } from "../lib/component_pr
 import { effectiveMetrics, effectiveMetricsKey } from "../lib/component_metrics";
 import { CalcRuleLink } from "../components/RuleLink";
 import { durationText } from "../lib/timeline";
-import { getNode, nodeKey } from "../lib/nodes";
+import { getOutpost, outpostKey } from "../lib/outposts";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { LEAF_NODE_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "../lib/component_leaf";
+import { LEAF_OUTPOST_POLL_MS, LEAF_POLL_MS, collectionState, dotVerdict, identityRows, instanceName, leafAlarmSince, membershipRows, spreadSummary, vitalRows, vitalValueText } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 import { createToggles } from "../lib/toggles";
 import InfoTip from "../components/InfoTip";
 import { ChevronRight } from "../components/icons";
-import { systemRoles, systemRolesKey } from "../lib/system_roles";
-import { componentCrumbs, isRoomOf, rolesOf } from "../lib/detail";
+import { systemSlots, systemSlotsKey } from "../lib/system_slots";
+import { componentCrumbs, isRoomOf, slotsOf } from "../lib/detail";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 
 // The component's detail view (#637, reoriented in #872): a component is a
-// piece of a system. Its place is a card of context (its own, or its system's
+// piece of a system. Its location is a card of context (its own, or its system's
 // standing in for one it does not have, and the card says which); then the
 // component itself: verdict, since-when (what took it down), product, and its
 // three tabs. Overview reads why, what it is, the systems it serves and the
-// role it fills in each, its vitals, and collection in context: the one place
-// a node appears to an operator, because the distinction that matters is
-// stated here plainly (a healthy node with a stale sample means the component or
-// the path, not collection), which is why nodes need no view of their own.
+// slot it fills in each, its vitals, and collection in context: the one place
+// an outpost appears to an operator, because the distinction that matters is
+// stated here plainly (a healthy outpost with a stale sample means the component or
+// the path, not collection), which is why outposts need no view of their own.
 // ageWords renders a sample age in plain words, coarse on purpose: the card
 // answers "how stale", not "how many milliseconds".
 function ageWords(ts: string, now: number = Date.now()): string {
@@ -155,7 +155,7 @@ export default function ComponentLeaf() {
   }));
   // Every age on the card reads one ticking clock: a poll that returns the
   // same data changes nothing a query can see, so an age pinned to the data
-  // would keep reading fresh after its node died.
+  // would keep reading fresh after its outpost died.
   const pageNow = createClock(CLOCK_TICK_MS);
   const scale = useSeverity();
   // Each alarm row opens its timeline in place (#950).
@@ -163,11 +163,11 @@ export default function ComponentLeaf() {
   const snoozeSurface = createUniqueId();
   const activeAlarms = createMemo(() => splitAlarms(alarmsQ.data?.alarms ?? [], scale().levels).active);
   // The strip reads red when any active alarm is at an outage level (the
-  // registry's flag, #917), amber when they only degrade.
+  // catalog's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => activeAlarms().some((a) => scale().outage(a.severity)));
   const since = createMemo(() => leafAlarmSince(alarmsQ.data?.alarms ?? [], pageNow(), scale().levels));
   // The component's own verdict rides on its alarms read, polled; the fleet
-  // view's dot (read once, for the place and the path) stands in until then.
+  // view's dot (read once, for the location and the path) stands in until then.
   const verdict = createMemo(() => alarmsQ.data?.verdict ?? (view.data ? dotVerdict(view.data, component()?.id ?? "") : null));
   const identity = createMemo(() => identityRows(propsQ.data ?? []));
   const vitals = createMemo(() => vitalRows(metricsQ.data ?? []));
@@ -182,15 +182,15 @@ export default function ComponentLeaf() {
 
   const product = createMemo(() => (products.data ?? []).find((p) => p.name === component()?.product));
   const rows = createMemo(() => (view.data && memberships.data ? membershipRows(memberships.data, view.data) : []));
-  // The node behind each endpoint, read one by one: a component has a node
+  // The outpost behind each endpoint, read one by one: a component has an outpost
   // or two, the fleet has many, and only these are on the card.
-  const nodeNames = createMemo(() => [...new Set((reach.data?.endpoints ?? []).map((e) => e.node).filter((n): n is string => !!n))], undefined, {
+  const outpostNames = createMemo(() => [...new Set((reach.data?.endpoints ?? []).map((e) => e.outpost).filter((n): n is string => !!n))], undefined, {
     equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
   });
-  const nodeReads = useQueries(() => ({
-    queries: nodeNames().map((n) => ({ queryKey: nodeKey(n), queryFn: () => getNode(n), refetchInterval: LEAF_NODE_POLL_MS })),
+  const outpostReads = useQueries(() => ({
+    queries: outpostNames().map((n) => ({ queryKey: outpostKey(n), queryFn: () => getOutpost(n), refetchInterval: LEAF_OUTPOST_POLL_MS })),
   }));
-  const nodeByName = createMemo(() => new Map(nodeReads.filter((q) => q.data).map((q) => [q.data!.name, q.data!])));
+  const outpostByName = createMemo(() => new Map(outpostReads.filter((q) => q.data).map((q) => [q.data!.name, q.data!])));
   // The collection rows are kept by endpoint id, never by the objects a poll
   // hands back (each poll is fresh: last_seen moves), so a row's ladder
   // tooltip and a retry waiting on its session survive the next poll (#1059).
@@ -199,34 +199,34 @@ export default function ComponentLeaf() {
     equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
   });
   const reachByKey = createMemo(() => new Map((reach.data?.endpoints ?? []).map((it, i) => [reachKey(it, i), it])));
-  // The role this component fills in each system it serves: a membership
-  // says THAT it belongs; the system's declared roles say what it does there.
-  const roleReads = useQueries(() => ({
+  // The slot this component fills in each system it serves: a membership
+  // says THAT it belongs; the system's declared slots say what it does there.
+  const slotReads = useQueries(() => ({
     queries: rows().filter((r) => r.systemId).map((r) => ({
-      queryKey: systemRolesKey(r.systemId!),
-      queryFn: () => systemRoles(r.systemId!),
+      queryKey: systemSlotsKey(r.systemId!),
+      queryFn: () => systemSlots(r.systemId!),
       staleTime: 30_000,
     })),
   }));
-  const rolesIn = (systemId: string | null) => {
+  const slotsIn = (systemId: string | null) => {
     if (!systemId) return [];
     const i = rows().filter((r) => r.systemId).findIndex((r) => r.systemId === systemId);
-    const data = i >= 0 ? roleReads[i]?.data : undefined;
-    return data ? rolesOf(component()?.name ?? "", data) : [];
+    const data = i >= 0 ? slotReads[i]?.data : undefined;
+    return data ? slotsOf(component()?.name ?? "", data) : [];
   };
 
   const primary = createMemo(() => rows().find((r) => r.primary) ?? rows()[0]);
-  // Its own place, or (when it has none) its primary system's standing in.
-  const systemPlace = createMemo(() => {
+  // Its own location, or (when it has none) its primary system's standing in.
+  const systemLocation = createMemo(() => {
     const sid = primary()?.systemId;
     return sid ? (view.data?.systems ?? []).find((s) => s.id === sid)?.location ?? null : null;
   });
-  const placeId = () => component()?.location_id ?? systemPlace();
-  const provenance = () => (component()?.location_id ? "set here" : systemPlace() ? "from its system" : undefined);
+  const locationId = () => component()?.location_id ?? systemLocation();
+  const provenance = () => (component()?.location_id ? "set here" : systemLocation() ? "from its system" : undefined);
 
   const crumbs = createMemo(() => {
     if (!view.data) return [];
-    const trail = componentCrumbs(view.data, placeId(), primary()?.systemId);
+    const trail = componentCrumbs(view.data, locationId(), primary()?.systemId);
     return [
       // Back up lands where you were: the outline opened down to this row.
       { key: "explore", label: "Explore", href: `/explore?node=${encodeURIComponent(component()?.id ?? id())}` },
@@ -253,17 +253,17 @@ export default function ComponentLeaf() {
         onRetry={() => { void view.refetch(); void components.refetch(); }}
       >
         <div class="flex flex-col gap-3">
-          {/* In the room a system it serves makes, the place and the system
+          {/* In the room a system it serves makes, the location and the system
               are one thing, named under Systems it serves and in the path. */}
-          <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), rows().map((r) => r.systemId)))}>
-            <PlaceCard placeId={placeId()!} showName provenance={provenance()} />
+          <Show when={locationId() && !(view.data && isRoomOf(view.data, locationId(), rows().map((r) => r.systemId)))}>
+            <LocationCard locationId={locationId()!} showName provenance={provenance()} />
           </Show>
           <section data-testid="component-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
             {/* State, age, identity: the header every detail view opens with.
                 A component has no transitions read, so since-when is what
                 took it down: the worst active alarm's age (#786). */}
             <div data-testid="leaf-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
-              <Eyebrow label="Component" hint="A piece of a system. Its health is what its own checks and alarms say; the systems it serves read it through the roles it fills." />
+              <Eyebrow label="Component" hint="A piece of a system. Its health is what its own checks and alarms say; the systems it serves read it through the slots it fills." />
               <HealthBadge verdict={verdict() ?? undefined} size="sm" />
               <Show when={since()}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
@@ -357,7 +357,7 @@ export default function ComponentLeaf() {
                 </dl>
               </section>
                   <section data-testid="leaf-memberships" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-                    <Eyebrow label="Systems it serves" hint="Each system this component belongs to, and the role it fills there. The primary is the system answered when a question names none." />
+                    <Eyebrow label="Systems it serves" hint="Each system this component belongs to, and the slot it fills there. The primary is the system answered when a question names none." />
                     <Show when={rows().length > 0} fallback={<p class="mt-2 text-base-content/60">Not in any system yet.</p>}>
                       <ul class="mt-2 divide-y divide-base-300 rounded-field border border-base-300">
                         <For each={rows()}>
@@ -366,7 +366,7 @@ export default function ComponentLeaf() {
                               <Show when={row.systemId} fallback={<span>{row.label}</span>}>
                                 <button type="button" class="cursor-pointer hover:underline" onClick={() => navigate(`/systems/${row.systemId}`)}>{row.label}</button>
                               </Show>
-                              <For each={rolesIn(row.systemId)}>
+                              <For each={slotsIn(row.systemId)}>
                                 {(r) => <span class="badge badge-ghost badge-sm">{r}</span>}
                               </For>
                               <Show when={row.where}>
@@ -468,14 +468,14 @@ export default function ComponentLeaf() {
               </section>
             </Show>
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
-              <Eyebrow label="Collection" hint="How this component is read: each endpoint, the node collecting it, and the ladder it climbs bottom up (a ping, informational only; the transport answering, the gate; then the login). A held session's state sits beside it. A stale sample under a healthy node points at the component or the path, not at collection." />
+              <Eyebrow label="Collection" hint="How this component is read: each endpoint, the outpost collecting it, and the ladder it climbs bottom up (a ping, informational only; the transport answering, the gate; then the login). A held session's state sits beside it. A stale sample under a healthy outpost points at the component or the path, not at collection." />
               <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No endpoint declared yet, so nothing collects from this component.</p>}>
                 <ul class="mt-1 flex flex-col gap-1.5">
                   <For each={reachKeys()}>
                     {(key) => (
                       <Show when={reachByKey().get(key)}>
                         {(iface) => {
-                          const state = () => collectionState(iface(), iface().node ? nodeByName().get(iface().node!) : undefined, pageNow());
+                          const state = () => collectionState(iface(), iface().outpost ? outpostByName().get(iface().outpost!) : undefined, pageNow());
                           return (
                             <li class="flex flex-col gap-1.5">
                               <div class="flex flex-wrap items-center gap-2 text-xs">
@@ -501,8 +501,8 @@ export default function ComponentLeaf() {
                                 >
                                   <span class="text-base-content/60">hosted by the server</span>
                                 </Show>
-                                <Show when={iface().node}>
-                                  <span class="text-base-content/60">via {iface().node}</span>
+                                <Show when={iface().outpost}>
+                                  <span class="text-base-content/60">via {iface().outpost}</span>
                                 </Show>
                                 <Show when={lastSeenAt(iface())}>
                                   {(ts) => <span class="text-base-content/50">{iface().webhook ? "last heard" : "last seen"} {ageWords(ts(), pageNow())}</span>}
@@ -511,9 +511,9 @@ export default function ComponentLeaf() {
                                   {
                                     {
                                       collecting: "collecting",
-                                      "component-or-path": "stale sample; the node is healthy, so check the component or the path",
-                                      "node-offline": "node offline",
-                                      "no-node": "no node collecting it",
+                                      "component-or-path": "stale sample; the outpost is healthy, so check the component or the path",
+                                      "outpost-offline": "outpost offline",
+                                      "no-outpost": "no outpost collecting it",
                                       down: "component reports down",
                                       rejected: "polls stopped",
                                       "session-down": "polls failing",

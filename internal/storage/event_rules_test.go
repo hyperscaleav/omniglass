@@ -23,7 +23,7 @@ func criteria(op string, v any) rules.Criteria {
 // honest: it reads a registered sample key on its own lane, compares with
 // criteria that lane can evaluate, names a severity level that exists, and
 // selects component types and components that exist; an update bumps its
-// version; and rules read like a registry, written only with an
+// version; and rules read like a catalog, written only with an
 // all-scope grant.
 func TestEventRules(t *testing.T) {
 	t.Parallel()
@@ -83,14 +83,14 @@ func TestEventRules(t *testing.T) {
 		t.Fatalf("a duplicate name: err %v, want ErrEventRuleExists", err)
 	}
 
-	// Rules read like a registry: a reader whose component scope admits
+	// Rules read like a catalog: a reader whose component scope admits
 	// nothing still lists and gets every rule. Writing one takes an all-scope
 	// grant, since its selector reaches the whole fleet.
 	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "scoped", SampleKey: "room-temperature", Fire: criteria("gt", 1), Severity: "high"}, none); !errors.Is(err, storage.ErrEventRuleForbidden) {
 		t.Fatalf("a scoped create: err %v, want ErrEventRuleForbidden", err)
 	}
 	if list, err := gw.ListEventRules(ctx, none); err != nil || len(list) != 8 {
-		t.Fatalf("a scoped reader lists %d rules (%v), want all 8 (two authored, the official reachability-lost, ingest-lag-high, node-silent, worklist-stale, disk-nearly-full and retention-behind)", len(list), err)
+		t.Fatalf("a scoped reader lists %d rules (%v), want all 8 (two authored, the official reachability-lost, ingest-lag-high, outpost-silent, worklist-stale, disk-nearly-full and retention-behind)", len(list), err)
 	}
 	if r, err := gw.GetEventRule(ctx, "reach-lost", none); err != nil || r.Name != "reach-lost" {
 		t.Fatalf("a scoped reader gets %+v (%v), want reach-lost", r, err)
@@ -102,7 +102,7 @@ func TestEventRules(t *testing.T) {
 		t.Fatalf("a scoped delete: err %v, want ErrEventRuleForbidden", err)
 	}
 	if list, _ := gw.ListEventRules(ctx, all); len(list) != 8 {
-		t.Fatalf("an all-scope reader lists %d rules, want 8 (the two authored and the official reachability-lost, ingest-lag-high, node-silent, worklist-stale, disk-nearly-full and retention-behind)", len(list))
+		t.Fatalf("an all-scope reader lists %d rules, want 8 (the two authored and the official reachability-lost, ingest-lag-high, outpost-silent, worklist-stale, disk-nearly-full and retention-behind)", len(list))
 	}
 
 	// An update bumps the version; disabling is an update.

@@ -21,8 +21,8 @@ import (
 )
 
 // The simulated fleet: every dev-seed component whose product the simulator
-// serves gets a loopback address and endpoints on the dev node, so a lab
-// (omniglass lab run, whose node runs the simulator in process) collects for
+// serves gets a loopback address and endpoints on the dev outpost, so a lab
+// (omniglass lab run, whose outpost runs the simulator in process) collects for
 // real. The endpoints target the profiles' real ports, which a simulator in a
 // container binds; seed-dev --sim-port-offset lifts them for one run
 // unprivileged on a host.
@@ -59,7 +59,7 @@ func SimSecretSpecs() []storage.SecretSpec {
 }
 
 // seedSimFleet lands the plan through the gateway: the community secret,
-// then each planned component's endpoints on the dev node. A component that
+// then each planned component's endpoints on the dev outpost. A component that
 // already has an endpoint is left alone, so a re-run changes nothing. Only the
 // components whose ids are in only are planned.
 func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portOffset int, only map[string]bool) error {
@@ -134,11 +134,11 @@ func seedSimFleet(ctx context.Context, gw storage.Gateway, actorID string, portO
 	if err != nil {
 		return err
 	}
-	node := reachNode
+	outpost := reachOutpost
 	for _, dev := range plan {
 		comp := dev.ComponentID
 		for _, e := range dev.Endpoints {
-			spec := storage.EndpointSpec{Component: &comp, Node: &node, SecretRead: all, CanAdmin: true}
+			spec := storage.EndpointSpec{Component: &comp, Outpost: &outpost, SecretRead: all, SecretBind: all, CanAdmin: true}
 			if e.Driver != "" {
 				driver := e.Driver
 				spec.Driver, spec.Inputs = &driver, e.Inputs
@@ -163,10 +163,10 @@ func endpointTarget(params []byte) string {
 
 // simulateReachabilityDemo re-aims the worked reachability check at a
 // simulated device. The demo DSP targets a fixed address nothing answers,
-// which reads as down the moment a lab's node collects it; with the
+// which reads as down the moment a lab's outpost collects it; with the
 // simulated fleet it becomes the simulated DSP it was modeled on (HTTP 80
 // and the line protocol on 1710), at a free simulated address, so a live
-// node finds it up. It also gains its product's driver attach at that
+// outpost finds it up. It also gains its product's driver attach at that
 // address, so it reports what every other simulated DSP does (#1507). Its
 // seeded history stays, as history. Without the simulated fleet (the docs
 // screenshots) this never runs; on a later run the demo no longer targets
@@ -207,8 +207,8 @@ func simulateReachabilityDemo(ctx context.Context, gw storage.Gateway, actorID s
 	if !ok {
 		return fmt.Errorf("devseed: the reachability demo's product %s has no simulated attach for driver %q", reachProduct, driver)
 	}
-	comp, node := *demo[0].ComponentID, reachNode
-	spec := storage.EndpointSpec{Component: &comp, Node: &node, Driver: &driver, Inputs: inputs(addr, shift), SecretRead: all, CanAdmin: true}
+	comp, outpost := *demo[0].ComponentID, reachOutpost
+	spec := storage.EndpointSpec{Component: &comp, Outpost: &outpost, Driver: &driver, Inputs: inputs(addr, shift), SecretRead: all, SecretBind: all, CanAdmin: true}
 	if _, err := gw.CreateEndpoint(ctx, actorID, spec, all); err != nil {
 		return fmt.Errorf("devseed: attach %s to the reachability demo: %w", driver, err)
 	}
@@ -240,7 +240,7 @@ func seedSimSecrets(ctx context.Context, gw storage.Gateway, actorID string, doc
 // platform secrets they reference, then each endpoint as a driver attach at its
 // component's simulated address (the host an endpoint the plan gave it already
 // targets), the driver's declared port lifted as the simulator lifts it, on
-// the dev node, with its ssh host key pinned where the fixture names one
+// the dev outpost, with its ssh host key pinned where the fixture names one
 // (#1078). Idempotent: a secret that exists is kept, and a component that
 // already holds an endpoint of the driver's transport is left alone, so a
 // re-run changes nothing. Runs after seedSimFleet, which gives every simulated
@@ -278,7 +278,7 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 	if shift == nil {
 		shift = func(p int) int { return p } // the simulator binds the profiles' own ports
 	}
-	node := reachNode
+	outpost := reachOutpost
 	for _, se := range doc.SimEndpoints {
 		compID, ok := compIDs[se.Component]
 		if !ok {
@@ -310,7 +310,7 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 			continue
 		}
 		// A push endpoint (#1024) is the server's, dialing nothing: no host,
-		// no port, no node.
+		// no port, no outpost.
 		push := transport.IsPush(spec.Transport)
 		if host == "" && !push {
 			return fmt.Errorf("devseed: simulated endpoint on %s: the component has no simulated address", se.Component)
@@ -332,12 +332,12 @@ func seedSimEndpoints(ctx context.Context, gw storage.Gateway, actorID string, d
 			inputs[k] = v
 		}
 		comp, drv := compID, se.Driver
-		placed := &node
+		placed := &outpost
 		if push {
 			placed = nil
 		}
 		created, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
-			Driver: &drv, Inputs: inputs, Label: se.Label, Component: &comp, Node: placed, SecretRead: all, CanAdmin: true,
+			Driver: &drv, Inputs: inputs, Label: se.Label, Component: &comp, Outpost: placed, SecretRead: all, SecretBind: all, CanAdmin: true,
 		}, all)
 		if err != nil {
 			return fmt.Errorf("devseed: create simulated %s endpoint on %s: %w", se.Driver, se.Component, err)
@@ -387,7 +387,7 @@ func seedIdentityBindings(ctx context.Context, gw storage.Gateway, actorID strin
 
 // seedSimProbe lands a fixture's bare probe (#1370): an endpoint of the
 // transport alone, no driver, targeting the component's simulated address on
-// the dev node. Its target is the host, which is what an icmp probe pings.
+// the dev outpost. Its target is the host, which is what an icmp probe pings.
 // Idempotent: a component already holding an endpoint of the transport is
 // left alone.
 func seedSimProbe(ctx context.Context, gw storage.Gateway, actorID string, se SimEndpoint, compID string, endpoints []storage.Endpoint) error {
@@ -410,10 +410,10 @@ func seedSimProbe(ctx context.Context, gw storage.Gateway, actorID string, se Si
 		return fmt.Errorf("devseed: simulated %s probe on %s: the component has no simulated address", se.Transport, se.Component)
 	}
 	all := scope.Set{All: true}
-	comp, node := compID, reachNode
+	comp, outpost := compID, reachOutpost
 	if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
-		Transport: se.Transport, Label: se.Label, Component: &comp, Node: &node,
-		Params: []byte(fmt.Sprintf(`{"target":%q}`, host)), SecretRead: all, CanAdmin: true,
+		Transport: se.Transport, Label: se.Label, Component: &comp, Outpost: &outpost,
+		Params: []byte(fmt.Sprintf(`{"target":%q}`, host)), SecretRead: all, SecretBind: all, CanAdmin: true,
 	}, all); err != nil {
 		return fmt.Errorf("devseed: create simulated %s probe on %s: %w", se.Transport, se.Component, err)
 	}

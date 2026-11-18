@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ancestorsOf, buildOutline, entriesOf, rootAt, type OutlineInput, type PlaceNode } from "./outline";
+import { ancestorsOf, buildOutline, entriesOf, rootAt, type OutlineInput, type LocationNode } from "./outline";
 import { type FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
-// The outline's model (#866): the place tree, each place wearing its system,
+// The outline's model (#866): the location tree, each location wearing its system,
 // the components under it, the counts, folding and filter entries. Pure, so
 // everything an operator could dispute is tested here without a DOM.
 
@@ -34,11 +34,11 @@ function input(view: Partial<FleetView>, over: Partial<OutlineInput> = {}): Outl
   };
 }
 
-const roots = (o: { roots: PlaceNode[] }) => o.roots.map((r) => r.chain.map((c) => c.label).join(" / "));
-const child = (n: PlaceNode, label: string) => n.children.find((c) => c.chain.some((x) => x.label === label))!;
+const roots = (o: { roots: LocationNode[] }) => o.roots.map((r) => r.chain.map((c) => c.label).join(" / "));
+const child = (n: LocationNode, label: string) => n.children.find((c) => c.chain.some((x) => x.label === label))!;
 
-describe("the place tree", () => {
-  it("nests places by parent and sorts every level by name", () => {
+describe("the location tree", () => {
+  it("nests locations by parent and sorts every level by name", () => {
     const o = buildOutline(input({ locations: [loc("z", "Zeta", "campus"), loc("a", "Alpha", "campus"), loc("a2", "Beta", "building", "a"), loc("a1", "Annex", "building", "a")] }));
     expect(roots(o)).toEqual(["Alpha", "Zeta"]);
     expect(o.roots[0].children.map((c) => c.chain[0].label)).toEqual(["Annex", "Beta"]);
@@ -68,7 +68,7 @@ describe("the place tree", () => {
   });
 });
 
-describe("a place wears its system", () => {
+describe("a location wears its system", () => {
   const view = {
     locations: [loc("hq", "Headquarters", "campus"), loc("w", "West", "building", "hq"), loc("e", "East", "building", "hq"), loc("ba", "Boardroom A", "room", "w"), loc("bb", "Boardroom B", "room", "w")],
     systems: [sys("s-ba", "Boardroom", "ba", "degraded", [dot("bar-1"), dot("mic-1", "outage")])],
@@ -81,13 +81,13 @@ describe("a place wears its system", () => {
     ],
   };
 
-  it("puts the system's standard and health on the place's own row", () => {
+  it("puts the system's standard and health on the location's own row", () => {
     const ba = child(child(buildOutline(input(view, extra)).roots[0], "West"), "Boardroom A");
     expect(ba.systems.map((s) => s.standard)).toEqual(["Divisible Conference"]);
     expect(ba.health).toBe("degraded");
   });
 
-  it("lists the system's components directly beneath the place, by name, with product and health", () => {
+  it("lists the system's components directly beneath the location, by name, with product and health", () => {
     const ba = child(child(buildOutline(input(view, extra)).roots[0], "West"), "Boardroom A");
     expect(ba.groups).toHaveLength(1);
     expect(ba.groups[0].components.map((c) => [c.name, c.label, c.product, c.health])).toEqual([
@@ -102,13 +102,13 @@ describe("a place wears its system", () => {
     expect(ba.groups[0].components.map((c) => c.icon)).toEqual(["video", "box"]);
   });
 
-  it("counts every system beneath a place, inclusively, by health", () => {
+  it("counts every system beneath a location, inclusively, by health", () => {
     const hq = buildOutline(input(view, extra)).roots[0];
     expect(hq.lights).toEqual({ healthy: 0, incomplete: 0, degraded: 1, outage: 0 });
     expect(child(hq, "East").lights).toEqual({ healthy: 0, incomplete: 0, degraded: 0, outage: 0 });
   });
 
-  it("reads Empty for a place that holds nothing", () => {
+  it("reads Empty for a location that holds nothing", () => {
     expect(child(buildOutline(input(view, extra)).roots[0], "East").contents).toBe("Empty");
   });
 });
@@ -126,7 +126,7 @@ describe("two systems, shared components, and components in no system", () => {
     { id: uuidFor("loose"), name: "loose", label: "Spare Display", product: "Boreal", system_count: 0, location_id: uuidFor("lab") },
   ];
 
-  it("groups a place's components under one header per system when it holds more than one", () => {
+  it("groups a location's components under one header per system when it holds more than one", () => {
     const lab = buildOutline(input(view, { components: comps })).roots.find((r) => r.chain[0].label === "Media Lab")!;
     expect(lab.systems.map((s) => s.label)).toEqual(["Classroom", "Classroom 2"]);
     expect(lab.groups.map((g) => g.system?.label ?? null)).toEqual(["Classroom", "Classroom 2", null]);
@@ -142,7 +142,7 @@ describe("two systems, shared components, and components in no system", () => {
     expect(svcInB.also).toEqual(["Classroom"]);
   });
 
-  it("puts a component in no system under its place, with no system header", () => {
+  it("puts a component in no system under its location, with no system header", () => {
     const lab = buildOutline(input(view, { components: comps })).roots.find((r) => r.chain[0].label === "Media Lab")!;
     expect(lab.groups[2].components.map((c) => c.label)).toEqual(["Spare Display"]);
     expect(lab.contents).toBe("4 components");
@@ -154,7 +154,7 @@ describe("folding", () => {
     locations: [loc("hq", "Headquarters", "campus"), loc("w", "West Building", "building", "hq"), loc("l2", "Level 2", "floor", "w"), loc("l3", "Level 3", "floor", "w")],
   };
 
-  it("folds a chain of places whose only child is another place into one row", () => {
+  it("folds a chain of locations whose only child is another location into one row", () => {
     const hq = buildOutline(input(view)).roots[0];
     expect(hq.chain.map((c) => c.label)).toEqual(["Headquarters", "West Building"]);
     expect(hq.id).toBe(uuidFor("w"));
@@ -162,7 +162,7 @@ describe("folding", () => {
     expect(hq.children.map((c) => c.chain[0].label)).toEqual(["Level 2", "Level 3"]);
   });
 
-  it("counts a folded child by the place it starts at, which is what its parent holds", () => {
+  it("counts a folded child by the location it starts at, which is what its parent holds", () => {
     // Level 2 holds one room and nothing else, so it folds into "Level 2 / Huddle".
     // West still holds two FLOORS, not a floor and a room.
     const o = buildOutline(input({
@@ -172,14 +172,14 @@ describe("folding", () => {
     expect(child(o.roots[0], "Level 2").chain.map((c) => c.label)).toEqual(["Level 2", "Huddle"]);
   });
 
-  it("never folds a place that holds a system or a component of its own", () => {
+  it("never folds a location that holds a system or a component of its own", () => {
     const o = buildOutline(input({ ...view, systems: [sys("paging", "Paging", "hq", "healthy")] }));
     expect(o.roots[0].chain.map((c) => c.label)).toEqual(["Headquarters"]);
   });
 });
 
 describe("what you can and cannot see", () => {
-  it("collects systems readable at a place you cannot read under their own node", () => {
+  it("collects systems readable at a location you cannot read under their own node", () => {
     const o = buildOutline(input({ locations: [loc("a", "A", "room")], systems: [sys("s", "Hidden AV", "elsewhere", "healthy"), sys("n", "Nowhere AV", "", "outage")] }));
     expect(o.unplaced?.systems.map((s) => s.label)).toEqual(["Hidden AV", "Nowhere AV"]);
     expect(o.unplaced?.lights.outage).toBe(1);
@@ -188,7 +188,7 @@ describe("what you can and cannot see", () => {
 });
 
 describe("things placed nowhere", () => {
-  it("collects a component in no system and at no place you can read beside the unplaced systems", () => {
+  it("collects a component in no system and at no location you can read beside the unplaced systems", () => {
     const o = buildOutline(input({ locations: [loc("a", "A", "room")] }, {
       components: [
         { id: uuidFor("float"), name: "device-1", label: "Device 1", product: "generic", system_count: 0 },
@@ -208,7 +208,7 @@ describe("filter entries and reveal", () => {
   };
   const over = { systems: [{ id: uuidFor("s-ba"), standard: "divisible-conference" }], components: [{ id: uuidFor("mic-1"), name: "mic-1", label: "", product: "Lyra GN-12", system_count: 1, system_id: uuidFor("s-ba"), location_id: uuidFor("ba") }] };
 
-  it("gives every place and component an entry with its path and the facts a filter matches", () => {
+  it("gives every location and component an entry with its path and the facts a filter matches", () => {
     const es = entriesOf(buildOutline(input(view, over)));
     const ba = es.find((e) => e.id === uuidFor("ba"))!;
     expect(ba.path).toEqual(["Headquarters", "West"]);
@@ -222,7 +222,7 @@ describe("filter entries and reveal", () => {
     expect(mic.verdict).toBe("outage");
   });
 
-  it("carries each entry's effective tags, so a tag filter matches places and components alike", () => {
+  it("carries each entry's effective tags, so a tag filter matches locations and components alike", () => {
     const tags = new Map([[uuidFor("ba"), { environment: "staging" }], [uuidFor("mic-1"), { environment: "prod" }]]);
     const es = entriesOf(buildOutline(input(view, { ...over, tags })));
     expect(es.find((e) => e.id === uuidFor("ba"))!.tags).toEqual({ environment: "staging" });
@@ -235,12 +235,12 @@ describe("filter entries and reveal", () => {
     expect(ancestorsOf(o, uuidFor("mic-1"))).toEqual([uuidFor("hq"), uuidFor("w"), uuidFor("ba")]);
     expect(ancestorsOf(o, uuidFor("ba"))).toEqual([uuidFor("hq"), uuidFor("w")]);
     expect(ancestorsOf(o, uuidFor("nope"))).toEqual([]);
-    // A system is its place's own row, so only the places above it open.
+    // A system is its location's own row, so only the locations above it open.
     expect(ancestorsOf(o, uuidFor("s-ba"))).toEqual([uuidFor("hq"), uuidFor("w")]);
   });
 });
 
-describe("an outline rooted at one place (#872)", () => {
+describe("an outline rooted at one location (#872)", () => {
   const view = {
     locations: [
       loc("hq", "Headquarters", "campus"), loc("w", "West", "building", "hq"),
@@ -250,7 +250,7 @@ describe("an outline rooted at one place (#872)", () => {
     systems: [sys("s-ba", "Boardroom A", "ba", "degraded"), sys("s-lob", "Lobby", "lob", "healthy")],
   };
 
-  it("lists a place's own children, unfolded, so the place itself heads nothing", () => {
+  it("lists a location's own children, unfolded, so the location itself heads nothing", () => {
     const o = buildOutline(input(view));
     const at = rootAt(o, uuidFor("w"))!;
     expect(at.chain.map((c) => c.label)).toEqual(["West"]);

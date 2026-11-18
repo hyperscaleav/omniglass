@@ -19,7 +19,7 @@ import (
 // never leaks and no row is flagged current), revokes one so it stops
 // authenticating, and the revoke is audited with the admin as the actor. A
 // non-admin operator is 403; a credential id that is not the target's is a 404 (no
-// cross-principal revoke); and an owner's session cannot be revoked by a lesser
+// cross-user revoke); and an owner's session cannot be revoked by a lesser
 // admin (the takeover guard, shared with the password reset). Skipped under -short.
 func TestAdminSessionsAPI(t *testing.T) {
 	t.Parallel()
@@ -37,9 +37,9 @@ func TestAdminSessionsAPI(t *testing.T) {
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	ownerID := meID(t, c, ownerTok)
-	adminTok := principalWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
+	adminTok := userWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
 	adminID := meID(t, c, adminTok)
-	opTok := principalWithGrants(t, ctx, dsn, "op-all", []grant{{role: "operator", scopeKind: "all"}})
+	opTok := userWithGrants(t, ctx, dsn, "op-all", []grant{{role: "operator", scopeKind: "all"}})
 
 	// Two human targets with passwords, created by the owner.
 	create := func(username string) string {
@@ -47,7 +47,7 @@ func TestAdminSessionsAPI(t *testing.T) {
 		var out struct {
 			ID string `json:"id"`
 		}
-		body := c.do(ownerTok, http.MethodPost, "/principals", map[string]string{"username": username, "password": "orange-boat-42x"}, http.StatusCreated)
+		body := c.do(ownerTok, http.MethodPost, "/users", map[string]string{"username": username, "password": "orange-boat-42x"}, http.StatusCreated)
 		if err := json.Unmarshal(body, &out); err != nil || out.ID == "" {
 			t.Fatalf("create %s: %v (%s)", username, err, body)
 		}
@@ -84,21 +84,21 @@ func TestAdminSessionsAPI(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode
 	}
-	// adminList lists a principal's sessions through the admin surface, asserting 200.
-	adminList := func(tok, principalID string) []sessionRow {
+	// adminList lists a user's sessions through the admin surface, asserting 200.
+	adminList := func(tok, userID string) []sessionRow {
 		t.Helper()
 		var out struct {
 			Sessions []sessionRow `json:"sessions"`
 		}
-		body := c.do(tok, http.MethodGet, "/principals/"+principalID+"/sessions", nil, http.StatusOK)
+		body := c.do(tok, http.MethodGet, "/users/"+userID+"/sessions", nil, http.StatusOK)
 		if err := json.Unmarshal(body, &out); err != nil {
 			t.Fatalf("decode sessions: %v (%s)", err, body)
 		}
 		return out.Sessions
 	}
-	adminRevoke := func(tok, principalID, sid string) int {
+	adminRevoke := func(tok, userID, sid string) int {
 		t.Helper()
-		code, _ := c.send(tok, http.MethodPost, "/principals/"+principalID+"/sessions/"+sid+":revoke", nil)
+		code, _ := c.send(tok, http.MethodPost, "/users/"+userID+"/sessions/"+sid+":revoke", nil)
 		return code
 	}
 
@@ -127,8 +127,8 @@ func TestAdminSessionsAPI(t *testing.T) {
 		t.Fatalf("admin session list must not leak the secret: %s", raw)
 	}
 
-	// An operator lacks principal:revoke-session: it can neither list nor revoke.
-	if code, _ := c.send(opTok, http.MethodGet, "/principals/"+aliceID+"/sessions", nil); code != http.StatusForbidden {
+	// An operator lacks user:revoke-session: it can neither list nor revoke.
+	if code, _ := c.send(opTok, http.MethodGet, "/users/"+aliceID+"/sessions", nil); code != http.StatusForbidden {
 		t.Fatalf("operator listing sessions: want 403, got %d", code)
 	}
 	if code := adminRevoke(opTok, aliceID, aliceSessions[0].ID); code != http.StatusForbidden {
@@ -136,7 +136,7 @@ func TestAdminSessionsAPI(t *testing.T) {
 	}
 
 	// A credential id that is not the target's is a non-disclosing 404, and the owning
-	// principal is untouched: bob's session id revoked against alice must not touch bob.
+	// user is untouched: bob's session id revoked against alice must not touch bob.
 	bobSessions := adminList(adminTok, bobID)
 	if len(bobSessions) != 1 {
 		t.Fatalf("want 1 session for bob, got %d", len(bobSessions))
@@ -151,9 +151,9 @@ func TestAdminSessionsAPI(t *testing.T) {
 	if code := adminRevoke(adminTok, aliceID, "00000000-0000-0000-0000-000000000000"); code != http.StatusNotFound {
 		t.Fatalf("revoking an unknown credential id: want 404, got %d", code)
 	}
-	// An unknown principal is a 404.
+	// An unknown user is a 404.
 	if code := adminRevoke(adminTok, "11111111-1111-1111-1111-111111111111", aliceSessions[0].ID); code != http.StatusNotFound {
-		t.Fatalf("revoking under an unknown principal: want 404, got %d", code)
+		t.Fatalf("revoking under an unknown user: want 404, got %d", code)
 	}
 
 	// The takeover guard: an owner's session cannot be revoked by a lesser admin, even
@@ -177,7 +177,7 @@ func TestAdminSessionsAPI(t *testing.T) {
 		t.Fatalf("revoked session should stop authenticating: want 401, got %d", code)
 	}
 
-	// The revoke is audited with the acting admin as the actor and the target principal.
+	// The revoke is audited with the acting admin as the actor and the target user.
 	var auditDoc struct {
 		Events []auditEvent `json:"events"`
 	}
@@ -186,7 +186,7 @@ func TestAdminSessionsAPI(t *testing.T) {
 	}
 	found := false
 	for _, e := range auditDoc.Events {
-		if e.Verb == "revoke_session" && e.Actor == adminID && e.Resource == "principal" && e.ResourceID == aliceID {
+		if e.Verb == "revoke_session" && e.Actor == adminID && e.Resource == "user" && e.ResourceID == aliceID {
 			found = true
 		}
 	}
@@ -198,7 +198,7 @@ func TestAdminSessionsAPI(t *testing.T) {
 // TestAdminRevokeAllAPI drives the admin bulk-revoke surface against the real binary
 // (issue #172): an admin ends ALL of a target's sessions or ALL its tokens in one
 // action, filtered by purpose so one never touches the other, returning the count.
-// It is gated by principal:revoke-session (operator 403), guarded by the shared
+// It is gated by user:revoke-session (operator 403), guarded by the shared
 // takeover guard (an owner's credentials cannot be bulk-revoked by a lesser admin),
 // and audited with the admin as actor. Skipped under -short.
 func TestAdminRevokeAllAPI(t *testing.T) {
@@ -217,16 +217,16 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 	ownerID := meID(t, c, ownerTok)
-	adminTok := principalWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
+	adminTok := userWithGrants(t, ctx, dsn, "admin-all", []grant{{role: "admin", scopeKind: "all"}})
 	adminID := meID(t, c, adminTok)
-	opTok := principalWithGrants(t, ctx, dsn, "op-all", []grant{{role: "operator", scopeKind: "all"}})
+	opTok := userWithGrants(t, ctx, dsn, "op-all", []grant{{role: "operator", scopeKind: "all"}})
 
 	// Alice, created by the owner, given two login sessions (via /auth/login) and two
 	// API tokens (minted directly, the CLI lane). She then holds 2 sessions + 2 tokens.
 	var created struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &created); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/users", map[string]string{"username": "alice", "password": "orange-boat-42x"}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 	aliceID := created.ID
@@ -266,9 +266,9 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode
 	}
-	revokeAll := func(tok, principalID, purpose string) (int, int) {
+	revokeAll := func(tok, userID, purpose string) (int, int) {
 		t.Helper()
-		code, body := c.send(tok, http.MethodPost, "/principals/"+principalID+"/sessions:revokeAll", map[string]string{"purpose": purpose})
+		code, body := c.send(tok, http.MethodPost, "/users/"+userID+"/sessions:revokeAll", map[string]string{"purpose": purpose})
 		revoked := -1
 		if code == http.StatusOK {
 			var out struct {
@@ -281,12 +281,12 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 		}
 		return code, revoked
 	}
-	listKinds := func(principalID string) (sessions, tokens int) {
+	listKinds := func(userID string) (sessions, tokens int) {
 		t.Helper()
 		var out struct {
 			Sessions []sessionRow `json:"sessions"`
 		}
-		if err := json.Unmarshal(c.do(adminTok, http.MethodGet, "/principals/"+principalID+"/sessions", nil, http.StatusOK), &out); err != nil {
+		if err := json.Unmarshal(c.do(adminTok, http.MethodGet, "/users/"+userID+"/sessions", nil, http.StatusOK), &out); err != nil {
 			t.Fatalf("list: %v", err)
 		}
 		for _, s := range out.Sessions {
@@ -304,7 +304,7 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 		t.Fatalf("alice precondition: want 2 sessions + 2 tokens, got %d + %d", s, tk)
 	}
 
-	// An operator lacks principal:revoke-session: bulk revoke is 403.
+	// An operator lacks user:revoke-session: bulk revoke is 403.
 	if code, _ := revokeAll(opTok, aliceID, "session"); code != http.StatusForbidden {
 		t.Fatalf("operator bulk revoke: want 403, got %d", code)
 	}
@@ -344,7 +344,7 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 		t.Fatalf("idempotent bulk revoke: want (200, 0), got (%d, %d)", code, n)
 	}
 
-	// The bulk revoke is audited with the acting admin as actor and the target principal.
+	// The bulk revoke is audited with the acting admin as actor and the target user.
 	var auditDoc struct {
 		Events []auditEvent `json:"events"`
 	}
@@ -353,7 +353,7 @@ func TestAdminRevokeAllAPI(t *testing.T) {
 	}
 	found := false
 	for _, e := range auditDoc.Events {
-		if e.Verb == "revoke_session" && e.Actor == adminID && e.Resource == "principal" && e.ResourceID == aliceID {
+		if e.Verb == "revoke_session" && e.Actor == adminID && e.Resource == "user" && e.ResourceID == aliceID {
 			found = true
 		}
 	}

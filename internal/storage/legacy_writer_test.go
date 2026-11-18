@@ -16,10 +16,10 @@ import (
 )
 
 // The one-writer ruling (ADR-0161) held against what was stored before it:
-// a node's writer is bound to its task's component as well as its endpoint, a
+// an outpost's writer is bound to its task's component as well as its endpoint, a
 // command's lifecycle event is the command's alone, a contract cannot declare
 // a reserved key, a declared pin is trusted only from the audited :retry, and
-// a stored spec or derived task cannot carry a reserved emit to a node.
+// a stored spec or derived task cannot carry a reserved emit to an outpost.
 
 func (f writerFixture) componentID(t *testing.T, name string) string {
 	t.Helper()
@@ -30,11 +30,11 @@ func (f writerFixture) componentID(t *testing.T, name string) string {
 	return comp.ID
 }
 
-// TestNodeWriterBindsItsComponentAndEndpoint: a node's writer speaks for the
+// TestOutpostWriterBindsItsComponentAndEndpoint: an outpost's writer speaks for the
 // component its task collects for and the endpoint it ran against, both. A
 // batch landing on another component under the same endpoint name, or from a
 // writer bound to no component or no endpoint, is refused whole.
-func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
+func TestOutpostWriterBindsItsComponentAndEndpoint(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -44,44 +44,44 @@ func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 	if _, err := f.gw.CreateComponent(f.ctx, "", storage.ComponentSpec{Name: "disp-2"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if _, err := f.conn.Exec(f.ctx, `insert into endpoint (name, transport, component, node_name, params) values
-		('ssh', 'ssh', (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-a'), '{"target":"127.0.0.2:22"}'::jsonb)`); err != nil {
+	if _, err := f.conn.Exec(f.ctx, `insert into endpoint (name, transport, component, outpost_id, params) values
+		('ssh', 'ssh', (select id from component where name = 'disp-2'), (select user_id from outpost where name = 'outpost-a'), '{"target":"127.0.0.2:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert endpoint: %v", err)
 	}
 	d1, d2 := f.componentID(t, "disp-1"), f.componentID(t, "disp-2")
-	node := storage.NodeWriter(d1, "ssh")
+	outpost := storage.OutpostWriter(d1, "ssh")
 	prop := func(owner, key, instance, value string) []storage.PropertySampleWrite {
 		return []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: owner, Key: key, Instance: instance, Value: value}}
 	}
 
-	if err := f.gw.InsertPropertySamples(f.ctx, node, prop(d1, "endpoint-reachable", "ssh", "up")); err != nil {
-		t.Fatalf("the node's own verdict on its own endpoint: %v", err)
+	if err := f.gw.InsertPropertySamples(f.ctx, outpost, prop(d1, "endpoint-reachable", "ssh", "up")); err != nil {
+		t.Fatalf("the outpost's own verdict on its own endpoint: %v", err)
 	}
-	if err := f.gw.InsertPropertySamples(f.ctx, node, prop(d1, "video-input", "", "hdmi1")); err != nil {
-		t.Fatalf("a driver emit on the node's own component: %v", err)
+	if err := f.gw.InsertPropertySamples(f.ctx, outpost, prop(d1, "video-input", "", "hdmi1")); err != nil {
+		t.Fatalf("a driver emit on the outpost's own component: %v", err)
 	}
 
 	for name, write := range map[string]func() error{
 		"a verdict on another component's same-named endpoint": func() error {
-			return f.gw.InsertPropertySamples(f.ctx, node, prop(d2, "endpoint-reachable", "ssh", "down"))
+			return f.gw.InsertPropertySamples(f.ctx, outpost, prop(d2, "endpoint-reachable", "ssh", "down"))
 		},
 		"a probe metric on another component": func() error {
-			return f.gw.InsertMetricSamples(f.ctx, node, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d2, Key: "tcp-connect-time", Instance: "ssh", Value: 0}})
+			return f.gw.InsertMetricSamples(f.ctx, outpost, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d2, Key: "tcp-connect-time", Instance: "ssh", Value: 0}})
 		},
 		"collection-failed on another component": func() error {
-			return f.gw.InsertEvents(f.ctx, node, []storage.EventWrite{{OwnerKind: "component", OwnerID: d2, Key: "collection-failed", Instance: "ssh", Message: "forged"}})
+			return f.gw.InsertEvents(f.ctx, outpost, []storage.EventWrite{{OwnerKind: "component", OwnerID: d2, Key: "collection-failed", Instance: "ssh", Message: "forged"}})
 		},
 		"a driver emit on another component": func() error {
-			return f.gw.InsertPropertySamples(f.ctx, node, prop(d2, "video-input", "", "hdmi2"))
+			return f.gw.InsertPropertySamples(f.ctx, outpost, prop(d2, "video-input", "", "hdmi2"))
 		},
 		"a batch that strays onto another component midway": func() error {
-			return f.gw.InsertPropertySamples(f.ctx, node, append(prop(d1, "video-input", "", "hdmi3"), prop(d2, "video-input", "", "hdmi3")...))
+			return f.gw.InsertPropertySamples(f.ctx, outpost, append(prop(d1, "video-input", "", "hdmi3"), prop(d2, "video-input", "", "hdmi3")...))
 		},
-		"a node bound to no endpoint": func() error {
-			return f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(d1, ""), prop(d1, "video-input", "", "hdmi4"))
+		"an outpost bound to no endpoint": func() error {
+			return f.gw.InsertPropertySamples(f.ctx, storage.OutpostWriter(d1, ""), prop(d1, "video-input", "", "hdmi4"))
 		},
-		"a node bound to no component": func() error {
-			return f.gw.InsertMetricSamples(f.ctx, storage.NodeWriter("", "ssh"), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d1, Key: "tcp-connect-time", Instance: "ssh", Value: 1}})
+		"an outpost bound to no component": func() error {
+			return f.gw.InsertMetricSamples(f.ctx, storage.OutpostWriter("", "ssh"), []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: d1, Key: "tcp-connect-time", Instance: "ssh", Value: 1}})
 		},
 	} {
 		if err := write(); !refused(err) {
@@ -91,7 +91,7 @@ func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 	if n := f.count(t, `select (select count(*) from property where component_id = $1::uuid)
 		+ (select count(*) from `+storagetest.MetricRows+` metric where component_id = $1::uuid)
 		+ (select count(*) from event where component_id = $1::uuid)`, d2); n != 0 {
-		t.Errorf("%d rows landed on the component the node does not collect for", n)
+		t.Errorf("%d rows landed on the component the outpost does not collect for", n)
 	}
 	if n := f.count(t, `select count(*) from property where component_id = $1::uuid and value #>> '{}' in ('hdmi3', 'hdmi4')`, d1); n != 0 {
 		t.Errorf("a refused batch landed %d of its rows", n)
@@ -99,7 +99,7 @@ func TestNodeWriterBindsItsComponentAndEndpoint(t *testing.T) {
 }
 
 // TestCommandLifecycleIsTheCommandsAlone: command-issued puts a command on a
-// component's timeline, so only a command's issue writes it. A push, a node and
+// component's timeline, so only a command's issue writes it. A push, an outpost and
 // an event rule (declared now, or stored before the refusal) are refused, and
 // the command's own issue still lands it.
 func TestCommandLifecycleIsTheCommandsAlone(t *testing.T) {
@@ -117,8 +117,8 @@ func TestCommandLifecycleIsTheCommandsAlone(t *testing.T) {
 	if err := f.gw.InsertEvents(f.ctx, storage.PushWriter(), ev); !refused(err) || !strings.Contains(err.Error(), "command-issued") {
 		t.Errorf("a pushed command-issued = %v, want it refused naming the key", err)
 	}
-	if err := f.gw.InsertEvents(f.ctx, storage.NodeWriter(d1, "ssh"), ev); !refused(err) {
-		t.Errorf("a node's command-issued = %v, want it refused", err)
+	if err := f.gw.InsertEvents(f.ctx, storage.OutpostWriter(d1, "ssh"), ev); !refused(err) {
+		t.Errorf("an outpost's command-issued = %v, want it refused", err)
 	}
 	if err := f.gw.WriteRuleEvent(f.ctx, uuidZero, "command-issued", d1, ""); !refused(err) {
 		t.Errorf("an event rule's command-issued = %v, want it refused", err)
@@ -169,7 +169,7 @@ func TestCommandLifecycleIsTheCommandsAlone(t *testing.T) {
 
 // TestContractsRefuseAReservedKey: a product, standard or location-type
 // contract cannot declare a reserved key, on the operator's path or the
-// seed's, so no default ever stands in for a node's observation or the
+// seed's, so no default ever stands in for an outpost's observation or the
 // platform's verdict. A contract stored before the refusal keeps its line but
 // lends the key no default.
 func TestContractsRefuseAReservedKey(t *testing.T) {
@@ -314,7 +314,7 @@ func TestContractsRefuseAReservedKey(t *testing.T) {
 }
 
 // pinFixture is the writer fixture's ssh and tls endpoints, each with a task,
-// so the node's worklist carries both.
+// so the outpost's worklist carries both.
 func pinFixture(t *testing.T) writerFixture {
 	t.Helper()
 	f := newWriterFixture(t)
@@ -342,7 +342,7 @@ var pinCases = []pinCase{
 
 func (f writerFixture) endpointTask(t *testing.T, transport string) storage.WorklistTask {
 	t.Helper()
-	wl, err := f.gw.NodeWorklist(f.ctx, "node-a")
+	wl, err := f.gw.OutpostWorklist(f.ctx, "outpost-a")
 	if err != nil {
 		t.Fatalf("worklist: %v", err)
 	}
@@ -372,7 +372,7 @@ func (f writerFixture) plantPin(t *testing.T, property, instance, key string) {
 // ssh host key, a tls certificate's public key) only when it came through the
 // endpoint's audited :retry. A pin planted through the plain property route
 // before the writer check is never delivered and never moves the fingerprint,
-// so the next connection trusts on first use (or the key the node already
+// so the next connection trusts on first use (or the key the outpost already
 // learned); a :retry pin is delivered over a planted one, before or after it.
 func TestPlantedPinIsNeverDelivered(t *testing.T) {
 	t.Parallel()
@@ -403,10 +403,10 @@ func TestPlantedPinIsNeverDelivered(t *testing.T) {
 			t.Fatalf("%s: the reachability read serves pin %q (%v), want none", pc.transport, pin, err)
 		}
 
-		// The key the node learned on first use is still the pin.
-		if err := f.gw.InsertPropertySamples(f.ctx, storage.NodeWriter(d1, pc.transport), []storage.PropertySampleWrite{
+		// The key the outpost learned on first use is still the pin.
+		if err := f.gw.InsertPropertySamples(f.ctx, storage.OutpostWriter(d1, pc.transport), []storage.PropertySampleWrite{
 			{OwnerKind: "component", OwnerID: d1, Key: pc.property, Instance: pc.transport, Value: learned}}); err != nil {
-			t.Fatalf("%s: the node publishes its key: %v", pc.transport, err)
+			t.Fatalf("%s: the outpost publishes its key: %v", pc.transport, err)
 		}
 		if got := f.endpointTask(t, pc.transport); pc.delivered(got) != learned || got.Fingerprint != base.Fingerprint {
 			t.Fatalf("%s: pin %q (fingerprint moved %v), want the learned key and the fingerprint unmoved",
@@ -446,7 +446,7 @@ func TestPlantedPinIsNeverDelivered(t *testing.T) {
 }
 
 // TestStoredSpecsAndTasksCarryNoReservedEmit: a driver spec stored before the
-// emit refusal, and tasks derived from it, never hand a node an emit its
+// emit refusal, and tasks derived from it, never hand an outpost an emit its
 // writer class refuses (a reserved key, a calc rule's output): the worklist
 // strips it and keeps the rest, a re-derivation from the stored spec bakes
 // none, and the boot audit flags the spec and the task.
@@ -470,15 +470,15 @@ func TestStoredSpecsAndTasksCarryNoReservedEmit(t *testing.T) {
 	if _, err := f.gw.CreateDriver(f.ctx, "", storage.Driver{Name: "legacy-bar", Label: "Legacy Bar", Spec: []byte(spec)}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
-	comp, drv, node := "disp-1", "legacy-bar", "node-a"
-	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: all, CanAdmin: true}, all)
+	comp, drv, outpost := "disp-1", "legacy-bar", "outpost-a"
+	ep, err := f.gw.CreateEndpoint(f.ctx, "", storage.EndpointSpec{Driver: &drv, Component: &comp, Outpost: &outpost,
+		Inputs: map[string]string{"host": "10.0.0.9"}, SecretRead: all, SecretBind: all, CanAdmin: true}, all)
 	if err != nil {
 		t.Fatalf("attach: %v", err)
 	}
 	// What a release before the refusal could have stored: the spec and the
 	// task derived from it (its content address its own) both emit the
-	// node's verdict, the platform's health and a calc rule's output beside
+	// outpost's verdict, the platform's health and a calc rule's output beside
 	// the honest emit.
 	forged := []string{"endpoint-reachable", "health", "avg-uptime"}
 	if _, err := f.conn.Exec(f.ctx, `
@@ -500,7 +500,7 @@ func TestStoredSpecsAndTasksCarryNoReservedEmit(t *testing.T) {
 
 	emitsOnTheWorklist := func() []string {
 		t.Helper()
-		wl, err := f.gw.NodeWorklist(f.ctx, "node-a")
+		wl, err := f.gw.OutpostWorklist(f.ctx, "outpost-a")
 		if err != nil {
 			t.Fatalf("worklist: %v", err)
 		}
@@ -522,7 +522,7 @@ func TestStoredSpecsAndTasksCarryNoReservedEmit(t *testing.T) {
 	got := emitsOnTheWorklist()
 	for _, key := range forged {
 		if slices.Contains(got, key) {
-			t.Errorf("the worklist hands the node an emit of %s: %v", key, got)
+			t.Errorf("the worklist hands the outpost an emit of %s: %v", key, got)
 		}
 	}
 	if !slices.Contains(got, "video-input") {

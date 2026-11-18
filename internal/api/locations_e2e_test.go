@@ -189,7 +189,7 @@ func TestLocationRenameAndCheckName(t *testing.T) {
 // create would land in, named by the Parent field, not a single global fact.
 // A name taken under one parent is reported free under another (the exact
 // false-positive that used to block a legal create), and the advisory stays
-// blind to the caller's OWN grant scope, same as before: a deploy principal
+// blind to the caller's OWN grant scope, same as before: a deploy user
 // scoped to one subtree still gets a correct answer about a placement it
 // cannot GET, because the check is a query against the target bucket, not a
 // read of the target row. Skipped under -short.
@@ -225,7 +225,7 @@ func TestLocationCheckNameIsScopedToPlacement(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "scope-lab", "location_type": "campus"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "room-1", "location_type": "room", "parent": "scope-hq"}, http.StatusCreated)
 
-	// A deploy principal (location:update) scoped ONLY to scope-hq.
+	// A deploy user (location:update) scoped ONLY to scope-hq.
 	deployTok := setupScopedViewer(t, ctx, dsn, "deploy-hq", "deploy", "location", hq.ID)
 	// It cannot read scope-lab (out of scope -> non-disclosing 404).
 	c.do(deployTok, http.MethodGet, "/locations/scope-lab", nil, http.StatusNotFound)
@@ -395,24 +395,24 @@ func mustIndex(t *testing.T, locs []locResp, name string) int {
 	return -1
 }
 
-// setupScopedViewer inserts a service principal with a single (role @ scope)
+// setupScopedViewer inserts a service user with a single (role @ scope)
 // grant and returns its bearer token, so the test can drive a scoped identity.
 func setupScopedViewer(t *testing.T, ctx context.Context, dsn, label, role, scopeKind, scopeID string) string {
 	t.Helper()
-	return setupScopedPrincipal(t, ctx, dsn, label, grantSpec{role: role, scopeKind: scopeKind, scopeID: scopeID})
+	return setupScopedUser(t, ctx, dsn, label, grantSpec{role: role, scopeKind: scopeKind, scopeID: scopeID})
 }
 
-// grantSpec is one (role @ scope) grant for setupScopedPrincipal.
+// grantSpec is one (role @ scope) grant for setupScopedUser.
 type grantSpec struct {
 	role      string
 	scopeKind string
 	scopeID   string
 }
 
-// setupScopedPrincipal inserts a service principal with one or more (role @ scope)
+// setupScopedUser inserts a service user with one or more (role @ scope)
 // grants and returns its bearer token, so a test can drive an identity whose read
 // and action scopes differ (e.g. reads one subtree but may only modify another).
-func setupScopedPrincipal(t *testing.T, ctx context.Context, dsn, label string, grants ...grantSpec) string {
+func setupScopedUser(t *testing.T, ctx context.Context, dsn, label string, grants ...grantSpec) string {
 	t.Helper()
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -420,10 +420,10 @@ func setupScopedPrincipal(t *testing.T, ctx context.Context, dsn, label string, 
 	}
 	defer conn.Close(ctx)
 	var pid string
-	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
-		t.Fatalf("insert principal: %v", err)
+	if err := conn.QueryRow(ctx, `insert into users (kind) values ('machine') returning id`).Scan(&pid); err != nil {
+		t.Fatalf("insert user: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, label); err != nil {
+	if _, err := conn.Exec(ctx, `insert into machine (user_id, name) values ($1, $2)`, pid, label); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	tok, hash, prefix, err := auth.NewBearerToken()
@@ -431,13 +431,13 @@ func setupScopedPrincipal(t *testing.T, ctx context.Context, dsn, label string, 
 		t.Fatalf("mint token: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
+		`insert into credential (user_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`,
 		pid, hash, prefix); err != nil {
 		t.Fatalf("insert credential: %v", err)
 	}
 	for _, g := range grants {
 		if _, err := conn.Exec(ctx,
-			`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = $2), $3, $4)`,
+			`insert into user_grant (user_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = $2), $3, $4)`,
 			pid, g.role, g.scopeKind, g.scopeID); err != nil {
 			t.Fatalf("insert grant: %v", err)
 		}

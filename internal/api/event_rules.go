@@ -42,7 +42,7 @@ type eventRuleBody struct {
 	Description       string              `json:"description,omitempty"`
 	Selector          selectorBody        `json:"selector" doc:"The components the rule watches; both lists empty is every component"`
 	SampleKey         string              `json:"sample_key" doc:"The property or metric the rule reads"`
-	SampleLane        string              `json:"sample_lane" enum:"property,metric" doc:"Which lane the key reads, derived from the registries"`
+	SampleLane        string              `json:"sample_lane" enum:"property,metric" doc:"Which lane the key reads, derived from the catalogs"`
 	FireCriteria      criteriaBody        `json:"fire_criteria" doc:"When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity)"`
 	ClearCriteria     *criteriaBody       `json:"clear_criteria,omitempty" doc:"When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria"`
 	FireSustain       string              `json:"fire_sustain" doc:"How long the fire criteria must hold, a Go duration (0s fires at once)"`
@@ -191,17 +191,18 @@ type updateEventRuleInput struct {
 
 // registerEventRuleRoutes wires event rule authoring (#918), and the rule's
 // live state (#921): the rules that raise alarms, gated rule:*. A rule reads
-// like a registry (rule:read from any grant), its live state fenced to the
+// like a catalog (rule:read from any grant), its live state fenced to the
 // caller's component read scope; writing one takes an all-scope grant, since
 // its selector reaches the whole fleet (ruling 2 on #819, amended #921).
 // Official rules are read-only.
 func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-event-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/event-rules",
 		Summary:     "List event rules",
-		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
+		Description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.",
 	}, "rule", "read"), func(ctx context.Context, _ *struct{}) (*listEventRulesOutput, error) {
 		rs, err := gw.ListEventRules(ctx, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
@@ -217,6 +218,7 @@ func registerEventRuleRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-event-rule",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/event-rules/{name}",
 		Summary:     "Get an event rule",
@@ -385,6 +387,7 @@ type eventRuleStateOutput struct {
 func registerEventRuleStateRoute(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-event-rule-state",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/event-rules/{name}/state",
 		Summary:     "Get an event rule's live state",

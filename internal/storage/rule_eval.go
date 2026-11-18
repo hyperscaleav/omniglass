@@ -483,7 +483,7 @@ type seriesSample struct {
 	value               any
 }
 
-// laneTables names a lane's sample table, its type registry, and the
+// laneTables names a lane's sample table, its type catalog, and the
 // expression its value reads as.
 func laneTables(lane rules.Lane) (table, typeTable, value string) {
 	if lane == rules.LaneMetric {
@@ -500,7 +500,7 @@ func laneTables(lane rules.Lane) (table, typeTable, value string) {
 func seriesNewestSQL(lane rules.Lane, component, typeID, instance string) string {
 	if lane == rules.LaneMetric {
 		// Every series of the key on the component's instance (one per
-		// provenance, source and collecting node), each one probe.
+		// provenance, source and collecting outpost), each one probe.
 		return fmt.Sprintf(`select n.value from metric_series s cross join lateral (%[4]s) n
 		where s.owner_id = %[1]s and s.owner_kind = 'component' and s.metric_type_id = %[2]s and s.instance = %[3]s
 		order by n.ts desc, n.id desc limit 1`, component, typeID, instance, metricNewestSQL("s.id"))
@@ -709,7 +709,7 @@ func (p *PG) endCondition(ctx context.Context, tx pgx.Tx, actorID string, r Even
 func writeRuleEvent(ctx context.Context, tx pgx.Tx, r EventRule, eventType string, comp *Component, instance, alarmID string, s edgeSample) error {
 	// An event rule's event, held to the event type's writer class
 	// (ADR-0161): a rule stored before its fire type was refused at write
-	// still cannot write a node's collection-failed.
+	// still cannot write an outpost's collection-failed.
 	if err := admitWrites(ctx, tx, writeEvent, gatewayWriter(writerclass.EventRule), []keyedWrite{{key: eventType, instance: instance}}); err != nil {
 		return err
 	}
@@ -1117,7 +1117,7 @@ type EventRuleLive struct {
 }
 
 // EventRuleState reads a rule's live state by name. The rule reads like a
-// registry, but its open alarms and streaks name components, so only those on
+// catalog, but its open alarms and streaks name components, so only those on
 // a component the visible component read scope admits are listed.
 func (p *PG) EventRuleState(ctx context.Context, name string, visible scope.Set) (*EventRuleLive, error) {
 	r, err := p.GetEventRule(ctx, name, visible)

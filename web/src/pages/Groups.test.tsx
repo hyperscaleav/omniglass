@@ -4,7 +4,7 @@ import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Groups from "./Groups";
 import { GROUPS_KEY, type Group, type GroupMember } from "../lib/groups";
-import { PRINCIPALS_KEY, ROLES_KEY, type Principal } from "../lib/principals";
+import { USERS_KEY, ROLES_KEY, type User } from "../lib/users";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
@@ -12,9 +12,9 @@ import { uuidFor } from "../lib/testids";
 // group opens the group blade (members drill into the member's user blade), and the
 // per-group caches are seeded so no server is needed. `>` grants every permission.
 const group: Group = { id: uuidFor("g-hd"), name: "help-desk", label: "Help Desk", description: "Support crew", member_count: 1, grant_count: 0 };
-const members: GroupMember[] = [{ principal_id: uuidFor("u-alice"), kind: "human", name: "alice" }];
-const alice: Principal = { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", label: "Alice Ng" }, grants: [], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] };
-const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
+const members: GroupMember[] = [{ user_id: uuidFor("u-alice"), kind: "person", name: "alice" }];
+const alice: User = { id: uuidFor("u-alice"), kind: "person", active: true, person: { username: "alice", email: "alice@example.com", label: "Alice Ng" }, grants: [], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] };
+const me: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
 
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -22,8 +22,8 @@ function mount() {
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd")], group);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "members"], members);
   qc.setQueryData([...GROUPS_KEY, uuidFor("g-hd"), "grants"], []);
-  qc.setQueryData([...PRINCIPALS_KEY], [alice]);
-  qc.setQueryData([...PRINCIPALS_KEY, alice.id], alice); // the drilled user blade fetches getPrincipal by id
+  qc.setQueryData([...USERS_KEY], [alice]);
+  qc.setQueryData([...USERS_KEY, alice.id], alice); // the drilled user blade fetches getUser by id
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...ROLES_KEY], []);
   qc.setQueryData(["locations"], []);
@@ -75,7 +75,7 @@ describe("Groups page", () => {
     });
     // Read mode footer: Delete is always available (not gated by edit); Edit present;
     // but the body has no member Remove and no Save yet.
-    expect(within(blade).getByText("Delete group")).toBeTruthy();
+    expect(within(blade).getByText("Delete user group")).toBeTruthy();
     expect(within(blade).getByLabelText("Edit")).toBeTruthy();
     expect(within(blade).queryByLabelText("Remove")).toBeNull();
     expect(within(blade).queryByText("Save")).toBeNull();
@@ -84,7 +84,7 @@ describe("Groups page", () => {
     expect(within(blade).getByText("Save")).toBeTruthy();
     expect(within(blade).getByText("Cancel")).toBeTruthy();
     expect(within(blade).getAllByLabelText("Remove").length).toBeGreaterThan(0);
-    expect(within(blade).getByText("Delete group")).toBeTruthy(); // still there in edit
+    expect(within(blade).getByText("Delete user group")).toBeTruthy(); // still there in edit
   });
 
   it("stages a member removal in edit mode and Cancel reverts it", async () => {
@@ -117,7 +117,7 @@ describe("Groups page", () => {
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
       if (method === "DELETE") return new Response(null, { status: 204 });
-      if (method === "GET" && url.includes(`/principal-groups/${uuidFor("g-hd")}`)) {
+      if (method === "GET" && url.includes(`/user-groups/${uuidFor("g-hd")}`)) {
         detailRefetched = true;
         return new Response(JSON.stringify({ title: "not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
       }
@@ -130,16 +130,16 @@ describe("Groups page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    fireEvent.click(within(blade).getByText("Delete group"));
+    fireEvent.click(within(blade).getByText("Delete user group"));
     await waitFor(() => expect(asides().length).toBe(0));
     expect(detailRefetched).toBe(false);
   });
 
   it("disables Create and shows an inline error for an invalid group name", async () => {
     mount();
-    fireEvent.click(screen.getByText("New group"));
+    fireEvent.click(screen.getByText("New user group"));
     const name = (await screen.findByPlaceholderText("field-crew")) as HTMLInputElement;
-    const createBtn = () => screen.getByText("Create group").closest("button") as HTMLButtonElement;
+    const createBtn = () => screen.getByText("Create user group").closest("button") as HTMLButtonElement;
     fireEvent.input(name, { target: { value: "Field Crew" } }); // caps + space
     expect(screen.getByText(/space|capital/i)).toBeTruthy();
     expect(createBtn().disabled).toBe(true);
@@ -154,16 +154,16 @@ describe("Groups page", () => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
-      if (method === "POST" && url.includes("/principal-groups")) {
+      if (method === "POST" && url.includes("/user-groups")) {
         return new Response(JSON.stringify(created), { status: 201, headers: { "Content-Type": "application/json" } });
       }
       return new Response(JSON.stringify({ groups: [created] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
     mount();
-    fireEvent.click(screen.getByText("New group"));
+    fireEvent.click(screen.getByText("New user group"));
     const name = (await screen.findByPlaceholderText("field-crew")) as HTMLInputElement;
     fireEvent.input(name, { target: { value: "field-crew" } });
-    fireEvent.click(screen.getByText("Create group"));
+    fireEvent.click(screen.getByText("Create user group"));
     // The new group's blade opens already in edit mode: Save / Cancel and the
     // edit-only member add control are present without clicking Edit.
     const blade = await waitFor(() => {
@@ -211,7 +211,7 @@ describe("Groups page", () => {
 describe("Groups create identity", () => {
   const openCreate = async () => {
     mount();
-    fireEvent.click(screen.getByText("New group"));
+    fireEvent.click(screen.getByText("New user group"));
     const display = (await screen.findByPlaceholderText("Field Crew")) as HTMLInputElement;
     return { display, name: screen.getByPlaceholderText("field-crew") as HTMLInputElement };
   };

@@ -23,8 +23,8 @@ import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
 //
 // An alarm is where fleet health starts, and it impairs its component's own
 // verdict wholesale (#626): any active alarm degrades it, one at an outage
-// severity level (high and above) is an outage. A system role the component fills no longer counts it toward quorum
-// while it is down, so the role can drop below quorum and its impact becomes
+// severity level (high and above) is an outage. A system slot the component fills no longer counts it toward quorum
+// while it is down, so the slot can drop below quorum and its impact becomes
 // the system's verdict.
 //
 // Clearing keeps the row rather than deleting it, so the panel shows recently
@@ -47,7 +47,7 @@ import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
 // would put a triage act behind the guard for a different kind of act.
 
 //
-// Severity is the registry's (#917): the raise form offers its levels, least to
+// Severity is the catalog's (#917): the raise form offers its levels, least to
 // most severe, each saying what it does to this component, and the badges render
 // each level's label and color through SeverityBadge.
 
@@ -69,7 +69,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
 
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
-  // The chosen level, by name. Empty means "the default": the registry's least
+  // The chosen level, by name. Empty means "the default": the catalog's least
   // severe level, so a raise nobody tuned is the mildest one, never an outage.
   const [chosen, setChosen] = createSignal("");
   const severity = () => chosen() || scale().levels[0]?.name || "";
@@ -126,7 +126,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
       </div>
       <p class="text-[11px] text-base-content/50">
         An alarm records a condition on this component and takes its own verdict down (any active alarm degrades it,
-        one at an outage level is an outage). Any role it fills stops counting it toward quorum while it stays down, which is
+        one at an outage level is an outage). Any slot it fills stops counting it toward quorum while it stays down, which is
         how a fault on a box becomes a verdict on a system.
       </p>
       <p class="text-[11px] text-base-content/50">

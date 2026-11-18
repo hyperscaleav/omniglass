@@ -114,7 +114,7 @@ func (r *edgeRig) conditions() int {
 	return count(r.t, r.f.conn, `select count(*) from event_rule_condition c join event_rule e on e.id = c.rule_id where e.name = '`+r.name+`'`)
 }
 
-// editor bootstraps a named principal (root) to act as a rule's editor.
+// editor bootstraps a named user (root) to act as a rule's editor.
 func (r *edgeRig) editor() string {
 	r.t.Helper()
 	zeros := make([]byte, 32)

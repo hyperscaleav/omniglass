@@ -17,6 +17,10 @@ roles:
       # permission is still checked on every route and an install can
       # withhold it with a custom role.
       - "notification:subscribe"
+      # assistant:use is a person's own omnibot conversations (#2113): each
+      # is its owner's alone, so granting it to everyone exposes no one
+      # else's; explicit for the same reason as notification:subscribe.
+      - "assistant:use"
   - id: operator
     label: Operator
     description: >-
@@ -24,21 +28,21 @@ roles:
       endpoint's rejected session, or run its poll now), secrets,
       variables, the property, metric, event, command and notification
       catalogs, issue
-      commands in scope, preview a driver spec through a node, and impair
+      commands in scope, preview a driver spec through an outpost, and impair
       simulated devices.
-      Sees and reveals the device secrets in its scope (never the admin-sensitive
-      platform credentials). Inherits Viewer.
+      Sees, reveals and binds the device secrets in its scope (never the
+      admin-sensitive platform credentials). Inherits Viewer.
     inherits: ["viewer"]
     permissions:
       - "component:create,update,rename,move"
       - "endpoint:create,update,retry,run"
-      # driver:preview runs a spec's polls once through a node against a target
+      # driver:preview runs a spec's polls once through an outpost against a target
       # the caller names, storing nothing (#1163). A poll's request is whatever
       # the spec says, so it reaches the component as a command would: it sits
       # with command:issue, and the secrets it hands over must be ones the
-      # caller may reveal.
+      # caller may bind (secret:bind, #2047).
       - "driver:preview"
-      - "secret:read,reveal,create,update"
+      - "secret:read,reveal,bind,create,update"
       - "variable:create,update"
       - "property_type:create,update"
       - "metric_type:create,update"
@@ -97,13 +101,13 @@ roles:
       - "location:create,update,rename,move"
       - "system:create,update,rename,move"
       - "component:create,update,rename,move"
-      - "secret:read,reveal,create,update"
+      - "secret:read,reveal,bind,create,update"
       - "file:create"
   - id: admin
     label: Administrator
     description: >-
       Manages the fleet, users, roles, and grants: full create, update, and
-      delete on locations, systems, and components, and on principals,
+      delete on locations, systems, and components, and on users,
       credentials, grants, and roles. Deliberately NOT the superuser: it cannot
       grant a role above its own tier, so it cannot make itself owner. Inherits
       Operator.
@@ -114,14 +118,14 @@ roles:
       - "task:*"
       - "system:create,update,delete,rename,move"
       - "location:create,update,delete,rename,move"
-      - "principal:*"
+      - "user:*"
       # read (the Users directory) and purge (the irreversible hard delete) are
-      # admin-sensitive: three-token permissions that principal:* (two tokens)
+      # admin-sensitive: three-token permissions that user:* (two tokens)
       # structurally cannot reach, so only admin (via these explicit grants) and
       # owner (via >) get the directory and the hard delete. Roles and groups gate
       # their directory the same way.
-      - "principal:read:admin"
-      - "principal:purge:admin"
+      - "user:read:admin"
+      - "user:purge:admin"
       # secret:> (not secret:*) so admin reaches the admin-sensitive tier
       # (secret:reveal:admin etc.) a two-token wildcard cannot; an admin-sensitive
       # secret is thus admin/owner-only, while operators hold the two-token actions
@@ -139,10 +143,10 @@ roles:
       # the install-wide floor under them.
       - "platform:*"
       - "settings:read,update"
-      - "principal_grant:*"
-      - "principal_group:*"
-      - "principal_group:read:admin"
-      - "node:*"
+      - "user_grant:*"
+      - "user_group:*"
+      - "user_group:read:admin"
+      - "outpost:*"
       - "role:read:admin"
       - "audit:read:admin"
       - "property_type:*"
@@ -157,7 +161,7 @@ roles:
       # viewer floor and nothing below admin holds it.
       - "notification_target:*"
       - "command:*"
-      # rename moves a registry row's handle (#555): its own action, as on the
+      # rename moves a catalog row's handle (#555): its own action, as on the
       # fleet tiers, because it breaks a script or a bookmark that typed the old
       # name even though every reference inside the platform holds the uuid.
       - "location_type:create,update,delete,rename"
@@ -168,7 +172,7 @@ roles:
       - "product:create,update,delete,rename"
       # standard is the system-side counterpart of product (a Catalog entity with
       # its own property contract), so it carries its own permission rather than
-      # the type-registry one.
+      # the type-catalog one.
       - "standard:create,update,delete,rename"
       - "tag:*"
   - id: owner

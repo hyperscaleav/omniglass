@@ -13,7 +13,7 @@ import (
 // The system property surface: the properties read (every property the system
 // has, declared, calculated, observed or told, each row carrying its
 // want/told/is reconciliation, #1297) and the two writes that set and clear
-// one declared override. The component surface's twin on the system arc, over the
+// one declared value. The component surface's twin on the system arc, over the
 // same owner-generic gateway primitive. Gated by system:read / system:update and
 // scope-injected on the system arc, so an out-of-scope system is a non-disclosing
 // 404 rather than a forbidden.
@@ -34,7 +34,7 @@ type systemPropertyOutput struct {
 	Body systemPropertyBody
 }
 
-// systemPropertyValueBody is the write reply: the stored override, echoed back so
+// systemPropertyValueBody is the write reply: the stored declared value, echoed back so
 // a client that just set a value holds its id without re-reading the list.
 type systemPropertyBody struct {
 	System           string          `json:"system"`
@@ -59,16 +59,17 @@ type setSystemPropertyInput struct {
 }
 
 // registerSystemPropertyRoutes wires the per-system property surface: the
-// effective read and the set/clear of one declared override. The read is gated by
+// effective read and the set/clear of one declared value. The read is gated by
 // system:read and the writes by system:update, each carrying the matching scope so
 // the gateway resolves the system within it.
 func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-properties",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodGet,
 		Path:        "/systems/{name}/properties",
 		Summary:     "List a system's properties and where each stands",
-		Description: "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+		Description: "Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*systemPropertiesOutput, error) {
 		eff, err := gw.EffectiveProperties(ctx, "system", in.Name, a.scopeFor(ctx, "system", "read"))
 		if err != nil {

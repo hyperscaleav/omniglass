@@ -19,7 +19,7 @@ import (
 // A metric sample's ts is whole milliseconds everywhere (#1526), so a raw row
 // and the compacted block that later holds it (int4 millisecond offsets,
 // #1265) agree exactly. The ingest truncates rather than refuses, so a spool
-// replayed from an older node lands; the other lanes keep their timestamps.
+// replayed from an older outpost lands; the other lanes keep their timestamps.
 
 // TestIngestTruncatesAMetricSampleToTheMillisecond: a sample sent with a
 // microsecond ts is stored on its millisecond, its batch lands whole, and the
@@ -180,7 +180,7 @@ const metricMillisecondVersion = "20261106050800"
 // room-temperature series read by a calc rule (its mean) and by an event rule
 // that fires once the temperature has held above 90 for 2 seconds, then
 // clears. The samples are the same instants either way; with noisy each
-// carries the microsecond digits a node's clock would have given it. It
+// carries the microsecond digits an outpost's clock would have given it. It
 // returns what the rules did, as the rows they wrote.
 func millisecondScenario(t *testing.T, noisy bool) []string {
 	r := newEvalRig(t)
@@ -223,7 +223,7 @@ func millisecondScenario(t *testing.T, noisy bool) []string {
 
 // TestRulesJudgeAMillisecondScenarioAsBefore: an event rule
 // and a calc rule read one recorded series twice, once stamped on whole
-// milliseconds and once with the microseconds a node's clock would have left
+// milliseconds and once with the microseconds an outpost's clock would have left
 // on it. They wrote the same rows, and the scenario fired at all (so the
 // comparison is not of two empty runs).
 func TestRulesJudgeAMillisecondScenarioAsBefore(t *testing.T) {

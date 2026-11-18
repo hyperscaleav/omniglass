@@ -64,20 +64,20 @@ func (p *PG) ExportDueNow(ctx context.Context) error {
 	return err
 }
 
-// ExportServicePrincipal creates a service account principal named name and,
-// when group is set, adds it to that group: a non-human member a group
+// ExportMachine creates a machine user user named name and,
+// when group is set, adds it to that group: a machine member a group
 // target's expansion must skip.
-func (p *PG) ExportServicePrincipal(ctx context.Context, name, group string) (string, error) {
+func (p *PG) ExportMachine(ctx context.Context, name, group string) (string, error) {
 	var id string
-	if err := p.pool.QueryRow(ctx, `insert into principal (kind) values ('service') returning id::text`).Scan(&id); err != nil {
+	if err := p.pool.QueryRow(ctx, `insert into users (kind) values ('machine') returning id::text`).Scan(&id); err != nil {
 		return "", err
 	}
-	if _, err := p.pool.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, id, name); err != nil {
+	if _, err := p.pool.Exec(ctx, `insert into machine (user_id, name) values ($1, $2)`, id, name); err != nil {
 		return "", err
 	}
 	if group != "" {
-		if _, err := p.pool.Exec(ctx, `insert into principal_group_member (group_id, principal_id)
-			select id, $2 from principal_group where name = $1`, group, id); err != nil {
+		if _, err := p.pool.Exec(ctx, `insert into user_group_member (group_id, user_id)
+			select id, $2 from user_group where name = $1`, group, id); err != nil {
 			return "", err
 		}
 	}

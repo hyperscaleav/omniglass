@@ -11,12 +11,12 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestPrincipalLifecycle proves the archive -> restore -> purge lifecycle
+// TestUserLifecycle proves the archive -> restore -> purge lifecycle
 // against a real Postgres: archive soft-deletes (hidden from the directory,
 // cannot authenticate, reversible), purge is gated on archival and hard-deletes
 // the row, and a purge preserves the audit trail (the actor's name survives via the
-// denormalized snapshot once the principal id is nulled). Skipped under -short.
-func TestPrincipalLifecycle(t *testing.T) {
+// denormalized snapshot once the user id is nulled). Skipped under -short.
+func TestUserLifecycle(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -36,41 +36,41 @@ func TestPrincipalLifecycle(t *testing.T) {
 	all := scope.Set{All: true}
 
 	pwHash, _ := auth.HashPassword("alice-s3cret")
-	alice, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "alice", PasswordHash: pwHash}, all)
+	alice, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "alice", PasswordHash: pwHash}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
 
 	// Archive: soft-deleted. archived_at set, inactive, hidden from the list,
 	// and cannot authenticate.
-	if err := gw.ArchivePrincipal(ctx, root.ID, alice.ID, all); err != nil {
+	if err := gw.ArchiveUser(ctx, root.ID, alice.ID, all); err != nil {
 		t.Fatalf("archive: %v", err)
 	}
-	got, err := gw.GetPrincipal(ctx, alice.ID, all)
+	got, err := gw.GetUser(ctx, alice.ID, all)
 	if err != nil {
 		t.Fatalf("get archived: %v", err)
 	}
 	if got.ArchivedAt == nil {
-		t.Fatal("archived principal should carry archived_at")
+		t.Fatal("archived user should carry archived_at")
 	}
 	if got.Active {
-		t.Fatal("archived principal should be inactive")
+		t.Fatal("archived user should be inactive")
 	}
 	if _, err := gw.AuthenticatePassword(ctx, "alice", "alice-s3cret"); !errors.Is(err, storage.ErrAccountDisabled) {
 		t.Fatalf("archived auth: want ErrAccountDisabled, got %v", err)
 	}
-	list, err := gw.ListPrincipals(ctx, all, false)
+	list, err := gw.ListUsers(ctx, all, false)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
 	for _, p := range list {
 		if p.ID == alice.ID {
-			t.Fatal("archived principal should be hidden from the default directory")
+			t.Fatal("archived user should be hidden from the default directory")
 		}
 	}
 	// The "show archived" directory (includeArchived) surfaces her, carrying
 	// archived_at, so an admin can re-find her to restore or purge.
-	shown, err := gw.ListPrincipals(ctx, all, true)
+	shown, err := gw.ListUsers(ctx, all, true)
 	if err != nil {
 		t.Fatalf("list include-archived: %v", err)
 	}
@@ -79,28 +79,28 @@ func TestPrincipalLifecycle(t *testing.T) {
 		if p.ID == alice.ID {
 			seen = true
 			if p.ArchivedAt == nil {
-				t.Fatal("shown archived principal should carry archived_at")
+				t.Fatal("shown archived user should carry archived_at")
 			}
 		}
 	}
 	if !seen {
-		t.Fatal("include-archived list should surface the archived principal")
+		t.Fatal("include-archived list should surface the archived user")
 	}
 
-	// Purge is gated: a live (not archived) principal cannot be purged.
-	bob, err := gw.CreateHumanPrincipal(ctx, root.ID, storage.HumanSpec{Username: "bob"}, all)
+	// Purge is gated: a live (not archived) user cannot be purged.
+	bob, err := gw.CreatePerson(ctx, root.ID, storage.PersonSpec{Username: "bob"}, all)
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
-	if err := gw.PurgePrincipal(ctx, root.ID, bob.ID, all); !errors.Is(err, storage.ErrNotArchived) {
+	if err := gw.PurgeUser(ctx, root.ID, bob.ID, all); !errors.Is(err, storage.ErrNotArchived) {
 		t.Fatalf("purge live: want ErrNotArchived, got %v", err)
 	}
 
 	// Restore: restored to active and visible, and can authenticate again.
-	if err := gw.RestorePrincipal(ctx, root.ID, alice.ID, all); err != nil {
+	if err := gw.RestoreUser(ctx, root.ID, alice.ID, all); err != nil {
 		t.Fatalf("restore: %v", err)
 	}
-	got, _ = gw.GetPrincipal(ctx, alice.ID, all)
+	got, _ = gw.GetUser(ctx, alice.ID, all)
 	if got.ArchivedAt != nil || !got.Active {
 		t.Fatalf("restored should be active and clear: active=%v archived=%v", got.Active, got.ArchivedAt)
 	}
@@ -109,7 +109,7 @@ func TestPrincipalLifecycle(t *testing.T) {
 	}
 
 	// The last active owner cannot be archived.
-	if err := gw.ArchivePrincipal(ctx, root.ID, root.ID, all); !errors.Is(err, storage.ErrLastOwner) {
+	if err := gw.ArchiveUser(ctx, root.ID, root.ID, all); !errors.Is(err, storage.ErrLastOwner) {
 		t.Fatalf("archive last owner: want ErrLastOwner, got %v", err)
 	}
 
@@ -118,21 +118,21 @@ func TestPrincipalLifecycle(t *testing.T) {
 	if _, err := gw.CreateGrant(ctx, root.ID, alice.ID, storage.GrantSpec{Role: "owner", ScopeKind: "all"}, all); err != nil {
 		t.Fatalf("grant alice owner: %v", err)
 	}
-	if _, err := gw.CreateHumanPrincipal(ctx, alice.ID, storage.HumanSpec{Username: "carol"}, all); err != nil {
+	if _, err := gw.CreatePerson(ctx, alice.ID, storage.PersonSpec{Username: "carol"}, all); err != nil {
 		t.Fatalf("alice creates carol: %v", err)
 	}
-	if err := gw.ArchivePrincipal(ctx, root.ID, alice.ID, all); err != nil {
+	if err := gw.ArchiveUser(ctx, root.ID, alice.ID, all); err != nil {
 		t.Fatalf("archive alice: %v", err)
 	}
-	if err := gw.PurgePrincipal(ctx, root.ID, alice.ID, all); err != nil {
+	if err := gw.PurgeUser(ctx, root.ID, alice.ID, all); err != nil {
 		t.Fatalf("purge alice: %v", err)
 	}
-	if _, err := gw.GetPrincipal(ctx, alice.ID, all); !errors.Is(err, storage.ErrPrincipalNotFound) {
-		t.Fatalf("purged principal: want ErrPrincipalNotFound, got %v", err)
+	if _, err := gw.GetUser(ctx, alice.ID, all); !errors.Is(err, storage.ErrUserNotFound) {
+		t.Fatalf("purged user: want ErrUserNotFound, got %v", err)
 	}
 
 	// Audit preserved: alice's create-carol action still names "alice" as the actor,
-	// even though her principal row (and its id link) is gone.
+	// even though her user row (and its id link) is gone.
 	entries, err := gw.ListAuditLog(ctx, storage.AuditFilter{Limit: 500})
 	if err != nil {
 		t.Fatalf("list audit: %v", err)
