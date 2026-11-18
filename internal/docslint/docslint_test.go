@@ -748,3 +748,47 @@ func TestADR2037DeclaredValueFires(t *testing.T) {
 		}
 	}
 }
+
+// TestClaudeMdNoPreDeploymentStance enforces that CLAUDE.md no longer carries
+// the "Pre-deployment stance" section. The section was written to remove itself
+// in the PR that ships the first external deployment (issue #2186); its presence
+// after that point is drift that would let agents treat breaking changes as free.
+func TestClaudeMdNoPreDeploymentStance(t *testing.T) {
+	findings, err := ScanClaudeMd()
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	report(t, "claude-md", findings, true)
+}
+
+// TestScanClaudeMdFiresOnHeading pins the scanner: the check fires on the exact
+// heading and not on a line that merely mentions the section by name in prose.
+func TestScanClaudeMdFiresOnHeading(t *testing.T) {
+	fires := func(text string) bool {
+		old := claudeMdPath
+		defer func() { claudeMdPath = old }()
+		f, err := os.CreateTemp(t.TempDir(), "CLAUDE.md")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString(text); err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+		claudeMdPath = f.Name()
+		findings, err := ScanClaudeMd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(findings) > 0
+	}
+	if !fires("## Pre-deployment stance\n\nsome text\n") {
+		t.Error("the exact heading did not fire")
+	}
+	if fires("## Compatibility\n\nOmniglass has an installed base.\n") {
+		t.Error("the replacement heading fired")
+	}
+	if fires("the pre-deployment stance was removed in issue #2186\n") {
+		t.Error("a prose mention of the retired section fired")
+	}
+}
