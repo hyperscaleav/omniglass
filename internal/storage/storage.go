@@ -1412,13 +1412,15 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 func (p *PG) PoolSize() int { return int(p.pool.Config().MaxConns) }
 
 // PoolStat is the gateway pool at a moment (#1627): its connections in use,
-// idle and open against its most, and its running totals of acquires that
-// found it exhausted and the time they waited.
+// idle and open against its most, and its running totals of acquires, of the
+// acquires that found it exhausted and of the time they waited. The acquires
+// are the denominator the waits are a share of (#1980).
 type PoolStat struct {
 	Acquired          int
 	Idle              int
 	Total             int
 	Max               int
+	AcquireCount      int64
 	EmptyAcquireCount int64
 	EmptyAcquireWait  time.Duration
 }
@@ -1431,6 +1433,7 @@ func (p *PG) PoolStat() PoolStat {
 		Idle:              int(s.IdleConns()),
 		Total:             int(s.TotalConns()),
 		Max:               int(s.MaxConns()),
+		AcquireCount:      s.AcquireCount(),
 		EmptyAcquireCount: s.EmptyAcquireCount(),
 		EmptyAcquireWait:  s.EmptyAcquireWaitTime(),
 	}
