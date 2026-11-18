@@ -235,7 +235,7 @@ jobs:
             fi
           fi
           summary=""; [ -f "${RUNNER_TEMP}/agent-summary.md" ] && summary=$(head -c 4000 "${RUNNER_TEMP}/agent-summary.md")
-          if [ "$state" = failed ]; then summary="${summary:+${summary}$'\n\n'}Comment \`@claude\` on this PR to retry."; fi
+          if [ "$state" = failed ]; then summary="${summary:+${summary}$'\n\n'}Comment \`@hyperscale-agent\` on this PR to retry."; fi
           facts=$(jq -cn --arg run "$RUN_URL" --arg sha "$pushed" --arg state "$state" --arg why "$reason" --arg sum "$summary" \
             '{workflow: "agent-fix", state: $state, run_url: $run, pushed: $sha, reason: $why, summary: $sum}')
           body=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" body)
