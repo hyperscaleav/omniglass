@@ -1,10 +1,6 @@
 ---
 title: Glossary
 description: "The authoritative glossary: every official term in the architecture, defined once."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[Frozen internal reference]

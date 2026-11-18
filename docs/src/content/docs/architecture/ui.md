@@ -1,10 +1,6 @@
 ---
 title: UI
 description: "The operator console: one renderer library in two composition modes, reads through views, and an identity-based information architecture."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 The console is one renderer over the same views the rest of the platform reads. This page is the renderer / page / dashboard model and the information architecture; the stack and the concrete primitives are the [design system](/contributing/design-system/).

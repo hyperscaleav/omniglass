@@ -1,10 +1,6 @@
 ---
 title: Time
 description: "The one primitive that manufactures events from the passage of time, so the rest of the pipeline stays purely event-driven."
-sidebar:
-  badge:
-    text: Design
-    variant: caution
 ---
 
 ::::design[Target design: the time primitive, tracked in #419]

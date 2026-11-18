@@ -1,10 +1,6 @@
 ---
 title: Workers
 description: "One worker machinery over several JetStream consumers, plus the backtest capability and the reconcile loop over declared values."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 :::note[Implementation status]

@@ -1,10 +1,6 @@
 ---
 title: Storage
 description: "How storage works: the Storage Gateway, views by default, per-database isolation, append-only partitioning and tiering, and the on-row lineage pattern."
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 This page describes **how storage works**: the patterns every other leaf's entities land on (scope, audit, retention, lineage), not a per-table column dump.
