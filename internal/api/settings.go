@@ -174,10 +174,9 @@ func resolveOutput(ctx context.Context, svc *settings.Service) (*settingsReadOut
 	return out, nil
 }
 
-// mapMailSecretErr maps a notification settings patch refused for the mail
-// relay's secret (#1317): binding one, or moving the relay while one stays
-// bound, by any layer, takes the right to bind it (secret:bind), exactly as
-// binding a secret to a notification target does.
+// mapModelKeyErr maps an assistant settings patch refused for omnibot's model
+// key (#2109): binding one, or moving base_url or the provider while one stays
+// bound, takes the right to bind it (secret:bind), as the mail relay's does.
 func mapModelKeyErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrSecretNotFound):
@@ -190,6 +189,10 @@ func mapModelKeyErr(err error) error {
 	return err
 }
 
+// mapMailSecretErr maps a notification settings patch refused for the mail
+// relay's secret (#1317): binding one, or moving the relay while one stays
+// bound, by any layer, takes the right to bind it (secret:bind), exactly as
+// binding a secret to a notification target does.
 func mapMailSecretErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrSecretNotFound):

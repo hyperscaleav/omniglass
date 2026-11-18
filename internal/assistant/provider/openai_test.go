@@ -123,6 +123,8 @@ func TestOpenAIErrorsNameTheCauseNotTheKey(t *testing.T) {
 		want   string
 	}{
 		{401, `{"error":{"message":"Bad credentials ` + testKey + `"}}`, "refused the key"},
+		// A long message that echoes the key across the cut must not keep its head.
+		{401, `{"error":{"message":"` + strings.Repeat("x", 190) + testKey + `"}}`, "refused the key"},
 		{429, `{"error":{"message":"rate limited"}}`, "rate limit"},
 		{503, `upstream down ` + testKey, "503"},
 		{200, `{"choices":[]}`, "no answer"},
@@ -139,7 +141,7 @@ func TestOpenAIErrorsNameTheCauseNotTheKey(t *testing.T) {
 		if !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%d: %q does not say %q", tc.status, err, tc.want)
 		}
-		if strings.Contains(err.Error(), testKey) {
+		if strings.Contains(err.Error(), testKey[:8]) {
 			t.Errorf("%d: the error carries the key: %q", tc.status, err)
 		}
 	}

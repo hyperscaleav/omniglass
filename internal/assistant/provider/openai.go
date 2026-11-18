@@ -187,11 +187,13 @@ func (p *OpenAI) statusErr(status int, raw []byte) error {
 	}
 	detail := ""
 	if json.Unmarshal(raw, &e) == nil && e.Error.Message != "" {
-		detail = e.Error.Message
+		// Scrub before cutting: a cut through an echoed key would leave its
+		// head where ReplaceAll can no longer see it.
+		detail = p.scrubText(e.Error.Message)
 		if len(detail) > 200 {
-			detail = detail[:200]
+			detail = strings.ToValidUTF8(detail[:200], "")
 		}
-		detail = ": " + p.scrubText(detail)
+		detail = ": " + detail
 	}
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
