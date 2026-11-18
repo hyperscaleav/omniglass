@@ -102,20 +102,6 @@ describe("asking omnibot from the palette", () => {
     expect(withAsk([], "", true)).toEqual([{ label: "Ask omnibot", ask: true }]);
   });
 
-  it("offers to triage each gathered alarm, ahead of the ask row", () => {
-    const tray = [
-      { kind: "alarm", ref: "mic-1/icmp-unreachable" },
-      { kind: "system", ref: "boardroom" },
-    ];
-    expect(withAsk([], "", true, tray)).toEqual([
-      { label: "Triage alarm mic-1/icmp-unreachable", triage: tray[0] },
-      { label: "Ask omnibot", ask: true },
-    ]);
-    expect(withAsk([], "mic", true, tray).map((r) => r.label)).toEqual(["Triage alarm mic-1/icmp-unreachable", "Ask omnibot: mic"]);
-    expect(withAsk([], "amp", true, tray).map((r) => r.label)).toEqual(["Ask omnibot: amp"]);
-    expect(withAsk([], "", false, tray)).toEqual([]);
-  });
-
   it("is not offered to someone who may not run omnibot", () => {
     expect(withAsk(found, "x", false)).toEqual(found);
   });

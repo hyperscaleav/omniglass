@@ -1,0 +1,28 @@
+# Omnibot reads the page (#2162): every prompt carries the page the person is
+# on as context, shown as a chip above the composer, a reference omnibot looks
+# up and never what the console rendered. The lab's server plays a recording
+# (internal/lab/omnibot-replay.yaml) that reads the meeting 405 video bar and
+# asks to tag it, so every run goes the same way.
+title: Omnibot reads the page
+description: Open omnibot on a system page, see the page it will be handed, and ask about it without pointing at anything.
+steps:
+  - goto: /systems/auditorium
+    caption: A system page. Omnibot can read all of this through its tools, under your grants.
+  - click: 'button[aria-label="Ask omnibot"]'
+    caption: Open omnibot from the top bar.
+  - wait: { selector: '[data-testid=omnibot-page]' }
+    caption: The chip above the prompt is the page omnibot is handed, by its route and the system's name, never what the screen shows. Dismiss it to leave the page out of one prompt.
+    hold: 1500
+  - type: { target: 'textarea[aria-label="Ask omnibot"]', text: tag the meeting 405 video bar AV-0415 }
+    caption: Ask in plain words. The page goes with the prompt.
+  - press: Enter
+    caption: Send it. The prompt shows the page it carried.
+  - wait: { selector: '[data-testid=omnibot-ask]', timeout: 30000 }
+    caption: Omnibot reads the video bar, and asks before it writes the tag.
+    poster: true
+    hold: 2000
+  - click: { role: button, name: Confirm }
+    caption: Confirm it. The call runs as omnibot, on your behalf.
+  - wait: { text: Tagged the meeting 405 video bar as AV-0415., timeout: 30000 }
+    caption: The tag is set, and omnibot reports what it did.
+    hold: 2000

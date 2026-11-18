@@ -17,7 +17,6 @@ import {
 import { useSeverity } from "../lib/severity";
 import { entityLabel } from "../lib/entities";
 import SeverityBadge from "./SeverityBadge";
-import { alarmSubject, stamped } from "../lib/handover";
 import { SnoozeControl, SnoozedBadge } from "./SnoozeButton";
 
 // AlarmsPanel: what is wrong with this component, and what was.
@@ -156,7 +155,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
         <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300">
           <For each={active()}>
             {(a) => (
-              <div class="flex flex-col gap-1.5 px-3 py-2.5" data-subject-kind={stamped(alarmSubject(a))?.kind} data-subject-ref={stamped(alarmSubject(a))?.ref}>
+              <div class="flex flex-col gap-1.5 px-3 py-2.5">
                 <div class="flex flex-wrap items-baseline gap-2">
                   <SeverityBadge name={a.severity} />
                   <span class="min-w-0 flex-1 text-sm text-base-content/85">{a.message || "(no message)"}</span>
@@ -264,7 +263,7 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
           <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-dashed border-base-300">
             <For each={cleared()}>
               {(a) => (
-                <div class="flex flex-col gap-1.5 px-3 py-2" data-subject-kind={stamped(alarmSubject(a))?.kind} data-subject-ref={stamped(alarmSubject(a))?.ref}>
+                <div class="flex flex-col gap-1.5 px-3 py-2">
                   <div class="flex flex-wrap items-baseline gap-2">
                     <span class="flex min-w-0 flex-1 flex-wrap items-baseline gap-2 opacity-70">
                       <SeverityBadge name={a.severity} />
