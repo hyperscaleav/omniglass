@@ -25,7 +25,7 @@ import (
 
 // primaryKeyShaped is what a resource_id may look like without an explicit excuse: a
 // struct's ID field, or the helper that lifts an id out of a row image.
-var primaryKeyShaped = regexp.MustCompile(`\.(ID|PrincipalID)$|^[a-z][A-Za-z0-9]*ID$|^auditImageID\(`)
+var primaryKeyShaped = regexp.MustCompile(`\.(ID|UserID)$|^[a-z][A-Za-z0-9]*ID$|^auditImageID\(`)
 
 // auditKeyAllowed names every resource_id expression that is not primary-key-shaped
 // but is correct anyway, with the reason. An entry is a claim somebody made on
@@ -33,7 +33,7 @@ var primaryKeyShaped = regexp.MustCompile(`\.(ID|PrincipalID)$|^[a-z][A-Za-z0-9]
 var auditKeyAllowed = map[string]string{
 	"namespace":        "settings is keyed by namespace: there is no surrogate id to use instead",
 	"uid":              "the row's uuid, resolved by the caller before the delete",
-	"pid":              "the principal uuid, resolved by the caller",
+	"pid":              "the user uuid, resolved by the caller",
 	"gid":              "the grant uuid returned by the insert",
 	`fmt.Sprintf("%d"`: "command's primary key is a bigint, not a uuid",
 	`""`:               "the settings delete-all leg addresses no single row",

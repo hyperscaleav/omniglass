@@ -7,6 +7,7 @@ import { verdictHue } from "../lib/health";
 import type { MemberContext } from "../lib/detail";
 import { CircleDashed, resolveIcon } from "./icons";
 import Eyebrow from "./Eyebrow";
+import { stamped } from "../lib/handover";
 
 // The room, top-down (#791, ADR-0128): the standard's declared positions
 // rendered at their normalized coordinates, each marker the join of "where
@@ -16,9 +17,9 @@ import Eyebrow from "./Eyebrow";
 //
 // A marker reads like its component's row (#1074): the type's icon in its own
 // verdict's hue, the label under it, read through the same member context the
-// rows use, so the map and the rows never disagree. The detail (role,
+// rows use, so the map and the rows never disagree. The detail (slot,
 // product, health, the alarm behind a red one) rides a tooltip, never the
-// map itself. An empty position is a dashed ring named for its role.
+// map itself. An empty position is a dashed ring named for its slot.
 
 // How a marker hangs off its point: the icon's centre sits on the point (the
 // offsets are half the 18px icon plus the marker's px-1 / py-0.5 padding), and
@@ -65,14 +66,14 @@ export default function SystemMap(props: {
     ro.observe(mapEl);
     onCleanup(() => ro.disconnect());
   });
-  // The position number renders only when the role declares more than one
+  // The position number renders only when the slot declares more than one
   // position: "Room Microphone 2", but never "Display 1".
-  const roleOf = (m: MapMarker) => {
-    const many = props.markers.filter((o) => o.role === m.role).length > 1;
-    return `${m.roleLabel}${many ? ` ${m.position}` : ""}`;
+  const slotOf = (m: MapMarker) => {
+    const many = props.markers.filter((o) => o.slot === m.slot).length > 1;
+    return `${m.slotLabel}${many ? ` ${m.position}` : ""}`;
   };
   const labelOf = (m: MapMarker) =>
-    m.occupant ? (props.member?.label(m.occupant.componentId, m.occupant.name) ?? m.occupant.name) : roleOf(m);
+    m.occupant ? (props.member?.label(m.occupant.componentId, m.occupant.name) ?? m.occupant.name) : slotOf(m);
   const placements = createMemo(() =>
     layoutMarkers(
       props.markers.map((m) => ({ x: m.x, y: m.y, text: labelOf(m) })),
@@ -83,7 +84,7 @@ export default function SystemMap(props: {
     <div class="flex flex-col gap-2 p-4">
       <Eyebrow
         label="Map"
-        hint="The standard declares where each role position sits in the room; every system built to it renders the same map. Each marker is the component holding that position, its icon in its own health colour; a dashed ring is a position nobody staffed. Hover or focus a marker for its role and health; click it to open the component."
+        hint="The standard declares where each slot position sits in the room; every system built to it renders the same map. Each marker is the component holding that position, its icon in its own health colour; a dashed ring is a position nobody staffed. Hover or focus a marker for its slot and health; click it to open the component."
       />
       <div
         ref={mapEl}
@@ -97,32 +98,32 @@ export default function SystemMap(props: {
             and close an open tooltip every few seconds). */}
         <Index each={props.markers}>
           {(m, i) => {
-            const role = () => roleOf(m());
+            const slot = () => slotOf(m());
             const placed = () => placements()[i];
             const place = () => {
               const a = placed().anchor;
               return `absolute flex gap-0.5 ${MARKER} ${ANCHOR_X[a.x]} ${ANCHOR_Y[a.y]}`;
             };
             const at = () => ({ left: `${m().x * 100}%`, top: `${m().y * 100}%` });
-            const testid = () => `mapmarker-${m().role}-${m().position}`;
+            const testid = () => `mapmarker-${m().slot}-${m().position}`;
             return (
               <Show
                 when={m().occupant}
                 fallback={
                   <Tooltip openDelay={150} closeDelay={100} placement="top" gutter={4}>
-                    <Tooltip.Trigger as="span" tabIndex={0} data-testid={testid()} data-empty aria-label={role()} class={`${place()} cursor-default`} style={at()}>
+                    <Tooltip.Trigger as="span" tabIndex={0} data-testid={testid()} data-empty aria-label={slot()} class={`${place()} cursor-default`} style={at()}>
                       <span data-glyph class={`inline-flex ${verdictHue(null)}`}>
                         <CircleDashed size={18} />
                       </span>
                       <Show when={placed().label}>
                         {(b) => (
-                          <span data-maplabel data-label-box={box(b())} class="line-clamp-2 w-max max-w-28 text-balance text-[11px] leading-tight text-base-content/50">{role()}</span>
+                          <span data-maplabel data-label-box={box(b())} class="line-clamp-2 w-max max-w-28 text-balance text-[11px] leading-tight text-base-content/50">{slot()}</span>
                         )}
                       </Show>
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content class="z-100 max-w-56 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs leading-snug shadow-lg">
-                        {role()}: nobody staffs this position.
+                        {slot()}: nobody staffs this position.
                       </Tooltip.Content>
                     </Tooltip.Portal>
                   </Tooltip>
@@ -140,7 +141,9 @@ export default function SystemMap(props: {
                       <Tooltip.Trigger
                         type="button"
                         data-testid={testid()}
-                        aria-label={`${label()}, ${role()}, ${health()}`}
+                        data-subject-kind={stamped({ kind: "component", ref: occ().name })?.kind}
+                        data-subject-ref={stamped({ kind: "component", ref: occ().name })?.ref}
+                        aria-label={`${label()}, ${slot()}, ${health()}`}
                         class={`${place()} cursor-pointer hover:bg-base-content/10`}
                         style={at()}
                         onClick={() => (props.onOpen ? props.onOpen(id()) : navigate(`/components/${id()}`))}
@@ -160,7 +163,7 @@ export default function SystemMap(props: {
                           class="z-100 flex max-w-64 flex-col gap-0.5 rounded-box border border-base-300 bg-base-100 px-2.5 py-1.5 text-xs leading-snug shadow-lg"
                         >
                           <span class="font-medium">{label()}</span>
-                          <span class="text-base-content/70">{role()}</span>
+                          <span class="text-base-content/70">{slot()}</span>
                           <Show when={product()}>
                             <span class="text-base-content/70">{product()}</span>
                           </Show>

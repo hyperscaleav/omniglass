@@ -5,7 +5,7 @@ import InfoTip from "./InfoTip";
 
 // ruleHref is where a rule opens: the Rules page, its blade open (#951). The
 // ref is the rule's name or its uuid; the Rules page resolves either.
-export const ruleHref = (ref: string) => `/rules?rule=${encodeURIComponent(ref)}`;
+export const ruleHref = (ref: string) => `/event-rules?rule=${encodeURIComponent(ref)}`;
 
 // RuleLink names the event rule an occurrence belongs to ("by rule
 // reachability-lost"), so an event a rule derived on Activity leads back to

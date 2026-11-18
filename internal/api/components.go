@@ -162,7 +162,7 @@ const ErrSystemBindNeedsUpdate = "creating a component into a system writes that
 // in the update scope alone, so a system outside it came back as the
 // non-disclosing "system not found" (422), which a caller that had just read
 // that system on the same screen could only read as a broken platform. A
-// principal with a location-scoped deploy grant is exactly that caller: the
+// user with a location-scoped deploy grant is exactly that caller: the
 // cross-tier expansion is unbuilt (#10), so its system:update scope is empty
 // while its viewer floor reads every system in the fleet.
 //
@@ -233,7 +233,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/components",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a component",
-		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.",
+		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped component:create grant; a root with no location needs the all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.",
 	}, "component", "create"), "system", "update"), func(ctx context.Context, in *createComponentInput) (*componentOutput, error) {
 		if in.Body.Product == nil || *in.Body.Product == "" {
 			return nil, huma.Error422UnprocessableEntity(errProductRequired)
@@ -262,6 +262,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "update-component",
+		Extensions:  mcpExposed(),
 		Method:      http.MethodPatch,
 		Path:        "/components/{name}",
 		Summary:     "Update a component",
@@ -285,7 +286,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPost,
 		Path:        "/components/{name}:move",
 		Summary:     "Move a component",
-		Description: "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).",
+		Description: "Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).",
 	}, "component", "move"), func(ctx context.Context, in *moveComponentInput) (*componentOutput, error) {
 		if in.Body.Location == nil && in.Body.Parent == nil {
 			return nil, huma.Error422UnprocessableEntity("move requires at least one of location or parent")
@@ -375,7 +376,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/components/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a component",
-		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
+		Description:   "Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.",
 	}, "component", "delete"), func(ctx context.Context, in *componentPathInput) (*struct{}, error) {
 		if err := gw.DeleteComponent(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "delete")); err != nil {
@@ -436,7 +437,7 @@ func mapComponentErr(err error) error {
 	case errors.Is(err, storage.ErrComponentHasEndpoints):
 		return huma.Error409Conflict(componentEndpointsMessage(err))
 	case errors.Is(err, storage.ErrReferenced):
-		return huma.Error409Conflict("component is still referenced by another record, for example a system role it staffs")
+		return huma.Error409Conflict("component is still referenced by another record, for example a system slot it staffs")
 	case errors.Is(err, storage.ErrComponentExists):
 		return huma.Error409Conflict("component name already exists")
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
@@ -459,7 +460,7 @@ func mapComponentErr(err error) error {
 	case errors.Is(err, storage.ErrProductNotFound):
 		return huma.Error422UnprocessableEntity("product not found")
 	case errors.Is(err, storage.ErrComponentTypeNoStem):
-		return errNoGeneratedName("this product's component_type has no stem to generate a name from; supply a name explicitly, or fix the component_type registry")
+		return errNoGeneratedName("this product's component_type has no stem to generate a name from; supply a name explicitly, or fix the component_type catalog")
 	default:
 		return huma.Error500InternalServerError("component operation failed")
 	}

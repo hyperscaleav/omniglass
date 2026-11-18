@@ -7,7 +7,7 @@ import ConfigVars from '../../../components/ConfigVars.astro';
 
 Omniglass ships as a single container image. The operator console is compiled
 into the binary (`-tags web` plus `go:embed`), so one image is the whole app:
-every run mode (`server`, `node run`, `migrate`, `bootstrap`, `token`) is the same
+every run mode (`server`, `outpost run`, `migrate`, `bootstrap`, `token`) is the same
 binary with a different first argument. The final image is distroless and runs
 as an unprivileged user; the binary is statically linked (CGO disabled), so the
 image is a few tens of megabytes with no shell or libc.
@@ -77,10 +77,10 @@ exist without appearing here:
 A listen address may name port 0, and the server then reports the port it got through its
 ready file ([a server on ports it picks](/guides/cli/#a-server-on-ports-it-picks)).
 
-The node process reads its own small set (the CLI-scope variables surface through the
+The outpost process reads its own small set (the CLI-scope variables surface through the
 [CLI reference](/reference/cli/) instead):
 
-<ConfigVars scope="node" />
+<ConfigVars scope="outpost" />
 
 ## Running it
 

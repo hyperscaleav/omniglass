@@ -107,7 +107,7 @@ on a host the architect provisions once, and the session works in the machine's 
 clone of the repo. The worker has to be up, with the bridge connected, when the Routine
 fires; a day it is not is a day the autopilot does not wake.
 
-The worker needs, beyond Go, Node, and Docker: an authenticated `gh` with the `gh image`
+The worker needs, beyond Go, Outpost, and Docker: an authenticated `gh` with the `gh image`
 extension (a bridge session reaches GitHub through `gh`, not the cloud sandbox's MCP
 tools), the `d2` binary for any docs diagram, and the Playwright Chromium
 (`cd web && npx playwright install chromium`).

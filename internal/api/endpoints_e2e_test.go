@@ -106,7 +106,7 @@ func TestEndpointAPI(t *testing.T) {
 	// A driver-attached endpoint's connection inputs edit in place (#1061
 	// ruling): its port moves its derived target; a value the driver refuses
 	// is a 400 naming the field; the viewer floor is refused.
-	nvp := "newtron-nvp"
+	nvp := "newtron-panel-nvp"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-d"}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestEndpointAPI(t *testing.T) {
 	// the offered key itself is trusted.
 	sshEp := createEndpoint(c, ownerTok, map[string]any{"transport": "ssh", "component": "comp-d", "params": map[string]any{"target": "10.0.0.7:22"}})
 	shown, offeredNow := "SHA256:"+strings.Repeat("S", 43), "SHA256:"+strings.Repeat("N", 43)
-	if err := gw.InsertPropertySamples(ctx, storage.NodeWriter("comp-d", sshEp.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
+	if err := gw.InsertPropertySamples(ctx, storage.OutpostWriter("comp-d", sshEp.Name), []storage.PropertySampleWrite{{OwnerKind: "component", OwnerID: "comp-d", Key: "endpoint-rejection",
 		Instance: sshEp.Name, Value: "responsive host-key 9f86d081 SHA256:" + strings.Repeat("P", 43) + " " + offeredNow, Source: "ssh", TS: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ type endpointResp struct {
 	Name      string  `json:"name"`
 	Type      string  `json:"transport"`
 	Component *string `json:"component"`
-	Node      *string `json:"node"`
+	Outpost   *string `json:"outpost"`
 }
 
 func createEndpoint(c *apiClient, tok string, body map[string]any) endpointResp {

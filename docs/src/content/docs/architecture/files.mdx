@@ -1,10 +1,6 @@
 ---
 title: Files and blobs
 description: A searchable file handle over a content-addressed blob store, behind the Storage Gateway.
-sidebar:
-  badge:
-    text: Partial
-    variant: note
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -31,11 +27,11 @@ store, behind the same Storage Gateway as everything else.
 - **the blob store** holds the **bytes**, **content-addressed by `sha256`**: the hash is the key,
   so identical bytes are one blob.
 
-Splitting them means search and inventory never touch bytes, and one blob can back many handles.
+Splitting them means search and listing never touch bytes, and one blob can back many handles.
 
 :::design[Tags on files, tracked in #191]
-`file` tags will reuse the `tag` **key** registry (so `category` means the same thing on a firmware
-image as on a component, [config and credentials](/architecture/variables/)) but bind as a **flat
+`file` tags will reuse the `tag` **key** catalog (so `category` means the same thing on a firmware
+image as on a component, [variables, secrets, and declared values](/architecture/variables/)) but bind as a **flat
 per-file set**: a file is not on the structural exclusive-arc, so there is no parent to cascade
 from. The vocabulary is shared; the cascade is not.
 :::
@@ -62,7 +58,7 @@ so the viewer floor (`*:read`) reads ordinary files; only the flag fences the co
 :::design[The resource-classification and clearance lattice, tracked in #243]
 When the [resource-classification + clearance](https://github.com/hyperscaleav/omniglass/issues/243)
 lattice lands, it subsumes this binary flag (a 2-rung case of it) across files and secrets alike;
-the external-principal class it introduces is what will keep an outside integrator from ever seeing
+the external-user class it introduces is what will keep an outside integrator from ever seeing
 an internal file.
 :::
 

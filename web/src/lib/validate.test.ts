@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { handleError, emailError, passwordError, isPasswordPolicyMessage, MIN_PASSWORD_LENGTH } from "./validate";
 
 // The inline rules mirror the server's Huma pattern/format (see the API validation
-// test in internal/api/principals_validation_test.go): a handle is a lowercase
+// test in internal/api/users_validation_test.go): a handle is a lowercase
 // username or group name, an email must look like one. Empty is not a format error
 // (a separate `required` check owns emptiness), so both return null for "".
 describe("handleError", () => {

@@ -65,19 +65,19 @@ func declaredKeys(t *testing.T) []string {
 }
 
 // TestEveryKeyRuled is #1080's guard: every key this package declares is ruled
-// for the push lane exactly once, node-only (refused) or pushable with the
+// for the push lane exactly once, outpost-only (refused) or pushable with the
 // reason a push may write it. A key added without a ruling fails here, rather
 // than shipping pushable by omission.
 func TestEveryKeyRuled(t *testing.T) {
 	declared := declaredKeys(t)
 	for _, key := range declared {
-		only := slices.Contains(nodeOnly, key)
+		only := slices.Contains(outpostOnly, key)
 		_, push := pushable[key]
 		switch {
 		case only && push:
-			t.Errorf("%s is ruled both node-only and pushable; pick one", key)
+			t.Errorf("%s is ruled both outpost-only and pushable; pick one", key)
 		case !only && !push:
-			t.Errorf("%s is declared but not ruled: add it to nodeOnly (the push lane refuses it), "+
+			t.Errorf("%s is declared but not ruled: add it to outpostOnly (the push lane refuses it), "+
 				"or to pushable with the one-line reason a push may write it", key)
 		}
 	}
@@ -91,8 +91,8 @@ func TestEveryKeyRuled(t *testing.T) {
 			t.Errorf("%s is ruled but no constant declares it", key)
 		}
 	}
-	if sorted := slices.Sorted(slices.Values(nodeOnly)); len(slices.Compact(sorted)) != len(nodeOnly) {
-		t.Errorf("nodeOnly lists a key twice: %v", nodeOnly)
+	if sorted := slices.Sorted(slices.Values(outpostOnly)); len(slices.Compact(sorted)) != len(outpostOnly) {
+		t.Errorf("outpostOnly lists a key twice: %v", outpostOnly)
 	}
 }
 
@@ -112,47 +112,47 @@ func TestNative(t *testing.T) {
 	}
 }
 
-// IsNodeOnly is the push lane's refusal: every node-only key, under any casing
+// IsOutpostOnly is the push lane's refusal: every outpost-only key, under any casing
 // or surrounding space, and nothing pushable or foreign.
-func TestIsNodeOnly(t *testing.T) {
-	for _, key := range nodeOnly {
+func TestIsOutpostOnly(t *testing.T) {
+	for _, key := range outpostOnly {
 		for _, variant := range []string{key, strings.ToUpper(key), " " + key, key + "\t"} {
-			if !IsNodeOnly(variant) {
-				t.Errorf("IsNodeOnly(%q) = false, want true", variant)
+			if !IsOutpostOnly(variant) {
+				t.Errorf("IsOutpostOnly(%q) = false, want true", variant)
 			}
 		}
 	}
 	for key := range pushable {
-		if IsNodeOnly(key) {
-			t.Errorf("IsNodeOnly(%q) = true for a pushable key", key)
+		if IsOutpostOnly(key) {
+			t.Errorf("IsOutpostOnly(%q) = true for a pushable key", key)
 		}
 	}
 	for _, foreign := range []string{"uptime", "video-input", "", "tcp", "tcp-open-x"} {
-		if IsNodeOnly(foreign) {
-			t.Errorf("IsNodeOnly(%q) = true, want false", foreign)
+		if IsOutpostOnly(foreign) {
+			t.Errorf("IsOutpostOnly(%q) = true, want false", foreign)
 		}
 	}
 }
 
-// The tls keys (#1035) are the node's alone: its pin steers what it attempts,
+// The tls keys (#1035) are the outpost's alone: its pin steers what it attempts,
 // as the ssh host key does, and its handshake timing and certificate facts are
-// observations only the probing node makes.
-func TestTheTLSKeysAreNodeOnly(t *testing.T) {
+// observations only the probing outpost makes.
+func TestTheTLSKeysAreOutpostOnly(t *testing.T) {
 	for _, key := range []string{TLSCertificate, TLSHandshakeTime, TLSCertificateExpiry, TLSCertificateDaysLeft} {
-		if !IsNodeOnly(key) {
+		if !IsOutpostOnly(key) {
 			t.Errorf("%s is pushable", key)
 		}
 	}
 }
 
-// The collection telemetry keys (#1369) are the node's account of its own
+// The collection telemetry keys (#1369) are the outpost's account of its own
 // collection: how long its polls took, how many failed, and how many pushed
-// messages its listeners did or did not claim. Only the collecting node
+// messages its listeners did or did not claim. Only the collecting outpost
 // observes them, so a push may not forge them.
-func TestTheCollectionTelemetryKeysAreNodeOnly(t *testing.T) {
+func TestTheCollectionTelemetryKeysAreOutpostOnly(t *testing.T) {
 	for _, key := range []string{PollDuration, PollFailureCount, PushMessageCount, PushUnclaimedCount} {
-		if !IsNodeOnly(key) {
-			t.Errorf("IsNodeOnly(%q) = false: a push could forge the node's account of its own collection", key)
+		if !IsOutpostOnly(key) {
+			t.Errorf("IsOutpostOnly(%q) = false: a push could forge the outpost's account of its own collection", key)
 		}
 	}
 }

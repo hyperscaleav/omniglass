@@ -111,7 +111,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// could not be authoritative, and an insert-if-absent seed can add a shipped
 	// value but never remove one. Owning the rows is what lets the boot rewrite
 	// them, and an operator loses nothing by it: their edit forks into
-	// registry_shadow and resolves over the row (ADR-0095). Read together with
+	// catalog_shadow and resolves over the row (ADR-0095). Read together with
 	// the count above, it also says no operator row leaked into the shipped set.
 	var typeCount, officialTypes int
 	if err := conn.QueryRow(ctx, `select count(*) from location_type`).Scan(&typeCount); err != nil {
@@ -126,7 +126,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if officialTypes != len(facts.LocationTypes) {
 		t.Errorf("official location_types = %d, want %d (the platform owns every location type it ships, #703)", officialTypes, len(facts.LocationTypes))
 	}
-	// The registry lists alphabetically by label; the DB agrees with the YAML
+	// The catalog lists alphabetically by label; the DB agrees with the YAML
 	// on who comes first.
 	wantTop := ""
 	for _, lt := range facts.LocationTypes {

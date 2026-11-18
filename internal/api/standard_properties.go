@@ -125,7 +125,7 @@ func registerStandardPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 // mapStandardPropertyErr translates the contract storage sentinels into HTTP
 // status, mirroring the product contract: a property the catalog does not know is
 // a 422 (the request names a property that does not exist), everything else falls
-// through to the shared type-registry mapping, where the standard is the type:
+// through to the shared type-catalog mapping, where the standard is the type:
 // not-found 404, official read-only 422.
 func mapStandardPropertyErr(err error) error {
 	if errors.Is(err, storage.ErrPropertyTypeNotFound) {

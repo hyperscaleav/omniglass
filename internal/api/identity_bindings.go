@@ -47,7 +47,7 @@ type putIdentityBindingInput struct {
 	Key   string `path:"key" doc:"The match key, a registered property type" example:"ucc-room-id"`
 	Value string `path:"value" minLength:"1" maxLength:"256" doc:"The identity value the conduit reports, 1 to 256 characters" example:"room-17c-415a"`
 	Body  struct {
-		OwnerKind string `json:"owner_kind" enum:"component,system" doc:"What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here"`
+		OwnerKind string `json:"owner_kind" enum:"component,system" doc:"What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here"`
 		Owner     string `json:"owner" minLength:"1" doc:"Name or uuid of the owner the identity's values land on, or a dotted address" example:"hq.west.level-2.boardroom-a.$sys.av"`
 	}
 }
@@ -118,7 +118,7 @@ func registerIdentityBindingRoutes(api huma.API, a *authenticator, gw storage.Ga
 		Method:      http.MethodPut,
 		Path:        "/components/{name}/identity-bindings/{key}/{value}",
 		Summary:     "Bind an identity a conduit reports to its owner",
-		Description: "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.",
+		Description: "Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or an outpost owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.",
 	}, "component", "update"), "system", "update"), func(ctx context.Context, in *putIdentityBindingInput) (*identityBindingOutput, error) {
 		if in.Body.OwnerKind == "system" && !a.allows(ctx, "system", "update") {
 			return nil, huma.Error403Forbidden(ErrIdentityOwnerNeedsSystemUpdate)
@@ -177,7 +177,7 @@ func mapIdentityBindingErr(err error) error {
 	case errors.Is(err, storage.ErrIdentityBindingKeyUnregistered):
 		return huma.Error422UnprocessableEntity("the match key is not a registered property type; register it, or use one that is (e.g. ucc-room-id)")
 	case errors.Is(err, storage.ErrIdentityBindingOwnerKind):
-		return huma.Error422UnprocessableEntity("an identity binding's owner is a component or a system; a place or a node owns no observed sample")
+		return huma.Error422UnprocessableEntity("an identity binding's owner is a component or a system; a location or an outpost owns no observed sample")
 	case errors.Is(err, storage.ErrIdentityBindingOwnerIsConduit):
 		return huma.Error422UnprocessableEntity("an identity binding's owner is not its own conduit: a value the conduit reports with no identity already lands on the conduit, so bind the identity to the system or component it names")
 	case errors.Is(err, storage.ErrIdentityBindingValue):

@@ -34,18 +34,18 @@ func newAvatarGW(t *testing.T) (context.Context, storage.Gateway, string) {
 	return ctx, gw, pr.ID
 }
 
-func TestLoadPrincipal_NoAvatarByDefault(t *testing.T) {
+func TestLoadUser_NoAvatarByDefault(t *testing.T) {
 	t.Parallel()
 	ctx, gw, pid := newAvatarGW(t)
-	pr, err := gw.GetPrincipal(ctx, pid, scopeAll())
+	pr, err := gw.GetUser(ctx, pid, scopeAll())
 	if err != nil {
-		t.Fatalf("get principal: %v", err)
+		t.Fatalf("get user: %v", err)
 	}
-	if pr.Human == nil || pr.Human.HasAvatar {
-		t.Errorf("HasAvatar = %v, want false", pr.Human.HasAvatar)
+	if pr.Person == nil || pr.Person.HasAvatar {
+		t.Errorf("HasAvatar = %v, want false", pr.Person.HasAvatar)
 	}
-	if pr.Human.AvatarUpdatedAt != nil {
-		t.Errorf("AvatarUpdatedAt = %v, want nil", pr.Human.AvatarUpdatedAt)
+	if pr.Person.AvatarUpdatedAt != nil {
+		t.Errorf("AvatarUpdatedAt = %v, want nil", pr.Person.AvatarUpdatedAt)
 	}
 }
 
@@ -55,29 +55,29 @@ func TestSetGetClearOwnAvatar(t *testing.T) {
 	if err := gw.SetOwnAvatar(ctx, pid, "AAAA"); err != nil {
 		t.Fatalf("set own: %v", err)
 	}
-	b64, ok, err := gw.GetHumanAvatar(ctx, pid)
+	b64, ok, err := gw.GetPersonAvatar(ctx, pid)
 	if err != nil || !ok || b64 != "AAAA" {
 		t.Fatalf("get = (%q,%v,%v), want (AAAA,true,nil)", b64, ok, err)
 	}
-	pr, _ := gw.GetPrincipal(ctx, pid, scopeAll())
-	if !pr.Human.HasAvatar || pr.Human.AvatarUpdatedAt == nil {
-		t.Errorf("HasAvatar=%v updatedAt=%v, want true/non-nil", pr.Human.HasAvatar, pr.Human.AvatarUpdatedAt)
+	pr, _ := gw.GetUser(ctx, pid, scopeAll())
+	if !pr.Person.HasAvatar || pr.Person.AvatarUpdatedAt == nil {
+		t.Errorf("HasAvatar=%v updatedAt=%v, want true/non-nil", pr.Person.HasAvatar, pr.Person.AvatarUpdatedAt)
 	}
 	if err := gw.ClearOwnAvatar(ctx, pid); err != nil {
 		t.Fatalf("clear: %v", err)
 	}
-	if _, ok, _ := gw.GetHumanAvatar(ctx, pid); ok {
+	if _, ok, _ := gw.GetPersonAvatar(ctx, pid); ok {
 		t.Errorf("ok = true after clear, want false")
 	}
 }
 
-func TestSetPrincipalAvatar_RequiresAllScope(t *testing.T) {
+func TestSetUserAvatar_RequiresAllScope(t *testing.T) {
 	t.Parallel()
 	ctx, gw, pid := newAvatarGW(t)
-	if err := gw.SetPrincipalAvatar(ctx, pid, pid, "AAAA", scope.Set{}); err != storage.ErrPrincipalForbidden {
-		t.Errorf("err = %v, want ErrPrincipalForbidden", err)
+	if err := gw.SetUserAvatar(ctx, pid, pid, "AAAA", scope.Set{}); err != storage.ErrUserForbidden {
+		t.Errorf("err = %v, want ErrUserForbidden", err)
 	}
-	if err := gw.SetPrincipalAvatar(ctx, pid, pid, "AAAA", scope.Set{All: true}); err != nil {
+	if err := gw.SetUserAvatar(ctx, pid, pid, "AAAA", scope.Set{All: true}); err != nil {
 		t.Errorf("admin set with all-scope: %v", err)
 	}
 }

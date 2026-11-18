@@ -23,8 +23,8 @@ const seed: Variable[] = [
   { id: uuidFor("v-below"), name: "room_poll", value_type: "int", owner_kind: "location", owner_name: "room", value: 30 },
 ];
 
-const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const fleetWriter: Me = { principal: { id: "u-est", kind: "human" }, human: { username: "sam" }, permissions: ["variable:*"], grants: [] };
+const owner: Me = { user: { id: "u-root", kind: "person" }, person: { username: "root" }, permissions: [">"], grants: [] };
+const fleetWriter: Me = { user: { id: "u-est", kind: "person" }, person: { username: "sam" }, permissions: ["variable:*"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
@@ -57,7 +57,7 @@ const scopeOptions = () =>
 describe("Variables page platform-tier authority", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("offers the Platform scope to a principal that holds the install-wide permission", async () => {
+  it("offers the Platform scope to a user that holds the install-wide permission", async () => {
     mount(owner);
     expect(await screen.findByText("poll-interval")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /new variable/i }));

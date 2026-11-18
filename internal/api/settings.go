@@ -38,7 +38,7 @@ type settingsNamespaceInput struct {
 // a client-safe /settings/me any authenticated user may read, and admin writes
 // (merge-patch a namespace, restore a namespace, factory reset). Every write acts
 // on the platform scope, the same scope the resolver reads, so all three carry
-// platform:update on top of settings:update: a settings override is install-wide
+// platform:update on top of settings:update: a settings binding is install-wide
 // by definition, never scoped to part of the fleet.
 func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, svc *settings.Service) {
 	huma.Register(api, a.gated(huma.Operation{
@@ -56,7 +56,7 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Method:      http.MethodGet,
 		Path:        "/settings/me",
 		Summary:     "Get the caller's effective settings",
-		Description: "The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
+		Description: "The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.",
 		Middlewares: huma.Middlewares{a.authn},
 	}, func(ctx context.Context, _ *struct{}) (*settingsMeOutput, error) {
 		vals, err := svc.ClientEffective(ctx)
@@ -72,13 +72,13 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		return out, nil
 	})
 
-	huma.Register(api, a.platformGated(a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.platformGated(a.gated(huma.Operation{
 		OperationID: "patch-settings-namespace",
 		Method:      http.MethodPatch,
 		Path:        "/settings/{namespace}",
 		Summary:     "Update a settings namespace",
-		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {\"egress_allow\":null}). Gated by settings:update and platform:update.",
-	}, "settings", "update"), "update"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
+		Description: "Applies an RFC 7386 JSON Merge Patch to the namespace's platform binding; null on a key restores it (for example {\"egress_allow\":null}). Gated by settings:update and platform:update.",
+	}, "settings", "update"), "update"), "secret", "bind"), func(ctx context.Context, in *settingsPatchInput) (*settingsReadOutput, error) {
 		if err := a.requirePlatform(ctx, "update"); err != nil {
 			return nil, err
 		}
@@ -94,15 +94,20 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 			}
 			return nil, err
 		}
+		if in.Namespace == "agent" {
+			if err := a.checkAgentOverrides(ctx, in.Body); err != nil {
+				return nil, err
+			}
+		}
 		// The merge is a single atomic read-modify-write in the Gateway, serialized
 		// against concurrent patches to the same namespace so no update is lost.
 		// The notification namespace's mail relay binds a secret, so its patch
 		// is judged on the settings it results in (#1317).
 		if in.Namespace == "notification" {
-			if _, err := gw.MergePatchNotificationSettings(ctx, actorID(ctx), in.Body, secretUse(ctx, a)); err != nil {
+			if _, err := gw.MergePatchNotificationSettings(ctx, actorID(ctx), in.Body, a.secretBind(ctx)); err != nil {
 				return nil, mapMailSecretErr(err)
 			}
-		} else if _, err := gw.MergePatchSettingOverride(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
+		} else if _, err := gw.MergePatchSettingBinding(ctx, actorID(ctx), "platform", in.Namespace, in.Body); err != nil {
 			return nil, err
 		}
 		return resolveOutput(ctx, svc)
@@ -114,12 +119,12 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Path:          "/settings/{namespace}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Restore a settings namespace to defaults",
-		Description:   "Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
+		Description:   "Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
 	}, "settings", "update"), "update"), func(ctx context.Context, in *settingsNamespaceInput) (*struct{}, error) {
 		if err := a.requirePlatform(ctx, "update"); err != nil {
 			return nil, err
 		}
-		if err := gw.DeleteSettingOverride(ctx, actorID(ctx), "platform", in.Namespace); err != nil {
+		if err := gw.DeleteSettingBinding(ctx, actorID(ctx), "platform", in.Namespace); err != nil {
 			return nil, err
 		}
 		return nil, nil
@@ -131,12 +136,12 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Path:          "/settings:restoreDefaults",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Restore all settings to defaults",
-		Description:   "Removes every platform override (a factory reset). Gated by settings:update and platform:update.",
+		Description:   "Removes every platform binding (a factory reset). Gated by settings:update and platform:update.",
 	}, "settings", "update"), "update"), func(ctx context.Context, _ *struct{}) (*struct{}, error) {
 		if err := a.requirePlatform(ctx, "update"); err != nil {
 			return nil, err
 		}
-		if err := gw.DeleteAllSettingOverrides(ctx, actorID(ctx), "platform"); err != nil {
+		if err := gw.DeleteAllSettingBindings(ctx, actorID(ctx), "platform"); err != nil {
 			return nil, err
 		}
 		return nil, nil
@@ -163,14 +168,14 @@ func resolveOutput(ctx context.Context, svc *settings.Service) (*settingsReadOut
 
 // mapMailSecretErr maps a notification settings patch refused for the mail
 // relay's secret (#1317): binding one, or moving the relay while one stays
-// bound, by any layer, takes the right to reveal it, exactly as binding a
-// secret to a notification target does.
+// bound, by any layer, takes the right to bind it (secret:bind), exactly as
+// binding a secret to a notification target does.
 func mapMailSecretErr(err error) error {
 	switch {
 	case errors.Is(err, storage.ErrSecretNotFound):
 		return huma.Error404NotFound("secret not found")
 	case errors.Is(err, storage.ErrSecretForbidden):
-		return huma.Error403Forbidden("binding the mail relay's secret, or moving the relay while one is bound, takes the right to reveal that secret (secret:reveal)")
+		return huma.Error403Forbidden("binding the mail relay's secret, or moving the relay while one is bound, takes the right to bind that secret (secret:bind)")
 	case errors.Is(err, storage.ErrMailSecretInvalid):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: the mail relay's secret is invalid: "))
 	}

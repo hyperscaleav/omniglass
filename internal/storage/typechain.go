@@ -4,7 +4,7 @@ import "github.com/google/uuid"
 
 // The set-at-a-time type-chain walk (#695, widened by #716).
 //
-// A classification registry's facts inherit outward: a row that states none
+// A classification catalog's facts inherit outward: a row that states none
 // shows its nearest ancestor's (ADR-0095's first-non-null-wins rule). Resolving
 // that per row on a LIST read would be one query per row per level, so this
 // resolves the whole listing in one pass over rows the caller already holds.
@@ -28,7 +28,7 @@ import "github.com/google/uuid"
 // and compares all three facts, which is what makes two walks in one package
 // safe.
 
-// chainNode is the shape both registries reduce to for the walk: the parent to
+// chainNode is the shape both catalogs reduce to for the walk: the parent to
 // climb to, the name this node answers to, and the facts it states itself.
 //
 // A nil fact is INHERITING and an empty string is a value, the same distinction
@@ -43,11 +43,11 @@ type chainNode struct {
 	abbrev   *string
 }
 
-// ChainFact is one inherited fact, resolved over a registry chain.
+// ChainFact is one inherited fact, resolved over a catalog chain.
 type ChainFact struct {
 	// Shown is the value the row displays: its own when it states one, else the
 	// nearest ancestor's. Empty when nothing in the chain states one; the
-	// fallback differs per registry and belongs to whoever draws it.
+	// fallback differs per catalog and belongs to whoever draws it.
 	Shown string
 	// Inherited is the value the row would display if it stated none: the
 	// nearest ANCESTOR's, empty when no ancestor states one. It equals Shown on
@@ -61,7 +61,7 @@ type ChainFact struct {
 	InheritedFrom string
 }
 
-// TypeChainFacts is one registry row's three inherited facts.
+// TypeChainFacts is one catalog row's three inherited facts.
 type TypeChainFacts struct {
 	Stem   ChainFact
 	Icon   ChainFact
@@ -82,7 +82,7 @@ func ComponentTypeChainFacts(types []ComponentType) map[uuid.UUID]TypeChainFacts
 }
 
 // SystemTypeChainFacts is [ComponentTypeChainFacts] for the system_type
-// registry, which nests by the same rule with its own depth bound.
+// catalog, which nests by the same rule with its own depth bound.
 func SystemTypeChainFacts(types []SystemType) map[uuid.UUID]TypeChainFacts {
 	nodes := make(map[uuid.UUID]chainNode, len(types))
 	for i := range types {
@@ -117,7 +117,7 @@ func resolveTypeChains(nodes map[uuid.UUID]chainNode, maxDepth int) map[uuid.UUI
 // the query walks use, so a cycle terminates with an unresolved fact instead of
 // hanging. A parent id naming a row the map does not carry stops the climb the
 // same way a root does; through the API that cannot happen (the listing is the
-// whole registry), and pinning it is what the day somebody filters the list
+// whole catalog), and pinning it is what the day somebody filters the list
 // inherits.
 func resolveChainFact(nodes map[uuid.UUID]chainNode, id uuid.UUID, maxDepth int, pick func(chainNode) *string) ChainFact {
 	var f ChainFact

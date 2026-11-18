@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import type { CreateEventRuleInputBody, CriteriaBody, CriteriaInput, EventRuleBody, EventRuleStateOutputBody, RuleConditionBody, RuleOpenAlarmBody, RuleStreakBody, UpdateEventRuleInputBody } from "../api/api.gen";
+import type { CreateEventRuleInputBody, CriteriaBody, CriteriaInput, EventRuleBody, EventRuleStateOutputBody, RuleFiringBody, RuleOpenAlarmBody, RuleStreakBody, UpdateEventRuleInputBody } from "../api/api.gen";
 import type { SeverityLevel } from "./severity";
 import type { PreviewEventRule } from "./expressions";
 import { rel } from "./format";
@@ -8,10 +8,10 @@ import { entityNameError } from "./names";
 // The event rules data layer (#918, #921; ADR-0144): thin typed wrappers over
 // /event-rules plus the pure core the Rules page reads a rule through. A rule
 // reads one sample key (a property or a metric, whose lane the server derives
-// from the registries), opens an alarm at its severity when a sample meets its
+// from the catalogs), opens an alarm at its severity when a sample meets its
 // fire criteria for the fire sustain, and clears it on its clear criteria (or,
 // absent one, the opposite of the fire criteria) held for the clear sustain.
-// Rules read like a registry: any rule:read lists them all, with live counts
+// Rules read like a catalog: any rule:read lists them all, with live counts
 // over the components the caller may read; writing one takes an all-scope
 // grant. Official rules ship with the platform and are read-only.
 //
@@ -30,7 +30,7 @@ export type RuleLane = EventRule["sample_lane"];
 export type RuleState = EventRuleStateOutputBody;
 export type RuleOpenAlarm = RuleOpenAlarmBody;
 export type RuleStreak = RuleStreakBody;
-export type RuleCondition = RuleConditionBody;
+export type RuleFiring = RuleFiringBody;
 export type CreateEventRule = CreateEventRuleInputBody;
 export type UpdateEventRule = UpdateEventRuleInputBody;
 
@@ -43,10 +43,10 @@ export async function listEventRules(): Promise<EventRule[]> {
   return (data?.event_rules ?? []) as EventRule[];
 }
 
-export async function getRuleState(name: string): Promise<{ conditions: RuleCondition[]; open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
+export async function getRuleState(name: string): Promise<{ firings: RuleFiring[]; open: RuleOpenAlarm[]; pending: RuleStreak[]; last_judged_at?: string }> {
   const { data, error } = await api.GET("/event-rules/{name}/state", { params: { path: { name } } });
   if (error) throw error;
-  return { conditions: data?.conditions ?? [], open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
+  return { firings: data?.firings ?? [], open: data?.open ?? [], pending: data?.pending ?? [], last_judged_at: data?.last_judged_at };
 }
 
 // judgedWords says when a rule last judged an arriving sample (#929): the
@@ -147,7 +147,7 @@ export function criteriaErrorWords(e: NonNullable<EventRule["criteria_error"]>):
 }
 
 // criteriaPhrase is the value half of a criterion: "down", "anything but up",
-// "above 40". A metric's unit rides after its number when the registry names
+// "above 40". A metric's unit rides after its number when the catalog names
 // one; an expression with no short form reads as itself.
 export function criteriaPhrase(c: RuleCriteria, lane: RuleLane, unit?: string): string {
   const sf = shortForm(c);
@@ -219,7 +219,7 @@ export type RuleDraft = {
 
 // defaultSeverity is the most severe level that does NOT take its component
 // out: a new rule degrades until its author decides it is an outage. Judged on
-// the registry's own rank and outage flag, never on a level's name.
+// the catalog's own rank and outage flag, never on a level's name.
 export function defaultSeverity(levels: SeverityLevel[] | undefined): string {
   const sorted = [...(levels ?? [])].sort((a, b) => a.rank - b.rank);
   const degrading = sorted.filter((l) => !l.outage);
@@ -228,9 +228,9 @@ export function defaultSeverity(levels: SeverityLevel[] | undefined): string {
 
 // The official generic event types a rule writes when it needs no semantic
 // type of its own (#948): a new rule starts on them until the form offers the
-// registry (#951).
-export const GENERIC_FIRE_EVENT_TYPE = "condition-started";
-export const GENERIC_CLEAR_EVENT_TYPE = "condition-ended";
+// catalog (#951).
+export const GENERIC_FIRE_EVENT_TYPE = "rule-fired";
+export const GENERIC_CLEAR_EVENT_TYPE = "rule-cleared";
 
 export function emptyDraft(severity = ""): RuleDraft {
   return {
@@ -338,10 +338,10 @@ export function validateDraft(d: RuleDraft, editing?: string): DraftErrors {
   else {
     const f = readValue(d.fireValue, d.lane);
     if (d.fireExpr !== null) {
-      if (!d.fireExpr.trim()) e.fireExpr = "An expression that is true when the condition starts.";
+      if (!d.fireExpr.trim()) e.fireExpr = "An expression that is true when the rule fires.";
     } else if (f.error) e.fireValue = f.error;
     if (d.clearMode === "custom" && d.clearExpr !== null) {
-      if (!d.clearExpr.trim()) e.clearExpr = "An expression that is true when the condition ends.";
+      if (!d.clearExpr.trim()) e.clearExpr = "An expression that is true when it clears.";
     } else if (d.clearMode === "custom") {
       const c = readValue(d.clearValue, d.lane);
       if (c.error) e.clearValue = c.error;
@@ -351,7 +351,7 @@ export function validateDraft(d: RuleDraft, editing?: string): DraftErrors {
   if (fs) e.fireSustain = fs;
   const cs = readDuration(d.clearSustain);
   if (cs) e.clearSustain = cs;
-  if (!d.fireEventType) e.fireEventType = "The event the rule writes when its condition starts.";
+  if (!d.fireEventType) e.fireEventType = "The event the rule writes when it fires.";
   return e;
 }
 

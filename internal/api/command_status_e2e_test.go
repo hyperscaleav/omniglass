@@ -226,7 +226,7 @@ func TestCommandStatusList(t *testing.T) {
 // Reading a command needs command:read, and the component it hangs off is
 // resolved through the caller's read sets: outside the component read it is
 // the non-disclosing 404, inside it but outside command:read the truthful
-// 403, and a principal with no read at all is refused at the gate.
+// 403, and a user with no read at all is refused at the gate.
 func TestCommandStatusScope(t *testing.T) {
 	t.Parallel()
 	r := newCommandStatusRig(t)
@@ -251,13 +251,13 @@ func TestCommandStatusScope(t *testing.T) {
 		}
 	}
 
-	componentOnly := setupScopedPrincipal(t, r.ctx, r.dsn, "component-only",
+	componentOnly := setupScopedUser(t, r.ctx, r.dsn, "component-only",
 		grantSpec{role: "component-reader", scopeKind: "component", scopeID: disp},
 		grantSpec{role: "viewer", scopeKind: "component", scopeID: other})
 	c.do(componentOnly, http.MethodGet, one, nil, http.StatusForbidden)
 	c.do(componentOnly, http.MethodGet, list, nil, http.StatusForbidden)
 
-	none := principalWithGrants(t, r.ctx, r.dsn, "nothing", nil)
+	none := userWithGrants(t, r.ctx, r.dsn, "nothing", nil)
 	c.do(none, http.MethodGet, one, nil, http.StatusForbidden)
 	c.do(none, http.MethodGet, list, nil, http.StatusForbidden)
 }
@@ -310,7 +310,7 @@ func TestCommandIssueWaitIsLimited(t *testing.T) {
 	srv := httptest.NewServer(api.NewHandler(r.gw, api.WithCommandWaitLimits(2, 1)))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: r.ctx, base: srv.URL}
-	second := principalWithGrants(t, r.ctx, r.dsn, "second-op", []grant{{role: "operator", scopeKind: "all"}})
+	second := userWithGrants(t, r.ctx, r.dsn, "second-op", []grant{{role: "operator", scopeKind: "all"}})
 
 	count := func() int {
 		t.Helper()

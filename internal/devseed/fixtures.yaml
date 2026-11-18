@@ -43,7 +43,7 @@
 # root. There is no root location and no "bind this to every location", so a
 # binding at hq covers hq and nothing else, and a fourth site added next year
 # starts uncovered. The install-wide `platform` tier is the only rung that reaches
-# all of them, which is why the seed places devices under two different tops (see
+# all of them, which is why the seed puts devices under two different tops (see
 # components, below): with everything under one top, a binding there would look
 # like it covered the fleet.
 #
@@ -64,13 +64,13 @@ locations:
     label: Headquarters
     type: campus
   # Pinned: the name is a bearing, the label is the building. `west` renders
-  # "West", which is a direction rather than a place.
+  # "West", which is a direction rather than a location.
   - key: west
     name: west
     label: West Building
     type: building
     parent: hq
-  # A floor is named by the operator, like every other place here. It carried
+  # A floor is named by the operator, like every other location here. It carried
   # the fleet's one generated location name for two slices, `1`, under a
   # positional `floor` rule; ADR-0103 reversed that, because a floor's
   # designation is B2, LG, G, M, 12A, and an ordinal cannot spell any of them.
@@ -123,7 +123,7 @@ locations:
 
   # East Campus: a second site.
   #
-  # Pinned for the reason `west` is: a bearing is not a place.
+  # Pinned for the reason `west` is: a bearing is not a location.
   - key: east
     name: east
     label: East Campus
@@ -175,7 +175,7 @@ locations:
 
   # Service Depot: a fourth top of a deliberately DIFFERENT shape. It is a
   # building at the root with rooms hanging straight off it, no campus above and
-  # no floor between, which the seeded type registry allows and the model has
+  # no floor between, which the seeded type catalog allows and the model has
   # never required. Three tops shaped campus -> building -> floor -> room taught
   # a fixed ladder that does not exist, and a fleet canvas read against only
   # that shape would let a fixed-ladder assumption ship green (#630).
@@ -392,7 +392,8 @@ users:
         scope_kind: location
         scope_ref: hq
         scope_op: subtree
-  # A field tech scoped to the East campus, who builds out rooms under it but cannot
+  # A field tech scoped to the East campus, who builds out rooms under it (and creates
+  # and reads the systems and components placed in them, #1498) but cannot
   # touch the campus root itself (exercises subtree_excl_root, on a different site than
   # the viewer, so the seed shows per-site scoping).
   - username: tech-east
@@ -427,8 +428,8 @@ variables:
 # directory and the effective-tags cascade come up populated. `environment` is
 # universal with a tenant-wide default; `category` is narrowed to components;
 # `asset-id` is non-propagating (a flat per-entity label). The scoped binding
-# overrides the platform default for the west building's subtree, so a component
-# under it teaches the override while a component under another top keeps the
+# shadows the platform default for the west building's subtree, so a component
+# under it teaches the shadowing while a component under another top keeps the
 # platform value: the binding stops at its own top.
 tags:
   - name: environment
@@ -555,7 +556,7 @@ components:
     location: boardroom-a
   # The room's rack power conditioner (#1368), a networked Ferrite PDU the
   # simulator answers over SNMP. It classifies as a power-device, a type no
-  # role's accepted_types names, so no role can want it. It is in the room and
+  # slot's accepted_types names, so no slot can want it. It is in the room and
   # accounted for, and nothing more, which is exactly the case membership
   # exists to carry. It is also the one component that keeps a typed label:
   # the operator calls it the power conditioner, not "Power Device 1".
@@ -566,7 +567,7 @@ components:
   # The lab's generic-SNMP device (#1372): an unclassified box on the generic
   # device product, so snmp-generic keeps a simulated device now that every
   # classified product reads through its own driver. It sits in the auditorium
-  # as a member outside the standard's slots (members, below), not in a role.
+  # as a member outside the standard's slots (members, below), not in a slot.
   - key: auditorium-unclassified
     product: generic-device
     location: auditorium
@@ -630,7 +631,7 @@ components:
 
   # The huddle room's bar staffs the video-bar leg of the choice-bearing
   # huddle-room standard (systems, below); the touch panel is in the room and
-  # accounted for, filling no role.
+  # accounted for, filling no slot.
   - key: huddle-bar
     product: kestrel-vroom
     location: huddle
@@ -1175,7 +1176,7 @@ components:
     product: newtron-panel-7
     location: lab
 
-# Property values: two overrides the huddle display declares over its product's
+# Property values: two values the huddle display declares over its product's
 # contract, so the effective-properties panel teaches direct-vs-inherited.
 # `model-number` stays unset and resolves to the product default ("QM55"), and
 # `mac-address` stays unset with no default, showing the other two states.
@@ -1212,7 +1213,7 @@ systems:
 
   # A huddle room on the choice-bearing standard: it is built all-in-one, so
   # the component-build alternate stays unstaffed WITHOUT impairing the room
-  # (#626): a losing alternate's roles contribute nothing.
+  # (#626): a losing alternate's slots contribute nothing.
   - key: huddle-north
     standard: huddle-room
     system_type: huddle
@@ -1231,7 +1232,7 @@ systems:
   # briefing-av below the ONE provisioning exception. The pods keep their other
   # job: the fleet's same-BUCKET same-type siblings, the pair that demonstrates
   # the ordinal the system rule reads (#693): two `class` systems in one room
-  # mint `classroom` and `classroom-2`, rendering "Classroom" and "Classroom 2".
+  # mint `classroom` and `classroom-2`, rendering "Teaching" and "Teaching 2".
   - key: lab-pod-a
     standard: classroom
     system_type: class
@@ -1396,7 +1397,7 @@ systems:
 
 # Membership without a job. The audio rack staffs dsp and amplifier in both
 # halves (below, through assignment), but the power conditioner fills no declared
-# role at all: it is in the room, it is accounted for, and no role wants it. A
+# slot at all: it is in the room, it is accounted for, and no slot wants it. A
 # model that only knew about staffing would lose it. The depot's service stock
 # (the spare bars, mics, and displays racked in the bays) deliberately joins NO
 # system: stock relates to the bay it sits in, not to the bay's signage, so it
@@ -1404,19 +1405,19 @@ systems:
 members:
   - system: boardroom-a
     component: power
-  # One service, two tops. No role wants it, so it is membership and nothing
+  # One service, two tops. No slot wants it, so it is membership and nothing
   # more, which is exactly what the many-valued binding is for.
   - system: auditorium-av
     component: recording-service
   - system: briefing-av
     component: recording-service
-  # In the room and accounted for, filling no role.
+  # In the room and accounted for, filling no slot.
   - system: huddle-north
     component: huddle-touch
   - system: auditorium-av
     component: auditorium-touch
   # The house spare: a ceiling mic racked in the hall, in the room and
-  # accounted for, filling no role.
+  # accounted for, filling no slot.
   - system: auditorium-av
     component: auditorium-mic
   # An unclassified device in the hall: a member, outside the auditorium
@@ -1425,636 +1426,636 @@ members:
     component: auditorium-unclassified
 
 # Staffing, which creates the membership as a side effect. Both boardroom halves
-# are fully staffed (#785: a deployed room fills every role; the one-mic-short
+# are fully staffed (#785: a deployed room fills every slot; the one-mic-short
 # teaching case is briefing-av, below): the ONE audio rack in room A counts
 # toward both halves' dsp and amplifier quorums, and everything else is per-half.
-role_assignments:
+slot_assignments:
   # The divisible pair (#802): each side fully staffed on its own bar,
   # displays, mics, and panels, while the ONE audio rack in room A satisfies
   # BOTH sides' dsp and amplifier slots: the shared-component quorum case,
   # standing where the physically impossible shared video bar used to.
   - system: boardroom-a
-    role: video-bar
+    slot: video-bar
     component: bar-a
   - system: boardroom-a
-    role: main-display
+    slot: main-display
     component: panel-a
   - system: boardroom-a
-    role: main-display
+    slot: main-display
     component: panel-a2
   - system: boardroom-a
-    role: room-mic
+    slot: room-mic
     component: mic-a1
   - system: boardroom-a
-    role: room-mic
+    slot: room-mic
     component: mic-a2
   - system: boardroom-a
-    role: touch-control
+    slot: touch-control
     component: touch-a
   - system: boardroom-a
-    role: scheduling-panel
+    slot: scheduling-panel
     component: sched-a
   - system: boardroom-a
-    role: dsp
+    slot: dsp
     component: div-dsp
   - system: boardroom-a
-    role: amplifier
+    slot: amplifier
     component: div-amp
   - system: boardroom-b
-    role: video-bar
+    slot: video-bar
     component: bar-b
   - system: boardroom-b
-    role: main-display
+    slot: main-display
     component: panel-b
   - system: boardroom-b
-    role: main-display
+    slot: main-display
     component: panel-b2
   - system: boardroom-b
-    role: room-mic
+    slot: room-mic
     component: mic-b1
   - system: boardroom-b
-    role: room-mic
+    slot: room-mic
     component: mic-b2
   - system: boardroom-b
-    role: touch-control
+    slot: touch-control
     component: touch-b
   - system: boardroom-b
-    role: scheduling-panel
+    slot: scheduling-panel
     component: sched-b
   - system: boardroom-b
-    role: dsp
+    slot: dsp
     component: div-dsp
   - system: boardroom-b
-    role: amplifier
+    slot: amplifier
     component: div-amp
   # Huddle North, built all-in-one: the video-bar alternate is staffed and the
   # component build is left alone, so the room reads healthy on one leg.
   - system: huddle-north
-    role: conf-bar
+    slot: conf-bar
     component: huddle-bar
   - system: huddle-north
-    role: main-display
+    slot: main-display
     component: huddle-display
   # The auditorium is fully staffed on its hall-scale chain (#802). The
   # high alarm (below) takes the DSP down, so the hall drops on a real
   # failure in the middle of the signal path.
   - system: auditorium-av
-    role: projection
+    slot: projection
     component: auditorium-projector
   - system: auditorium-av
-    role: confidence-display
+    slot: confidence-display
     component: auditorium-display
   - system: auditorium-av
-    role: stage-mic
+    slot: stage-mic
     component: aud-mic-1
   - system: auditorium-av
-    role: stage-mic
+    slot: stage-mic
     component: aud-mic-2
   - system: auditorium-av
-    role: podium-mic
+    slot: podium-mic
     component: aud-podium
   - system: auditorium-av
-    role: dsp
+    slot: dsp
     component: aud-dsp
   - system: auditorium-av
-    role: amplifier
+    slot: amplifier
     component: aud-amp-1
   - system: auditorium-av
-    role: amplifier
+    slot: amplifier
     component: aud-amp-2
   - system: auditorium-av
-    role: speakers
+    slot: speakers
     component: aud-spk-1
   - system: auditorium-av
-    role: speakers
+    slot: speakers
     component: aud-spk-2
   - system: auditorium-av
-    role: speakers
+    slot: speakers
     component: aud-spk-3
   - system: auditorium-av
-    role: speakers
+    slot: speakers
     component: aud-spk-4
   - system: auditorium-av
-    role: video-switcher
+    slot: video-switcher
     component: aud-sw
   - system: auditorium-av
-    role: control-system
+    slot: control-system
     component: aud-cp
   - system: auditorium-av
-    role: touch-control
+    slot: touch-control
     component: auditorium-touch
   - system: auditorium-av
-    role: camera
+    slot: camera
     component: aud-cam-1
   - system: auditorium-av
-    role: camera
+    slot: camera
     component: aud-cam-2
   # The briefing room is deployed except its scheduling panel, which was never
   # installed: short one commissioning item, not broken.
   - system: briefing-av
-    role: video-bar
+    slot: video-bar
     component: briefing-bar
   - system: briefing-av
-    role: main-display
+    slot: main-display
     component: briefing-display
   - system: briefing-av
-    role: touch-control
+    slot: touch-control
     component: briefing-touch
   # The signage endpoints: panel plus player, deployed.
   - system: bay-1-av
-    role: panel
+    slot: panel
     component: bay-1-display
   - system: bay-1-av
-    role: player
+    slot: player
     component: bay-1-player
 
   # Volume staffing.
   - system: wl3-s1
-    role: video-bar
+    slot: video-bar
     component: wl3-c1a
   - system: wl3-s1
-    role: main-display
+    slot: main-display
     component: wl3-c1d
   - system: wl3-s1
-    role: touch-control
+    slot: touch-control
     component: wl3-c1b
   - system: wl3-s1
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl3-c1s
   - system: wl3-s2
-    role: video-bar
+    slot: video-bar
     component: wl3-c2a
   - system: wl3-s2
-    role: main-display
+    slot: main-display
     component: wl3-c2d
   - system: wl3-s2
-    role: touch-control
+    slot: touch-control
     component: wl3-c2b
   - system: wl3-s2
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl3-c2s
   - system: wl3-s3
-    role: video-bar
+    slot: video-bar
     component: wl3-c3a
   - system: wl3-s3
-    role: main-display
+    slot: main-display
     component: wl3-c3d
   - system: wl3-s3
-    role: touch-control
+    slot: touch-control
     component: wl3-c3b
   - system: wl3-s3
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl3-c3s
   - system: wl3-s4
-    role: video-bar
+    slot: video-bar
     component: wl3-c4a
   - system: wl3-s4
-    role: main-display
+    slot: main-display
     component: wl3-c4d
   - system: wl3-s4
-    role: touch-control
+    slot: touch-control
     component: wl3-c4b
   - system: wl3-s4
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl3-c4s
   - system: wl3-s5
-    role: video-bar
+    slot: video-bar
     component: wl3-c5a
   - system: wl3-s5
-    role: main-display
+    slot: main-display
     component: wl3-c5d
   - system: wl3-s5
-    role: touch-control
+    slot: touch-control
     component: wl3-c5b
   - system: wl3-s5
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl3-c5s
   - system: wl3-s6
-    role: video-bar
+    slot: video-bar
     component: wl3-c6a
   - system: wl3-s6
-    role: main-display
+    slot: main-display
     component: wl3-c6d
   - system: wl3-s6
-    role: touch-control
+    slot: touch-control
     component: wl3-c6b
   - system: wl3-s6
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl3-c6s
   - system: wl4-s1
-    role: video-bar
+    slot: video-bar
     component: wl4-c1a
   - system: wl4-s1
-    role: main-display
+    slot: main-display
     component: wl4-c1d
   - system: wl4-s1
-    role: touch-control
+    slot: touch-control
     component: wl4-c1b
   - system: wl4-s1
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl4-c1s
   - system: wl4-s2
-    role: video-bar
+    slot: video-bar
     component: wl4-c2a
   - system: wl4-s2
-    role: main-display
+    slot: main-display
     component: wl4-c2d
   - system: wl4-s2
-    role: touch-control
+    slot: touch-control
     component: wl4-c2b
   - system: wl4-s2
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl4-c2s
   - system: wl4-s3
-    role: video-bar
+    slot: video-bar
     component: wl4-c3a
   - system: wl4-s3
-    role: main-display
+    slot: main-display
     component: wl4-c3d
   - system: wl4-s3
-    role: touch-control
+    slot: touch-control
     component: wl4-c3b
   - system: wl4-s3
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl4-c3s
   - system: wl4-s4
-    role: video-bar
+    slot: video-bar
     component: wl4-c4a
   - system: wl4-s4
-    role: main-display
+    slot: main-display
     component: wl4-c4d
   - system: wl4-s4
-    role: touch-control
+    slot: touch-control
     component: wl4-c4b
   - system: wl4-s4
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl4-c4s
   - system: wl4-s5
-    role: video-bar
+    slot: video-bar
     component: wl4-c5a
   - system: wl4-s5
-    role: main-display
+    slot: main-display
     component: wl4-c5d
   - system: wl4-s5
-    role: touch-control
+    slot: touch-control
     component: wl4-c5b
   - system: wl4-s5
-    role: scheduling-panel
+    slot: scheduling-panel
     component: wl4-c5s
   - system: pava-s1
-    role: video-bar
+    slot: video-bar
     component: pava-c1a
   - system: pava-s1
-    role: main-display
+    slot: main-display
     component: pava-c1d
   - system: pava-s1
-    role: touch-control
+    slot: touch-control
     component: pava-c1b
   - system: pava-s1
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pava-c1s
   - system: pava-s2
-    role: video-bar
+    slot: video-bar
     component: pava-c2a
   - system: pava-s2
-    role: main-display
+    slot: main-display
     component: pava-c2d
   - system: pava-s2
-    role: touch-control
+    slot: touch-control
     component: pava-c2b
   - system: pava-s2
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pava-c2s
   - system: pava-s3
-    role: video-bar
+    slot: video-bar
     component: pava-c3a
   - system: pava-s3
-    role: main-display
+    slot: main-display
     component: pava-c3d
   - system: pava-s3
-    role: touch-control
+    slot: touch-control
     component: pava-c3b
   - system: pava-s3
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pava-c3s
   - system: pava-s4
-    role: video-bar
+    slot: video-bar
     component: pava-c4a
   - system: pava-s4
-    role: main-display
+    slot: main-display
     component: pava-c4d
   - system: pava-s4
-    role: touch-control
+    slot: touch-control
     component: pava-c4b
   - system: pava-s4
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pava-c4s
   - system: pava-s5
-    role: video-bar
+    slot: video-bar
     component: pava-c5a
   - system: pava-s5
-    role: main-display
+    slot: main-display
     component: pava-c5d
   - system: pava-s5
-    role: touch-control
+    slot: touch-control
     component: pava-c5b
   - system: pava-s5
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pava-c5s
   - system: pavb-s1
-    role: video-bar
+    slot: video-bar
     component: pavb-c1a
   - system: pavb-s1
-    role: main-display
+    slot: main-display
     component: pavb-c1d
   - system: pavb-s1
-    role: touch-control
+    slot: touch-control
     component: pavb-c1b
   - system: pavb-s1
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pavb-c1s
   - system: pavb-s2
-    role: video-bar
+    slot: video-bar
     component: pavb-c2a
   - system: pavb-s2
-    role: main-display
+    slot: main-display
     component: pavb-c2d
   - system: pavb-s2
-    role: touch-control
+    slot: touch-control
     component: pavb-c2b
   - system: pavb-s2
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pavb-c2s
   - system: pavb-s3
-    role: video-bar
+    slot: video-bar
     component: pavb-c3a
   - system: pavb-s3
-    role: main-display
+    slot: main-display
     component: pavb-c3d
   - system: pavb-s3
-    role: touch-control
+    slot: touch-control
     component: pavb-c3b
   - system: pavb-s3
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pavb-c3s
   - system: pavb-s4
-    role: video-bar
+    slot: video-bar
     component: pavb-c4a
   - system: pavb-s4
-    role: main-display
+    slot: main-display
     component: pavb-c4d
   - system: pavb-s4
-    role: touch-control
+    slot: touch-control
     component: pavb-c4b
   - system: pavb-s4
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pavb-c4s
   - system: pavb-s5
-    role: video-bar
+    slot: video-bar
     component: pavb-c5a
   - system: pavb-s5
-    role: main-display
+    slot: main-display
     component: pavb-c5d
   - system: pavb-s5
-    role: touch-control
+    slot: touch-control
     component: pavb-c5b
   - system: pavb-s5
-    role: scheduling-panel
+    slot: scheduling-panel
     component: pavb-c5s
   - system: ann-s1
-    role: video-bar
+    slot: video-bar
     component: ann-c1a
   - system: ann-s1
-    role: main-display
+    slot: main-display
     component: ann-c1d
   - system: ann-s1
-    role: touch-control
+    slot: touch-control
     component: ann-c1b
   - system: ann-s1
-    role: scheduling-panel
+    slot: scheduling-panel
     component: ann-c1s
   - system: ann-s2
-    role: video-bar
+    slot: video-bar
     component: ann-c2a
   - system: ann-s2
-    role: main-display
+    slot: main-display
     component: ann-c2d
   - system: ann-s2
-    role: touch-control
+    slot: touch-control
     component: ann-c2b
   - system: ann-s2
-    role: scheduling-panel
+    slot: scheduling-panel
     component: ann-c2s
   - system: ann-s3
-    role: video-bar
+    slot: video-bar
     component: ann-c3a
   - system: ann-s3
-    role: main-display
+    slot: main-display
     component: ann-c3d
   - system: ann-s3
-    role: touch-control
+    slot: touch-control
     component: ann-c3b
   - system: ann-s3
-    role: scheduling-panel
+    slot: scheduling-panel
     component: ann-c3s
   - system: hl2-s1
-    role: front-display
+    slot: front-display
     component: hl2-c1d
   - system: hl2-s1
-    role: front-display
+    slot: front-display
     component: t1-fd2
   - system: hl2-s1
-    role: ceiling-mic
+    slot: ceiling-mic
     component: hl2-c1a
   - system: hl2-s1
-    role: ceiling-mic
+    slot: ceiling-mic
     component: t1-cm2
   - system: hl2-s1
-    role: presenter-mic
+    slot: presenter-mic
     component: t1-wm
   - system: hl2-s1
-    role: podium-mic
+    slot: podium-mic
     component: t1-pm
   - system: hl2-s1
-    role: dsp
+    slot: dsp
     component: t1-dsp
   - system: hl2-s1
-    role: amplifier
+    slot: amplifier
     component: t1-amp
   - system: hl2-s1
-    role: speakers
+    slot: speakers
     component: t1-spk1
   - system: hl2-s1
-    role: speakers
+    slot: speakers
     component: t1-spk2
   - system: hl2-s1
-    role: speakers
+    slot: speakers
     component: t1-spk3
   - system: hl2-s1
-    role: speakers
+    slot: speakers
     component: t1-spk4
   - system: hl2-s1
-    role: video-switcher
+    slot: video-switcher
     component: t1-sw
   - system: hl2-s1
-    role: display-endpoint
+    slot: display-endpoint
     component: t1-ext1
   - system: hl2-s1
-    role: display-endpoint
+    slot: display-endpoint
     component: t1-ext2
   - system: hl2-s1
-    role: control-system
+    slot: control-system
     component: t1-cp
   - system: hl2-s1
-    role: touch-control
+    slot: touch-control
     component: hl2-c1b
   - system: hl2-s1
-    role: scheduling-panel
+    slot: scheduling-panel
     component: t1-sp
   - system: hl2-s1
-    role: people-counter
+    slot: people-counter
     component: t1-oc
   - system: hl2-s1
-    role: camera
+    slot: camera
     component: t1-cam1
   - system: hl2-s1
-    role: camera
+    slot: camera
     component: t1-cam2
   - system: hl2-s2
-    role: front-display
+    slot: front-display
     component: hl2-c2d
   - system: hl2-s2
-    role: front-display
+    slot: front-display
     component: t2-fd2
   - system: hl2-s2
-    role: ceiling-mic
+    slot: ceiling-mic
     component: hl2-c2a
   - system: hl2-s2
-    role: ceiling-mic
+    slot: ceiling-mic
     component: t2-cm2
   - system: hl2-s2
-    role: presenter-mic
+    slot: presenter-mic
     component: t2-wm
   - system: hl2-s2
-    role: podium-mic
+    slot: podium-mic
     component: t2-pm
   - system: hl2-s2
-    role: dsp
+    slot: dsp
     component: t2-dsp
   - system: hl2-s2
-    role: amplifier
+    slot: amplifier
     component: t2-amp
   - system: hl2-s2
-    role: speakers
+    slot: speakers
     component: t2-spk1
   - system: hl2-s2
-    role: speakers
+    slot: speakers
     component: t2-spk2
   - system: hl2-s2
-    role: speakers
+    slot: speakers
     component: t2-spk3
   - system: hl2-s2
-    role: speakers
+    slot: speakers
     component: t2-spk4
   - system: hl2-s2
-    role: video-switcher
+    slot: video-switcher
     component: t2-sw
   - system: hl2-s2
-    role: display-endpoint
+    slot: display-endpoint
     component: t2-ext1
   - system: hl2-s2
-    role: display-endpoint
+    slot: display-endpoint
     component: t2-ext2
   - system: hl2-s2
-    role: control-system
+    slot: control-system
     component: t2-cp
   - system: hl2-s2
-    role: touch-control
+    slot: touch-control
     component: hl2-c2b
   - system: hl2-s2
-    role: scheduling-panel
+    slot: scheduling-panel
     component: t2-sp
   - system: hl2-s2
-    role: people-counter
+    slot: people-counter
     component: t2-oc
   - system: hl2-s2
-    role: camera
+    slot: camera
     component: t2-cam1
   - system: hl2-s2
-    role: camera
+    slot: camera
     component: t2-cam2
   - system: hl2-s3
-    role: class-display
+    slot: class-display
     component: hl2-c3d
   - system: hl2-s3
-    role: instructor-mic
+    slot: instructor-mic
     component: hl2-c3a
   - system: hl2-s3
-    role: touch-control
+    slot: touch-control
     component: hl2-c3b
   - system: hl2-s4
-    role: class-display
+    slot: class-display
     component: hl2-c4d
   - system: hl2-s4
-    role: instructor-mic
+    slot: instructor-mic
     component: hl2-c4a
   - system: hl2-s4
-    role: touch-control
+    slot: touch-control
     component: hl2-c4b
   - system: hl2-s5
-    role: class-display
+    slot: class-display
     component: hl2-c5d
   - system: hl2-s5
-    role: instructor-mic
+    slot: instructor-mic
     component: hl2-c5a
   - system: hl2-s5
-    role: touch-control
+    slot: touch-control
     component: hl2-c5b
   - system: hl2-s6
-    role: class-display
+    slot: class-display
     component: hl2-c6d
   - system: hl2-s6
-    role: instructor-mic
+    slot: instructor-mic
     component: hl2-c6a
   - system: hl2-s6
-    role: touch-control
+    slot: touch-control
     component: hl2-c6b
   - system: dep-s1
-    role: panel
+    slot: panel
     component: dep-c1a
   - system: dep-s1
-    role: player
+    slot: player
     component: dep-c1b
   - system: dep-s2
-    role: panel
+    slot: panel
     component: dep-c2a
   - system: dep-s2
-    role: player
+    slot: player
     component: dep-c2b
   - system: dep-s3
-    role: panel
+    slot: panel
     component: dep-c3a
   - system: dep-s3
-    role: player
+    slot: player
     component: dep-c3b
 
   - system: lab-pod-a
-    role: class-display
+    slot: class-display
     component: lab-a-display
   - system: lab-pod-a
-    role: instructor-mic
+    slot: instructor-mic
     component: lab-a-mic
   - system: lab-pod-a
-    role: touch-control
+    slot: touch-control
     component: lab-a-touch
   - system: lab-pod-b
-    role: class-display
+    slot: class-display
     component: lab-b-display
   - system: lab-pod-b
-    role: instructor-mic
+    slot: instructor-mic
     component: lab-b-mic
   - system: lab-pod-b
-    role: touch-control
+    slot: touch-control
     component: lab-b-touch
 
 # Dependency edges (#1648): what a component needs from another, a different
@@ -2098,7 +2099,7 @@ alarms:
 # (the simulated panel's nvp-telnet face, admin / newtron). Its password was
 # rotated, and this endpoint still logs in with the secret holding the old
 # one: the panel answers "auth rejected", the driver declares that terminal,
-# and a live node reads the session rejected after one attempt, with the
+# and a live outpost reads the session rejected after one attempt, with the
 # panel's own words beside Retry. Pointing the endpoint's login at the rotated
 # secret moves the connection fingerprint and the session comes up, which is
 # the walkthrough (fix-a-rejected-session). The host is the panel's simulated
@@ -2114,7 +2115,7 @@ sim_secrets:
   # band): Boardroom A's copy wins for the room's components, and touch-a has a
   # copy of its own, which wins on that one panel with the room's and the
   # platform's shadowed beneath it. Chosen because only the huddle panel's
-  # console uses this name, outside the room: a node refuses a name with more
+  # console uses this name, outside the room: an outpost refuses a name with more
   # than one copy cascading onto a component (#820), so the name planted here
   # must be one no endpoint in the subtree references. The seed lands these two
   # after every endpoint, since an attach refuses a name that has two copies.
@@ -2160,7 +2161,7 @@ sim_secrets:
 
 sim_endpoints:
   # The meeting platform's webhooks (#1024, #1282): a server-hosted endpoint,
-  # so no node and no address. Its token is minted at creation. The driver's
+  # so no outpost and no address. Its token is minted at creation. The driver's
   # room-naming listeners declare the ucc-room-id identity, so each post
   # lands on the system bound to its room (the bindings below). Point the
   # simulated ucc-platform at this endpoint's URL (its POST /api/webhooks,
@@ -2186,16 +2187,16 @@ sim_endpoints:
     label: Panel over TLS
   # And NVP as datagrams on 51327 (its nvp-udp face, #1037), which drops a
   # seeded 5% of datagrams each way, so the driver's retries are always at
-  # work. No listen port: the node binds one of its own, and the panel
+  # work. No listen port: the outpost binds one of its own, and the panel
   # pushes to the source of SUBSCRIBE INPUT. Setting the endpoint's
   # listen-port input rebinds it there, and moves its fingerprint.
   - component: huddle-touch
     driver: newtron-nvp-udp
     label: Panel over UDP
-  # A changed host key worth showing (#1078). The briefing place's touch panel
+  # A changed host key worth showing (#1078). The briefing location's touch panel
   # also answers NVP over its ssh console (admin / newtron, the rotated
   # secret), and this endpoint pins the host key the panel presented before it
-  # was reimaged. The simulated panel's own key never matches it: a live node refuses the connection before
+  # was reimaged. The simulated panel's own key never matches it: a live outpost refuses the connection before
   # logging in and reads the session rejected, class host-key, naming both
   # keys beside Trust this key. Trusting the offered key makes it the pin and
   # the session comes up, which is the walkthrough (trust-a-changed-host-key).
@@ -2210,7 +2211,7 @@ sim_endpoints:
   # A refusal on an endpoint holding no session worth showing (#1110). The
   # auditorium's touch panel answers SNMP, and this endpoint reads its
   # community from the secret holding the one the panel's agent refuses: a
-  # live node's reachability probe meets authorizationError, gates the
+  # live outpost's reachability probe meets authorizationError, gates the
   # endpoint at the session rung and sends no further get, and the console
   # shows the refusal's reason beside Retry with no session pill. Pointing
   # the community at the fleet's own secret (sim-community) lifts the gate.
@@ -2221,7 +2222,7 @@ sim_endpoints:
     planted_fault: the endpoint names a community the panel's agent refuses
 
 
-  # Every collection method healthy on one place (#1370): the HQ boardroom
+  # Every collection method healthy on one location (#1370): the HQ boardroom
   # runs each driver and transport the planted faults above break, and the
   # three drivers the rest of the fleet never attaches, beside the defaults
   # its components already carry (the bar's https API, the panel's NVP over
@@ -2294,11 +2295,11 @@ sim_identity_bindings:
 # The fleet's outside actors (#1370, #1743), declared as a scale scenario
 # declares its pushers: each an emulator device of a profile with a push
 # face. The booking service is a scheduling platform's integration that
-# posts a place's bookings (booking-count, booking-state) to POST
-# /telemetry:push, owned by the place's system. Its principal holds
+# posts a location's bookings (booking-count, booking-state) to POST
+# /telemetry:push, owned by the location's system. Its user holds
 # telemetry:push alone, scoped to its systems, so it can push nowhere else
 # and read nothing. The lab mints its token on every run, as it does the
-# node's, and the emulator beside the node pushes with it. A push has no
+# outpost's, and the emulator beside the outpost pushes with it. A push has no
 # endpoint, so it counts on its collected tier alone.
 sim_pushers:
   - { name: sim-booking-service, profile: booking-service, systems: [boardroom-a] }

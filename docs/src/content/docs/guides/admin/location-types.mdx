@@ -1,21 +1,21 @@
 ---
 title: Location types
-description: "The Location Types catalog: the place classifier registry (campus, building, floor, room, and your own), operator-owned rows with an icon, an allowed-parents constraint, and a declared-property contract."
+description: "The Location Types catalog: the location classifier catalog (campus, building, floor, room, and your own), operator-owned rows with an icon, an allowed-parents constraint, and a declared-property contract."
 ---
 
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Locations: Types** (`/location-types`, with `location_type:read`, covered by every
-viewer's `*:read` floor) is the registry of **place classifiers**: the `location_type` a
-[location](/guides/operator/entities/) is classified by. It is one registry with one page on
-purpose; its former home, a tabbed Types page, shared a fetch with the secret type registry, and
+viewer's `*:read` floor) is the catalog of **location classifiers**: the `location_type` a
+[location](/guides/operator/entities/) is classified by. It is one catalog with one page on
+purpose; its former home, a tabbed Types page, shared a fetch with the secret type catalog, and
 a viewer without `secret:read` lost both. The two now stand alone (secret shapes live on
 [Secret Types](/guides/admin/secret-types/)), and two other kinds left even earlier, because a
-bare label registry was never what they were: a **component**'s shape comes from the
+bare label catalog was never what they were: a **component**'s shape comes from the
 [product](/guides/admin/products/) it points at, and a **system**'s from the
 [standard](/guides/admin/standards/) it conforms to.
 
-The page is that registry's directory: a table of its rows, sorted alphabetically by display
+The page is that catalog's directory: a table of its rows, sorted alphabetically by display
 name, each showing the **name** (for example `wing`), **label**, an **icon** glyph key,
 and its **origin** (**official**, **custom**, or **overridden**). A type also carries an `id`, a
 uuid minted by the database, the internal address the handle resolves to
@@ -24,7 +24,7 @@ uuid minted by the database, the internal address the handle resolves to
 - **name** matches a name or label, and **official** narrows the list to **shipped**,
   **yours**, or **overridden** rows.
 - **New location type** (with `location_type:create`, an admin permission) opens a create
-  **drawer**: give it a **name** (unique within the registry, e.g. `wing`), a **label**,
+  **drawer**: give it a **name** (unique within the catalog, e.g. `wing`), a **label**,
   an **icon** glyph key (defaults to `map-pin`), and its **allowed parents**: a checkbox list of
   the other location types plus a **Root** option, the set of parent types (or the top of the
   tree) a location of this type may be placed under. Leave every box unchecked for
@@ -141,12 +141,12 @@ uuid minted by the database, the internal address the handle resolves to
   the shipped one), and **Delete** stays greyed with the reason on hover, "Official: ships with
   Omniglass and updates with it." Once you have changed one, that slot becomes **Restore default**,
   which discards your version and takes whatever the current release ships. The same treatment the
-  [component type](/guides/admin/products/) registry uses, and the reason both registries have it is
+  [component type](/guides/admin/products/) catalog uses, and the reason both catalogs have it is
   that a release must be able to correct the vocabulary it ships.
 - **Delete** is refused (409) while a location still uses that type: reclassify or remove the
   referencing rows first.
 - A location type is **flat**: it has no parent, so it inherits nothing and every fact on it is its
-  own. The nested registries beside it, [component type](/guides/admin/products/) and system type, do
+  own. The nested catalogs beside it, [component type](/guides/admin/products/) and system type, do
   inherit, and their blades say so: an empty **Stem**, **Abbrev** or **Icon** box shows the value the
   type would take in grey, and the hint under it names the ancestor that value comes from, which may
   be further up than the immediate parent. Clearing a box therefore tells you what you just fell back
@@ -182,7 +182,7 @@ pencil's `location_type:update` is in the path either way.
 
 From the CLI the contract is `omniglass location-type property list room`,
 `omniglass location-type property update room <property>`, and
-`omniglass location-type property delete room <property>`. The registry and its contract are one
-noun, mirroring the routes (`/location-types` for the registry,
+`omniglass location-type property delete room <property>`. The catalog and its contract are one
+noun, mirroring the routes (`/location-types` for the catalog,
 `/location-types/{id}/properties` for its contract): a hyphen joins a two-word noun, a space
 means the thing beneath it.

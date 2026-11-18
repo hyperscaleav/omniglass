@@ -1,0 +1,869 @@
+package outpost
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
+	"github.com/hyperscaleav/omniglass/internal/transport"
+	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// endpointParams is the address config a probe reads off a task's endpoint.
+// A tcp probe needs the dial target (host:port) and an optional connect timeout;
+// an icmp probe needs the echo target (host or IP), an optional echo count, and
+// an optional per-run timeout.
+type endpointParams struct {
+	Target   string `json:"target"`
+	Count    int    `json:"count,omitempty"`
+	Timeout  string `json:"timeout,omitempty"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+	// TLSMode is a tls endpoint's verification mode (#1035), derived from
+	// its driver's tls-mode input; empty verifies.
+	TLSMode string `json:"tls-mode,omitempty"`
+}
+
+// collector runs one task when the dispatcher hands it a lane (#1634): a
+// driver poll or a reachability probe, publishing what it landed to the
+// outpost's own telemetry subject. The outpost stamps NO component identity: the
+// Event carries only the task_id and the measurements; the server binds the
+// owner at ingest. A task that cannot be attempted (bad params, unresolved
+// host, no capability) lands a collection-failed story, never a false down,
+// so one bad task never stalls the rest. Workers run many tasks at once, so
+// the transition memories (verdicts, faultseen) are held under memMu; the
+// schedule, the report and the spool hold their own locks.
+type collector struct {
+	out      *telemetrySpool
+	outpost  string
+	runner   *collection.Runner
+	sessions *sessionManager
+	sched    *pollSchedule
+	report   *collectionReport
+	clock    func() time.Time
+	// wake asks the run loop for a pass: a probe verdict may have moved a
+	// gate that holds polls.
+	wake func()
+	// every is a task's interval, the cap on its retry backoff: the
+	// dispatcher's, which fills in an interval a poll does not declare.
+	every func(collection.TaskSpec) time.Duration
+	// pings shares the informational ping of a host among its probes in one
+	// probe slot (#1249).
+	pings pingShare
+
+	memMu     sync.Mutex
+	verdicts  map[string]string
+	faultseen map[string]string
+}
+
+func newCollector(out *telemetrySpool, outpost string, runner *collection.Runner, sessions *sessionManager, sched *pollSchedule, report *collectionReport) *collector {
+	return &collector{out: out, outpost: outpost, runner: runner, sessions: sessions, sched: sched, report: report,
+		clock: time.Now, wake: func() {}, every: pollInterval, verdicts: map[string]string{}, faultseen: map[string]string{}}
+}
+
+// forgetTransitions drops the remembered verdicts and faults, so each lands
+// again: the run loop's answer to a spool overflow that may have dropped the
+// batch that carried them.
+func (c *collector) forgetTransitions() {
+	c.memMu.Lock()
+	defer c.memMu.Unlock()
+	clear(c.verdicts)
+	clear(c.faultseen)
+}
+
+// run is the dispatcher's work: one run of task. A publish that fails is
+// logged; the spool holds what it can and the next run tries again.
+func (c *collector) run(ctx context.Context, task collection.TaskSpec) {
+	var err error
+	if driver.IsBaked(task.Spec) {
+		err = c.runPoll(ctx, task)
+	} else {
+		err = c.runProbe(ctx, task)
+	}
+	if err != nil {
+		slog.Warn("task publish failed", "facility", "collection", "task", task.ID, "error", err.Error())
+	}
+}
+
+// runPoll runs a driver poll (a baked function, #814), which interprets
+// rather than probes: fetch over the transport, locate and type each emit.
+// Its faults are per-emit collection-failed stories beside whatever samples
+// still landed, so a payload missing one value never silently drops the
+// rest. Faults publish transition-only (like the reachability verdict): a
+// static misconfiguration that faults every run lands one event, not one per
+// run forever, so a stuck driver does not flood the event lane.
+func (c *collector) runPoll(ctx context.Context, task collection.TaskSpec) error {
+	interval := c.every(task)
+	// An http poll is its own request even beside a held stream (#1038): it
+	// answers to the gate itself, as a stateless poll does.
+	ownRequest := c.sessions.lookup(task.EndpointID) == nil || driver.IsHTTP(task.Transport)
+	gt, refused := c.sessions.refusedAt(task.EndpointID, statelessRung(task))
+	refused = refused && ownRequest
+	var dps []collection.Sample
+	var faults []error
+	if refused {
+		// A stateless poll on a gated endpoint is not retried under the
+		// fingerprint it was refused under (#1056 ruling).
+		faults = []error{fmt.Errorf("outpost: task %s: the endpoint is gated: %w", task.ID, gt.refusal())}
+		c.report.refused(task.EndpointID)
+	} else {
+		cost := measureRun(func() { dps, faults = collectDriverTask(ctx, c.runner, task, c.sessions) })
+		// The run's own account of itself (#1369): how long it took and
+		// the CPU the kernel charged it (#1870), answered or failed, and
+		// whether it failed as bookPollRun reads a failure, faulted and
+		// landed nothing.
+		c.report.poll(task.EndpointID, cost, !landedData(dps) && len(faults) > 0)
+		if ownRequest {
+			for _, f := range faults {
+				if terr, ok := collection.AsTerminal(f); ok {
+					c.sessions.refuseOver(task.Transport, task.EndpointID, task.Fingerprint, terr)
+				}
+			}
+		}
+	}
+	// A retry waits its backoff from the run's end (#1634): from its start,
+	// a device that takes longer than the wait to time out would be asked
+	// again the moment it finished.
+	bookPollRun(c.sched, task.ID, interval, c.clock(), dps, faults)
+	current := ""
+	for _, f := range faults {
+		current += f.Error() + "\n"
+	}
+	c.memMu.Lock()
+	if current != c.faultseen[task.ID] {
+		for _, f := range faults {
+			slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
+			if pubErr := publishCollectionFailed(c.out, c.outpost, task.ID, f); pubErr != nil {
+				c.memMu.Unlock()
+				return pubErr
+			}
+		}
+		// Remembered only once published, so a fault set whose publish
+		// failed is told again next run rather than lost.
+		c.faultseen[task.ID] = current
+	}
+	c.memMu.Unlock()
+	// The run is booked on what it fetched; what it lands is held to change
+	// for its events and log lines (#1145), so a status page's last error
+	// lands when it changes, not every run.
+	if n := clampedCount(dps); n > 0 {
+		slog.Info("payload time ahead of arrival, landed at arrival", "facility", "collection", "task", task.ID, "count", n, "window", driver.ClampWindow.String())
+	}
+	if landed := c.sched.changed(task.ID, dps); len(landed) > 0 {
+		if err := publishBatch(c.out, c.outpost, task.ID, landed); err != nil {
+			return err
+		}
+	}
+	c.sched.commitChanged(task.ID, dps)
+	return nil
+}
+
+// runProbe runs a reachability probe; tcp and icmp and the transports' own
+// rungs ride the same pipeline (the ingest consumer does not branch on probe
+// type).
+func (c *collector) runProbe(ctx context.Context, task collection.TaskSpec) error {
+	// The ladder's informational ping runs beside the probe, bounded, so
+	// gear that drops ICMP costs the run nothing extra.
+	// began is when the probe read the device: its verdict is judged at
+	// it, so an up from a probe in flight across a disruptive delivery
+	// cannot release the disruption (#1651).
+	began := c.clock()
+	pinged := make(chan []collection.Sample, 1)
+	go func() { pinged <- c.sharedPing(ctx, task) }()
+	dps, err := collectProbe(ctx, c.runner, task, c.sessions)
+	pings := <-pinged // joined here, before any path leaves
+	if err != nil {
+		// A skipped task is the outpost's own operational story AND a
+		// collection fact (#812): log it as a self-log, and land a
+		// collection-failed event naming the task, so the failure is visible
+		// on the component's timeline rather than only in the outpost's own
+		// logs. Never a false-down state sample.
+		slog.Warn("task skipped", "facility", "collection", "task", task.ID, "error", err.Error())
+		return publishCollectionFailed(c.out, c.outpost, task.ID, err)
+	}
+	if dps == nil {
+		return nil // an unwired transport: nothing to publish
+	}
+	// The verdict feeds the endpoint's gate (#1650): the second down in a
+	// row closes it as unreachable, the next up reopens it, and the
+	// dispatcher is woken to release or hold the endpoint's polls. A probe
+	// that could not be attempted left above and never reaches here, and a
+	// refusal's own down reading is no verdict (probeVerdict).
+	if up, ok := probeVerdict(dps); ok {
+		c.sessions.verdict(task.EndpointID, task.ID, up, began)
+		c.wake()
+	}
+	// Compute and, on a transition only, append the endpoint reachability
+	// verdict as a state sample. The outpost remembers the last verdict per task
+	// and emits endpoint-reachable only on a flip or first observation, so
+	// the state series is transition-only, not one row per run. The key is
+	// the task id, not the endpoint name: endpoint names are unique only per
+	// component, so an outpost routinely probes two components' endpoints that
+	// share a friendly name (the default is the protocol), and a name-keyed
+	// map would suppress the second one's verdict. The task id is outpost-unique
+	// (a content hash over the endpoint). The property lane's transition
+	// guard, held in the ingest's insert, is the net for an outpost restart.
+	c.memMu.Lock()
+	dps = appendVerdict(dps, task.ID, c.verdicts)
+	c.memMu.Unlock()
+	dps = append(dps, pings...)
+	return publishBatch(c.out, c.outpost, task.ID, dps)
+}
+
+// bookPollRun books a poll's next run from what its run landed. A run that
+// landed nothing and faulted (the fetch failed) retries on a backoff rather
+// than waiting its whole interval, unless the fault is terminal (#1049) or
+// the request's own (an http 404, #902): a fault retrying cannot fix waits
+// the interval, never the backoff. A run whose only landing is the session
+// rung it proved (an http answer's endpoint-authenticated) landed no data,
+// and a retryable answer's backoff waits at least its Retry-After.
+func bookPollRun(sched *pollSchedule, taskID string, interval time.Duration, now time.Time, dps []collection.Sample, faults []error) {
+	if !landedData(dps) && len(faults) > 0 {
+		for _, f := range faults {
+			_, terminal := collection.AsTerminal(f)
+			_, own := collection.AsRequestFault(f)
+			if terminal || own {
+				sched.refusedRun(taskID)
+				return
+			}
+		}
+		atLeast := time.Duration(0)
+		for _, f := range faults {
+			if wait, ok := collection.RetryAfterOf(f); ok && wait > atLeast {
+				atLeast = wait
+			}
+		}
+		sched.failedAtLeast(taskID, interval, now, atLeast)
+		return
+	}
+	sched.succeeded(taskID)
+}
+
+// landedData reports a run that landed a sample beyond the session rung its
+// answer proved.
+func landedData(dps []collection.Sample) bool {
+	for _, d := range dps {
+		if d.Name != collection.SignalEndpointAuthenticated {
+			return true
+		}
+	}
+	return false
+}
+
+// pollInterval reads a driver poll's declared cadence off its baked spec;
+// zero (the dispatcher runs it at the heartbeat) when it declares none or does not parse, where the
+// poll itself then faults by name.
+func pollInterval(task collection.TaskSpec) time.Duration {
+	fn, err := driver.ParseBaked(task.Spec)
+	if err != nil || fn.Schedule == nil {
+		return 0
+	}
+	return fn.Schedule.Interval()
+}
+
+// clampedCount is how many of a run's samples claimed a time past the clamp
+// window ahead of their arrival and landed at arrival instead (#1145).
+func clampedCount(dps []collection.Sample) int {
+	n := 0
+	for _, d := range dps {
+		if d.Clamped {
+			n++
+		}
+	}
+	return n
+}
+
+// publishBatch maps samples to a per-lane task group and adds it to the
+// spool's next batch (#1582), which ships on the outpost's own telemetry subject
+// once the stream acks it, holding it until then (#453). The batch carries the
+// outpost's id, so the outpost argument is the call sites' and goes unused.
+func publishBatch(out *telemetrySpool, _, taskID string, dps []collection.Sample) error {
+	return out.add(groupFor(taskID, dps))
+}
+
+// publishPushed adds a session's pushed samples to the spool and flushes it
+// at once, the groups already pending riding along: a push is a change the
+// endpoint just reported, so it does not wait out the tick's flush timer.
+// Polled groups coalesce on the timer; a push costs the batch it flushes.
+func publishPushed(out *telemetrySpool, taskID string, dps []collection.Sample) error {
+	if err := out.add(groupFor(taskID, dps)); err != nil {
+		return err
+	}
+	out.flush()
+	return nil
+}
+
+// collectDriverTask parses one derived driver poll and runs it: the baked
+// function from the task spec, the target from the endpoint params, the
+// unsealed secret inputs from the worklist, and the endpoint's held session
+// when the outpost holds one (#816), which the poll borrows instead of dialing.
+// Faults are the collection-failed stories; a parse fault covers the whole
+// task.
+func collectDriverTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, []error) {
+	fn, err := driver.ParseBaked(task.Spec)
+	if err != nil {
+		return nil, []error{fmt.Errorf("outpost: task %s: %w", task.ID, err)}
+	}
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return nil, []error{fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)}
+		}
+	}
+	var timeout time.Duration
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return nil, []error{fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)}
+		}
+		timeout = d
+	}
+	pt := collection.DriverPollTask{
+		Fn:          fn,
+		Transport:   task.Transport,
+		Target:      p.Target,
+		Secrets:     task.Secrets,
+		Timeout:     timeout,
+		Session:     sessions.lookup(task.EndpointID),
+		SessionOnly: task.Session != nil || driver.IsWebSocket(task.Transport),
+		Auth:        task.Session,
+	}
+	if driver.IsHTTP(task.Transport) {
+		// An http poll holds no session (#902): it is its own request, its
+		// credential from the session block, its trust (https) the one the
+		// endpoint's probe shares, the pin included.
+		pt.Session, pt.SessionOnly = nil, false
+		pt.HTTPState = sessions.httpAuthOf(task.EndpointID, task.Fingerprint)
+		if task.Transport == "https" {
+			trust, err := tlsTrustOf(p)
+			if err != nil {
+				return nil, []error{fmt.Errorf("outpost: task %s: %w", task.ID, err)}
+			}
+			if trust.Mode == driver.TLSModePin {
+				trust.Pin = sessions.certPinOf(task)
+			}
+			pt.TLS = &trust
+		}
+	}
+	if task.Transport == "udp" {
+		pt.Datagram = sessions.datagramOf(task.EndpointID)
+		pt.Retries = fn.Request.RetriesOr(driver.DefaultPollRetries)
+		if pt.Datagram == nil {
+			return nil, []error{fmt.Errorf("outpost: task %s: no udp socket is bound for the endpoint: %s", task.ID, sessions.datagramRefusal(task.EndpointID))}
+		}
+	}
+	return runner.CollectDriverPoll(ctx, pt)
+}
+
+// appendVerdict computes the endpoint reachability verdict from a probe's
+// samples and appends it (a state sample carrying up/down) only when it
+// differs from the last verdict remembered for that task, or is the first
+// observation. It records the emitted verdict in verdicts (keyed by the
+// outpost-unique task id, since endpoint names collide across components) so the
+// next tick can tell a flip from a repeat. When the probe produced no
+// reachability metric (nothing to judge) or the verdict is unchanged, dps is
+// returned untouched.
+func appendVerdict(dps []collection.Sample, taskID string, verdicts map[string]string) []collection.Sample {
+	up, ok := collection.EndpointVerdict(dps)
+	if !ok {
+		return dps
+	}
+	verdict := collection.VerdictDown
+	if up {
+		verdict = collection.VerdictUp
+	}
+	if prev, seen := verdicts[taskID]; seen && prev == verdict {
+		return dps // no transition: transition-only, emit nothing
+	}
+	verdicts[taskID] = verdict
+	return append(dps, collection.Sample{
+		Name:   collection.SignalEndpointReachable,
+		Text:   verdict,
+		IsText: true,
+		TS:     time.Now().UTC(),
+	})
+}
+
+// collectProbe runs a reachability probe, except over an endpoint whose held
+// telnet session reads up (#1033): the up session is the proof the port and
+// the protocol answer, and a second dial would be refused by gear that admits
+// one telnet client, reading not responsive beside an up session.
+func collectProbe(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, error) {
+	if transport.ProbeYieldsToSession(task.Transport) && sessions.isUp(task.EndpointID) {
+		now := time.Now().UTC()
+		return []collection.Sample{
+			collection.ProbeResult(collection.SignalTCPOpen, true, now, collection.Responded),
+			{Name: collection.SignalEndpointResponsive, Text: "up", IsText: true, TS: now,
+				Labels: map[string]string{collection.ReasonLabel: "the held session is up"}},
+		}, nil
+	}
+	// The ladder a driver declares (ADR-0158): its transport rung, the gate,
+	// is a connect, the protocol's handshake, or a named request answered.
+	if l := task.Ladder; l != nil {
+		switch {
+		case l.Transport == driver.RungRequest && l.Request != nil && task.Transport == "udp":
+			return collectDatagramRung(ctx, task, l.Request, sessions)
+		case l.Transport == driver.RungRequest && l.Request != nil && task.Transport == "snmp":
+			return collectSNMPRung(ctx, runner, task, l.Request, sessions)
+		case l.Transport == driver.RungRequest && l.Request != nil:
+			return collectRequestRung(ctx, runner, task, l.Request)
+		case l.Transport == driver.RungConnect && (task.Transport == "ssh" || transport.UsesTLS(task.Transport)):
+			t, err := parseTCPTask(task)
+			if err != nil {
+				return nil, err
+			}
+			return runner.CollectTCP(ctx, t)
+		}
+	}
+	switch task.Transport {
+	case "ssh":
+		return collectSSHProbe(ctx, runner, task, sessions)
+	case "tls":
+		return collectTLSProbe(ctx, runner, task, sessions)
+	case "https", "wss":
+		// wss's probe is https's (#1034): the handshake under the
+		// endpoint's trust, then a credential-free GET / that any status
+		// answers.
+		return collectHTTPSProbe(ctx, runner, task, sessions)
+	}
+	return collectTask(ctx, runner, task)
+}
+
+// probeTally is the transport an http probe counts under (#1647): a
+// websocket endpoint's GET / lands on the face's own listener, which the sim
+// counts as websocket.
+func probeTally(transport string) collection.TallyTransport {
+	if transport == "websocket" || transport == "wss" {
+		return collection.TallyWebSocket
+	}
+	return collection.TallyHTTP
+}
+
+// collectHTTPSProbe runs the https probe on the gate (#902), as the tls
+// probe does: with the transport rung gated (a changed key, a certificate
+// that failed verification) only the TCP connect runs, so no handshake
+// reaches a key nobody trusted; otherwise the handshake runs under the
+// endpoint's mode and the pin its polls share, then one credential-free
+// GET /, and a certificate refusal it meets gates the endpoint.
+func collectHTTPSProbe(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, error) {
+	t, err := parseTCPTask(task)
+	if err != nil {
+		return nil, err
+	}
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+		return runner.CollectTCP(ctx, t)
+	}
+	var p endpointParams
+	_ = json.Unmarshal(task.EndpointParams, &p) // parseTCPTask has read it already
+	trust, err := tlsTrustOf(p)
+	if err != nil {
+		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, err)
+	}
+	if trust.Mode == driver.TLSModePin {
+		trust.Pin = sessions.certPinOf(task)
+	}
+	dps, res, err := runner.CollectHTTPResult(ctx, collection.HTTPTask{Target: t.Target, Timeout: t.Timeout, TLS: &trust, Tally: probeTally(task.Transport)})
+	if err != nil {
+		return nil, err
+	}
+	if res.Refusal != nil {
+		slog.Warn("https certificate refused", "facility", "collection", "task", task.ID, "endpoint", task.EndpointName, "reason", res.Refusal.Error())
+		sessions.refuse(task.EndpointID, task.Fingerprint, res.Refusal)
+	}
+	return dps, nil
+}
+
+// collectSSHProbe runs the ssh probe on the gate (#1060). With the transport
+// rung gated (a changed host key) only the rung below runs, a TCP connect.
+// With the session rung gated (a refused credential) the key exchange still
+// runs, so responsiveness stays observed, but the credential is not sent
+// again under the same fingerprint. The probe honours the pinned key, so a
+// credential never reaches a component whose key changed; what it meets
+// (a refusal, a changed key, a pass) moves the gate.
+func collectSSHProbe(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, error) {
+	t, err := parseSSHTask(task)
+	if err != nil {
+		return nil, err
+	}
+	t.HostKeyPin = task.HostKey
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+		return runner.CollectTCP(ctx, collection.TCPTask{Target: t.Target, Timeout: t.Timeout})
+	}
+	if _, ok := sessions.refusedAt(task.EndpointID, rungAuthenticated); ok {
+		t.Username, t.Password = "", ""
+	}
+	dps, res, err := runner.CollectSSHResult(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case res.HostKeyChanged:
+		sessions.refuse(task.EndpointID, task.Fingerprint, collection.HostKeyRefusal(t.HostKeyPin, res.OfferedKey))
+	case res.AuthAttempted && !res.Authenticated:
+		sessions.refuse(task.EndpointID, task.Fingerprint, &collection.TerminalError{Class: driver.ClassAuth, Reason: "the component refused the probe's credential"})
+	case res.Authenticated:
+		sessions.pass(task.EndpointID)
+	}
+	return dps, nil
+}
+
+// collectTLSProbe runs the tls probe on the gate (#1035). With the transport
+// rung gated (a changed key, a certificate that failed verification) only
+// the rung below runs, a TCP connect, so no handshake reaches a key nobody
+// trusted. Otherwise the handshake runs under the endpoint's mode and its
+// pin (the one its held session shares), and a certificate refusal it meets
+// gates the endpoint, carrying both keys when a pin refused one.
+func collectTLSProbe(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, sessions *sessionManager) ([]collection.Sample, error) {
+	t, err := parseTCPTask(task)
+	if err != nil {
+		return nil, err
+	}
+	if gt, ok := sessions.refusedAt(task.EndpointID, rungResponsive); ok && gt.rung == rungResponsive {
+		return runner.CollectTCP(ctx, t)
+	}
+	var p endpointParams
+	_ = json.Unmarshal(task.EndpointParams, &p) // parseTCPTask has read it already
+	trust, err := tlsTrustOf(p)
+	if err != nil {
+		return nil, fmt.Errorf("outpost: task %s: %w", task.ID, err)
+	}
+	if trust.Mode == driver.TLSModePin {
+		trust.Pin = sessions.certPinOf(task)
+	}
+	dps, res, err := runner.CollectTLSResult(ctx, collection.TLSTask{Target: t.Target, Timeout: t.Timeout, Trust: trust})
+	if err != nil {
+		return nil, err
+	}
+	if res.Refusal != nil {
+		// The reason (an unknown authority, a name mismatch, an expiry, a
+		// changed key) is what an operator acts on: the gate publishes it as
+		// endpoint-rejection-reason (#1110), and the log says it once, here,
+		// since beneath the gate this handshake is not tried again.
+		slog.Warn("tls certificate refused", "facility", "collection", "task", task.ID, "endpoint", task.EndpointName, "reason", res.Refusal.Error())
+		sessions.refuse(task.EndpointID, task.Fingerprint, res.Refusal)
+	}
+	return dps, nil
+}
+
+// collectRequestRung runs a request transport rung (ADR-0158): the driver's
+// named request, answered, is the transport proven where an open port cannot
+// be detected. The line protocol carries it here; snmp's own request is #821.
+func collectRequestRung(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, req *driver.Request) ([]collection.Sample, error) {
+	t, err := parseTCPTask(task)
+	if err != nil {
+		return nil, err
+	}
+	if runner.Line == nil {
+		return nil, fmt.Errorf("outpost: task %s: no line client for the request rung", task.ID)
+	}
+	now := time.Now().UTC()
+	answer, xerr := runner.Line.Exchange(ctx, t.Target, req.Line, t.Timeout)
+	answered := xerr == nil && req.Reply.Accepts(answer)
+	reason := collection.Responded
+	if xerr != nil {
+		reason = collection.Timedout
+		if r, ok := collection.Classify(xerr); ok && r != collection.Responded {
+			reason = r
+		}
+	} else if !answered {
+		reason = collection.Timedout
+	}
+	// The port took the request when the send went through; whether it
+	// answered is the next fact.
+	open := xerr == nil || reason == collection.Timedout
+	verdict := "down"
+	if answered {
+		verdict = "up"
+	}
+	return []collection.Sample{
+		collection.ProbeResult(collection.SignalTCPOpen, open, now, reason),
+		{Name: collection.SignalEndpointResponsive, Text: verdict, IsText: true, TS: now, Labels: map[string]string{collection.ReasonLabel: string(reason)}},
+	}, nil
+}
+
+// informationalPingTimeout bounds the ladder's ping: it is informational, so
+// it never holds a tick.
+const informationalPingTimeout = 500 * time.Millisecond
+
+// pingInformational lands the ladder's ping (ADR-0158) beside an endpoint's
+// probe: icmp-reachable and its rtt, informational only. It is appended after
+// the verdict is judged, so a component that blocks ping never reads down
+// for it; an outpost that cannot ping lands nothing.
+func pingInformational(ctx context.Context, runner *collection.Runner, task collection.TaskSpec, dps []collection.Sample) []collection.Sample {
+	host, ok := pingHost(runner, task)
+	if !ok {
+		return dps
+	}
+	pings, err := runner.CollectICMP(ctx, collection.ICMPTask{Target: host, Timeout: informationalPingTimeout})
+	if err != nil {
+		return dps
+	}
+	// One observation per probe (the architect's ruling on probe samples):
+	// the reachable fact only, no averaged figure.
+	for _, p := range pings {
+		if p.Name != collection.SignalICMPReachable {
+			continue
+		}
+		if p.Labels == nil {
+			p.Labels = map[string]string{}
+		}
+		p.Labels["informational"] = "true"
+		dps = append(dps, p)
+	}
+	return dps
+}
+
+// collectTask dispatches a task to its probe by transport and returns the
+// produced samples. A nil, nil return is a transport this outpost does not
+// run (skip, nothing to publish); an error is an unusable config or an
+// inconclusive probe (skip, no false down). Since #812 the ladder climbs to
+// layer 7: http issues a real request and ssh runs a real key exchange, each
+// carrying its L4 dial facts along, so reached-but-not-responsive and
+// responded-but-not-authenticated are observable states; tcp stays the plain
+// connect and icmp pings.
+func collectTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Sample, error) {
+	switch task.Transport {
+	case "tcp":
+		t, err := parseTCPTask(task)
+		if err != nil {
+			return nil, err
+		}
+		return runner.CollectTCP(ctx, t)
+	case "http", "websocket":
+		// A websocket's probe is http's (#1034): a credential-free GET /,
+		// any status an answer, so the rung stays observed beneath an
+		// upgrade the credential gates.
+		t, err := parseHTTPTask(task)
+		if err != nil {
+			return nil, err
+		}
+		t.Tally = probeTally(task.Transport)
+		return runner.CollectHTTP(ctx, t)
+	case "telnet":
+		t, err := parseTCPTask(task)
+		if err != nil {
+			return nil, err
+		}
+		return runner.CollectTelnet(ctx, collection.TelnetTask{Target: t.Target, Timeout: t.Timeout})
+	case "ssh":
+		t, err := parseSSHTask(task)
+		if err != nil {
+			return nil, err
+		}
+		return runner.CollectSSH(ctx, t)
+	case "icmp":
+		t, err := parseICMPTask(task)
+		if err != nil {
+			return nil, err
+		}
+		return runner.CollectICMP(ctx, t)
+	default:
+		return nil, nil // unwired transport: nothing to run
+	}
+}
+
+// parseTCPTask reads the dial target and timeout from a task's endpoint params.
+func parseTCPTask(task collection.TaskSpec) (collection.TCPTask, error) {
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.TCPTask{}, fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)
+		}
+	}
+	if p.Target == "" {
+		return collection.TCPTask{}, fmt.Errorf("outpost: task %s: empty tcp target", task.ID)
+	}
+	var timeout time.Duration
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return collection.TCPTask{}, fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+		}
+		timeout = d
+	}
+	return collection.TCPTask{Target: p.Target, Timeout: timeout}, nil
+}
+
+// parseICMPTask reads the echo target, count, and timeout from a task's endpoint
+// params. An empty target is a usage error the caller skips on.
+func parseICMPTask(task collection.TaskSpec) (collection.ICMPTask, error) {
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.ICMPTask{}, fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)
+		}
+	}
+	if p.Target == "" {
+		return collection.ICMPTask{}, fmt.Errorf("outpost: task %s: empty icmp target", task.ID)
+	}
+	var timeout time.Duration
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return collection.ICMPTask{}, fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+		}
+		timeout = d
+	}
+	return collection.ICMPTask{Target: p.Target, Count: p.Count, Timeout: timeout}, nil
+}
+
+// groupFor maps one task's produced samples to a per-lane task group (#594,
+// #1582), one of the groups of the tick's batch. Pure: no I/O. The probes
+// know their lanes statically: a numeric probe value rides the metric lane, a
+// text verdict rides the property lane as canonical JSON text. A sample the
+// probe did not stamp carries NO per-sample ts (the group ts governs at
+// ingest); stamping the zero time would read as the year one downstream. The
+// per-sample labels are carried but not persisted in this checkpoint.
+func groupFor(taskID string, dps []collection.Sample) *ogv1.TaskGroup {
+	ev := &ogv1.TaskGroup{
+		TaskId: taskID,
+		Ts:     timestamppb.New(time.Now().UTC()),
+	}
+	for _, d := range dps {
+		var ts *timestamppb.Timestamp
+		if !d.TS.IsZero() {
+			ts = timestamppb.New(d.TS)
+		}
+		switch d.Lane {
+		case driver.LaneEvent:
+			// A driver's event (#1145): its message and payload, validated
+			// against the event type at ingest.
+			ev.Events = append(ev.Events, &ogv1.EventSample{
+				Name:     d.Name,
+				Message:  strings.ToValidUTF8(d.Text, "\uFFFD"),
+				Payload:  d.Attributes,
+				Ts:       ts,
+				Identity: collection.WireIdentity(d.Identity),
+			})
+			continue
+		case driver.LaneLog:
+			// A component's log line the task collected (#1145): its own
+			// lane, so ingest lands it on the task's component, never as the
+			// outpost's self-log.
+			ev.TaskLogs = append(ev.TaskLogs, &ogv1.LogLine{
+				Message:    strings.ToValidUTF8(d.Text, "\uFFFD"),
+				Severity:   d.Severity,
+				Facility:   strings.ToValidUTF8(d.Facility, "\uFFFD"),
+				Source:     strings.ToValidUTF8(d.Source, "\uFFFD"),
+				Attributes: d.Attributes,
+				Ts:         ts,
+			})
+			continue
+		}
+		if d.IsText {
+			// json.Marshal of a string cannot fail; it yields the quoted canonical form.
+			vj, _ := json.Marshal(d.Text)
+			ev.Properties = append(ev.Properties, &ogv1.PropertySample{
+				Name:      d.Name,
+				ValueJson: string(vj),
+				Ts:        ts,
+				Labels:    validLabels(d.Labels),
+				Identity:  collection.WireIdentity(d.Identity),
+			})
+			continue
+		}
+		ev.Metrics = append(ev.Metrics, &ogv1.MetricSample{
+			Name:     d.Name,
+			Value:    d.Value,
+			Ts:       ts,
+			Labels:   validLabels(d.Labels),
+			Identity: collection.WireIdentity(d.Identity),
+		})
+	}
+	return ev
+}
+
+// validLabels is a sample's labels as valid UTF-8: a reason may carry a
+// component's own text (an http error page), and a protobuf string refuses
+// invalid UTF-8, which would fail the whole batch.
+func validLabels(labels map[string]string) map[string]string {
+	if len(labels) == 0 {
+		return labels
+	}
+	out := make(map[string]string, len(labels))
+	for k, v := range labels {
+		out[strings.ToValidUTF8(k, "\uFFFD")] = strings.ToValidUTF8(v, "\uFFFD")
+	}
+	return out
+}
+
+// publishCollectionFailed lands the collection-failed occurrence for a task
+// whose config or payload could not be used: the event carries the reason as
+// its message and the task identity in its payload, so a failing check is a
+// fact on the component's timeline, never only a line in the outpost's own logs.
+// It rides the tick's batch as the task's group (#1582); the outpost argument is
+// the call sites' and goes unused, the batch carrying the outpost's id.
+func publishCollectionFailed(out *telemetrySpool, _, taskID string, cause error) error {
+	return out.add(collectionFailedGroup(taskID, cause))
+}
+
+// collectionFailedGroup is the task group carrying one collection-failed
+// event for taskID: cause as its message, the task identity in its payload.
+func collectionFailedGroup(taskID string, cause error) *ogv1.TaskGroup {
+	payload, _ := json.Marshal(map[string]string{"task": taskID})
+	return &ogv1.TaskGroup{
+		TaskId: taskID,
+		Ts:     timestamppb.New(time.Now().UTC()),
+		Events: []*ogv1.EventSample{{
+			Name: collection.EventCollectionFailed,
+			// A cause may carry a component's own text; a protobuf string
+			// refuses invalid UTF-8.
+			Message: strings.ToValidUTF8(cause.Error(), "\uFFFD"),
+			Payload: payload,
+		}},
+	}
+}
+
+// parseHTTPTask reads the request target and timeout from a task's endpoint
+// params.
+func parseHTTPTask(task collection.TaskSpec) (collection.HTTPTask, error) {
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.HTTPTask{}, fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)
+		}
+	}
+	if p.Target == "" {
+		return collection.HTTPTask{}, fmt.Errorf("outpost: task %s: empty http target", task.ID)
+	}
+	var timeout time.Duration
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return collection.HTTPTask{}, fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+		}
+		timeout = d
+	}
+	return collection.HTTPTask{Target: p.Target, Timeout: timeout}, nil
+}
+
+// parseSSHTask reads the dial target, the optional credential the auth rung
+// tries (plain params today; secret references arrive with the driver spec,
+// #813), and the timeout from a task's endpoint params.
+func parseSSHTask(task collection.TaskSpec) (collection.SSHTask, error) {
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.SSHTask{}, fmt.Errorf("outpost: bad endpoint params for task %s: %w", task.ID, err)
+		}
+	}
+	if p.Target == "" {
+		return collection.SSHTask{}, fmt.Errorf("outpost: task %s: empty ssh target", task.ID)
+	}
+	var timeout time.Duration
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return collection.SSHTask{}, fmt.Errorf("outpost: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+		}
+		timeout = d
+	}
+	return collection.SSHTask{Target: p.Target, Username: p.Username, Password: p.Password, Timeout: timeout}, nil
+}

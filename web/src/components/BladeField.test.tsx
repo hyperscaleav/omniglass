@@ -33,7 +33,7 @@ describe("BladeField", () => {
       expect(container.textContent).toContain("\u2014");
     });
 
-    it("renders a custom read node when one is given", () => {
+    it("renders a custom read outpost when one is given", () => {
       const { getByText, container } = render(() => (
         <BladeField label="Kind" read={<span class="badge">manufacturer</span>}>
           <select />

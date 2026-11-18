@@ -15,7 +15,7 @@ import (
 // TestMetricTypeAPI drives the /metric-types catalog over HTTP, the metric-lane
 // mirror of TestPropertyAPI: an owner registers, reads, updates, and deletes a
 // custom metric type; an official (seeded) one is read-only; a malformed name, a
-// non-numeric data type, and a duplicate are rejected; and an ungranted principal
+// non-numeric data type, and a duplicate are rejected; and an ungranted user
 // is forbidden to create.
 func TestMetricTypeAPI(t *testing.T) {
 	t.Parallel()
@@ -94,8 +94,8 @@ func TestMetricTypeAPI(t *testing.T) {
 	// Delete the custom type.
 	c.do(ownerTok, http.MethodDelete, "/metric-types/pump-speed", nil, http.StatusNoContent)
 
-	// An ungranted principal is forbidden to create.
-	noneTok := principalWithGrants(t, ctx, dsn, "nometrics", nil)
+	// An ungranted user is forbidden to create.
+	noneTok := userWithGrants(t, ctx, dsn, "nometrics", nil)
 	c.do(noneTok, http.MethodPost, "/metric-types", map[string]any{"name": "nope-metric", "data_type": "int"}, http.StatusForbidden)
 }
 

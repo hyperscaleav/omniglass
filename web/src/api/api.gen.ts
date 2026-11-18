@@ -39,6 +39,9 @@ export type AcceptedStruct = {
   properties: number;
 };
 
+/**
+ * A rule that decides when a notification about an alarm is sent, and to which targets.
+ */
 export type ActionRuleBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -75,10 +78,10 @@ export type AddMemberInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * The principal to add: a human's username, a service account's name, or its uuid
+     * The user to add: a person's username, a machine user's name, or its uuid
      * @minLength 1
      */
-  principal_id: string;
+  user_id: string;
 };
 
 export type AddSimComponentInputBody = {
@@ -106,7 +109,7 @@ export type AddSimComponentOutputBody = {
   component: string;
   /** How many endpoints were created for the collector to reach it. */
   endpoints: number;
-  node: string;
+  outpost: string;
 };
 
 export type AddSimSystemComponentBody = {
@@ -114,7 +117,7 @@ export type AddSimSystemComponentBody = {
   address: string;
   component: string;
   product: string;
-  role: string;
+  slot: string;
 };
 
 export type AddSimSystemInputBody = {
@@ -125,7 +128,7 @@ export type AddSimSystemInputBody = {
   /** The system's name; minted from its type when empty */
   name?: string;
   /**
-     * The standard the system is built to; its roles decide the components
+     * The standard the system is built to; its slots decide the components
      * @minLength 1
      */
   standard: string;
@@ -136,18 +139,18 @@ export type AddSimSystemInputBody = {
   system_type: string;
 };
 
-export type SimRoleFillBody = {
-  /** The choice alternate the role belongs to, choice/alternate; empty when unconditional. */
+export type SimSlotFillBody = {
+  /** The choice alternate the slot belongs to, choice/alternate; empty when unconditional. */
   alternate?: string;
-  /** How many simulated components the role gets: its quorum, at least one, capped at its capacity. */
+  /** How many simulated components the slot gets: its quorum, at least one, capped at its capacity. */
   count: number;
-  /** How many the role stays short when nothing simulated fits. */
+  /** How many the slot stays short when nothing simulated fits. */
   missing?: number;
-  /** The simulated product chosen for the role; empty when nothing simulated fits. */
+  /** The simulated product chosen for the slot; empty when nothing simulated fits. */
   product?: string;
-  /** Why the role is left unstaffed. */
+  /** Why the slot is left unstaffed. */
   reason?: string;
-  role: string;
+  slot: string;
 };
 
 export type AddSimSystemOutputBody = {
@@ -155,17 +158,333 @@ export type AddSimSystemOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   components: AddSimSystemComponentBody[] | null;
-  node: string;
+  outpost: string;
   system: string;
   /** The new system's id, the stable address a link to it uses. */
   system_id: string;
   /**
-     * The roles nothing simulated could fill, left short.
+     * The slots nothing simulated could fill, left short.
      * @nullable
      */
-  unstaffed: SimRoleFillBody[] | null;
+  unstaffed: SimSlotFillBody[] | null;
 };
 
+/**
+ * Policy for this role's agents' calls that may point a stored credential somewhere
+ */
+export type AgentClassOverrideCredentialDestination = typeof AgentClassOverrideCredentialDestination[keyof typeof AgentClassOverrideCredentialDestination];
+
+
+export const AgentClassOverrideCredentialDestination = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for this role's agents' writes that overwrite or delete
+ */
+export type AgentClassOverrideDestructive = typeof AgentClassOverrideDestructive[keyof typeof AgentClassOverrideDestructive];
+
+
+export const AgentClassOverrideDestructive = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for this role's agents' reads
+ */
+export type AgentClassOverrideRead = typeof AgentClassOverrideRead[keyof typeof AgentClassOverrideRead];
+
+
+export const AgentClassOverrideRead = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for this role's agents' writes that create or act
+ */
+export type AgentClassOverrideWrite = typeof AgentClassOverrideWrite[keyof typeof AgentClassOverrideWrite];
+
+
+export const AgentClassOverrideWrite = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+export type AgentClassOverride = {
+  /** Policy for this role's agents' calls that may point a stored credential somewhere */
+  credential_destination?: AgentClassOverrideCredentialDestination;
+  /** Policy for this role's agents' writes that overwrite or delete */
+  destructive?: AgentClassOverrideDestructive;
+  /** Policy for this role's agents' reads */
+  read?: AgentClassOverrideRead;
+  /** Policy for this role's agents' writes that create or act */
+  write?: AgentClassOverrideWrite;
+};
+
+/**
+ * The operation class
+ */
+export type AgentClassPolicyClass = typeof AgentClassPolicyClass[keyof typeof AgentClassPolicyClass];
+
+
+export const AgentClassPolicyClass = {
+  read: 'read',
+  write: 'write',
+  destructive: 'destructive',
+  credential_destination: 'credential_destination',
+} as const;
+
+/**
+ * always runs; ask runs, and the client confirms with its person first; never is refused by the server
+ */
+export type AgentClassPolicyPolicy = typeof AgentClassPolicyPolicy[keyof typeof AgentClassPolicyPolicy];
+
+
+export const AgentClassPolicyPolicy = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * The layer that set the policy: the platform's class value, a role's override, or the tool's own
+ */
+export type AgentClassPolicySource = typeof AgentClassPolicySource[keyof typeof AgentClassPolicySource];
+
+
+export const AgentClassPolicySource = {
+  platform: 'platform',
+  role: 'role',
+  tool: 'tool',
+} as const;
+
+export type AgentClassPolicy = {
+  /** The operation class */
+  class: AgentClassPolicyClass;
+  /** always runs; ask runs, and the client confirms with its person first; never is refused by the server */
+  policy: AgentClassPolicyPolicy;
+  /** The role whose override set the policy, when the source is role */
+  role?: string;
+  /** The layer that set the policy: the platform's class value, a role's override, or the tool's own */
+  source: AgentClassPolicySource;
+};
+
+/**
+ * The tool's operation class
+ */
+export type AgentToolPolicyClass = typeof AgentToolPolicyClass[keyof typeof AgentToolPolicyClass];
+
+
+export const AgentToolPolicyClass = {
+  read: 'read',
+  write: 'write',
+  destructive: 'destructive',
+  credential_destination: 'credential_destination',
+} as const;
+
+/**
+ * always runs; ask runs, and the client confirms with its person first; never is refused by the server
+ */
+export type AgentToolPolicyPolicy = typeof AgentToolPolicyPolicy[keyof typeof AgentToolPolicyPolicy];
+
+
+export const AgentToolPolicyPolicy = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * The layer that set the policy: the platform's class value, a role's override, or the tool's own
+ */
+export type AgentToolPolicySource = typeof AgentToolPolicySource[keyof typeof AgentToolPolicySource];
+
+
+export const AgentToolPolicySource = {
+  platform: 'platform',
+  role: 'role',
+  tool: 'tool',
+} as const;
+
+export type AgentToolPolicy = {
+  /** The tool's operation class */
+  class: AgentToolPolicyClass;
+  /** always runs; ask runs, and the client confirms with its person first; never is refused by the server */
+  policy: AgentToolPolicyPolicy;
+  /** The role whose override set the policy, when the source is role */
+  role?: string;
+  /** The layer that set the policy: the platform's class value, a role's override, or the tool's own */
+  source: AgentToolPolicySource;
+  /** The tool (operation ID) an override names */
+  tool: string;
+};
+
+export type AgentPolicyOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Whether this request is an agent's (an agent token, or any request over MCP), so the policy governs it */
+  applies: boolean;
+  /**
+     * The resolved policy for each operation class, for the caller's roles
+     * @nullable
+     */
+  classes: AgentClassPolicy[] | null;
+  /**
+     * The resolved policy for each tool the install overrides; every other tool takes its class's
+     * @nullable
+     */
+  tools: AgentToolPolicy[] | null;
+};
+
+/**
+ * Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind)
+ */
+export type AgentSettingsCredentialDestination = typeof AgentSettingsCredentialDestination[keyof typeof AgentSettingsCredentialDestination];
+
+
+export const AgentSettingsCredentialDestination = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE)
+ */
+export type AgentSettingsDestructive = typeof AgentSettingsDestructive[keyof typeof AgentSettingsDestructive];
+
+
+export const AgentSettingsDestructive = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Policy for an agent's reads (a GET, or a POST gated on a read permission)
+ */
+export type AgentSettingsRead = typeof AgentSettingsRead[keyof typeof AgentSettingsRead];
+
+
+export const AgentSettingsRead = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+/**
+ * Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter
+ */
+export type AgentSettingsRoles = {[key: string]: AgentClassOverride};
+
+/**
+ * Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter
+ */
+export type AgentSettingsTools = {[key: string]: string};
+
+/**
+ * Policy for an agent's writes that create or act (a POST that is not a read)
+ */
+export type AgentSettingsWrite = typeof AgentSettingsWrite[keyof typeof AgentSettingsWrite];
+
+
+export const AgentSettingsWrite = {
+  always: 'always',
+  ask: 'ask',
+  never: 'never',
+} as const;
+
+export type AgentSettings = {
+  /** Policy for an agent's calls that may point a stored credential somewhere (any operation gated on secret:bind) */
+  credential_destination: AgentSettingsCredentialDestination;
+  /** Policy for an agent's writes that overwrite or delete (a PATCH, PUT or DELETE) */
+  destructive: AgentSettingsDestructive;
+  /** Policy for an agent's reads (a GET, or a POST gated on a read permission) */
+  read: AgentSettingsRead;
+  /** Per-role overrides, keyed by role name: a class set here applies to the agents of anyone granted the role, when it is stricter */
+  roles?: AgentSettingsRoles;
+  /** Per-tool overrides, keyed by operation ID (an MCP tool's name): always, ask or never, applied on top of the tool's class when stricter */
+  tools?: AgentSettingsTools;
+  /** Policy for an agent's writes that create or act (a POST that is not a read) */
+  write: AgentSettingsWrite;
+};
+
+export type AguiContextInput = {
+  /**
+     * What it is: a kind, or page
+     * @maxLength 100
+     */
+  description: string;
+  /**
+     * A name or dotted address, or a route and its query; never a rendered value
+     * @maxLength 2000
+     */
+  value: string;
+  [key: string]: unknown;
+ };
+
+/**
+ * The skill's arguments, by name
+ */
+export type AguiSkillInputArguments = {[key: string]: string};
+
+export type AguiSkillInput = {
+  /** The skill's arguments, by name */
+  arguments?: AguiSkillInputArguments;
+  /**
+     * The skill, as omniglass mcp skill lists it
+     * @maxLength 100
+     */
+  name: string;
+  [key: string]: unknown;
+ };
+
+export type AguiForwardedInput = {
+  /** An embedded skill to run, its prompt ahead of the person's message */
+  skill?: AguiSkillInput;
+  [key: string]: unknown;
+ };
+
+export type AguiMessageInput = {
+  /** Text, or an array of parts whose text parts are read */
+  content?: unknown;
+  id?: string;
+  /** Who said it; only the last user message is read */
+  role: string;
+  [key: string]: unknown;
+ };
+
+/**
+ * resolved answers it with the payload; cancelled declines it
+ */
+export type AguiResumeInputStatus = typeof AguiResumeInputStatus[keyof typeof AguiResumeInputStatus];
+
+
+export const AguiResumeInputStatus = {
+  resolved: 'resolved',
+  cancelled: 'cancelled',
+} as const;
+
+export type AguiResumeInput = {
+  /** The interrupt being answered: the call the run waits on */
+  interruptId: string;
+  /** The answer, {"approved": true} to run the call */
+  payload?: unknown;
+  /** resolved answers it with the payload; cancelled declines it */
+  status: AguiResumeInputStatus;
+  [key: string]: unknown;
+ };
+
+/**
+ * A raised problem on a component, with a severity, from the moment it raises until it clears.
+ */
 export type AlarmBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -173,7 +492,7 @@ export type AlarmBody = {
   acknowledged: boolean;
   /** When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at */
   acknowledged_at?: string;
-  /** Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name) */
+  /** Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name) */
   acknowledged_by?: string;
   active: boolean;
   /** Null while the alarm is active */
@@ -182,7 +501,7 @@ export type AlarmBody = {
   component: string;
   /** The component's uuid, the stable form of component */
   component_id: string;
-  /** The condition identity: one open alarm per (component, dedup_key) */
+  /** What the alarm is about: one open alarm per (component, dedup_key) */
   dedup_key: string;
   id: string;
   message: string;
@@ -193,14 +512,14 @@ export type AlarmBody = {
   raised_by_rule_id?: string;
   /** The severity level the alarm was raised at, by name (see /severity-levels) */
   severity: string;
-  /** Who snoozed the condition, by name; empty while it is not snoozed, or once that principal has been purged (the audit log keeps the name) */
+  /** Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name) */
   snoozed_by?: string;
-  /** Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
+  /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
   snoozed_until?: string;
 };
 
 export type AlarmFactBody = {
-  /** The key a template reads it by ({{.Name}}) */
+  /** The key a rule reads it by ({{.Name}}) */
   name: string;
   value: string;
 };
@@ -251,7 +570,7 @@ export type AlarmTimelineEntryBody = {
   message?: string;
   /** A notification's uuid, what :retry names */
   notification?: string;
-  /** The person a notification is addressed to, by username: shown to that person and to holders of principal:read:admin */
+  /** The person a notification is addressed to, by username: shown to that person and to holders of user:read:admin */
   recipient?: string;
   /** True when a notification is addressed to a person whose name the caller may not see */
   recipient_withheld?: boolean;
@@ -261,7 +580,7 @@ export type AlarmTimelineEntryBody = {
   target?: string;
   /** The alarm edge a notification is about: raised or cleared */
   transition?: string;
-  /** The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed) */
+  /** The event's type (e.g. rule-fired), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its alarm was snoozed) */
   what: string;
 };
 
@@ -277,10 +596,119 @@ export type AlarmTimelineOutputBody = {
   entries: AlarmTimelineEntryBody[] | null;
 };
 
+/**
+ * Who said it
+ */
+export type AppendAssistantMessageInputRole = typeof AppendAssistantMessageInputRole[keyof typeof AppendAssistantMessageInputRole];
+
+
+export const AppendAssistantMessageInputRole = {
+  user: 'user',
+  assistant: 'assistant',
+  tool: 'tool',
+} as const;
+
+export type AppendAssistantMessageInput = {
+  /** The message as your loop carries it on */
+  body: unknown;
+  /** Who said it */
+  role: AppendAssistantMessageInputRole;
+};
+
+export type AssistantUsage = {
+  input_tokens: number;
+  output_tokens: number;
+};
+
+export type AppendAssistantConversationInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The seq of the last message you saw (0 for an empty conversation); anything else is a 409
+     * @minimum 0
+     */
+  after: number;
+  /**
+     * The new messages, in order
+     * @minItems 1
+     * @nullable
+     */
+  messages: AppendAssistantMessageInput[] | null;
+  /** The write the run paused on, waiting on you; absent clears it */
+  pending?: unknown;
+  /** The tokens this turn spent, added to the total */
+  usage?: AssistantUsage;
+};
+
+export type AssistantConversation = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  created_at: string;
+  id: string;
+  message_count: number;
+  name: string;
+  pending?: unknown;
+  updated_at: string;
+  usage: AssistantUsage;
+};
+
+/**
+ * Who said it
+ */
+export type AssistantMessageBodyRole = typeof AssistantMessageBodyRole[keyof typeof AssistantMessageBodyRole];
+
+
+export const AssistantMessageBodyRole = {
+  user: 'user',
+  assistant: 'assistant',
+  tool: 'tool',
+} as const;
+
+export type AssistantMessageBody = {
+  /** The message as the client's loop carries it on, kept as given */
+  body: unknown;
+  created_at: string;
+  /** Who said it */
+  role: AssistantMessageBodyRole;
+  /** The message's position in the conversation, from 1 */
+  seq: number;
+};
+
+export type AssistantConversationOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  created_at: string;
+  id: string;
+  message_count: number;
+  /**
+     * The transcript, in order
+     * @nullable
+     */
+  messages: AssistantMessageBody[] | null;
+  name: string;
+  pending?: unknown;
+  updated_at: string;
+  usage: AssistantUsage;
+};
+
+export type AssistantSettings = {
+  /**
+     * Days a stored omnibot conversation is kept after it last changed
+     * @minimum 1
+     * @maximum 36500
+     */
+  conversation_days: number;
+};
+
+/**
+ * One recorded privileged action or sign-in, with who did it, when and to what.
+ */
 export type AuditEventBody = {
   actor?: string;
   actor_name?: string;
-  /** How the action arrived: mcp for a tool call on the MCP server; absent for a direct API call. Set by the server, never by the caller */
+  /** The agent that took the action on the actor's behalf, from the agent token it authenticated with; absent when the person acted directly */
+  agent?: string;
+  /** How the action arrived: mcp for a tool call on the MCP server, omnibot for one omnibot made; absent for a direct API call. Set by the server, never by the caller */
   channel?: string;
   /** The name and version the MCP client declared about itself, recorded as asserted; absent when there is none */
   client?: string;
@@ -310,6 +738,45 @@ export type AuthStatusOutputBody = {
   bootstrapped: boolean;
   /** Whether this server is a lab started by omniglass lab run: disposable data and a well-known login, never a real deployment */
   lab: boolean;
+};
+
+/**
+ * The PKCE method; S256 only
+ */
+export type AuthorizeOAuthClientInputBodyCodeChallengeMethod = typeof AuthorizeOAuthClientInputBodyCodeChallengeMethod[keyof typeof AuthorizeOAuthClientInputBodyCodeChallengeMethod];
+
+
+export const AuthorizeOAuthClientInputBodyCodeChallengeMethod = {
+  S256: 'S256',
+} as const;
+
+export type AuthorizeOAuthClientInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Whether you approve the client; false sends it back with access_denied */
+  approved: boolean;
+  /** The PKCE challenge from the authorization request */
+  code_challenge: string;
+  /** The PKCE method; S256 only */
+  code_challenge_method: AuthorizeOAuthClientInputBodyCodeChallengeMethod;
+  /** The redirect URI from the authorization request; one the client registered */
+  redirect_uri: string;
+  /** The resource the token is for: this server's MCP endpoint */
+  resource: string;
+  /**
+     * The roles to approve; each must be one whose capabilities you hold. Required when approved
+     * @nullable
+     */
+  roles?: string[] | null;
+  /** The client's state, echoed back */
+  state?: string;
+};
+
+export type AuthorizeOAuthClientOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Where to send the browser back to: the client's redirect with a code, or with access_denied */
+  redirect_to: string;
 };
 
 export type AvatarOutputBody = {
@@ -353,7 +820,7 @@ export type CalcInputBody = {
 };
 
 /**
- * Which registry the key is in
+ * Which catalog the key is in
  */
 export type CalcInputReadBodyLane = typeof CalcInputReadBodyLane[keyof typeof CalcInputReadBodyLane];
 
@@ -370,7 +837,7 @@ export type CalcInputReadBody = {
   key: string;
   /** The key's uuid, which the rule holds it by */
   key_id: string;
-  /** Which registry the key is in */
+  /** Which catalog the key is in */
   lane: CalcInputReadBodyLane;
   /** The window the input reads its key over, in seconds; absent for an input that reads current values */
   window_seconds?: number;
@@ -419,7 +886,7 @@ export type CalcOwnerStateBody = {
      * @nullable
      */
   missing: string[] | null;
-  /** A system with no role-bound members since then: the rule writes nothing and its last value stands, unsupported */
+  /** A system with no slot-bound members since then: the rule writes nothing and its last value stands, unsupported */
   no_members_since?: string;
   /** The owner, by name, resolved now */
   owner: string;
@@ -539,7 +1006,7 @@ export type CalcPreviewOwnerBody = {
      * @nullable
      */
   missing: string[] | null;
-  /** A system with no role-bound members: the rule would write nothing */
+  /** A system with no slot-bound members: the rule would write nothing */
   no_members: boolean;
   /** The owner, by name */
   owner: string;
@@ -584,7 +1051,7 @@ export type CalcPreviewOutputBody = {
 };
 
 /**
- * Which lane the output key is on, derived from the registries
+ * Which lane the output key is on, derived from the catalogs
  */
 export type CalcRuleBodyOutputLane = typeof CalcRuleBodyOutputLane[keyof typeof CalcRuleBodyOutputLane];
 
@@ -595,7 +1062,7 @@ export const CalcRuleBodyOutputLane = {
 } as const;
 
 /**
- * What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members)
+ * What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members)
  */
 export type CalcRuleBodyOwnerKind = typeof CalcRuleBodyOwnerKind[keyof typeof CalcRuleBodyOwnerKind];
 
@@ -605,10 +1072,13 @@ export const CalcRuleBodyOwnerKind = {
   system: 'system',
 } as const;
 
+/**
+ * A rule that derives a new value from other signals on each owner it applies to.
+ */
 export type CalcRuleBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** Why the stored reduce does not compile against the registries as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled */
+  /** Why the stored reduce does not compile against the catalogs as they are now (an input key deleted or retyped, or an expression a newer diagnostic refuses); absent when it compiles. While present the rule cannot be enabled */
   calc_error?: CalcErrorBody;
   /**
      * The warnings the stored reduce compiles with (a likely mistake, such as an input it never names), each with its code; notes only, never a fault: the rule computes all the same
@@ -636,9 +1106,9 @@ export type CalcRuleBody = {
   official: boolean;
   /** The property or metric the rule writes */
   output_key: string;
-  /** Which lane the output key is on, derived from the registries */
+  /** Which lane the output key is on, derived from the catalogs */
   output_lane: CalcRuleBodyOutputLane;
-  /** What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members) */
+  /** What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members) */
   owner_kind: CalcRuleBodyOwnerKind;
   /** How many owners the caller may read hold a value the rule computed (on the list; 0 on a single read) */
   owners_computed: number;
@@ -714,16 +1184,16 @@ export type CheckNameOutputBody = {
   valid: boolean;
 };
 
-export type ClaimNodeInputBody = {
+export type ClaimOutpostInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * The node name the enrollment was minted for
+     * The outpost name the enrollment was minted for
      * @minLength 1
      */
   name: string;
   /**
-     * The one-time enrollment token from node create, exchanged here for the node's NATS credential
+     * The one-time enrollment token from outpost create, exchanged here for the outpost's NATS credential
      * @minLength 1
      */
   token: string;
@@ -732,11 +1202,11 @@ export type ClaimNodeInputBody = {
 export type ClaimOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The NATS URL the node dials */
+  /** The NATS URL the outpost dials */
   nats_url: string;
-  /** The node's NATS password (its enrollment token) */
+  /** The outpost's NATS password (its enrollment token) */
   password: string;
-  /** The node's NATS username (its node name) */
+  /** The outpost's NATS username (its outpost name) */
   username: string;
 };
 
@@ -750,7 +1220,7 @@ export type CollectionSettings = {
 };
 
 /**
- * Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
+ * Where it sits now: queued for its outpost; delivered to it (a binding that settles on observation, or a fire-and-forget command its outpost's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status
  */
 export type CommandBodyPhase = typeof CommandBodyPhase[keyof typeof CommandBodyPhase];
 
@@ -766,7 +1236,7 @@ export const CommandBodyPhase = {
 } as const;
 
 /**
- * How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it)
+ * How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its outpost's execution report decides it)
  */
 export type CommandBodySettleMode = typeof CommandBodySettleMode[keyof typeof CommandBodySettleMode];
 
@@ -778,7 +1248,7 @@ export const CommandBodySettleMode = {
 } as const;
 
 /**
- * What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report
+ * What decided it, once terminal: its reply (for a fire-and-forget command, its outpost's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report
  */
 export type CommandBodySettledBy = typeof CommandBodySettledBy[keyof typeof CommandBodySettledBy];
 
@@ -834,6 +1304,9 @@ export type CommandObservation = {
   value: unknown;
 };
 
+/**
+ * One instruction sent to a component, typed by a command type, and its outcome.
+ */
 export type CommandBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -847,21 +1320,21 @@ export type CommandBody = {
   component_id: string;
   /** When its window closes (its settle window, or a fire-and-forget command's delivery window); a command still issued past it is timed out by the next sweep */
   deadline: string;
-  /** When a node last took it from its queue */
+  /** When an outpost last took it from its queue */
   delivered_at?: string;
-  /** How many times a node has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again */
+  /** How many times an outpost has taken it: 0 while queued, 1 once delivered, more when it went silent past the redelivery wait and was taken again */
   delivery_count: number;
   /** The driver whose binding renders and settles it, by name */
   driver?: string;
-  /** The endpoint it rides, by name: the one a node took it over, else the one a node would (its driver binds the type); absent when no endpoint can carry it */
+  /** The endpoint it rides, by name: the one an outpost took it over, else the one an outpost would (its driver binds the type); absent when no endpoint can carry it */
   endpoint?: string;
   /** The endpoint's uuid */
   endpoint_id?: string;
-  /** The execution's failure, as its node reported it, masked of credentials */
+  /** The execution's failure, as its outpost reported it, masked of credentials */
   exec_error?: string;
-  /** When its node's execution report landed */
+  /** When its outpost's execution report landed */
   executed_at?: string;
-  /** When a node first took it from its queue; a redelivery moves delivered_at, not this */
+  /** When an outpost first took it from its queue; a redelivery moves delivered_at, not this */
   first_delivered_at?: string;
   /** The command's id: with its component, its address (a command has no name) */
   id: number;
@@ -871,29 +1344,29 @@ export type CommandBody = {
   intended?: unknown;
   /** When it was issued */
   issued_at: string;
-  /** Who issued it, by name; empty once that principal is purged (the audit log keeps the name) */
+  /** Who issued it, by name; empty once that user is purged (the audit log keeps the name) */
   issuer?: string;
   /** The issuer's uuid, the actor on the command's audit row */
   issuer_id?: string;
-  /** The node that endpoint is placed on, by name */
-  node?: string;
   /** The sample of its target that decided it, when an observation did */
   observed?: CommandObservation;
+  /** The outpost that endpoint is placed on, by name */
+  outpost?: string;
   /** The invocation params */
   params?: unknown;
-  /** Where it sits now: queued for its node; delivered to it (a binding that settles on observation, or a fire-and-forget command its node's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status */
+  /** Where it sits now: queued for its outpost; delivered to it (a binding that settles on observation, or a fire-and-forget command its outpost's execution report decides); awaiting the reply that settles it; awaiting the observation that does, within its window; or, once terminal, its status */
   phase: CommandBodyPhase;
   /** Why it reached its terminal status, in words: the reply that confirmed it, the value observed instead, where it stopped when it timed out */
   reason?: string;
   /** The component's answer, as its execution report carried it, masked of the endpoint's credentials and anything labeled a credential, and capped; absent until a report lands */
   reply?: string;
-  /** How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its node's execution report decides it) */
+  /** How its driver binding says it settles: from the component's reply, from the next observation of its target, or none (it sets nothing, so its outpost's execution report decides it) */
   settle_mode: CommandBodySettleMode;
   /** How long it waits for its evidence */
   settle_window_seconds: number;
   /** When it reached its terminal status */
   settled_at?: string;
-  /** What decided it, once terminal: its reply (for a fire-and-forget command, its node's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report */
+  /** What decided it, once terminal: its reply (for a fire-and-forget command, its outpost's execution report), an observation of its target, or its window closing on no evidence; issue marks a fire-and-forget command recorded before it waited on its report */
   settled_by?: CommandBodySettledBy;
   /** The event its terminal status put there: command-settled, command-failed or command-timed-out */
   settled_event_id?: number;
@@ -907,11 +1380,14 @@ export type CommandBody = {
   target_kind?: CommandBodyTargetKind;
 };
 
+/**
+ * Something a component can be told to do in the catalog, with its target and how long it takes to settle.
+ */
 export type CommandTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   description?: string;
-  /** The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering node until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
+  /** The command takes its device down (reboot): its delivery closes the gates of the hold set on the delivering outpost until each reads up again. The hold set is the target and what it hosts (host dependencies, followed down), less any out-of-band endpoint of the target */
   disruptive: boolean;
   /** A disruptive type's backstop: an endpoint with no up verdict this long after delivery reopens anyway, counted as hold-expiry-count. Not the settle window. 0 on a type that is not disruptive */
   hold_seconds: number;
@@ -924,7 +1400,7 @@ export type CommandTypeBody = {
   params_schema?: unknown;
   /** Marks a power command: the name of the param that carries the outlet. Its hold set is the components that outlet feeds (their power dependencies) and what they host, not the target itself. Only on a disruptive type */
   power_outlet_param?: string;
-  /** A disruptive type's quiet period: how long the node runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive */
+  /** A disruptive type's quiet period: how long the outpost runs no poll, probe or session dial against the held endpoints after delivery. 0 on a type that is not disruptive */
   quiet_seconds: number;
   /** How long the device is given to actuate before a mismatch is a failed command */
   settle_window_seconds: number;
@@ -946,6 +1422,9 @@ export type RenderBody = {
   dash: string;
 };
 
+/**
+ * One managed device or service, an instance of a product, placed at a location and usually a member of a system.
+ */
 export type ComponentBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -1066,6 +1545,8 @@ export type EffectiveMetricBody = {
   source_rule?: string;
   /** That calc rule's uuid, the stable form of source_rule */
   source_rule_id?: string;
+  /** The display unit of the series (ms, dB, percent), from the metric catalog; omitted when the type names none */
+  unit?: string;
   /** The effective value: the latest sample, or the contract default until one arrives */
   value?: unknown;
 };
@@ -1098,7 +1579,7 @@ export type EffectivePropertyBody = {
   default_value?: unknown;
   /** True when the component's product declares the property; false for one set directly on the component */
   from_contract: boolean;
-  /** True when the component overrides the contract default */
+  /** True when the component declares its own value over the contract default */
   is_set: boolean;
   /** The property's human label; omitted when unset */
   label?: string;
@@ -1110,13 +1591,13 @@ export type EffectivePropertyBody = {
   reconciliation?: ReconciliationBody;
   /** Whether the product contract requires a value; always false off-contract */
   required: boolean;
-  /** The component's override; omitted when the property is unset */
+  /** The component's declared value; omitted when the property is unset */
   set_value?: unknown;
   /** The calc rule whose calculated sample is the value, by the name it was written under; absent when the value is a declared one or a default */
   source_rule?: string;
   /** That calc rule's uuid, the stable form of source_rule */
   source_rule_id?: string;
-  /** The effective value: the override, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation */
+  /** The effective value: the declared value, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation */
   value?: unknown;
   /** The stored value's id when set; omitted when the property is unset */
   value_id?: string;
@@ -1269,13 +1750,13 @@ export type ComponentSimOutputBody = {
   /** What the simulator reports for the component: serving, hits, and its impairment. */
   activity?: SimDeviceBody;
   address?: string;
-  /** The node's simulator pulled recently. */
+  /** The outpost's simulator pulled recently. */
   connected: boolean;
   impairments: SimImpairmentStatus;
-  node?: string;
+  outpost?: string;
   product?: string;
   profile?: string;
-  /** The component has an endpoint on a node and a product a profile simulates. */
+  /** The component has an endpoint on an outpost and a product a profile simulates. */
   simulated: boolean;
   summary?: string;
   /**
@@ -1290,13 +1771,16 @@ export type ComponentSimOutputBody = {
   variants?: string[] | null;
 };
 
+/**
+ * The device class a product belongs to, such as display, projector or microphone.
+ */
 export type ComponentTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** A compact form of label; empty inherits the nearest ancestor's */
   abbrev?: string;
   /**
-     * Tags every instance of this type (or a descendant that does not override) starts with
+     * Tags every instance of this type (or a descendant that does not set its own) starts with
      * @nullable
      */
   default_tags: string[] | null;
@@ -1306,20 +1790,20 @@ export type ComponentTypeBody = {
   icon?: string;
   /** The component_type's uuid, the stable handle that survives a rename */
   id: string;
-  /** The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_abbrev?: string;
   /** The name of the ancestor component_type inherited_abbrev comes from, which may be further up the chain than the parent */
   inherited_abbrev_source?: string;
-  /** The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_icon?: string;
   /** The name of the ancestor component_type inherited_icon comes from, which may be further up the chain than the parent */
   inherited_icon_source?: string;
-  /** The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_stem?: string;
   /** The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent */
   inherited_stem_source?: string;
   label: string;
-  /** The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components */
+  /** The label rule instances of this type get; empty inherits the nearest ancestor's, then the global rule for components */
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -1329,7 +1813,7 @@ export type ComponentTypeBody = {
   parent?: string;
   /** The parent component_type's id, the canonical handle; absent for a root type */
   parent_id?: string;
-  /** The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it */
+  /** The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it */
   resolved_icon?: string;
   /** The auto-generated component name's prefix; empty inherits the nearest ancestor's */
   stem?: string;
@@ -1365,12 +1849,19 @@ export type CreateActionRuleInputBody = {
      * @nullable
      */
   targets: string[] | null;
-  /** A predicate over the alarm facts at the action expression site (component, place, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
+  /** A predicate over the alarm facts at the action expression site (component, location, severity, severity_rank, message, transition, rule, ...; see /expressions:validate with site action); absent always holds. A refusal is a 422 with its line and column */
   when?: string;
 };
 
+export type CreateAssistantConversationInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** A name (lowercase kebab), unique among your own conversations; absent names it for you */
+  name?: string;
+};
+
 /**
- * What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create
+ * What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create
  */
 export type CreateCalcRuleInputBodyOwnerKind = typeof CreateCalcRuleInputBodyOwnerKind[keyof typeof CreateCalcRuleInputBodyOwnerKind];
 
@@ -1408,7 +1899,7 @@ export type CreateCalcRuleInputBody = {
      * @minLength 1
      */
   output_key: string;
-  /** What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's role-bound members). Fixed at create */
+  /** What the rule derives a value on: each component its selector picks, or each system its selector picks (read from the system's slot-bound members). Fixed at create */
   owner_kind: CreateCalcRuleInputBodyOwnerKind;
   /** An expression over the inputs by alias */
   reduce: CalcReduceBody;
@@ -1421,7 +1912,7 @@ export type CreateCommandTypeInputBody = {
   readonly $schema?: string;
   /** What the command does */
   description?: string;
-  /** The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering node until each reads up again */
+  /** The command takes its device down (reboot): its delivery closes the gates of the hold set (the target and what it hosts) on the delivering outpost until each reads up again */
   disruptive?: boolean;
   /**
      * A disruptive type's backstop in seconds, greater than quiet_seconds: an endpoint with no up verdict by then reopens anyway, counted. Not the settle window. Only on a disruptive type
@@ -1488,23 +1979,23 @@ export type CreateComponentDependencyInputBody = {
 };
 
 /**
- * Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read
+ * Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind)
  */
 export type CreateComponentFromTemplateInputBodyInputs = {[key: string]: string};
 
 export type CreateComponentFromTemplateInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may read */
+  /** Driver inputs laid over the template's preset: the address (host) attaches the endpoint, a secret input names a secret you may bind (secret:bind) */
   inputs?: CreateComponentFromTemplateInputBodyInputs;
   /** The component's label */
   label?: string;
-  /** The place the component sits in, by name or dotted path */
+  /** The location the component sits in, by name or dotted path */
   location?: string;
   /** The component's name; minted as an unnamed create mints it when empty */
   name?: string;
-  /** The node the endpoint is placed on; needed when inputs carry an address */
-  node?: string;
+  /** The outpost the endpoint is placed on; needed when inputs carry an address */
+  outpost?: string;
   /**
      * The component template, by name
      * @minLength 1
@@ -1573,7 +2064,7 @@ export type CreateComponentTypeInputBody = {
      * @minLength 1
      */
   label: string;
-  /** A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. */
+  /** A label rule, written in Go text/template, rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A rule that does not parse is refused here, 422. */
   label_rule?: string;
   /**
      * The globally unique name
@@ -1633,13 +2124,13 @@ export type CreateEndpointInputBody = {
      * @maxLength 200
      */
   label?: string;
-  /** Node placement, by name or id */
-  node?: string;
   /** Mark the endpoint a management path (a BMC, a management port) that answers through a reboot of its device, so a reboot's hold leaves its gate open */
   out_of_band?: boolean;
+  /** Outpost placement, by name or id */
+  outpost?: string;
   /** Address/target settings (jsonb); an attach derives them from the inputs instead */
   params?: unknown;
-  /** A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
+  /** A transport name from the built-in transports (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
   transport?: string;
 };
 
@@ -1685,7 +2176,7 @@ export type CreateEventRuleInputBody = {
   readonly $schema?: string;
   /** The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) */
   clear_criteria?: CriteriaInput;
-  /** The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none */
+  /** The event type the rule writes when it clears, by name (rule-cleared is the generic one); absent, it writes none */
   clear_event_type?: string;
   /** A Go duration; empty is 0s */
   clear_sustain?: string;
@@ -1693,10 +2184,10 @@ export type CreateEventRuleInputBody = {
   description?: string;
   /** Defaults to true */
   enabled?: boolean;
-  /** The criteria that starts the condition: {expr}, or the short form {op, value} */
+  /** The criteria the rule fires on: {expr}, or the short form {op, value} */
   fire_criteria: CriteriaInput;
   /**
-     * The event type the rule writes when its condition starts, by name (condition-started is the generic one)
+     * The event type the rule writes when it fires, by name (rule-fired is the generic one)
      * @minLength 1
      */
   fire_event_type: string;
@@ -1915,7 +2406,7 @@ export type CreateLocationTypeInputBody = {
      * @minLength 1
      */
   label: string;
-  /** The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile */
+  /** The label rule locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile */
   label_rule?: string;
   /**
      * The globally unique name (e.g. wing); "root" is reserved
@@ -1935,28 +2426,28 @@ export type CreateLocationsFromTemplateInputBody = {
   label?: string;
   /** The subtree root's name; omitted takes the template's, else its type's name rule mints one */
   name?: string;
-  /** The place the subtree sits under, by name or dotted path; omitted makes it a new top */
+  /** The location the subtree sits under, by name or dotted path; omitted makes it a new top */
   parent?: string;
   /**
-     * The place template, by name
+     * The location template, by name
      * @minLength 1
      */
   template: string;
 };
 
-export type CreatedPlaceBody = {
-  /** The place's name */
+export type CreatedLocationBody = {
+  /** The location's name */
   location: string;
-  /** The place's id, the stable address a link to it uses */
+  /** The location's id, the stable address a link to it uses */
   location_id: string;
-  /** The place it sits under, by name */
+  /** The location it sits under, by name */
   parent?: string;
   /** Its location type */
   type: string;
 };
 
 export type CreatedSystemBody = {
-  /** The place it sits in */
+  /** The location it sits in */
   location: string;
   /** The standard it is built to */
   standard: string;
@@ -1970,10 +2461,10 @@ export type CreateLocationsFromTemplateOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * The places created, parents first
+     * The locations created, parents first
      * @nullable
      */
-  places: CreatedPlaceBody[] | null;
+  locations: CreatedLocationBody[] | null;
   /**
      * The standards this write created from their templates
      * @nullable
@@ -1993,9 +2484,30 @@ export type CreateLocationsFromTemplateOutputBody = {
   to_attach: string[] | null;
 };
 
+export type CreateMeTokenInputBodyChannelsItem = typeof CreateMeTokenInputBodyChannelsItem[keyof typeof CreateMeTokenInputBodyChannelsItem];
+
+
+export const CreateMeTokenInputBodyChannelsItem = {
+  api: 'api',
+  mcp: 'mcp',
+  omnibot: 'omnibot',
+} as const;
+
 export type CreateMeTokenInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /**
+     * Mint an agent token: the name of the agent that will act on your behalf. Every row it writes is marked with this name; it can never reveal or use a credential, mint a token, change your password, or impersonate.
+     * @maxLength 100
+     * @pattern ^[A-Za-z0-9][A-Za-z0-9 ._-]*$
+     */
+  agent?: string;
+  /**
+     * The channels an agent token is accepted on: api (direct calls), mcp (the MCP server), or omnibot alone (the built-in assistant, which reaches the MCP server and audits as omnibot). Omit to accept api and mcp.
+     * @maxItems 3
+     * @nullable
+     */
+  channels?: CreateMeTokenInputBodyChannelsItem[] | null;
   /**
      * What the token is for (required)
      * @minLength 1
@@ -2003,7 +2515,13 @@ export type CreateMeTokenInputBody = {
      */
   description: string;
   /**
-     * Days until the token expires (default 90, maximum 365)
+     * An agent token's own roles: it holds only what these roles AND you hold, re-checked on every request. Each must be a role you cover. Omit for your own grants, still under the agent ceiling.
+     * @maxItems 20
+     * @nullable
+     */
+  roles?: string[] | null;
+  /**
+     * Days until the token expires (default 90, maximum 365; required for an agent token)
      * @minimum 1
      * @maximum 365
      */
@@ -2013,12 +2531,24 @@ export type CreateMeTokenInputBody = {
 export type CreateMeTokenOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** The agent the token was minted for, when it is an agent token */
+  agent?: string;
+  /**
+     * The channels the agent token is accepted on, when restricted
+     * @nullable
+     */
+  channels?: string[] | null;
   /** What the token is for */
   description: string;
   /** When the token expires (RFC 3339) */
   expires_at: string;
   /** The non-secret ogp locator for the new token */
   prefix: string;
+  /**
+     * The agent token's own roles, when narrowed
+     * @nullable
+     */
+  roles?: string[] | null;
   /** The bearer token, shown once. Store it now: it cannot be retrieved again. */
   token: string;
 };
@@ -2054,24 +2584,6 @@ export type CreateMetricTypeInputBody = {
   unit?: string;
 };
 
-export type CreateNodeInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** Free-form operator notes about the node */
-  description?: string;
-  /** Operator label; falls back to the name when empty */
-  label?: string;
-  /** Optional location the node sits in, by name or id (descriptive placement, not scope) */
-  location?: string;
-  /**
-     * Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name: string;
-};
-
 /**
  * The target kind
  */
@@ -2081,8 +2593,8 @@ export type CreateNotificationTargetInputBodyKind = typeof CreateNotificationTar
 export const CreateNotificationTargetInputBodyKind = {
   webhook: 'webhook',
   email: 'email',
-  principal_group: 'principal_group',
-  principal: 'principal',
+  user_group: 'user_group',
+  user: 'user',
 } as const;
 
 export type CreateNotificationTargetInputBody = {
@@ -2109,14 +2621,14 @@ export type CreateNotificationTargetInputBody = {
      * @minLength 1
      */
   name: string;
-  /** A principal target's person, by username or uuid; binding one takes principal:read:admin */
-  principal?: string;
-  /** A principal_group target's group, by name or uuid; binding one takes principal_group:read:admin */
-  principal_group?: string;
   /** A platform secret, by name or uuid, of type hmac-key (signs each body) or bearer-token (sent as Authorization: Bearer) */
   secret?: string;
   /** A webhook's destination URL: https, or plain http to a host or address the notification.egress_allow setting names. A private, loopback or link-local destination is refused at send unless that setting names it; a cloud metadata address always is */
   url?: string;
+  /** A user target's person, by username or uuid; binding one takes user:read:admin */
+  user?: string;
+  /** A user_group target's group, by name or uuid; binding one takes user_group:read:admin */
+  user_group?: string;
 };
 
 export type CreateNotificationTypeInputBody = {
@@ -2131,10 +2643,28 @@ export type CreateNotificationTypeInputBody = {
      * @minLength 1
      */
   name: string;
-  /** The one-line subject template */
+  /** The one-line subject, written in the rule language */
   subject: string;
-  /** The body text template */
+  /** The body text, written in the rule language */
   text: string;
+};
+
+export type CreateOutpostInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** Free-form operator notes about the outpost */
+  description?: string;
+  /** Operator label; falls back to the name when empty */
+  label?: string;
+  /** Optional location the outpost sits in, by name or id (descriptive placement, not scope) */
+  location?: string;
+  /**
+     * Globally unique outpost name (lowercase letters, digits, and hyphens); it is also the outpost's NATS subject token, which is why the rule forbids a dot
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name: string;
 };
 
 export type CreatePersonalRuleInputBody = {
@@ -2170,36 +2700,8 @@ export type CreatePersonalRuleInputBody = {
      * @nullable
      */
   targets?: string[] | null;
-  /** A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read */
+  /** A predicate over the alarm facts (component, location, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read */
   when?: string;
-};
-
-export type CreatePrincipalInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * Contact email for the account
-     * @maxLength 320
-     */
-  email?: string;
-  /**
-     * What an operator reads in lists; falls back to the username
-     * @maxLength 200
-     */
-  label?: string;
-  /**
-     * Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in
-     * @minLength 12
-     * @maxLength 256
-     */
-  password?: string;
-  /**
-     * Unique sign-in name (lowercase letters, digits, and . _ -)
-     * @minLength 1
-     * @maxLength 200
-     * @pattern ^[a-z0-9][a-z0-9._-]*$
-     */
-  username: string;
 };
 
 /**
@@ -2218,7 +2720,7 @@ export type CreateProductInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.
+     * The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to a type in that tree. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.
      * @minLength 1
      */
   component_type: string;
@@ -2233,7 +2735,7 @@ export type CreateProductInputBody = {
      * @minLength 1
      */
   label: string;
-  /** A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. */
+  /** A label rule, written in Go text/template, rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A rule that does not parse is refused here, 422. */
   label_rule?: string;
   /**
      * The globally unique name; renameable
@@ -2337,7 +2839,7 @@ export type CreateSeverityLevelInputBody = {
      * @minLength 1
      */
   name: string;
-  /** Its place among the levels: higher is more severe; unique */
+  /** Its position among the levels: higher is more severe; unique */
   rank: number;
 };
 
@@ -2379,23 +2881,23 @@ export type CreateStandardInputBody = {
 export type CreateSystemFromTemplateInputBodyAttachItem = {[key: string]: string};
 
 /**
- * Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached
+ * Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached
  */
 export type CreateSystemFromTemplateInputBodyAttach = {[key: string]: CreateSystemFromTemplateInputBodyAttachItem[] | null};
 
 export type CreateSystemFromTemplateInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** Driver inputs per role, one object per component of the role in order; an object with an address (host) attaches that component, the rest land unattached */
+  /** Driver inputs per slot, one object per component of the slot in order; an object with an address (host) attaches that component, the rest land unattached */
   attach?: CreateSystemFromTemplateInputBodyAttach;
   /** The system's label */
   label?: string;
-  /** The place the system and its components sit in, by name or dotted path */
+  /** The location the system and its components sit in, by name or dotted path */
   location?: string;
   /** The system's name; minted from its type when empty */
   name?: string;
-  /** The node the endpoints are placed on; needed when any component attaches */
-  node?: string;
+  /** The outpost the endpoints are placed on; needed when any component attaches */
+  outpost?: string;
   /** A standard of your own to build to, by name; omitted takes the template's, created from its template in the same write when you hold none of that name */
   standard?: string;
   /**
@@ -2414,15 +2916,15 @@ export type CreatedComponentBody = {
   component_id: string;
   /** Its product */
   product: string;
-  /** The role it fills in its system */
-  role?: string;
+  /** The slot it fills in its system */
+  slot?: string;
 };
 
 export type CreateSystemFromTemplateOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * A component per role, filled to quorum and assigned
+     * A component per slot, filled to quorum and assigned
      * @nullable
      */
   components: CreatedComponentBody[] | null;
@@ -2471,7 +2973,7 @@ export type CreateSystemInputBody = {
   parent?: string;
   /** The standard it conforms to, by handle or uuid; omit for a one-off system */
   standard_id?: string;
-  /** The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified */
+  /** The system_type it is classified as (what it is for), by name or uuid; omit to leave it unclassified */
   system_type_id?: string;
 };
 
@@ -2487,7 +2989,7 @@ export type CreateSystemTypeInputBody = {
      * @minLength 1
      */
   label: string;
-  /** The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile */
+  /** The label rule systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile */
   label_rule?: string;
   /**
      * The globally unique name
@@ -2534,6 +3036,34 @@ export type CreateTagInputBody = {
   name: string;
   /** Whether bindings cascade to descendants; defaults true */
   propagates?: boolean;
+};
+
+export type CreateUserInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Contact email for the account
+     * @maxLength 320
+     */
+  email?: string;
+  /**
+     * What an operator reads in lists; falls back to the username
+     * @maxLength 200
+     */
+  label?: string;
+  /**
+     * Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in
+     * @minLength 12
+     * @maxLength 256
+     */
+  password?: string;
+  /**
+     * Unique sign-in name (lowercase letters, digits, and . _ -)
+     * @minLength 1
+     * @maxLength 200
+     * @pattern ^[a-z0-9][a-z0-9._-]*$
+     */
+  username: string;
 };
 
 /**
@@ -2684,6 +3214,9 @@ export type DraftLabelOutputBody = {
   rule: string;
 };
 
+/**
+ * The declared recipe that collects from a product, what to fetch, how to read it and what it can set.
+ */
 export type DriverBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -2696,49 +3229,6 @@ export type DriverBody = {
   /** The declarative spec body (#813): transports, inputs, poll functions, listeners, command bindings. Absent on a stub that cannot be attached yet */
   spec?: unknown;
   version?: string;
-};
-
-export type EffectiveRoleBody = {
-  /**
-     * The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type
-     * @nullable
-     */
-  accepted_types: string[] | null;
-  /** The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write */
-  alternate?: string;
-  /** How many components fill the role */
-  assigned: number;
-  /**
-     * The component names filling this role in this system
-     * @nullable
-     */
-  assigned_to: string[] | null;
-  /** The most components the role will accept; null means no upper bound beyond quorum */
-  capacity?: number;
-  /** True when the role is inherited from the system's standard; false when declared on the system */
-  from_standard: boolean;
-  /** What an impaired role means for its system: outage, degraded, or none */
-  impact: string;
-  label: string;
-  name: string;
-  /**
-     * If set, a filling component's product must be one of these; empty accepts any product of an accepted type
-     * @nullable
-     */
-  pinned_products: string[] | null;
-  /**
-     * Human labels for each position within the role, by index; empty when unlabeled
-     * @nullable
-     */
-  position_labels: string[] | null;
-  /**
-     * AssignedTo's own 1-based position, index for index; not necessarily i+1, since an unassign leaves a gap rather than compacting
-     * @nullable
-     */
-  positions: number[] | null;
-  quorum: number;
-  /** How many more assignment rows the role wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure */
-  understaffed: number;
 };
 
 export type SecretFieldBody = {
@@ -2776,6 +3266,49 @@ export type EffectiveSecretsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   secrets: ResolvedSecretBody[] | null;
+};
+
+export type EffectiveSlotBody = {
+  /**
+     * The component_types a filling component's product must be classified within (self or a descendant); empty accepts any type
+     * @nullable
+     */
+  accepted_types: string[] | null;
+  /** The choice/alternate this slot joins, addressed as "choice-name/alternate-name" (#626); absent when the slot is unconditional. The same form the write body takes, so a read round-trips into a write */
+  alternate?: string;
+  /** How many components fill the slot */
+  assigned: number;
+  /**
+     * The component names filling this slot in this system
+     * @nullable
+     */
+  assigned_to: string[] | null;
+  /** The most components the slot will accept; null means no upper bound beyond quorum */
+  capacity?: number;
+  /** True when the slot is inherited from the system's standard; false when declared on the system */
+  from_standard: boolean;
+  /** What an impaired slot means for its system: outage, degraded, or none */
+  impact: string;
+  label: string;
+  name: string;
+  /**
+     * If set, a filling component's product must be one of these; empty accepts any product of an accepted type
+     * @nullable
+     */
+  pinned_products: string[] | null;
+  /**
+     * Human labels for each position within the slot, by index; empty when unlabeled
+     * @nullable
+     */
+  position_labels: string[] | null;
+  /**
+     * AssignedTo's own 1-based position, index for index; not necessarily i+1, since an unassign leaves a gap rather than compacting
+     * @nullable
+     */
+  positions: number[] | null;
+  quorum: number;
+  /** How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own health. See the health read's short for the occupancy-aware figure */
+  understaffed: number;
 };
 
 export type ResolvedTagBody = {
@@ -2853,6 +3386,9 @@ export type EndpointWebhookBody = {
   signed: boolean;
 };
 
+/**
+ * A connection to a component over one transport, the API Omniglass reaches it through.
+ */
 export type EndpointBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -2872,15 +3408,15 @@ export type EndpointBody = {
   label?: string;
   /** The derived name (its transport), unique within the owning component */
   name: string;
-  /** The node placement name, if assigned */
-  node?: string;
-  /** The placed node's id; the stable form of node */
-  node_id?: string;
   /** A management path to the device (a BMC, a management port) that answers through a reboot of it: a reboot's hold leaves this endpoint's gate open. A power command on the outlet feeding the device still holds it */
   out_of_band: boolean;
+  /** The outpost placement name, if assigned */
+  outpost?: string;
+  /** The placed outpost's id; the stable form of outpost */
+  outpost_id?: string;
   /** The address/target settings (jsonb) */
   params?: unknown;
-  /** The transport name (the wire this endpoint speaks over), from the code registry */
+  /** The transport name (the wire this endpoint speaks over), from the built-in transports */
   transport: string;
   /** A webhook endpoint's own block (#1024): where a sender posts, the scheme that checks it, and what the scheme has refused; absent on every other transport, and on a list */
   webhook?: EndpointWebhookBody;
@@ -2913,7 +3449,7 @@ export type RequestTallySnapshot = {
   batches_acknowledged: number;
   batches_dropped: number;
   busy_workers?: GaugeReading;
-  node: string;
+  outpost: string;
   queue_depth?: GaugeReading;
   started: string;
   /** @nullable */
@@ -2962,8 +3498,10 @@ export type SimObservation = {
   /** @nullable */
   faces?: SimFaceOverlap[] | null;
   faces_overlapped?: number;
+  fleet_changing?: boolean;
+  fleet_generation: number;
   impaired: number;
-  node: string;
+  outpost: string;
   /** @nullable */
   protocols: SimProtocolObservation[] | null;
   started: string;
@@ -2972,7 +3510,7 @@ export type SimObservation = {
 export type EndpointObservation = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  node: RequestTallySnapshot;
+  outpost: RequestTallySnapshot;
   sim_after: SimObservation;
   sim_before: SimObservation;
 };
@@ -2981,7 +3519,7 @@ export type EnrollOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   name: string;
-  /** The enrollment token, shown once. Hand it to the node deployment; the node presents it to claim its NATS credential. */
+  /** The enrollment token, shown once. Hand it to the outpost deployment; the outpost presents it to claim its NATS credential. */
   token: string;
 };
 
@@ -3057,6 +3595,9 @@ export type ErrorModel = {
   type?: string;
 };
 
+/**
+ * One point-in-time occurrence on a component, typed by an event type.
+ */
 export type EventBody = {
   /** The alarm a rule's fire event opened or its clear event resolved; absent for most events */
   alarm_id?: string;
@@ -3085,7 +3626,7 @@ export type EventBody = {
 };
 
 /**
- * Which lane the key reads, derived from the registries
+ * Which lane the key reads, derived from the catalogs
  */
 export type EventRuleBodySampleLane = typeof EventRuleBodySampleLane[keyof typeof EventRuleBodySampleLane];
 
@@ -3095,17 +3636,18 @@ export const EventRuleBodySampleLane = {
   metric: 'metric',
 } as const;
 
+/**
+ * A rule that watches signals and fires when its criteria hold, raising an alarm if it carries a severity.
+ */
 export type EventRuleBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria */
+  /** When the sample meets this for clear_sustain, it clears (and the alarm clears); absent, the negation of fire_criteria */
   clear_criteria?: CriteriaBody;
-  /** The event type the rule writes when its condition ends, by name; absent, it writes none */
+  /** The event type the rule writes when it clears, by name; absent, it writes none */
   clear_event_type?: string;
   /** How long the clear criteria must hold, a Go duration */
   clear_sustain: string;
-  /** How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them) */
-  conditions_in_force: number;
   /** Why the rule's stored criteria do not compile (its key's data type changed under them, a row the backfill left in short form, or an expression a newer diagnostic refuses); absent when they compile. While present the rule holds: it judges nothing */
   criteria_error?: CriteriaErrorBody;
   /**
@@ -3115,12 +3657,14 @@ export type EventRuleBody = {
   criteria_warnings?: CriteriaErrorBody[] | null;
   description?: string;
   enabled: boolean;
-  /** When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity) */
+  /** When the sample meets this for fire_sustain, the rule fires (and it opens an alarm when it names a severity) */
   fire_criteria: CriteriaBody;
-  /** The event type the rule writes when its condition starts, by name */
+  /** The event type the rule writes when it fires, by name */
   fire_event_type: string;
   /** How long the fire criteria must hold, a Go duration (0s fires at once) */
   fire_sustain: string;
+  /** How many firings the rule holds right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them) */
+  firing: number;
   /** The rule's uuid, the stable form of name */
   id: string;
   label?: string;
@@ -3137,7 +3681,7 @@ export type EventRuleBody = {
   pending_streaks: number;
   /** The property or metric the rule reads */
   sample_key: string;
-  /** Which lane the key reads, derived from the registries */
+  /** Which lane the key reads, derived from the catalogs */
   sample_lane: EventRuleBodySampleLane;
   /** The components the rule watches; both lists empty is every component */
   selector: SelectorBody;
@@ -3147,14 +3691,14 @@ export type EventRuleBody = {
   version: number;
 };
 
-export type RuleConditionBody = {
+export type RuleFiringBody = {
   /** The component, by name */
   component: string;
   /** The component's uuid */
   component_id: string;
-  /** The sample instance (an endpoint) the condition is on */
+  /** The sample instance (an endpoint) it fired on */
   instance?: string;
-  /** When the condition came into force */
+  /** When the rule fired there */
   since: string;
 };
 
@@ -3196,13 +3740,13 @@ export type RuleStreakBody = {
 export type EventRuleStateOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /**
-     * The conditions the rule holds in force, informational or not
-     * @nullable
-     */
-  conditions: RuleConditionBody[] | null;
   /** Why the rule's stored criteria do not compile; absent when they compile. While present the rule holds */
   criteria_error?: CriteriaErrorBody;
+  /**
+     * The rule's firings, informational or not
+     * @nullable
+     */
+  firings: RuleFiringBody[] | null;
   /** When an ingested sample was last judged by the rule, to within 5s; absent when it never has been */
   last_judged_at?: string;
   /**
@@ -3218,19 +3762,22 @@ export type EventRuleStateOutputBody = {
 };
 
 /**
- * Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+ * Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
  */
 export type EventTypeBodyWriterClass = typeof EventTypeBodyWriterClass[keyof typeof EventTypeBodyWriterClass];
 
 
 export const EventTypeBodyWriterClass = {
-  'node-probe': 'node-probe',
+  'outpost-probe': 'outpost-probe',
   platform: 'platform',
   'command-lifecycle': 'command-lifecycle',
   calc: 'calc',
   collected: 'collected',
 } as const;
 
+/**
+ * A kind of discrete occurrence in the catalog, what an event is typed by.
+ */
 export type EventTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3242,7 +3789,7 @@ export type EventTypeBody = {
   official: boolean;
   /** A JSON Schema fragment for the occurrence payload */
   payload_schema?: unknown;
-  /** Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
+  /** Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), command-lifecycle (a command's own issue: command-issued), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
   writer_class: EventTypeBodyWriterClass;
 };
 
@@ -3330,6 +3877,9 @@ export type ExpressionDiagnostic = {
   unbound?: string;
 };
 
+/**
+ * Uploaded content kept with the fleet, such as a firmware image, a config dump or a runbook.
+ */
 export type FileBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3408,7 +3958,7 @@ export type HealthAlarmBody = {
   acknowledged: boolean;
   /** When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at */
   acknowledged_at?: string;
-  /** Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name) */
+  /** Who acknowledged it, by name; empty while unacknowledged, or once that user has been purged (the audit log keeps the name) */
   acknowledged_by?: string;
   /** The component the alarm is on, by name */
   component: string;
@@ -3420,37 +3970,37 @@ export type HealthAlarmBody = {
   severity: string;
 };
 
-export type HealthRoleBody = {
-  /** True for an unconditional role, or a role whose alternate is the one currently answering its choice. False means this role's own impaired/short/spare figures did not contribute to the system's verdict */
+export type HealthSlotBody = {
+  /** True for an unconditional slot, or a slot whose alternate is the one currently answering its choice. False means this slot's own impaired/short/spare figures did not contribute to the system's verdict */
   active: boolean;
   /**
      * The active alarms on those down components
      * @nullable
      */
   alarms: HealthAlarmBody[] | null;
-  /** The alternate within choice this role belongs to; absent when the role is unconditional */
+  /** The alternate within choice this slot belongs to; absent when the slot is unconditional */
   alternate?: string;
   /** @nullable */
   assigned_to: string[] | null;
-  /** The choice this role belongs to; absent when the role is unconditional */
+  /** The choice this slot belongs to; absent when the slot is unconditional */
   choice?: string;
   /**
-     * The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded
+     * The assigned components whose own verdict is outage; empty when the slot is merely short-staffed or only degraded
      * @nullable
      */
   down: string[] | null;
-  /** What an impaired role means for its system: outage, degraded, or none */
+  /** What an impaired slot means for its system: outage, degraded, or none */
   impact: string;
   /** True when satisfying is below quorum */
   impaired: boolean;
   label: string;
   name: string;
   quorum: number;
-  /** How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies) */
+  /** How many assigned components currently occupy the slot (their own verdict is not outage; a degraded component still occupies) */
   satisfying: number;
-  /** How many more occupants the role needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the roles read's understaffed when an assigned component is down */
+  /** How many more occupants the slot needs to reach quorum, counting only those currently occupying (own verdict not outage); zero once it does. Diverges from the slots read's understaffed when an assigned component is down */
   short: number;
-  /** How many occupants the role has beyond quorum; zero at or below quorum */
+  /** How many occupants the slot has beyond quorum; zero at or below quorum */
   spare: number;
 };
 
@@ -3470,10 +4020,10 @@ export type FleetHealthOutputBody = {
   owner: string;
   owner_kind: string;
   /**
-     * The contributing roles; empty for a location
+     * The contributing slots; empty for a location
      * @nullable
      */
-  roles: HealthRoleBody[] | null;
+  slots: HealthSlotBody[] | null;
   /**
      * The systems beneath a location with their verdicts; empty for a system
      * @nullable
@@ -3484,7 +4034,7 @@ export type FleetHealthOutputBody = {
      * @nullable
      */
   transitions: HealthTransitionBody[] | null;
-  /** healthy, incomplete, degraded, or outage: the rollup of the roles or systems served beside it. incomplete is a commissioning gap, a role short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
+  /** healthy, incomplete, degraded, or outage: the rollup of the slots or systems served beside it. incomplete is a commissioning gap, a slot short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
   verdict: string;
 };
 
@@ -3523,7 +4073,7 @@ export type FleetViewOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than place without a second read
+     * Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than location without a second read
      * @nullable
      */
   locations: FleetLocationBody[] | null;
@@ -3551,9 +4101,9 @@ export const GrantBodyScopeOp = {
 export type GrantBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The source group's name, the identifier /principal-groups/{group} takes; present when the grant is inherited. */
+  /** The source group's name, the identifier /user-groups/{group} takes; present when the grant is inherited. */
   group?: string;
-  /** Set when this grant is inherited from a group the principal belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the principal. */
+  /** Set when this grant is inherited from a group the user belongs to (the group's id); absent for a direct grant, which is the only kind revocable from the user. */
   group_id?: string;
   /** The source group's friendly label, present when the grant is inherited and the group has one. */
   group_label?: string;
@@ -3565,6 +4115,9 @@ export type GrantBody = {
   scope_op?: GrantBodyScopeOp;
 };
 
+/**
+ * A set of users granted roles together, each member inheriting the group's grants.
+ */
 export type GroupBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3573,7 +4126,7 @@ export type GroupBody = {
   grant_count: number;
   id: string;
   label?: string;
-  /** How many principals belong to the group (populated on list and get; 0 from create/update). */
+  /** How many users belong to the group (populated on list and get; 0 from create/update). */
   member_count: number;
   name: string;
 };
@@ -3585,18 +4138,6 @@ export type HealthOutputBody = {
   db: string;
   /** Overall health: ok when all legs pass, degraded otherwise */
   status: string;
-};
-
-export type HumanBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  email?: string;
-  /** True when the principal has a profile picture; fetch it from the avatar endpoint. */
-  has_avatar?: boolean;
-  label?: string;
-  /** True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears. */
-  must_change_password?: boolean;
-  username: string;
 };
 
 /**
@@ -3632,7 +4173,7 @@ export type IdentityBindingBody = {
 };
 
 /**
- * view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal
+ * view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user
  */
 export type ImpersonateInputBodyMode = typeof ImpersonateInputBodyMode[keyof typeof ImpersonateInputBodyMode];
 
@@ -3651,7 +4192,7 @@ export type ImpersonateInputBody = {
      * @maximum 1440
      */
   duration_minutes?: number;
-  /** view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal */
+  /** view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated user */
   mode: ImpersonateInputBodyMode;
 };
 
@@ -3735,8 +4276,15 @@ export type ListAlarmsOutputBody = {
   /** @nullable */
   alarms: AlarmBody[] | null;
   component: string;
-  /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view */
+  /** The component's own verdict, the one its active alarms make (healthy, degraded, or outage), whatever the filter: a component's view reads it here rather than off the whole fleet view. unknown when nothing has ever observed the component (no alarm raised, no endpoint delivered): there is nothing to call healthy on */
   verdict: string;
+};
+
+export type ListAssistantConversationsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  conversations: AssistantConversation[] | null;
 };
 
 export type ListCalcRulesOutputBody = {
@@ -3861,6 +4409,13 @@ export type ListFilesOutputBody = {
   files: FileBody[] | null;
 };
 
+export type ListFleetAlarmsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  alarms: AlarmBody[] | null;
+};
+
 export type ListGroupGrantsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3902,7 +4457,7 @@ export const NotificationBodyChannel = {
 } as const;
 
 /**
- * queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm's condition was snoozed (the reason in last_error)
+ * queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm was snoozed (the reason in last_error)
  */
 export type NotificationBodyStatus = typeof NotificationBodyStatus[keyof typeof NotificationBodyStatus];
 
@@ -3925,6 +4480,9 @@ export const NotificationBodyTransition = {
   cleared: 'cleared',
 } as const;
 
+/**
+ * One message about an alarm sent on one channel, such as a webhook, an email or the inbox.
+ */
 export type NotificationBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -3954,12 +4512,12 @@ export type NotificationBody = {
   notification_type: string;
   /** When its recipient read it, for an inbox entry */
   read_at?: string;
-  /** The person it is addressed to, by username: shown to that person and to holders of principal:read:admin, withheld from everyone else (see recipient_withheld) */
+  /** The person it is addressed to, by username: shown to that person and to holders of user:read:admin, withheld from everyone else (see recipient_withheld) */
   recipient?: string;
   /** True when the row is addressed to a person whose name the caller may not see */
   recipient_withheld?: boolean;
   sent_at?: string;
-  /** queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm's condition was snoozed (the reason in last_error) */
+  /** queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm was snoozed (the reason in last_error) */
   status: NotificationBodyStatus;
   /** The rendered subject */
   subject: string;
@@ -4032,6 +4590,9 @@ export type NameRuleReadBody = {
   stem: string;
 };
 
+/**
+ * What kind of location a location is, and which kinds it may sit under.
+ */
 export type LocationTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4043,7 +4604,7 @@ export type LocationTypeBody = {
   /** The location type's uuid, the stable handle that survives a rename */
   id: string;
   label: string;
-  /** The label template locations of this type get; empty falls back to the global rule for locations */
+  /** The label rule locations of this type get; empty falls back to the global rule for locations */
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -4065,6 +4626,9 @@ export type ListLocationTypesOutputBody = {
  */
 export type LocationBodyEffectiveTags = {[key: string]: string};
 
+/**
+ * A place the fleet occupies, from a campus down to a room, nested under the location it sits in.
+ */
 export type LocationBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4120,6 +4684,18 @@ export const SessionBodyKind = {
 } as const;
 
 export type SessionBody = {
+  /** Set on an agent token: the agent acting on the person's behalf */
+  agent?: string;
+  /**
+     * The channels an agent token is accepted on
+     * @nullable
+     */
+  agent_channels?: string[] | null;
+  /**
+     * An agent token's own roles, intersected with its person's on every request
+     * @nullable
+     */
+  agent_roles?: string[] | null;
   /** The IP address the credential was created from */
   client_ip?: string;
   /** When the credential was issued (RFC 3339) */
@@ -4135,6 +4711,8 @@ export type SessionBody = {
   kind: SessionBodyKind;
   /** When the credential last authenticated a request (RFC 3339), throttled to the minute */
   last_used_at?: string;
+  /** Set on a token an OAuth client signed in for: the client's registered name */
+  oauth_client?: string;
   /** The non-secret ogp locator, so a credential is recognizable without exposing the token */
   prefix: string;
   /** The User-Agent that created the credential, so the console can show a device label */
@@ -4152,9 +4730,9 @@ export type MemberBody = {
   kind: string;
   /** The friendly string, where the member is a human who has one */
   label?: string;
-  /** The member's identifier: a human's username, or a service account's name */
+  /** The member's identifier: a person's username, or a machine user's name */
   name?: string;
-  principal_id: string;
+  user_id: string;
 };
 
 export type ListMembersOutputBody = {
@@ -4165,18 +4743,21 @@ export type ListMembersOutputBody = {
 };
 
 /**
- * Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+ * Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
  */
 export type MetricTypeBodyWriterClass = typeof MetricTypeBodyWriterClass[keyof typeof MetricTypeBodyWriterClass];
 
 
 export const MetricTypeBodyWriterClass = {
-  'node-probe': 'node-probe',
+  'outpost-probe': 'outpost-probe',
   platform: 'platform',
   calc: 'calc',
   collected: 'collected',
 } as const;
 
+/**
+ * A numeric signal in the catalog, the series a sample measures, with its unit and precision.
+ */
 export type MetricTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4193,7 +4774,7 @@ export type MetricTypeBody = {
   retention_days?: number;
   /** The display unit of the series (ms, dB, percent) */
   unit?: string;
-  /** Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
+  /** Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
   writer_class: MetricTypeBodyWriterClass;
   /** The calc rule that writes this metric, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled) */
   written_by?: CalcWriterBody;
@@ -4204,39 +4785,6 @@ export type ListMetricTypesOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   metric_types: MetricTypeBody[] | null;
-};
-
-/**
- * The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills.
- */
-export type NodeBodyEffectiveTags = {[key: string]: string};
-
-export type NodeBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  description?: string;
-  /** The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills. */
-  effective_tags?: NodeBodyEffectiveTags;
-  enrolled: boolean;
-  enrolled_at?: string;
-  label?: string;
-  last_heartbeat_at?: string;
-  /** When the newest orphaned batch arrived */
-  last_orphaned_at?: string;
-  /** The location the node sits in (descriptive placement, not scope) */
-  location?: string;
-  /** The location's id; the stable form of location */
-  location_id?: string;
-  name: string;
-  /** How many of this node's telemetry batches the server dropped because their task is not placed on this node (moved to another node, or unknown): the confinement fence, counted rather than silent. A rising count means the node is collecting for a task it no longer holds */
-  orphaned_batches: number;
-};
-
-export type ListNodesOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** @nullable */
-  nodes: NodeBody[] | null;
 };
 
 /**
@@ -4252,7 +4800,7 @@ export const NotificationTargetBodyAuth = {
 } as const;
 
 /**
- * The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read
+ * The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person. A person is told only about alarms on components they can read
  */
 export type NotificationTargetBodyKind = typeof NotificationTargetBodyKind[keyof typeof NotificationTargetBodyKind];
 
@@ -4260,10 +4808,13 @@ export type NotificationTargetBodyKind = typeof NotificationTargetBodyKind[keyof
 export const NotificationTargetBodyKind = {
   webhook: 'webhook',
   email: 'email',
-  principal_group: 'principal_group',
-  principal: 'principal',
+  user_group: 'user_group',
+  user: 'user',
 } as const;
 
+/**
+ * Where a notification goes, a webhook, a mailbox, a user group or a person.
+ */
 export type NotificationTargetBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4284,18 +4835,10 @@ export type NotificationTargetBody = {
   enabled: boolean;
   /** The target's uuid, the stable form of name */
   id: string;
-  /** The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; principal_group reaches every human member of a group, read at each alarm transition; principal reaches one person. A person is told only about alarms on components they can read */
+  /** The target kind: webhook posts a signed JSON envelope to the URL; email sends to fixed addresses through the install's mail relay; user_group reaches every person in a group, read at each alarm transition; user reaches one person. A person is told only about alarms on components they can read */
   kind: NotificationTargetBodyKind;
   label?: string;
   name: string;
-  /** The person a principal target reaches, by username; shown to a caller who reads the principal directory (principal:read:admin, all-scope) */
-  principal?: string;
-  /** The group a principal_group target reaches, by name; shown to a caller who reads the group directory (principal_group:read:admin, all-scope) */
-  principal_group?: string;
-  /** The group's uuid */
-  principal_group_id?: string;
-  /** The person's uuid */
-  principal_id?: string;
   /** The platform secret the send signs (an hmac-key) or authenticates (a bearer-token) with, by name; absent sends unsigned */
   secret?: string;
   /** The bound secret's uuid, the stable form of secret */
@@ -4303,6 +4846,14 @@ export type NotificationTargetBody = {
   updated_at: string;
   /** A webhook's destination, masked to its scheme and host (the path and query often carry a credential); :reveal returns it whole */
   url?: string;
+  /** The person a user target reaches, by username; shown to a caller who reads the user directory (user:read:admin, all-scope) */
+  user?: string;
+  /** The group a user_group target reaches, by name; shown to a caller who reads the group directory (user_group:read:admin, all-scope) */
+  user_group?: string;
+  /** The group's uuid */
+  user_group_id?: string;
+  /** The person's uuid */
+  user_id?: string;
 };
 
 export type ListNotificationTargetsOutputBody = {
@@ -4312,6 +4863,9 @@ export type ListNotificationTargetsOutputBody = {
   notification_targets: NotificationTargetBody[] | null;
 };
 
+/**
+ * What a notification about an alarm says, as a subject and a text.
+ */
 export type NotificationTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4323,9 +4877,9 @@ export type NotificationTypeBody = {
   name: string;
   /** Shipped with the platform and read-only */
   official: boolean;
-  /** The one-line subject template */
+  /** The one-line subject, written in the rule language */
   subject: string;
-  /** The body text template */
+  /** The body text, written in the rule language */
   text: string;
   updated_at: string;
 };
@@ -4342,6 +4896,42 @@ export type ListNotificationsOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   notifications: NotificationBody[] | null;
+};
+
+/**
+ * The resolved effective tags (key -> winning value) on this outpost: its direct bindings plus propagating platform tags. For the Tags column and the blade pills.
+ */
+export type OutpostBodyEffectiveTags = {[key: string]: string};
+
+/**
+ * A collection process placed near the fleet that runs tasks and commands over endpoints and reports back.
+ */
+export type OutpostBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  description?: string;
+  /** The resolved effective tags (key -> winning value) on this outpost: its direct bindings plus propagating platform tags. For the Tags column and the blade pills. */
+  effective_tags?: OutpostBodyEffectiveTags;
+  enrolled: boolean;
+  enrolled_at?: string;
+  label?: string;
+  last_heartbeat_at?: string;
+  /** When the newest orphaned batch arrived */
+  last_orphaned_at?: string;
+  /** The location the outpost sits in (descriptive placement, not scope) */
+  location?: string;
+  /** The location's id; the stable form of location */
+  location_id?: string;
+  name: string;
+  /** How many of this outpost's telemetry batches the server dropped because their task is not placed on this outpost (moved to another outpost, or unknown): the confinement fence, counted rather than silent. A rising count means the outpost is collecting for a task it no longer holds */
+  orphaned_batches: number;
+};
+
+export type ListOutpostsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  outposts: OutpostBody[] | null;
 };
 
 export type PersonalRuleBody = {
@@ -4380,46 +4970,6 @@ export type ListPersonalRulesOutputBody = {
   readonly $schema?: string;
   /** @nullable */
   action_rules: PersonalRuleBody[] | null;
-};
-
-export type ListPrincipalSessionsOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** @nullable */
-  sessions: SessionBody[] | null;
-};
-
-export type PrincipalGroupRef = {
-  id: string;
-  name: string;
-};
-
-export type SvcBody = {
-  /** The service account's identifier, unique across service principals */
-  name: string;
-};
-
-export type PrincipalBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  active: boolean;
-  /** Set when the principal is archived (soft-deleted); absent means live */
-  archived_at?: string;
-  /** @nullable */
-  grants: GrantBody[] | null;
-  /** @nullable */
-  groups: PrincipalGroupRef[] | null;
-  human?: HumanBody;
-  id: string;
-  kind: string;
-  service?: SvcBody;
-};
-
-export type ListPrincipalsOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** @nullable */
-  principals: PrincipalBody[] | null;
 };
 
 export type ProductMetricBody = {
@@ -4471,6 +5021,9 @@ export const ProductBodyKind = {
   service: 'service',
 } as const;
 
+/**
+ * A concrete model a vendor sells, with the driver that collects from it and the component type it is classified under.
+ */
 export type ProductBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4488,7 +5041,7 @@ export type ProductBody = {
   id: string;
   kind: ProductBodyKind;
   label: string;
-  /** The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule */
+  /** The label rule instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule */
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -4511,18 +5064,21 @@ export type ListProductsOutputBody = {
 };
 
 /**
- * Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
+ * Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit
  */
 export type PropertyBodyWriterClass = typeof PropertyBodyWriterClass[keyof typeof PropertyBodyWriterClass];
 
 
 export const PropertyBodyWriterClass = {
-  'node-probe': 'node-probe',
+  'outpost-probe': 'outpost-probe',
   platform: 'platform',
   calc: 'calc',
   collected: 'collected',
 } as const;
 
+/**
+ * A categorical signal in the catalog, a value a component reports or is declared to have.
+ */
 export type PropertyBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4537,7 +5093,7 @@ export type PropertyBody = {
   retention_days?: number;
   /** A JSON Schema fragment constraining the value */
   validation?: unknown;
-  /** Who may write this key (ADR-0161): node-probe (a node's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
+  /** Who may write this key (ADR-0161): outpost-probe (an outpost's own probe or session machine, under the endpoint it probed), platform (the Omniglass process itself: the health rollup), calc (the calc rule that outputs it), or collected (a driver's emits or a push, and a command's or an operator's value). The Storage Gateway refuses any write whose writer the class does not admit */
   writer_class: PropertyBodyWriterClass;
   /** The calc rule that writes this property, absent when none does (one enabled rule writes a key; a disabled writer is named when no rule is enabled) */
   written_by?: CalcWriterBody;
@@ -4558,6 +5114,9 @@ export type SecretTypeFieldBody = {
   type: string;
 };
 
+/**
+ * A shape a secret can take, such as a password or an API key, built into Omniglass.
+ */
 export type SecretTypeBody = {
   /** The admin_sensitive value the create form seeds for this type */
   default_admin_sensitive: boolean;
@@ -4578,6 +5137,9 @@ export type ListSecretTypesOutputBody = {
   secret_types: SecretTypeBody[] | null;
 };
 
+/**
+ * An encrypted credential set at one level of the fleet and inherited below it.
+ */
 export type SecretBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4622,6 +5184,9 @@ export const SeverityLevelBodyColor = {
   darkred: 'darkred',
 } as const;
 
+/**
+ * How bad an alarm is, ranked, with its color and whether it takes its component out.
+ */
 export type SeverityLevelBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4687,7 +5252,7 @@ export type ListStandardPropertiesOutputBody = {
   properties: StandardPropertyBody[] | null;
 };
 
-export type SystemRoleBody = {
+export type SystemSlotBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
@@ -4695,15 +5260,15 @@ export type SystemRoleBody = {
      * @nullable
      */
   accepted_types: string[] | null;
-  /** The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626); absent when the role is unconditional. The same form the write body takes, so a read round-trips into a write */
+  /** The choice/alternate this slot joins, addressed as "choice-name/alternate-name" (#626); absent when the slot is unconditional. The same form the write body takes, so a read round-trips into a write */
   alternate?: string;
-  /** The most components the role will accept; null means no upper bound beyond quorum */
+  /** The most components the slot will accept; null means no upper bound beyond quorum */
   capacity?: number;
-  /** What an impaired role means for its system: outage, degraded, or none */
+  /** What an impaired slot means for its system: outage, degraded, or none */
   impact: string;
-  /** The role's human label */
+  /** The slot's human label */
   label: string;
-  /** The role's name within its owner (the address) */
+  /** The slot's name within its owner (the address) */
   name: string;
   /**
      * If set, a filling component's product must be one of these; empty accepts any product of an accepted type
@@ -4711,28 +5276,31 @@ export type SystemRoleBody = {
      */
   pinned_products: string[] | null;
   /**
-     * Human labels for each position within the role, by index; empty when unlabeled
+     * Human labels for each position within the slot, by index; empty when unlabeled
      * @nullable
      */
   position_labels: string[] | null;
-  /** How many components must fill the role */
+  /** How many components must fill the slot */
   quorum: number;
 };
 
-export type ListStandardRolesOutputBody = {
+export type ListStandardSlotsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** @nullable */
-  roles: SystemRoleBody[] | null;
+  slots: SystemSlotBody[] | null;
 };
 
+/**
+ * The contract a system is built to, declaring the slots it fills and the properties every conforming system exposes.
+ */
 export type StandardBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** The standard's uuid, the stable handle that survives a rename */
   id: string;
   label: string;
-  /** The standard's room layout: aspect (width over height) and one normalized position per role position; absent when undeclared */
+  /** The standard's room layout: aspect (width over height) and one normalized position per slot position; absent when undeclared */
   map?: unknown;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -4758,14 +5326,17 @@ export type ListSystemMembersOutputBody = {
   system: string;
 };
 
-export type ListSystemRolesOutputBody = {
+export type ListSystemSlotsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** @nullable */
-  roles: EffectiveRoleBody[] | null;
+  slots: EffectiveSlotBody[] | null;
   system: string;
 };
 
+/**
+ * What a system is for, such as meeting, teaching or signage, never the space it sits in.
+ */
 export type SystemTypeBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4775,20 +5346,20 @@ export type SystemTypeBody = {
   icon?: string;
   /** The system_type's uuid, the stable handle that survives a rename */
   id: string;
-  /** The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_abbrev?: string;
   /** The name of the ancestor system_type inherited_abbrev comes from, which may be further up the chain than the parent */
   inherited_abbrev_source?: string;
-  /** The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_icon?: string;
   /** The name of the ancestor system_type inherited_icon comes from, which may be further up the chain than the parent */
   inherited_icon_source?: string;
-  /** The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+  /** The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the catalog listing, on the same terms as resolved_icon */
   inherited_stem?: string;
   /** The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent */
   inherited_stem_source?: string;
   label: string;
-  /** The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems */
+  /** The label rule systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems */
   label_rule?: string;
   /** The name an operator reads and types; renameable */
   name: string;
@@ -4797,7 +5368,7 @@ export type SystemTypeBody = {
   parent?: string;
   /** The parent system_type's id, the canonical handle; absent for a root type */
   parent_id?: string;
-  /** The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it */
+  /** The glyph this type shows: its own icon, else the nearest ancestor's. Served on the catalog listing, where the whole chain is already in hand; a single-row write response does not carry it */
   resolved_icon?: string;
   /** The prefix a generated system name is built from; empty inherits the nearest ancestor's */
   stem?: string;
@@ -4815,6 +5386,9 @@ export type ListSystemTypesOutputBody = {
  */
 export type SystemBodyEffectiveTags = {[key: string]: string};
 
+/**
+ * The unit Omniglass monitors, a set of components in one location that works as one, with one health of its own.
+ */
 export type SystemBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4855,7 +5429,7 @@ export type SystemBody = {
   standard?: string;
   /** The standard's uuid; the stable form of standard */
   standard_id?: string;
-  /** The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to. */
+  /** The system_type's name, for display: what this system is for (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the contract it is built to. */
   system_type?: string;
   /** The system_type's uuid; the stable form of system_type */
   system_type_id?: string;
@@ -4868,6 +5442,9 @@ export type ListSystemsOutputBody = {
   systems: SystemBody[] | null;
 };
 
+/**
+ * An operator's key and value on a location, system or component, its key governed install-wide.
+ */
 export type TagBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4896,6 +5473,9 @@ export type ListTagsOutputBody = {
   tags: TagBody[] | null;
 };
 
+/**
+ * An outpost's unit of collection, a poll it runs or a listener it holds on one endpoint.
+ */
 export type TaskBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -4905,10 +5485,10 @@ export type TaskBody = {
   id: string;
   label?: string;
   mode: string;
-  /** The node placement name, projected from the endpoint */
-  node?: string;
-  /** The placed node's id; the stable form of node */
-  node_id?: string;
+  /** The outpost placement name, projected from the endpoint */
+  outpost?: string;
+  /** The placed outpost's id; the stable form of outpost */
+  outpost_id?: string;
   /** The inline probe settings (jsonb) */
   spec?: unknown;
 };
@@ -4950,33 +5530,33 @@ export type TemplateBodyKind = typeof TemplateBodyKind[keyof typeof TemplateBody
 export const TemplateBodyKind = {
   standard_template: 'standard_template',
   system_template: 'system_template',
-  place_template: 'place_template',
+  location_template: 'location_template',
   component_template: 'component_template',
 } as const;
 
-export type TemplatePlaceSystemBody = {
+export type TemplateLocationSystemBody = {
   /** The system's label */
   label?: string;
-  /** The system template that lands in the place */
+  /** The system template that lands in the location */
   template: string;
 };
 
-export type TemplatePlaceBody = {
-  /** The place's label */
+export type TemplateLocationBody = {
+  /** The location's label */
   label?: string;
-  /** The place's name; omitted where its type's name rule mints one, or the caller names it */
+  /**
+     * The locations nested under this one
+     * @nullable
+     */
+  locations?: TemplateLocationBody[] | null;
+  /** The location's name; omitted where its type's name rule mints one, or the caller names it */
   name?: string;
   /**
-     * The places nested under this one
+     * The system templates that land in the location
      * @nullable
      */
-  places?: TemplatePlaceBody[] | null;
-  /**
-     * The system templates that land in the place
-     * @nullable
-     */
-  systems?: TemplatePlaceSystemBody[] | null;
-  /** The place's location type */
+  systems?: TemplateLocationSystemBody[] | null;
+  /** The location's location type */
   type: string;
 };
 
@@ -5000,10 +5580,10 @@ export type TemplateChoiceBody = {
 };
 
 export type TemplateMapPositionBody = {
-  /** Which of the role's components, from 1 */
+  /** Which of the slot's components, from 1 */
   position: number;
-  /** The role placed */
-  role: string;
+  /** The slot placed */
+  slot: string;
   /** Horizontal position, 0 to 1 from the left */
   x: number;
   /** Vertical position, 0 to 1 from the top */
@@ -5014,7 +5594,7 @@ export type TemplateMapBody = {
   /** The layout's width over its height */
   aspect: number;
   /**
-     * Where each role's components sit
+     * Where each slot's components sit
      * @nullable
      */
   positions: TemplateMapPositionBody[] | null;
@@ -5029,36 +5609,36 @@ export type TemplateContractBody = {
   required?: boolean;
 };
 
-export type TemplateRoleBody = {
+export type TemplateSlotBody = {
   /**
-     * The component types that may fill the role; empty accepts any
+     * The component types that may fill the slot; empty accepts any
      * @nullable
      */
   accepted_types?: string[] | null;
-  /** The alternate of that choice the role belongs to */
+  /** The alternate of that choice the slot belongs to */
   alternate?: string;
-  /** The most components the role takes; omitted for no cap */
+  /** The most components the slot takes; omitted for no cap */
   capacity?: number;
-  /** The choice the role belongs to, when it is one way of answering a choice */
+  /** The choice the slot belongs to, when it is one way of answering a choice */
   choice?: string;
-  /** What the system loses when the role is below quorum: outage, degraded (the default) or none */
+  /** What the system loses when the slot is below quorum: outage, degraded (the default) or none */
   impact?: string;
-  /** What an operator reads for the role */
+  /** What an operator reads for the slot */
   label: string;
-  /** The role's name, unique within the standard */
+  /** The slot's name, unique within the standard */
   name: string;
   /**
-     * The products the role is pinned to; empty pins none
+     * The products the slot is pinned to; empty pins none
      * @nullable
      */
   pinned_products?: string[] | null;
-  /** How many components must fill the role (at least one) */
+  /** How many components must fill the slot (at least one) */
   quorum: number;
 };
 
 export type TemplateStandardBody = {
   /**
-     * The exclusive-or groups of roles a conforming system answers one way
+     * The exclusive-or groups of slots a conforming system answers one way
      * @nullable
      */
   choices?: TemplateChoiceBody[] | null;
@@ -5077,16 +5657,16 @@ export type TemplateStandardBody = {
      */
   properties?: TemplateContractBody[] | null;
   /**
-     * The roles a conforming system needs filled
+     * The slots a conforming system needs filled
      * @nullable
      */
-  roles: TemplateRoleBody[] | null;
+  slots: TemplateSlotBody[] | null;
 };
 
-export type TemplateRoleFillBody = {
-  /** The component template that fills the role */
+export type TemplateSlotFillBody = {
+  /** The component template that fills the slot */
   component?: string;
-  /** The product that fills the role, when no component template does */
+  /** The product that fills the slot, when no component template does */
   product?: string;
 };
 
@@ -5096,21 +5676,24 @@ export type TemplateRoleFillBody = {
 export type TemplateSystemBodyProperties = {[key: string]: unknown};
 
 /**
- * What fills each role, by role name
+ * What fills each slot, by slot name
  */
-export type TemplateSystemBodyRoles = {[key: string]: TemplateRoleFillBody};
+export type TemplateSystemBodySlots = {[key: string]: TemplateSlotFillBody};
 
 export type TemplateSystemBody = {
   /** Declared system property values, by property name */
   properties?: TemplateSystemBodyProperties;
-  /** What fills each role, by role name */
-  roles: TemplateSystemBodyRoles;
+  /** What fills each slot, by slot name */
+  slots: TemplateSystemBodySlots;
   /** The standard the system conforms to, a standard template's name */
   standard: string;
   /** The system type the system is classified as */
   system_type?: string;
 };
 
+/**
+ * An example you clone to start a standard, a component, a system or a set of locations, then own what you get.
+ */
 export type TemplateBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5122,10 +5705,10 @@ export type TemplateBody = {
   kind: TemplateBodyKind;
   /** What an operator reads for the template */
   label: string;
+  /** A location template's body: the root of the subtree */
+  location?: TemplateLocationBody;
   /** The template's name, unique across the catalog */
   name: string;
-  /** A place template's body: the root of the subtree */
-  place?: TemplatePlaceBody;
   /** A standard template's body: what creating a standard from it writes */
   standard?: TemplateStandardBody;
   /** A system template's body */
@@ -5160,6 +5743,9 @@ export type ListTransportsOutputBody = {
   transports: Transport[] | null;
 };
 
+/**
+ * A device an outpost heard from that no endpoint claims yet, waiting to be adopted or ignored.
+ */
 export type UnclaimedSourceBody = {
   /** How many messages it sent that nothing claimed */
   count: number;
@@ -5184,6 +5770,64 @@ export type ListUnclaimedSourcesOutputBody = {
   sources: UnclaimedSourceBody[] | null;
 };
 
+export type ListUserSessionsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  sessions: SessionBody[] | null;
+};
+
+export type UserGroupRef = {
+  id: string;
+  name: string;
+};
+
+export type MachineBody = {
+  /** The machine user's identifier, unique across machine users */
+  name: string;
+};
+
+export type PersonBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  email?: string;
+  /** True when the user has a profile picture; fetch it from the avatar endpoint. */
+  has_avatar?: boolean;
+  label?: string;
+  /** True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears. */
+  must_change_password?: boolean;
+  username: string;
+};
+
+/**
+ * Who a role is granted to, a person who signs in or a machine user that holds tokens.
+ */
+export type UserBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  active: boolean;
+  /** Set when the user is archived (soft-deleted); absent means live */
+  archived_at?: string;
+  /** @nullable */
+  grants: GrantBody[] | null;
+  /** @nullable */
+  groups: UserGroupRef[] | null;
+  id: string;
+  kind: string;
+  machine?: MachineBody;
+  person?: PersonBody;
+};
+
+export type ListUsersOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  users: UserBody[] | null;
+};
+
+/**
+ * A named value set at one level of the fleet and inherited below it, written into text as $var.
+ */
 export type VariableBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5216,6 +5860,9 @@ export const VendorBodyKind = {
   developer: 'developer',
 } as const;
 
+/**
+ * An organization behind products, a manufacturer, an integrator or a developer.
+ */
 export type VendorBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -5274,7 +5921,7 @@ export type LogBody = {
   correlation_id?: string;
   /** The line's facility, when classified */
   facility?: string;
-  /** The endpoint that collected the line, when a node collected it */
+  /** The endpoint that collected the line, when an outpost collected it */
   instance?: string;
   /** Freeform classification labels, when present */
   labels?: unknown;
@@ -5319,7 +5966,7 @@ export type MarkAllReadOutputBody = {
   marked: number;
 };
 
-export type PrincipalStruct = {
+export type UserStruct = {
   id: string;
   kind: string;
 };
@@ -5327,18 +5974,20 @@ export type PrincipalStruct = {
 export type MeOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
+  /** Set when the request authenticated with an agent token: the agent acting on this user's behalf. Permissions and fleet_permissions are then the agent's, bounded by its roles and the agent ceiling. */
+  agent?: string;
   /**
-     * The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a place or system does not reach it. A UI hint; the server is the authority.
+     * The permissions the caller holds on an all-scope grant, flattened like permissions. Writing fleet-wide config (an event rule) needs its permission here; a grant bounded to a location or system does not reach it. A UI hint; the server is the authority.
      * @nullable
      */
   fleet_permissions: string[] | null;
   /** @nullable */
   grants: GrantBody[] | null;
-  human?: HumanBody;
+  machine?: MachineBody;
   /** @nullable */
   permissions: string[] | null;
-  principal: PrincipalStruct;
-  service?: SvcBody;
+  person?: PersonBody;
+  user: UserStruct;
 };
 
 export type MetricBucketBody = {
@@ -5420,14 +6069,6 @@ export type MoveSystemInputBody = {
   parent?: string;
 };
 
-export type NodeLogsOutputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** @nullable */
-  logs: LogBody[] | null;
-  node: string;
-};
-
 /**
  * How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim)
  */
@@ -5441,7 +6082,7 @@ export const NotificationSettingsMailSecurity = {
 } as const;
 
 export type NotificationSettings = {
-  /** The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a template reads. Empty leaves Link empty */
+  /** The console's base URL as a receiver of a notification reaches it (https://omniglass.example.com); the prefix of the Link a notification's subject and text read. Empty leaves Link empty */
   console_url: string;
   /** The internal destinations a notification may reach, each a CIDR (10.20.0.0/16), an address, or a host name (chat.corp.example). Everything private, loopback or link-local is refused unless named here; a cloud metadata address is refused even when it is; plain http is admitted only to a destination named here */
   egress_allow: string[];
@@ -5449,10 +6090,30 @@ export type NotificationSettings = {
   mail_from: string;
   /** The SMTP relay email notifications go through, host:port (smtp.example.com:587). Empty turns email off. An internal relay is reached only when egress_allow names it */
   mail_relay: string;
-  /** A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes the right to reveal that secret */
+  /** A platform basic-auth secret, by name, the relay session authenticates with; empty sends without authenticating. Setting it, or moving mail_relay while one is set, takes secret:bind on that secret */
   mail_secret: string;
   /** How the session to the relay is protected: starttls (the relay must offer it), tls (implicit TLS, port 465), or none, admitted only for a relay egress_allow names (a lab's mail sim) */
   mail_security: NotificationSettingsMailSecurity;
+};
+
+export type OauthClientOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** The name the client registered under; its token acts as this agent */
+  client_name: string;
+  id: string;
+  /** The host serving the client's metadata document, when the client is named by one (#2074): the one part of its identity it cannot choose */
+  metadata_host?: string;
+  /**
+     * The exact URIs a code may be sent back to
+     * @nullable
+     */
+  redirect_uris: string[] | null;
+  /**
+     * The roles you may approve for the client: every role whose capabilities you hold
+     * @nullable
+     */
+  roles: string[] | null;
 };
 
 export type OptOutOutputBody = {
@@ -5462,6 +6123,14 @@ export type OptOutOutputBody = {
   action_rule: string;
   /** Whether you are now opted out of it */
   opted_out: boolean;
+};
+
+export type OutpostLogsOutputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** @nullable */
+  logs: LogBody[] | null;
+  outpost: string;
 };
 
 /**
@@ -5516,7 +6185,7 @@ export type PlatformKeyBody = {
   description?: string;
   /** The metric type's label, the column header */
   label: string;
-  /** The metric type's name: the key a node's figures are indexed by */
+  /** The metric type's name: the key an outpost's figures are indexed by */
   name: string;
   /** The metric type's unit, when it has one */
   unit?: string;
@@ -5545,23 +6214,23 @@ export type PlatformInstanceFigureBody = {
 };
 
 /**
- * The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read
+ * The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read
  */
-export type PlatformNodeBodyFigures = {[key: string]: PlatformFigureBody};
+export type PlatformOutpostBodyFigures = {[key: string]: PlatformFigureBody};
 
-export type PlatformNodeBody = {
-  /** The node's platform component uuid, where every figure has its history; absent for a node the boot has not yet adopted */
+export type PlatformOutpostBody = {
+  /** The outpost's platform component uuid, where every figure has its history; absent for an outpost the boot has not yet adopted */
   component?: string;
   enrolled: boolean;
-  /** The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the node has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
-  figures?: PlatformNodeBodyFigures;
+  /** The current figure per key, by key name: a gauge's latest sample, a window count only while its window is the newest. A key the outpost has never reported, or whose last window has passed, is absent, never zero; the whole map is absent without a fleet-wide component read */
+  figures?: PlatformOutpostBodyFigures;
   label: string;
-  /** The node's last heartbeat; absent when it has never sent one */
+  /** The outpost's last heartbeat; absent when it has never sent one */
   last_heartbeat_at?: string;
-  /** The share of what the node's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read */
+  /** The share of what the outpost's own hops (loss_hops) took in over the last hour that they lost, every kind summed per hop and composed across them as the pipeline's end to end is; 0 is healthy. Absent when nothing went in on any of them, or without a fleet-wide component read */
   loss?: number;
   name: string;
-  /** The node's platform component verdict, which tones the row; absent without a fleet-wide component read */
+  /** The outpost's platform component verdict, which tones the row; absent without a fleet-wide component read */
   verdict?: string;
 };
 
@@ -5695,7 +6364,7 @@ export type PlatformPipelineHopBodyComponentClass = typeof PlatformPipelineHopBo
 
 
 export const PlatformPipelineHopBodyComponentClass = {
-  node: 'node',
+  outpost: 'outpost',
   server: 'server',
 } as const;
 
@@ -5708,7 +6377,7 @@ export type PlatformPipelineHopBodyId = typeof PlatformPipelineHopBodyId[keyof t
 export const PlatformPipelineHopBodyId = {
   schedule: 'schedule',
   sim: 'sim',
-  node: 'node',
+  outpost: 'outpost',
   ingest: 'ingest',
 } as const;
 
@@ -5789,7 +6458,7 @@ export type PlatformServerBody = {
 export type PlatformSimulationDeviceReceived = {[key: string]: number};
 
 export type PlatformSimulationDevice = {
-  /** The component's name; empty when it is no longer one of the node's simulated devices. */
+  /** The component's name; empty when it is no longer one of the outpost's simulated devices. */
   component: string;
   component_id: string;
   /** Whether the simulator impairs the device at the window's end. */
@@ -5801,7 +6470,7 @@ export type PlatformSimulationDevice = {
 };
 
 /**
- * How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful.
+ * How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (an outpost or sim that started again, or a sim whose served fleet changed) means no figure is meaningful.
  */
 export type PlatformSimulationGapReading = typeof PlatformSimulationGapReading[keyof typeof PlatformSimulationGapReading];
 
@@ -5814,7 +6483,7 @@ export const PlatformSimulationGapReading = {
 } as const;
 
 export type PlatformSimulationGap = {
-  /** Answers the node gave up on before they arrived. */
+  /** Answers the outpost gave up on before they arrived. */
   answered_late: number;
   /** How many were lost at the hop over the window, past its masking term. */
   count: number;
@@ -5826,24 +6495,24 @@ export type PlatformSimulationGap = {
   masked: number;
   /** What the masking term is, empty when the gap has none. */
   masked_by: string;
-  /** The protocol the gap is on; empty for a batch gap, which is per node. */
+  /** The protocol the gap is on; empty for a batch gap, which is per outpost. */
   protocol: string;
   /**
-     * count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted node.
+     * count over in, 0 healthy; null when nothing went in, when the sim does not observe the hop, or on a restarted outpost.
      * @nullable
      */
   ratio: number | null;
-  /** How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted means no figure is meaningful. */
+  /** How to read the gap: loss is a fault, impaired is expected under an applied impairment, restarted (an outpost or sim that started again, or a sim whose served fleet changed) means no figure is meaningful. */
   reading: PlatformSimulationGapReading;
 };
 
 /**
- * warming up until the server holds a window and the bracket after it; restarted while the window holds a restart.
+ * warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the outpost or its sim, or a change to the fleet the sim serves.
  */
-export type PlatformSimulationNodeState = typeof PlatformSimulationNodeState[keyof typeof PlatformSimulationNodeState];
+export type PlatformSimulationOutpostState = typeof PlatformSimulationOutpostState[keyof typeof PlatformSimulationOutpostState];
 
 
-export const PlatformSimulationNodeState = {
+export const PlatformSimulationOutpostState = {
   warming_up: 'warming up',
   measured: 'measured',
   restarted: 'restarted',
@@ -5883,11 +6552,11 @@ export type PlatformSimulationReceipts = {
   margin: number;
 };
 
-export type PlatformSimulationNode = {
-  /** How many brackets the server holds for the node. */
+export type PlatformSimulationOutpost = {
+  /** How many brackets the server holds for the outpost. */
   brackets: number;
   /**
-     * The node's busy-worker high water; null until a node reports it.
+     * The outpost's busy-worker high water; null until an outpost reports it.
      * @nullable
      */
   busy_workers: number | null;
@@ -5907,11 +6576,11 @@ export type PlatformSimulationNode = {
   gaps: PlatformSimulationGap[] | null;
   /** The most requests the simulator held at once over every protocol. */
   in_flight_high: number;
-  node: string;
+  outpost: string;
   /** @nullable */
   protocols: PlatformSimulationProtocol[] | null;
   /**
-     * The node's dispatch queue depth; null until a node reports it.
+     * The outpost's dispatch queue depth; null until an outpost reports it.
      * @nullable
      */
   queue_depth: number | null;
@@ -5921,20 +6590,20 @@ export type PlatformSimulationNode = {
      * @nullable
      */
   start: string | null;
-  /** warming up until the server holds a window and the bracket after it; restarted while the window holds a restart. */
-  state: PlatformSimulationNodeState;
+  /** warming up until the server holds a window and the bracket after it; restarted while the window holds a restart of the outpost or its sim, or a change to the fleet the sim serves. */
+  state: PlatformSimulationOutpostState;
 };
 
 export type PlatformSimulationViewOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** How often the server brackets each node. */
+  /** How often the server brackets each outpost. */
   bracket_seconds: number;
   /**
-     * Each node with a connected simulator; empty when none is.
+     * Each outpost with a connected simulator; empty when none is.
      * @nullable
      */
-  nodes: PlatformSimulationNode[] | null;
+  outposts: PlatformSimulationOutpost[] | null;
   /** The server's clock at the read. */
   read_at: string;
   /** A full window's length. */
@@ -5955,22 +6624,22 @@ export type PlatformViewOutputBody = {
   /** True when the caller's component read reached the platform components. False means the figures, verdicts and servers are left out because the caller may not read them, not because nothing was reported */
   figures_read: boolean;
   /**
-     * The node table's column groups, in order: the page renders these and has no key list of its own
+     * The outpost table's column groups, in order: the page renders these and has no key list of its own
      * @nullable
      */
   groups: PlatformGroupBody[] | null;
   /** True when this server runs as an omniglass lab */
   lab: boolean;
   /**
-     * The hops a node's loss composes: the ones its own platform component records
+     * The hops an outpost's loss composes: the ones its own platform component records
      * @nullable
      */
   loss_hops: string[] | null;
   /**
-     * One row per node, in name order
+     * One row per outpost, in name order
      * @nullable
      */
-  nodes: PlatformNodeBody[] | null;
+  outposts: PlatformOutpostBody[] | null;
   /** Where work is lost: each hop's in, out and loss per kind, newest window and last hour, and the end to end. Absent without a fleet-wide component read */
   pipeline?: PlatformPipelineBody;
   /** The server's clock when the view was read: uptime and the liveness pill are both judged against it, so they read one clock */
@@ -6030,12 +6699,12 @@ export type PollRunBody = {
      * @nullable
      */
   samples: RunSample[] | null;
-  /** How long the poll took on the node */
+  /** How long the poll took on the outpost */
   took_ms: number;
 };
 
 /**
- * The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target
+ * The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target
  */
 export type PreviewDriverInputBodyInputs = {[key: string]: string};
 
@@ -6044,10 +6713,10 @@ export type PreviewDriverInputBody = {
   readonly $schema?: string;
   /** A stored driver to preview, by name; or give spec */
   driver?: string;
-  /** The inputs an attach would take (host, port, a secret by name); a secret must be one you may reveal, since a preview hands it to the target */
+  /** The inputs an attach would take (host, port, a secret by name); a secret must be one you may bind (secret:bind), since a preview hands it to the target */
   inputs?: PreviewDriverInputBodyInputs;
-  /** The node that runs the preview, by name: the one that reaches the target */
-  node: string;
+  /** The outpost that runs the preview, by name: the one that reaches the target */
+  outpost: string;
   /**
      * The polls to run, by name; absent runs every poll
      * @nullable
@@ -6056,7 +6725,7 @@ export type PreviewDriverInputBody = {
   /** A driver spec to preview inline, unsaved; or give driver */
   spec?: unknown;
   /**
-     * How long the node may take for the whole preview (default 15, at most 30)
+     * How long the outpost may take for the whole preview (default 15, at most 30)
      * @minimum 1
      * @maximum 30
      */
@@ -6068,8 +6737,8 @@ export type PreviewDriverOutputBody = {
   readonly $schema?: string;
   /** The stored driver previewed; absent for an inline spec */
   driver?: string;
-  /** The node that ran it */
-  node: string;
+  /** The outpost that ran it */
+  outpost: string;
   /**
      * One per poll
      * @nullable
@@ -6108,11 +6777,11 @@ export type PreviewEdgeBody = {
 export type PreviewEventRuleInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The criteria it ends on; absent, the negation of fire_criteria */
+  /** The criteria it clears on; absent, the negation of fire_criteria */
   clear_criteria?: CriteriaInput;
   /** Accepted and ignored, like fire_sustain */
   clear_sustain?: string;
-  /** The criteria its condition starts on: {expr}, or the short form {op, value} */
+  /** The criteria it fires on: {expr}, or the short form {op, value} */
   fire_criteria: CriteriaInput;
   /** Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone */
   fire_sustain?: string;
@@ -6191,9 +6860,9 @@ export type PreviewNotificationTypeInputBody = {
      * @minLength 1
      */
   component: string;
-  /** A draft subject template to render instead of the stored one, so an editor previews before it saves */
+  /** A draft subject to render instead of the stored one, so an editor previews before it saves */
   subject?: string;
-  /** A draft text template to render instead of the stored one */
+  /** A draft text to render instead of the stored one */
   text?: string;
   /** The edge to render for; absent reads the alarm's own state (cleared when it is, raised otherwise) */
   transition?: PreviewNotificationTypeInputBodyTransition;
@@ -6214,7 +6883,7 @@ export type PreviewNotificationTypeOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
-     * The alarm facts the templates read, every key in its declared order (an absent fact is empty)
+     * The alarm facts the subject and text read, every key in its declared order (an absent fact is empty)
      * @nullable
      */
   facts: AlarmFactBody[] | null;
@@ -6230,7 +6899,12 @@ export type PropertyBucketBody = {
   /** Changes in the bucket */
   count: number;
   /**
-     * The value in force at the bucket's end, from the newest change in it; null for a bucket with no change
+     * The value in force at the bucket's end: last, else the value held at the end of the bucket before it, else carried_in; null before any value is known (#1488)
+     * @nullable
+     */
+  held: string | null;
+  /**
+     * The value the bucket's own changes end on, from the newest change in it; null for a bucket with no change
      * @nullable
      */
   last: string | null;
@@ -6257,6 +6931,8 @@ export type PropertySeriesOutputBody = {
      * @nullable
      */
   buckets?: PropertyBucketBody[] | null;
+  /** The value in force when the window opens: the newest measured row (observed or calculated) of the instance from before it, no older than the type's retention; absent when none. A step chart draws it from the window's left edge to the first change */
+  carried_in?: string;
   /** The earliest instant the read could have data for: the start of the window or the series' effective retention, whichever is later */
   covered_from?: string;
   /** The one instance the buckets aggregate, measured changes only (observed and calculated); present only on a bucketed read */
@@ -6345,7 +7021,7 @@ export type PushInputBody = {
      */
   events?: PushEvent[] | null;
   /**
-     * Raw untyped log lines. No registry gate. Component owners only: a system batch carrying one is refused with a 422
+     * Raw untyped log lines. No catalog gate. Component owners only: a system batch carrying one is refused with a 422
      * @nullable
      */
   logs?: PushLog[] | null;
@@ -6384,7 +7060,7 @@ export type PushOutputBody = {
 };
 
 /**
- * What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here
+ * What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here
  */
 export type PutIdentityBindingInputBodyOwnerKind = typeof PutIdentityBindingInputBodyOwnerKind[keyof typeof PutIdentityBindingInputBodyOwnerKind];
 
@@ -6402,14 +7078,14 @@ export type PutIdentityBindingInputBody = {
      * @minLength 1
      */
   owner: string;
-  /** What kind of owner the identity names. A component or a system; a place or a node owns no observed sample, so neither is an owner here */
+  /** What kind of owner the identity names. A component or a system; a location or an outpost owns no observed sample, so neither is an owner here */
   owner_kind: PutIdentityBindingInputBodyOwnerKind;
 };
 
 export type RaiseAlarmInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition */
+  /** What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing */
   dedup_key?: string;
   /** What is wrong, for the operator reading it later */
   message?: string;
@@ -6421,13 +7097,13 @@ export type RaiseAlarmInputBody = {
 };
 
 /**
- * Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
+ * Why verdict is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored
  */
 export type ReachEndpointBodyPending = typeof ReachEndpointBodyPending[keyof typeof ReachEndpointBodyPending];
 
 
 export const ReachEndpointBodyPending = {
-  'no-node': 'no-node',
+  'no-outpost': 'no-outpost',
   'awaiting-probe': 'awaiting-probe',
 } as const;
 
@@ -6441,7 +7117,7 @@ export type ReachVerdictBody = {
 export type ReachGateReasonBody = {
   /** An upstream reason only: the name of the component source names, when the caller may read it; absent otherwise, and for every other kind */
   component?: string;
-  /** The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this node, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe) */
+  /** The reason's kind: disrupted, a disruptive command (a reboot) delivered to the endpoint's component, which lifts on the endpoint's first up verdict after the command type's quiet period or at its hold backstop; unreachable, two consecutive down verdicts from the endpoint's reachability probe, which lifts on its next up verdict; upstream, a component the endpoint's component is reached through (a path dependency, #1652) has a closed gate on this outpost, which holds the endpoint's probes as well as its polls until the upstream opens, then lifts on the endpoint's own next up verdict (at once when it has no probe) */
   kind: string;
   /** When the reason began: for disrupted, the command's delivery; for unreachable, the first of the down verdicts that closed the gate; for upstream, when the upstream's gate closed this endpoint's */
   since: string;
@@ -6484,18 +7160,18 @@ export type ReachRejectionBody = {
   class: string;
   /** A refusal of a changed key only: the SHA256 fingerprint of the key the component offered instead. Trusting it is POST /endpoints/{endpoint}:retry with this exact value as host_key (a tls or https endpoint also takes it as certificate); while the refusal holds, any other value is refused (409) */
   offered_key?: string;
-  /** A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the node refused against it. Present with offered_key or not at all */
+  /** A refusal of a changed key only (class host-key, or certificate for a pinned tls key): the SHA256 fingerprint of the key the endpoint pins, as the outpost refused against it. Present with offered_key or not at all */
   pinned_key?: string;
-  /** Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the node of anything it sent. Published beside the gate by whatever the node was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the node recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole */
+  /** Why the gate holds (endpoint-rejection-reason): the class and the component's own text (auth: the agent answered authorizationError for the community), scrubbed by the outpost of anything it sent. Published beside the gate by whatever the outpost was connecting with, its reachability probe, a poll or a held session, so an endpoint holding no session still says why it was refused. Absent when the outpost recorded none (a gate published before it did). Cut to 500 characters; the property's series keeps the whole */
   reason?: string;
   /** The ladder rung the refusal holds: responsive for a host key, certificate or protocol refusal, authenticated for a credential. Nothing at or above it is attempted until the connection fingerprint moves */
   rung: ReachRejectionBodyRung;
-  /** When the node last published the gate: a retry that lifts it and a refusal that sets it again each move it */
+  /** When the outpost last published the gate: a retry that lifts it and a refusal that sets it again each move it */
   ts: string;
 };
 
 /**
- * The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves)
+ * The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the outpost dials no more until the endpoint's connection fingerprint moves)
  */
 export type ReachSessionBodyState = typeof ReachSessionBodyState[keyof typeof ReachSessionBodyState];
 
@@ -6509,9 +7185,9 @@ export const ReachSessionBodyState = {
 } as const;
 
 export type ReachSessionBody = {
-  /** Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the node of anything it sent. Cut to 500 characters; the property's series keeps the whole */
+  /** Why the session is in its state (session-reason), the reason of its latest transition; a rejected session's is its class and the component's own text (auth: auth rejected), scrubbed by the outpost of anything it sent. Cut to 500 characters; the property's series keeps the whole */
   reason?: string;
-  /** The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the node dials no more until the endpoint's connection fingerprint moves) */
+  /** The held session's latest state (session-state): establishing, up, recovering, down, or rejected (a refusal retrying cannot fix; the outpost dials no more until the endpoint's connection fingerprint moves) */
   state: ReachSessionBodyState;
   /** When the session last changed state: a state is stored only on a transition, so a session is judged by the endpoint's last_seen, not by this */
   ts: string;
@@ -6526,7 +7202,7 @@ export type ReachTLSBody = {
   handshake_ms?: number;
   /** The public key the endpoint pins (tls-certificate), a SHA256 fingerprint; served in pin mode alone, and absent before first use */
   key?: string;
-  /** How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the node's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice) */
+  /** How the endpoint's connections judge the certificate (its driver's tls-mode input, verify when none is set): verify (against the outpost's system roots, the server name the host), pin (the public key trusted on first use, any other refused) or skip (nothing checked, the operator's explicit choice) */
   mode: string;
 };
 
@@ -6538,7 +7214,7 @@ export type ReachEndpointBody = {
   /** The endpoint's derived name (its transport) */
   endpoint: string;
   /**
-     * Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the node published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection
+     * Every reason other than a refusal the endpoint's gate holds (the gate is a reason set, #1650), most causal first as the outpost published them: while any holds, due polls are held (poll-held-count), and a command or run now answers at once with the reason. Absent when none holds; a refusal is rejection
      * @nullable
      */
   gate_reasons?: ReachGateReasonBody[] | null;
@@ -6558,9 +7234,9 @@ export type ReachEndpointBody = {
      * @nullable
      */
   layers: ReachLayerBody[] | null;
-  /** The node that probes this endpoint */
-  node?: string;
-  /** Why verdict is null, present only while it is: no-node, the endpoint has no node assigned so nothing probes it (create and enroll a node, run it, then assign the endpoint to it); awaiting-probe, a node is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored */
+  /** The outpost that probes this endpoint */
+  outpost?: string;
+  /** Why verdict is null, present only while it is: no-outpost, the endpoint has no outpost assigned so nothing probes it (create and enroll an outpost, run it, then assign the endpoint to it); awaiting-probe, an outpost is assigned and its first probe has not landed. Absent once a verdict exists, and on a push endpoint, which has no verdict to wait for. Derived at read time, not stored */
   pending?: ReachEndpointBodyPending;
   /** The gate a terminal refusal holds on the endpoint, its rung, class and reason, whether or not the endpoint holds a session (a reachability probe's refusal gates it too); absent when none holds */
   rejection?: ReachRejectionBody;
@@ -6591,6 +7267,18 @@ export type RenameCalcRuleInputBody = {
   readonly $schema?: string;
   /**
      * The rule's new name, unique among calc rules (lowercase letters, digits, hyphens)
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[a-z0-9][a-z0-9-]*$
+     */
+  name: string;
+};
+
+export type RenameCatalogInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The new name, unique in the catalog (lowercase letters, digits, hyphens; never a uuid)
      * @minLength 1
      * @maxLength 100
      * @pattern ^[a-z0-9][a-z0-9-]*$
@@ -6639,18 +7327,6 @@ export type RenameLocationInputBody = {
   readonly $schema?: string;
   /**
      * The new name, unique within its placement (lowercase letters, digits, hyphens)
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[a-z0-9][a-z0-9-]*$
-     */
-  name: string;
-};
-
-export type RenameRegistryInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The new name, unique in the registry (lowercase letters, digits, hyphens; never a uuid)
      * @minLength 1
      * @maxLength 100
      * @pattern ^[a-z0-9][a-z0-9-]*$
@@ -6707,7 +7383,7 @@ export type RenderSystemLabelInputBody = {
   parent?: string;
   /** The standard this system conforms to, by name or uuid; omit for a one-off system */
   standard_id?: string;
-  /** The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. */
+  /** The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that catalog row. */
   system_type_id?: string;
 };
 
@@ -6754,29 +7430,29 @@ export type RetentionSettings = {
      */
   metric_days: number;
   /**
-     * Days a node's own debug log line is kept; unset follows log_debug_days
+     * Days an outpost's own debug log line is kept; unset follows log_debug_days
      * @minimum 1
      * @maximum 36500
      */
-  node_log_debug_days?: number;
+  outpost_log_debug_days?: number;
   /**
-     * Days a node's own error, critical, alert or emergency log line is kept; unset follows log_error_days
+     * Days an outpost's own error, critical, alert or emergency log line is kept; unset follows log_error_days
      * @minimum 1
      * @maximum 36500
      */
-  node_log_error_days?: number;
+  outpost_log_error_days?: number;
   /**
-     * Days a node's own info or notice log line, or one with no severity, is kept; unset follows log_info_days
+     * Days an outpost's own info or notice log line, or one with no severity, is kept; unset follows log_info_days
      * @minimum 1
      * @maximum 36500
      */
-  node_log_info_days?: number;
+  outpost_log_info_days?: number;
   /**
-     * Days a node's own warning log line is kept; unset follows log_warning_days
+     * Days an outpost's own warning log line is kept; unset follows log_warning_days
      * @minimum 1
      * @maximum 36500
      */
-  node_log_warning_days?: number;
+  outpost_log_warning_days?: number;
   /**
      * Days a property transition is kept, unless its type keeps its own (a property type's retention_days)
      * @minimum 1
@@ -6796,7 +7472,7 @@ export type RetryEndpointInputBody = {
   readonly $schema?: string;
   /** A tls or https endpoint only: the same as host_key, named for the certificate (the offered_key a certificate refusal names). It becomes the endpoint's declared tls-certificate pin, held to the same rule (the exact offered key while a key refusal holds), and the session redials onto it. Omit to retry with the pin unchanged */
   certificate?: string;
-  /** The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the node's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
+  /** The SHA256 fingerprint of a changed key the operator now trusts, the key the endpoint's transport pins (the offered_key a key refusal names on the component's reachability read): an ssh endpoint's host key, which becomes its declared ssh-host-key, or a tls or https endpoint's certificate public key, which becomes its declared tls-certificate. The session redials onto it. While a key refusal holds, it must be that exact offered key: any other is a 409 that changes nothing (the refusal on record is the outpost's last word, so to trust a key the component presents since, retry without a key first). With no key refusal held it declares a pin ahead of time. Omit to retry with the pin unchanged */
   host_key?: string;
 };
 
@@ -6846,30 +7522,33 @@ export type RevokeAllMeSessionsOutputBody = {
 };
 
 /**
- * Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens
+ * Which credentials to revoke: all of the user's web-login sessions, or all its CLI/API tokens
  */
-export type RevokeAllPrincipalSessionsInputBodyPurpose = typeof RevokeAllPrincipalSessionsInputBodyPurpose[keyof typeof RevokeAllPrincipalSessionsInputBodyPurpose];
+export type RevokeAllUserSessionsInputBodyPurpose = typeof RevokeAllUserSessionsInputBodyPurpose[keyof typeof RevokeAllUserSessionsInputBodyPurpose];
 
 
-export const RevokeAllPrincipalSessionsInputBodyPurpose = {
+export const RevokeAllUserSessionsInputBodyPurpose = {
   session: 'session',
   token: 'token',
 } as const;
 
-export type RevokeAllPrincipalSessionsInputBody = {
+export type RevokeAllUserSessionsInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** Which credentials to revoke: all of the principal's web-login sessions, or all its CLI/API tokens */
-  purpose: RevokeAllPrincipalSessionsInputBodyPurpose;
+  /** Which credentials to revoke: all of the user's web-login sessions, or all its CLI/API tokens */
+  purpose: RevokeAllUserSessionsInputBodyPurpose;
 };
 
-export type RevokeAllPrincipalSessionsOutputBody = {
+export type RevokeAllUserSessionsOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /** How many credentials were revoked */
   revoked: number;
 };
 
+/**
+ * A named bundle of permissions granted to users, which may inherit another role's.
+ */
 export type RoleBody = {
   description?: string;
   /** @nullable */
@@ -6884,59 +7563,6 @@ export type RoleBody = {
   official: boolean;
   /** @nullable */
   permissions: string[] | null;
-};
-
-/**
- * What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display
- */
-export type RoleSpecBodyImpact = typeof RoleSpecBodyImpact[keyof typeof RoleSpecBodyImpact];
-
-
-export const RoleSpecBodyImpact = {
-  outage: 'outage',
-  degraded: 'degraded',
-  none: 'none',
-} as const;
-
-export type RoleSpecBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask
-     * @nullable
-     */
-  accepted_types?: string[] | null;
-  /** The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 */
-  alternate?: string;
-  /**
-     * The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded
-     * @minimum 1
-     */
-  capacity?: number;
-  /** What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display */
-  impact?: RoleSpecBodyImpact;
-  /** The role's human label; defaults to the role name on first declare */
-  label?: string;
-  /**
-     * If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask
-     * @nullable
-     */
-  pinned_products?: string[] | null;
-  /**
-     * Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask
-     * @nullable
-     */
-  position_labels?: string[] | null;
-  /**
-     * How many components must fill the role; one on first declare
-     * @minimum 0
-     */
-  quorum?: number;
-  /**
-     * Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it
-     * @nullable
-     */
-  update_mask?: string[] | null;
 };
 
 export type RolesOutputBody = {
@@ -6976,6 +7602,34 @@ export type RuleMatchBody = {
   transition: RuleMatchBodyTransition;
 };
 
+export type RunAssistantConversationInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * What the person handed over with the prompt, read as data ahead of it; ignored on a resume
+     * @maxItems 20
+     * @nullable
+     */
+  context?: AguiContextInput[] | null;
+  /** An embedded skill to run; ignored on a resume */
+  forwardedProps?: AguiForwardedInput;
+  /**
+     * The client's view of the conversation; only its last user message is read, as the prompt
+     * @nullable
+     */
+  messages?: AguiMessageInput[] | null;
+  /**
+     * The answer to the interrupt the last run ended on
+     * @nullable
+     */
+  resume?: AguiResumeInput[] | null;
+  /** The run's id, echoed in its events */
+  runId?: string;
+  /** Ignored: the conversation is the thread */
+  threadId?: string;
+  [key: string]: unknown;
+ };
+
 export type RunEndpointPollOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -6988,8 +7642,8 @@ export type RunEndpointPollOutputBody = {
      * @nullable
      */
   faults?: string[] | null;
-  /** The node that ran the poll */
-  node: string;
+  /** The outpost that ran the poll */
+  outpost: string;
   /** The poll that ran */
   poll: string;
   /**
@@ -6999,7 +7653,7 @@ export type RunEndpointPollOutputBody = {
   samples: RunSample[] | null;
   /** Always true: a run now lands its samples as a scheduled run does */
   stored: boolean;
-  /** How long the poll took on the node */
+  /** How long the poll took on the outpost */
   took_ms: number;
 };
 
@@ -7126,6 +7780,8 @@ export type UISettings = {
 };
 
 export type Settings = {
+  agent: AgentSettings;
+  assistant: AssistantSettings;
   collection: CollectionSettings;
   database: DatabaseSettings;
   keybindings: Keybindings;
@@ -7167,7 +7823,7 @@ export type SimCapabilities = {
   port_offset: number;
 };
 
-export type SimNodeBody = {
+export type SimOutpostBody = {
   capabilities: SimCapabilities;
   /**
      * The components the simulator serves, in the caller's component read scope, with their live hits.
@@ -7177,7 +7833,7 @@ export type SimNodeBody = {
   connected: boolean;
   impairments: SimImpairmentStatus;
   last_seen: string;
-  node: string;
+  outpost: string;
 };
 
 export type SimFleetOutputBody = {
@@ -7186,10 +7842,10 @@ export type SimFleetOutputBody = {
   /** Any simulator pulled its device list recently; the console shows its Simulation page only then. */
   connected: boolean;
   /**
-     * Each node a simulator has pulled for since the server started, whose simulated components the caller's scope reaches.
+     * Each outpost a simulator has pulled for since the server started, whose simulated components the caller's scope reaches.
      * @nullable
      */
-  nodes: SimNodeBody[] | null;
+  outposts: SimOutpostBody[] | null;
 };
 
 export type SimOperationResult = {
@@ -7240,7 +7896,7 @@ export type SimSystemPlanOutputBody = {
   /** How many simulated components the system would get. */
   components: number;
   /** @nullable */
-  roles: SimRoleFillBody[] | null;
+  slots: SimSlotFillBody[] | null;
   standard: string;
 };
 
@@ -7248,7 +7904,7 @@ export type SimulationOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   capabilities: SimCapabilities;
-  /** A simulator beside this node pulled its device list recently. */
+  /** A simulator beside this outpost pulled its device list recently. */
   connected: boolean;
   /** @nullable */
   devices: SimDeviceBody[] | null;
@@ -7257,14 +7913,67 @@ export type SimulationOutputBody = {
   last_seen?: string;
 };
 
+/**
+ * What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display
+ */
+export type SlotSpecBodyImpact = typeof SlotSpecBodyImpact[keyof typeof SlotSpecBodyImpact];
+
+
+export const SlotSpecBodyImpact = {
+  outage: 'outage',
+  degraded: 'degraded',
+  none: 'none',
+} as const;
+
+export type SlotSpecBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask
+     * @nullable
+     */
+  accepted_types?: string[] | null;
+  /** The choice/alternate this slot joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the slot, making it unconditional; an unknown choice or alternate is a 422 */
+  alternate?: string;
+  /**
+     * The most components the slot will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded
+     * @minimum 1
+     */
+  capacity?: number;
+  /** What an impaired slot means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display */
+  impact?: SlotSpecBodyImpact;
+  /** The slot's human label; defaults to the slot name on first declare */
+  label?: string;
+  /**
+     * If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask
+     * @nullable
+     */
+  pinned_products?: string[] | null;
+  /**
+     * Human labels for each position within the slot, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask
+     * @nullable
+     */
+  position_labels?: string[] | null;
+  /**
+     * How many components must fill the slot; one on first declare
+     * @minimum 0
+     */
+  quorum?: number;
+  /**
+     * Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it
+     * @nullable
+     */
+  update_mask?: string[] | null;
+};
+
 export type SnoozeAlarmInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer */
+  /** How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer */
   duration: string;
 };
 
-export type SwapRolePositionsInputBody = {
+export type SwapSlotPositionsInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
   /**
@@ -7337,7 +8046,7 @@ export type SystemLogBody = {
   correlation_id?: string;
   /** The line's facility, when classified */
   facility?: string;
-  /** The endpoint that collected the line, when a node collected it */
+  /** The endpoint that collected the line, when an outpost collected it */
   instance?: string;
   /** Freeform classification labels, when present */
   labels?: unknown;
@@ -7606,7 +8315,7 @@ export type UpdateComponentTypeInputBody = {
   icon?: string;
   /** A new operator-facing label */
   label?: string;
-  /** A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. */
+  /** A new label rule; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. */
   label_rule?: string;
   /**
      * A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).
@@ -7628,24 +8337,24 @@ export type UpdateDriverInputBody = {
 };
 
 /**
- * A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential
+ * A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it
  */
 export type UpdateEndpointInputBodyInputs = {[key: string]: string | number};
 
 export type UpdateEndpointInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to be able to use that credential */
+  /** A driver-attached endpoint's inputs, edited in place (#1061): the host, the port, an attached secret's reference name, any input the driver declares. Merged over the stored inputs and validated against the driver; a value it refuses is a 400 naming the input. Changing where a credential is sent needs the caller to hold secret:bind on it, a 403 naming secret:bind without it */
   inputs?: UpdateEndpointInputBodyInputs;
   /**
      * A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone
      * @maxLength 200
      */
   label?: string;
-  /** Reassign the node placement, by name or id */
-  node?: string;
   /** Mark the endpoint a management path that answers through a reboot of its device (true), or an ordinary one (false). Omit to leave it alone */
   out_of_band?: boolean;
+  /** Reassign the outpost placement, by name or id */
+  outpost?: string;
   /** Replace the address/target settings (jsonb). On a driver-attached endpoint only the timeout is set here: its address derives from its host and port inputs */
   params?: unknown;
   /** The transport: a driver-attached endpoint takes only one its driver speaks */
@@ -7657,7 +8366,7 @@ export type UpdateEventRuleInputBody = {
   readonly $schema?: string;
   /** The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) */
   clear_criteria?: CriteriaInput;
-  /** The event type the rule writes when its condition ends, by name; empty writes none */
+  /** The event type the rule writes when it clears, by name; empty writes none */
   clear_event_type?: string;
   /** Drop the clear criteria, so the rule clears on the negation of its fire criteria */
   clear_negates?: boolean;
@@ -7667,9 +8376,9 @@ export type UpdateEventRuleInputBody = {
   description?: string;
   /** Whether the rule evaluates; defaults to true on create */
   enabled?: boolean;
-  /** The criteria that starts the condition: {expr}, or the short form {op, value} */
+  /** The criteria the rule fires on: {expr}, or the short form {op, value} */
   fire_criteria?: CriteriaInput;
-  /** The event type the rule writes when its condition starts, by name; it cannot be emptied */
+  /** The event type the rule writes when it fires, by name; it cannot be emptied */
   fire_event_type?: string;
   /** How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s */
   fire_sustain?: string;
@@ -7734,7 +8443,7 @@ export type UpdateLocationTypeInputBody = {
   icon?: string;
   /** A new operator-facing label */
   label?: string;
-  /** A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels */
+  /** A new label rule for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels */
   label_rule?: string;
   /** A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row */
   name_rule?: NameRuleBody;
@@ -7773,17 +8482,6 @@ export type UpdateMetricTypeInputBody = {
   update_mask?: string[] | null;
 };
 
-export type UpdateNodeInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /** New free-form operator notes */
-  description?: string;
-  /** A new operator-facing label */
-  label?: string;
-  /** Set the node's location by name or id, or "" to clear it */
-  location?: string;
-};
-
 export type UpdateNotificationTargetInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
@@ -7808,10 +8506,21 @@ export type UpdateNotificationTypeInputBody = {
   description?: string;
   /** A human label (empty clears it) */
   label?: string;
-  /** The one-line subject template */
+  /** The one-line subject, written in the rule language */
   subject?: string;
-  /** The body text template */
+  /** The body text, written in the rule language */
   text?: string;
+};
+
+export type UpdateOutpostInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /** New free-form operator notes */
+  description?: string;
+  /** A new operator-facing label */
+  label?: string;
+  /** Set the outpost's location by name or id, or "" to clear it */
+  location?: string;
 };
 
 export type UpdatePersonalRuleInputBody = {
@@ -7831,28 +8540,6 @@ export type UpdatePersonalRuleInputBody = {
   on?: string[];
   /** The predicate (empty always holds) */
   when?: string;
-};
-
-export type UpdatePrincipalInputBody = {
-  /** A URL to the JSON Schema for this object. */
-  readonly $schema?: string;
-  /**
-     * Email; empty clears it
-     * @maxLength 320
-     */
-  email?: string;
-  /**
-     * Label; empty clears it
-     * @maxLength 200
-     */
-  label?: string;
-  /**
-     * Sign-in name (lowercase letters, digits, and . _ -); renaming is safe
-     * @minLength 1
-     * @maxLength 200
-     * @pattern ^[a-z0-9][a-z0-9._-]*$
-     */
-  username?: string;
 };
 
 /**
@@ -7880,7 +8567,7 @@ export type UpdateProductInputBody = {
   kind?: UpdateProductInputBodyKind;
   /** A new operator-facing label */
   label?: string;
-  /** A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. */
+  /** A new label rule; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. */
   label_rule?: string;
   /** A new parent product, by handle or uuid; an empty string clears it */
   parent_product_id?: string;
@@ -7930,7 +8617,7 @@ export type UpdateSeverityLevelInputBody = {
   label?: string;
   /** A new name; every alarm at this level follows */
   name?: string;
-  /** Its place among the levels; unique */
+  /** Its position among the levels; unique */
   rank?: number;
 };
 
@@ -7939,7 +8626,7 @@ export type UpdateStandardInputBody = {
   readonly $schema?: string;
   /** A new operator-facing label */
   label?: string;
-  /** The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair */
+  /** The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (slot, position) pair */
   map?: unknown;
   /** A new variant parent, by handle or uuid; omit to leave unchanged, "" to clear it back to a standalone standard */
   parent_standard_id?: string;
@@ -7965,7 +8652,7 @@ export type UpdateSystemTypeInputBody = {
   icon?: string;
   /** A new operator-facing label */
   label?: string;
-  /** A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels */
+  /** A new label rule for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels */
   label_rule?: string;
   /**
      * A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).
@@ -7995,6 +8682,28 @@ export type UpdateTagInputBody = {
   label?: string;
   /** Whether bindings cascade to descendants; defaults true */
   propagates?: boolean;
+};
+
+export type UpdateUserInputBody = {
+  /** A URL to the JSON Schema for this object. */
+  readonly $schema?: string;
+  /**
+     * Email; empty clears it
+     * @maxLength 320
+     */
+  email?: string;
+  /**
+     * Label; empty clears it
+     * @maxLength 200
+     */
+  label?: string;
+  /**
+     * Sign-in name (lowercase letters, digits, and . _ -); renaming is safe
+     * @minLength 1
+     * @maxLength 200
+     * @pattern ^[a-z0-9][a-z0-9._-]*$
+     */
+  username?: string;
 };
 
 export type UpdateVariableInputBody = {
@@ -8056,7 +8765,7 @@ export type ValidateDriverOutputBody = {
 };
 
 /**
- * For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component
+ * For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per slot-bound member with value.<alias> and has.<alias> per input; defaults to component
  */
 export type ValidateExpressionInputBodyOwnerKind = typeof ValidateExpressionInputBodyOwnerKind[keyof typeof ValidateExpressionInputBodyOwnerKind];
 
@@ -8088,7 +8797,7 @@ export type ValidateExpressionInputBody = {
   inputs?: CalcInputBody[] | null;
   /** The sample key that types the expression (required at both sites). For criteria, the key the rule reads: its lane and data type type the value (a metric is a number; a property is text, or a bool for a bool property). For calc, the rule's output key: its type is the result the reduce must yield */
   key?: string;
-  /** For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per role-bound member with value.<alias> and has.<alias> per input; defaults to component */
+  /** For calc, what the rule derives on: each input binds by its alias as the list of its current values (one per instance on a component, every member's on a system); a system also binds members, one record per slot-bound member with value.<alias> and has.<alias> per input; defaults to component */
   owner_kind?: ValidateExpressionInputBodyOwnerKind;
   /** Where the expression is written: action, an action rule's when; calc, a calc rule's reduce; criteria, an event rule's fire_criteria or clear_criteria */
   site: ValidateExpressionInputBodySite;
@@ -8137,16 +8846,42 @@ export type ValidateExpressionOutputBody = {
   value_type: ValidateExpressionOutputBodyValueType;
 };
 
+export type ListAlarmsParams = {
+  /** Only the alarms nobody has looked at: the queue an operator, or an agent, works */
+  unacknowledged?: boolean;
+  /**
+   * At most this many, the worst first; 0 or absent means 200
+   * @minimum 0
+   * @maximum 1000
+   */
+  limit?: number;
+};
+
 export type ListAuditLogParams = {
   /** Max rows to return, newest first (default 100, capped at 500) */
   limit?: number;
-  /** Filter to one resource kind (e.g. auth, principal_grant) */
+  /** Filter to one resource kind (e.g. auth, user_grant) */
   resource?: string;
   /** Filter to one verb (e.g. login, create) */
   verb?: string;
   /** Only events strictly older than this RFC3339 timestamp (paging backward) */
   before?: string;
+  /** Filter to the events one agent took on its person's behalf (the name its agent token was minted with) */
+  agent?: string;
+  /** Filter to the events that arrived through one channel; direct is a plain API call, with no channel */
+  channel?: ListAuditLogChannel;
+  /** Filter to the events whose declared MCP client contains this term, case-insensitively */
+  client?: string;
 };
+
+export type ListAuditLogChannel = typeof ListAuditLogChannel[keyof typeof ListAuditLogChannel];
+
+
+export const ListAuditLogChannel = {
+  direct: 'direct',
+  mcp: 'mcp',
+  omnibot: 'omnibot',
+} as const;
 
 export type ListAuthMeNotificationsParams = {
   /** Only the entries not yet read */
@@ -8171,7 +8906,7 @@ export type GetCalcRuleStateParams = {
 export type ListComponentAlarmsParams = {
   /** Include cleared alarms, so the list is the history rather than what is wrong now */
   include_cleared?: boolean;
-  /** Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended */
+  /** Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended */
   unacknowledged?: boolean;
 };
 
@@ -8282,13 +9017,13 @@ export type ListComponentPropertySeriesParams = {
    * @maximum 2592000
    */
   resolution?: number;
-  /** The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution */
+  /** The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it */
   instance?: string;
 };
 
 export type RunEndpointPollParams = {
   /**
-   * How long the node may take (default 15, at most 30)
+   * How long the outpost may take (default 15, at most 30)
    * @minimum 1
    * @maximum 30
    */
@@ -8319,21 +9054,6 @@ export const ListNotificationStatus = {
   failed: 'failed',
   suppressed: 'suppressed',
   '': '',
-} as const;
-
-export type ListPrincipalsParams = {
-  /** Optionally filter by principal kind */
-  kind?: ListPrincipalsKind;
-  /** Include archived (soft-deleted) principals, hidden by default */
-  include_archived?: boolean;
-};
-
-export type ListPrincipalsKind = typeof ListPrincipalsKind[keyof typeof ListPrincipalsKind];
-
-
-export const ListPrincipalsKind = {
-  human: 'human',
-  service: 'service',
 } as const;
 
 /**
@@ -8407,7 +9127,7 @@ export type ListSystemPropertySeriesParams = {
    * @maximum 2592000
    */
   resolution?: number;
-  /** The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. Ignored without a resolution */
+  /** The instance a bucketed read aggregates. Unset, the one instance with measured samples in the window; when more than one has them the read is refused with a 422 listing them. On a raw read it names only the instance whose carried_in value is returned, the one with a measured row in the window else the one holding a value from before it */
   instance?: string;
 };
 
@@ -8422,8 +9142,23 @@ export type ListTemplatesKind = typeof ListTemplatesKind[keyof typeof ListTempla
 export const ListTemplatesKind = {
   standard_template: 'standard_template',
   system_template: 'system_template',
-  place_template: 'place_template',
+  location_template: 'location_template',
   component_template: 'component_template',
+} as const;
+
+export type ListUsersParams = {
+  /** Optionally filter by user kind */
+  kind?: ListUsersKind;
+  /** Include archived (soft-deleted) users, hidden by default */
+  include_archived?: boolean;
+};
+
+export type ListUsersKind = typeof ListUsersKind[keyof typeof ListUsersKind];
+
+
+export const ListUsersKind = {
+  person: 'person',
+  machine: 'machine',
 } as const;
 
 export type HTTPStatusCode1xx = 100 | 101 | 102 | 103;
@@ -8770,6 +9505,365 @@ export const optOutActionRule = async (name: string, options?: Parameters<typeof
 
 
 
+export type listAlarmsResponse200 = {
+  data: ListFleetAlarmsOutputBody
+  status: 200
+}
+
+export type listAlarmsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listAlarmsResponseSuccess = (listAlarmsResponse200) & {
+  headers: Headers;
+};
+export type listAlarmsResponseError = (listAlarmsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listAlarmsResponse = (listAlarmsResponseSuccess | listAlarmsResponseError)
+
+export const getListAlarmsUrl = (params?: ListAlarmsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/alarms?${stringifiedParams}` : `/alarms`
+}
+
+/**
+ * What is wrong now across every component the caller may read, in one read: the active alarms, worst severity first and newest first within a severity, each naming its component. Pass unacknowledged for the queue nobody has looked at, and limit to cap it (default 200, at most 1000). It is the triage read: find what is red without walking every component. Gated by component:read; the caller's component scope bounds the list, so an out-of-scope alarm is never named.
+ * @summary List the fleet's active alarms
+ */
+export const listAlarms = async (params?: ListAlarmsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAlarmsResponse> => {
+
+  return ogFetch<listAlarmsResponse>(getListAlarmsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type listAssistantConversationsResponse200 = {
+  data: ListAssistantConversationsOutputBody
+  status: 200
+}
+
+export type listAssistantConversationsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listAssistantConversationsResponseSuccess = (listAssistantConversationsResponse200) & {
+  headers: Headers;
+};
+export type listAssistantConversationsResponseError = (listAssistantConversationsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listAssistantConversationsResponse = (listAssistantConversationsResponseSuccess | listAssistantConversationsResponseError)
+
+export const getListAssistantConversationsUrl = () => {
+
+
+
+
+  return `/assistant/conversations`
+}
+
+/**
+ * Your own stored conversations, most recently moved first, without their messages. Owner-only. Gated by assistant:use.
+ * @summary List your omnibot conversations
+ */
+export const listAssistantConversations = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAssistantConversationsResponse> => {
+
+  return ogFetch<listAssistantConversationsResponse>(getListAssistantConversationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createAssistantConversationResponse201 = {
+  data: AssistantConversation
+  status: 201
+}
+
+export type createAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createAssistantConversationResponseSuccess = (createAssistantConversationResponse201) & {
+  headers: Headers;
+};
+export type createAssistantConversationResponseError = (createAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type createAssistantConversationResponse = (createAssistantConversationResponseSuccess | createAssistantConversationResponseError)
+
+export const getCreateAssistantConversationUrl = () => {
+
+
+
+
+  return `/assistant/conversations`
+}
+
+/**
+ * Creates an empty conversation of your own, named or named for you. A name you already use is a 409. Audited. Gated by assistant:use.
+ * @summary Start an omnibot conversation
+ */
+export const createAssistantConversation = async (createAssistantConversationInputBody?: NonReadonly<CreateAssistantConversationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createAssistantConversationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createAssistantConversationResponse>(getCreateAssistantConversationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createAssistantConversationInputBody)
+  }
+);}
+
+
+
+export type deleteAssistantConversationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type deleteAssistantConversationResponseSuccess = (deleteAssistantConversationResponse204) & {
+  headers: Headers;
+};
+export type deleteAssistantConversationResponseError = (deleteAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type deleteAssistantConversationResponse = (deleteAssistantConversationResponseSuccess | deleteAssistantConversationResponseError)
+
+export const getDeleteAssistantConversationUrl = (name: string,) => {
+
+
+
+
+  return `/assistant/conversations/${name}`
+}
+
+/**
+ * Deletes one of your own conversations and its transcript. Anyone else's is a 404. Audited. Gated by assistant:use.
+ * @summary Delete one of your omnibot conversations
+ */
+export const deleteAssistantConversation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteAssistantConversationResponse> => {
+
+  return ogFetch<deleteAssistantConversationResponse>(getDeleteAssistantConversationUrl(name),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type getAssistantConversationResponse200 = {
+  data: AssistantConversationOutputBody
+  status: 200
+}
+
+export type getAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getAssistantConversationResponseSuccess = (getAssistantConversationResponse200) & {
+  headers: Headers;
+};
+export type getAssistantConversationResponseError = (getAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type getAssistantConversationResponse = (getAssistantConversationResponseSuccess | getAssistantConversationResponseError)
+
+export const getGetAssistantConversationUrl = (name: string,) => {
+
+
+
+
+  return `/assistant/conversations/${name}`
+}
+
+/**
+ * One of your own conversations with its transcript, its pending write if a run paused on one, and the tokens it has spent. Anyone else's is a 404. Gated by assistant:use.
+ * @summary Get one of your omnibot conversations
+ */
+export const getAssistantConversation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getAssistantConversationResponse> => {
+
+  return ogFetch<getAssistantConversationResponse>(getGetAssistantConversationUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type appendAssistantConversationResponse200 = {
+  data: AssistantConversation
+  status: 200
+}
+
+export type appendAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type appendAssistantConversationResponseSuccess = (appendAssistantConversationResponse200) & {
+  headers: Headers;
+};
+export type appendAssistantConversationResponseError = (appendAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type appendAssistantConversationResponse = (appendAssistantConversationResponseSuccess | appendAssistantConversationResponseError)
+
+export const getAppendAssistantConversationUrl = (name: string,) => {
+
+
+
+
+  return `/assistant/conversations/${name}:append`
+}
+
+/**
+ * Adds a turn's messages after the one you last saw (after), keeps or clears the write a run paused on (pending), and adds the turn's tokens. An after that is not the conversation's last message is a 409: another client wrote first, so read it again. While a server run holds the conversation, an append is a 409. Anyone else's is a 404. Audited without content. Gated by assistant:use.
+ * @summary Append a turn to one of your omnibot conversations
+ */
+export const appendAssistantConversation = async (name: string,
+    appendAssistantConversationInputBody: NonReadonly<AppendAssistantConversationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<appendAssistantConversationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<appendAssistantConversationResponse>(getAppendAssistantConversationUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(appendAssistantConversationInputBody)
+  }
+);}
+
+
+
+export type runAssistantConversationResponse200 = {
+  data: void
+  status: 200
+}
+
+export type runAssistantConversationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type runAssistantConversationResponseSuccess = (runAssistantConversationResponse200) & {
+  headers: Headers;
+};
+export type runAssistantConversationResponseError = (runAssistantConversationResponseDefault) & {
+  headers: Headers;
+};
+
+export type runAssistantConversationResponse = (runAssistantConversationResponseSuccess | runAssistantConversationResponseError)
+
+export const getRunAssistantConversationUrl = (name: string,) => {
+
+
+
+
+  return `/assistant/conversations/${name}:run`
+}
+
+/**
+ * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use.
+ * @summary Run omnibot on one of your conversations
+ */
+export const runAssistantConversation = async (name: string,
+    runAssistantConversationInputBody: NonReadonly<RunAssistantConversationInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<runAssistantConversationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<runAssistantConversationResponse>(getRunAssistantConversationUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(runAssistantConversationInputBody)
+  }
+);}
+
+
+
 export type listAuditLogResponse200 = {
   data: AuditListOutputBody
   status: 200
@@ -8966,8 +10060,8 @@ export const getGetAuthMeUrl = () => {
 }
 
 /**
- * Returns the caller's principal, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
- * @summary The authenticated principal, its permissions, and grants
+ * Returns the caller's user, flattened permissions (a UI hint and the fast-reject set), the permissions held on an all-scope grant (fleet_permissions), and grants. Requires authentication.
+ * @summary The authenticated user, its permissions, and grants
  */
 export const getAuthMe = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getAuthMeResponse> => {
 
@@ -8983,7 +10077,7 @@ export const getAuthMe = async ( options?: Parameters<typeof ogFetch>[1]): Promi
 
 
 export type updateAuthMeResponse200 = {
-  data: HumanBody
+  data: PersonBody
   status: 200
 }
 
@@ -9010,7 +10104,7 @@ export const getUpdateAuthMeUrl = () => {
 }
 
 /**
- * Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
+ * Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own user).
  * @summary Update your own profile
  */
 export const updateAuthMe = async (updateMeInputBody: NonReadonly<UpdateMeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateAuthMeResponse> => {
@@ -9406,6 +10500,50 @@ return ogFetch<testAuthMeActionRulesDraftResponse>(getTestAuthMeActionRulesDraft
 
 
 
+export type getAuthMeAgentPolicyResponse200 = {
+  data: AgentPolicyOutputBody
+  status: 200
+}
+
+export type getAuthMeAgentPolicyResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getAuthMeAgentPolicyResponseSuccess = (getAuthMeAgentPolicyResponse200) & {
+  headers: Headers;
+};
+export type getAuthMeAgentPolicyResponseError = (getAuthMeAgentPolicyResponseDefault) & {
+  headers: Headers;
+};
+
+export type getAuthMeAgentPolicyResponse = (getAuthMeAgentPolicyResponseSuccess | getAuthMeAgentPolicyResponseError)
+
+export const getGetAuthMeAgentPolicyUrl = () => {
+
+
+
+
+  return `/auth/me/agent-policy`
+}
+
+/**
+ * Returns the install's resolved agent policy, always, ask or never for each operation class (read, write, destructive, credential_destination), and whether this request is an agent's (an agent token, or any request over MCP) and so governed by it. Each class names the layer that set it (platform, role, or tool), and an overridden tool is listed with its own policy; the strictest layer wins. The server refuses an agent a never class on every route; ask is the client's to confirm. Requires authentication; answers even when the policy refuses every read.
+ * @summary What the install lets an agent do
+ */
+export const getAuthMeAgentPolicy = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getAuthMeAgentPolicyResponse> => {
+
+  return ogFetch<getAuthMeAgentPolicyResponse>(getGetAuthMeAgentPolicyUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
 export type getAuthMeAvatarResponse200 = {
   data: AvatarOutputBody
   status: 200
@@ -9485,7 +10623,7 @@ export const getListAuthMeNotificationsUrl = (params?: ListAuthMeNotificationsPa
 }
 
 /**
- * The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another principal's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
+ * The caller's own console inbox: the notifications addressed to them on the inbox channel, newest first, with the unread count. Self-scoped (never another user's), and scoped again by the caller's component read scope as it stands now, so an entry about a component they can no longer read is gone. Gated by notification:read.
  * @summary List your inbox
  */
 export const listAuthMeNotifications = async (params?: ListAuthMeNotificationsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listAuthMeNotificationsResponse> => {
@@ -9617,7 +10755,7 @@ export const getListAuthMeSessionsUrl = () => {
 }
 
 /**
- * Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another principal's). The token secret is never returned.
+ * Lists the caller's own active bearer credentials (time-bounded web-login sessions and CLI/API tokens) with their non-secret metadata; the current one is flagged. Requires authentication; self-scoped (never another user's). The token secret is never returned.
  * @summary List your own sessions and tokens
  */
 export const listAuthMeSessions = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listAuthMeSessionsResponse> => {
@@ -9750,15 +10888,25 @@ export type createAuthMeTokenResponse201 = {
   status: 201
 }
 
-export type createAuthMeTokenResponseDefault = {
+export type createAuthMeTokenResponse403 = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
+  status: 403
+}
+
+export type createAuthMeTokenResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type createAuthMeTokenResponse500 = {
+  data: ErrorModel
+  status: 500
 }
 
 export type createAuthMeTokenResponseSuccess = (createAuthMeTokenResponse201) & {
   headers: Headers;
 };
-export type createAuthMeTokenResponseError = (createAuthMeTokenResponseDefault) & {
+export type createAuthMeTokenResponseError = (createAuthMeTokenResponse403 | createAuthMeTokenResponse422 | createAuthMeTokenResponse500) & {
   headers: Headers;
 };
 
@@ -9773,7 +10921,7 @@ export const getCreateAuthMeTokenUrl = () => {
 }
 
 /**
- * Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it.
+ * Mints a CLI/API token for the caller and returns it once (store it now; it cannot be retrieved again). A description is required (what the token is for); an optional ttl_days bounds its lifetime (default 90, maximum 365). Requires authentication; self-scoped (always issued for you). The token is stamped with the device and address that created it. Naming an agent mints an agent token instead: it acts on your behalf, holds only what its optional roles AND you hold (each role must be one you cover, else 403), is accepted only on its optional channels, needs an explicit ttl_days, never holds a reveal or use action, cannot mint a token, change your password or impersonate, and every row it writes names the agent. An agent token cannot call this route.
  * @summary Create one of your own API tokens
  */
 export const createAuthMeToken = async (createMeTokenInputBody: NonReadonly<CreateMeTokenInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createAuthMeTokenResponse> => {
@@ -9831,7 +10979,7 @@ export const getChangeAuthMePasswordUrl = () => {
 }
 
 /**
- * Verifies the current password and sets a new one. Requires authentication; self-scoped.
+ * Verifies the current password and sets a new one. Requires authentication; self-scoped. Refused (403) to an agent token.
  * @summary Change your own password
  */
 export const changeAuthMePassword = async (changePasswordInputBody: NonReadonly<ChangePasswordInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<changeAuthMePasswordResponse> => {
@@ -10012,6 +11160,134 @@ export const stopImpersonation = async ( options?: Parameters<typeof ogFetch>[1]
 
 
 
+export type getOauthClientResponse200 = {
+  data: OauthClientOutputBody
+  status: 200
+}
+
+export type getOauthClientResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type getOauthClientResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type getOauthClientResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type getOauthClientResponseSuccess = (getOauthClientResponse200) & {
+  headers: Headers;
+};
+export type getOauthClientResponseError = (getOauthClientResponse404 | getOauthClientResponse422 | getOauthClientResponse500) & {
+  headers: Headers;
+};
+
+export type getOauthClientResponse = (getOauthClientResponseSuccess | getOauthClientResponseError)
+
+export const getGetOauthClientUrl = (id: string,) => {
+
+
+
+
+  return `/auth/oauth-clients/${id}`
+}
+
+/**
+ * Returns a registered OAuth client (the name it gave, its redirect URIs) and the roles you may approve for it, for the console's consent page. Requires authentication; the client is the one named in the authorization request.
+ * @summary Read an OAuth client asking for your consent
+ */
+export const getOauthClient = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getOauthClientResponse> => {
+
+  return ogFetch<getOauthClientResponse>(getGetOauthClientUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type authorizeOauthClientResponse200 = {
+  data: AuthorizeOAuthClientOutputBody
+  status: 200
+}
+
+export type authorizeOauthClientResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type authorizeOauthClientResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type authorizeOauthClientResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type authorizeOauthClientResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type authorizeOauthClientResponseSuccess = (authorizeOauthClientResponse200) & {
+  headers: Headers;
+};
+export type authorizeOauthClientResponseError = (authorizeOauthClientResponse403 | authorizeOauthClientResponse404 | authorizeOauthClientResponse422 | authorizeOauthClientResponse500) & {
+  headers: Headers;
+};
+
+export type authorizeOauthClientResponse = (authorizeOauthClientResponseSuccess | authorizeOauthClientResponseError)
+
+export const getAuthorizeOauthClientUrl = (id: string,) => {
+
+
+
+
+  return `/auth/oauth-clients/${id}:authorize`
+}
+
+/**
+ * Answers an OAuth client's authorization request as you. Approved, it issues a one-time code (good for five minutes) the client exchanges for an agent token accepted on the MCP channel only and holding only the roles you chose, each one whose capabilities you hold (else 403); denied, it sends the client back with access_denied. Returns where to send the browser back to. Requires authentication; an agent token or an impersonated session cannot answer.
+ * @summary Approve or deny an OAuth client
+ */
+export const authorizeOauthClient = async (id: string,
+    authorizeOAuthClientInputBody: NonReadonly<AuthorizeOAuthClientInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<authorizeOauthClientResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<authorizeOauthClientResponse>(getAuthorizeOauthClientUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(authorizeOAuthClientInputBody)
+  }
+);}
+
+
+
 export type getAuthStatusResponse200 = {
   data: AuthStatusOutputBody
   status: 200
@@ -10084,7 +11360,7 @@ export const getListCalcRuleUrl = () => {
 }
 
 /**
- * Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a registry, so every rule is listed whatever the caller's scope. Gated by rule:read.
+ * Lists the calc rules, by name: the authored config that derives an output key on each owner from aliased inputs, each with its live state as counts (owners_computed, owners_pending, owners_unsupported, owners_failed) over the owners the caller may read. Rules read like a catalog, so every rule is listed whatever the caller's scope. Gated by rule:read.
  * @summary List calc rules
  */
 export const listCalcRule = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listCalcRuleResponse> => {
@@ -10752,7 +12028,7 @@ export const getListComponentTypesUrl = () => {
 }
 
 /**
- * Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+ * Lists the component_type catalog (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
  * @summary List component types
  */
 export const listComponentTypes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listComponentTypesResponse> => {
@@ -11045,7 +12321,7 @@ export const getCreateComponentUrl = () => {
 }
 
 /**
- * Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
+ * Creates a component, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped component:create grant; a root with no location needs the all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
  * @summary Create a component
  */
 export const createComponent = async (createComponentInputBody: NonReadonly<CreateComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createComponentResponse> => {
@@ -11103,7 +12379,7 @@ export const getDeleteComponentUrl = (name: string,) => {
 }
 
 /**
- * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system role it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
+ * Deletes a component, refused (409) while it still has child components, while it still owns endpoints (delete or reassign them first), or while it is still referenced elsewhere, such as by a system slot it staffs. Gated by component:delete; read and delete scopes drive the 404 versus 403 split.
  * @summary Delete a component
  */
 export const deleteComponent = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteComponentResponse> => {
@@ -11303,7 +12579,7 @@ export const getRaiseComponentAlarmUrl = (name: string,) => {
 }
 
 /**
- * Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Raise an alarm on a component
  */
 export const raiseComponentAlarm = async (name: string,
@@ -11455,8 +12731,8 @@ export const getSnoozeComponentAlarmUrl = (name: string,
 }
 
 /**
- * Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
- * @summary Snooze an alarm's condition
+ * Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+ * @summary Snooze an alarm
  */
 export const snoozeComponentAlarm = async (name: string,
     id: string,
@@ -11562,8 +12838,8 @@ export const getUnsnoozeComponentAlarmUrl = (name: string,
 }
 
 /**
- * Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
- * @summary End an alarm's condition's snooze
+ * Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+ * @summary End an alarm's snooze
  */
 export const unsnoozeComponentAlarm = async (name: string,
     id: string, options?: Parameters<typeof ogFetch>[1]): Promise<unsnoozeComponentAlarmResponse> => {
@@ -11661,7 +12937,7 @@ export const getGetComponentCommandUrl = (name: string,
 }
 
 /**
- * One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, node and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
+ * One command, whole: what it was told and the value it set, its recorded status with a time for each transition (issued, delivered, executed, settled), where it sits now while in flight (queued, delivered, awaiting the reply, awaiting the observation), how its binding settles it, the evidence that decided it (the reply, masked of credentials, or the observed sample) and why, the endpoint, outpost and driver that carry it, and who issued it. Gated by command:read, resolved on the component tier; a component outside the caller's component:read, or a command not on that component, is a non-disclosing 404, and a component it can read but whose commands it may not is a 403.
  * @summary Read a command
  */
 export const getComponentCommand = async (name: string,
@@ -11818,7 +13094,7 @@ export const getCreateComponentDependencyUrl = (name: string,) => {
 }
 
 /**
- * Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's node its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
+ * Records that this component depends on the upstream: power (fed from the named outlet of the upstream; the outlet is required on this kind and refused on the others), host (hosted by the upstream, so a reboot of the upstream holds this component's endpoints too) or path (reached through the upstream, so while the upstream's gate is closed on this component's outpost its in-band endpoints are held with an upstream reason naming it). A component never depends on itself, one edge of a kind joins a pair once (a 409 for the second), and an edge whose upstream already depends on this component through edges of the same kind would close a cycle and is a 422. The edge is a fact about the dependent: gated by component:update on it (a dependent the caller reads but cannot write is a 403), with the upstream resolved in the caller's component:read (outside it, a non-disclosing 404).
  * @summary Record that a component depends on another
  */
 export const createComponentDependency = async (name: string,
@@ -11977,7 +13253,7 @@ export const getEffectiveTagsUrl = (name: string,
 }
 
 /**
- * Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+ * Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
  * @summary Effective tags for a component
  */
 export const effectiveTags = async (name: string,
@@ -12022,7 +13298,7 @@ export const getEffectiveVariablesUrl = (name: string,) => {
 }
 
 /**
- * Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.
+ * Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union and the most specific binding shadows the rest, with the winner and the shadowed candidates. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.
  * @summary Effective variables for a component
  */
 export const effectiveVariables = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<effectiveVariablesResponse> => {
@@ -12204,7 +13480,7 @@ export const getPutIdentityBindingUrl = (name: string,
 }
 
 /**
- * Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a place or a node owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
+ * Ties this value, reported by the conduit component under this match key, to one owner, a system or a component, so the conduit's samples naming it land on that owner. One identity on one conduit has exactly one owner: a put naming the owner it is already bound to changes nothing, and one naming a different owner moves it. The match key must be a registered property type (422 otherwise), and the owner a component or a system other than the conduit itself (a location or an outpost owns no observed sample, and a value with no identity already lands on the conduit: each a 422). The value rides the path as one percent-encoded segment, so a value carrying a slash, a space or another reserved character is escaped (room%2F1) and round-trips. A binding writes onto both of its ends, so it costs a write on both: gated by component:update on the conduit, and it also needs the owner's update (component:update, or system:update for a system, refused with a 403 naming it before anything resolves). Each end resolves in its own tier's read scope and must be inside its update scope: an end outside the read scope is a non-disclosing 404, one readable but not writable a 403. A move also needs update on the owner it leaves; refused, it says the identity is bound to another owner but never which one.
  * @summary Bind an identity a conduit reports to its owner
  */
 export const putIdentityBinding = async (name: string,
@@ -12265,7 +13541,7 @@ export const getGetComponentImpairmentUrl = (name: string,) => {
 }
 
 /**
- * The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its node when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
+ * The impairment an operator set on a simulated component (unplugged, or a degraded link), applied by the simulator beside its outpost when that simulator runs with impairments and NET_ADMIN. A healthy device reads all zero. Gated by simulation:read; the component resolves within the caller's component read scope.
  * @summary Get what is broken on a simulated device
  */
 export const getComponentImpairment = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentImpairmentResponse> => {
@@ -12309,7 +13585,7 @@ export const getSetComponentImpairmentUrl = (name: string,) => {
 }
 
 /**
- * Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's node applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
+ * Sets what is broken on a simulated component: unplugged, or a link with added latency, jitter, loss or a rate limit. It replaces the whole impairment, so a field left out reads as zero (setting a latency on an unplugged device plugs it back in); an empty body repairs it. Returns the impairment as stored, loss rounded to hundredths. Audited. The simulator beside the component's outpost applies it on its next pull. Gated by simulation:update, whose scope is resolved on the component tier; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not impair is a 403. Jitter above latency, or a value outside its range, is a 422.
  * @summary Break or repair a simulated device
  */
 export const setComponentImpairment = async (name: string,
@@ -12564,7 +13840,7 @@ export const getListComponentPropertiesUrl = (name: string,) => {
 }
 
 /**
- * Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's properties and where each stands
  */
 export const listComponentProperties = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentPropertiesResponse> => {
@@ -12724,7 +14000,7 @@ export const getListComponentPropertySeriesUrl = (name: string,
 }
 
 /**
- * The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+ * The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by component:read; an out-of-scope owner is a non-disclosing 404.
  * @summary Read one property series' change history
  */
 export const listComponentPropertySeries = async (name: string,
@@ -12814,7 +14090,7 @@ export const getGetComponentSimulationUrl = (name: string,) => {
 }
 
 /**
- * Whether a component is simulated (it has an endpoint on a node and a product a simulator profile simulates) and, when it is, its node, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
+ * Whether a component is simulated (it has an endpoint on an outpost and a product a simulator profile simulates) and, when it is, its outpost, address, live hits and impairment, the products its profile simulates, and its full API surface: every protocol surface, with its HTTP routes, commands and SNMP OIDs. A component that is not simulated reads simulated false. Gated by simulation:read; the component resolves within the caller's component read scope.
  * @summary Get a component's simulation
  */
 export const getComponentSimulation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getComponentSimulationResponse> => {
@@ -12858,7 +14134,7 @@ export const getFireComponentSimulationUrl = (name: string,) => {
 }
 
 /**
- * Asks the simulator beside the component's node to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
+ * Asks the simulator beside the component's outpost to run one operation against the simulated component, on one of its protocol surfaces: an HTTP call, a command line (SSH, Telnet, TCP) or an SNMP get, and returns its answer. The simulator answers from the component's live state in process, as its listeners would, so a command's change sticks and the collector sees it; an impairment does not stop it. Audited. Gated by simulation:update, resolved on the component tier. A component that is not simulated is a 409, a surface it does not serve a 422, and no simulator answering a 503.
  * @summary Fire an operation at a simulated component
  */
 export const fireComponentSimulation = async (name: string,
@@ -13005,7 +14281,7 @@ export const getMoveComponentUrl = (name: string,) => {
 }
 
 /**
- * Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+ * Relocates and/or re-parents a component: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a component for read and create only). A separate act from update, and a separately grantable one (component:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. Does not recompute health: a component's own verdict is purely its active alarms, unaffected by where it sits. A taken name at the destination is a 409. Gated by component:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
  * @summary Move a component
  */
 export const moveComponent = async (name: string,
@@ -13343,7 +14619,7 @@ export const getCreateComponentFromTemplateUrl = () => {
 }
 
 /**
- * Creates one component from a component template at a place: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may read, resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A place outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no node a 422.
+ * Creates one component from a component template at a location: its product and the template's declared values, and, when the inputs carry an address (host), its endpoint attached through the driver with the template's preset under your inputs. A secret input names a secret you may bind (secret:bind), resolved as an attach resolves it. One transaction, every piece in your own scope with its own audit row carrying from_template; nothing points back at the template. Gated by component:create; declared values also need component:update and an attach endpoint:create. A location outside your location scope is a 404, an unknown template a 404, inputs with no address or an attach with no outpost a 422.
  * @summary Start a component from a template
  */
 export const createComponentFromTemplate = async (createComponentFromTemplateInputBody: NonReadonly<CreateComponentFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createComponentFromTemplateResponse> => {
@@ -13547,7 +14823,7 @@ export const getListDriversUrl = () => {
 }
 
 /**
- * Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
+ * Lists the driver catalog, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
  * @summary List drivers
  */
 export const listDrivers = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listDriversResponse> => {
@@ -13800,7 +15076,7 @@ export const getRenameDriverUrl = (id: string,) => {
  * @summary Rename a driver
  */
 export const renameDriver = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameDriverResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameDriverResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -13821,7 +15097,7 @@ return ogFetch<renameDriverResponse>(getRenameDriverUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -13855,8 +15131,8 @@ export const getPreviewDriverUrl = () => {
 }
 
 /**
- * Runs a driver spec's polls once through the node named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may reveal (secret:reveal), since the preview hands it to the target named. A preview whose transport and target name an endpoint the node holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the node and on each secret used. Gated by driver:preview.
- * @summary Preview a driver spec's polls through a node
+ * Runs a driver spec's polls once through the outpost named, against the target its inputs name, and answers with what each poll read: the samples its emits extracted, each emit that did not locate, and an excerpt of the raw answer, masked of every secret the preview used. Nothing is stored. The spec is a stored driver (driver) or an unsaved one (spec); an invalid spec is a 422 listing its findings, as validate-driver-spec gives them. A preview runs a poll that is its own request (http, https, an snmp get, a tcp line); a poll that rides a held session or a bound socket needs an attached endpoint (run-endpoint-poll). A secret input must be one the caller may bind (secret:bind), since the preview hands it to the target named. A preview whose transport and target name an endpoint the outpost holds runs on that endpoint's lane, never beside its other requests and ahead of its scheduled polls; when that endpoint's gate is closed (refused, unreachable, or disrupted by a command), or the probe reads the target's host unreachable, it is a 409 naming the reason, and nothing is sent. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the outpost and on each secret used. Gated by driver:preview.
+ * @summary Preview a driver spec's polls through an outpost
  */
 export const previewDriver = async (previewDriverInputBody: NonReadonly<PreviewDriverInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<previewDriverResponse> => {
 
@@ -14015,7 +15291,7 @@ export const getCreateEndpointUrl = () => {
 }
 
 /**
- * Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.
+ * Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. A secret input hands that credential to the endpoint's host, so it takes secret:bind on the secret: one the caller cannot read is a 422, one it can read but not bind a 403. The create scope cascades through the owning component. Gated by endpoint:create.
  * @summary Create an endpoint
  */
 export const createEndpoint = async (createEndpointInputBody: NonReadonly<CreateEndpointInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createEndpointResponse> => {
@@ -14161,7 +15437,7 @@ export const getUpdateEndpointUrl = (endpoint: string,) => {
 }
 
 /**
- * Patches an endpoint's node placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references, validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+ * Patches an endpoint's outpost placement, params, label, out-of-band mark, or (driver-attached) its connection inputs in place: the host, port and attached secret references (a secret taking secret:bind, as on create), validated against the driver's declared inputs, the endpoint's tasks re-derived in the same transaction. A value the driver refuses is a 400 naming the field. An empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
  * @summary Update an endpoint
  */
 export const updateEndpoint = async (endpoint: string,
@@ -14229,7 +15505,7 @@ export const getRunEndpointPollUrl = (endpoint: string,
 }
 
 /**
- * Runs one of an attached endpoint's polls now, on the node that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the node, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no node is a 409. A node that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the node's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
+ * Runs one of an attached endpoint's polls now, on the outpost that holds the endpoint, outside its schedule (which is unchanged), and answers with what it read. The samples land as a scheduled run's do. The run waits for the endpoint's lane on the outpost, ahead of its scheduled polls and never beside another request to the endpoint; it borrows the endpoint's held session where it has one and honors its gate: a gated endpoint refuses the run with the gate's reason (409), a refusal, an unreachable verdict from the endpoint's probe, or a disruptive command (a reboot) the run was queued behind, and nothing is sent. A poll the endpoint does not have is a 404 naming the polls it has; an endpoint on no outpost is a 409. An outpost that is not connected is a 503, one that does not answer in time a 504; too many runs in flight, here or on the outpost's operator lanes, is a 429. Audited on the endpoint. Gated by endpoint:run; read and run scopes (through the component) drive the 404 versus 403 split.
  * @summary Run an endpoint's poll now
  */
 export const runEndpointPoll = async (endpoint: string,
@@ -14275,7 +15551,7 @@ export const getRetryEndpointUrl = (endpoint: string,) => {
 }
 
 /**
- * Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the node recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
+ * Moves the endpoint's retry counter, which is part of its connection fingerprint: a gate a refusal retrying cannot fix holds (a wrong credential, a changed host key or certificate, a reply its driver declares terminal) lifts, the outpost recycles the endpoint's held session, and every connection to it is attempted again. Fixing the secret, the address, the transport, the tls mode or the driver's login needs no retry: the change moves the fingerprint itself. An unrelated edit (a label) moves nothing. host_key names a key to trust, the one the endpoint's transport pins (the offered key a key refusal names): an ssh host key, or a tls or https endpoint's certificate public key, which such an endpoint also takes as certificate. It becomes the declared pin and recycles the session onto it whatever its state, an audited acceptance of the change. While the endpoint's gate names an offered key, the key must be that key, so a trust confirmed against a refusal the record has since moved past is a 409 and changes nothing. Audited, a trusted key with the pin it replaced (old) and the pin it set (new). Gated by endpoint:retry; read and retry scopes (through the component) drive the 404 versus 403 split.
  * @summary Retry an endpoint's gated connections
  */
 export const retryEndpoint = async (endpoint: string,
@@ -14378,7 +15654,7 @@ export const getListEventRuleUrl = () => {
 }
 
 /**
- * Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a registry: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+ * Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
  * @summary List event rules
  */
 export const listEventRule = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listEventRuleResponse> => {
@@ -14422,7 +15698,7 @@ export const getCreateEventRuleUrl = () => {
 }
 
 /**
- * Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+ * Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
  * @summary Create an event rule
  */
 export const createEventRule = async (createEventRuleInputBody: NonReadonly<CreateEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createEventRuleResponse> => {
@@ -14627,7 +15903,7 @@ export const getGetEventRuleStateUrl = (name: string,) => {
 }
 
 /**
- * What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.
+ * What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.
  * @summary Get an event rule's live state
  */
 export const getEventRuleState = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEventRuleStateResponse> => {
@@ -14671,7 +15947,7 @@ export const getRenameEventRuleUrl = (name: string,) => {
 }
 
 /**
- * Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
+ * Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
  * @summary Rename an event rule
  */
 export const renameEventRule = async (name: string,
@@ -15373,7 +16649,7 @@ export const getListLocationTypesUrl = () => {
 }
 
 /**
- * Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
+ * Lists the location_type catalog (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
  * @summary List location types
  */
 export const listLocationTypes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listLocationTypesResponse> => {
@@ -15884,7 +17160,7 @@ export const getRenameLocationTypeUrl = (id: string,) => {
  * @summary Rename a location type
  */
 export const renameLocationType = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameLocationTypeResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameLocationTypeResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -15905,7 +17181,7 @@ return ogFetch<renameLocationTypeResponse>(getRenameLocationTypeUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -16232,7 +17508,7 @@ export const getGetLocationHealthUrl = (name: string,) => {
 }
 
 /**
- * The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the slot, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary Read a location's health
  */
 export const getLocationHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getLocationHealthResponse> => {
@@ -16320,7 +17596,7 @@ export const getListLocationPropertiesUrl = (name: string,) => {
 }
 
 /**
- * Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A place owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary List a location's effective properties
  */
 export const listLocationProperties = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listLocationPropertiesResponse> => {
@@ -16692,7 +17968,7 @@ export const getResetLocationNameUrl = (name: string,) => {
 }
 
 /**
- * Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
+ * Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of location, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
  * @summary Regenerate a location's name
  */
 export const resetLocationName = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<resetLocationNameResponse> => {
@@ -16853,8 +18129,8 @@ export const getCreateLocationsFromTemplateUrl = () => {
 }
 
 /**
- * Creates a subtree of places from a place template under a parent place (or as a new top), each place's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template places in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
- * @summary Start a subtree of places from a template
+ * Creates a subtree of locations from a location template under a parent location (or as a new top), each location's type checked against its parent type's allowed parents as this fleet has them (your fork of a shipped type included), each named by the template, the request (the root) or its type's name rule, and the systems the template puts in them, staffed as a system template is, unattached. One transaction: all of it or none, every piece in your own scope with its own audit row carrying from_template. Gated by location:create; when the subtree carries systems it also needs system:create, system:read, system:update, component:create and component:update, and standard:create when a standard is created from its template. A type this fleet does not hold, or a placement its types refuse, is a 422 naming the type or the pair.
+ * @summary Start a subtree of locations from a template
  */
 export const createLocationsFromTemplate = async (createLocationsFromTemplateInputBody: NonReadonly<CreateLocationsFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createLocationsFromTemplateResponse> => {
 
@@ -17337,779 +18613,6 @@ return ogFetch<setMetricTypeRetentionResponse>(getSetMetricTypeRetentionUrl(name
 
 
 
-export type listNodesResponse200 = {
-  data: ListNodesOutputBody
-  status: 200
-}
-
-export type listNodesResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listNodesResponseSuccess = (listNodesResponse200) & {
-  headers: Headers;
-};
-export type listNodesResponseError = (listNodesResponseDefault) & {
-  headers: Headers;
-};
-
-export type listNodesResponse = (listNodesResponseSuccess | listNodesResponseError)
-
-export const getListNodesUrl = () => {
-
-
-
-
-  return `/nodes`
-}
-
-/**
- * Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.
- * @summary List nodes
- */
-export const listNodes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listNodesResponse> => {
-
-  return ogFetch<listNodesResponse>(getListNodesUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type createNodeResponse201 = {
-  data: NodeBody
-  status: 201
-}
-
-export type createNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type createNodeResponseSuccess = (createNodeResponse201) & {
-  headers: Headers;
-};
-export type createNodeResponseError = (createNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type createNodeResponse = (createNodeResponseSuccess | createNodeResponseError)
-
-export const getCreateNodeUrl = () => {
-
-
-
-
-  return `/nodes`
-}
-
-/**
- * Registers an edge node server-side (day-one enrollment: create, then :enroll to mint its token). Gated by node:create.
- * @summary Create a node
- */
-export const createNode = async (createNodeInputBody: NonReadonly<CreateNodeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNodeResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createNodeResponse>(getCreateNodeUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createNodeInputBody)
-  }
-);}
-
-
-
-export type deleteNodeResponse204 = {
-  data: void
-  status: 204
-}
-
-export type deleteNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type deleteNodeResponseSuccess = (deleteNodeResponse204) & {
-  headers: Headers;
-};
-export type deleteNodeResponseError = (deleteNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type deleteNodeResponse = (deleteNodeResponseSuccess | deleteNodeResponseError)
-
-export const getDeleteNodeUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}`
-}
-
-/**
- * Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
- * @summary Delete a node
- */
-export const deleteNode = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteNodeResponse> => {
-
-  return ogFetch<deleteNodeResponse>(getDeleteNodeUrl(name),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export type getNodeResponse200 = {
-  data: NodeBody
-  status: 200
-}
-
-export type getNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type getNodeResponseSuccess = (getNodeResponse200) & {
-  headers: Headers;
-};
-export type getNodeResponseError = (getNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type getNodeResponse = (getNodeResponseSuccess | getNodeResponseError)
-
-export const getGetNodeUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}`
-}
-
-/**
- * Fetches a node by name. Requires an all-scope read. Gated by node:read.
- * @summary Get a node
- */
-export const getNode = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getNodeResponse> => {
-
-  return ogFetch<getNodeResponse>(getGetNodeUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type updateNodeResponse200 = {
-  data: NodeBody
-  status: 200
-}
-
-export type updateNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type updateNodeResponseSuccess = (updateNodeResponse200) & {
-  headers: Headers;
-};
-export type updateNodeResponseError = (updateNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type updateNodeResponse = (updateNodeResponseSuccess | updateNodeResponseError)
-
-export const getUpdateNodeUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}`
-}
-
-/**
- * Patches a node's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
- * @summary Update a node
- */
-export const updateNode = async (name: string,
-    updateNodeInputBody: NonReadonly<UpdateNodeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateNodeResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<updateNodeResponse>(getUpdateNodeUrl(name),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(updateNodeInputBody)
-  }
-);}
-
-
-
-export type listNodeLogsResponse200 = {
-  data: NodeLogsOutputBody
-  status: 200
-}
-
-export type listNodeLogsResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listNodeLogsResponseSuccess = (listNodeLogsResponse200) & {
-  headers: Headers;
-};
-export type listNodeLogsResponseError = (listNodeLogsResponseDefault) & {
-  headers: Headers;
-};
-
-export type listNodeLogsResponse = (listNodeLogsResponseSuccess | listNodeLogsResponseError)
-
-export const getListNodeLogsUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/logs`
-}
-
-/**
- * Returns the node's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the node), newest first, bounded to the last 24 hours. Gated by node:read; an out-of-scope node is a non-disclosing 404.
- * @summary List a node's recent self-logs
- */
-export const listNodeLogs = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listNodeLogsResponse> => {
-
-  return ogFetch<listNodeLogsResponse>(getListNodeLogsUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type getNodeSimulationResponse200 = {
-  data: SimulationOutputBody
-  status: 200
-}
-
-export type getNodeSimulationResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type getNodeSimulationResponseSuccess = (getNodeSimulationResponse200) & {
-  headers: Headers;
-};
-export type getNodeSimulationResponseError = (getNodeSimulationResponseDefault) & {
-  headers: Headers;
-};
-
-export type getNodeSimulationResponse = (getNodeSimulationResponseSuccess | getNodeSimulationResponseError)
-
-export const getGetNodeSimulationUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/simulation`
-}
-
-/**
- * The devices a simulator beside the node serves (each component with an endpoint placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
- * @summary Get a node's simulator
- */
-export const getNodeSimulation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getNodeSimulationResponse> => {
-
-  return ogFetch<getNodeSimulationResponse>(getGetNodeSimulationUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type addNodeSimulationComponentResponse201 = {
-  data: AddSimComponentOutputBody
-  status: 201
-}
-
-export type addNodeSimulationComponentResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type addNodeSimulationComponentResponseSuccess = (addNodeSimulationComponentResponse201) & {
-  headers: Headers;
-};
-export type addNodeSimulationComponentResponseError = (addNodeSimulationComponentResponseDefault) & {
-  headers: Headers;
-};
-
-export type addNodeSimulationComponentResponse = (addNodeSimulationComponentResponseSuccess | addNodeSimulationComponentResponseError)
-
-export const getAddNodeSimulationComponentUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/simulation/components`
-}
-
-/**
- * Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the node: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the node's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. A node with no simulator connected is a 409, and a product no profile simulates a 422.
- * @summary Add a simulated component
- */
-export const addNodeSimulationComponent = async (name: string,
-    addSimComponentInputBody: NonReadonly<AddSimComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addNodeSimulationComponentResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<addNodeSimulationComponentResponse>(getAddNodeSimulationComponentUrl(name),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(addSimComponentInputBody)
-  }
-);}
-
-
-
-export type getNodeSimulationObservationResponse200 = {
-  data: EndpointObservation
-  status: 200
-}
-
-export type getNodeSimulationObservationResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type getNodeSimulationObservationResponseSuccess = (getNodeSimulationObservationResponse200) & {
-  headers: Headers;
-};
-export type getNodeSimulationObservationResponseError = (getNodeSimulationObservationResponseDefault) & {
-  headers: Headers;
-};
-
-export type getNodeSimulationObservationResponse = (getNodeSimulationObservationResponseSuccess | getNodeSimulationObservationResponseError)
-
-export const getGetNodeSimulationObservationUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/simulation/observation`
-}
-
-/**
- * What the simulated endpoints beside a node saw arrive and how each request settled, and what the node tallied sending, read in that order: the simulator, then the node, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the node simulates. A node that does not exist is a 404; no simulator answering, or the node not answering, a 503.
- * @summary Get a node's endpoint observation
- */
-export const getNodeSimulationObservation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getNodeSimulationObservationResponse> => {
-
-  return ogFetch<getNodeSimulationObservationResponse>(getGetNodeSimulationObservationUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type addNodeSimulationSystemResponse201 = {
-  data: AddSimSystemOutputBody
-  status: 201
-}
-
-export type addNodeSimulationSystemResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type addNodeSimulationSystemResponseSuccess = (addNodeSimulationSystemResponse201) & {
-  headers: Headers;
-};
-export type addNodeSimulationSystemResponseError = (addNodeSimulationSystemResponseDefault) & {
-  headers: Headers;
-};
-
-export type addNodeSimulationSystemResponse = (addNodeSimulationSystemResponseSuccess | addNodeSimulationSystemResponseError)
-
-export const getAddNodeSimulationSystemUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}/simulation/systems`
-}
-
-/**
- * Creates a system built to a standard, with a simulated component for each staffed role in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the node, and assigned its role, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; roles nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and node:read (and location:read when it names a place), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its role writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). A node with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
- * @summary Add a simulated system
- */
-export const addNodeSimulationSystem = async (name: string,
-    addSimSystemInputBody: NonReadonly<AddSimSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addNodeSimulationSystemResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<addNodeSimulationSystemResponse>(getAddNodeSimulationSystemUrl(name),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(addSimSystemInputBody)
-  }
-);}
-
-
-
-export type enrollNodeResponse200 = {
-  data: EnrollOutputBody
-  status: 200
-}
-
-export type enrollNodeResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type enrollNodeResponseSuccess = (enrollNodeResponse200) & {
-  headers: Headers;
-};
-export type enrollNodeResponseError = (enrollNodeResponseDefault) & {
-  headers: Headers;
-};
-
-export type enrollNodeResponse = (enrollNodeResponseSuccess | enrollNodeResponseError)
-
-export const getEnrollNodeUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}:enroll`
-}
-
-/**
- * Mints (or re-mints) the node's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by node:enroll.
- * @summary Mint a node's enrollment token
- */
-export const enrollNode = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<enrollNodeResponse> => {
-
-  return ogFetch<enrollNodeResponse>(getEnrollNodeUrl(name),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type listNodeTagsResponse200 = {
-  data: EntityTagsOutputBody
-  status: 200
-}
-
-export type listNodeTagsResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listNodeTagsResponseSuccess = (listNodeTagsResponse200) & {
-  headers: Headers;
-};
-export type listNodeTagsResponseError = (listNodeTagsResponseDefault) & {
-  headers: Headers;
-};
-
-export type listNodeTagsResponse = (listNodeTagsResponseSuccess | listNodeTagsResponseError)
-
-export const getListNodeTagsUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}:listTags`
-}
-
-/**
- * Lists the tags bound directly on a node (not the resolved cascade). Gated by node:read.
- * @summary List tags on a node
- */
-export const listNodeTags = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listNodeTagsResponse> => {
-
-  return ogFetch<listNodeTagsResponse>(getListNodeTagsUrl(name),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type removeNodeTagResponse204 = {
-  data: void
-  status: 204
-}
-
-export type removeNodeTagResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type removeNodeTagResponseSuccess = (removeNodeTagResponse204) & {
-  headers: Headers;
-};
-export type removeNodeTagResponseError = (removeNodeTagResponseDefault) & {
-  headers: Headers;
-};
-
-export type removeNodeTagResponse = (removeNodeTagResponseSuccess | removeNodeTagResponseError)
-
-export const getRemoveNodeTagUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}:removeTag`
-}
-
-/**
- * Removes a key's value from a node. Gated by node:update.
- * @summary Remove a tag value from a node
- */
-export const removeNodeTag = async (name: string,
-    entityRemoveTagInputBody: NonReadonly<EntityRemoveTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<removeNodeTagResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<removeNodeTagResponse>(getRemoveNodeTagUrl(name),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(entityRemoveTagInputBody)
-  }
-);}
-
-
-
-export type setNodeTagResponse200 = {
-  data: TagBindingBody
-  status: 200
-}
-
-export type setNodeTagResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type setNodeTagResponseSuccess = (setNodeTagResponse200) & {
-  headers: Headers;
-};
-export type setNodeTagResponseError = (setNodeTagResponseDefault) & {
-  headers: Headers;
-};
-
-export type setNodeTagResponse = (setNodeTagResponseSuccess | setNodeTagResponseError)
-
-export const getSetNodeTagUrl = (name: string,) => {
-
-
-
-
-  return `/nodes/${name}:setTag`
-}
-
-/**
- * Binds a value for a key on a node. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by node:update.
- * @summary Set a tag value on a node
- */
-export const setNodeTag = async (name: string,
-    entitySetTagInputBody: NonReadonly<EntitySetTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setNodeTagResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setNodeTagResponse>(getSetNodeTagUrl(name),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(entitySetTagInputBody)
-  }
-);}
-
-
-
-export type claimNodeResponse200 = {
-  data: ClaimOutputBody
-  status: 200
-}
-
-export type claimNodeResponse401 = {
-  data: ErrorModel
-  status: 401
-}
-
-export type claimNodeResponse422 = {
-  data: ErrorModel
-  status: 422
-}
-
-export type claimNodeResponse500 = {
-  data: ErrorModel
-  status: 500
-}
-
-export type claimNodeResponseSuccess = (claimNodeResponse200) & {
-  headers: Headers;
-};
-export type claimNodeResponseError = (claimNodeResponse401 | claimNodeResponse422 | claimNodeResponse500) & {
-  headers: Headers;
-};
-
-export type claimNodeResponse = (claimNodeResponseSuccess | claimNodeResponseError)
-
-export const getClaimNodeUrl = () => {
-
-
-
-
-  return `/nodes:claim`
-}
-
-/**
- * The node-facing exchange: a node presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
- * @summary Claim a node identity in exchange for its NATS credential
- */
-export const claimNode = async (claimNodeInputBody: NonReadonly<ClaimNodeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<claimNodeResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<claimNodeResponse>(getClaimNodeUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(claimNodeInputBody)
-  }
-);}
-
-
-
 export type listNotificationTargetResponse200 = {
   data: ListNotificationTargetsOutputBody
   status: 200
@@ -18182,7 +18685,7 @@ export const getCreateNotificationTargetUrl = () => {
 }
 
 /**
- * Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a principal_group (every human member, read at each alarm transition) or one principal, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes principal_group:read:admin and binding a person principal:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to reveal it (secret:reveal, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not reveal a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
+ * Adds a destination a notification can be sent to: a webhook, its URL and, optionally, the platform secret it signs or authenticates with; or people, a user_group (every person in the group, read at each alarm transition) or one user, on the channels named. A person is told only about an alarm on a component their own component read scope admits. Binding a group takes user_group:read:admin and binding a person user:read:admin (a 403 without it), since the target reaches whoever they name. Binding a secret takes the right to bind it (secret:bind, and the admin tier for an admin-sensitive one), since every send hands it to the URL: a secret the caller cannot read is a 404, one it can read but not bind a 403. A URL the egress contract refuses under the allow list in force, an unknown kind, or a secret that is not a platform hmac-key or bearer-token is a 422; a taken name a 409. Audited, the URL masked. Gated by notification_target:create with an all-scope grant.
  * @summary Create a notification target
  */
 export const createNotificationTarget = async (createNotificationTargetInputBody: NonReadonly<CreateNotificationTargetInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNotificationTargetResponse> => {
@@ -18328,7 +18831,7 @@ export const getUpdateNotificationTargetUrl = (name: string,) => {
 }
 
 /**
- * Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to reveal it, as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
+ * Patches a target's label, URL, secret or enabled flag (an absent field is unchanged; an empty secret unbinds it). Binding a secret takes the right to bind it (secret:bind), as on create, and so does moving the URL of a target that keeps a bound secret (a 403 without it), since the next send would hand the secret to the new URL. Audited, the URL masked and a change to it recorded as changed. Gated by notification_target:update with an all-scope grant.
  * @summary Update a notification target
  */
 export const updateNotificationTarget = async (name: string,
@@ -18519,7 +19022,7 @@ export const getCreateNotificationTypeUrl = () => {
 }
 
 /**
- * Registers an operator notification type (official=false). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
+ * Registers an operator notification type (official=false). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422, and is never stored. A taken name is a 409. Audited. Gated by notification_type:create.
  * @summary Create a notification type
  */
 export const createNotificationType = async (createNotificationTypeInputBody: NonReadonly<CreateNotificationTypeInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createNotificationTypeResponse> => {
@@ -18581,7 +19084,7 @@ export const getRenameNotificationTypeUrl = (id: string,) => {
  * @summary Rename a notification type
  */
 export const renameNotificationType = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameNotificationTypeResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameNotificationTypeResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -18602,7 +19105,7 @@ return ogFetch<renameNotificationTypeResponse>(getRenameNotificationTypeUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -18724,7 +19227,7 @@ export const getUpdateNotificationTypeUrl = (name: string,) => {
 }
 
 /**
- * Patches an operator type's label, description or templates (an absent field is unchanged). A template in the sandboxed language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Place, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
+ * Patches an operator type's label, description, subject or text (an absent field is unchanged). Subject and text are written in the rule language a label rule uses (the functions title, upper, lower, slug, words; {{if}} and the builtins and, or, not, eq, ne, lt, le, gt, ge), reading the alarm facts Component, ComponentLabel, ComponentType, Location, Severity, SeverityLabel, Message, Transition, RaisedAt, ClearedAt, Rule, Link; a fact outside them renders empty, and anything else (printf, call, index, range, a variable, a source past 4096 bytes) is a 422. An official type is read-only (409). The name moves only through :rename. Audited. Gated by notification_type:update.
  * @summary Update a notification type
  */
 export const updateNotificationType = async (name: string,
@@ -18783,7 +19286,7 @@ export const getPreviewNotificationTypeUrl = (name: string,) => {
 }
 
 /**
- * Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft template the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
+ * Renders the type's subject and text (or a draft of either, sent in the body) against one real alarm, exactly as a delivery of that alarm's transition would carry them, with the facts they read. Writes nothing. The alarm is named by its component and id; without an id, the component's most recently raised alarm. A draft the sandbox refuses is a 422, one that fails to render (its output past the cap) a 422 naming it. Gated by notification_type:read; the component is resolved in the caller's component read scope, so a component outside it is a non-disclosing 404.
  * @summary Preview a notification type against an alarm
  */
 export const previewNotificationType = async (name: string,
@@ -18849,7 +19352,7 @@ export const getListNotificationUrl = (params?: ListNotificationParams,) => {
 }
 
 /**
- * The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of principal:read:admin. Gated by notification:read.
+ * The messages sent, on their way, or failed about alarms, newest first, filtered by alarm, target or status. Only notifications about components in the caller's component read scope are listed. A row addressed to a person names them only to that person and to holders of user:read:admin. Gated by notification:read.
  * @summary List notifications
  */
 export const listNotification = async (params?: ListNotificationParams, options?: Parameters<typeof ogFetch>[1]): Promise<listNotificationResponse> => {
@@ -18937,7 +19440,7 @@ export const getRetryNotificationUrl = (id: string,) => {
 }
 
 /**
- * Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+ * Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
  * @summary Retry a failed notification
  */
 export const retryNotification = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<retryNotificationResponse> => {
@@ -18953,40 +19456,40 @@ export const retryNotification = async (id: string, options?: Parameters<typeof 
 
 
 
-export type listGroupsResponse200 = {
-  data: ListGroupsOutputBody
+export type listOutpostsResponse200 = {
+  data: ListOutpostsOutputBody
   status: 200
 }
 
-export type listGroupsResponseDefault = {
+export type listOutpostsResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listGroupsResponseSuccess = (listGroupsResponse200) & {
+export type listOutpostsResponseSuccess = (listOutpostsResponse200) & {
   headers: Headers;
 };
-export type listGroupsResponseError = (listGroupsResponseDefault) & {
+export type listOutpostsResponseError = (listOutpostsResponseDefault) & {
   headers: Headers;
 };
 
-export type listGroupsResponse = (listGroupsResponseSuccess | listGroupsResponseError)
+export type listOutpostsResponse = (listOutpostsResponseSuccess | listOutpostsResponseError)
 
-export const getListGroupsUrl = () => {
-
-
+export const getListOutpostsUrl = () => {
 
 
-  return `/principal-groups`
+
+
+  return `/outposts`
 }
 
 /**
- * Every principal group. Gated by principal_group:read:admin.
- * @summary List principal groups
+ * Lists the edge outposts. An outpost is fleet-wide, so listing requires an all-scope read. Gated by outpost:read.
+ * @summary List outposts
  */
-export const listGroups = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listGroupsResponse> => {
+export const listOutposts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listOutpostsResponse> => {
 
-  return ogFetch<listGroupsResponse>(getListGroupsUrl(),
+  return ogFetch<listOutpostsResponse>(getListOutpostsUrl(),
   {
     ...options,
     method: 'GET'
@@ -18997,38 +19500,38 @@ export const listGroups = async ( options?: Parameters<typeof ogFetch>[1]): Prom
 
 
 
-export type createGroupResponse201 = {
-  data: GroupBody
+export type createOutpostResponse201 = {
+  data: OutpostBody
   status: 201
 }
 
-export type createGroupResponseDefault = {
+export type createOutpostResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 201>
 }
 
-export type createGroupResponseSuccess = (createGroupResponse201) & {
+export type createOutpostResponseSuccess = (createOutpostResponse201) & {
   headers: Headers;
 };
-export type createGroupResponseError = (createGroupResponseDefault) & {
+export type createOutpostResponseError = (createOutpostResponseDefault) & {
   headers: Headers;
 };
 
-export type createGroupResponse = (createGroupResponseSuccess | createGroupResponseError)
+export type createOutpostResponse = (createOutpostResponseSuccess | createOutpostResponseError)
 
-export const getCreateGroupUrl = () => {
-
-
+export const getCreateOutpostUrl = () => {
 
 
-  return `/principal-groups`
+
+
+  return `/outposts`
 }
 
 /**
- * Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.
- * @summary Create a principal group
+ * Registers an edge outpost server-side (day-one enrollment: create, then :enroll to mint its token). Gated by outpost:create.
+ * @summary Create an outpost
  */
-export const createGroup = async (createGroupInputBody: NonReadonly<CreateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupResponse> => {
+export const createOutpost = async (createOutpostInputBody: NonReadonly<CreateOutpostInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createOutpostResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -19044,51 +19547,51 @@ export const createGroup = async (createGroupInputBody: NonReadonly<CreateGroupI
     }
     return headers;
   };
-return ogFetch<createGroupResponse>(getCreateGroupUrl(),
+return ogFetch<createOutpostResponse>(getCreateOutpostUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createGroupInputBody)
+    body: JSON.stringify(createOutpostInputBody)
   }
 );}
 
 
 
-export type deleteGroupResponse204 = {
+export type deleteOutpostResponse204 = {
   data: void
   status: 204
 }
 
-export type deleteGroupResponseDefault = {
+export type deleteOutpostResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type deleteGroupResponseSuccess = (deleteGroupResponse204) & {
+export type deleteOutpostResponseSuccess = (deleteOutpostResponse204) & {
   headers: Headers;
 };
-export type deleteGroupResponseError = (deleteGroupResponseDefault) & {
+export type deleteOutpostResponseError = (deleteOutpostResponseDefault) & {
   headers: Headers;
 };
 
-export type deleteGroupResponse = (deleteGroupResponseSuccess | deleteGroupResponseError)
+export type deleteOutpostResponse = (deleteOutpostResponseSuccess | deleteOutpostResponseError)
 
-export const getDeleteGroupUrl = (group: string,) => {
-
-
+export const getDeleteOutpostUrl = (name: string,) => {
 
 
-  return `/principal-groups/${group}`
+
+
+  return `/outposts/${name}`
 }
 
 /**
- * Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by principal_group:delete (all-scope).
- * @summary Delete a principal group
+ * Decommissions an outpost: a hard delete that cascades its endpoints, their derived tasks, its outpost-owned tags and self-telemetry, its platform component, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by outpost:delete.
+ * @summary Delete an outpost
  */
-export const deleteGroup = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteGroupResponse> => {
+export const deleteOutpost = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteOutpostResponse> => {
 
-  return ogFetch<deleteGroupResponse>(getDeleteGroupUrl(group),
+  return ogFetch<deleteOutpostResponse>(getDeleteOutpostUrl(name),
   {
     ...options,
     method: 'DELETE'
@@ -19099,40 +19602,40 @@ export const deleteGroup = async (group: string, options?: Parameters<typeof ogF
 
 
 
-export type getGroupResponse200 = {
-  data: GroupBody
+export type getOutpostResponse200 = {
+  data: OutpostBody
   status: 200
 }
 
-export type getGroupResponseDefault = {
+export type getOutpostResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type getGroupResponseSuccess = (getGroupResponse200) & {
+export type getOutpostResponseSuccess = (getOutpostResponse200) & {
   headers: Headers;
 };
-export type getGroupResponseError = (getGroupResponseDefault) & {
+export type getOutpostResponseError = (getOutpostResponseDefault) & {
   headers: Headers;
 };
 
-export type getGroupResponse = (getGroupResponseSuccess | getGroupResponseError)
+export type getOutpostResponse = (getOutpostResponseSuccess | getOutpostResponseError)
 
-export const getGetGroupUrl = (group: string,) => {
-
-
+export const getGetOutpostUrl = (name: string,) => {
 
 
-  return `/principal-groups/${group}`
+
+
+  return `/outposts/${name}`
 }
 
 /**
- * One principal group, by name or uuid. Gated by principal_group:read:admin.
- * @summary Get a principal group
+ * Fetches an outpost by name. Requires an all-scope read. Gated by outpost:read.
+ * @summary Get an outpost
  */
-export const getGroup = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<getGroupResponse> => {
+export const getOutpost = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getOutpostResponse> => {
 
-  return ogFetch<getGroupResponse>(getGetGroupUrl(group),
+  return ogFetch<getOutpostResponse>(getGetOutpostUrl(name),
   {
     ...options,
     method: 'GET'
@@ -19143,39 +19646,39 @@ export const getGroup = async (group: string, options?: Parameters<typeof ogFetc
 
 
 
-export type updateGroupResponse200 = {
-  data: GroupBody
+export type updateOutpostResponse200 = {
+  data: OutpostBody
   status: 200
 }
 
-export type updateGroupResponseDefault = {
+export type updateOutpostResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type updateGroupResponseSuccess = (updateGroupResponse200) & {
+export type updateOutpostResponseSuccess = (updateOutpostResponse200) & {
   headers: Headers;
 };
-export type updateGroupResponseError = (updateGroupResponseDefault) & {
+export type updateOutpostResponseError = (updateOutpostResponseDefault) & {
   headers: Headers;
 };
 
-export type updateGroupResponse = (updateGroupResponseSuccess | updateGroupResponseError)
+export type updateOutpostResponse = (updateOutpostResponseSuccess | updateOutpostResponseError)
 
-export const getUpdateGroupUrl = (group: string,) => {
-
-
+export const getUpdateOutpostUrl = (name: string,) => {
 
 
-  return `/principal-groups/${group}`
+
+
+  return `/outposts/${name}`
 }
 
 /**
- * Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).
- * @summary Update a principal group
+ * Patches an outpost's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by outpost:update.
+ * @summary Update an outpost
  */
-export const updateGroup = async (group: string,
-    updateGroupInputBody: NonReadonly<UpdateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateGroupResponse> => {
+export const updateOutpost = async (name: string,
+    updateOutpostInputBody: NonReadonly<UpdateOutpostInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateOutpostResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -19191,51 +19694,51 @@ export const updateGroup = async (group: string,
     }
     return headers;
   };
-return ogFetch<updateGroupResponse>(getUpdateGroupUrl(group),
+return ogFetch<updateOutpostResponse>(getUpdateOutpostUrl(name),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(updateGroupInputBody)
+    body: JSON.stringify(updateOutpostInputBody)
   }
 );}
 
 
 
-export type listGroupGrantsResponse200 = {
-  data: ListGroupGrantsOutputBody
+export type listOutpostLogsResponse200 = {
+  data: OutpostLogsOutputBody
   status: 200
 }
 
-export type listGroupGrantsResponseDefault = {
+export type listOutpostLogsResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listGroupGrantsResponseSuccess = (listGroupGrantsResponse200) & {
+export type listOutpostLogsResponseSuccess = (listOutpostLogsResponse200) & {
   headers: Headers;
 };
-export type listGroupGrantsResponseError = (listGroupGrantsResponseDefault) & {
+export type listOutpostLogsResponseError = (listOutpostLogsResponseDefault) & {
   headers: Headers;
 };
 
-export type listGroupGrantsResponse = (listGroupGrantsResponseSuccess | listGroupGrantsResponseError)
+export type listOutpostLogsResponse = (listOutpostLogsResponseSuccess | listOutpostLogsResponseError)
 
-export const getListGroupGrantsUrl = (group: string,) => {
-
-
+export const getListOutpostLogsUrl = (name: string,) => {
 
 
-  return `/principal-groups/${group}/grants`
+
+
+  return `/outposts/${name}/logs`
 }
 
 /**
- * The role x scope grants a group confers on its members. Gated by principal_group:read:admin.
- * @summary List a group's grants
+ * Returns the outpost's own recent operational log lines (the raw ingest lane of ADR-0066, owner-bound to the outpost), newest first, bounded to the last 24 hours. Gated by outpost:read; an out-of-scope outpost is a non-disclosing 404.
+ * @summary List an outpost's recent self-logs
  */
-export const listGroupGrants = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupGrantsResponse> => {
+export const listOutpostLogs = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listOutpostLogsResponse> => {
 
-  return ogFetch<listGroupGrantsResponse>(getListGroupGrantsUrl(group),
+  return ogFetch<listOutpostLogsResponse>(getListOutpostLogsUrl(name),
   {
     ...options,
     method: 'GET'
@@ -19246,39 +19749,83 @@ export const listGroupGrants = async (group: string, options?: Parameters<typeof
 
 
 
-export type createGroupGrantResponse201 = {
-  data: GrantBody
+export type getOutpostSimulationResponse200 = {
+  data: SimulationOutputBody
+  status: 200
+}
+
+export type getOutpostSimulationResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getOutpostSimulationResponseSuccess = (getOutpostSimulationResponse200) & {
+  headers: Headers;
+};
+export type getOutpostSimulationResponseError = (getOutpostSimulationResponseDefault) & {
+  headers: Headers;
+};
+
+export type getOutpostSimulationResponse = (getOutpostSimulationResponseSuccess | getOutpostSimulationResponseError)
+
+export const getGetOutpostSimulationUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}/simulation`
+}
+
+/**
+ * The devices a simulator beside the outpost serves (each component with an endpoint placed on the outpost, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope outpost read. Gated by outpost:read.
+ * @summary Get an outpost's simulator
+ */
+export const getOutpostSimulation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getOutpostSimulationResponse> => {
+
+  return ogFetch<getOutpostSimulationResponse>(getGetOutpostSimulationUrl(name),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type addOutpostSimulationComponentResponse201 = {
+  data: AddSimComponentOutputBody
   status: 201
 }
 
-export type createGroupGrantResponseDefault = {
+export type addOutpostSimulationComponentResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 201>
 }
 
-export type createGroupGrantResponseSuccess = (createGroupGrantResponse201) & {
+export type addOutpostSimulationComponentResponseSuccess = (addOutpostSimulationComponentResponse201) & {
   headers: Headers;
 };
-export type createGroupGrantResponseError = (createGroupGrantResponseDefault) & {
+export type addOutpostSimulationComponentResponseError = (addOutpostSimulationComponentResponseDefault) & {
   headers: Headers;
 };
 
-export type createGroupGrantResponse = (createGroupGrantResponseSuccess | createGroupGrantResponseError)
+export type addOutpostSimulationComponentResponse = (addOutpostSimulationComponentResponseSuccess | addOutpostSimulationComponentResponseError)
 
-export const getCreateGroupGrantUrl = (group: string,) => {
-
-
+export const getAddOutpostSimulationComponentUrl = (name: string,) => {
 
 
-  return `/principal-groups/${group}/grants`
+
+
+  return `/outposts/${name}/simulation/components`
 }
 
 /**
- * Assigns a role at a scope to a group; its members inherit it. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
- * @summary Grant a role to a group
+ * Creates a component of a simulated product, at the lowest free address in the simulated block (127.60.0.0/16), with the endpoint the collector reaches it through placed on the outpost: a driver attach where the driver's inputs are known (only when the platform secret the attach references exists, the community or the credential the face demands, else it falls back), otherwise a reachability probe on a port the profile serves, lifted as the outpost's simulator lifts its ports. The simulator serves it from its next pull, with no restart. Gated by simulation:update, and also needs component:create and endpoint:create, each in the caller's own scope. An outpost with no simulator connected is a 409, and a product no profile simulates a 422.
+ * @summary Add a simulated component
  */
-export const createGroupGrant = async (group: string,
-    createGroupGrantInputBody: NonReadonly<CreateGroupGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupGrantResponse> => {
+export const addOutpostSimulationComponent = async (name: string,
+    addSimComponentInputBody: NonReadonly<AddSimComponentInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addOutpostSimulationComponentResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -19294,97 +19841,51 @@ export const createGroupGrant = async (group: string,
     }
     return headers;
   };
-return ogFetch<createGroupGrantResponse>(getCreateGroupGrantUrl(group),
+return ogFetch<addOutpostSimulationComponentResponse>(getAddOutpostSimulationComponentUrl(name),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createGroupGrantInputBody)
+    body: JSON.stringify(addSimComponentInputBody)
   }
 );}
 
 
 
-export type revokeGroupGrantResponse204 = {
-  data: void
-  status: 204
-}
-
-export type revokeGroupGrantResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type revokeGroupGrantResponseSuccess = (revokeGroupGrantResponse204) & {
-  headers: Headers;
-};
-export type revokeGroupGrantResponseError = (revokeGroupGrantResponseDefault) & {
-  headers: Headers;
-};
-
-export type revokeGroupGrantResponse = (revokeGroupGrantResponseSuccess | revokeGroupGrantResponseError)
-
-export const getRevokeGroupGrantUrl = (group: string,
-    grantId: string,) => {
-
-
-
-
-  return `/principal-groups/${group}/grants/${grantId}`
-}
-
-/**
- * Removes one grant from a group. Gated by principal_grant:delete (all-scope).
- * @summary Revoke a group grant
- */
-export const revokeGroupGrant = async (group: string,
-    grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGroupGrantResponse> => {
-
-  return ogFetch<revokeGroupGrantResponse>(getRevokeGroupGrantUrl(group,grantId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export type listGroupMembersResponse200 = {
-  data: ListMembersOutputBody
+export type getOutpostSimulationObservationResponse200 = {
+  data: EndpointObservation
   status: 200
 }
 
-export type listGroupMembersResponseDefault = {
+export type getOutpostSimulationObservationResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listGroupMembersResponseSuccess = (listGroupMembersResponse200) & {
+export type getOutpostSimulationObservationResponseSuccess = (getOutpostSimulationObservationResponse200) & {
   headers: Headers;
 };
-export type listGroupMembersResponseError = (listGroupMembersResponseDefault) & {
+export type getOutpostSimulationObservationResponseError = (getOutpostSimulationObservationResponseDefault) & {
   headers: Headers;
 };
 
-export type listGroupMembersResponse = (listGroupMembersResponseSuccess | listGroupMembersResponseError)
+export type getOutpostSimulationObservationResponse = (getOutpostSimulationObservationResponseSuccess | getOutpostSimulationObservationResponseError)
 
-export const getListGroupMembersUrl = (group: string,) => {
-
-
+export const getGetOutpostSimulationObservationUrl = (name: string,) => {
 
 
-  return `/principal-groups/${group}/members`
+
+
+  return `/outposts/${name}/simulation/observation`
 }
 
 /**
- * The principals in a group. Gated by principal_group:read:admin.
- * @summary List a group's members
+ * What the simulated endpoints beside an outpost saw arrive and how each request settled, and what the outpost tallied sending, read in that order: the simulator, then the outpost, then the simulator again, so a request in transit between reads is never a false gap. A scale lab reconciles the three. Totals are per protocol with a capped sample of device ids, bounded at any fleet size, and count since each process started. Gated by simulation:read, and only for a caller whose component read scope is all, since the totals span every component the outpost simulates. An outpost that does not exist is a 404; no simulator answering, or the outpost not answering, a 503.
+ * @summary Get an outpost's endpoint observation
  */
-export const listGroupMembers = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupMembersResponse> => {
+export const getOutpostSimulationObservation = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getOutpostSimulationObservationResponse> => {
 
-  return ogFetch<listGroupMembersResponse>(getListGroupMembersUrl(group),
+  return ogFetch<getOutpostSimulationObservationResponse>(getGetOutpostSimulationObservationUrl(name),
   {
     ...options,
     method: 'GET'
@@ -19395,253 +19896,39 @@ export const listGroupMembers = async (group: string, options?: Parameters<typeo
 
 
 
-export type addGroupMemberResponse204 = {
-  data: void
-  status: 204
-}
-
-export type addGroupMemberResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type addGroupMemberResponseSuccess = (addGroupMemberResponse204) & {
-  headers: Headers;
-};
-export type addGroupMemberResponseError = (addGroupMemberResponseDefault) & {
-  headers: Headers;
-};
-
-export type addGroupMemberResponse = (addGroupMemberResponseSuccess | addGroupMemberResponseError)
-
-export const getAddGroupMemberUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}/members`
-}
-
-/**
- * Adds a principal to a group; its members inherit the group's grants. Gated by principal_group:update (all-scope). Idempotent.
- * @summary Add a member to a group
- */
-export const addGroupMember = async (group: string,
-    addMemberInputBody: NonReadonly<AddMemberInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addGroupMemberResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<addGroupMemberResponse>(getAddGroupMemberUrl(group),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(addMemberInputBody)
-  }
-);}
-
-
-
-export type removeGroupMemberResponse204 = {
-  data: void
-  status: 204
-}
-
-export type removeGroupMemberResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type removeGroupMemberResponseSuccess = (removeGroupMemberResponse204) & {
-  headers: Headers;
-};
-export type removeGroupMemberResponseError = (removeGroupMemberResponseDefault) & {
-  headers: Headers;
-};
-
-export type removeGroupMemberResponse = (removeGroupMemberResponseSuccess | removeGroupMemberResponseError)
-
-export const getRemoveGroupMemberUrl = (group: string,
-    principal: string,) => {
-
-
-
-
-  return `/principal-groups/${group}/members/${principal}`
-}
-
-/**
- * Removes a principal from a group; it stops inheriting the group's grants. Gated by principal_group:update (all-scope).
- * @summary Remove a member from a group
- */
-export const removeGroupMember = async (group: string,
-    principal: string, options?: Parameters<typeof ogFetch>[1]): Promise<removeGroupMemberResponse> => {
-
-  return ogFetch<removeGroupMemberResponse>(getRemoveGroupMemberUrl(group,principal),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export type renameGroupResponse200 = {
-  data: GroupBody
-  status: 200
-}
-
-export type renameGroupResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type renameGroupResponseSuccess = (renameGroupResponse200) & {
-  headers: Headers;
-};
-export type renameGroupResponseError = (renameGroupResponseDefault) & {
-  headers: Headers;
-};
-
-export type renameGroupResponse = (renameGroupResponseSuccess | renameGroupResponseError)
-
-export const getRenameGroupUrl = (group: string,) => {
-
-
-
-
-  return `/principal-groups/${group}:rename`
-}
-
-/**
- * Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by principal_group:rename (all-scope).
- * @summary Rename a principal group
- */
-export const renameGroup = async (group: string,
-    renameGroupInputBody: NonReadonly<RenameGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameGroupResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<renameGroupResponse>(getRenameGroupUrl(group),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameGroupInputBody)
-  }
-);}
-
-
-
-export type listPrincipalsResponse200 = {
-  data: ListPrincipalsOutputBody
-  status: 200
-}
-
-export type listPrincipalsResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
-}
-
-export type listPrincipalsResponseSuccess = (listPrincipalsResponse200) & {
-  headers: Headers;
-};
-export type listPrincipalsResponseError = (listPrincipalsResponseDefault) & {
-  headers: Headers;
-};
-
-export type listPrincipalsResponse = (listPrincipalsResponseSuccess | listPrincipalsResponseError)
-
-export const getListPrincipalsUrl = (params?: ListPrincipalsParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/principals?${stringifiedParams}` : `/principals`
-}
-
-/**
- * Lists all principals (humans and service accounts) with their grants. Gated by principal:read:admin.
- * @summary List principals
- */
-export const listPrincipals = async (params?: ListPrincipalsParams, options?: Parameters<typeof ogFetch>[1]): Promise<listPrincipalsResponse> => {
-
-  return ogFetch<listPrincipalsResponse>(getListPrincipalsUrl(params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type createPrincipalResponse201 = {
-  data: PrincipalBody
+export type addOutpostSimulationSystemResponse201 = {
+  data: AddSimSystemOutputBody
   status: 201
 }
 
-export type createPrincipalResponseDefault = {
+export type addOutpostSimulationSystemResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 201>
 }
 
-export type createPrincipalResponseSuccess = (createPrincipalResponse201) & {
+export type addOutpostSimulationSystemResponseSuccess = (addOutpostSimulationSystemResponse201) & {
   headers: Headers;
 };
-export type createPrincipalResponseError = (createPrincipalResponseDefault) & {
+export type addOutpostSimulationSystemResponseError = (addOutpostSimulationSystemResponseDefault) & {
   headers: Headers;
 };
 
-export type createPrincipalResponse = (createPrincipalResponseSuccess | createPrincipalResponseError)
+export type addOutpostSimulationSystemResponse = (addOutpostSimulationSystemResponseSuccess | addOutpostSimulationSystemResponseError)
 
-export const getCreatePrincipalUrl = () => {
-
-
+export const getAddOutpostSimulationSystemUrl = (name: string,) => {
 
 
-  return `/principals`
+
+
+  return `/outposts/${name}/simulation/systems`
 }
 
 /**
- * Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.
- * @summary Create a human principal
+ * Creates a system built to a standard, with a simulated component for each staffed slot in the standard's plan (see plan-simulation-system), each at its own free address in the simulated block with its endpoint placed on the outpost, and assigned its slot, all in one transaction: it lands whole or not at all. Component names are minted as an unnamed create mints them; slots nothing simulated fits are left short and listed. The simulator serves the components from its next pull. Gated by simulation:update, and also needs system:create, system:update, system:read, component:create, component:update, endpoint:create and outpost:read (and location:read when it names a location), each in the caller's own scope; the components are created without a parent, so component:create must be all-scope, and so must component:update, since assigning each its slot writes onto it as an assignment route does. A refused piece is mapped as its own route maps it (a component refused is a 403). An outpost with no simulator connected is a 409, and a standard nothing simulated can staff a 422.
+ * @summary Add a simulated system
  */
-export const createPrincipal = async (createPrincipalInputBody: NonReadonly<CreatePrincipalInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createPrincipalResponse> => {
+export const addOutpostSimulationSystem = async (name: string,
+    addSimSystemInputBody: NonReadonly<AddSimSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addOutpostSimulationSystemResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -19657,51 +19944,95 @@ export const createPrincipal = async (createPrincipalInputBody: NonReadonly<Crea
     }
     return headers;
   };
-return ogFetch<createPrincipalResponse>(getCreatePrincipalUrl(),
+return ogFetch<addOutpostSimulationSystemResponse>(getAddOutpostSimulationSystemUrl(name),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createPrincipalInputBody)
+    body: JSON.stringify(addSimSystemInputBody)
   }
 );}
 
 
 
-export type getPrincipalResponse200 = {
-  data: PrincipalBody
+export type enrollOutpostResponse200 = {
+  data: EnrollOutputBody
   status: 200
 }
 
-export type getPrincipalResponseDefault = {
+export type enrollOutpostResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type getPrincipalResponseSuccess = (getPrincipalResponse200) & {
+export type enrollOutpostResponseSuccess = (enrollOutpostResponse200) & {
   headers: Headers;
 };
-export type getPrincipalResponseError = (getPrincipalResponseDefault) & {
+export type enrollOutpostResponseError = (enrollOutpostResponseDefault) & {
   headers: Headers;
 };
 
-export type getPrincipalResponse = (getPrincipalResponseSuccess | getPrincipalResponseError)
+export type enrollOutpostResponse = (enrollOutpostResponseSuccess | enrollOutpostResponseError)
 
-export const getGetPrincipalUrl = (id: string,) => {
-
-
+export const getEnrollOutpostUrl = (name: string,) => {
 
 
-  return `/principals/${id}`
+
+
+  return `/outposts/${name}:enroll`
 }
 
 /**
- * Fetches one principal by id with its profile and grants. Gated by principal:read:admin.
- * @summary Get a principal
+ * Mints (or re-mints) the outpost's enrollment token and returns it once. The token is stored only as a hash; it is never logged. Gated by outpost:enroll.
+ * @summary Mint an outpost's enrollment token
  */
-export const getPrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getPrincipalResponse> => {
+export const enrollOutpost = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<enrollOutpostResponse> => {
 
-  return ogFetch<getPrincipalResponse>(getGetPrincipalUrl(id),
+  return ogFetch<enrollOutpostResponse>(getEnrollOutpostUrl(name),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type listOutpostTagsResponse200 = {
+  data: EntityTagsOutputBody
+  status: 200
+}
+
+export type listOutpostTagsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listOutpostTagsResponseSuccess = (listOutpostTagsResponse200) & {
+  headers: Headers;
+};
+export type listOutpostTagsResponseError = (listOutpostTagsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listOutpostTagsResponse = (listOutpostTagsResponseSuccess | listOutpostTagsResponseError)
+
+export const getListOutpostTagsUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}:listTags`
+}
+
+/**
+ * Lists the tags bound directly on a outpost (not the resolved cascade). Gated by outpost:read.
+ * @summary List tags on a outpost
+ */
+export const listOutpostTags = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listOutpostTagsResponse> => {
+
+  return ogFetch<listOutpostTagsResponse>(getListOutpostTagsUrl(name),
   {
     ...options,
     method: 'GET'
@@ -19712,39 +20043,98 @@ export const getPrincipal = async (id: string, options?: Parameters<typeof ogFet
 
 
 
-export type updatePrincipalResponse200 = {
-  data: PrincipalBody
+export type removeOutpostTagResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeOutpostTagResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type removeOutpostTagResponseSuccess = (removeOutpostTagResponse204) & {
+  headers: Headers;
+};
+export type removeOutpostTagResponseError = (removeOutpostTagResponseDefault) & {
+  headers: Headers;
+};
+
+export type removeOutpostTagResponse = (removeOutpostTagResponseSuccess | removeOutpostTagResponseError)
+
+export const getRemoveOutpostTagUrl = (name: string,) => {
+
+
+
+
+  return `/outposts/${name}:removeTag`
+}
+
+/**
+ * Removes a key's value from a outpost. Gated by outpost:update.
+ * @summary Remove a tag value from a outpost
+ */
+export const removeOutpostTag = async (name: string,
+    entityRemoveTagInputBody: NonReadonly<EntityRemoveTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<removeOutpostTagResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<removeOutpostTagResponse>(getRemoveOutpostTagUrl(name),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(entityRemoveTagInputBody)
+  }
+);}
+
+
+
+export type setOutpostTagResponse200 = {
+  data: TagBindingBody
   status: 200
 }
 
-export type updatePrincipalResponseDefault = {
+export type setOutpostTagResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type updatePrincipalResponseSuccess = (updatePrincipalResponse200) & {
+export type setOutpostTagResponseSuccess = (setOutpostTagResponse200) & {
   headers: Headers;
 };
-export type updatePrincipalResponseError = (updatePrincipalResponseDefault) & {
+export type setOutpostTagResponseError = (setOutpostTagResponseDefault) & {
   headers: Headers;
 };
 
-export type updatePrincipalResponse = (updatePrincipalResponseSuccess | updatePrincipalResponseError)
+export type setOutpostTagResponse = (setOutpostTagResponseSuccess | setOutpostTagResponseError)
 
-export const getUpdatePrincipalUrl = (id: string,) => {
-
-
+export const getSetOutpostTagUrl = (name: string,) => {
 
 
-  return `/principals/${id}`
+
+
+  return `/outposts/${name}:setTag`
 }
 
 /**
- * Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
- * @summary Update a principal
+ * Binds a value for a key on a outpost. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by outpost:update.
+ * @summary Set a tag value on a outpost
  */
-export const updatePrincipal = async (id: string,
-    updatePrincipalInputBody: NonReadonly<UpdatePrincipalInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updatePrincipalResponse> => {
+export const setOutpostTag = async (name: string,
+    entitySetTagInputBody: NonReadonly<EntitySetTagInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setOutpostTagResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -19760,334 +20150,59 @@ export const updatePrincipal = async (id: string,
     }
     return headers;
   };
-return ogFetch<updatePrincipalResponse>(getUpdatePrincipalUrl(id),
+return ogFetch<setOutpostTagResponse>(getSetOutpostTagUrl(name),
   {
     ...options,
-    method: 'PATCH',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(updatePrincipalInputBody)
+    body: JSON.stringify(entitySetTagInputBody)
   }
 );}
 
 
 
-export type getPrincipalAvatarResponse200 = {
-  data: AvatarOutputBody
+export type claimOutpostResponse200 = {
+  data: ClaimOutputBody
   status: 200
 }
 
-export type getPrincipalAvatarResponseDefault = {
+export type claimOutpostResponse401 = {
   data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 200>
+  status: 401
 }
 
-export type getPrincipalAvatarResponseSuccess = (getPrincipalAvatarResponse200) & {
-  headers: Headers;
-};
-export type getPrincipalAvatarResponseError = (getPrincipalAvatarResponseDefault) & {
-  headers: Headers;
-};
-
-export type getPrincipalAvatarResponse = (getPrincipalAvatarResponseSuccess | getPrincipalAvatarResponseError)
-
-export const getGetPrincipalAvatarUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}/avatar`
-}
-
-/**
- * Returns the principal's profile picture as a base64-encoded JPEG. Gated by principal:read:admin. A principal without a picture is a 404.
- * @summary Get a principal's profile picture
- */
-export const getPrincipalAvatar = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getPrincipalAvatarResponse> => {
-
-  return ogFetch<getPrincipalAvatarResponse>(getGetPrincipalAvatarUrl(id),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type createGrantResponse201 = {
-  data: GrantBody
-  status: 201
-}
-
-export type createGrantResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 201>
-}
-
-export type createGrantResponseSuccess = (createGrantResponse201) & {
-  headers: Headers;
-};
-export type createGrantResponseError = (createGrantResponseDefault) & {
-  headers: Headers;
-};
-
-export type createGrantResponse = (createGrantResponseSuccess | createGrantResponseError)
-
-export const getCreateGrantUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}/grants`
-}
-
-/**
- * Assigns a role at a scope to a principal. Gated by principal_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
- * @summary Grant a role to a principal
- */
-export const createGrant = async (id: string,
-    createGrantInputBody: NonReadonly<CreateGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGrantResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<createGrantResponse>(getCreateGrantUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createGrantInputBody)
-  }
-);}
-
-
-
-export type revokeGrantResponse204 = {
-  data: void
-  status: 204
-}
-
-export type revokeGrantResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type revokeGrantResponseSuccess = (revokeGrantResponse204) & {
-  headers: Headers;
-};
-export type revokeGrantResponseError = (revokeGrantResponseDefault) & {
-  headers: Headers;
-};
-
-export type revokeGrantResponse = (revokeGrantResponseSuccess | revokeGrantResponseError)
-
-export const getRevokeGrantUrl = (id: string,
-    grantId: string,) => {
-
-
-
-
-  return `/principals/${id}/grants/${grantId}`
-}
-
-/**
- * Removes one grant from a principal. Gated by principal_grant:delete (all-scope). The last owner grant cannot be revoked.
- * @summary Revoke a grant
- */
-export const revokeGrant = async (id: string,
-    grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGrantResponse> => {
-
-  return ogFetch<revokeGrantResponse>(getRevokeGrantUrl(id,grantId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-export type listPrincipalSessionsResponse200 = {
-  data: ListPrincipalSessionsOutputBody
-  status: 200
-}
-
-export type listPrincipalSessionsResponse403 = {
-  data: ErrorModel
-  status: 403
-}
-
-export type listPrincipalSessionsResponse404 = {
-  data: ErrorModel
-  status: 404
-}
-
-export type listPrincipalSessionsResponse422 = {
+export type claimOutpostResponse422 = {
   data: ErrorModel
   status: 422
 }
 
-export type listPrincipalSessionsResponse500 = {
+export type claimOutpostResponse500 = {
   data: ErrorModel
   status: 500
 }
 
-export type listPrincipalSessionsResponseSuccess = (listPrincipalSessionsResponse200) & {
+export type claimOutpostResponseSuccess = (claimOutpostResponse200) & {
   headers: Headers;
 };
-export type listPrincipalSessionsResponseError = (listPrincipalSessionsResponse403 | listPrincipalSessionsResponse404 | listPrincipalSessionsResponse422 | listPrincipalSessionsResponse500) & {
+export type claimOutpostResponseError = (claimOutpostResponse401 | claimOutpostResponse422 | claimOutpostResponse500) & {
   headers: Headers;
 };
 
-export type listPrincipalSessionsResponse = (listPrincipalSessionsResponseSuccess | listPrincipalSessionsResponseError)
+export type claimOutpostResponse = (claimOutpostResponseSuccess | claimOutpostResponseError)
 
-export const getListPrincipalSessionsUrl = (id: string,) => {
-
-
+export const getClaimOutpostUrl = () => {
 
 
-  return `/principals/${id}/sessions`
+
+
+  return `/outposts:claim`
 }
 
 /**
- * Lists another principal's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by principal:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another principal).
- * @summary List a principal's sessions
+ * The outpost-facing exchange: an outpost presents its enrollment token and receives its NATS credential (url, username, password). Public (the token is the authentication); an invalid token is a 401.
+ * @summary Claim an outpost identity in exchange for its NATS credential
  */
-export const listPrincipalSessions = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listPrincipalSessionsResponse> => {
-
-  return ogFetch<listPrincipalSessionsResponse>(getListPrincipalSessionsUrl(id),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-export type revokePrincipalSessionResponse204 = {
-  data: void
-  status: 204
-}
-
-export type revokePrincipalSessionResponse403 = {
-  data: ErrorModel
-  status: 403
-}
-
-export type revokePrincipalSessionResponse404 = {
-  data: ErrorModel
-  status: 404
-}
-
-export type revokePrincipalSessionResponse422 = {
-  data: ErrorModel
-  status: 422
-}
-
-export type revokePrincipalSessionResponse500 = {
-  data: ErrorModel
-  status: 500
-}
-
-export type revokePrincipalSessionResponseSuccess = (revokePrincipalSessionResponse204) & {
-  headers: Headers;
-};
-export type revokePrincipalSessionResponseError = (revokePrincipalSessionResponse403 | revokePrincipalSessionResponse404 | revokePrincipalSessionResponse422 | revokePrincipalSessionResponse500) & {
-  headers: Headers;
-};
-
-export type revokePrincipalSessionResponse = (revokePrincipalSessionResponseSuccess | revokePrincipalSessionResponseError)
-
-export const getRevokePrincipalSessionUrl = (id: string,
-    sid: string,) => {
-
-
-
-
-  return `/principals/${id}/sessions/${sid}:revoke`
-}
-
-/**
- * Revokes one of another principal's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by principal:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-principal revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
- * @summary Revoke a principal's session
- */
-export const revokePrincipalSession = async (id: string,
-    sid: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokePrincipalSessionResponse> => {
-
-  return ogFetch<revokePrincipalSessionResponse>(getRevokePrincipalSessionUrl(id,sid),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type revokeAllPrincipalSessionsResponse200 = {
-  data: RevokeAllPrincipalSessionsOutputBody
-  status: 200
-}
-
-export type revokeAllPrincipalSessionsResponse403 = {
-  data: ErrorModel
-  status: 403
-}
-
-export type revokeAllPrincipalSessionsResponse404 = {
-  data: ErrorModel
-  status: 404
-}
-
-export type revokeAllPrincipalSessionsResponse422 = {
-  data: ErrorModel
-  status: 422
-}
-
-export type revokeAllPrincipalSessionsResponse500 = {
-  data: ErrorModel
-  status: 500
-}
-
-export type revokeAllPrincipalSessionsResponseSuccess = (revokeAllPrincipalSessionsResponse200) & {
-  headers: Headers;
-};
-export type revokeAllPrincipalSessionsResponseError = (revokeAllPrincipalSessionsResponse403 | revokeAllPrincipalSessionsResponse404 | revokeAllPrincipalSessionsResponse422 | revokeAllPrincipalSessionsResponse500) & {
-  headers: Headers;
-};
-
-export type revokeAllPrincipalSessionsResponse = (revokeAllPrincipalSessionsResponseSuccess | revokeAllPrincipalSessionsResponseError)
-
-export const getRevokeAllPrincipalSessionsUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}/sessions:revokeAll`
-}
-
-/**
- * Revokes every one of another principal's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by principal:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
- * @summary Revoke all of a principal's sessions or tokens
- */
-export const revokeAllPrincipalSessions = async (id: string,
-    revokeAllPrincipalSessionsInputBody: NonReadonly<RevokeAllPrincipalSessionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<revokeAllPrincipalSessionsResponse> => {
+export const claimOutpost = async (claimOutpostInputBody: NonReadonly<ClaimOutpostInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<claimOutpostResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -20103,468 +20218,12 @@ export const revokeAllPrincipalSessions = async (id: string,
     }
     return headers;
   };
-return ogFetch<revokeAllPrincipalSessionsResponse>(getRevokeAllPrincipalSessionsUrl(id),
+return ogFetch<claimOutpostResponse>(getClaimOutpostUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(revokeAllPrincipalSessionsInputBody)
-  }
-);}
-
-
-
-export type archivePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type archivePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type archivePrincipalResponseSuccess = (archivePrincipalResponse204) & {
-  headers: Headers;
-};
-export type archivePrincipalResponseError = (archivePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type archivePrincipalResponse = (archivePrincipalResponseSuccess | archivePrincipalResponseError)
-
-export const getArchivePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:archive`
-}
-
-/**
- * Soft-deletes a principal: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by principal:archive (all-scope). The last active owner cannot be archived.
- * @summary Archive a principal
- */
-export const archivePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<archivePrincipalResponse> => {
-
-  return ogFetch<archivePrincipalResponse>(getArchivePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type disablePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type disablePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type disablePrincipalResponseSuccess = (disablePrincipalResponse204) & {
-  headers: Headers;
-};
-export type disablePrincipalResponseError = (disablePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type disablePrincipalResponse = (disablePrincipalResponseSuccess | disablePrincipalResponseError)
-
-export const getDisablePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:disable`
-}
-
-/**
- * Soft-disables a principal so it can no longer authenticate; its audit trail is kept. Gated by principal:update (all-scope). The last active owner cannot be disabled.
- * @summary Disable a principal
- */
-export const disablePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<disablePrincipalResponse> => {
-
-  return ogFetch<disablePrincipalResponse>(getDisablePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type enablePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type enablePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type enablePrincipalResponseSuccess = (enablePrincipalResponse204) & {
-  headers: Headers;
-};
-export type enablePrincipalResponseError = (enablePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type enablePrincipalResponse = (enablePrincipalResponseSuccess | enablePrincipalResponseError)
-
-export const getEnablePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:enable`
-}
-
-/**
- * Re-enables a disabled principal, restoring its ability to authenticate. Gated by principal:update (all-scope).
- * @summary Enable a principal
- */
-export const enablePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<enablePrincipalResponse> => {
-
-  return ogFetch<enablePrincipalResponse>(getEnablePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type impersonatePrincipalResponse201 = {
-  data: ImpersonateOutputBody
-  status: 201
-}
-
-export type impersonatePrincipalResponse403 = {
-  data: ErrorModel
-  status: 403
-}
-
-export type impersonatePrincipalResponse404 = {
-  data: ErrorModel
-  status: 404
-}
-
-export type impersonatePrincipalResponse422 = {
-  data: ErrorModel
-  status: 422
-}
-
-export type impersonatePrincipalResponse500 = {
-  data: ErrorModel
-  status: 500
-}
-
-export type impersonatePrincipalResponseSuccess = (impersonatePrincipalResponse201) & {
-  headers: Headers;
-};
-export type impersonatePrincipalResponseError = (impersonatePrincipalResponse403 | impersonatePrincipalResponse404 | impersonatePrincipalResponse422 | impersonatePrincipalResponse500) & {
-  headers: Headers;
-};
-
-export type impersonatePrincipalResponse = (impersonatePrincipalResponseSuccess | impersonatePrincipalResponseError)
-
-export const getImpersonatePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:impersonate`
-}
-
-/**
- * Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by principal:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), or from within an existing impersonation.
- * @summary Impersonate a principal (view-as or act-as)
- */
-export const impersonatePrincipal = async (id: string,
-    impersonateInputBody: NonReadonly<ImpersonateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<impersonatePrincipalResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<impersonatePrincipalResponse>(getImpersonatePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(impersonateInputBody)
-  }
-);}
-
-
-
-export type purgePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type purgePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type purgePrincipalResponseSuccess = (purgePrincipalResponse204) & {
-  headers: Headers;
-};
-export type purgePrincipalResponseError = (purgePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type purgePrincipalResponse = (purgePrincipalResponseSuccess | purgePrincipalResponseError)
-
-export const getPurgePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:purge`
-}
-
-/**
- * Hard-deletes an archived principal and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by principal:purge:admin (admin-sensitive, all-scope), and the principal must be archived first.
- * @summary Purge a principal
- */
-export const purgePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<purgePrincipalResponse> => {
-
-  return ogFetch<purgePrincipalResponse>(getPurgePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type removePrincipalAvatarResponse204 = {
-  data: void
-  status: 204
-}
-
-export type removePrincipalAvatarResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type removePrincipalAvatarResponseSuccess = (removePrincipalAvatarResponse204) & {
-  headers: Headers;
-};
-export type removePrincipalAvatarResponseError = (removePrincipalAvatarResponseDefault) & {
-  headers: Headers;
-};
-
-export type removePrincipalAvatarResponse = (removePrincipalAvatarResponseSuccess | removePrincipalAvatarResponseError)
-
-export const getRemovePrincipalAvatarUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:removeAvatar`
-}
-
-/**
- * Clears another human principal's profile picture. Gated by principal:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
- * @summary Remove a principal's profile picture
- */
-export const removePrincipalAvatar = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<removePrincipalAvatarResponse> => {
-
-  return ogFetch<removePrincipalAvatarResponse>(getRemovePrincipalAvatarUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type resetPrincipalPasswordResponse204 = {
-  data: void
-  status: 204
-}
-
-export type resetPrincipalPasswordResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type resetPrincipalPasswordResponseSuccess = (resetPrincipalPasswordResponse204) & {
-  headers: Headers;
-};
-export type resetPrincipalPasswordResponseError = (resetPrincipalPasswordResponseDefault) & {
-  headers: Headers;
-};
-
-export type resetPrincipalPasswordResponse = (resetPrincipalPasswordResponseSuccess | resetPrincipalPasswordResponseError)
-
-export const getResetPrincipalPasswordUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:resetPassword`
-}
-
-/**
- * Sets a new password for another human principal (an administrator action; the target's current password is not required). Gated by principal:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
- * @summary Reset a principal's password
- */
-export const resetPrincipalPassword = async (id: string,
-    resetPasswordInputBody: NonReadonly<ResetPasswordInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<resetPrincipalPasswordResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<resetPrincipalPasswordResponse>(getResetPrincipalPasswordUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(resetPasswordInputBody)
-  }
-);}
-
-
-
-export type restorePrincipalResponse204 = {
-  data: void
-  status: 204
-}
-
-export type restorePrincipalResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type restorePrincipalResponseSuccess = (restorePrincipalResponse204) & {
-  headers: Headers;
-};
-export type restorePrincipalResponseError = (restorePrincipalResponseDefault) & {
-  headers: Headers;
-};
-
-export type restorePrincipalResponse = (restorePrincipalResponseSuccess | restorePrincipalResponseError)
-
-export const getRestorePrincipalUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:restore`
-}
-
-/**
- * Reverses an archive: the account is restored to active and can authenticate again. Gated by principal:archive (all-scope).
- * @summary Restore a principal
- */
-export const restorePrincipal = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<restorePrincipalResponse> => {
-
-  return ogFetch<restorePrincipalResponse>(getRestorePrincipalUrl(id),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-export type setPrincipalAvatarResponse204 = {
-  data: void
-  status: 204
-}
-
-export type setPrincipalAvatarResponseDefault = {
-  data: ErrorModel
-  status: Exclude<HTTPStatusCodes, 204>
-}
-
-export type setPrincipalAvatarResponseSuccess = (setPrincipalAvatarResponse204) & {
-  headers: Headers;
-};
-export type setPrincipalAvatarResponseError = (setPrincipalAvatarResponseDefault) & {
-  headers: Headers;
-};
-
-export type setPrincipalAvatarResponse = (setPrincipalAvatarResponseSuccess | setPrincipalAvatarResponseError)
-
-export const getSetPrincipalAvatarUrl = (id: string,) => {
-
-
-
-
-  return `/principals/${id}:setAvatar`
-}
-
-/**
- * Sets another human principal's profile picture (an administrator action). Gated by principal:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
- * @summary Set a principal's profile picture
- */
-export const setPrincipalAvatar = async (id: string,
-    setAvatarInputBody: NonReadonly<SetAvatarInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setPrincipalAvatarResponse> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return ogFetch<setPrincipalAvatarResponse>(getSetPrincipalAvatarUrl(id),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(setAvatarInputBody)
+    body: JSON.stringify(claimOutpostInputBody)
   }
 );}
 
@@ -20598,7 +20257,7 @@ export const getListProductsUrl = () => {
 }
 
 /**
- * Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+ * Lists the product catalog, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
  * @summary List products
  */
 export const listProducts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listProductsResponse> => {
@@ -21153,7 +20812,7 @@ export const getRenameProductUrl = (id: string,) => {
  * @summary Rename a product
  */
 export const renameProduct = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameProductResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameProductResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -21174,7 +20833,7 @@ return ogFetch<renameProductResponse>(getRenameProductUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -21941,7 +21600,7 @@ export const getGetSettingsMeUrl = () => {
 }
 
 /**
- * The current principal's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
+ * The current user's resolved settings, client-visible namespaces only, no provenance. Feeds the SPA at boot. Requires authentication.
  * @summary Get the caller's effective settings
  */
 export const getSettingsMe = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getSettingsMeResponse> => {
@@ -21985,7 +21644,7 @@ export const getDeleteSettingsNamespaceUrl = (namespace: string,) => {
 }
 
 /**
- * Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
+ * Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
  * @summary Restore a settings namespace to defaults
  */
 export const deleteSettingsNamespace = async (namespace: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSettingsNamespaceResponse> => {
@@ -22029,7 +21688,7 @@ export const getPatchSettingsNamespaceUrl = (namespace: string,) => {
 }
 
 /**
- * Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
+ * Applies an RFC 7386 JSON Merge Patch to the namespace's platform binding; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
  * @summary Update a settings namespace
  */
 export const patchSettingsNamespace = async (namespace: string,
@@ -22088,7 +21747,7 @@ export const getRestoreSettingsDefaultsUrl = () => {
 }
 
 /**
- * Removes every platform override (a factory reset). Gated by settings:update and platform:update.
+ * Removes every platform binding (a factory reset). Gated by settings:update and platform:update.
  * @summary Restore all settings to defaults
  */
 export const restoreSettingsDefaults = async ( options?: Parameters<typeof ogFetch>[1]): Promise<restoreSettingsDefaultsResponse> => {
@@ -22381,7 +22040,7 @@ export const getGetSimulationUrl = () => {
 }
 
 /**
- * Every node a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees a node's simulator when its component read scope holds at least one component the node simulates (an all-scope reader sees all of them); no node read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
+ * Every outpost a simulator has pulled for since the server started, each with its capabilities, its account of impairments, and the components it simulates within the caller's component read scope, joined to their live hits. A caller sees an outpost's simulator when its component read scope holds at least one component the outpost simulates (an all-scope reader sees all of them); no outpost read is needed. Connected is true when any listed simulator pulled recently. Hits are per server process, not stored. Gated by simulation:read.
  * @summary Get the simulated fleet
  */
 export const getSimulation = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getSimulationResponse> => {
@@ -22469,7 +22128,7 @@ export const getPlanSimulationSystemUrl = (standard: string,) => {
 }
 
 /**
- * Previews a simulated system built to a standard: each of the standard's roles (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.
+ * Previews a simulated system built to a standard: each of the standard's slots (one alternate taken per choice) staffed with the first simulated product that fits its accepted types and pins, as many as its quorum and at least one, or left short with the reason when nothing simulated fits. Creates nothing. Gated by simulation:read.
  * @summary Plan a simulated system to a standard
  */
 export const planSimulationSystem = async (standard: string, options?: Parameters<typeof ogFetch>[1]): Promise<planSimulationSystemResponse> => {
@@ -22513,7 +22172,7 @@ export const getListStandardsUrl = () => {
 }
 
 /**
- * Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.
+ * Lists the standard catalog, ordered alphabetically by label. A standard is the contract a system is built to. Gated by standard:read.
  * @summary List standards
  */
 export const listStandards = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listStandardsResponse> => {
@@ -23036,40 +22695,40 @@ return ogFetch<setStandardPropertyResponse>(getSetStandardPropertyUrl(id,propert
 
 
 
-export type listStandardRolesResponse200 = {
-  data: ListStandardRolesOutputBody
+export type listStandardSlotsResponse200 = {
+  data: ListStandardSlotsOutputBody
   status: 200
 }
 
-export type listStandardRolesResponseDefault = {
+export type listStandardSlotsResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listStandardRolesResponseSuccess = (listStandardRolesResponse200) & {
+export type listStandardSlotsResponseSuccess = (listStandardSlotsResponse200) & {
   headers: Headers;
 };
-export type listStandardRolesResponseError = (listStandardRolesResponseDefault) & {
+export type listStandardSlotsResponseError = (listStandardSlotsResponseDefault) & {
   headers: Headers;
 };
 
-export type listStandardRolesResponse = (listStandardRolesResponseSuccess | listStandardRolesResponseError)
+export type listStandardSlotsResponse = (listStandardSlotsResponseSuccess | listStandardSlotsResponseError)
 
-export const getListStandardRolesUrl = (id: string,) => {
-
-
+export const getListStandardSlotsUrl = (id: string,) => {
 
 
-  return `/standards/${id}/roles`
+
+
+  return `/standards/${id}/slots`
 }
 
 /**
- * Lists the roles this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
- * @summary List a standard's declared roles
+ * Lists the slots this standard declares (every conforming system inherits them live), ordered by name, each with its quorum and the component_types (accepted_types) and, if pinned, the products a filling component must match. An unknown standard is a 404, never an empty list. Gated by standard:read.
+ * @summary List a standard's declared slots
  */
-export const listStandardRoles = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardRolesResponse> => {
+export const listStandardSlots = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listStandardSlotsResponse> => {
 
-  return ogFetch<listStandardRolesResponse>(getListStandardRolesUrl(id),
+  return ogFetch<listStandardSlotsResponse>(getListStandardSlotsUrl(id),
   {
     ...options,
     method: 'GET'
@@ -23080,42 +22739,42 @@ export const listStandardRoles = async (id: string, options?: Parameters<typeof 
 
 
 
-export type deleteStandardRoleResponse204 = {
+export type deleteStandardSlotResponse204 = {
   data: void
   status: 204
 }
 
-export type deleteStandardRoleResponseDefault = {
+export type deleteStandardSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type deleteStandardRoleResponseSuccess = (deleteStandardRoleResponse204) & {
+export type deleteStandardSlotResponseSuccess = (deleteStandardSlotResponse204) & {
   headers: Headers;
 };
-export type deleteStandardRoleResponseError = (deleteStandardRoleResponseDefault) & {
+export type deleteStandardSlotResponseError = (deleteStandardSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type deleteStandardRoleResponse = (deleteStandardRoleResponseSuccess | deleteStandardRoleResponseError)
+export type deleteStandardSlotResponse = (deleteStandardSlotResponseSuccess | deleteStandardSlotResponseError)
 
-export const getDeleteStandardRoleUrl = (id: string,
-    role: string,) => {
-
-
+export const getDeleteStandardSlotUrl = (id: string,
+    slot: string,) => {
 
 
-  return `/standards/${id}/roles/${role}`
+
+
+  return `/standards/${id}/slots/${slot}`
 }
 
 /**
- * Removes the role from the standard, and with it every assignment conforming systems made to it. A role the standard does not declare is a 404. Gated by standard:delete.
- * @summary Withdraw a role from a standard
+ * Removes the slot from the standard, and with it every assignment conforming systems made to it. A slot the standard does not declare is a 404. Gated by standard:delete.
+ * @summary Withdraw a slot from a standard
  */
-export const deleteStandardRole = async (id: string,
-    role: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteStandardRoleResponse> => {
+export const deleteStandardSlot = async (id: string,
+    slot: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteStandardSlotResponse> => {
 
-  return ogFetch<deleteStandardRoleResponse>(getDeleteStandardRoleUrl(id,role),
+  return ogFetch<deleteStandardSlotResponse>(getDeleteStandardSlotUrl(id,slot),
   {
     ...options,
     method: 'DELETE'
@@ -23126,41 +22785,41 @@ export const deleteStandardRole = async (id: string,
 
 
 
-export type setStandardRoleResponse200 = {
-  data: SystemRoleBody
+export type setStandardSlotResponse200 = {
+  data: SystemSlotBody
   status: 200
 }
 
-export type setStandardRoleResponseDefault = {
+export type setStandardSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type setStandardRoleResponseSuccess = (setStandardRoleResponse200) & {
+export type setStandardSlotResponseSuccess = (setStandardSlotResponse200) & {
   headers: Headers;
 };
-export type setStandardRoleResponseError = (setStandardRoleResponseDefault) & {
+export type setStandardSlotResponseError = (setStandardSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type setStandardRoleResponse = (setStandardRoleResponseSuccess | setStandardRoleResponseError)
+export type setStandardSlotResponse = (setStandardSlotResponseSuccess | setStandardSlotResponseError)
 
-export const getSetStandardRoleUrl = (id: string,
-    role: string,) => {
-
-
+export const getSetStandardSlotUrl = (id: string,
+    slot: string,) => {
 
 
-  return `/standards/${id}/roles/${role}`
+
+
+  return `/standards/${id}/slots/${slot}`
 }
 
 /**
- * Declares a role every conforming system needs filled, or revises it in place (the role is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a role name must mean one role in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.
- * @summary Declare a role on a standard
+ * Declares a slot every conforming system needs filled, or revises it in place (the slot is addressed by name, so the write is idempotent and declaring is this same route). Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. An unknown standard, type, or product is a 422, as is a mask naming a field this resource does not patch. A name a conforming system already declares itself is a 409, since a slot name must mean one slot in a system, and so is a capacity below what a conforming system already holds; either names the conflicting system only if the caller may read it. Gated by standard:update.
+ * @summary Declare a slot on a standard
  */
-export const setStandardRole = async (id: string,
-    role: string,
-    roleSpecBody: NonReadonly<RoleSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardRoleResponse> => {
+export const setStandardSlot = async (id: string,
+    slot: string,
+    slotSpecBody: NonReadonly<SlotSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setStandardSlotResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -23176,12 +22835,12 @@ export const setStandardRole = async (id: string,
     }
     return headers;
   };
-return ogFetch<setStandardRoleResponse>(getSetStandardRoleUrl(id,role),
+return ogFetch<setStandardSlotResponse>(getSetStandardSlotUrl(id,slot),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(roleSpecBody)
+    body: JSON.stringify(slotSpecBody)
   }
 );}
 
@@ -23219,7 +22878,7 @@ export const getRenameStandardUrl = (id: string,) => {
  * @summary Rename a standard
  */
 export const renameStandard = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameStandardResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameStandardResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -23240,7 +22899,7 @@ return ogFetch<renameStandardResponse>(getRenameStandardUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -23274,7 +22933,7 @@ export const getCreateStandardFromTemplateUrl = () => {
 }
 
 /**
- * Writes one standard of your own (official false) from a standard template in the catalog: its roles, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
+ * Writes one standard of your own (official false) from a standard template in the catalog: its slots, choices, property and metric contract lines and map, in one transaction, audited once as a create carrying the template it came from (from_template). Nothing points back at the template, so a later release can change the template without touching your standard, and your standard renames, edits and deletes like any you created. The name is the template's unless you give one; a taken name is a 409, so creating from the same template again needs a second name. A variant is created only once you hold the standard it hangs off (the parent you name, or yours named for the template's parent), else a 422 naming the template to create from first. An unknown template is a 404. Gated by standard:create.
  * @summary Create a standard from a template
  */
 export const createStandardFromTemplate = async (createStandardFromTemplateInputBody: NonReadonly<CreateStandardFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createStandardFromTemplateResponse> => {
@@ -23332,7 +22991,7 @@ export const getListSystemTypesUrl = () => {
 }
 
 /**
- * Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+ * Lists the system_type catalog (the taxonomy of what a system is for: meeting, teaching, signage), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the contract a system is built to. Gated by system_type:read.
  * @summary List system types
  */
 export const listSystemTypes = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemTypesResponse> => {
@@ -23581,7 +23240,7 @@ export const getCreateSystemUrl = () => {
 }
 
 /**
- * Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
+ * Creates a system, optionally under a parent (a root needs an all-scoped grant, or a location inside the location subtree of a location-scoped system:create grant; a root with no location needs the all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.
  * @summary Create a system
  */
 export const createSystem = async (createSystemInputBody: NonReadonly<CreateSystemInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createSystemResponse> => {
@@ -23727,7 +23386,7 @@ export const getUpdateSystemUrl = (name: string,) => {
 }
 
 /**
- * Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a role name the system declares itself is a 409 naming the role, since a role name must mean one role in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited role moves onto the new standard's role of the same name when it is still a typed match and the role has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. A new standard declaring a slot name the system declares itself is a 409 naming the slot, since a slot name must mean one slot in a system. A standard change carries the system's staffing in the same transaction: each occupant of an inherited slot moves onto the new standard's slot of the same name when it is still a typed match and the slot has room, and is released, staying a member, otherwise; clearing the standard releases every inherited assignment. Gated by system:update; read and update scopes drive the 404 versus 403 split.
  * @summary Update a system
  */
 export const updateSystem = async (name: string,
@@ -23786,7 +23445,7 @@ export const getListSystemAlarmsUrl = (name: string,) => {
 }
 
 /**
- * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's members' alarms
  */
 export const listSystemAlarms = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {
@@ -23874,7 +23533,7 @@ export const getGetSystemHealthUrl = (name: string,) => {
 }
 
 /**
- * The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The system's current verdict and why: every slot it needs filled, whether it is impaired, what an impaired slot means for the system (impact), and for an impaired slot which assigned components are down plus the alarms that took them down. A slot that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this slot's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary Read a system's health
  */
 export const getSystemHealth = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getSystemHealthResponse> => {
@@ -23971,7 +23630,7 @@ export const getListSystemMembersUrl = (name: string,) => {
 }
 
 /**
- * The components bound into this system, ordered by name. Membership is what a role attaches to: every component staffing a role here is a member, and a member may also carry no role at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * The components bound into this system, ordered by name. Membership is what a slot attaches to: every component staffing a slot here is a member, and a member may also carry no slot at all (a power conditioner is in the room without filling a declared slot). Each member carries its own verdict, so a system's view can poll its members' health here rather than reading the whole fleet. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List the components in a system
  */
 export const listSystemMembers = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemMembersResponse> => {
@@ -24016,7 +23675,7 @@ export const getRemoveSystemMemberUrl = (name: string,
 }
 
 /**
- * Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
+ * Unbinds this component from the system. Refused with a 409 while it still fills a slot here, since removing it would leave the system staffed by a non-member: unassign the slot first. A component that was not a member is a 404. Gated by system:update, and also needs component:update, because unbinding moves the component's primary and restamps its label; read and update scopes drive the system's 404 versus 403 split, and a member outside the component:update scope is a 403 (the system's member list already names it).
  * @summary Take a component out of a system
  */
 export const removeSystemMember = async (name: string,
@@ -24252,7 +23911,7 @@ export const getListSystemPropertiesUrl = (name: string,) => {
 }
 
 /**
- * Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's properties and where each stands
  */
 export const listSystemProperties = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemPropertiesResponse> => {
@@ -24412,7 +24071,7 @@ export const getListSystemPropertySeriesUrl = (name: string,
 }
 
 /**
- * The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count and the value in force at its end (null when empty), and covered_from, the earliest instant retention leaves data for. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+ * The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). With a resolution (seconds) it answers instead with every regular bucket of the window, oldest first, each with the change count, last (the value its own changes end on, null when empty) and held (the value in force at its end), and covered_from, the earliest instant retention leaves data for. Both forms carry carried_in, the value in force when the window opens (the newest measured row of the instance before it, within retention), so a step chart starts on it instead of blank. A bucket aggregates one instance's measured changes (observed and calculated, never declared or intended): instance names it, and unset it is the one instance with measured changes in the window, or a 422 listing them when there are several. Gated by system:read; an out-of-scope owner is a non-disclosing 404.
  * @summary Read one property series' change history
  */
 export const listSystemPropertySeries = async (name: string,
@@ -24430,40 +24089,40 @@ export const listSystemPropertySeries = async (name: string,
 
 
 
-export type listSystemRolesResponse200 = {
-  data: ListSystemRolesOutputBody
+export type listSystemSlotsResponse200 = {
+  data: ListSystemSlotsOutputBody
   status: 200
 }
 
-export type listSystemRolesResponseDefault = {
+export type listSystemSlotsResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type listSystemRolesResponseSuccess = (listSystemRolesResponse200) & {
+export type listSystemSlotsResponseSuccess = (listSystemSlotsResponse200) & {
   headers: Headers;
 };
-export type listSystemRolesResponseError = (listSystemRolesResponseDefault) & {
+export type listSystemSlotsResponseError = (listSystemSlotsResponseDefault) & {
   headers: Headers;
 };
 
-export type listSystemRolesResponse = (listSystemRolesResponseSuccess | listSystemRolesResponseError)
+export type listSystemSlotsResponse = (listSystemSlotsResponseSuccess | listSystemSlotsResponseError)
 
-export const getListSystemRolesUrl = (name: string,) => {
-
-
+export const getListSystemSlotsUrl = (name: string,) => {
 
 
-  return `/systems/${name}/roles`
+
+
+  return `/systems/${name}/slots`
 }
 
 /**
- * Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
- * @summary List a system's effective roles
+ * Every slot this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * @summary List a system's effective slots
  */
-export const listSystemRoles = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemRolesResponse> => {
+export const listSystemSlots = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemSlotsResponse> => {
 
-  return ogFetch<listSystemRolesResponse>(getListSystemRolesUrl(name),
+  return ogFetch<listSystemSlotsResponse>(getListSystemSlotsUrl(name),
   {
     ...options,
     method: 'GET'
@@ -24474,42 +24133,42 @@ export const listSystemRoles = async (name: string, options?: Parameters<typeof 
 
 
 
-export type deleteSystemRoleResponse204 = {
+export type deleteSystemSlotResponse204 = {
   data: void
   status: 204
 }
 
-export type deleteSystemRoleResponseDefault = {
+export type deleteSystemSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type deleteSystemRoleResponseSuccess = (deleteSystemRoleResponse204) & {
+export type deleteSystemSlotResponseSuccess = (deleteSystemSlotResponse204) & {
   headers: Headers;
 };
-export type deleteSystemRoleResponseError = (deleteSystemRoleResponseDefault) & {
+export type deleteSystemSlotResponseError = (deleteSystemSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type deleteSystemRoleResponse = (deleteSystemRoleResponseSuccess | deleteSystemRoleResponseError)
+export type deleteSystemSlotResponse = (deleteSystemSlotResponseSuccess | deleteSystemSlotResponseError)
 
-export const getDeleteSystemRoleUrl = (name: string,
-    role: string,) => {
-
-
+export const getDeleteSystemSlotUrl = (name: string,
+    slot: string,) => {
 
 
-  return `/systems/${name}/roles/${role}`
+
+
+  return `/systems/${name}/slots/${slot}`
 }
 
 /**
- * Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.
- * @summary Withdraw a role from a system
+ * Removes a slot declared on this system, and with it every assignment to it. A slot the system does not declare itself is a 404 (a slot inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * @summary Withdraw a slot from a system
  */
-export const deleteSystemRole = async (name: string,
-    role: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemRoleResponse> => {
+export const deleteSystemSlot = async (name: string,
+    slot: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSystemSlotResponse> => {
 
-  return ogFetch<deleteSystemRoleResponse>(getDeleteSystemRoleUrl(name,role),
+  return ogFetch<deleteSystemSlotResponse>(getDeleteSystemSlotUrl(name,slot),
   {
     ...options,
     method: 'DELETE'
@@ -24520,41 +24179,41 @@ export const deleteSystemRole = async (name: string,
 
 
 
-export type setSystemRoleResponse200 = {
-  data: SystemRoleBody
+export type setSystemSlotResponse200 = {
+  data: SystemSlotBody
   status: 200
 }
 
-export type setSystemRoleResponseDefault = {
+export type setSystemSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 200>
 }
 
-export type setSystemRoleResponseSuccess = (setSystemRoleResponse200) & {
+export type setSystemSlotResponseSuccess = (setSystemSlotResponse200) & {
   headers: Headers;
 };
-export type setSystemRoleResponseError = (setSystemRoleResponseDefault) & {
+export type setSystemSlotResponseError = (setSystemSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type setSystemRoleResponse = (setSystemRoleResponseSuccess | setSystemRoleResponseError)
+export type setSystemSlotResponse = (setSystemSlotResponseSuccess | setSystemSlotResponseError)
 
-export const getSetSystemRoleUrl = (name: string,
-    role: string,) => {
-
-
+export const getSetSystemSlotUrl = (name: string,
+    slot: string,) => {
 
 
-  return `/systems/${name}/roles/${role}`
+
+
+  return `/systems/${name}/slots/${slot}`
 }
 
 /**
- * Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. A name the system's standard already declares is a 409: a system role never shadows an inherited one, since a role name must mean one role in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.
- * @summary Declare a role on a system
+ * Declares a slot directly on this system (how a one-off system gets slots at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. A name the system's standard already declares is a 409: a system slot never shadows an inherited one, since a slot name must mean one slot in a system. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * @summary Declare a slot on a system
  */
-export const setSystemRole = async (name: string,
-    role: string,
-    roleSpecBody: NonReadonly<RoleSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setSystemRoleResponse> => {
+export const setSystemSlot = async (name: string,
+    slot: string,
+    slotSpecBody: NonReadonly<SlotSpecBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setSystemSlotResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -24570,55 +24229,55 @@ export const setSystemRole = async (name: string,
     }
     return headers;
   };
-return ogFetch<setSystemRoleResponse>(getSetSystemRoleUrl(name,role),
+return ogFetch<setSystemSlotResponse>(getSetSystemSlotUrl(name,slot),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(roleSpecBody)
+    body: JSON.stringify(slotSpecBody)
   }
 );}
 
 
 
-export type unassignSystemRoleResponse204 = {
+export type unassignSystemSlotResponse204 = {
   data: void
   status: 204
 }
 
-export type unassignSystemRoleResponseDefault = {
+export type unassignSystemSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type unassignSystemRoleResponseSuccess = (unassignSystemRoleResponse204) & {
+export type unassignSystemSlotResponseSuccess = (unassignSystemSlotResponse204) & {
   headers: Headers;
 };
-export type unassignSystemRoleResponseError = (unassignSystemRoleResponseDefault) & {
+export type unassignSystemSlotResponseError = (unassignSystemSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type unassignSystemRoleResponse = (unassignSystemRoleResponseSuccess | unassignSystemRoleResponseError)
+export type unassignSystemSlotResponse = (unassignSystemSlotResponseSuccess | unassignSystemSlotResponseError)
 
-export const getUnassignSystemRoleUrl = (name: string,
-    role: string,
+export const getUnassignSystemSlotUrl = (name: string,
+    slot: string,
     component: string,) => {
 
 
 
 
-  return `/systems/${name}/roles/${role}/assignments/${component}`
+  return `/systems/${name}/slots/${slot}/assignments/${component}`
 }
 
 /**
- * Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the role's own read already names it).
- * @summary Unassign a component from a role
+ * Takes this component out of the slot, leaving the slot understaffed until another fills it. A component that was not filling the slot is a 404. Gated by system:update, and also needs component:update, as assigning does; read and update scopes drive the system's 404 versus 403 split, and an occupant outside the component:update scope is a 403 (the slot's own read already names it).
+ * @summary Unassign a component from a slot
  */
-export const unassignSystemRole = async (name: string,
-    role: string,
-    component: string, options?: Parameters<typeof ogFetch>[1]): Promise<unassignSystemRoleResponse> => {
+export const unassignSystemSlot = async (name: string,
+    slot: string,
+    component: string, options?: Parameters<typeof ogFetch>[1]): Promise<unassignSystemSlotResponse> => {
 
-  return ogFetch<unassignSystemRoleResponse>(getUnassignSystemRoleUrl(name,role,component),
+  return ogFetch<unassignSystemSlotResponse>(getUnassignSystemSlotUrl(name,slot,component),
   {
     ...options,
     method: 'DELETE'
@@ -24629,44 +24288,44 @@ export const unassignSystemRole = async (name: string,
 
 
 
-export type assignSystemRoleResponse204 = {
+export type assignSystemSlotResponse204 = {
   data: void
   status: 204
 }
 
-export type assignSystemRoleResponseDefault = {
+export type assignSystemSlotResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type assignSystemRoleResponseSuccess = (assignSystemRoleResponse204) & {
+export type assignSystemSlotResponseSuccess = (assignSystemSlotResponse204) & {
   headers: Headers;
 };
-export type assignSystemRoleResponseError = (assignSystemRoleResponseDefault) & {
+export type assignSystemSlotResponseError = (assignSystemSlotResponseDefault) & {
   headers: Headers;
 };
 
-export type assignSystemRoleResponse = (assignSystemRoleResponseSuccess | assignSystemRoleResponseError)
+export type assignSystemSlotResponse = (assignSystemSlotResponseSuccess | assignSystemSlotResponseError)
 
-export const getAssignSystemRoleUrl = (name: string,
-    role: string,
+export const getAssignSystemSlotUrl = (name: string,
+    slot: string,
     component: string,) => {
 
 
 
 
-  return `/systems/${name}/roles/${role}/assignments/${component}`
+  return `/systems/${name}/slots/${slot}/assignments/${component}`
 }
 
 /**
- * Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a role makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
- * @summary Assign a component to a role
+ * Puts this component in the slot for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the slot accepts, or (if the slot pins products) its product not one of them. A slot with no accepted types takes any type. Idempotent. Gated by system:update, and also needs component:update, because staffing a slot makes the component a member and writes onto it: each end resolves in its own tier's read scope and must be inside its update scope, so an end outside the read scope is a non-disclosing 404 and one readable but not writable a 403.
+ * @summary Assign a component to a slot
  */
-export const assignSystemRole = async (name: string,
-    role: string,
-    component: string, options?: Parameters<typeof ogFetch>[1]): Promise<assignSystemRoleResponse> => {
+export const assignSystemSlot = async (name: string,
+    slot: string,
+    component: string, options?: Parameters<typeof ogFetch>[1]): Promise<assignSystemSlotResponse> => {
 
-  return ogFetch<assignSystemRoleResponse>(getAssignSystemRoleUrl(name,role,component),
+  return ogFetch<assignSystemSlotResponse>(getAssignSystemSlotUrl(name,slot,component),
   {
     ...options,
     method: 'PUT'
@@ -24677,41 +24336,41 @@ export const assignSystemRole = async (name: string,
 
 
 
-export type swapRolePositionsResponse204 = {
+export type swapSlotPositionsResponse204 = {
   data: void
   status: 204
 }
 
-export type swapRolePositionsResponseDefault = {
+export type swapSlotPositionsResponseDefault = {
   data: ErrorModel
   status: Exclude<HTTPStatusCodes, 204>
 }
 
-export type swapRolePositionsResponseSuccess = (swapRolePositionsResponse204) & {
+export type swapSlotPositionsResponseSuccess = (swapSlotPositionsResponse204) & {
   headers: Headers;
 };
-export type swapRolePositionsResponseError = (swapRolePositionsResponseDefault) & {
+export type swapSlotPositionsResponseError = (swapSlotPositionsResponseDefault) & {
   headers: Headers;
 };
 
-export type swapRolePositionsResponse = (swapRolePositionsResponseSuccess | swapRolePositionsResponseError)
+export type swapSlotPositionsResponse = (swapSlotPositionsResponseSuccess | swapSlotPositionsResponseError)
 
-export const getSwapRolePositionsUrl = (name: string,
-    role: string,) => {
-
-
+export const getSwapSlotPositionsUrl = (name: string,
+    slot: string,) => {
 
 
-  return `/systems/${name}/roles/${role}:swapPositions`
+
+
+  return `/systems/${name}/slots/${slot}:swapPositions`
 }
 
 /**
- * Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
- * @summary Exchange two occupants' positions within a role
+ * Exchanges the positions of whichever components currently hold position and with within this slot: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+ * @summary Exchange two occupants' positions within a slot
  */
-export const swapRolePositions = async (name: string,
-    role: string,
-    swapRolePositionsInputBody: NonReadonly<SwapRolePositionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<swapRolePositionsResponse> => {
+export const swapSlotPositions = async (name: string,
+    slot: string,
+    swapSlotPositionsInputBody: NonReadonly<SwapSlotPositionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<swapSlotPositionsResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -24727,12 +24386,12 @@ export const swapRolePositions = async (name: string,
     }
     return headers;
   };
-return ogFetch<swapRolePositionsResponse>(getSwapRolePositionsUrl(name,role),
+return ogFetch<swapSlotPositionsResponse>(getSwapSlotPositionsUrl(name,slot),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(swapRolePositionsInputBody)
+    body: JSON.stringify(swapSlotPositionsInputBody)
   }
 );}
 
@@ -24810,7 +24469,7 @@ export const getMoveSystemUrl = (name: string,) => {
 }
 
 /**
- * Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
+ * Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant (a location-scoped grant reaches a system for read and create only). A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).
  * @summary Move a system
  */
 export const moveSystem = async (name: string,
@@ -25148,7 +24807,7 @@ export const getCreateSystemFromTemplateUrl = () => {
 }
 
 /**
- * Creates a system from a system template at a place, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each role filled to its quorum and assigned, and the declared values. A component whose role you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A place outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the roles.
+ * Creates a system from a system template at a location, built to the standard you name or the template's own (yours of that name when you hold one, else created from its standard template, with any parent it hangs off, in the same write), with a component for each slot filled to its quorum and assigned, and the declared values. A component whose slot you give an address in attach lands attached; the rest land unattached and are listed in to_attach. One transaction: it lands whole or not at all, every piece in your own scope with its own audit row carrying from_template. Gated by system:create, and also needs system:read, system:update, component:create and component:update; endpoint:create when anything attaches, standard:create when a standard is created from its template. A location outside your location scope is a 404, an unknown template or standard a 404, a standard the template cannot staff a 422 naming the slots.
  * @summary Start a whole system from a template
  */
 export const createSystemFromTemplate = async (createSystemFromTemplateInputBody: NonReadonly<CreateSystemFromTemplateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createSystemFromTemplateResponse> => {
@@ -25206,7 +24865,7 @@ export const getListSystemVerdictsUrl = () => {
 }
 
 /**
- * The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
+ * The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every slot, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
  * @summary Read every system's health verdict
  */
 export const listSystemVerdicts = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listSystemVerdictsResponse> => {
@@ -25836,7 +25495,7 @@ export const getPushTelemetryUrl = () => {
 }
 
 /**
- * Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key a node writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is a node's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
+ * Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Every key has one writer class, and a push writes only a collected key: a built-in key an outpost writes (a reachability verdict or rung, a probe metric or timing, a held session's state, collection-failed, an endpoint's collection telemetry) is an outpost's own observation and a platform key (health, the webhook receiver's counts) is the platform's, each rejected by name on every lane; a key a calc rule outputs is rejected naming the rule. The owner is a component or a system; a system batch carries no log lines (a log line is component-owned), refused with a 422. An observation's instance is the endpoint it came through: one naming no endpoint on the owner refuses the batch with a 422 naming it and listing the owner's endpoints, and a system has none, so a system's observations name no instance. Gated by telemetry:push, whose scope must cover the declared owner on its own tier (one check per batch): the push scope alone is enough to see the owner (no component:read or system:read is needed), an owner outside both the push scope and the caller's read of that kind is a non-disclosing 404, and one the caller can read but may not push to is a 403.
  * @summary Push telemetry for an owner
  */
 export const pushTelemetry = async (pushInputBody: NonReadonly<PushInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<pushTelemetryResponse> => {
@@ -25989,7 +25648,7 @@ export const getListTransportsUrl = () => {
 }
 
 /**
- * Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
+ * Lists the built-in transports: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
  * @summary List the transports the platform speaks
  */
 export const listTransports = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listTransportsResponse> => {
@@ -26033,7 +25692,7 @@ export const getListUnclaimedSourcesUrl = () => {
 }
 
 /**
- * The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by node:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as nodes are.
+ * The unclaimed-source inbox: each source a listener heard from that no endpoint claims (a webhook post to an unknown or rotated token), with how often, when first and last, and its last message cut to 512 bytes. Bounded at 256 sources per listener, the least recently heard evicted, and aged out after seven days; a source is let go once its messages land on an endpoint. Claim one by creating its endpoint. Gated by outpost:read on an all-scope grant: it is the listener's own observation, and listeners are fleet-wide as outposts are.
  * @summary List the sources no endpoint claims
  */
 export const listUnclaimedSources = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listUnclaimedSourcesResponse> => {
@@ -26044,6 +25703,1623 @@ export const listUnclaimedSources = async ( options?: Parameters<typeof ogFetch>
     method: 'GET'
 
 
+  }
+);}
+
+
+
+export type listGroupsResponse200 = {
+  data: ListGroupsOutputBody
+  status: 200
+}
+
+export type listGroupsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listGroupsResponseSuccess = (listGroupsResponse200) & {
+  headers: Headers;
+};
+export type listGroupsResponseError = (listGroupsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listGroupsResponse = (listGroupsResponseSuccess | listGroupsResponseError)
+
+export const getListGroupsUrl = () => {
+
+
+
+
+  return `/user-groups`
+}
+
+/**
+ * Every user group. Gated by user_group:read:admin.
+ * @summary List user groups
+ */
+export const listGroups = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listGroupsResponse> => {
+
+  return ogFetch<listGroupsResponse>(getListGroupsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createGroupResponse201 = {
+  data: GroupBody
+  status: 201
+}
+
+export type createGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createGroupResponseSuccess = (createGroupResponse201) & {
+  headers: Headers;
+};
+export type createGroupResponseError = (createGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type createGroupResponse = (createGroupResponseSuccess | createGroupResponseError)
+
+export const getCreateGroupUrl = () => {
+
+
+
+
+  return `/user-groups`
+}
+
+/**
+ * Creates a user group. Gated by user_group:create (all-scope). A duplicate name is 409.
+ * @summary Create a user group
+ */
+export const createGroup = async (createGroupInputBody: NonReadonly<CreateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createGroupResponse>(getCreateGroupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createGroupInputBody)
+  }
+);}
+
+
+
+export type deleteGroupResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type deleteGroupResponseSuccess = (deleteGroupResponse204) & {
+  headers: Headers;
+};
+export type deleteGroupResponseError = (deleteGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type deleteGroupResponse = (deleteGroupResponseSuccess | deleteGroupResponseError)
+
+export const getDeleteGroupUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}`
+}
+
+/**
+ * Removes a group and, by cascade, its memberships and grants. A group a notification target notifies cannot be deleted (a 409): the refusal names the target to a caller who reads targets. Gated by user_group:delete (all-scope).
+ * @summary Delete a user group
+ */
+export const deleteGroup = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteGroupResponse> => {
+
+  return ogFetch<deleteGroupResponse>(getDeleteGroupUrl(group),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type getGroupResponse200 = {
+  data: GroupBody
+  status: 200
+}
+
+export type getGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getGroupResponseSuccess = (getGroupResponse200) & {
+  headers: Headers;
+};
+export type getGroupResponseError = (getGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type getGroupResponse = (getGroupResponseSuccess | getGroupResponseError)
+
+export const getGetGroupUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}`
+}
+
+/**
+ * One user group, by name or uuid. Gated by user_group:read:admin.
+ * @summary Get a user group
+ */
+export const getGroup = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<getGroupResponse> => {
+
+  return ogFetch<getGroupResponse>(getGetGroupUrl(group),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type updateGroupResponse200 = {
+  data: GroupBody
+  status: 200
+}
+
+export type updateGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type updateGroupResponseSuccess = (updateGroupResponse200) & {
+  headers: Headers;
+};
+export type updateGroupResponseError = (updateGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type updateGroupResponse = (updateGroupResponseSuccess | updateGroupResponseError)
+
+export const getUpdateGroupUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}`
+}
+
+/**
+ * Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by user_group:update (all-scope).
+ * @summary Update a user group
+ */
+export const updateGroup = async (group: string,
+    updateGroupInputBody: NonReadonly<UpdateGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateGroupResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<updateGroupResponse>(getUpdateGroupUrl(group),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateGroupInputBody)
+  }
+);}
+
+
+
+export type listGroupGrantsResponse200 = {
+  data: ListGroupGrantsOutputBody
+  status: 200
+}
+
+export type listGroupGrantsResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listGroupGrantsResponseSuccess = (listGroupGrantsResponse200) & {
+  headers: Headers;
+};
+export type listGroupGrantsResponseError = (listGroupGrantsResponseDefault) & {
+  headers: Headers;
+};
+
+export type listGroupGrantsResponse = (listGroupGrantsResponseSuccess | listGroupGrantsResponseError)
+
+export const getListGroupGrantsUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/grants`
+}
+
+/**
+ * The role x scope grants a group confers on its members. Gated by user_group:read:admin.
+ * @summary List a group's grants
+ */
+export const listGroupGrants = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupGrantsResponse> => {
+
+  return ogFetch<listGroupGrantsResponse>(getListGroupGrantsUrl(group),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createGroupGrantResponse201 = {
+  data: GrantBody
+  status: 201
+}
+
+export type createGroupGrantResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createGroupGrantResponseSuccess = (createGroupGrantResponse201) & {
+  headers: Headers;
+};
+export type createGroupGrantResponseError = (createGroupGrantResponseDefault) & {
+  headers: Headers;
+};
+
+export type createGroupGrantResponse = (createGroupGrantResponseSuccess | createGroupGrantResponseError)
+
+export const getCreateGroupGrantUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/grants`
+}
+
+/**
+ * Assigns a role at a scope to a group; its members inherit it. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own, exactly as for a direct grant. A duplicate is 409.
+ * @summary Grant a role to a group
+ */
+export const createGroupGrant = async (group: string,
+    createGroupGrantInputBody: NonReadonly<CreateGroupGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGroupGrantResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createGroupGrantResponse>(getCreateGroupGrantUrl(group),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createGroupGrantInputBody)
+  }
+);}
+
+
+
+export type revokeGroupGrantResponse204 = {
+  data: void
+  status: 204
+}
+
+export type revokeGroupGrantResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type revokeGroupGrantResponseSuccess = (revokeGroupGrantResponse204) & {
+  headers: Headers;
+};
+export type revokeGroupGrantResponseError = (revokeGroupGrantResponseDefault) & {
+  headers: Headers;
+};
+
+export type revokeGroupGrantResponse = (revokeGroupGrantResponseSuccess | revokeGroupGrantResponseError)
+
+export const getRevokeGroupGrantUrl = (group: string,
+    grantId: string,) => {
+
+
+
+
+  return `/user-groups/${group}/grants/${grantId}`
+}
+
+/**
+ * Removes one grant from a group. Gated by user_grant:delete (all-scope).
+ * @summary Revoke a group grant
+ */
+export const revokeGroupGrant = async (group: string,
+    grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGroupGrantResponse> => {
+
+  return ogFetch<revokeGroupGrantResponse>(getRevokeGroupGrantUrl(group,grantId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type listGroupMembersResponse200 = {
+  data: ListMembersOutputBody
+  status: 200
+}
+
+export type listGroupMembersResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listGroupMembersResponseSuccess = (listGroupMembersResponse200) & {
+  headers: Headers;
+};
+export type listGroupMembersResponseError = (listGroupMembersResponseDefault) & {
+  headers: Headers;
+};
+
+export type listGroupMembersResponse = (listGroupMembersResponseSuccess | listGroupMembersResponseError)
+
+export const getListGroupMembersUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/members`
+}
+
+/**
+ * The users in a group. Gated by user_group:read:admin.
+ * @summary List a group's members
+ */
+export const listGroupMembers = async (group: string, options?: Parameters<typeof ogFetch>[1]): Promise<listGroupMembersResponse> => {
+
+  return ogFetch<listGroupMembersResponse>(getListGroupMembersUrl(group),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type addGroupMemberResponse204 = {
+  data: void
+  status: 204
+}
+
+export type addGroupMemberResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type addGroupMemberResponseSuccess = (addGroupMemberResponse204) & {
+  headers: Headers;
+};
+export type addGroupMemberResponseError = (addGroupMemberResponseDefault) & {
+  headers: Headers;
+};
+
+export type addGroupMemberResponse = (addGroupMemberResponseSuccess | addGroupMemberResponseError)
+
+export const getAddGroupMemberUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}/members`
+}
+
+/**
+ * Adds a user to a group; its members inherit the group's grants. Gated by user_group:update (all-scope). Idempotent. Under an agent token or the agent ceiling, refused (403) when the group's grants exceed the caller's bounded permissions, since membership is a grant by another route.
+ * @summary Add a member to a group
+ */
+export const addGroupMember = async (group: string,
+    addMemberInputBody: NonReadonly<AddMemberInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<addGroupMemberResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<addGroupMemberResponse>(getAddGroupMemberUrl(group),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(addMemberInputBody)
+  }
+);}
+
+
+
+export type removeGroupMemberResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeGroupMemberResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type removeGroupMemberResponseSuccess = (removeGroupMemberResponse204) & {
+  headers: Headers;
+};
+export type removeGroupMemberResponseError = (removeGroupMemberResponseDefault) & {
+  headers: Headers;
+};
+
+export type removeGroupMemberResponse = (removeGroupMemberResponseSuccess | removeGroupMemberResponseError)
+
+export const getRemoveGroupMemberUrl = (group: string,
+    user: string,) => {
+
+
+
+
+  return `/user-groups/${group}/members/${user}`
+}
+
+/**
+ * Removes a user from a group; it stops inheriting the group's grants. Gated by user_group:update (all-scope).
+ * @summary Remove a member from a group
+ */
+export const removeGroupMember = async (group: string,
+    user: string, options?: Parameters<typeof ogFetch>[1]): Promise<removeGroupMemberResponse> => {
+
+  return ogFetch<removeGroupMemberResponse>(getRemoveGroupMemberUrl(group,user),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type renameGroupResponse200 = {
+  data: GroupBody
+  status: 200
+}
+
+export type renameGroupResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type renameGroupResponseSuccess = (renameGroupResponse200) & {
+  headers: Headers;
+};
+export type renameGroupResponseError = (renameGroupResponseDefault) & {
+  headers: Headers;
+};
+
+export type renameGroupResponse = (renameGroupResponseSuccess | renameGroupResponseError)
+
+export const getRenameGroupUrl = (group: string,) => {
+
+
+
+
+  return `/user-groups/${group}:rename`
+}
+
+/**
+ * Moves the group's name. A separate act from an update, and a separately grantable one, because it breaks the references stored outside this system; inside it nothing breaks, since membership and grants both key on the group's uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by user_group:rename (all-scope).
+ * @summary Rename a user group
+ */
+export const renameGroup = async (group: string,
+    renameGroupInputBody: NonReadonly<RenameGroupInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameGroupResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<renameGroupResponse>(getRenameGroupUrl(group),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(renameGroupInputBody)
+  }
+);}
+
+
+
+export type listUsersResponse200 = {
+  data: ListUsersOutputBody
+  status: 200
+}
+
+export type listUsersResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listUsersResponseSuccess = (listUsersResponse200) & {
+  headers: Headers;
+};
+export type listUsersResponseError = (listUsersResponseDefault) & {
+  headers: Headers;
+};
+
+export type listUsersResponse = (listUsersResponseSuccess | listUsersResponseError)
+
+export const getListUsersUrl = (params?: ListUsersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/users?${stringifiedParams}` : `/users`
+}
+
+/**
+ * Lists all users (people and machine users) with their grants. Gated by user:read:admin.
+ * @summary List users
+ */
+export const listUsers = async (params?: ListUsersParams, options?: Parameters<typeof ogFetch>[1]): Promise<listUsersResponse> => {
+
+  return ogFetch<listUsersResponse>(getListUsersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createUserResponse201 = {
+  data: UserBody
+  status: 201
+}
+
+export type createUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createUserResponseSuccess = (createUserResponse201) & {
+  headers: Headers;
+};
+export type createUserResponseError = (createUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type createUserResponse = (createUserResponseSuccess | createUserResponseError)
+
+export const getCreateUserUrl = () => {
+
+
+
+
+  return `/users`
+}
+
+/**
+ * Creates a person with an optional initial password. Gated by user:create (all-scope). The new user holds no grants; assign roles separately.
+ * @summary Create a person
+ */
+export const createUser = async (createUserInputBody: NonReadonly<CreateUserInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createUserResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createUserResponse>(getCreateUserUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createUserInputBody)
+  }
+);}
+
+
+
+export type getUserResponse200 = {
+  data: UserBody
+  status: 200
+}
+
+export type getUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getUserResponseSuccess = (getUserResponse200) & {
+  headers: Headers;
+};
+export type getUserResponseError = (getUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type getUserResponse = (getUserResponseSuccess | getUserResponseError)
+
+export const getGetUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}`
+}
+
+/**
+ * Fetches one user by id with its profile and grants. Gated by user:read:admin.
+ * @summary Get a user
+ */
+export const getUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getUserResponse> => {
+
+  return ogFetch<getUserResponse>(getGetUserUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type updateUserResponse200 = {
+  data: UserBody
+  status: 200
+}
+
+export type updateUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type updateUserResponseSuccess = (updateUserResponse200) & {
+  headers: Headers;
+};
+export type updateUserResponseError = (updateUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type updateUserResponse = (updateUserResponseSuccess | updateUserResponseError)
+
+export const getUpdateUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}`
+}
+
+/**
+ * Updates a person's label, email, and username. Gated by user:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
+ * @summary Update a user
+ */
+export const updateUser = async (id: string,
+    updateUserInputBody: NonReadonly<UpdateUserInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<updateUserResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<updateUserResponse>(getUpdateUserUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateUserInputBody)
+  }
+);}
+
+
+
+export type getUserAvatarResponse200 = {
+  data: AvatarOutputBody
+  status: 200
+}
+
+export type getUserAvatarResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type getUserAvatarResponseSuccess = (getUserAvatarResponse200) & {
+  headers: Headers;
+};
+export type getUserAvatarResponseError = (getUserAvatarResponseDefault) & {
+  headers: Headers;
+};
+
+export type getUserAvatarResponse = (getUserAvatarResponseSuccess | getUserAvatarResponseError)
+
+export const getGetUserAvatarUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/avatar`
+}
+
+/**
+ * Returns the user's profile picture as a base64-encoded JPEG. Gated by user:read:admin. A user without a picture is a 404.
+ * @summary Get a user's profile picture
+ */
+export const getUserAvatar = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<getUserAvatarResponse> => {
+
+  return ogFetch<getUserAvatarResponse>(getGetUserAvatarUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type createGrantResponse201 = {
+  data: GrantBody
+  status: 201
+}
+
+export type createGrantResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 201>
+}
+
+export type createGrantResponseSuccess = (createGrantResponse201) & {
+  headers: Headers;
+};
+export type createGrantResponseError = (createGrantResponseDefault) & {
+  headers: Headers;
+};
+
+export type createGrantResponse = (createGrantResponseSuccess | createGrantResponseError)
+
+export const getCreateGrantUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/grants`
+}
+
+/**
+ * Assigns a role at a scope to a user. Gated by user_grant:create (all-scope). Refused (403) when the granted role's capabilities exceed the granter's own (no promoting anyone, including yourself, to a higher tier such as owner). A duplicate is 409, an unknown role or bad scope 422.
+ * @summary Grant a role to a user
+ */
+export const createGrant = async (id: string,
+    createGrantInputBody: NonReadonly<CreateGrantInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createGrantResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<createGrantResponse>(getCreateGrantUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createGrantInputBody)
+  }
+);}
+
+
+
+export type revokeGrantResponse204 = {
+  data: void
+  status: 204
+}
+
+export type revokeGrantResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type revokeGrantResponseSuccess = (revokeGrantResponse204) & {
+  headers: Headers;
+};
+export type revokeGrantResponseError = (revokeGrantResponseDefault) & {
+  headers: Headers;
+};
+
+export type revokeGrantResponse = (revokeGrantResponseSuccess | revokeGrantResponseError)
+
+export const getRevokeGrantUrl = (id: string,
+    grantId: string,) => {
+
+
+
+
+  return `/users/${id}/grants/${grantId}`
+}
+
+/**
+ * Removes one grant from a user. Gated by user_grant:delete (all-scope). The last owner grant cannot be revoked.
+ * @summary Revoke a grant
+ */
+export const revokeGrant = async (id: string,
+    grantId: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeGrantResponse> => {
+
+  return ogFetch<revokeGrantResponse>(getRevokeGrantUrl(id,grantId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+export type listUserSessionsResponse200 = {
+  data: ListUserSessionsOutputBody
+  status: 200
+}
+
+export type listUserSessionsResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type listUserSessionsResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type listUserSessionsResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type listUserSessionsResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type listUserSessionsResponseSuccess = (listUserSessionsResponse200) & {
+  headers: Headers;
+};
+export type listUserSessionsResponseError = (listUserSessionsResponse403 | listUserSessionsResponse404 | listUserSessionsResponse422 | listUserSessionsResponse500) & {
+  headers: Headers;
+};
+
+export type listUserSessionsResponse = (listUserSessionsResponseSuccess | listUserSessionsResponseError)
+
+export const getListUserSessionsUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/sessions`
+}
+
+/**
+ * Lists another user's active bearer credentials (login sessions and API tokens) with their non-secret metadata, newest first, so an administrator can see where an account is signed in and revoke a session that should not be. Gated by user:revoke-session (all-scope). The token secret is never returned, and current is always false (there is no "this request's own session" when viewing another user).
+ * @summary List a user's sessions
+ */
+export const listUserSessions = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<listUserSessionsResponse> => {
+
+  return ogFetch<listUserSessionsResponse>(getListUserSessionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+export type revokeUserSessionResponse204 = {
+  data: void
+  status: 204
+}
+
+export type revokeUserSessionResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type revokeUserSessionResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type revokeUserSessionResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type revokeUserSessionResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type revokeUserSessionResponseSuccess = (revokeUserSessionResponse204) & {
+  headers: Headers;
+};
+export type revokeUserSessionResponseError = (revokeUserSessionResponse403 | revokeUserSessionResponse404 | revokeUserSessionResponse422 | revokeUserSessionResponse500) & {
+  headers: Headers;
+};
+
+export type revokeUserSessionResponse = (revokeUserSessionResponseSuccess | revokeUserSessionResponseError)
+
+export const getRevokeUserSessionUrl = (id: string,
+    sid: string,) => {
+
+
+
+
+  return `/users/${id}/sessions/${sid}:revoke`
+}
+
+/**
+ * Revokes one of another user's sessions or tokens by id (an administrator action; the target is immediately signed out of that credential). Gated by user:revoke-session (all-scope). Bounded to the target, so a credential id that is not theirs is a non-disclosing 404, never a cross-user revoke. Refused (403) on an owner (an owner's sessions cannot be revoked by anyone, the takeover guard shared with impersonation and password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+ * @summary Revoke a user's session
+ */
+export const revokeUserSession = async (id: string,
+    sid: string, options?: Parameters<typeof ogFetch>[1]): Promise<revokeUserSessionResponse> => {
+
+  return ogFetch<revokeUserSessionResponse>(getRevokeUserSessionUrl(id,sid),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type revokeAllUserSessionsResponse200 = {
+  data: RevokeAllUserSessionsOutputBody
+  status: 200
+}
+
+export type revokeAllUserSessionsResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type revokeAllUserSessionsResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type revokeAllUserSessionsResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type revokeAllUserSessionsResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type revokeAllUserSessionsResponseSuccess = (revokeAllUserSessionsResponse200) & {
+  headers: Headers;
+};
+export type revokeAllUserSessionsResponseError = (revokeAllUserSessionsResponse403 | revokeAllUserSessionsResponse404 | revokeAllUserSessionsResponse422 | revokeAllUserSessionsResponse500) & {
+  headers: Headers;
+};
+
+export type revokeAllUserSessionsResponse = (revokeAllUserSessionsResponseSuccess | revokeAllUserSessionsResponseError)
+
+export const getRevokeAllUserSessionsUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}/sessions:revokeAll`
+}
+
+/**
+ * Revokes every one of another user's web-login sessions, or every one of its CLI/API tokens (chosen by purpose), in a single administrator action, returning how many were ended. Gated by user:revoke-session (all-scope). Bounded to the target and never crosses purpose (revoking sessions leaves tokens, and vice versa). Refused (403) on an owner (the takeover guard shared with impersonation and the password reset) or when it would exceed the caller's own capabilities. Audited with the administrator as the actor.
+ * @summary Revoke all of a user's sessions or tokens
+ */
+export const revokeAllUserSessions = async (id: string,
+    revokeAllUserSessionsInputBody: NonReadonly<RevokeAllUserSessionsInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<revokeAllUserSessionsResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<revokeAllUserSessionsResponse>(getRevokeAllUserSessionsUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(revokeAllUserSessionsInputBody)
+  }
+);}
+
+
+
+export type archiveUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type archiveUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type archiveUserResponseSuccess = (archiveUserResponse204) & {
+  headers: Headers;
+};
+export type archiveUserResponseError = (archiveUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type archiveUserResponse = (archiveUserResponseSuccess | archiveUserResponseError)
+
+export const getArchiveUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:archive`
+}
+
+/**
+ * Soft-deletes a user: it is hidden from the directory, can no longer authenticate, and its rows stay intact, reversibly (restore) until purged. Gated by user:archive (all-scope). The last active owner cannot be archived.
+ * @summary Archive a user
+ */
+export const archiveUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<archiveUserResponse> => {
+
+  return ogFetch<archiveUserResponse>(getArchiveUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type disableUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type disableUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type disableUserResponseSuccess = (disableUserResponse204) & {
+  headers: Headers;
+};
+export type disableUserResponseError = (disableUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type disableUserResponse = (disableUserResponseSuccess | disableUserResponseError)
+
+export const getDisableUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:disable`
+}
+
+/**
+ * Soft-disables a user so it can no longer authenticate; its audit trail is kept. Gated by user:update (all-scope). The last active owner cannot be disabled.
+ * @summary Disable a user
+ */
+export const disableUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<disableUserResponse> => {
+
+  return ogFetch<disableUserResponse>(getDisableUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type enableUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type enableUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type enableUserResponseSuccess = (enableUserResponse204) & {
+  headers: Headers;
+};
+export type enableUserResponseError = (enableUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type enableUserResponse = (enableUserResponseSuccess | enableUserResponseError)
+
+export const getEnableUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:enable`
+}
+
+/**
+ * Re-enables a disabled user, restoring its ability to authenticate. Gated by user:update (all-scope).
+ * @summary Enable a user
+ */
+export const enableUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<enableUserResponse> => {
+
+  return ogFetch<enableUserResponse>(getEnableUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type impersonateUserResponse201 = {
+  data: ImpersonateOutputBody
+  status: 201
+}
+
+export type impersonateUserResponse403 = {
+  data: ErrorModel
+  status: 403
+}
+
+export type impersonateUserResponse404 = {
+  data: ErrorModel
+  status: 404
+}
+
+export type impersonateUserResponse422 = {
+  data: ErrorModel
+  status: 422
+}
+
+export type impersonateUserResponse500 = {
+  data: ErrorModel
+  status: 500
+}
+
+export type impersonateUserResponseSuccess = (impersonateUserResponse201) & {
+  headers: Headers;
+};
+export type impersonateUserResponseError = (impersonateUserResponse403 | impersonateUserResponse404 | impersonateUserResponse422 | impersonateUserResponse500) & {
+  headers: Headers;
+};
+
+export type impersonateUserResponse = (impersonateUserResponseSuccess | impersonateUserResponseError)
+
+export const getImpersonateUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:impersonate`
+}
+
+/**
+ * Mints a bounded, revocable token to view as (read-only) or act as (full) the target. Gated by user:impersonate (all-scope). Refused on self, on an owner target (owners are un-impersonatable by anyone), when it would grant a capability the caller lacks (the escalation guard), from within an existing impersonation, or to an agent token.
+ * @summary Impersonate a user (view-as or act-as)
+ */
+export const impersonateUser = async (id: string,
+    impersonateInputBody: NonReadonly<ImpersonateInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<impersonateUserResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<impersonateUserResponse>(getImpersonateUserUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(impersonateInputBody)
+  }
+);}
+
+
+
+export type purgeUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type purgeUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type purgeUserResponseSuccess = (purgeUserResponse204) & {
+  headers: Headers;
+};
+export type purgeUserResponseError = (purgeUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type purgeUserResponse = (purgeUserResponseSuccess | purgeUserResponseError)
+
+export const getPurgeUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:purge`
+}
+
+/**
+ * Hard-deletes an archived user and its owned rows (profile, credentials, grants, memberships); the audit trail is preserved. Irreversible. A person a notification target notifies cannot be purged (a 409; the refusal names the target to a caller who reads targets). Gated by user:purge:admin (admin-sensitive, all-scope), and the user must be archived first.
+ * @summary Purge a user
+ */
+export const purgeUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<purgeUserResponse> => {
+
+  return ogFetch<purgeUserResponse>(getPurgeUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type removeUserAvatarResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeUserAvatarResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type removeUserAvatarResponseSuccess = (removeUserAvatarResponse204) & {
+  headers: Headers;
+};
+export type removeUserAvatarResponseError = (removeUserAvatarResponseDefault) & {
+  headers: Headers;
+};
+
+export type removeUserAvatarResponse = (removeUserAvatarResponseSuccess | removeUserAvatarResponseError)
+
+export const getRemoveUserAvatarUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:removeAvatar`
+}
+
+/**
+ * Clears another person's profile picture. Gated by user:set-avatar (all-scope). Removing an absent picture is a no-op. Audited with the administrator as the actor.
+ * @summary Remove a user's profile picture
+ */
+export const removeUserAvatar = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<removeUserAvatarResponse> => {
+
+  return ogFetch<removeUserAvatarResponse>(getRemoveUserAvatarUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type resetUserPasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type resetUserPasswordResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type resetUserPasswordResponseSuccess = (resetUserPasswordResponse204) & {
+  headers: Headers;
+};
+export type resetUserPasswordResponseError = (resetUserPasswordResponseDefault) & {
+  headers: Headers;
+};
+
+export type resetUserPasswordResponse = (resetUserPasswordResponseSuccess | resetUserPasswordResponseError)
+
+export const getResetUserPasswordUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:resetPassword`
+}
+
+/**
+ * Sets a new password for another person (an administrator action; the target's current password is not required). Gated by user:reset-password (all-scope). The new password must meet the password policy; a violation is a 422. Refused on yourself (change your own password from your profile, which verifies your current one), on an owner (owners cannot be reset by anyone), or when it would exceed the caller's own capabilities (the takeover guard, shared with impersonation). The action is audited with the administrator as the actor.
+ * @summary Reset a user's password
+ */
+export const resetUserPassword = async (id: string,
+    resetPasswordInputBody: NonReadonly<ResetPasswordInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<resetUserPasswordResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<resetUserPasswordResponse>(getResetUserPasswordUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(resetPasswordInputBody)
+  }
+);}
+
+
+
+export type restoreUserResponse204 = {
+  data: void
+  status: 204
+}
+
+export type restoreUserResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type restoreUserResponseSuccess = (restoreUserResponse204) & {
+  headers: Headers;
+};
+export type restoreUserResponseError = (restoreUserResponseDefault) & {
+  headers: Headers;
+};
+
+export type restoreUserResponse = (restoreUserResponseSuccess | restoreUserResponseError)
+
+export const getRestoreUserUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:restore`
+}
+
+/**
+ * Reverses an archive: the account is restored to active and can authenticate again. Gated by user:archive (all-scope).
+ * @summary Restore a user
+ */
+export const restoreUser = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<restoreUserResponse> => {
+
+  return ogFetch<restoreUserResponse>(getRestoreUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+export type setUserAvatarResponse204 = {
+  data: void
+  status: 204
+}
+
+export type setUserAvatarResponseDefault = {
+  data: ErrorModel
+  status: Exclude<HTTPStatusCodes, 204>
+}
+
+export type setUserAvatarResponseSuccess = (setUserAvatarResponse204) & {
+  headers: Headers;
+};
+export type setUserAvatarResponseError = (setUserAvatarResponseDefault) & {
+  headers: Headers;
+};
+
+export type setUserAvatarResponse = (setUserAvatarResponseSuccess | setUserAvatarResponseError)
+
+export const getSetUserAvatarUrl = (id: string,) => {
+
+
+
+
+  return `/users/${id}:setAvatar`
+}
+
+/**
+ * Sets another person's profile picture (an administrator action). Gated by user:set-avatar (all-scope). The image (JPEG, PNG, or WebP, base64-encoded) is normalized server-side to a 256x256 JPEG; a bad or oversize image is a 422. Audited with the administrator as the actor.
+ * @summary Set a user's profile picture
+ */
+export const setUserAvatar = async (id: string,
+    setAvatarInputBody: NonReadonly<SetAvatarInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<setUserAvatarResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return ogFetch<setUserAvatarResponse>(getSetUserAvatarUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setAvatarInputBody)
   }
 );}
 
@@ -26282,7 +27558,7 @@ export const getListVendorsUrl = () => {
 }
 
 /**
- * Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
+ * Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
  * @summary List vendors
  */
 export const listVendors = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listVendorsResponse> => {
@@ -26535,7 +27811,7 @@ export const getRenameVendorUrl = (id: string,) => {
  * @summary Rename a vendor
  */
 export const renameVendor = async (id: string,
-    renameRegistryInputBody: NonReadonly<RenameRegistryInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameVendorResponse> => {
+    renameCatalogInputBody: NonReadonly<RenameCatalogInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<renameVendorResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -26556,7 +27832,7 @@ return ogFetch<renameVendorResponse>(getRenameVendorUrl(id),
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(renameRegistryInputBody)
+    body: JSON.stringify(renameCatalogInputBody)
   }
 );}
 
@@ -26634,7 +27910,7 @@ export const getGetPlatformViewUrl = () => {
 }
 
 /**
- * Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the node table's column groups with each key's catalog facts, and one row per node with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide node:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the node loss with them) is left out, never zeroed. Gated by node:read.
+ * Returns the read behind the Platform health page: the server clock (read_at), whether this is a lab, the platform system and its verdict, each server's running build, start time and panels (Requests, Ingest, Queues and Retention: each key's catalog facts and its latest sample per instance, a ranked key cut to the ten highest of its newest window in the database, and the open alarms on the server component with the key each one's rule samples), the outpost table's column groups with each key's catalog facts, and one row per outpost with its last heartbeat, its platform component's current figure per key (a gauge's latest sample, a window count only while its window is the newest) and its loss over its own hops, and the pipeline: each hop an item crosses, in order, with its in, out and loss per kind and per component, newest window and last hour, and the end to end. The rows need a fleet-wide outpost:read, so a location-scoped holder is refused rather than shown an empty table. The platform components are unplaced, so the figures, verdicts and servers (with their panels) need a fleet-wide component:read and the system a fleet-wide system:read; short of that each (the pipeline and the outpost loss with them) is left out, never zeroed. Gated by outpost:read.
  * @summary Read Omniglass's own health in one call
  */
 export const getPlatformView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformViewResponse> => {
@@ -26678,7 +27954,7 @@ export const getGetPlatformSimulationViewUrl = () => {
 }
 
 /**
- * Returns the read behind the Platform health page's simulation section: one row per node with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. A node reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
+ * Returns the read behind the Platform health page's simulation section: one row per outpost with a connected simulator, read over a sliding window the server brackets each minute by default (bracket_seconds). Each gap is a loss ratio (count over what went into the hop, 0 healthy, null when nothing did), its masking term and how to read it: impaired under an applied impairment, restarted while the window holds a restart or a change to the fleet the simulator serves, otherwise loss. Beside them, the receipts counted for the window, each protocol's received and answered counts, service-time quantiles and in-flight high water, and each simulated device's requests. An outpost reads warming up until the server holds a full window. The devices are unplaced simulator state, so the read needs a fleet-wide component:read; short of that it answers not found. Gated by simulation:read.
  * @summary Read what each simulator saw against what the platform collected
  */
 export const getPlatformSimulationView = async ( options?: Parameters<typeof ogFetch>[1]): Promise<getPlatformSimulationViewResponse> => {
@@ -26865,7 +28141,7 @@ export const getReceiveWebhookUrl = (token: string,) => {
 }
 
 /**
- * The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a principal, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
+ * The webhook transport's listener (#1024): a component or a cloud service posts here, to the URL its webhook endpoint was given. The token names one endpoint; the scheme its driver declares authenticates the post (an hmac signature over a signed timestamp, a token, basic, or none, which reads unsigned); a signed timestamp outside five minutes is refused, and a declared delivery id lands once. The driver's listeners map the body (json, xml, form or text) onto any lane, and the post also lands as a log line unless its listener says otherwise. Public by necessity: the sender is not a user, and the endpoint's scheme is the authentication. Answers 202 once the post is published, 401 for a refused scheme (saying nothing of which part failed), 404 for an unknown or rotated token (identical either way), 413 past 1 MiB, 429 with Retry-After past a rate limit.
  * @summary Receive a webhook post for an endpoint
  */
 export const receiveWebhook = async (token: string,

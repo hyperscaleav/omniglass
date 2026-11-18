@@ -15,8 +15,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
-// platformViewFixture is two nodes and one server on a seeded platform: the
-// nodes carry platform samples, the server its boot identity, and the
+// platformViewFixture is two outposts and one server on a seeded platform: the
+// outposts carry platform samples, the server its boot identity, and the
 // platform system a recorded verdict.
 type platformViewFixture struct {
 	gw        *storage.PG
@@ -34,8 +34,8 @@ func newPlatformViewFixture(t *testing.T) platformViewFixture {
 	t.Helper()
 	gw, ctx, dsn := platformGatewayDSN(t)
 	f := platformViewFixture{gw: gw, ctx: ctx, day: time.Now().UTC().Truncate(24 * time.Hour)}
-	f.alpha = platformNode(t, ctx, gw, "edge-alpha")
-	f.bravo = platformNode(t, ctx, gw, "edge-bravo")
+	f.alpha = platformOutpost(t, ctx, gw, "edge-alpha")
+	f.bravo = platformOutpost(t, ctx, gw, "edge-bravo")
 	var err error
 	if f.server, err = gw.EnsureServerComponent(ctx, "lab-server"); err != nil {
 		t.Fatalf("ensure server component: %v", err)
@@ -78,7 +78,7 @@ func newPlatformViewFixture(t *testing.T) platformViewFixture {
 	return f
 }
 
-// TestPlatformViewReadsTheWholePlatform: an all-scope caller gets every node's
+// TestPlatformViewReadsTheWholePlatform: an all-scope caller gets every outpost's
 // latest figure per key, the server's version and start time, and the
 // platform system's verdict, in one read.
 func TestPlatformViewReadsTheWholePlatform(t *testing.T) {
@@ -107,12 +107,12 @@ func TestPlatformViewReadsTheWholePlatform(t *testing.T) {
 		t.Errorf("groups = %d, keys = %d, want every group and its catalog keys", len(v.Groups), len(v.Keys))
 	}
 
-	rows := map[string]storage.PlatformNode{}
-	for _, n := range v.Nodes {
+	rows := map[string]storage.PlatformOutpost{}
+	for _, n := range v.Outposts {
 		rows[n.Name] = n
 	}
 	if len(rows) != 2 {
-		t.Fatalf("nodes = %+v, want edge-alpha and edge-bravo", v.Nodes)
+		t.Fatalf("outposts = %+v, want edge-alpha and edge-bravo", v.Outposts)
 	}
 	alpha := rows["edge-alpha"]
 	if got := alpha.Figures[writerclass.CheckinAge]; got.Value != 3 {
@@ -158,24 +158,24 @@ func TestPlatformViewWithoutPlatformReach(t *testing.T) {
 	if v.FiguresRead || len(v.Servers) != 0 {
 		t.Errorf("figures read = %v, servers = %+v, want neither, and so no server groups", v.FiguresRead, v.Servers)
 	}
-	if len(v.Nodes) != 2 {
-		t.Fatalf("nodes = %+v, want both rows", v.Nodes)
+	if len(v.Outposts) != 2 {
+		t.Fatalf("outposts = %+v, want both rows", v.Outposts)
 	}
-	for _, n := range v.Nodes {
+	for _, n := range v.Outposts {
 		if n.Figures != nil || n.Verdict != nil {
 			t.Errorf("%s figures = %v, verdict = %v, want both omitted", n.Name, n.Figures, n.Verdict)
 		}
 	}
 }
 
-// TestPlatformViewNeedsAnAllScopeNodeRead: the rows are ListNodes', so a
-// location-scoped node read is ErrNodeForbidden, not an empty table.
-func TestPlatformViewNeedsAnAllScopeNodeRead(t *testing.T) {
+// TestPlatformViewNeedsAnAllScopeOutpostRead: the rows are ListOutposts', so a
+// location-scoped outpost read is ErrOutpostForbidden, not an empty table.
+func TestPlatformViewNeedsAnAllScopeOutpostRead(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
 	located := scope.Set{IDs: []string{"00000000-0000-0000-0000-0000000000aa"}}
-	if _, err := gw.PlatformView(ctx, located, all, all); !errors.Is(err, storage.ErrNodeForbidden) {
-		t.Errorf("platform view with a scoped node read = %v, want ErrNodeForbidden", err)
+	if _, err := gw.PlatformView(ctx, located, all, all); !errors.Is(err, storage.ErrOutpostForbidden) {
+		t.Errorf("platform view with a scoped outpost read = %v, want ErrOutpostForbidden", err)
 	}
 }
 
@@ -193,7 +193,7 @@ func TestRecordServerIdentityRefusesAMissingComponent(t *testing.T) {
 // TestPlatformViewReadsAWindowCountAsItsNewestWindow: a window count is
 // written once a window, every window, zero when quiet, so the figure is the
 // newest window's, summed across the instances that split it, and like a
-// gauge it never ages out: an old sample means the node stopped reporting,
+// gauge it never ages out: an old sample means the outpost stopped reporting,
 // which its checkin age says.
 func TestPlatformViewReadsAWindowCountAsItsNewestWindow(t *testing.T) {
 	t.Parallel()
@@ -218,8 +218,8 @@ func TestPlatformViewReadsAWindowCountAsItsNewestWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platform view: %v", err)
 	}
-	rows := map[string]storage.PlatformNode{}
-	for _, n := range v.Nodes {
+	rows := map[string]storage.PlatformOutpost{}
+	for _, n := range v.Outposts {
 		rows[n.Name] = n
 	}
 	alpha, bravo := rows["edge-alpha"], rows["edge-bravo"]
@@ -412,7 +412,7 @@ func TestPlatformViewServerPanelsCarryTheirCatalogAndAlarms(t *testing.T) {
 // only for a window that observed something (a request, a landed batch, a
 // slow query) is that window's figure, not a current reading; a
 // later window that saw nothing writes no row. So once two report windows
-// have passed it is absent, instance by instance, as a node's window count is (#1644), and the
+// have passed it is absent, instance by instance, as an outpost's window count is (#1644), and the
 // panel reads not reported instead of the last lag as current. A gauge the
 // server samples every window, and a retention fact its hourly pass writes,
 // stay however old.
@@ -558,7 +558,7 @@ func TestPlatformViewServesTheServersFailureCounts(t *testing.T) {
 }
 
 // deliveryWindow is one window of a hop's three keys for one kind on one
-// platform component, as the node's report or the server's recorder writes it.
+// platform component, as the outpost's report or the server's recorder writes it.
 func deliveryWindow(id, kind string, in, out float64, ts time.Time) []storage.PlatformMetric {
 	loss := 0.0
 	if in > 0 {
@@ -600,10 +600,10 @@ func ratio(f *float64) float64 {
 	return *f
 }
 
-// TestPlatformViewReadsThePipelineHopByHop: two nodes and a server each write
+// TestPlatformViewReadsThePipelineHopByHop: two outposts and a server each write
 // two windows of their hop's delivery. Each hop reads its newest window and
 // its last hour per kind, composed from the summed counts; its components'
-// in and out sum to its own; the node rows carry their own hop's last-hour
+// in and out sum to its own; the outpost rows carry their own hop's last-hour
 // loss; and a window older than the hour is not in it.
 func TestPlatformViewReadsThePipelineHopByHop(t *testing.T) {
 	t.Parallel()
@@ -646,28 +646,28 @@ func TestPlatformViewReadsThePipelineHopByHop(t *testing.T) {
 		t.Errorf("pipeline keys = %+v, want the three delivery keys' catalog facts", v.Pipeline.Keys)
 	}
 
-	node := pipelineHop(t, v.Pipeline, delivery.Node)
-	m := pipelineKind(t, node.Kinds, delivery.Metric)
+	outpost := pipelineHop(t, v.Pipeline, delivery.Outpost)
+	m := pipelineKind(t, outpost.Kinds, delivery.Metric)
 	if m.Newest.In != 110 || m.Newest.Out != 110 || ratio(m.Newest.Loss) != 0 {
-		t.Errorf("node metric newest = %+v loss %v, want 110 in, 110 out, 0", m.Newest, ratio(m.Newest.Loss))
+		t.Errorf("outpost metric newest = %+v loss %v, want 110 in, 110 out, 0", m.Newest, ratio(m.Newest.Loss))
 	}
 	if m.LastHour.In != 200 || m.LastHour.Out != 198 || ratio(m.LastHour.Loss) != 0.01 {
-		t.Errorf("node metric last hour = %+v loss %v, want 200 in, 198 out, 0.01", m.LastHour, ratio(m.LastHour.Loss))
+		t.Errorf("outpost metric last hour = %+v loss %v, want 200 in, 198 out, 0.01", m.LastHour, ratio(m.LastHour.Loss))
 	}
 	if m.NewestAt == nil || !m.NewestAt.Equal(newer) {
-		t.Errorf("node metric newest at = %v, want %s", m.NewestAt, newer)
+		t.Errorf("outpost metric newest at = %v, want %s", m.NewestAt, newer)
 	}
-	p := pipelineKind(t, node.Kinds, delivery.Property)
+	p := pipelineKind(t, outpost.Kinds, delivery.Property)
 	if p.Newest.In != 0 || p.Newest.Loss != nil {
-		t.Errorf("node property = %+v, want a row with nothing in and no ratio", p.Newest)
+		t.Errorf("outpost property = %+v, want a row with nothing in and no ratio", p.Newest)
 	}
 	var in, out uint64
-	for _, c := range node.ByComponent {
+	for _, c := range outpost.ByComponent {
 		in += c.Total.LastHour.In
 		out += c.Total.LastHour.Out
 	}
-	if len(node.ByComponent) != 2 || in != node.Total.LastHour.In || out != node.Total.LastHour.Out {
-		t.Errorf("node components %+v sum to %d in, %d out; hop total %+v", node.ByComponent, in, out, node.Total.LastHour)
+	if len(outpost.ByComponent) != 2 || in != outpost.Total.LastHour.In || out != outpost.Total.LastHour.Out {
+		t.Errorf("outpost components %+v sum to %d in, %d out; hop total %+v", outpost.ByComponent, in, out, outpost.Total.LastHour)
 	}
 
 	ingest := pipelineHop(t, v.Pipeline, delivery.Ingest)
@@ -682,8 +682,8 @@ func TestPlatformViewReadsThePipelineHopByHop(t *testing.T) {
 		t.Errorf("ingest kinds = %+v, want metric alone: a kind with no series has no row", ingest.Kinds)
 	}
 
-	rows := map[string]storage.PlatformNode{}
-	for _, n := range v.Nodes {
+	rows := map[string]storage.PlatformOutpost{}
+	for _, n := range v.Outposts {
 		rows[n.Name] = n
 	}
 	if l := rows["edge-alpha"].Loss; l == nil || *l != 0.1 {
@@ -692,14 +692,14 @@ func TestPlatformViewReadsThePipelineHopByHop(t *testing.T) {
 	if l := rows["edge-bravo"].Loss; l == nil || *l != 0 {
 		t.Errorf("edge-bravo loss = %v, want 0: its loss three hours ago is outside the hour", ratio(l))
 	}
-	if v.LossHops == nil || len(v.LossHops) != 1 || v.LossHops[0] != delivery.Node {
-		t.Errorf("loss hops = %v, want the node hop", v.LossHops)
+	if v.LossHops == nil || len(v.LossHops) != 1 || v.LossHops[0] != delivery.Outpost {
+		t.Errorf("loss hops = %v, want the outpost hop", v.LossHops)
 	}
 }
 
 // TestPlatformViewOmitsThePipelineWithoutPlatformReach: the pipeline's
 // figures are platform component figures, so a location-scoped component
-// read gets no pipeline and no node loss.
+// read gets no pipeline and no outpost loss.
 func TestPlatformViewOmitsThePipelineWithoutPlatformReach(t *testing.T) {
 	t.Parallel()
 	f := newPlatformViewFixture(t)
@@ -714,7 +714,7 @@ func TestPlatformViewOmitsThePipelineWithoutPlatformReach(t *testing.T) {
 	if v.Pipeline != nil {
 		t.Errorf("pipeline = %+v, want omitted for a location-scoped component read", v.Pipeline)
 	}
-	for _, n := range v.Nodes {
+	for _, n := range v.Outposts {
 		if n.Loss != nil {
 			t.Errorf("%s loss = %v, want omitted", n.Name, *n.Loss)
 		}
@@ -735,11 +735,11 @@ func TestPlatformViewGroupsCarryNoFoldedDropCount(t *testing.T) {
 	}
 }
 
-// TestPlatformViewPipelineNewestIsTheCurrentWindow: a node that stopped
+// TestPlatformViewPipelineNewestIsTheCurrentWindow: an outpost that stopped
 // reporting twenty minutes ago keeps its lossy last window as its newest
 // sample. Past two report windows (the default 60 s, so 2 minutes) that window
 // is not the pipeline's newest: the hop's and the end to end's newest read the
-// node still reporting, while the stopped node's loss still counts in the
+// outpost still reporting, while the stopped outpost's loss still counts in the
 // last hour.
 func TestPlatformViewPipelineNewestIsTheCurrentWindow(t *testing.T) {
 	t.Parallel()
@@ -758,12 +758,12 @@ func TestPlatformViewPipelineNewestIsTheCurrentWindow(t *testing.T) {
 	if v.Pipeline == nil {
 		t.Fatal("pipeline = nil for an all-scope component read")
 	}
-	m := pipelineKind(t, pipelineHop(t, v.Pipeline, delivery.Node).Kinds, delivery.Metric)
+	m := pipelineKind(t, pipelineHop(t, v.Pipeline, delivery.Outpost).Kinds, delivery.Metric)
 	if m.Newest.In != 10 || m.Newest.Out != 10 || ratio(m.Newest.Loss) != 0 {
-		t.Errorf("node metric newest = %+v loss %v, want edge-alpha's current 10 of 10, 0", m.Newest, ratio(m.Newest.Loss))
+		t.Errorf("outpost metric newest = %+v loss %v, want edge-alpha's current 10 of 10, 0", m.Newest, ratio(m.Newest.Loss))
 	}
 	if m.LastHour.In != 20 || m.LastHour.Out != 10 {
-		t.Errorf("node metric last hour = %+v, want both nodes' 20 in, 10 out", m.LastHour)
+		t.Errorf("outpost metric last hour = %+v, want both outposts' 20 in, 10 out", m.LastHour)
 	}
 	if e := pipelineEnd(t, v.Pipeline.EndToEnd, delivery.Metric); ratio(e.Newest) != 0 {
 		t.Errorf("metric end to end newest = %v, want 0: edge-bravo's last window is not current", ratio(e.Newest))
@@ -786,11 +786,11 @@ func pipelineEnd(t *testing.T, ends []storage.PlatformPipelineEnd, kind delivery
 // charts every key that component carries, so a key kept off is one click
 // away, never unread.
 const (
-	offVerdict      = "the page shows the platform system's recorded verdict, which this rollup is"
-	offNodeDetail   = "node detail beyond the table's columns: on the node's component page its row opens"
-	offProcess      = "every process's runtime figures: on its own component page, node or server"
-	offServerDetail = "server detail beyond its panels: on the server's component page its panel opens"
-	offRetention    = "the retention pass's own bookkeeping: on the server's component page"
+	offVerdict       = "the page shows the platform system's recorded verdict, which this rollup is"
+	offOutpostDetail = "outpost detail beyond the table's columns: on the outpost's component page its row opens"
+	offProcess       = "every process's runtime figures: on its own component page, outpost or server"
+	offServerDetail  = "server detail beyond its panels: on the server's component page its panel opens"
+	offRetention     = "the retention pass's own bookkeeping: on the server's component page"
 )
 
 // platformKeysOffPage is every platform key deliberately kept off the page,
@@ -798,16 +798,17 @@ const (
 var platformKeysOffPage = map[string]string{
 	writerclass.Health: offVerdict,
 
-	writerclass.WorklistTaskCount:       offNodeDetail,
-	writerclass.TickDuration:            offNodeDetail,
-	writerclass.ScheduleGapExcess:       offNodeDetail,
-	writerclass.SpoolBatchCount:         offNodeDetail,
-	writerclass.SessionHeldCount:        offNodeDetail,
-	writerclass.CommandDispatchLatency:  offNodeDetail,
-	writerclass.CommandExecutionLatency: offNodeDetail,
-	writerclass.CommandRedeliveryCount:  offNodeDetail,
-	writerclass.CommandPullFailureCount: offNodeDetail,
-	writerclass.WorkerBusyFraction:      offNodeDetail,
+	writerclass.WorklistTaskCount:       offOutpostDetail,
+	writerclass.TickDuration:            offOutpostDetail,
+	writerclass.ScheduleGapExcess:       offOutpostDetail,
+	writerclass.SpoolBatchCount:         offOutpostDetail,
+	writerclass.SessionHeldCount:        offOutpostDetail,
+	writerclass.CommandDispatchLatency:  offOutpostDetail,
+	writerclass.CommandExecutionLatency: offOutpostDetail,
+	writerclass.CommandRedeliveryCount:  offOutpostDetail,
+	writerclass.CommandPullFailureCount: offOutpostDetail,
+	writerclass.WorkerBusyFraction:      offOutpostDetail,
+	writerclass.LaneWorkerCount:         offOutpostDetail,
 
 	writerclass.ProcessGoroutineCount: offProcess,
 	writerclass.ProcessHeapSize:       offProcess,
@@ -869,7 +870,7 @@ func TestPlatformServerGroupsReadConnectionsAsRatios(t *testing.T) {
 }
 
 // TestPlatformPageListsEveryPlatformKey (#1763): every key the server or a
-// node writes of itself is on the Platform health page or kept off it with a
+// outpost writes of itself is on the Platform health page or kept off it with a
 // reason, so a new gauge cannot land silently absent. A kept-off key that
 // joins the page, or stops being a platform key, must leave the list too.
 func TestPlatformPageListsEveryPlatformKey(t *testing.T) {
@@ -900,11 +901,11 @@ func TestPlatformPageListsEveryPlatformKey(t *testing.T) {
 	}
 }
 
-// TestPlatformViewShowsANodeRunningAStaleWorklist (#1868): a node whose every
+// TestPlatformViewShowsAOutpostRunningAStaleWorklist (#1868): an outpost whose every
 // worklist pull in its newest window was refused reads 1 in the worklist
-// column, beside a node whose pulls were served, so a node running a stale
+// column, beside an outpost whose pulls were served, so an outpost running a stale
 // worklist is a cell on the page and not only an alarm.
-func TestPlatformViewShowsANodeRunningAStaleWorklist(t *testing.T) {
+func TestPlatformViewShowsAOutpostRunningAStaleWorklist(t *testing.T) {
 	t.Parallel()
 	f := newPlatformViewFixture(t)
 	now := time.Now().UTC().Truncate(time.Second)
@@ -927,8 +928,8 @@ func TestPlatformViewShowsANodeRunningAStaleWorklist(t *testing.T) {
 	if !group {
 		t.Errorf("groups = %+v, want a worklist group of %s", v.Groups, writerclass.WorklistPullLossRatio)
 	}
-	rows := map[string]storage.PlatformNode{}
-	for _, n := range v.Nodes {
+	rows := map[string]storage.PlatformOutpost{}
+	for _, n := range v.Outposts {
 		rows[n.Name] = n
 	}
 	if got := rows["edge-alpha"].Figures[writerclass.WorklistPullLossRatio]; got.Value != 1 || !got.ObservedAt.Equal(now) {

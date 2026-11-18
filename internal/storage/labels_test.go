@@ -304,7 +304,7 @@ func TestAMoreSpecificTierWins(t *testing.T) {
 	}
 
 	// A product an operator owns, since a shipped product cannot be edited
-	// until the fork primitive reaches that registry.
+	// until the fork primitive reaches that catalog.
 	mine, err := gw.CreateProduct(ctx, "", storage.Product{
 		Name: "my-panel", Label: "My Panel", ComponentType: "display",
 		LabelRule: strptr("product says {{.ProductName}}"),
@@ -361,7 +361,7 @@ func TestARuleOnAShippedTypeForksItRatherThanWritingIt(t *testing.T) {
 }
 
 // A rule inherits down the component_type chain by the same first-non-null walk
-// stem, icon and abbrev follow, and the walk crosses the fork boundary PER NODE
+// stem, icon and abbrev follow, and the walk crosses the fork boundary PER OUTPOST
 // (ADR-0095 decision 3). interactive-display sets nothing of its own and sits
 // under display, so forking the PARENT's rule reaches it, and a rule of its own
 // then overrides for itself alone.
@@ -527,7 +527,7 @@ func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
 // keeping rather than quietly rewording. Slice 2 read it as the whole
 // enumeration the data map commits us to, on the reasoning that no fact in that
 // map changes by any other route. That reasoning was already thin (TypeName,
-// ProductName, VendorName and the rule itself are columns on registry rows, not
+// ProductName, VendorName and the rule itself are columns on catalog rows, not
 // on this one) and #685 ended it outright: a component's map now reads its
 // location's label and its primary system's type, so acts on OTHER rows stale
 // it too. Those acts, and the cascade that answers them, are
@@ -651,7 +651,7 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 
 // TestTwoSameTypeSystemsInOneRoomReadDifferently is #693: a divisible boardroom
 // whose two halves are both `board` systems in the same room. The shipped
-// system rule read the type alone, so both rendered "Boardroom": the platform
+// system rule read the type alone, so both rendered "Board Meeting": the platform
 // could tell them apart (`boardroom` and `boardroom-2`) and the operator
 // reading the console could not.
 //
@@ -687,11 +687,11 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 	// alone when it was created and read "Room A"; the second arriving
 	// restamped it, so it is re-read here.
 	first = *mustGetSystemByID(t, gw, ctx, first.ID)
-	if first.Label != "Room A Boardroom" {
-		t.Errorf("the first half's label = %q, want %q", first.Label, "Room A Boardroom")
+	if first.Label != "Room A Board Meeting" {
+		t.Errorf("the first half's label = %q, want %q", first.Label, "Room A Board Meeting")
 	}
-	if second.Label != "Room A Boardroom 2" {
-		t.Errorf("the second half's label = %q, want %q", second.Label, "Room A Boardroom 2")
+	if second.Label != "Room A Board Meeting 2" {
+		t.Errorf("the second half's label = %q, want %q", second.Label, "Room A Board Meeting 2")
 	}
 	if first.Label == second.Label {
 		t.Errorf("both halves read %q, so the console cannot tell them apart", first.Label)
@@ -706,7 +706,7 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 // TestAPlaceHoldingSeveralSystemsNamesEachKind is #872's rule for the case
 // the architect named: a room's sole system reads as the room ("Media Lab"),
 // and once the room holds several, each reads as the room and its kind
-// ("Media Lab Meeting Room", "Media Lab Signage"). The siblings restamp as the
+// ("Media Lab Meeting", "Media Lab Signage"). The siblings restamp as the
 // count changes, in the write that changed it: a second arriving, one
 // leaving by delete, one moving out.
 func TestAPlaceHoldingSeveralSystemsNamesEachKind(t *testing.T) {
@@ -729,8 +729,8 @@ func TestAPlaceHoldingSeveralSystemsNamesEachKind(t *testing.T) {
 	if sign.Label != "Room A Signage" {
 		t.Errorf("the second system reads %q, want %q", sign.Label, "Room A Signage")
 	}
-	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Boardroom" {
-		t.Errorf("the first system, once its room holds two, reads %q, want %q", got, "Room A Boardroom")
+	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Board Meeting" {
+		t.Errorf("the first system, once its room holds two, reads %q, want %q", got, "Room A Board Meeting")
 	}
 
 	// One moves out: each place recounts, the one it left and the one it
@@ -750,8 +750,8 @@ func TestAPlaceHoldingSeveralSystemsNamesEachKind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create signage again: %v", err)
 	}
-	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Boardroom" {
-		t.Fatalf("board beside a second signage reads %q, want %q", got, "Room A Boardroom")
+	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Board Meeting" {
+		t.Fatalf("board beside a second signage reads %q, want %q", got, "Room A Board Meeting")
 	}
 	if err := gw.DeleteSystem(ctx, "", sign2.ID, all, all); err != nil {
 		t.Fatalf("delete signage: %v", err)
@@ -795,8 +795,8 @@ func TestAnUnplacedSystemReadsItsKind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create typed: %v", err)
 	}
-	if typed.Label != "Boardroom" {
-		t.Errorf("unplaced classified label = %q, want %q", typed.Label, "Boardroom")
+	if typed.Label != "Board Meeting" {
+		t.Errorf("unplaced classified label = %q, want %q", typed.Label, "Board Meeting")
 	}
 	bare, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "loose"}, all, all)
 	if err != nil {
@@ -824,8 +824,8 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if shipped.Template != nil {
-		t.Fatalf("a freshly seeded rule carries an operator template %q, want none", *shipped.Template)
+	if shipped.Rule != nil {
+		t.Fatalf("a freshly seeded rule carries an operator rule %q, want none", *shipped.Rule)
 	}
 	if shipped.Effective != shipped.Default || shipped.Default == "" {
 		t.Fatalf("effective = %q default = %q, want the shipped default to be in force", shipped.Effective, shipped.Default)
@@ -848,8 +848,8 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	if err != nil {
 		t.Fatalf("get after re-seed: %v", err)
 	}
-	if after.Template == nil || *after.Template != "mine: {{.TypeName}}" {
-		t.Fatalf("after re-seed the operator's rule is %v, want it untouched", after.Template)
+	if after.Rule == nil || *after.Rule != "mine: {{.TypeName}}" {
+		t.Fatalf("after re-seed the operator's rule is %v, want it untouched", after.Rule)
 	}
 	if after.Default != shipped.Default {
 		t.Fatalf("after re-seed the shipped default is %q, want %q restated", after.Default, shipped.Default)
@@ -868,14 +868,14 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	if err != nil {
 		t.Fatalf("clear: %v", err)
 	}
-	if restored.Template != nil || restored.Effective != shipped.Default {
-		t.Fatalf("after clearing: template %v effective %q, want none and the shipped default", restored.Template, restored.Effective)
+	if restored.Rule != nil || restored.Effective != shipped.Default {
+		t.Fatalf("after clearing: rule %v effective %q, want none and the shipped default", restored.Rule, restored.Effective)
 	}
 
 	// And an unparseable global rule is refused before it is stored, exactly as
 	// a tier rule is.
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.TypeName"); !errors.Is(err, storage.ErrInvalidLabelRule) {
-		t.Fatalf("SetLabelRule with a broken template = %v, want ErrInvalidLabelRule", err)
+		t.Fatalf("SetLabelRule with a broken rule = %v, want ErrInvalidLabelRule", err)
 	}
 }
 
@@ -953,8 +953,8 @@ func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get after re-seed: %v", err)
 	}
-	if after.Template == nil || *after.Template != "{{.TypeName}} {{.Name}}" {
-		t.Errorf("after re-seed the operator's location rule is %v, want it untouched", after.Template)
+	if after.Rule == nil || *after.Rule != "{{.TypeName}} {{.Name}}" {
+		t.Errorf("after re-seed the operator's location rule is %v, want it untouched", after.Rule)
 	}
 	if after.Default != shipped.Effective {
 		t.Errorf("after re-seed the shipped default is %q, want %q restated", after.Default, shipped.Effective)
@@ -976,22 +976,22 @@ func TestASystemsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if sys.Label != "Boardroom/sys-a" {
-		t.Fatalf("on create = %q, want %q", sys.Label, "Boardroom/sys-a")
+	if sys.Label != "Board Meeting/sys-a" {
+		t.Fatalf("on create = %q, want %q", sys.Label, "Board Meeting/sys-a")
 	}
 	renamed, err := gw.RenameSystem(ctx, "", sys.ID, "sys-b", all, all)
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
-	if renamed.Label != "Boardroom/sys-b" {
-		t.Fatalf("after rename = %q, want %q", renamed.Label, "Boardroom/sys-b")
+	if renamed.Label != "Board Meeting/sys-b" {
+		t.Fatalf("after rename = %q, want %q", renamed.Label, "Board Meeting/sys-b")
 	}
 	reclassified, err := gw.UpdateSystem(ctx, "", renamed.ID, storage.SystemPatch{SystemTypeID: strptr("class")}, all, all)
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
 	}
-	if reclassified.Label != "Classroom/sys-b" {
-		t.Fatalf("after reclassify = %q, want %q", reclassified.Label, "Classroom/sys-b")
+	if reclassified.Label != "Teaching/sys-b" {
+		t.Fatalf("after reclassify = %q, want %q", reclassified.Label, "Teaching/sys-b")
 	}
 }
 
@@ -1017,7 +1017,7 @@ func TestALocationsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 		t.Fatalf("after rename = %q, want %q", renamed.Label, "Room/room-b")
 	}
 	// A location_type is seed-if-absent example content an operator owns, so
-	// reclassifying to a second seeded type needs no custom registry row.
+	// reclassifying to a second seeded type needs no custom catalog row.
 	reclassified, err := gw.UpdateLocation(ctx, "", renamed.ID, storage.LocationPatch{LocationType: strptr("floor")}, all, all)
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)

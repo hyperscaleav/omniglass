@@ -6,14 +6,14 @@ import type { MemberGroup, MemberRow } from "../lib/detail";
 
 // MemberRows (#872): a system's components in the outline's row idiom, on the
 // outline's own grid, so the room's hardware reads the way Explore drew it:
-// name, role, product, the alarm behind a red light, health. A role earns a
+// name, slot, product, the alarm behind a red light, health. A slot earns a
 // header only where it says something a column cannot (lib/detail's
 // memberModel); its gap is drawn as empty slots beneath it.
 
-// The outline's grid, re-measured for members: a role reads in words a
+// The outline's grid, re-measured for members: a slot reads in words a
 // type label rarely needs ("Confidence Display"), and a member's health is one
 // glyph, never four counted slots. The same container tiers give way in the
-// same order: product, then role, then detail.
+// same order: product, then slot, then detail.
 const MEMBER_COLS =
   "grid-cols-[minmax(0,1fr)_12rem_11rem_12rem_3rem] @max-[56rem]:grid-cols-[minmax(0,1fr)_12rem_10rem_3rem] @max-[40rem]:grid-cols-[minmax(0,1fr)_9rem_3rem] @max-[28rem]:grid-cols-[minmax(0,1fr)_3rem]";
 
@@ -39,7 +39,7 @@ function Row(props: { row: MemberRow; depth: number; onOpen: (id: string) => voi
           <span class="flex-none rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55">also in {r().also.join(", ")}</span>
         </Show>
       </span>
-      <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().noRole ? "no role" : r().role}</span>
+      <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().noSlot ? "no slot" : r().slot}</span>
       <span class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>{r().product}</span>
       <span class={`truncate pr-4 ${NARROW_HIDDEN}`} classList={{ "text-error": !!r().alarm, "text-base-content/55": !r().alarm }} title={r().alarm}>{r().alarm ?? ""}</span>
       <span><HealthGlyph verdict={r().health} /></span>
@@ -52,7 +52,7 @@ export default function MemberRows(props: { rows: MemberRow[]; groups: MemberGro
     <div data-testid="member-rows" class={`${OUTLINE_FRAME} rounded-box border border-base-300 bg-base-100`}>
       <div class={`grid ${MEMBER_COLS} h-8 items-center border-b border-base-300 px-4 text-xs font-medium text-base-content/40`} aria-hidden="true">
         <span style={{ "padding-left": "24px" }}>Component</span>
-        <span class={ROOMY_ONLY}>Role</span>
+        <span class={ROOMY_ONLY}>Slot</span>
         <span class={WIDE_ONLY}>Product</span>
         <span class={NARROW_HIDDEN}>Detail</span>
         <span>Health</span>
@@ -60,7 +60,7 @@ export default function MemberRows(props: { rows: MemberRow[]; groups: MemberGro
       <For each={props.rows}>{(r) => <Row row={r} depth={0} onOpen={props.onOpen} />}</For>
       <For each={props.groups}>
         {(g) => (
-          <div data-testid={`rolegroup-${g.key}`} role="group" aria-label={g.label}>
+          <div data-testid={`slotgroup-${g.key}`} role="group" aria-label={g.label}>
             <div class={`grid ${MEMBER_COLS} h-9 items-center px-4`}>
               <span class="flex min-w-0 items-center gap-2 pr-4">
                 <span class="flex-none text-base-content/35"><LayoutDashboard size={16} /></span>

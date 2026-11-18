@@ -36,7 +36,7 @@ edge parse, a calc rollup, an alarm lifecycle, a health rollup), never the code 
 
 The product is also the teaching artifact for the AV Observability discipline it
 implements. The Measure and Instrument layers should be concrete, explorable artifacts
-rather than blueprints in a PDF. A user who operates Omniglass should come away
+rather than diagrams in a PDF. A user who operates Omniglass should come away
 understanding *how* it models their fleet, because the tool taught them while they used
 it.
 

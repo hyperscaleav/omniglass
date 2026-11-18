@@ -1,5 +1,5 @@
 // Package footprint builds the standard ingest workload the storage footprint
-// is measured against (#1272): node-shaped telemetry batches, one per task per
+// is measured against (#1272): outpost-shaped telemetry batches, one per task per
 // tick, deterministic for a given task and tick so two runs land the same rows
 // and a count that moves is the code under test moving, never the workload.
 //
@@ -69,10 +69,10 @@ var StandardMix = []Signal{
 	{Key: "endpoint-reachable", Lane: PropertyLane, Shape: Constant, Text: "up"},
 }
 
-// Task is the task a batch is published for, and the node that ran it.
+// Task is the task a batch is published for, and the outpost that ran it.
 type Task struct {
-	ID   string
-	Node string
+	ID      string
+	Outpost string
 }
 
 // Workload is a mix checked at a cadence from a start time.
@@ -86,7 +86,7 @@ type Workload struct {
 // stamped at the tick's time.
 func (w Workload) Batch(task Task, tick int) *ogv1.TelemetryBatch {
 	ts := w.Start.Add(time.Duration(tick) * w.Cadence)
-	b := &ogv1.TelemetryBatch{TaskId: task.ID, NodeId: task.Node, Ts: timestamppb.New(ts)}
+	b := &ogv1.TelemetryBatch{TaskId: task.ID, OutpostId: task.Outpost, Ts: timestamppb.New(ts)}
 	for _, s := range w.Mix {
 		switch s.Lane {
 		case MetricLane:

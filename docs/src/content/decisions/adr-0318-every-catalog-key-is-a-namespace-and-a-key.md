@@ -3,7 +3,7 @@ title: "Every catalog key is a namespace and a key"
 date: 2026-10-29
 status: Accepted
 summary: "Every catalog that carries `official` keys its rows by `(namespace, name)`. `og` is the platform's namespace and only the boot seed writes it; `local` is the operator's default; any other namespace is the operator's to use. A bare name resolves `local`, then `og`, so an operator's key shadows a shipped one of the same name and a release can never write an operator's row. The pair is two columns (nothing parses a joined key); `namespace/name` is only its rendering, and a URL carries it as two path segments."
-refs: [318, 1431, 1432, 1433, 1434, 1307, 144]
+refs: [318, 1431, 1432, 1433, 1434, 1307, 144, 1447]
 ---
 
 - **Date:** 2026-10-29 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/),
@@ -55,9 +55,13 @@ refs: [318, 1431, 1432, 1433, 1434, 1307, 144]
   - **Divergences, logged:** a grant naming an ambiguous role is refused as an unknown role (422)
     rather than the ruling's 409 naming both, since operators cannot create a role yet; a shipped
     rule or command type is validated against `og` at seed, but at run time follows the search path
-    like every reader, so a rule on a shadowed key judges the operator's series; which command types
+    like every reader, so a rule on a shadowed key judges the operator's series; and which command types
     target a key matches any row of its name, since a shipped command type's target is pinned in
-    `og`; and the reserved-key exception `ResolveNameLane` makes is not yet in `<table>_in_effect()`
-    (#1447).
+    `og`.
+  - **A reserved key is never shadowed, in SQL too** (#1447): the three signal catalogs'
+    `<table>_in_effect()` return neither tier's row of a reserved key both `local` and `og` hold, as
+    `ResolveNameLane` resolves it for the registry, so no reader serves an operator's frozen values
+    of a name a later release reserved. The reserved names live in `reserved_key`, which the boot seed
+    reconciles to `writerclass.ReservedNames()` on every start.
   - **An operator's own create or rename never takes a name `og` holds** (a trigger raises the
     name's unique violation, as before): a shadow arises only from a release.

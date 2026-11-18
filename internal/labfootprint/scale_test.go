@@ -215,7 +215,7 @@ func TestScaleRunExtrapolates(t *testing.T) {
 	for _, c := range rep.Containers {
 		names = append(names, c.Name)
 	}
-	// Server and Postgres first, then the nodes by name, the total last.
+	// Server and Postgres first, then the outposts by name, the total last.
 	if got := strings.Join(names, ","); got != "server,db,edge-hq,total" {
 		t.Errorf("containers listed %s, want server,db,edge-hq,total", got)
 	}
@@ -424,7 +424,7 @@ func TestScaleTableLagPastTheWindow(t *testing.T) {
 // The server logs its ingest lane's tally as a text line every so often; the
 // harness reads the cumulative batches and busy time from each.
 func TestParseLaneLog(t *testing.T) {
-	log := `time=2026-11-08T12:00:30.250Z level=INFO msg="worklist served" node=edge-hq
+	log := `time=2026-11-08T12:00:30.250Z level=INFO msg="worklist served" outpost=edge-hq
 time=2026-11-08T12:00:30.500Z level=INFO msg="ingest lane" facility=ingest batches=100 busy_ms=10000
 time=2026-11-08T12:01:00.500Z level=INFO msg="telemetry ack not confirmed, the batch will be redelivered and held by its receipt" id=x
 time=2026-11-08T12:01:00.750-07:00 level=INFO msg="ingest lane" facility=ingest batches=160 busy_ms=25000
@@ -545,7 +545,7 @@ func TestLaneOfPartitions(t *testing.T) {
 	}
 }
 
-// receipt is one landed batch of boot b on node "edge-hq", minted at second
+// receipt is one landed batch of boot b on outpost "edge-hq", minted at second
 // s, declaring counts by kind from the running offsets before, with every
 // declared item stored unless outcome says otherwise.
 func receipt(b string, seq uint64, s int, declared delivery.Declared, outcome func(*delivery.Tally)) delivery.Receipt {
@@ -557,7 +557,7 @@ func receipt(b string, seq uint64, s int, declared delivery.Declared, outcome fu
 		t = delivery.Tally{}
 		outcome(&t)
 	}
-	return delivery.Receipt{Node: "edge-hq", Boot: b, Seq: seq, Minted: at(s), Resolved: seq - 1, Deliveries: 1, Declared: declared, Outcome: t}
+	return delivery.Receipt{Outpost: "edge-hq", Boot: b, Seq: seq, Minted: at(s), Resolved: seq - 1, Deliveries: 1, Declared: declared, Outcome: t}
 }
 
 // deliveryRun is a run whose delivery read covers (0 s, 600 s] and found
@@ -570,7 +570,7 @@ func deliveryRun(receipts ...delivery.Receipt) ScaleRun {
 }
 
 // The delivery table has one row per kind the window's batches carried
-// across each hop, the node's then the ingest's, and none for a kind that
+// across each hop, the outpost's then the ingest's, and none for a kind that
 // crossed nothing: a row that would read 0 of 0 is absent, not a fake
 // healthy 0.
 func TestScaleDeliveryRowPerKindCrossed(t *testing.T) {
@@ -586,7 +586,7 @@ func TestScaleDeliveryRowPerKindCrossed(t *testing.T) {
 		t.Fatalf("delivery rows = %+v, want metric and property on each hop only", rep.Delivery)
 	}
 	for i, k := range []delivery.Kind{delivery.Metric, delivery.Property} {
-		for j, h := range []delivery.Hop{delivery.Node, delivery.Ingest} {
+		for j, h := range []delivery.Hop{delivery.Outpost, delivery.Ingest} {
 			r := rep.Delivery[2*i+j]
 			if r.Kind != k || r.Hop != h || r.In != uint64(80/(1+9*i)) || r.Out != r.In || r.Loss == nil || *r.Loss != 0 {
 				t.Errorf("row %d = %+v, want %s %s with 0 loss", 2*i+j, r, k, h)
@@ -594,15 +594,15 @@ func TestScaleDeliveryRowPerKindCrossed(t *testing.T) {
 		}
 	}
 	table := rep.Table()
-	for _, want := range []string{"delivery    lane  hop     in       out      loss     dedup  cause",
-		"metric      node  node    80       80       0        0      -", "metric      node  ingest  80       80       0        0      -",
-		"property    node  node    8        8        0        0      -", "property    node  ingest  8        8        0        0      -",
-		"end to end  node  metric 0  property 0  event -  log -"} {
+	for _, want := range []string{"delivery    lane     hop      in       out      loss     dedup  cause",
+		"metric      outpost  outpost  80       80       0        0      -", "metric      outpost  ingest   80       80       0        0      -",
+		"property    outpost  outpost  8        8        0        0      -", "property    outpost  ingest   8        8        0        0      -",
+		"end to end  outpost  metric 0  property 0  event -  log -"} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}
 	}
-	for _, absent := range []string{"event       node", "event       push", "log         node", "log         push"} {
+	for _, absent := range []string{"event       outpost", "event       push", "log         outpost", "log         push"} {
 		if strings.Contains(table, absent) {
 			t.Errorf("the table has a row for a kind that crossed nothing, %q:\n%s", absent, table)
 		}
@@ -623,10 +623,10 @@ func TestScaleDeliveryCauseAndJSON(t *testing.T) {
 		receipt("b1", 2, 700, delivery.Declared{delivery.Metric: {Count: 10, Before: 10}, delivery.Property: {Count: 10, Before: 10}}, nil),
 	))
 	table := rep.Table()
-	if !strings.Contains(table, "property    node  ingest  10       5        0.5      0      refused-unregistered") {
+	if !strings.Contains(table, "property    outpost  ingest   10       5        0.5      0      refused-unregistered") {
 		t.Errorf("the property row does not name its largest outcome as the cause:\n%s", table)
 	}
-	if !strings.Contains(table, "end to end  node  metric 0  property 0.5  event -  log -") {
+	if !strings.Contains(table, "end to end  outpost  metric 0  property 0.5  event -  log -") {
 		t.Errorf("the end-to-end line does not carry the property loss:\n%s", table)
 	}
 	b, err := json.Marshal(rep)
@@ -693,8 +693,8 @@ func TestScaleDeliveryUnboundIsNotLoss(t *testing.T) {
 		receipt("b1", 2, 700, delivery.Declared{delivery.Metric: {Count: 10, Before: 10}, delivery.Property: {Count: 10, Before: 10}}, nil),
 	))
 	table := rep.Table()
-	for _, want := range []string{"metric      node  ingest  10       10       0        0      -",
-		"property    node  ingest  10       8        0.2      0      refused-writer"} {
+	for _, want := range []string{"metric      outpost  ingest   10       10       0        0      -",
+		"property    outpost  ingest   10       8        0.2      0      refused-writer"} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}
@@ -705,7 +705,7 @@ func TestScaleDeliveryUnboundIsNotLoss(t *testing.T) {
 }
 
 // A boot whose batches are not all known when the read gives up prints as
-// unsettled, with its node, and no ratio comes from it: the ratios are only
+// unsettled, with its outpost, and no ratio comes from it: the ratios are only
 // the settled boots'. A stream still holding batches leaves every boot
 // unsettled, since any of them could still land.
 func TestScaleDeliveryUnsettled(t *testing.T) {
@@ -716,18 +716,18 @@ func TestScaleDeliveryUnsettled(t *testing.T) {
 		receipt("b1", 1, 100, m(10, 0), nil),
 		receipt("b1", 2, 700, m(10, 10), nil),
 		// b2 has nothing landed after the window: its tail could be in a spool.
-		delivery.Receipt{Node: "edge-west", Boot: "b2", Seq: 1, Minted: at(100), Deliveries: 1, Declared: m(7, 0), Outcome: tallyOf(delivery.Metric, delivery.Stored, 7)},
+		delivery.Receipt{Outpost: "edge-west", Boot: "b2", Seq: 1, Minted: at(100), Deliveries: 1, Declared: m(7, 0), Outcome: tallyOf(delivery.Metric, delivery.Stored, 7)},
 	)
 	rep := SummarizeScale(run)
 	if len(rep.Delivery) != 2 || rep.Delivery[0].In != 10 || rep.Delivery[1].In != 10 {
 		t.Errorf("rows = %+v, want metric on each hop over the settled boot alone (10 in)", rep.Delivery)
 	}
 	table := rep.Table()
-	if !strings.Contains(table, "unsettled   node edge-west, boot b2: no ratio") {
+	if !strings.Contains(table, "unsettled   outpost edge-west, boot b2: no ratio") {
 		t.Errorf("the table does not name the unsettled boot:\n%s", table)
 	}
 	b, _ := json.Marshal(rep)
-	if !strings.Contains(string(b), `"delivery_unsettled":[{"node":"edge-west","boot":"b2"}]`) {
+	if !strings.Contains(string(b), `"delivery_unsettled":[{"outpost":"edge-west","boot":"b2"}]`) {
 		t.Errorf("the JSON does not name the unsettled boot: %s", b)
 	}
 
@@ -736,41 +736,41 @@ func TestScaleDeliveryUnsettled(t *testing.T) {
 	if len(rep.Delivery) != 0 || len(rep.DeliveryUnsettled) != 2 {
 		t.Errorf("with the stream still holding batches: rows %+v, unsettled %+v; want no rows and both boots", rep.Delivery, rep.DeliveryUnsettled)
 	}
-	if table := rep.Table(); !strings.Contains(table, "node edge-hq, boot b1: no ratio") || strings.Contains(table, "end to end") {
+	if table := rep.Table(); !strings.Contains(table, "outpost edge-hq, boot b1: no ratio") || strings.Contains(table, "end to end") {
 		t.Errorf("an unsettled stream still prints a ratio:\n%s", table)
 	}
 }
 
-// simBracket is one node's closed-loop bracket over the window in which the
+// simBracket is one outpost's closed-loop bracket over the window in which the
 // sim settled in requests of protocol p: withheld of them it chose not to
-// answer, and the node got returned replies back (the rest timed out).
-func simBracket(node, p string, in, withheld, returned int64) closedloop.NodeBracket {
-	start := collection.SimObservation{Node: node, Protocols: []collection.SimProtocolObservation{{Protocol: p}}}
-	end := collection.SimObservation{Node: node, Protocols: []collection.SimProtocolObservation{
+// answer, and the outpost got returned replies back (the rest timed out).
+func simBracket(outpost, p string, in, withheld, returned int64) closedloop.OutpostBracket {
+	start := collection.SimObservation{Outpost: outpost, FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{{Protocol: p}}}
+	end := collection.SimObservation{Outpost: outpost, FleetGeneration: 1, Protocols: []collection.SimProtocolObservation{
 		{Protocol: p, Received: in, Answered: in - withheld, Withheld: withheld}}}
-	return closedloop.NodeBracket{Node: node, Window: 2 * time.Minute,
+	return closedloop.OutpostBracket{Outpost: outpost, Window: 2 * time.Minute,
 		Start: collection.EndpointObservation{SimBefore: start, SimAfter: start,
-			Node: collection.RequestTallySnapshot{Node: node, Transports: []collection.TallyCounters{{Transport: p}}}},
+			Outpost: collection.RequestTallySnapshot{Outpost: outpost, Transports: []collection.TallyCounters{{Transport: p}}}},
 		End: collection.EndpointObservation{SimBefore: end, SimAfter: end,
-			Node: collection.RequestTallySnapshot{Node: node, Transports: []collection.TallyCounters{
+			Outpost: collection.RequestTallySnapshot{Outpost: outpost, Transports: []collection.TallyCounters{
 				{Transport: p, Sent: in, Answered: returned, TimedOut: in - returned}}}},
 	}
 }
 
-// The sim hop (#1694) prints a row per protocol the nodes polled, ahead of
-// each kind's node and ingest rows: what the simulated endpoints settled against what came
-// back to the node, a withheld answer read as the hop's loss. End to end
-// composes the sim hop's loss into every kind's: a reply the node never got
+// The sim hop (#1694) prints a row per protocol the outposts polled, ahead of
+// each kind's outpost and ingest rows: what the simulated endpoints settled against what came
+// back to the outpost, a withheld answer read as the hop's loss. End to end
+// composes the sim hop's loss into every kind's: a reply the outpost never got
 // is every item it would have carried.
 func TestScaleDeliverySimRowPerProtocol(t *testing.T) {
 	run := deliveryRun(
 		receipt("b1", 1, 100, delivery.Declared{delivery.Metric: {Count: 80}, delivery.Property: {Count: 8}}, nil),
 		receipt("b1", 2, 700, delivery.Declared{delivery.Metric: {Count: 80, Before: 80}, delivery.Property: {Count: 8, Before: 8}}, nil),
 	)
-	run.Endpoints = []closedloop.NodeBracket{simBracket("edge-hq", "http", 60, 0, 60), simBracket("edge-hq", "snmp", 40, 10, 30)}
+	run.Endpoints = []closedloop.OutpostBracket{simBracket("edge-hq", "http", 60, 0, 60), simBracket("edge-hq", "snmp", 40, 10, 30)}
 	rep := SummarizeScale(run)
 	if len(rep.Delivery) != 6 {
-		t.Fatalf("delivery rows = %+v, want http and snmp sim rows, then metric and property node and ingest rows", rep.Delivery)
+		t.Fatalf("delivery rows = %+v, want http and snmp sim rows, then metric and property outpost and ingest rows", rep.Delivery)
 	}
 	snmp := rep.Delivery[1]
 	if snmp.Hop != delivery.Sim || snmp.Protocol != "snmp" || snmp.In != 40 || snmp.Out != 30 || snmp.Loss == nil || *snmp.Loss != 0.25 ||
@@ -778,14 +778,14 @@ func TestScaleDeliverySimRowPerProtocol(t *testing.T) {
 		t.Errorf("the snmp sim row = %+v, want 40 in, 30 out, 0.25 lost to withheld", snmp)
 	}
 	table := rep.Table()
-	want := "delivery    lane  hop     in       out      loss     dedup  cause\n" +
-		"http        node  sim     60       60       0        -      -\n" +
-		"snmp        node  sim     40       30       0.25     -      withheld\n" +
-		"metric      node  node    80       80       0        0      -\n" +
-		"metric      node  ingest  80       80       0        0      -\n" +
-		"property    node  node    8        8        0        0      -\n" +
-		"property    node  ingest  8        8        0        0      -\n" +
-		"end to end  node  metric 0.1  property 0.1  event -  log -\n"
+	want := "delivery    lane     hop      in       out      loss     dedup  cause\n" +
+		"http        outpost  sim      60       60       0        -      -\n" +
+		"snmp        outpost  sim      40       30       0.25     -      withheld\n" +
+		"metric      outpost  outpost  80       80       0        0      -\n" +
+		"metric      outpost  ingest   80       80       0        0      -\n" +
+		"property    outpost  outpost  8        8        0        0      -\n" +
+		"property    outpost  ingest   8        8        0        0      -\n" +
+		"end to end  outpost  metric 0.1  property 0.1  event -  log -\n"
 	if !strings.Contains(table, want) {
 		t.Errorf("the table has no\n%s\nin:\n%s", want, table)
 	}
@@ -833,9 +833,9 @@ func TestScaleDeliverySimRowPerProtocol(t *testing.T) {
 func TestScaleDeliverySimRowWithoutReceipts(t *testing.T) {
 	run := deliveryRun()
 	run.Delivery = DeliveryRead{Reason: "the window is over 23 h"}
-	run.Endpoints = []closedloop.NodeBracket{simBracket("edge-hq", "snmp", 30, 0, 30), simBracket("edge-west", "snmp", 20, 0, 20)}
+	run.Endpoints = []closedloop.OutpostBracket{simBracket("edge-hq", "snmp", 30, 0, 30), simBracket("edge-west", "snmp", 20, 0, 20)}
 	table := SummarizeScale(run).Table()
-	for _, want := range []string{"snmp        node  sim     50       50       0        -      -\n", "ingest      not measured: the window is over 23 h\n"} {
+	for _, want := range []string{"snmp        outpost  sim     50       50       0        -      -\n", "ingest      not measured: the window is over 23 h\n"} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}
@@ -857,22 +857,22 @@ func TestScaleDeliverySimNotMeasured(t *testing.T) {
 	}
 }
 
-// A node that restarted in the window is left out of the summed sim row, and
-// the table names it: the row otherwise reads as every node's.
-func TestScaleDeliverySimNamesRestartedNode(t *testing.T) {
+// An outpost that restarted in the window is left out of the summed sim row, and
+// the table names it: the row otherwise reads as every outpost's.
+func TestScaleDeliverySimNamesRestartedOutpost(t *testing.T) {
 	run := deliveryRun(receipt("b1", 1, 100, delivery.Declared{delivery.Metric: {Count: 80}}, nil))
 	west := simBracket("edge-west", "snmp", 20, 0, 20)
 	west.End.SimBefore.Started = west.Start.SimBefore.Started.Add(time.Minute)
 	west.End.SimAfter.Started = west.End.SimBefore.Started
-	run.Endpoints = []closedloop.NodeBracket{simBracket("edge-hq", "snmp", 30, 0, 30), west}
+	run.Endpoints = []closedloop.OutpostBracket{simBracket("edge-hq", "snmp", 30, 0, 30), west}
 	table := SummarizeScale(run).Table()
-	for _, want := range []string{"snmp        node  sim     30       30       0        -      -\n", "sim         not counted: edge-west restarted in the window\n"} {
+	for _, want := range []string{"snmp        outpost  sim     30       30       0        -      -\n", "sim         not counted: edge-west restarted or changed fleet in the window\n"} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}
 	}
 	if strings.Contains(table, "not counted: edge-hq") {
-		t.Errorf("the table names a node that did not restart:\n%s", table)
+		t.Errorf("the table names an outpost that did not restart:\n%s", table)
 	}
 }
 
@@ -888,17 +888,17 @@ func rowOn(t *testing.T, rep ScaleReport, h delivery.Hop, k delivery.Kind) Deliv
 	return DeliveryRow{}
 }
 
-// TestScaleDeliveryPrintsTheNodeRowPerKind (#1692): the table prints the
-// node hop's row for each kind ahead of the ingest's. A batch the spool
-// dropped at its cap reads as the node's loss under spool-overflow, the
-// ingest row over what the node shipped reads 0, and end to end composes
-// the two; self-logs the node lost before minting read under their cause.
-func TestScaleDeliveryPrintsTheNodeRowPerKind(t *testing.T) {
+// TestScaleDeliveryPrintsTheOutpostRowPerKind (#1692): the table prints the
+// outpost hop's row for each kind ahead of the ingest's. A batch the spool
+// dropped at its cap reads as the outpost's loss under spool-overflow, the
+// ingest row over what the outpost shipped reads 0, and end to end composes
+// the two; self-logs the outpost lost before minting read under their cause.
+func TestScaleDeliveryPrintsTheOutpostRowPerKind(t *testing.T) {
 	m := func(n, before uint64) delivery.Declared {
 		return delivery.Declared{delivery.Metric: {Count: n, Before: before}, delivery.Log: {Count: 1, Before: before / 10}}
 	}
 	third := receipt("b1", 3, 300, m(10, 20), nil)
-	third.Loss = delivery.NodeLoss{
+	third.Loss = delivery.OutpostLoss{
 		Dropped: []delivery.Drop{{Cause: delivery.SpoolOverflow, From: 2, To: 2, Items: map[delivery.Kind]uint64{delivery.Metric: 10, delivery.Log: 1}}},
 		Lost:    map[delivery.Outcome]map[delivery.Kind]uint64{delivery.SelfLogOverflow: {delivery.Log: 2}},
 	}
@@ -907,30 +907,30 @@ func TestScaleDeliveryPrintsTheNodeRowPerKind(t *testing.T) {
 		third,
 		receipt("b1", 4, 700, m(10, 30), nil),
 	))
-	node, ingest := rowOn(t, rep, delivery.Node, delivery.Metric), rowOn(t, rep, delivery.Ingest, delivery.Metric)
-	if node.In != 30 || node.Out != 20 || node.Outcomes[delivery.SpoolOverflow] != 10 || node.Cause() != delivery.SpoolOverflow {
-		t.Errorf("node metric row = %+v, want 30 in, 20 shipped, 10 spool-overflow", node)
+	outpost, ingest := rowOn(t, rep, delivery.Outpost, delivery.Metric), rowOn(t, rep, delivery.Ingest, delivery.Metric)
+	if outpost.In != 30 || outpost.Out != 20 || outpost.Outcomes[delivery.SpoolOverflow] != 10 || outpost.Cause() != delivery.SpoolOverflow {
+		t.Errorf("outpost metric row = %+v, want 30 in, 20 shipped, 10 spool-overflow", outpost)
 	}
 	if ingest.In != 20 || ingest.Out != 20 || ingest.Loss == nil || *ingest.Loss != 0 {
-		t.Errorf("ingest metric row = %+v, want the 20 the node shipped, all landed", ingest)
+		t.Errorf("ingest metric row = %+v, want the 20 the outpost shipped, all landed", ingest)
 	}
 	table := rep.Table()
 	for _, want := range []string{
-		"metric      node  node    30       20       0.3333   0      spool-overflow\nmetric      node  ingest  20       20       0        0      -\n",
-		"log         node  node    5        2        0.6      0      self-log-overflow\nlog         node  ingest  2        2        0        0      -\n",
-		"end to end  node  metric 0.3333  property -  event -  log 0.6",
+		"metric      outpost  outpost  30       20       0.3333   0      spool-overflow\nmetric      outpost  ingest   20       20       0        0      -\n",
+		"log         outpost  outpost  5        2        0.6      0      self-log-overflow\nlog         outpost  ingest   2        2        0        0      -\n",
+		"end to end  outpost  metric 0.3333  property -  event -  log 0.6",
 	} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}
 	}
-	if strings.Contains(table, "missing     node") {
-		t.Errorf("a gap the node dropped reads as missing at ingest:\n%s", table)
+	if strings.Contains(table, "missing     outpost") {
+		t.Errorf("a gap the outpost dropped reads as missing at ingest:\n%s", table)
 	}
 }
 
 // TestScaleDeliveryNamesAnEndedBootsTail (#1692): a boot that never settled
-// because its node started again is read as far as it landed, and the table
+// because its outpost started again is read as far as it landed, and the table
 // names its tail as never shipped and uncounted rather than leaving the
 // boot unsettled.
 func TestScaleDeliveryNamesAnEndedBootsTail(t *testing.T) {
@@ -947,29 +947,29 @@ func TestScaleDeliveryNamesAnEndedBootsTail(t *testing.T) {
 	if len(rep.DeliveryUnsettled) != 0 || len(rep.DeliveryEnded) != 1 || rep.DeliveryEnded[0].Boot != "b1" || rep.DeliveryEnded[0].Last != 2 {
 		t.Fatalf("unsettled %+v, ended %+v; want b1 ended at seq 2", rep.DeliveryUnsettled, rep.DeliveryEnded)
 	}
-	if r := rowOn(t, rep, delivery.Node, delivery.Metric); r.In != 25 || r.Out != 25 {
-		t.Errorf("node metric row = %+v, want both boots read as far as they landed (25)", r)
+	if r := rowOn(t, rep, delivery.Outpost, delivery.Metric); r.In != 25 || r.Out != 25 {
+		t.Errorf("outpost metric row = %+v, want both boots read as far as they landed (25)", r)
 	}
-	if table := rep.Table(); !strings.Contains(table, "unshipped   node edge-hq, boot b1: last seq 2 landed, boot b2 began "+at(400).UTC().Format(time.RFC3339)+"; anything after 2 never shipped, uncounted") {
+	if table := rep.Table(); !strings.Contains(table, "unshipped   outpost edge-hq, boot b1: last seq 2 landed, boot b2 began "+at(400).UTC().Format(time.RFC3339)+"; anything after 2 never shipped, uncounted") {
 		t.Errorf("the table does not name the ended boot's tail:\n%s", table)
 	}
 	b, _ := json.Marshal(rep)
-	if !strings.Contains(string(b), `"delivery_unshipped":[{"node":"edge-hq","boot":"b1","last_seq":2,"next_boot":"b2"`) {
+	if !strings.Contains(string(b), `"delivery_unshipped":[{"outpost":"edge-hq","boot":"b1","last_seq":2,"next_boot":"b2"`) {
 		t.Errorf("the JSON does not name the ended boot: %s", b)
 	}
 }
 
 // pushed is one batch the API's push lane published (#1696): the same ledger
-// as a node's, under the server's own boot, with no node.
+// as an outpost's, under the server's own boot, with no outpost.
 func pushed(seq uint64, s int, declared delivery.Declared, outcome func(*delivery.Tally)) delivery.Receipt {
 	r := receipt("push-boot", seq, s, declared, outcome)
-	r.Node = ""
+	r.Outpost = ""
 	return r
 }
 
-// The push lane reads as its own ingest-hop row, apart from the node lane's
-// (#1696): its loss is not folded into the nodes', and its one hop is not
-// composed into the node lane's end to end. A pushed batch Termed at ingest
+// The push lane reads as its own ingest-hop row, apart from the outpost lane's
+// (#1696): its loss is not folded into the outposts', and its one hop is not
+// composed into the outpost lane's end to end. A pushed batch Termed at ingest
 // leaves a hole in the server's boot, read as missing on the push row alone.
 func TestScaleDeliveryPushLaneRowsApart(t *testing.T) {
 	m := func(n, before uint64) delivery.Declared {
@@ -984,32 +984,32 @@ func TestScaleDeliveryPushLaneRowsApart(t *testing.T) {
 		pushed(4, 700, m(1, 7), nil),
 	))
 	if len(rep.Delivery) != 3 {
-		t.Fatalf("delivery rows = %+v, want the node lane's two hops and the push lane's one for metric", rep.Delivery)
+		t.Fatalf("delivery rows = %+v, want the outpost lane's two hops and the push lane's one for metric", rep.Delivery)
 	}
-	nodeRow, pushRow := rep.Delivery[1], rep.Delivery[2]
-	if nodeRow.Lane != LaneNode || nodeRow.In != 40 || nodeRow.Out != 40 || nodeRow.Loss == nil || *nodeRow.Loss != 0 {
-		t.Errorf("node row = %+v, want 40 in 40 out, 0 loss", nodeRow)
+	outpostRow, pushRow := rep.Delivery[1], rep.Delivery[2]
+	if outpostRow.Lane != LaneOutpost || outpostRow.In != 40 || outpostRow.Out != 40 || outpostRow.Loss == nil || *outpostRow.Loss != 0 {
+		t.Errorf("outpost row = %+v, want 40 in 40 out, 0 loss", outpostRow)
 	}
 	if pushRow.Lane != LanePush || pushRow.Hop != delivery.Ingest || pushRow.In != 7 || pushRow.Out != 5 ||
 		pushRow.Outcomes[delivery.Missing] != 2 || pushRow.Cause() != delivery.Missing {
 		t.Errorf("push row = %+v, want 7 in 5 out, 2 missing", pushRow)
 	}
 	if got := rep.DeliveryEndToEnd[delivery.Metric]; got != 0 {
-		t.Errorf("node end to end metric = %v, want 0: the push lane's loss is its own row's", got)
+		t.Errorf("outpost end to end metric = %v, want 0: the push lane's loss is its own row's", got)
 	}
 	table := rep.Table()
 	for _, want := range []string{
-		"metric      node  ingest  40       40       0        0      -",
-		"metric      push  ingest  7        5        0.2857   0      missing",
-		"end to end  node  metric 0  property -  event -  log -",
-		"missing     push  " + pushMissingLabel,
+		"metric      outpost  ingest   40       40       0        0      -",
+		"metric      push     ingest   7        5        0.2857   0      missing",
+		"end to end  outpost  metric 0  property -  event -  log -",
+		"missing     push     " + pushMissingLabel,
 	} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}
 	}
-	if strings.Contains(table, "missing     node") {
-		t.Errorf("the node lane lost nothing but reads missing:\n%s", table)
+	if strings.Contains(table, "missing     outpost") {
+		t.Errorf("the outpost lane lost nothing but reads missing:\n%s", table)
 	}
 	b, _ := json.Marshal(rep)
 	if !strings.Contains(string(b), `"lane":"push","hop":"ingest","kind":"metric","in":7,"out":5`) {
@@ -1018,7 +1018,7 @@ func TestScaleDeliveryPushLaneRowsApart(t *testing.T) {
 }
 
 // A push boot whose batches are not all known prints as the push lane's,
-// not as a node with no name.
+// not as an outpost with no name.
 func TestScaleDeliveryPushLaneUnsettled(t *testing.T) {
 	rep := SummarizeScale(deliveryRun(
 		pushed(1, 100, delivery.Declared{delivery.Metric: {Count: 3}}, nil),
@@ -1045,8 +1045,8 @@ func TestScaleDeliveryNotRead(t *testing.T) {
 // writes with the ledger and outcome packed (#1699), into receipts the
 // reconcile reads.
 func TestParseReceipts(t *testing.T) {
-	out := `{"node":"edge-hq","boot":"b1","seq":3,"minted":"2026-11-09T12:00:01.25+00:00","resolved":2,"deliveries":2,"ledger":[4,8,null,null,null,null,null,null],"outcome":[1,4],"node_loss":{"dropped":[{"cause":"spool-overflow","from":2,"to":2,"items":{"metric":4}}]}}
-{"node":null,"boot":"b2","seq":1,"minted":"2026-11-09T12:00:02+00:00","resolved":0,"deliveries":1,"ledger":[null,null,null,null,null,null,null,null],"outcome":null}
+	out := `{"outpost":"edge-hq","boot":"b1","seq":3,"minted":"2026-11-09T12:00:01.25+00:00","resolved":2,"deliveries":2,"ledger":[4,8,null,null,null,null,null,null],"outcome":[1,4],"outpost_loss":{"dropped":[{"cause":"spool-overflow","from":2,"to":2,"items":{"metric":4}}]}}
+{"outpost":null,"boot":"b2","seq":1,"minted":"2026-11-09T12:00:02+00:00","resolved":0,"deliveries":1,"ledger":[null,null,null,null,null,null,null,null],"outcome":null}
 `
 	rs, err := ParseReceipts(out)
 	if err != nil {
@@ -1056,15 +1056,15 @@ func TestParseReceipts(t *testing.T) {
 		t.Fatalf("receipts = %+v", rs)
 	}
 	r := rs[0]
-	if r.Node != "edge-hq" || r.Boot != "b1" || r.Seq != 3 || r.Resolved != 2 || r.Deliveries != 2 ||
+	if r.Outpost != "edge-hq" || r.Boot != "b1" || r.Seq != 3 || r.Resolved != 2 || r.Deliveries != 2 ||
 		!r.Minted.Equal(time.Date(2026, 11, 9, 12, 0, 1, 250e6, time.UTC)) ||
 		r.Declared[delivery.Metric] != (delivery.Count{Count: 4, Before: 8}) || r.Outcome.Count(delivery.Metric, delivery.Stored) != 4 {
 		t.Errorf("receipt = %+v", r)
 	}
 	if d := r.Loss.Dropped; len(d) != 1 || d[0].Cause != delivery.SpoolOverflow || d[0].Items[delivery.Metric] != 4 {
-		t.Errorf("receipt node loss = %+v, want seq 2's 4 metrics dropped at the cap", r.Loss)
+		t.Errorf("receipt outpost loss = %+v, want seq 2's 4 metrics dropped at the cap", r.Loss)
 	}
-	if !rs[1].Outcome.Empty() || rs[1].Node != "" {
+	if !rs[1].Outcome.Empty() || rs[1].Outpost != "" {
 		t.Errorf("a receipt with no outcome yet = %+v", rs[1])
 	}
 	if _, err := ParseReceipts("not json\n"); err == nil {
@@ -1192,8 +1192,8 @@ func TestScaleDeliverySettlesUnderSteadyLoad(t *testing.T) {
 	if len(rep.DeliveryUnsettled) != 0 || rep.DeliveryNote != "" {
 		t.Fatalf("unsettled %+v, note %q; want the boot read", rep.DeliveryUnsettled, rep.DeliveryNote)
 	}
-	if r := rowOn(t, rep, delivery.Node, delivery.Metric); r.In != 10 || r.Out != 10 {
-		t.Errorf("node metric row = %+v, want the window's 10", r)
+	if r := rowOn(t, rep, delivery.Outpost, delivery.Metric); r.In != 10 || r.Out != 10 {
+		t.Errorf("outpost metric row = %+v, want the window's 10", r)
 	}
 	if r := rowOn(t, rep, delivery.Ingest, delivery.Metric); r.In != 10 || r.Out != 10 {
 		t.Errorf("ingest metric row = %+v, want the window's 10", r)
@@ -1238,7 +1238,7 @@ func TestScaleDeliveryScheduleHopRow(t *testing.T) {
 	run.Delivery.Schedule = []ScheduleCount{{Kind: delivery.Metric, Due: 10, Made: 8}, {Kind: delivery.Event}}
 	rep := SummarizeScale(run)
 	if len(rep.Delivery) != 5 {
-		t.Fatalf("delivery rows = %+v, want metric schedule, node and ingest, and property node and ingest", rep.Delivery)
+		t.Fatalf("delivery rows = %+v, want metric schedule, outpost and ingest, and property outpost and ingest", rep.Delivery)
 	}
 	if r := rep.Delivery[0]; r.Hop != delivery.Schedule || r.Kind != delivery.Metric || r.In != 10 || r.Out != 8 ||
 		r.Loss == nil || *r.Loss != 0.2 || r.Cause() != delivery.Skipped || r.Outcomes[delivery.Made] != 8 || r.Outcomes[delivery.Skipped] != 2 {
@@ -1246,34 +1246,34 @@ func TestScaleDeliveryScheduleHopRow(t *testing.T) {
 	}
 	table := rep.Table()
 	for _, want := range []string{
-		"delivery    lane  hop       in       out      loss     dedup  cause",
-		"metric      node  schedule  10       8        0.2      0      skipped\n" +
-			"metric      node  node      80       80       0        0      -\n" +
-			"metric      node  ingest    80       80       0        0      -\n",
-		"property    node  node      8        8        0        0      -",
-		"property    node  ingest    8        8        0        0      -",
-		"end to end  node  metric 0.2  property 0  event -  log -",
+		"delivery    lane     hop       in       out      loss     dedup  cause",
+		"metric      outpost  schedule  10       8        0.2      0      skipped\n" +
+			"metric      outpost  outpost   80       80       0        0      -\n" +
+			"metric      outpost  ingest    80       80       0        0      -\n",
+		"property    outpost  outpost   8        8        0        0      -",
+		"property    outpost  ingest    8        8        0        0      -",
+		"end to end  outpost  metric 0.2  property 0  event -  log -",
 	} {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table has no %q:\n%s", want, table)
 		}
 	}
-	for _, absent := range []string{"property    node  schedule", "event       node  schedule"} {
+	for _, absent := range []string{"property    outpost  schedule", "event       outpost  schedule"} {
 		if strings.Contains(table, absent) {
 			t.Errorf("the table has a schedule row for a kind no schedule produced, %q:\n%s", absent, table)
 		}
 	}
-	if strings.Index(table, "metric      node  schedule") > strings.Index(table, "metric      node  ingest") {
+	if strings.Index(table, "metric      outpost  schedule") > strings.Index(table, "metric      outpost  ingest") {
 		t.Errorf("the schedule row does not lead its kind's hops:\n%s", table)
 	}
-	if !strings.Contains(before, "delivery    lane  hop     in       out") || strings.Contains(before, "schedule") {
+	if !strings.Contains(before, "delivery    lane     hop      in       out") || strings.Contains(before, "schedule") {
 		t.Errorf("with no schedule read the table changed:\n%s", before)
 	}
 	b, err := json.Marshal(rep)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), `{"lane":"node","hop":"schedule","kind":"metric","in":10,"out":8,"loss":0.2,"deduplicated":0,"outcomes":{"made":8,"skipped":2}}`) {
+	if !strings.Contains(string(b), `{"lane":"outpost","hop":"schedule","kind":"metric","in":10,"out":8,"loss":0.2,"deduplicated":0,"outcomes":{"made":8,"skipped":2}}`) {
 		t.Errorf("the JSON schedule row: %s", b)
 	}
 }
@@ -1297,7 +1297,7 @@ func TestScaleDeliveryEndToEndOverASilencedHop(t *testing.T) {
 	if got, ok := rep.DeliveryEndToEnd[delivery.Property]; !ok || got != 1 {
 		t.Errorf("property end to end = %v (%v), want 1: every due skipped", got, ok)
 	}
-	if table := rep.Table(); !strings.Contains(table, "end to end  node  metric 0  property 1  event -  log -") {
+	if table := rep.Table(); !strings.Contains(table, "end to end  outpost  metric 0  property 1  event -  log -") {
 		t.Errorf("the end to end line does not read the skipped kind's loss:\n%s", table)
 	}
 
@@ -1306,7 +1306,7 @@ func TestScaleDeliveryEndToEndOverASilencedHop(t *testing.T) {
 	if len(rep.DeliveryEndToEnd) != 0 {
 		t.Errorf("end to end = %v with every boot unsettled, want none", rep.DeliveryEndToEnd)
 	}
-	if table := rep.Table(); !strings.Contains(table, "end to end  node  metric -  property -  event -  log -") {
+	if table := rep.Table(); !strings.Contains(table, "end to end  outpost  metric -  property -  event -  log -") {
 		t.Errorf("the end to end line reads a ratio with no ingest settled:\n%s", table)
 	}
 }

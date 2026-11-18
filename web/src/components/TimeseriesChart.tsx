@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { bucketLayout, chartLayout, nearestPoint, type ChartBucket, type ChartPoint, type ChartSample } from "../lib/chart";
 import { fmtTime } from "../lib/format";
+import { stamped, type Subject } from "../lib/handover";
 
 // The timeseries chart (#794): one series, drawn from chartLayout's pure
 // geometry. Single series, so no legend (the row or title names it); a 2px
@@ -17,10 +18,16 @@ export default function TimeseriesChart(props: {
   buckets?: ChartBucket[];
   resolutionMs?: number;
   mode?: "line" | "step";
+  // The value in force when the window opens (#1488), step mode only: drawn
+  // from the left edge to the first change.
+  carriedIn?: number;
   now: number;
   windowMs: number;
   unit?: string;
   spark?: boolean;
+  // What the chart is when the person hands it to omnibot (#2122): a metric,
+  // by its owner's name and the metric's.
+  subject?: Subject;
 }) {
   const W = () => (props.spark ? 160 : 640);
   const H = () => (props.spark ? 36 : 170);
@@ -35,9 +42,9 @@ export default function TimeseriesChart(props: {
       windowMs: props.windowMs,
     };
     if (props.buckets) return bucketLayout(props.buckets, { ...frame, resolutionMs: props.resolutionMs ?? 3600_000 });
-    return chartLayout(props.samples ?? [], { ...frame, mode: props.mode });
+    return chartLayout(props.samples ?? [], { ...frame, mode: props.mode, carriedIn: props.carriedIn });
   });
-  const last = () => (layout().points.length > 0 ? layout().endDot : undefined);
+  const last = () => (layout().linePath ? layout().endDot : undefined);
   const tip = (p: ChartPoint) =>
     p.min !== undefined && p.max !== undefined
       ? `${fmtV(p.value)}${props.unit ?? ""} avg, ${fmtV(p.min)} to ${fmtV(p.max)} (${p.count} samples) · ${fmtTime(p.ts)}`
@@ -58,7 +65,7 @@ export default function TimeseriesChart(props: {
   };
   return (
     <Show
-      when={layout().points.length > 0}
+      when={layout().linePath !== ""}
       fallback={
         <Show when={!props.spark} fallback={<span class="text-[10px] text-base-content/40">no samples</span>}>
           <p class="text-sm text-base-content/50">No samples in the window.</p>
@@ -67,6 +74,8 @@ export default function TimeseriesChart(props: {
     >
       <svg
         data-testid={props.spark ? "sparkline" : "timeseries-chart"}
+        data-subject-kind={stamped(props.subject)?.kind}
+        data-subject-ref={stamped(props.subject)?.ref}
         viewBox={`0 0 ${W()} ${H()}`}
         class={props.spark ? "h-9 w-40" : "w-full max-w-3xl"}
         role="img"

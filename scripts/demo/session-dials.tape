@@ -1,23 +1,23 @@
-# A node's held sessions come up as their worklist lands, through bounded first dials
+# An outpost's held sessions come up as their worklist lands, through bounded first dials
 #
-# The node's run loop reconciles held sessions the moment a worklist arrives, runs each one
-# supervised (a panic costs that one session, never the node), and makes each session's first dial
-# through one of --session-dials node-wide slots (default 16; a redial takes none). A Kestrel bar's
+# The outpost's run loop reconciles held sessions the moment a worklist arrives, runs each one
+# supervised (a panic costs that one session, never the outpost), and makes each session's first dial
+# through one of --session-dials outpost-wide slots (default 16; a redial takes none). A Kestrel bar's
 # control socket is attached on edge-hq and comes up, then is detached and goes away (#1636).
 
-Type "# The node's bound on first dials, and its env twin"
+Type "# The outpost's bound on first dials, and its env twin"
 Enter
 Wait
-Type `omniglass node run --help | grep -- --session-dials`
+Type `omniglass outpost run --help | grep -- --session-dials`
 Enter
 Wait
-Type "# A bound below one is refused before the node starts"
+Type "# A bound below one is refused before the outpost starts"
 Enter
 Wait
-Type `OMNIGLASS_NODE_SESSION_DIALS=0 omniglass node run --name edge-demo --token unused || true`
+Type `OMNIGLASS_OUTPOST_SESSION_DIALS=0 omniglass outpost run --name edge-demo --token unused || true`
 Enter
 Wait
-Type `omniglass node run --name edge-demo --token unused --session-dials 0 || true`
+Type `omniglass outpost run --name edge-demo --token unused --session-dials 0 || true`
 Enter
 Wait
 
@@ -45,7 +45,7 @@ Wait
 Type `bar='hq.west.level-2.boardroom-b.$comp.videobar-1'`
 Enter
 Wait
-Type `omniglass endpoint create --component "$bar" --driver kestrel-ws --node edge-hq --inputs "{\"host\":\"$addr\",\"port\":\"9443\",\"login\":\"boardroom-ws-login\"}" | jq -c '{name, driver}'`
+Type `omniglass endpoint create --component "$bar" --driver kestrel-ws --outpost edge-hq --inputs "{\"host\":\"$addr\",\"port\":\"9443\",\"login\":\"boardroom-ws-login\"}" | jq -c '{name, driver}'`
 Enter
 Wait
 
@@ -61,7 +61,7 @@ Wait
 Type `omniglass component reachability list "$bar" | jq -c '[.endpoints[] | {endpoint, session: .session.state}]'`
 Enter
 Wait
-Type `omniglass node log list edge-hq | jq -c '[.logs[] | select((.message | startswith("session ")) and .attributes.endpoint == "wss") | .message] | reverse'`
+Type `omniglass outpost log list edge-hq | jq -c '[.logs[] | select((.message | startswith("session ")) and .attributes.endpoint == "wss") | .message] | reverse'`
 Enter
 Wait
 
@@ -77,11 +77,11 @@ Type `omniglass endpoint delete "$bar/wss"`
 Enter
 Wait
 Hide
-Type `demo_until 60 'grep "msg=\"session torn down\"" /stack/logs/node.log | grep -q "endpoint=wss"'`
+Type `demo_until 60 'grep "msg=\"session torn down\"" /stack/logs/outpost.log | grep -q "endpoint=wss"'`
 Enter
 Wait@90s
 Show
-Type `grep 'msg="session torn down"' /stack/logs/node.log | grep 'endpoint=wss' | tail -1 | sed 's/.*msg="\([^"]*\)".*reason="\([^"]*\)".*/\1: \2/'`
+Type `grep 'msg="session torn down"' /stack/logs/outpost.log | grep 'endpoint=wss' | tail -1 | sed 's/.*msg="\([^"]*\)".*reason="\([^"]*\)".*/\1: \2/'`
 Enter
 Wait
 Type `omniglass component reachability list "$bar" | jq -c '[.endpoints[] | {endpoint, session: .session.state}]'`
