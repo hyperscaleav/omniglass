@@ -6,7 +6,7 @@ summary: "Accepted: #1645 renders each server's Requests, Ingest, Queues and Ret
 refs: [1645, 1644, 1627, 1628, 1629, 1646]
 ---
 
-- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [api](/architecture/api/), [Platform health](/guides/operator/platform-health/)
+- **Date:** 2026-11-10 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [api](/architecture/api/), [Platform health](/operator/platform-health/)
 - **Decision:**
   1. **Both request keys are ranked.** The ticket ranked `http-request-duration-max` alone and
      returned `http-request-count` per instance. A route table is as large for one key as the

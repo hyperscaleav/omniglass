@@ -1,6 +1,12 @@
 ---
 title: Sign in and your profile
 description: "Getting into the console with a password or a bearer token, and managing your own label, picture, and password."
+sidebar:
+  label: Sign in
+  order: 1
+  badge:
+    text: Built
+    variant: success
 screenshots:
   - id: sign-in
     path: /web/login
