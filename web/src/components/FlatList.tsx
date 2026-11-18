@@ -39,6 +39,10 @@ export type FlatConfig<T> = {
   // replace the "Loading…" line, so the loaded rows land in place instead of
   // shifting what sits below the list (the probe's layout-shift budget).
   loadingRows?: number;
+  // Lay the table out with fixed column widths (table-layout: fixed), so cell
+  // content never sizes a column. For a list whose cells vary run to run or are
+  // masked in a screenshot (the audit trail); columns with no width split the rest.
+  fixedLayout?: boolean;
   error?: Accessor<unknown>;
   filterKeys: FilterKeys<T>;
   filterPlaceholder?: string;
@@ -196,7 +200,7 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                   "min-h-0 flex-1 overflow-y-auto [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-base-200": cfg.fill,
                 }}
               >
-                <table class="table table-sm">
+                <table class={cfg.fixedLayout ? "table table-sm table-fixed w-full" : "table table-sm"}>
                   <Show when={cfg.columns.some((c) => c.width)}>
                     <colgroup>
                       <For each={cfg.columns}>{(c) => <col style={c.width ? { width: c.width } : undefined} />}</For>

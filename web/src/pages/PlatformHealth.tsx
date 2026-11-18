@@ -142,7 +142,7 @@ function Header(props: { view: PlatformView }) {
         {(s) => (
           <>
             <Fact label="Version" sub={s().name}>
-              <span class="tnum" data-testid="platform-version" classList={{ "text-base-content/30": !s().version }}>{s().version ?? NOT_REPORTED}</span>
+              <span class="tnum block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap" title={s().version ?? undefined} data-testid="platform-version" classList={{ "text-base-content/30": !s().version }}>{s().version ?? NOT_REPORTED}</span>
             </Fact>
             <Fact label="Up for" sub={s().started_at ? `since ${fmtTime(s().started_at!)}` : "no start time written yet"}>
               <span class="tnum" data-testid="platform-uptime">{serverUptime(props.view.read_at, s().started_at) ?? NOT_REPORTED}</span>
@@ -156,10 +156,10 @@ function Header(props: { view: PlatformView }) {
 
 function Fact(props: { label: string; sub: string; children: JSX.Element }) {
   return (
-    <div class="card border border-base-300 bg-base-200">
-      <div class="card-body gap-1 p-5">
+    <div class="card min-w-0 border border-base-300 bg-base-200">
+      <div class="card-body min-w-0 gap-1 p-5">
         <div class="eyebrow">{props.label}</div>
-        <div class="text-2xl font-semibold leading-none">{props.children}</div>
+        <div class="min-w-0 overflow-hidden text-2xl font-semibold leading-none">{props.children}</div>
         <div class="text-xs text-base-content/50">{props.sub}</div>
       </div>
     </div>
