@@ -247,6 +247,7 @@ export default function Audit() {
           rows,
           loading,
           loadingRows: AUDIT_LOADING_ROWS,
+          fixedLayout: true,
           // A page of 100 is taller than the skeleton: scrolling the rows inside
           // the card keeps the footer where the first paint put it (#1461).
           fill: true,

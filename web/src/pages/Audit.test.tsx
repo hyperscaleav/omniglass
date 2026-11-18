@@ -244,6 +244,14 @@ describe("Audit drawer fits a jsonb change (#1088)", () => {
     expect(row("Inputs").children[2].textContent).toContain('"login": "touch-panel-login"');
   });
 
+  it("fixes the trail's column widths so masked cell text cannot size them", async () => {
+    const { container, findByText } = render(() => <Audit />);
+    await findByText("retry");
+    const table = container.querySelector("table")!;
+    expect(table.className).toContain("table-fixed");
+    expect(table.className).toContain("w-full");
+  });
+
   it("lays the change table out to the drawer's width, its values wrapping in place", async () => {
     const { findByText } = render(() => <Audit />);
     fireEvent.click(await findByText("retry"));
