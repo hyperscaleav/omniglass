@@ -127,7 +127,11 @@ GHCR until it is flipped (#1940).
 the workflow's own `GITHUB_TOKEN`, so the workflow mints a token from a dedicated release GitHub
 App, the one bypass on that ruleset, when the variable `RELEASE_APP_CLIENT_ID` and the secret
 `RELEASE_APP_PRIVATE_KEY` are set. Without them it pushes with `GITHUB_TOKEN`, and the push is
-refused (#1940). Release branches themselves are protected like `main` by a `release/*`
+refused (#1940). A `dry_run` dispatch mints the App's token too and reports it in the run's
+summary, so a wrong client id, key or permission fails a dry run, not the first candidate
+(#2147). Only a real tag push exercises the App's bypass on the ruleset. To try a dry run before
+the real cut, an admin can create a throwaway release branch such as `release/0.0`, dispatch on
+it with `dry_run`, and delete it. Release branches themselves are protected like `main` by a `release/*`
 ruleset: pull requests only, the same required checks, no force-push or deletion.
 
 To preview locally, from the release branch:
