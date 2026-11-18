@@ -10,6 +10,7 @@
 #
 #   agent-trust.sh build    may this run:dev-gha label start a build?
 #   agent-trust.sh fix      may this comment or review start a fix?
+#   agent-trust.sh verdict  does the reviewer say ship on this PR's head?
 #   agent-trust.sh actors   the logins whose comments the model may read
 #   agent-trust.sh teams O  print {"maintainers":[...],"contributors":[...]} for
 #                           org O, read with gh (needs a token that can read
@@ -17,16 +18,21 @@
 #                           empty, so every gate fails closed
 #
 # Input is one JSON object on stdin. build reads labeler, author, labels (names),
-# open_prs (count), maintainers and contributors (logins). fix reads event
+# open_prs (count), blocked_by (the numbers of the issue's open blockers),
+# blockers_unreadable (bool: the workflow could not read them), maintainers and
+# contributors (logins). fix reads event
 # ("comment" or "review"), sender, review_state, mentions (bool: the body
 # carries @claude), head_ref, fork (bool), app_bot (the agents' App bot login),
 # auto_rounds (the App's Changes-requested reviews on the PR, this one
-# included), maintainers and contributors. actors reads maintainers and
-# contributors. A comment reaches fix only when it mentions @claude, so a
+# included), maintainers and contributors. verdict reads app_bot, head_sha and
+# reviews ([{user, state, commit_id}] in the order GitHub lists them). actors
+# reads maintainers and contributors. A comment reaches fix only when it mentions @claude, so a
 # comment needs only a team member as sender; a review runs when it requests
 # changes or mentions @claude.
 #
-# build and fix print "run", or "refuse: <reason>" / "skip: <reason>". actors
+# build and fix print "run", or "refuse: <reason>" / "skip: <reason>"; fix
+# prints "park: <reason>" when the reviewer's automatic rounds are used up, so
+# the PR waits for a person. verdict prints "ship" or "block: <reason>". actors
 # prints the logins, comma-separated, sorted.
 #
 # Exit: 0 decided (a refusal is a decision), 2 unreadable input, 64 bad usage.
@@ -34,7 +40,7 @@
 set -euo pipefail
 shopt -s inherit_errexit
 
-AUTO_ROUND_CAP=2
+AUTO_ROUND_CAP=5
 
 mode=${1:-}
 
@@ -54,8 +60,8 @@ if [ "$mode" = teams ]; then
 fi
 
 case "$mode" in
-  build | fix | actors) [ $# -eq 1 ] || { printf 'usage: agent-trust.sh %s < facts.json\n' "$mode" >&2; exit 64; } ;;
-  *) printf 'usage: agent-trust.sh build|fix|actors < facts.json, or teams <org>\n' >&2; exit 64 ;;
+  build | fix | verdict | actors) [ $# -eq 1 ] || { printf 'usage: agent-trust.sh %s < facts.json\n' "$mode" >&2; exit 64; } ;;
+  *) printf 'usage: agent-trust.sh build|fix|verdict|actors < facts.json, or teams <org>\n' >&2; exit 64 ;;
 esac
 
 facts=$(cat)
@@ -89,6 +95,10 @@ case "$mode" in
           "refuse: the issue was written by @\(.author // "unknown"), who is not on the maintainers or contributors team"
         elif (.open_prs // 0) > 0 then
           "refuse: an open PR already closes this issue"
+        elif (.blockers_unreadable // false) then
+          "refuse: the issue'"'"'s blockers could not be read"
+        elif ((.blocked_by // []) | length) > 0 then
+          "refuse: blocked by open " + ((.blocked_by | map("#\(.)")) | join(", "))
         else "run" end'
     ;;
 
@@ -103,12 +113,26 @@ case "$mode" in
           if .event != "review" or ((.review_state // "") | ascii_downcase) != "changes_requested" then
             "skip: only the reviewer'"'"'s Changes-requested review starts an automatic fix"
           elif (.auto_rounds // 0) > $cap then
-            "skip: \($cap) automatic fix rounds already ran on this PR"
+            "park: \($cap) automatic fix rounds already ran on this PR"
           else "run" end
         elif member($sender) | not then
           "skip: @\($sender) is not on the maintainers or contributors team"
         elif .event == "review" and ((.review_state // "") | ascii_downcase) != "changes_requested" and ((.mentions // false) | not) then
           "skip: a review starts a fix only when it requests changes or mentions @claude"
         else "run" end'
+    ;;
+
+  verdict)
+    printf '%s' "$facts" | jq -r '
+      . as $root
+      | ((.app_bot // "") | ascii_downcase) as $bot
+      | [(.reviews // [])[]
+          | select((.user // "" | ascii_downcase) == $bot and .commit_id == $root.head_sha)
+          | select(.state == "CHANGES_REQUESTED" or .state == "COMMENTED" or .state == "APPROVED")]
+      | last as $r
+      | if $bot == "" then "block: the event names no reviewer"
+        elif $r == null then "block: the reviewer posted no review on this head"
+        elif $r.state == "CHANGES_REQUESTED" then "block: the reviewer requests changes"
+        else "ship" end'
     ;;
 esac

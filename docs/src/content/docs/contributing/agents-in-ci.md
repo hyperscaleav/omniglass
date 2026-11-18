@@ -12,9 +12,33 @@ ruleset, and none can merge ([ADR-2175](/architecture/decisions/#adr-2175-agent-
 
 | Workflow | Starts on | Does |
 | --- | --- | --- |
-| `agent-build.yml` | `run:dev-gha` on an issue | builds the ticket into a PR that closes it |
-| `agent-review.yml` | every same-repo PR that is opened, pushed, reopened or marked ready | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only and posts findings |
+| `agent-build.yml` | `run:dev-gha` on an issue | builds the ticket into a draft PR that closes it, and marks it ready when done |
+| `agent-review.yml` | every same-repo PR that is opened, pushed, reopened or marked ready | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only, posts findings, and passes its check only when it says ship |
 | `agent-fix.yml` | `@claude` on a PR, a review that requests changes, or agent-review's own Changes requested | pushes a fix to the PR's branch |
+
+## The flow
+
+Work moves through five stages, and the architect has three gates in them: starting the work,
+merging it, and releasing it. Everything between the gates runs without a person.
+
+1. **Backlog.** Ideas land as issues from anywhere: exploration, scoping, bug reports, the
+   agents' own follow-ups.
+2. **Todo.** The architect and the assistant groom the backlog about daily into tickets in the
+   standard format (`/define-work`), with a `tier:*` and `risk:*` label. A ticket that needs
+   another one first says so with GitHub's **blocked by** link, and a build refuses to start
+   while any blocker is open. **Gate 1:** applying `run:dev-gha` (or `run:dev-hah`) is the
+   approval to start.
+3. **Build and review.** The builder opens a draft PR, and marks it ready once `make test`
+   passes and `/ship-slice` is clean. Ready starts agent-review; its Changes requested starts
+   agent-fix, whose push starts agent-review again. The loop ends when the reviewer says ship,
+   which turns its check green, or after five fix rounds, when the PR parks with `needs-fred`.
+4. **Merge.** **Gate 2:** the architect approves a PR whose checks are all green, the reviewer's
+   verdict among them, and it squash-merges to `main`. There is no staging branch: `main` is
+   the integration branch, a feature that is not ready ships dark behind a flag, and a bad merge
+   is reverted on `main`.
+5. **Release.** A `release/x.y` branch is cut from `main` and tagged `rc.N`
+   ([release CI](/contributing/release-ci/)). Only fixes are cherry-picked onto it, never
+   features. **Gate 3:** the architect approves the final tag.
 
 ## Building a ticket
 
@@ -27,21 +51,27 @@ otherwise takes the label off and comments why:
   the project is rewritten by a maintainer first.
 - **No open PR already closes it**, and it does not also carry `run:dev-hah`. Both labels means
   neither builder runs.
+- **Nothing it is blocked by is still open.** Mark the order with GitHub's issue dependencies
+  (**blocked by** on the issue). If the list cannot be read, the build is refused, not guessed.
 
 The label comes off as the build starts, so applying it again is the retry. The run locks the
 issue's conversation to collaborators while it works, moves the ticket to In Progress, and
-follows CLAUDE.md like any session: test first, docs with the change, `/ship-slice`, a PR with
-the template that says `Closes #<n>`. Linking the PR moves the ticket to In Review. The model
-follows the ticket's tier: sonnet for `tier:jr` and `tier:mid`, opus for `tier:sr`, with a turn
-cap per tier and a 240 minute limit. A run that stops early comments on the issue with its
-link; one that runs out of room opens a draft PR saying what is left.
+follows CLAUDE.md like any session: test first, docs with the change, a draft PR with the
+template that says `Closes #<n>`, then `/ship-slice`, then ready for review. Linking the PR
+moves the ticket to In Review. The model follows the ticket's tier: sonnet for `tier:jr` and
+`tier:mid`, opus for `tier:sr`, with a turn cap per tier and a 240 minute limit. A run that
+stops early comments on the issue with its link; one that runs out of room leaves the PR a
+draft saying what is left.
 
 ## Review on every PR
 
 Every same-repo PR that is not a draft gets one adversarial review: inline findings, each with
 its failure scenario, and one summary review that requests changes or comments. It never
-approves, and its check, `agent-review`, is advisory. Opus reviews PRs that close a `risk:high`
-ticket, sonnet the rest. The reviewer reads the diff and the code, never the PR's conversation.
+approves. Its check, `agent-review`, is the verdict: red while its latest review on the PR's
+head requests changes, green when it says ship. The verdict is read with the default branch's
+`scripts/agent-trust.sh`, so a PR cannot rewrite its own check. The check is not in either main
+ruleset yet; making it required is the architect's call. Opus reviews PRs that close a
+`risk:high` ticket, sonnet the rest. The reviewer reads the diff and the code, never the PR's conversation.
 Harness PRs are reviewed too, so the two builders can be compared.
 
 ## Asking for a fix
@@ -54,8 +84,9 @@ review that started it. Write the ask the way you would to a colleague:
 @claude the retry in poller.go never backs off; add the backoff and a test for it
 ```
 
-When agent-review requests changes, agent-fix answers it automatically, at most twice per PR;
-after that it says so and waits for a person. Harness PRs (branch `agent/issue-<n>`) are left to
+When agent-review requests changes, agent-fix answers it automatically, up to five rounds per
+PR. After the fifth the PR parks: it gets the `needs-fred` label and a comment, and waits for a
+person to request changes, mention `@claude` or take it over. Harness PRs (branch `agent/issue-<n>`) are left to
 the harness, which answers your review there as before. Fork PRs are skipped.
 
 ## Who can start what

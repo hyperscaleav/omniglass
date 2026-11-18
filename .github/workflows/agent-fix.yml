@@ -4,7 +4,8 @@ name: agent-fix
 # - an @claude comment on a PR, or an @claude review comment, from a member of
 #   the maintainers or contributors team;
 # - a review from either team that requests changes or mentions @claude;
-# - a Changes-requested review from agent-review, at most twice per PR.
+# - a Changes-requested review from agent-review, up to five rounds per PR;
+#   after that the PR parks with needs-fred until a person steps in.
 # Everyone else's mention does nothing. Harness PRs (head branch agent/issue-*)
 # are left to the harness, and fork PRs are skipped. Every decision is
 # scripts/agent-trust.sh fix (tested in go test ./scripts/). The agent reads only
@@ -100,15 +101,17 @@ jobs:
             if [ "$tier" = "tier:sr" ]; then echo "model=opus"; else echo "model=sonnet"; fi
           } >> "$GITHUB_OUTPUT"
 
-      # Only the reviewer's capped rounds get a word back; anyone else's
-      # skipped mention gets none, so a stranger learns nothing from it.
-      - name: Say that the automatic rounds are used up
-        if: steps.gate.outputs.decision == 'skip' && steps.gate.outputs.from_app == 'true' && contains(steps.gate.outputs.reason, 'automatic fix rounds')
+      # The reviewer and the fixer could not agree in five rounds: park the PR
+      # for the architect. Only this gets a word back; a skipped mention from
+      # anyone else gets none, so a stranger learns nothing from it.
+      - name: Park the PR for a person
+        if: steps.gate.outputs.decision == 'park'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
+          gh pr edit "$NUMBER" --repo "$REPO" --add-label needs-fred
           gh pr comment "$NUMBER" --repo "$REPO" \
-            --body "agent-fix: the automatic fix rounds on this PR are used up. Request changes or mention @claude to run another."
+            --body "agent-fix: five automatic fix rounds did not satisfy agent-review, so this PR waits for a person (needs-fred). Request changes or mention @claude to run another round."
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.gate.outputs.decision == 'run'
