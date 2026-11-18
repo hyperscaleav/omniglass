@@ -527,7 +527,7 @@ components:
           description: The component's uuid, the stable form of component
           type: string
         dedup_key:
-          description: "The condition identity: one open alarm per (component, dedup_key)"
+          description: "What the alarm is about: one open alarm per (component, dedup_key)"
           type: string
         id:
           type: string
@@ -546,10 +546,10 @@ components:
           description: The severity level the alarm was raised at, by name (see /severity-levels)
           type: string
         snoozed_by:
-          description: Who snoozed the condition, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)
+          description: Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name)
           type: string
         snoozed_until:
-          description: "Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"
+          description: "Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at"
           format: date-time
           type: string
       required:
@@ -635,7 +635,7 @@ components:
           description: "The alarm edge a notification is about: raised or cleared"
           type: string
         what:
-          description: The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed)
+          description: The event's type (e.g. rule-fired), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its alarm was snoozed)
           type: string
       required:
         - at
@@ -2679,7 +2679,7 @@ components:
           $ref: "#/components/schemas/CriteriaInput"
           description: "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)"
         clear_event_type:
-          description: The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none
+          description: The event type the rule writes when it clears, by name (rule-cleared is the generic one); absent, it writes none
           type: string
         clear_sustain:
           description: A Go duration; empty is 0s
@@ -2692,9 +2692,9 @@ components:
           type: boolean
         fire_criteria:
           $ref: "#/components/schemas/CriteriaInput"
-          description: "The criteria that starts the condition: {expr}, or the short form {op, value}"
+          description: "The criteria the rule fires on: {expr}, or the short form {op, value}"
         fire_event_type:
-          description: The event type the rule writes when its condition starts, by name (condition-started is the generic one)
+          description: The event type the rule writes when it fires, by name (rule-fired is the generic one)
           minLength: 1
           type: string
         fire_sustain:
@@ -4301,7 +4301,7 @@ components:
           format: int64
           type: integer
         understaffed:
-          description: How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure
+          description: How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own health. See the health read's short for the occupancy-aware figure
           format: int64
           type: integer
       required:
@@ -4671,17 +4671,13 @@ components:
           type: string
         clear_criteria:
           $ref: "#/components/schemas/CriteriaBody"
-          description: When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria
+          description: When the sample meets this for clear_sustain, it clears (and the alarm clears); absent, the negation of fire_criteria
         clear_event_type:
-          description: The event type the rule writes when its condition ends, by name; absent, it writes none
+          description: The event type the rule writes when it clears, by name; absent, it writes none
           type: string
         clear_sustain:
           description: How long the clear criteria must hold, a Go duration
           type: string
-        conditions_in_force:
-          description: How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
-          format: int64
-          type: integer
         criteria_error:
           $ref: "#/components/schemas/CriteriaErrorBody"
           description: "Why the rule's stored criteria do not compile (its key's data type changed under them, a row the backfill left in short form, or an expression a newer diagnostic refuses); absent when they compile. While present the rule holds: it judges nothing"
@@ -4698,13 +4694,17 @@ components:
           type: boolean
         fire_criteria:
           $ref: "#/components/schemas/CriteriaBody"
-          description: When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity)
+          description: When the sample meets this for fire_sustain, the rule fires (and it opens an alarm when it names a severity)
         fire_event_type:
-          description: The event type the rule writes when its condition starts, by name
+          description: The event type the rule writes when it fires, by name
           type: string
         fire_sustain:
           description: How long the fire criteria must hold, a Go duration (0s fires at once)
           type: string
+        firing:
+          description: How many firings the rule holds right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them)
+          format: int64
+          type: integer
         id:
           description: The rule's uuid, the stable form of name
           type: string
@@ -4764,7 +4764,7 @@ components:
         - version
         - open_alarms
         - pending_streaks
-        - conditions_in_force
+        - firing
       type: object
     EventRuleStateOutputBody:
       additionalProperties: false
@@ -4776,16 +4776,16 @@ components:
           format: uri
           readOnly: true
           type: string
-        conditions:
-          description: The conditions the rule holds in force, informational or not
-          items:
-            $ref: "#/components/schemas/RuleConditionBody"
-          type:
-            - array
-            - "null"
         criteria_error:
           $ref: "#/components/schemas/CriteriaErrorBody"
           description: Why the rule's stored criteria do not compile; absent when they compile. While present the rule holds
+        firings:
+          description: The rule's firings, informational or not
+          items:
+            $ref: "#/components/schemas/RuleFiringBody"
+          type:
+            - array
+            - "null"
         last_judged_at:
           description: When an ingested sample was last judged by the rule, to within 5s; absent when it never has been
           format: date-time
@@ -4805,7 +4805,7 @@ components:
             - array
             - "null"
       required:
-        - conditions
+        - firings
         - open
         - pending
       type: object
@@ -7619,7 +7619,7 @@ components:
           format: date-time
           type: string
         status:
-          description: "queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm's condition was snoozed (the reason in last_error)"
+          description: "queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm was snoozed (the reason in last_error)"
           enum:
             - queued
             - sent
@@ -9000,13 +9000,13 @@ components:
           type: string
         clear_criteria:
           $ref: "#/components/schemas/CriteriaInput"
-          description: The criteria it ends on; absent, the negation of fire_criteria
+          description: The criteria it clears on; absent, the negation of fire_criteria
         clear_sustain:
           description: Accepted and ignored, like fire_sustain
           type: string
         fire_criteria:
           $ref: "#/components/schemas/CriteriaInput"
-          description: "The criteria its condition starts on: {expr}, or the short form {op, value}"
+          description: "The criteria it fires on: {expr}, or the short form {op, value}"
         fire_sustain:
           description: "Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone"
           type: string
@@ -9675,7 +9675,7 @@ components:
           readOnly: true
           type: string
         dedup_key:
-          description: "The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition"
+          description: "What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing"
           type: string
         message:
           description: What is wrong, for the operator reading it later
@@ -10646,7 +10646,7 @@ components:
         - permission_universe
         - roles
       type: object
-    RuleConditionBody:
+    RuleFiringBody:
       additionalProperties: false
       properties:
         component:
@@ -10656,10 +10656,10 @@ components:
           description: The component's uuid
           type: string
         instance:
-          description: The sample instance (an endpoint) the condition is on
+          description: The sample instance (an endpoint) it fired on
           type: string
         since:
-          description: When the condition came into force
+          description: When the rule fired there
           format: date-time
           type: string
       required:
@@ -12028,7 +12028,7 @@ components:
           readOnly: true
           type: string
         duration:
-          description: "How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer"
+          description: "How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer"
           type: string
       required:
         - duration
@@ -13621,7 +13621,7 @@ components:
           $ref: "#/components/schemas/CriteriaInput"
           description: "The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire)"
         clear_event_type:
-          description: The event type the rule writes when its condition ends, by name; empty writes none
+          description: The event type the rule writes when it clears, by name; empty writes none
           type: string
         clear_negates:
           description: Drop the clear criteria, so the rule clears on the negation of its fire criteria
@@ -13637,9 +13637,9 @@ components:
           type: boolean
         fire_criteria:
           $ref: "#/components/schemas/CriteriaInput"
-          description: "The criteria that starts the condition: {expr}, or the short form {op, value}"
+          description: "The criteria the rule fires on: {expr}, or the short form {op, value}"
         fire_event_type:
-          description: The event type the rule writes when its condition starts, by name; it cannot be emptied
+          description: The event type the rule writes when it fires, by name; it cannot be emptied
           type: string
         fire_sustain:
           description: How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s
@@ -16278,12 +16278,12 @@ paths:
           schema:
             description: Include cleared alarms, so the list is the history rather than what is wrong now
             type: boolean
-        - description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended
+        - description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended
           explode: false
           in: query
           name: unacknowledged
           schema:
-            description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended
+            description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended
             type: boolean
       responses:
         "200":
@@ -16302,7 +16302,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: component:read
     post:
-      description: "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: raise-component-alarm
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -16400,7 +16400,7 @@ paths:
       x-omniglass-permission: alarm:acknowledge
   /components/{name}/alarms/{id}:snooze:
     post:
-      description: "Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403."
+      description: "Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403."
       operationId: snooze-component-alarm
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -16410,12 +16410,12 @@ paths:
           schema:
             description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
             type: string
-        - description: "The alarm id: any alarm of the condition to snooze"
+        - description: "The alarm id: any alarm of the dedup key to snooze"
           in: path
           name: id
           required: true
           schema:
-            description: "The alarm id: any alarm of the condition to snooze"
+            description: "The alarm id: any alarm of the dedup key to snooze"
             type: string
       requestBody:
         content:
@@ -16436,7 +16436,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Snooze an alarm's condition
+      summary: Snooze an alarm
       x-omniglass-mcp: {}
       x-omniglass-permission: alarm:snooze
   /components/{name}/alarms/{id}:timeline:
@@ -16476,7 +16476,7 @@ paths:
       x-omniglass-permission: alarm:read
   /components/{name}/alarms/{id}:unsnooze:
     post:
-      description: "Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is."
+      description: "Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is."
       operationId: unsnooze-component-alarm
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -16506,7 +16506,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: End an alarm's condition's snooze
+      summary: End an alarm's snooze
       x-omniglass-mcp: {}
       x-omniglass-permission: alarm:snooze
   /components/{name}/commands:
@@ -18341,7 +18341,7 @@ paths:
       x-omniglass-permission: endpoint:update
   /event-rules:
     get:
-      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
+      description: "Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read."
       operationId: list-event-rule
       responses:
         "200":
@@ -18360,7 +18360,7 @@ paths:
       x-omniglass-mcp: {}
       x-omniglass-permission: rule:read
     post:
-      description: Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+      description: Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
       operationId: create-event-rule
       requestBody:
         content:
@@ -18467,7 +18467,7 @@ paths:
       x-omniglass-permission: rule:update
   /event-rules/{name}/state:
     get:
-      description: "What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read."
+      description: "What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read."
       operationId: get-event-rule-state
       parameters:
         - description: The rule's name
@@ -18495,7 +18495,7 @@ paths:
       x-omniglass-permission: rule:read
   /event-rules/{name}:rename:
     post:
-      description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant."
+      description: "Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant."
       operationId: rename-event-rule
       parameters:
         - description: The rule's current name
@@ -20410,7 +20410,7 @@ paths:
       x-omniglass-permission: notification:read
   /notifications/{id}:retry:
     post:
-      description: Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+      description: Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
       operationId: retry-notification
       parameters:
         - description: The notification's uuid
@@ -22630,7 +22630,7 @@ paths:
       x-omniglass-permission: system:update
   /systems/{name}/alarms:
     get:
-      description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404."
+      description: "Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404."
       operationId: list-system-alarms
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)

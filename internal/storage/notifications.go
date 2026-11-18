@@ -32,7 +32,7 @@ const (
 	NotificationSent   = "sent"
 	NotificationFailed = "failed"
 	// NotificationSuppressed is a row written but never sent, because its
-	// alarm's condition is snoozed (#1318): terminal, its reason in
+	// alarm is snoozed (#1318): terminal, its reason in
 	// last_error. The tick never drains it, the inbox never shows it, and
 	// :retry refuses it.
 	NotificationSuppressed = "suppressed"
@@ -271,12 +271,12 @@ func (p *PG) queueNotifications(ctx context.Context, tx pgx.Tx, componentID, ala
 			}
 		}
 	}
-	// A snoozed condition (#1318, ADR-1318): one lookup once some rule fires,
+	// A snoozed alarm (#1318, ADR-1318): one lookup once some rule fires,
 	// and every row a firing rule would send or deliver is written suppressed
 	// with the reason instead, on every channel. A rule that failed stays
 	// failed, so a broken rule is still visible during a snooze.
 	if len(fires) > 0 {
-		reason, err := conditionSnooze(ctx, tx, alarmID, true)
+		reason, err := alarmSnooze(ctx, tx, alarmID, true)
 		if err != nil {
 			return err
 		}
@@ -571,12 +571,12 @@ func (p *PG) DeliverNext(ctx context.Context, send SendFunc) (bool, error) {
 	}
 	_ = json.Unmarshal(factsRaw, &ns.Facts)
 	// The re-check where a row waits (#1318, the pattern of ADR-1341 point
-	// 3): a row of a condition snoozed since it was queued, a retry waiting
+	// 3): a row of an alarm snoozed since it was queued, a retry waiting
 	// out its backoff included, is suppressed with the reason, not sent.
-	// Read without the condition's lock: the send is already under way, and
+	// Read without the snooze lock: the send is already under way, and
 	// holding the lock across it would make an operator's snooze wait out a
 	// dead receiver's timeout.
-	suppressed, err := conditionSnooze(ctx, tx, ns.AlarmID, false)
+	suppressed, err := alarmSnooze(ctx, tx, ns.AlarmID, false)
 	if err != nil {
 		return true, err
 	}

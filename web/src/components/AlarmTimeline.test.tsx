@@ -43,11 +43,11 @@ function mount(me: Me) {
 // Every status a notification can stand at, beside an event and an audit
 // line, as the architect's mock lays them out.
 const allStatuses = () => [
-  { at: ago(90_000), kind: "event", what: "condition-started", rule: "lobby-video", message: "no video" },
+  { at: ago(90_000), kind: "event", what: "rule-fired", rule: "lobby-video", message: "no video" },
   { at: ago(90_000), kind: "notification", what: "sent", action_rule: "page-ops", target: "ops-chat", transition: "raised", notification: notified, attempts: 1, message: "[High] Lobby display: no video" },
   { at: ago(80_000), kind: "notification", what: "failed", action_rule: "page-ops", target: "ops-chat", transition: "raised", notification: failed, attempts: 3, error: "the receiver answered 503", message: "[High] Lobby display: no video" },
   { at: ago(70_000), kind: "audit", what: "snooze", actor: "alice" },
-  { at: ago(60_000), kind: "notification", what: "suppressed", action_rule: "page-ops", target: "ops-chat", transition: "cleared", notification: snoozed, error: "the condition is snoozed until 2026-10-29 14:30 UTC by root", message: "[Cleared] Lobby display: no video" },
+  { at: ago(60_000), kind: "notification", what: "suppressed", action_rule: "page-ops", target: "ops-chat", transition: "cleared", notification: snoozed, error: "the alarm is snoozed until 2026-10-29 14:30 UTC by root", message: "[Cleared] Lobby display: no video" },
   { at: ago(50_000), kind: "notification", what: "queued", action_rule: "page-ops", target: "ops-chat", transition: "cleared", notification: queued, attempts: 2, message: "[Cleared] Lobby display: no video" },
 ];
 
@@ -85,7 +85,7 @@ describe("AlarmTimeline notifications", () => {
   it("gives a failed row its error and attempts, and a snoozed row its reason, muted", async () => {
     const lis = await rows(viewer, allStatuses());
     expect(lis[2].textContent).toContain("the receiver answered 503 (3 attempts)");
-    const why = Array.from(lis[4].querySelectorAll("span")).find((s) => s.textContent === "the condition is snoozed until 2026-10-29 14:30 UTC by root");
+    const why = Array.from(lis[4].querySelectorAll("span")).find((s) => s.textContent === "the alarm is snoozed until 2026-10-29 14:30 UTC by root");
     expect(why, "no snooze reason").toBeTruthy();
     expect(why!.className).toContain("text-base-content/45");
     // Neither a sent nor a queued row (even one on its second attempt) carries a reason.
@@ -103,7 +103,7 @@ describe("AlarmTimeline notifications", () => {
 
   it("keeps event and audit lines as sentences", async () => {
     const lis = await rows(viewer, allStatuses());
-    expect(lis[0].textContent).toContain("condition-started");
+    expect(lis[0].textContent).toContain("rule-fired");
     expect(bySpan(lis[0])?.textContent).toBe("by rule lobby-video");
     expect(pillOf(lis[0])).toBeNull();
     expect(lis[3].textContent).toContain("snoozed");

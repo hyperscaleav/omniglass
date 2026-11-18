@@ -8,13 +8,13 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// TestAlarmOneOpenPerCondition pins #465 (ADR-0075): the one-open invariant is
-// per (component, condition), the condition identified by a raiser-supplied
-// dedup key. Raising the same condition twice returns the existing open alarm
-// instead of a duplicate; different conditions coexist on one component (each
+// TestAlarmOneOpenPerIdentity pins #465 (ADR-0075): the one-open invariant is
+// per alarm identity (component, dedup key), the key supplied by the raiser.
+// Raising the same identity twice returns the existing open alarm
+// instead of a duplicate; different identities coexist on one component (each
 // impairs the component's own verdict wholesale, #626); clearing reopens the
-// key for a fresh incident.
-func TestAlarmOneOpenPerCondition(t *testing.T) {
+// key for a fresh alarm.
+func TestAlarmOneOpenPerIdentity(t *testing.T) {
 	t.Parallel()
 	gw, _ := secretGateway(t)
 	ctx := context.Background()
@@ -44,10 +44,10 @@ func TestAlarmOneOpenPerCondition(t *testing.T) {
 		Severity: "warning", Message: "fan degraded", DedupKey: "fan.degraded",
 	})
 	if err != nil {
-		t.Fatalf("raise other condition: %v", err)
+		t.Fatalf("raise other identity: %v", err)
 	}
 	if other.ID == first.ID {
-		t.Error("a different condition deduped onto the first alarm; the key must be per condition, not per component")
+		t.Error("a different identity deduped onto the first alarm; the key must be per dedup key, not per component")
 	}
 
 	if err := gw.ClearAlarm(ctx, "", "codec-1", first.ID); err != nil {
@@ -60,6 +60,6 @@ func TestAlarmOneOpenPerCondition(t *testing.T) {
 		t.Fatalf("raise after clear: %v", err)
 	}
 	if fresh.ID == first.ID {
-		t.Error("a cleared condition must open a NEW incident row (one incident, new row per open)")
+		t.Error("a cleared alarm's identity must open a NEW alarm row (one row per open)")
 	}
 }

@@ -27,7 +27,7 @@
     {
       "table": "alarm_snooze",
       "shape": "id only",
-      "reason": "a snooze on an alarm condition, keyed by component and dedup key; it is set and ended through an alarm, never named",
+      "reason": "a snooze on an alarm, keyed by component and dedup key; it is set and ended through an alarm, never named",
       "labelled": false
     },
     {
@@ -151,9 +151,9 @@
       "labelled": true
     },
     {
-      "table": "event_rule_condition",
+      "table": "event_rule_firing",
       "shape": "id only",
-      "reason": "a rule's condition in force, keyed by rule, component and instance; nothing addresses it by name",
+      "reason": "one place a rule is firing, keyed by rule, component and instance; nothing addresses it by name",
       "labelled": false
     },
     {

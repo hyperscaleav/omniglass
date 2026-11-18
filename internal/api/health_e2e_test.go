@@ -239,7 +239,7 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("member verdict after clearing = %q, want healthy", v)
 	}
 	// A recently cleared alarm stays on the system's read: Activity explains a
-	// past incident with it.
+	// past unhealthy stretch with it.
 	if got := systemAlarms(); len(got) != 1 || got[0].ID != raised.ID || got[0].Active {
 		t.Fatalf("system alarms after clearing = %+v, want the cleared row kept", got)
 	}

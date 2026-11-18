@@ -245,18 +245,18 @@ type Component struct {
 	Location string `yaml:"location"`
 }
 
-// Alarm is one example condition standing open against a component, so a fresh
+// Alarm is one example alarm standing open against a component, so a fresh
 // dev fleet has something actually wrong in it. Without one, every shortfall in
 // the seed is a commissioning gap and no surface ever renders a failure: the
 // fleet reads healthy and incomplete and nothing else, which teaches an
 // operator (and a reviewer looking at a screenshot) that the platform cannot
 // show a fault.
 //
-// DedupKey is the condition identity, so a re-raise on a second devseed run
+// DedupKey names what the alarm is about, so a re-raise on a second devseed run
 // returns the alarm already standing rather than a duplicate. That is what makes
 // this section idempotent without a read-before-write of its own.
 //
-// AppliesTo names the component types the condition is a template for (a type
+// AppliesTo names the component types the alarm is a template for (a type
 // matches itself and its descendants), so the degraded scenario never plants a
 // lamp warning on a microphone. Empty means any component. It only steers the
 // scenario's expansion; the fixture's own alarms name their component directly.
@@ -733,7 +733,7 @@ func runDoc(ctx context.Context, gw storage.Gateway, actorID string, doc Doc, op
 	// Alarms: raised last of the fleet writes, since the component must exist and
 	// be staffed for the alarm to reach anything above it. RaiseAlarm recomputes
 	// health in the same transaction, so the verdicts the console reads are moved
-	// by this the moment it lands, exactly as they would be by a real condition.
+	// by this the moment it lands, exactly as they would be by a real fault.
 	// The fixture references the component BY KEY, resolved to its uuid here:
 	// most components are platform-named, so the minted name is not the fixture's
 	// to know, and a bare name could be ambiguous across rooms anyway.
@@ -1325,7 +1325,7 @@ func seedBreadthRTT(ctx context.Context, gw storage.Gateway, compIDs map[string]
 // every system whose standard declares them (the RTT series wait for their
 // endpoints, seedBreadthRTT), and a raised-then-cleared alarm pair so the
 // history surfaces show a healed
-// incident beside the standing ones. Sentinel: the breadth marker event on
+// alarm beside the standing ones. Sentinel: the breadth marker event on
 // the first breadth bar; present means the whole block ran.
 func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID string, compIDs, sysIDs map[string]string) error {
 	first, ok := compIDs["huddle-bar"]
@@ -1421,7 +1421,7 @@ func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID strin
 		return fmt.Errorf("devseed: breadth samples: %w", err)
 	}
 
-	// A healed incident: raised and cleared in the same seed, so the history
+	// A healed alarm: raised and cleared in the same seed, so the history
 	// surfaces show a cleared row beside the standing alarms. Honest about
 	// its age (the record cannot be backdated through the write path).
 	if hl, ok := compIDs["wl3-c1a"]; ok {

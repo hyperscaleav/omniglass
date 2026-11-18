@@ -760,7 +760,7 @@ key pin is trusted only from the endpoint's audited `:retry`, whose row carries 
 legacy `:retry` pin was recognized by its audit row and stamped. A stored driver spec or derived task
 never hands an outpost an emit the ruling refuses (the worklist strips it), a contract cannot declare a
 reserved key, and at boot the server judges again every event rule series a retirement took rows
-from (so a condition a retired row raised lets go) and names every stored declaration the ruling
+from (so a firing a retired row raised lets go) and names every stored declaration the ruling
 refuses so an operator can mend it.
 
 The gateway also accepts a **query tracer** (`storage.WithQueryTracer`), installed on the pool's
