@@ -50,7 +50,7 @@ case "$command" in
       exit 2
     fi
     # Block any force push that targets main, from any branch.
-    if echo "$command" | grep -qE '(--force|--force-with-lease|-f[[:space:]])' && \
+    if echo "$command" | grep -qE '(--force|--force-with-lease|-f($|[[:space:]]))' && \
        echo "$command" | grep -qE '\bmain\b'; then
       printf 'Blocked: force push to main is not allowed (see CLAUDE.md).\n' >&2
       exit 2

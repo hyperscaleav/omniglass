@@ -66,6 +66,30 @@ func TestCODEOWNERSPathsExist(t *testing.T) {
 	}
 }
 
+func TestIsWildcardOnly(t *testing.T) {
+	cases := []struct {
+		pattern string
+		want    bool
+	}{
+		{"*", true},
+		{"**", true},
+		{"*.md", true},
+		{"/docs/src/content/**", true},
+		{"/docs/*.md", true},
+		{"/CLAUDE.md", false},
+		{"/.github/", false},
+		{"/internal/build/", false},
+	}
+	for _, c := range cases {
+		t.Run(c.pattern, func(t *testing.T) {
+			got := isWildcardOnly(c.pattern)
+			if got != c.want {
+				t.Errorf("isWildcardOnly(%q) = %v, want %v", c.pattern, got, c.want)
+			}
+		})
+	}
+}
+
 // isWildcardOnly reports whether a CODEOWNERS pattern is a pure wildcard
 // (contains no path separator and is or contains only glob characters).
 // Such patterns match by content rather than by a single directory path
@@ -73,8 +97,8 @@ func TestCODEOWNERSPathsExist(t *testing.T) {
 func isWildcardOnly(pattern string) bool {
 	// Remove leading slash before checking.
 	p := strings.TrimPrefix(pattern, "/")
-	// If there is no slash left and the pattern is entirely glob chars, skip.
-	if !strings.Contains(p, "/") && strings.ContainsAny(p, "*?[") {
+	// If the pattern contains any glob character, it cannot be stat-checked.
+	if strings.ContainsAny(p, "*?[") {
 		return true
 	}
 	return false

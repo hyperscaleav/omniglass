@@ -87,6 +87,12 @@ func TestGuardMainBranchHook(t *testing.T) {
 			blocked: true,
 		},
 		{
+			name:    "force push with trailing -f to main is blocked",
+			branch:  "feat/my-feature",
+			command: "git push origin main -f",
+			blocked: true,
+		},
+		{
 			name:    "git status on main passes",
 			branch:  "main",
 			command: "git status",
