@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/assistant/provider"
 	"github.com/hyperscaleav/omniglass/internal/auth"
 	mcpserver "github.com/hyperscaleav/omniglass/internal/mcp"
+	"github.com/hyperscaleav/omniglass/internal/mcp/skills"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -56,6 +58,19 @@ type aguiContextInput struct {
 	Value       string   `json:"value" maxLength:"2000" doc:"A name or dotted address, or a route and its query; never a rendered value"`
 }
 
+// aguiSkillInput is an embedded skill the run carries out (#2122): its
+// prompt, with the arguments given, is what the model is sent.
+type aguiSkillInput struct {
+	_         struct{}          `additionalProperties:"true"`
+	Name      string            `json:"name" maxLength:"100" doc:"The skill, as omniglass mcp skill lists it"`
+	Arguments map[string]string `json:"arguments,omitempty" required:"false" doc:"The skill's arguments, by name"`
+}
+
+type aguiForwardedInput struct {
+	_     struct{}        `additionalProperties:"true"`
+	Skill *aguiSkillInput `json:"skill,omitempty" required:"false" doc:"An embedded skill to run, its prompt ahead of the person's message"`
+}
+
 type runAssistantConversationInput struct {
 	Name string `path:"name" doc:"Your conversation's name"`
 	Body struct {
@@ -65,6 +80,7 @@ type runAssistantConversationInput struct {
 		Messages []aguiMessageInput `json:"messages,omitempty" required:"false" doc:"The client's view of the conversation; only its last user message is read, as the prompt"`
 		Resume   []aguiResumeInput  `json:"resume,omitempty" required:"false" doc:"The answer to the interrupt the last run ended on"`
 		Context  []aguiContextInput `json:"context,omitempty" required:"false" maxItems:"20" doc:"What the person handed over with the prompt, read as data ahead of it; ignored on a resume"`
+		Forward  aguiForwardedInput `json:"forwardedProps,omitempty" required:"false" doc:"An embedded skill to run; ignored on a resume"`
 	}
 }
 
@@ -80,7 +96,8 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 			"The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, " +
 			"and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. " +
 			"Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. " +
-				"A server with no model is a 503. Gated by assistant:use.",
+			"forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. " +
+			"A server with no model is a 503. Gated by assistant:use.",
 	}, "assistant", "use"), func(ctx context.Context, in *runAssistantConversationInput) (*huma.StreamResponse, error) {
 		if o.omnibotModel == nil {
 			return nil, huma.Error503ServiceUnavailable("omnibot has no model on this server")
@@ -98,6 +115,11 @@ func registerAssistantRunRoute(api huma.API, a *authenticator, gw storage.Gatewa
 			return nil, huma.Error500InternalServerError("read the conversation")
 		}
 		prompt := lastUserText(in.Body.Messages)
+		if sk := in.Body.Forward.Skill; sk != nil && len(in.Body.Resume) == 0 {
+			if prompt, err = skillPrompt(*sk, prompt); err != nil {
+				return nil, huma.Error422UnprocessableEntity(err.Error())
+			}
+		}
 		if len(in.Body.Resume) == 0 && prompt == "" {
 			return nil, huma.Error422UnprocessableEntity("a run needs a user message or a resume")
 		}
@@ -266,6 +288,23 @@ func lastUserText(msgs []aguiMessageInput) string {
 		return strings.TrimSpace(b.String())
 	}
 	return ""
+}
+
+// skillPrompt is the prompt a skill run sends: the embedded skill's own, with
+// its arguments, then the person's message when they wrote one.
+func skillPrompt(in aguiSkillInput, message string) (string, error) {
+	s, ok := skills.Get(in.Name)
+	if !ok {
+		return "", fmt.Errorf("no skill is named %q", in.Name)
+	}
+	p, err := s.Prompt(in.Arguments)
+	if err != nil {
+		return "", err
+	}
+	if message != "" {
+		p = strings.TrimRight(p, "\n") + "\n\nTheir message:\n" + message
+	}
+	return p, nil
 }
 
 func handover(in []aguiContextInput) []assistant.Handover {

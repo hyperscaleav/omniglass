@@ -430,6 +430,28 @@ export type AguiContextInput = {
   [key: string]: unknown;
  };
 
+/**
+ * The skill's arguments, by name
+ */
+export type AguiSkillInputArguments = {[key: string]: string};
+
+export type AguiSkillInput = {
+  /** The skill's arguments, by name */
+  arguments?: AguiSkillInputArguments;
+  /**
+     * The skill, as omniglass mcp skill lists it
+     * @maxLength 100
+     */
+  name: string;
+  [key: string]: unknown;
+ };
+
+export type AguiForwardedInput = {
+  /** An embedded skill to run, its prompt ahead of the person's message */
+  skill?: AguiSkillInput;
+  [key: string]: unknown;
+ };
+
 export type AguiMessageInput = {
   /** Text, or an array of parts whose text parts are read */
   content?: unknown;
@@ -7589,6 +7611,8 @@ export type RunAssistantConversationInputBody = {
      * @nullable
      */
   context?: AguiContextInput[] | null;
+  /** An embedded skill to run; ignored on a resume */
+  forwardedProps?: AguiForwardedInput;
   /**
      * The client's view of the conversation; only its last user message is read, as the prompt
      * @nullable
@@ -9809,7 +9833,7 @@ export const getRunAssistantConversationUrl = (name: string,) => {
 }
 
 /**
- * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. A server with no model is a 503. Gated by assistant:use.
+ * Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {"stopped": "step_limit", "steps": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use.
  * @summary Run omnibot on one of your conversations
  */
 export const runAssistantConversation = async (name: string,

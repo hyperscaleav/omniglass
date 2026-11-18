@@ -1,15 +1,28 @@
-import { For, Show, createMemo, createSignal, createEffect, createUniqueId } from "solid-js";
+import {
+  For,
+  Show,
+  createMemo,
+  createSignal,
+  createEffect,
+  createUniqueId,
+} from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import { useNavigate } from "@solidjs/router";
 import { navItems, filterNav } from "../lib/nav";
 import { entryHref, visibleGroups } from "../lib/catalog";
 import { useMe, can } from "../lib/auth";
+import { tray, triageCall, type Subject } from "../lib/handover";
 import { Search, ArrowRight, Bot } from "./icons";
 
 // The ⌘K command palette: a global jump across the whole app (distinct from a
 // page's own filter). Built on Kobalte Dialog (focus-trap, Esc, scroll-lock for
 // free). Arrow keys move the active row, Enter navigates.
-export type Command = { label: string; path: string; group?: string; section?: string };
+export type Command = {
+  label: string;
+  path: string;
+  group?: string;
+  section?: string;
+};
 
 // buildCommands is the palette's source: every destination the caller may
 // reach, flattened to one searchable list.
@@ -42,29 +55,60 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
   const catalog: Command[] = visibleGroups(allow).flatMap((g) =>
     g.entries
       .filter((e) => e.path)
-      .map((e) => ({ label: e.label, path: entryHref(e), group: `Catalog · ${g.header}`, section: g.header })),
+      .map((e) => ({
+        label: e.label,
+        path: entryHref(e),
+        group: `Catalog · ${g.header}`,
+        section: g.header,
+      })),
   );
   return [...rail, ...catalog];
 }
 
 // matches is the palette filter: label, group, or section.
 export const matches = (c: Command, q: string): boolean =>
-  c.label.toLowerCase().includes(q) || (c.group ?? "").toLowerCase().includes(q) || (c.section ?? "").toLowerCase().includes(q);
+  c.label.toLowerCase().includes(q) ||
+  (c.group ?? "").toLowerCase().includes(q) ||
+  (c.section ?? "").toLowerCase().includes(q);
 
-// An ask row hands the palette's query to omnibot (#1167) instead of jumping.
+// An ask row hands the palette's query to omnibot (#1167) instead of jumping;
+// a triage row runs the triage-alarm skill on an alarm gathered into omnibot's
+// tray (#2122).
 export type AskRow = { label: string; ask: true };
-export type Row = Command | AskRow;
+export type TriageRow = { label: string; triage: Subject };
+export type Row = Command | AskRow | TriageRow;
 
-// withAsk ends the results with the ask row, for a person who may run omnibot.
-export function withAsk(results: Command[], q: string, allowed: boolean): Row[] {
+// withAsk ends the results with a triage row for each gathered alarm the query
+// matches, then the ask row, for a person who may run omnibot.
+export function withAsk(
+  results: Command[],
+  q: string,
+  allowed: boolean,
+  gathered: Subject[] = [],
+): Row[] {
   if (!allowed) return results;
-  return [...results, { label: q ? `Ask omnibot: ${q}` : "Ask omnibot", ask: true }];
+  const triage = gathered
+    .filter((s) => triageCall(s))
+    .map((s) => ({ label: `Triage alarm ${s.ref}`, triage: s }))
+    .filter((r) => r.label.toLowerCase().includes(q.toLowerCase()));
+  return [
+    ...results,
+    ...triage,
+    { label: q ? `Ask omnibot: ${q}` : "Ask omnibot", ask: true },
+  ];
 }
 
-export default function CommandPalette(props: { open: boolean; onClose: () => void; onAsk?: (prompt: string) => void }) {
+export default function CommandPalette(props: {
+  open: boolean;
+  onClose: () => void;
+  onAsk?: (prompt: string) => void;
+  onTriage?: (alarm: Subject) => void;
+}) {
   const navigate = useNavigate();
   const me = useMe();
-  const commands = createMemo(() => buildCommands((tokens) => can(me.data, ...tokens)));
+  const commands = createMemo(() =>
+    buildCommands((tokens) => can(me.data, ...tokens)),
+  );
   const [query, setQuery] = createSignal("");
   const [active, setActive] = createSignal(0);
   const listId = createUniqueId();
@@ -74,7 +118,12 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
     const raw = query().trim();
     const q = raw.toLowerCase();
     const found = q ? commands().filter((c) => matches(c, q)) : commands();
-    return withAsk(found, raw, !!props.onAsk && can(me.data, "assistant", "use"));
+    return withAsk(
+      found,
+      raw,
+      !!props.onAsk && can(me.data, "assistant", "use"),
+      props.onTriage ? tray() : [],
+    );
   });
 
   // Reset query + selection each time it opens; keep active in range as results change.
@@ -85,13 +134,15 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
     }
   });
   createEffect(() => {
-    if (active() >= results().length) setActive(Math.max(0, results().length - 1));
+    if (active() >= results().length)
+      setActive(Math.max(0, results().length - 1));
   });
 
   const go = (c: Row | undefined) => {
     if (!c) return;
     props.onClose();
     if ("ask" in c) props.onAsk?.(query().trim());
+    else if ("triage" in c) props.onTriage?.(c.triage);
     else navigate(c.path);
   };
 
@@ -125,7 +176,9 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
                 aria-expanded={results().length > 0}
                 aria-controls={listId}
                 aria-autocomplete="list"
-                aria-activedescendant={results().length ? optId(active()) : undefined}
+                aria-activedescendant={
+                  results().length ? optId(active()) : undefined
+                }
                 onInput={(e) => setQuery(e.currentTarget.value)}
                 onKeyDown={onKey}
                 autofocus
@@ -133,7 +186,14 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
               <kbd class="kbd kbd-sm">esc</kbd>
             </div>
             <ul id={listId} role="listbox" class="max-h-80 overflow-y-auto p-2">
-              <Show when={results().length > 0} fallback={<li class="px-3 py-6 text-center text-sm text-base-content/40">No matches</li>}>
+              <Show
+                when={results().length > 0}
+                fallback={
+                  <li class="px-3 py-6 text-center text-sm text-base-content/40">
+                    No matches
+                  </li>
+                }
+              >
                 <For each={results()}>
                   {(c, i) => (
                     <li>
@@ -142,15 +202,19 @@ export default function CommandPalette(props: { open: boolean; onClose: () => vo
                         role="option"
                         aria-selected={i() === active()}
                         class="flex w-full items-center gap-3 rounded-field px-3 py-2 text-left text-sm"
-                        classList={{ "bg-primary/15 text-primary": i() === active() }}
+                        classList={{
+                          "bg-primary/15 text-primary": i() === active(),
+                        }}
                         onMouseEnter={() => setActive(i())}
                         onClick={() => go(c)}
                       >
-                        <Show when={"ask" in c}>
+                        <Show when={"ask" in c || "triage" in c}>
                           <Bot size={14} />
                         </Show>
                         <Show when={"group" in c && c.group}>
-                          <span class="text-xs text-base-content/40">{"group" in c && c.group}</span>
+                          <span class="text-xs text-base-content/40">
+                            {"group" in c && c.group}
+                          </span>
                           <span class="text-base-content/30">/</span>
                         </Show>
                         <span class="flex-1">{c.label}</span>

@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import OmnibotPanel from "./OmnibotPanel";
 import { uuidFor } from "../lib/testids";
-import { addSubjects, clearTray, tray } from "../lib/handover";
+import { addSubjects, clearTray, requestTriage, tray } from "../lib/handover";
 
 // The omnibot panel (#1167): a prompt starts a conversation and runs it,
 // omnibot's text and each tool call stream in, a call the person's policy
@@ -244,6 +244,35 @@ describe("the omnibot panel", () => {
     send("what is in this room?");
     await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
     expect(calls.find((c) => c.url.includes(":run"))!.body.context).toEqual([{ description: "system", value: "hq.room-1" }]);
+  });
+
+  it("triages a gathered alarm in one click, running the triage-alarm skill on it", async () => {
+    addSubjects([
+      { kind: "alarm", ref: "mic-1/icmp-unreachable" },
+      { kind: "system", ref: "boardroom" },
+    ]);
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Triage alarm mic-1/icmp-unreachable" }));
+    await screen.findByTestId("omnibot-ask");
+    const run = calls.find((c) => c.url.includes(":run"))!;
+    expect(run.body.forwardedProps).toEqual({ skill: { name: "triage-alarm", arguments: { component: "mic-1", alarm: "icmp-unreachable" } } });
+    expect(run.body.messages).toEqual([]);
+    expect(run.body.context).toEqual([
+      { description: "alarm", value: "mic-1/icmp-unreachable" },
+      { description: "system", value: "boardroom" },
+    ]);
+    expect(tray()).toEqual([]);
+    expect(screen.getByText("Triage alarm mic-1/icmp-unreachable")).toBeTruthy();
+  });
+
+  it("runs a triage handed in from the palette", async () => {
+    addSubjects([{ kind: "alarm", ref: "mic-1/icmp-unreachable" }]);
+    requestTriage({ kind: "alarm", ref: "mic-1/icmp-unreachable" });
+    open();
+    await waitFor(() => expect(calls.some((c) => c.url.includes(":run"))).toBe(true));
+    expect(calls.find((c) => c.url.includes(":run"))!.body.forwardedProps).toEqual({
+      skill: { name: "triage-alarm", arguments: { component: "mic-1", alarm: "icmp-unreachable" } },
+    });
   });
 
   it("sends no context when nothing was handed over", async () => {

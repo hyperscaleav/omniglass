@@ -1,6 +1,6 @@
 import { api, sendRaw } from "../api/client";
 import { describeError } from "./format";
-import type { ContextEntry } from "./handover";
+import type { ContextEntry, SkillCall } from "./handover";
 
 // The omnibot panel's data layer (#1167). A run is the server's: the console
 // posts a prompt (or the answer to an ask) to a conversation's :run and reads
@@ -24,7 +24,10 @@ export type Step = {
   decision?: "approved" | "declined";
 };
 
-export type Item = { kind: "user"; text: string; context?: ContextEntry[] } | { kind: "text"; id: string; text: string } | Step;
+export type Item =
+  | { kind: "user"; text: string; context?: ContextEntry[] }
+  | { kind: "text"; id: string; text: string }
+  | Step;
 
 // The call a run paused on, waiting for the person.
 export type Ask = {
@@ -38,7 +41,8 @@ export type Ask = {
 // idle: nothing asked yet; working: a run streams; pending: a call waits on
 // the person; done: answered; stopped: the step limit ended it unanswered;
 // refused: this person may not run omnibot here; error: it failed.
-export type RunStatus = "idle" | "working" | "pending" | "done" | "stopped" | "refused" | "error";
+export type RunStatus =
+  "idle" | "working" | "pending" | "done" | "stopped" | "refused" | "error";
 
 export type RunState = {
   items: Item[];
@@ -52,8 +56,14 @@ export const initialRun: RunState = { items: [], status: "idle" };
 
 // ask adds the person's prompt, and what they handed over with it, and starts
 // working on it.
-export function ask(s: RunState, text: string, context?: ContextEntry[]): RunState {
-  const item: Item = context?.length ? { kind: "user", text, context } : { kind: "user", text };
+export function ask(
+  s: RunState,
+  text: string,
+  context?: ContextEntry[],
+): RunState {
+  const item: Item = context?.length
+    ? { kind: "user", text, context }
+    : { kind: "user", text };
   return { items: [...s.items, item], status: "working" };
 }
 
@@ -63,25 +73,36 @@ export function answer(s: RunState, approved: boolean): RunState {
   const id = s.interrupt?.id;
   const decision = approved ? "approved" : "declined";
   return {
-    items: s.items.map((i) => (i.kind === "step" && i.id === id ? { ...i, decision } : i)),
+    items: s.items.map((i) =>
+      i.kind === "step" && i.id === id ? { ...i, decision } : i,
+    ),
     status: "working",
   };
 }
 
 // fail ends the run on a failure to start or to read it.
 export function fail(s: RunState, message: string, refused = false): RunState {
-  return { ...s, status: refused ? "refused" : "error", error: message, interrupt: undefined };
+  return {
+    ...s,
+    status: refused ? "refused" : "error",
+    error: message,
+    interrupt: undefined,
+  };
 }
 
 // closed settles a run whose stream has closed: a run still working never
 // finished (a dropped connection, a server gone mid-run), so it ends in an
 // error rather than leaving the panel busy for good.
 export function closed(s: RunState): RunState {
-  return s.status === "working" ? fail(s, "The run ended before it finished. Ask again to carry on.") : s;
+  return s.status === "working"
+    ? fail(s, "The run ended before it finished. Ask again to carry on.")
+    : s;
 }
 
 function objectOf(v: unknown): Record<string, unknown> {
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : {};
 }
 
 function parseArgs(delta: unknown): Record<string, unknown> {
@@ -100,26 +121,67 @@ function updateStep(items: Item[], id: unknown, f: (s: Step) => Step): Item[] {
 export function reduce(s: RunState, ev: AguiEvent): RunState {
   switch (ev.type) {
     case "RUN_STARTED":
-      return { ...s, status: "working", interrupt: undefined, error: undefined, steps: undefined };
+      return {
+        ...s,
+        status: "working",
+        interrupt: undefined,
+        error: undefined,
+        steps: undefined,
+      };
     case "TEXT_MESSAGE_START":
-      return { ...s, items: [...s.items, { kind: "text", id: String(ev.messageId), text: "" }] };
+      return {
+        ...s,
+        items: [
+          ...s.items,
+          { kind: "text", id: String(ev.messageId), text: "" },
+        ],
+      };
     case "TEXT_MESSAGE_CONTENT":
       return {
         ...s,
-        items: s.items.map((i) => (i.kind === "text" && i.id === ev.messageId ? { ...i, text: i.text + String(ev.delta ?? "") } : i)),
+        items: s.items.map((i) =>
+          i.kind === "text" && i.id === ev.messageId
+            ? { ...i, text: i.text + String(ev.delta ?? "") }
+            : i,
+        ),
       };
     case "TOOL_CALL_START":
-      return { ...s, items: [...s.items, { kind: "step", id: String(ev.toolCallId), tool: String(ev.toolCallName), args: {} }] };
+      return {
+        ...s,
+        items: [
+          ...s.items,
+          {
+            kind: "step",
+            id: String(ev.toolCallId),
+            tool: String(ev.toolCallName),
+            args: {},
+          },
+        ],
+      };
     case "TOOL_CALL_ARGS":
-      return { ...s, items: updateStep(s.items, ev.toolCallId, (st) => ({ ...st, args: parseArgs(ev.delta) })) };
+      return {
+        ...s,
+        items: updateStep(s.items, ev.toolCallId, (st) => ({
+          ...st,
+          args: parseArgs(ev.delta),
+        })),
+      };
     case "TOOL_CALL_RESULT":
-      return { ...s, items: updateStep(s.items, ev.toolCallId, (st) => ({ ...st, result: String(ev.content ?? "") })) };
+      return {
+        ...s,
+        items: updateStep(s.items, ev.toolCallId, (st) => ({
+          ...st,
+          result: String(ev.content ?? ""),
+        })),
+      };
     case "RUN_ERROR":
       return fail(s, String(ev.message ?? "The run failed."));
     case "RUN_FINISHED": {
       const outcome = objectOf(ev.outcome);
       if (outcome.type === "interrupt") {
-        const first = objectOf((outcome.interrupts as unknown[] | undefined)?.[0]);
+        const first = objectOf(
+          (outcome.interrupts as unknown[] | undefined)?.[0],
+        );
         const meta = objectOf(first.metadata);
         return {
           ...s,
@@ -134,7 +196,8 @@ export function reduce(s: RunState, ev: AguiEvent): RunState {
         };
       }
       const result = objectOf(ev.result);
-      if (result.stopped === "step_limit") return { ...s, status: "stopped", steps: Number(result.steps) };
+      if (result.stopped === "step_limit")
+        return { ...s, status: "stopped", steps: Number(result.steps) };
       return { ...s, status: "done" };
     }
   }
@@ -143,7 +206,9 @@ export function reduce(s: RunState, ev: AguiEvent): RunState {
 
 // readEvents parses an SSE stream into its events: each `data:` line is one
 // JSON event, events end on a blank line, and a chunk may split anywhere.
-export async function* readEvents(stream: ReadableStream<Uint8Array>): AsyncGenerator<AguiEvent> {
+export async function* readEvents(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<AguiEvent> {
   const reader = stream.getReader();
   const dec = new TextDecoder();
   let buf = "";
@@ -169,34 +234,56 @@ export async function* readEvents(stream: ReadableStream<Uint8Array>): AsyncGene
 // impersonation session.
 export class RunRefused extends Error {}
 
-export type RunInput = { prompt: string; context?: ContextEntry[] } | { resume: { id: string; approved: boolean } };
+// A run is a prompt, an embedded skill the server renders as the prompt (its
+// text is the server's, not the console's), or the answer to an ask.
+export type RunInput =
+  | { prompt: string; context?: ContextEntry[] }
+  | { skill: SkillCall; context?: ContextEntry[] }
+  | { resume: { id: string; approved: boolean } };
 
 // runOmnibot runs omnibot on the named conversation and hands each event to
 // onEvent as it arrives. A run the server refuses to start throws: RunRefused
 // for a 403, an Error naming the server's reason otherwise.
-export async function runOmnibot(name: string, input: RunInput, onEvent: (ev: AguiEvent) => void, signal?: AbortSignal): Promise<void> {
+export async function runOmnibot(
+  name: string,
+  input: RunInput,
+  onEvent: (ev: AguiEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
   // The prompt carries no message id: the server reads only its role and
   // content, and crypto.randomUUID exists only on a secure origin, so a
   // console reached over plain http would fail before it sent.
+  const context =
+    "resume" in input || !input.context?.length
+      ? {}
+      : { context: input.context };
   const body =
     "prompt" in input
-      ? { messages: [{ role: "user", content: input.prompt }], ...(input.context?.length ? { context: input.context } : {}) }
-      : {
-          messages: [],
-          resume: [
-            {
-              interruptId: input.resume.id,
-              status: input.resume.approved ? "resolved" : "cancelled",
-              payload: { approved: input.resume.approved },
-            },
-          ],
-        };
-  const response = await sendRaw(`/assistant/conversations/${encodeURIComponent(name)}:run`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify(body),
-    signal,
-  });
+      ? { messages: [{ role: "user", content: input.prompt }], ...context }
+      : "skill" in input
+        ? { messages: [], forwardedProps: { skill: input.skill }, ...context }
+        : {
+            messages: [],
+            resume: [
+              {
+                interruptId: input.resume.id,
+                status: input.resume.approved ? "resolved" : "cancelled",
+                payload: { approved: input.resume.approved },
+              },
+            ],
+          };
+  const response = await sendRaw(
+    `/assistant/conversations/${encodeURIComponent(name)}:run`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(body),
+      signal,
+    },
+  );
   if (!response.ok || !response.body) {
     const text = await response.text();
     let err: unknown = text;
@@ -206,7 +293,9 @@ export async function runOmnibot(name: string, input: RunInput, onEvent: (ev: Ag
       // Not JSON: the reason is the body's text.
     }
     const message = typeof err === "string" && err ? err : describeError(err);
-    throw response.status === 403 ? new RunRefused(message) : new Error(message);
+    throw response.status === 403
+      ? new RunRefused(message)
+      : new Error(message);
   }
   for await (const ev of readEvents(response.body)) onEvent(ev);
 }
@@ -214,7 +303,9 @@ export async function runOmnibot(name: string, input: RunInput, onEvent: (ev: Ag
 // startConversation makes the person a new conversation, named for them, the
 // one a panel's first prompt runs on.
 export async function startConversation(): Promise<string> {
-  const { data, error } = await api.POST("/assistant/conversations", { body: {} });
+  const { data, error } = await api.POST("/assistant/conversations", {
+    body: {},
+  });
   if (error) throw new Error(describeError(error));
   return data.name;
 }

@@ -21,7 +21,10 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 // pageSubject is the page as a query: its route and the arguments that are not
 // a uuid. A route that holds a uuid is no subject.
-export function pageSubject(pathname: string, search: string): Subject | undefined {
+export function pageSubject(
+  pathname: string,
+  search: string,
+): Subject | undefined {
   if (UUID.test(pathname)) return undefined;
   const params = new URLSearchParams(search);
   for (const [k, v] of [...params]) if (UUID.test(v)) params.delete(k, v);
@@ -40,8 +43,17 @@ export function subjectOf(el: HTMLElement): Subject | undefined {
 
 // alarmSubject is an alarm by its component's name and the rule that raised
 // it, or when it was raised: never its message, which a device may write.
-export function alarmSubject(a: { component: string; raised_by_rule?: string | null; raised_at: string }): Subject {
-  return { kind: "alarm", ref: a.raised_by_rule ? `${a.component}/${a.raised_by_rule}` : `${a.component}@${a.raised_at}` };
+export function alarmSubject(a: {
+  component: string;
+  raised_by_rule?: string | null;
+  raised_at: string;
+}): Subject {
+  return {
+    kind: "alarm",
+    ref: a.raised_by_rule
+      ? `${a.component}/${a.raised_by_rule}`
+      : `${a.component}@${a.raised_at}`,
+  };
 }
 
 const STAMP = "[data-subject-kind]";
@@ -51,7 +63,11 @@ const CONTROL = "button,a,input,select,textarea,label,summary";
 // lands in, or with range every stamped sibling from the anchor (the last one
 // gathered) to it. A click on a control inside a stamp gathers nothing, so the
 // control keeps its own meaning (an outline chevron's alt expands all).
-export function gathered(target: Element, anchor: Element | undefined, range: boolean): { stamp: HTMLElement; subjects: Subject[] } | undefined {
+export function gathered(
+  target: Element,
+  anchor: Element | undefined,
+  range: boolean,
+): { stamp: HTMLElement; subjects: Subject[] } | undefined {
   const stamp = target.closest<HTMLElement>(STAMP);
   if (!stamp) return undefined;
   const control = target.closest(CONTROL);
@@ -59,12 +75,25 @@ export function gathered(target: Element, anchor: Element | undefined, range: bo
   const own = subjectOf(stamp);
   if (!own) return undefined;
   const list = stamp.parentElement;
-  if (!range || !anchor || anchor === stamp || !list || anchor.parentElement !== list) return { stamp, subjects: [own] };
+  if (
+    !range ||
+    !anchor ||
+    anchor === stamp ||
+    !list ||
+    anchor.parentElement !== list
+  )
+    return { stamp, subjects: [own] };
   const kids = [...list.children];
-  const [from, to] = [kids.indexOf(anchor), kids.indexOf(stamp)].sort((x, y) => x - y);
+  const [from, to] = [kids.indexOf(anchor), kids.indexOf(stamp)].sort(
+    (x, y) => x - y,
+  );
   const subjects = kids
     .slice(from, to + 1)
-    .map((el) => (el instanceof HTMLElement && el.matches(STAMP) ? subjectOf(el) : undefined))
+    .map((el) =>
+      el instanceof HTMLElement && el.matches(STAMP)
+        ? subjectOf(el)
+        : undefined,
+    )
     .filter((s): s is Subject => !!s);
   return { stamp, subjects };
 }
@@ -84,7 +113,14 @@ export function contextEntries(subjects: Subject[]): ContextEntry[] {
   const kept: Subject[] = [];
   for (const s of subjects) {
     if (kept.length === MAX_ENTRIES) break;
-    if (!s.kind || !s.ref || s.ref.length > MAX_VALUE || UUID.test(s.ref) || kept.some((k) => same(k, s))) continue;
+    if (
+      !s.kind ||
+      !s.ref ||
+      s.ref.length > MAX_VALUE ||
+      UUID.test(s.ref) ||
+      kept.some((k) => same(k, s))
+    )
+      continue;
     kept.push(s);
   }
   return kept.map((s) => ({ description: s.kind, value: s.ref }));
@@ -96,7 +132,13 @@ const [subjects, setSubjects] = createSignal<Subject[]>([]);
 export const tray = subjects;
 
 export function addSubjects(add: Subject[]) {
-  setSubjects((cur) => [...cur, ...add.filter((s, i) => !cur.some((c) => same(c, s)) && add.findIndex((t) => same(t, s)) === i)]);
+  setSubjects((cur) => [
+    ...cur,
+    ...add.filter(
+      (s, i) =>
+        !cur.some((c) => same(c, s)) && add.findIndex((t) => same(t, s)) === i,
+    ),
+  ]);
 }
 
 export function removeSubject(s: Subject) {
@@ -112,10 +154,20 @@ export function clearTray() {
 // every row from the last one gathered, and opens omnibot. Not ⌘ or Ctrl,
 // which open a link in a new tab. Capturing runs ahead of Solid's delegated
 // handlers, so the row's own click does not run as well.
-export function gatherer(mayAsk: () => boolean, open: () => void): (e: MouseEvent) => void {
+export function gatherer(
+  mayAsk: () => boolean,
+  open: () => void,
+): (e: MouseEvent) => void {
   let anchor: Element | undefined;
   return (e) => {
-    if (!e.altKey || e.metaKey || e.ctrlKey || !mayAsk() || !(e.target instanceof Element)) return;
+    if (
+      !e.altKey ||
+      e.metaKey ||
+      e.ctrlKey ||
+      !mayAsk() ||
+      !(e.target instanceof Element)
+    )
+      return;
     const g = gathered(e.target, anchor, e.shiftKey);
     if (!g) return;
     e.preventDefault();
@@ -128,8 +180,15 @@ export function gatherer(mayAsk: () => boolean, open: () => void): (e: MouseEven
 
 // isHandOverKey is the key that hands omnibot the console: ⌘J or Ctrl-J, beside
 // the palette's ⌘K.
-export function isHandOverKey(e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">): boolean {
-  return (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "j";
+export function isHandOverKey(
+  e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
+): boolean {
+  return (
+    (e.metaKey || e.ctrlKey) &&
+    !e.altKey &&
+    !e.shiftKey &&
+    e.key.toLowerCase() === "j"
+  );
 }
 
 // handOverPage puts the page in the tray when the person has gathered nothing
@@ -138,4 +197,33 @@ export function handOverPage(pathname: string, search: string) {
   if (subjects().length > 0) return;
   const page = pageSubject(pathname, search);
   if (page) addSubjects([page]);
+}
+
+export type SkillCall = { name: string; arguments: Record<string, string> };
+
+// triageCall is the triage-alarm skill run on an alarm subject: its component,
+// and the rule that raised it when the alarm is known by one. Nothing for a
+// subject that is not an alarm.
+export function triageCall(s: Subject): SkillCall | undefined {
+  if (s.kind !== "alarm") return undefined;
+  const slash = s.ref.indexOf("/");
+  const [component, alarm] =
+    slash >= 0
+      ? [s.ref.slice(0, slash), s.ref.slice(slash + 1)]
+      : [s.ref.split("@")[0], ""];
+  if (!component) return undefined;
+  return {
+    name: "triage-alarm",
+    arguments: alarm ? { component, alarm } : { component },
+  };
+}
+
+const [triage, setTriage] = createSignal<Subject | undefined>();
+
+// pendingTriage is an alarm the person asked to triage from outside the panel
+// (the palette), for the panel to run once it is open.
+export const pendingTriage = triage;
+
+export function requestTriage(s: Subject | undefined) {
+  setTriage(s);
 }

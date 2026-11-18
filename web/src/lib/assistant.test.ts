@@ -140,6 +140,17 @@ describe("running omnibot", () => {
     expect(body.messages).toEqual([{ role: "user", content: "why?" }]);
   });
 
+  it("runs a skill by name in forwardedProps, with no message of its own", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(streamOf(fixture("step-limit.sse"))));
+    const context = [{ description: "alarm", value: "mic-1/icmp-unreachable" }];
+    const skill = { name: "triage-alarm", arguments: { component: "mic-1", alarm: "icmp-unreachable" } };
+    await runOmnibot("lobby", { skill, context }, () => {});
+    const body = await (fetchMock.mock.calls[0][0] as Request).json();
+    expect(body.forwardedProps).toEqual({ skill });
+    expect(body.messages).toEqual([]);
+    expect(body.context).toEqual(context);
+  });
+
   it("answers an interrupt by resume", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(streamOf(fixture("resume-declined.sse"))));
     await runOmnibot("lobby", { resume: { id: "call-2", approved: false } }, () => {});

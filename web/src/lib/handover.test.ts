@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { addSubjects, alarmSubject, clearTray, contextEntries, gathered, gatherer, handOverPage, isHandOverKey, pageSubject, removeSubject, stamped, subjectOf, tray } from "./handover";
+import { addSubjects, alarmSubject, triageCall, clearTray, contextEntries, gathered, gatherer, handOverPage, isHandOverKey, pageSubject, removeSubject, stamped, subjectOf, tray } from "./handover";
 
 // The context builder (#2122): what the person hands omnibot is references and
 // the page as a query, never what the console rendered and never a uuid.
@@ -205,5 +205,23 @@ describe("gatherer", () => {
     l.done();
     expect(l.onRow).toHaveBeenCalledTimes(1);
     expect(tray()).toEqual([]);
+  });
+});
+
+describe("triageCall", () => {
+  it("runs triage-alarm on the alarm's component and the rule that raised it", () => {
+    expect(triageCall({ kind: "alarm", ref: "hq.lobby.mic-1/icmp-unreachable" })).toEqual({
+      name: "triage-alarm",
+      arguments: { component: "hq.lobby.mic-1", alarm: "icmp-unreachable" },
+    });
+  });
+
+  it("names only the component for an alarm known by when it was raised", () => {
+    expect(triageCall({ kind: "alarm", ref: "mic-1@2026-08-15T14:20:00Z" })).toEqual({ name: "triage-alarm", arguments: { component: "mic-1" } });
+  });
+
+  it("is nothing for a subject that is not an alarm", () => {
+    expect(triageCall({ kind: "component", ref: "mic-1" })).toBeUndefined();
+    expect(triageCall({ kind: "alarm", ref: "/x" })).toBeUndefined();
   });
 });

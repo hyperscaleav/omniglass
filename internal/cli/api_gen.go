@@ -395,6 +395,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fContext string
+					var fForwardedProps string
 					var fMessages string
 					var fResume string
 					var fRunId string
@@ -402,7 +403,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "run <name>",
 						Short:   "Run omnibot on one of your conversations",
-						Long:    "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. A server with no model is a 503. Gated by assistant:use.",
+						Long:    "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use.",
 						Example: "  omniglass assistant conversation run <name>",
 						Args:    pathArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -410,6 +411,9 @@ func generatedCommands() []*cobra.Command {
 							body := map[string]any{}
 							if cmd.Flags().Changed("context") {
 								body["context"] = jsonOrString(fContext)
+							}
+							if cmd.Flags().Changed("forwardedProps") {
+								body["forwardedProps"] = jsonOrString(fForwardedProps)
 							}
 							if cmd.Flags().Changed("messages") {
 								body["messages"] = jsonOrString(fMessages)
@@ -427,6 +431,7 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().StringVar(&fContext, "context", "", "What the person handed over with the prompt, read as data ahead of it; ignored on a resume")
+					cmd.Flags().StringVar(&fForwardedProps, "forwardedProps", "", "An embedded skill to run; ignored on a resume")
 					cmd.Flags().StringVar(&fMessages, "messages", "", "The client's view of the conversation; only its last user message is read, as the prompt")
 					cmd.Flags().StringVar(&fResume, "resume", "", "The answer to the interrupt the last run ended on")
 					cmd.Flags().StringVar(&fRunId, "runId", "", "The run's id, echoed in its events")
