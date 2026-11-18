@@ -246,6 +246,12 @@ Move each issue the PR closes to In Review on the project board:
 scripts/board.sh set <M> "In Review"
 ```
 
+A session the dispatcher launched (the harness sets `AGENT_ROLE`) leaves this move out: the
+script changes nothing there, prints one line saying the dispatcher moves the ticket after its
+gate, and exits 0. The dispatcher moves a ticket to AI Review only while the board still says
+In Progress, so a session that moved its own ticket to In Review would strand it with no
+reviewer verdict. Run the call anyway; it is safe in both places.
+
 Until the board has an "In Review" status the script lands it on In Progress with one warning;
 that is expected, not a failure. The board's own "Pull request linked to issue" workflow makes
 the same move as the PR opens; the call is the backstop, and writing a status the item already
