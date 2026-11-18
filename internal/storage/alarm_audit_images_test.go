@@ -96,7 +96,7 @@ func TestEveryAlarmAuditRowCarriesItsBeforeAndAfter(t *testing.T) {
 func TestARulesClearAuditsItsBeforeAndAfter(t *testing.T) {
 	t.Parallel()
 	r := newEdgeRig(t)
-	r.rule(storage.EventRuleSpec{Name: "audited", Severity: "high", ClearEventType: "condition-ended"})
+	r.rule(storage.EventRuleSpec{Name: "audited", Severity: "high", ClearEventType: "rule-cleared"})
 	r.observe("tcp", "down")
 	alarm := r.openAlarm("tcp")
 	if alarm == "" {

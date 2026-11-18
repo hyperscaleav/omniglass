@@ -12,10 +12,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// A snooze is a fact about an alarm's CONDITION (#1318, ADR-1318): the
-// (component, dedup_key) identity of ADR-0075, set from any alarm of that
-// condition and lasting until a deadline. These tests pin the record itself:
-// who and until when, on every alarm of the condition and on no other, audited
+// A snooze is a fact about an alarm's IDENTITY (#1318, ADR-1318): the
+// (component, dedup_key) of ADR-0075, set from any alarm of that
+// identity and lasting until a deadline. These tests pin the record itself:
+// who and until when, on every alarm of the identity and on no other, audited
 // on the alarm it was called on, and orthogonal to acknowledgement, health and
 // clearing.
 

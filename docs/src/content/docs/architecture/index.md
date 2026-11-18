@@ -106,10 +106,10 @@ back.
 
 ## Detect
 
-An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its condition, an
-**[expression](/architecture/expressions/)**, is met, recording an
+An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its criteria, an
+**[expression](/architecture/expressions/)**, are met, recording an
 **[event](/architecture/events/)**: our assertion that something happened. Pair a fire
-with a clear and the two events open and resolve an **alarm**, the stateful incident, one row per
+with a clear and the two events open and resolve an **alarm**, the stateful record of a fault, one row per
 occurrence, the thing an operator works and a ticket binds to. An alarm impairs its **component's
 own verdict** wholesale, turning a detection into a verdict on the system.
 

@@ -360,13 +360,13 @@ Raising one takes two things:
 
 **Not every alarm is raised by hand.** An [event rule](/guides/admin/rules/) raises and clears its
 own as telemetry lands: such an alarm says **by rule** and the rule's name, and the rule clears it
-when the condition passes (the official reachability rule does this for every endpoint that stops
+when the rule clears (the official reachability rule does this for every endpoint that stops
 answering). You acknowledge it like any other. Clearing it by hand works too, and **a hand clear of a
-rule's alarm holds until the condition ends and returns**, whatever the input: a rule acts on the
-condition's edges, not on each sample, so a metric still reading over its threshold on every poll does
-not reopen it. The rule still counts the condition as in force (its condition and the events it wrote
-are untouched); once the value recovers the condition ends, and if it comes back later the rule opens
-a new alarm. Fix the condition rather than clearing its alarm.
+rule's alarm holds until the rule clears and fires again**, whatever the input: a rule acts on
+edges, not on each sample, so a metric still reading over its threshold on every poll does
+not reopen it. The rule still counts itself as firing there (the firing and the events it wrote
+are untouched); once the value recovers the rule clears, and if it fires again later it raises
+a new alarm. Fix the fault rather than clearing its alarm.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
@@ -398,20 +398,20 @@ Acknowledging twice is harmless. The first person and the first time are what th
 second click (or a colleague reaching it a moment after you) changes nothing and is not an error.
 There is no un-acknowledge yet.
 
-### Snoozing: silencing a noisy condition for a while
+### Snoozing: silencing a noisy alarm for a while
 
 **Snoozing stops the people an alarm notifies from being told about it, for a bounded time.** It is
 for the alarm that flaps or that you are already working on: **Snooze** beside the alarm (in the
 **Why** strip and the alarms panel, active or recently cleared) offers 15 minutes, 1 hour, 4 hours
-or 24 hours. While it holds, every notification about that condition, a raise or a clear, on a
+or 24 hours. While it holds, every notification about that alarm, a raise or a clear, on a
 webhook, by email or in an inbox, is recorded instead of sent, and each one stays on the alarm's
 timeline reading **snoozed**, with the reason. The alarm wears a **snoozed until** chip naming the time, and its tooltip
 names who snoozed it.
 
-A snooze belongs to the alarm's **condition**, not to one alarm row: when the condition clears and
-comes back, the new alarm is snoozed too, until the deadline. Another alarm on the same component is
-not affected. When the snooze ends, by its deadline or by **Unsnooze**, and the condition is still
-raised, the people its rules reach are told again; a condition that cleared meanwhile gets nothing.
+A snooze belongs to the alarm's **identity** (its component and dedup key), not to one alarm row: when
+the alarm clears and is raised again, the new alarm is snoozed too, until the deadline. Another alarm on
+the same component is not affected. When the snooze ends, by its deadline or by **Unsnooze**, and the
+alarm is still raised, the people its rules reach are told again; an alarm that cleared meanwhile gets nothing.
 
 It is not acknowledging (nobody is recorded as having looked), not [opting out](/guides/admin/notifications/)
 (that silences only you), and not pausing an action rule (that silences a rule for every alarm). It
@@ -428,8 +428,8 @@ omniglass component alarm unsnooze display-1 <alarm-id>
 
 The **clock** button on an alarm row (in the **Why** strip at the top of a component's or a system's
 page, and in the alarms panel, active or recently cleared) opens the alarm's **timeline** under the row: everything recorded about it, oldest first. An **event** line is what a rule saw (its
-`condition-started` when the condition came into force and opened the alarm, its `condition-ended`
-when it passed and resolved it), named by the rule and the endpoint; an **audit** line is what was
+`rule-fired` when it fired and raised the alarm, its `rule-cleared`
+when it cleared and resolved it), named by the rule and the endpoint; an **audit** line is what was
 done to the alarm (raised, acknowledged, cleared, snoozed, unsnoozed, snooze ended) and by whom, a person by name or the rule the
 platform acted for. A **notify** line is a notification the alarm's raise or clear queued, read as a
 status row: its target, how its delivery stands (**on its way**, **sent**, **failed** with the

@@ -465,7 +465,7 @@ export type AlarmBody = {
   component: string;
   /** The component's uuid, the stable form of component */
   component_id: string;
-  /** The condition identity: one open alarm per (component, dedup_key) */
+  /** What the alarm is about: one open alarm per (component, dedup_key) */
   dedup_key: string;
   id: string;
   message: string;
@@ -476,9 +476,9 @@ export type AlarmBody = {
   raised_by_rule_id?: string;
   /** The severity level the alarm was raised at, by name (see /severity-levels) */
   severity: string;
-  /** Who snoozed the condition, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name) */
+  /** Who snoozed the alarm, by name; empty while it is not snoozed, or once that user has been purged (the audit log keeps the name) */
   snoozed_by?: string;
-  /** Until when the alarm's condition (component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
+  /** Until when the alarm (by component and dedup_key) is snoozed: its notifications are written suppressed until then. Null while it is not snoozed. Independent of acknowledged and cleared_at */
   snoozed_until?: string;
 };
 
@@ -544,7 +544,7 @@ export type AlarmTimelineEntryBody = {
   target?: string;
   /** The alarm edge a notification is about: raised or cleared */
   transition?: string;
-  /** The event's type (e.g. condition-started), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its condition was snoozed) */
+  /** The event's type (e.g. rule-fired), the audit action (raise, acknowledge, clear, snooze, unsnooze, or snooze-end when a snooze reached its deadline), or a notification's status as it stands (queued, sent, failed, or suppressed when its alarm was snoozed) */
   what: string;
 };
 
@@ -2140,7 +2140,7 @@ export type CreateEventRuleInputBody = {
   readonly $schema?: string;
   /** The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) */
   clear_criteria?: CriteriaInput;
-  /** The event type the rule writes when its condition ends, by name (condition-ended is the generic one); absent, it writes none */
+  /** The event type the rule writes when it clears, by name (rule-cleared is the generic one); absent, it writes none */
   clear_event_type?: string;
   /** A Go duration; empty is 0s */
   clear_sustain?: string;
@@ -2148,10 +2148,10 @@ export type CreateEventRuleInputBody = {
   description?: string;
   /** Defaults to true */
   enabled?: boolean;
-  /** The criteria that starts the condition: {expr}, or the short form {op, value} */
+  /** The criteria the rule fires on: {expr}, or the short form {op, value} */
   fire_criteria: CriteriaInput;
   /**
-     * The event type the rule writes when its condition starts, by name (condition-started is the generic one)
+     * The event type the rule writes when it fires, by name (rule-fired is the generic one)
      * @minLength 1
      */
   fire_event_type: string;
@@ -3271,7 +3271,7 @@ export type EffectiveSlotBody = {
      */
   positions: number[] | null;
   quorum: number;
-  /** How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own condition. See the health read's short for the occupancy-aware figure */
+  /** How many more assignment rows the slot wants before quorum, health-blind; zero when enough are assigned regardless of their own health. See the health read's short for the occupancy-aware figure */
   understaffed: number;
 };
 
@@ -3606,14 +3606,12 @@ export const EventRuleBodySampleLane = {
 export type EventRuleBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** When the sample meets this for clear_sustain, the condition ends (and the alarm clears); absent, the negation of fire_criteria */
+  /** When the sample meets this for clear_sustain, it clears (and the alarm clears); absent, the negation of fire_criteria */
   clear_criteria?: CriteriaBody;
-  /** The event type the rule writes when its condition ends, by name; absent, it writes none */
+  /** The event type the rule writes when it clears, by name; absent, it writes none */
   clear_event_type?: string;
   /** How long the clear criteria must hold, a Go duration */
   clear_sustain: string;
-  /** How many conditions the rule holds in force right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them) */
-  conditions_in_force: number;
   /** Why the rule's stored criteria do not compile (its key's data type changed under them, a row the backfill left in short form, or an expression a newer diagnostic refuses); absent when they compile. While present the rule holds: it judges nothing */
   criteria_error?: CriteriaErrorBody;
   /**
@@ -3623,12 +3621,14 @@ export type EventRuleBody = {
   criteria_warnings?: CriteriaErrorBody[] | null;
   description?: string;
   enabled: boolean;
-  /** When the sample meets this for fire_sustain, the rule's condition starts (and it opens an alarm when it names a severity) */
+  /** When the sample meets this for fire_sustain, the rule fires (and it opens an alarm when it names a severity) */
   fire_criteria: CriteriaBody;
-  /** The event type the rule writes when its condition starts, by name */
+  /** The event type the rule writes when it fires, by name */
   fire_event_type: string;
   /** How long the fire criteria must hold, a Go duration (0s fires at once) */
   fire_sustain: string;
+  /** How many firings the rule holds right now, one per component and instance, whether or not it raises an alarm (GET /event-rules/{name}/state lists them) */
+  firing: number;
   /** The rule's uuid, the stable form of name */
   id: string;
   label?: string;
@@ -3655,14 +3655,14 @@ export type EventRuleBody = {
   version: number;
 };
 
-export type RuleConditionBody = {
+export type RuleFiringBody = {
   /** The component, by name */
   component: string;
   /** The component's uuid */
   component_id: string;
-  /** The sample instance (an endpoint) the condition is on */
+  /** The sample instance (an endpoint) it fired on */
   instance?: string;
-  /** When the condition came into force */
+  /** When the rule fired there */
   since: string;
 };
 
@@ -3704,13 +3704,13 @@ export type RuleStreakBody = {
 export type EventRuleStateOutputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /**
-     * The conditions the rule holds in force, informational or not
-     * @nullable
-     */
-  conditions: RuleConditionBody[] | null;
   /** Why the rule's stored criteria do not compile; absent when they compile. While present the rule holds */
   criteria_error?: CriteriaErrorBody;
+  /**
+     * The rule's firings, informational or not
+     * @nullable
+     */
+  firings: RuleFiringBody[] | null;
   /** When an ingested sample was last judged by the rule, to within 5s; absent when it never has been */
   last_judged_at?: string;
   /**
@@ -4421,7 +4421,7 @@ export const NotificationBodyChannel = {
 } as const;
 
 /**
- * queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm's condition was snoozed (the reason in last_error)
+ * queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm was snoozed (the reason in last_error)
  */
 export type NotificationBodyStatus = typeof NotificationBodyStatus[keyof typeof NotificationBodyStatus];
 
@@ -4481,7 +4481,7 @@ export type NotificationBody = {
   /** True when the row is addressed to a person whose name the caller may not see */
   recipient_withheld?: boolean;
   sent_at?: string;
-  /** queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm's condition was snoozed (the reason in last_error) */
+  /** queued: on its way (its next attempt at next_attempt_at); sent: the receiver answered 2xx; failed: its last attempt failed, or it was refused before one; suppressed: written but never sent, because its alarm was snoozed (the reason in last_error) */
   status: NotificationBodyStatus;
   /** The rendered subject */
   subject: string;
@@ -6741,11 +6741,11 @@ export type PreviewEdgeBody = {
 export type PreviewEventRuleInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The criteria it ends on; absent, the negation of fire_criteria */
+  /** The criteria it clears on; absent, the negation of fire_criteria */
   clear_criteria?: CriteriaInput;
   /** Accepted and ignored, like fire_sustain */
   clear_sustain?: string;
-  /** The criteria its condition starts on: {expr}, or the short form {op, value} */
+  /** The criteria it fires on: {expr}, or the short form {op, value} */
   fire_criteria: CriteriaInput;
   /** Accepted so a rule body previews as it is, and ignored: a preview judges each sample alone */
   fire_sustain?: string;
@@ -7049,7 +7049,7 @@ export type PutIdentityBindingInputBody = {
 export type RaiseAlarmInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** The condition identity; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace names a rule's condition */
+  /** What the alarm is about; defaults to the message. Raising an already-open (component, dedup_key) returns the existing open alarm instead of a duplicate. A key (or, without one, a message) beginning rule: is refused (422): that namespace is a rule's firing */
   dedup_key?: string;
   /** What is wrong, for the operator reading it later */
   message?: string;
@@ -7925,7 +7925,7 @@ export type SlotSpecBody = {
 export type SnoozeAlarmInputBody = {
   /** A URL to the JSON Schema for this object. */
   readonly $schema?: string;
-  /** How long from now the condition stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed condition replaces its deadline, shorter or longer */
+  /** How long from now the alarm stays snoozed, from 1m to 7d: a duration such as 15m, 1h, 4h or 24h, or whole days such as 7d. Snoozing a snoozed alarm replaces its deadline, shorter or longer */
   duration: string;
 };
 
@@ -8322,7 +8322,7 @@ export type UpdateEventRuleInputBody = {
   readonly $schema?: string;
   /** The criteria that ends it: {expr} or {op, value}; absent clears on the negation of fire_criteria, !(fire) */
   clear_criteria?: CriteriaInput;
-  /** The event type the rule writes when its condition ends, by name; empty writes none */
+  /** The event type the rule writes when it clears, by name; empty writes none */
   clear_event_type?: string;
   /** Drop the clear criteria, so the rule clears on the negation of its fire criteria */
   clear_negates?: boolean;
@@ -8332,9 +8332,9 @@ export type UpdateEventRuleInputBody = {
   description?: string;
   /** Whether the rule evaluates; defaults to true on create */
   enabled?: boolean;
-  /** The criteria that starts the condition: {expr}, or the short form {op, value} */
+  /** The criteria the rule fires on: {expr}, or the short form {op, value} */
   fire_criteria?: CriteriaInput;
-  /** The event type the rule writes when its condition starts, by name; it cannot be emptied */
+  /** The event type the rule writes when it fires, by name; it cannot be emptied */
   fire_event_type?: string;
   /** How long the fire criteria must hold, a Go duration (e.g. 30s); empty is 0s */
   fire_sustain?: string;
@@ -8862,7 +8862,7 @@ export type GetCalcRuleStateParams = {
 export type ListComponentAlarmsParams = {
   /** Include cleared alarms, so the list is the history rather than what is wrong now */
   include_cleared?: boolean;
-  /** Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended */
+  /** Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the alarms that came and went unattended */
   unacknowledged?: boolean;
 };
 
@@ -12535,7 +12535,7 @@ export const getRaiseComponentAlarmUrl = (name: string,) => {
 }
 
 /**
- * Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+ * Raises an alarm on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (an alarm at or above the high level), any slot it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser alarm degrades the component but leaves it occupying its slots. Gated by component:update; read and update scopes drive the 404 versus 403 split.
  * @summary Raise an alarm on a component
  */
 export const raiseComponentAlarm = async (name: string,
@@ -12687,8 +12687,8 @@ export const getSnoozeComponentAlarmUrl = (name: string,
 }
 
 /**
- * Snoozes the alarm's condition, its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that condition would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed condition replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of the condition still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
- * @summary Snooze an alarm's condition
+ * Snoozes the alarm, by its component and dedup_key, for a duration from now (1m to 7d), so every notification any alarm of that dedup key would send, a raise or a clear, on any channel, is written suppressed with the reason instead, and a message already waiting to be retried is suppressed when its turn comes. Snoozing a snoozed alarm replaces the deadline. It changes nothing else: it does not acknowledge, does not recompute health, a snoozed alarm stays in the unacknowledged queue, and a clear does not end it. It notifies nothing itself. When the snooze ends, at its deadline or by :unsnooze, with an alarm of that dedup key still raised, that alarm is announced again as raised to whoever the action rules reach then. Audited on this alarm. Gated by alarm:snooze, whose scope is resolved on the component tier from that permission; a component outside the caller's component:read is a non-disclosing 404, and one it can read but not snooze on is a 403.
+ * @summary Snooze an alarm
  */
 export const snoozeComponentAlarm = async (name: string,
     id: string,
@@ -12794,8 +12794,8 @@ export const getUnsnoozeComponentAlarmUrl = (name: string,
 }
 
 /**
- * Ends the snooze on the alarm's condition early, exactly as its deadline passing would: if an alarm of the condition is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing a condition that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
- * @summary End an alarm's condition's snooze
+ * Ends the alarm's snooze early, exactly as its deadline passing would: if an alarm of that dedup key is still raised, it is announced again as raised to whoever the action rules reach now. Audited on this alarm, naming the caller. Unsnoozing an alarm that is not snoozed is a 200 that writes nothing. Gated by alarm:snooze, resolved as :snooze is.
+ * @summary End an alarm's snooze
  */
 export const unsnoozeComponentAlarm = async (name: string,
     id: string, options?: Parameters<typeof ogFetch>[1]): Promise<unsnoozeComponentAlarmResponse> => {
@@ -15610,7 +15610,7 @@ export const getListEventRuleUrl = () => {
 }
 
 /**
- * Lists the event rules, the authored config that raises alarms, each with its live state as counts (conditions_in_force, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
+ * Lists the event rules, the authored config that raises alarms, each with its live state as counts (firing, open_alarms, pending_streaks) read in the same query. Rules read like a catalog: every rule is listed whatever the caller's scope, while the counts cover only components the caller may read. Gated by rule:read.
  * @summary List event rules
  */
 export const listEventRule = async ( options?: Parameters<typeof ogFetch>[1]): Promise<listEventRuleResponse> => {
@@ -15654,7 +15654,7 @@ export const getCreateEventRuleUrl = () => {
 }
 
 /**
- * Authors a rule whose condition starts on each component it watches when its sample key meets the fire criteria for the fire sustain, and ends when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when the condition starts (required) and, optionally, when it ends; with a severity it also raises an alarm while the condition holds, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
+ * Authors a rule that fires on each component it watches when its sample key meets the fire criteria for the fire sustain, and clears when the clear criteria (or the negation of fire) holds for the clear sustain. It names the event type it writes when it fires (required) and, optionally, when it clears; with a severity it also raises an alarm while it is firing, and without one it is informational. Criteria are expressions over the sample (value, key, instance, component.name, component.type) yielding true or false; a body may give {expr} or the short form {op, value}, and the answer is always {expr}. The key must be a registered property or metric, the criteria must compile against its lane (an unknown name or a result that is not a bool is a 422 naming the criteria, line and column), the event types registered and the severity, when given, a level that exists (else 422); a name already taken is a 409. Audited. Gated by rule:create, with an all-scope grant.
  * @summary Create an event rule
  */
 export const createEventRule = async (createEventRuleInputBody: NonReadonly<CreateEventRuleInputBody>, options?: Parameters<typeof ogFetch>[1]): Promise<createEventRuleResponse> => {
@@ -15859,7 +15859,7 @@ export const getGetEventRuleStateUrl = (name: string,) => {
 }
 
 /**
- * What a rule holds right now: the conditions it holds in force (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only conditions, alarms and streaks on components the caller may read are listed. Gated by rule:read.
+ * What a rule holds right now: its firings (one per component and instance, whether or not it raises an alarm), the alarms it raised that are still open, each on a component and instance, its streaks waiting out a sustain, and when it last judged an ingested sample. Only firings, alarms and streaks on components the caller may read are listed. Gated by rule:read.
  * @summary Get an event rule's live state
  */
 export const getEventRuleState = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<getEventRuleStateResponse> => {
@@ -15903,7 +15903,7 @@ export const getRenameEventRuleUrl = (name: string,) => {
 }
 
 /**
- * Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a condition, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and conditions stay in force. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
+ * Moves an operator rule's name, the address an operator types. A separate act from an update, because it breaks bookmarks and integration config outside this system; inside it nothing breaks, since every reference holds the rule's uuid (an alarm's raised_by_rule_id and dedup key, a firing, a streak, an event's derived_by_rule_id). Not a material change: no version bump, streaks keep running and firings stay. An event keeps the name it was written under (derived_by_rule); the rule's next events carry the new one. An official rule keeps its name (409), a taken name is a 409, an illegal or uuid-shaped one a 422. Returns the rule with its uuid. Audited. Gated by rule:update, with an all-scope grant.
  * @summary Rename an event rule
  */
 export const renameEventRule = async (name: string,
@@ -19396,7 +19396,7 @@ export const getRetryNotificationUrl = (id: string,) => {
 }
 
 /**
- * Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm's condition was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
+ * Re-queues a failed notification for a fresh run of attempts, sending the same rendered message with the same Idempotency-Key. One that is queued, sent or suppressed (its alarm was snoozed), or one that failed before any attempt (its rule's when did not run, or its type did not render, so it holds no message), is a 409. Audited as retry. Gated by notification:retry, whose scope resolves on the component tier; a component outside the caller's component read scope is a non-disclosing 404, one it reads but may not retry on a 403.
  * @summary Retry a failed notification
  */
 export const retryNotification = async (id: string, options?: Parameters<typeof ogFetch>[1]): Promise<retryNotificationResponse> => {
@@ -23401,7 +23401,7 @@ export const getListSystemAlarmsUrl = (name: string,) => {
 }
 
 /**
- * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its incidents, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Every member's alarms in one read, newest first, each naming its component: the active ones whatever their age, and those cleared in the last 30 days, capped at 500. It is what a system's Activity reads to explain its alarms, one request however many members the system has. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's members' alarms
  */
 export const listSystemAlarms = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemAlarmsResponse> => {

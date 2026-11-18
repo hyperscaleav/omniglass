@@ -160,7 +160,7 @@ func TestUnsnoozingEarlyAnnouncesLikeTheDeadline(t *testing.T) {
 }
 
 // TestARuleDisabledDuringTheSnoozeStaysQuiet: the end judges the rules as
-// they stand, so a rule paused while the condition was snoozed tells nobody.
+// they stand, so a rule paused while the alarm was snoozed tells nobody.
 func TestARuleDisabledDuringTheSnoozeStaysQuiet(t *testing.T) {
 	t.Parallel()
 	f := newNotifyFixture(t)

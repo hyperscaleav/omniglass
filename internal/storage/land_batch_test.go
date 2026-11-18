@@ -386,12 +386,12 @@ func TestLandBatchTakesItsRuleRowsBeforeAnyHealthLock(t *testing.T) {
 	f := newLandFixture(t)
 	ctx := context.Background()
 	all := scope.Set{All: true}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "power-off",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: "power-off",
 		SampleKey: "power-state", Fire: criteria("eq", "off"), Severity: "high",
 		Selector: storage.EventRuleSelector{Components: []string{"disp-1"}}}, all); err != nil {
 		t.Fatalf("create the property rule: %v", err)
 	}
-	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "condition-started", Name: "room-hot",
+	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{FireEventType: "rule-fired", Name: "room-hot",
 		SampleKey: "room-temperature", Fire: criteria("gt", 90), Severity: "warning"}, all); err != nil {
 		t.Fatalf("create the metric rule: %v", err)
 	}

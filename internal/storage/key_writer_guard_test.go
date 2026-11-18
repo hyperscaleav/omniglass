@@ -292,7 +292,7 @@ func TestSampleWriteSQLReadsEveryForm(t *testing.T) {
 		`insert into property_type (name) values ($1)`,
 		`insert into metric_type (name) values ($1)`,
 		`insert into event_type (name) values ($1)`,
-		`insert into event_rule_condition (rule_id) values ($1)`,
+		`insert into event_rule_firing (rule_id) values ($1)`,
 		`update metric_type set unit = $1`,
 		`update property_type p set label = $1`,
 		`storage: update property %q: %w`,

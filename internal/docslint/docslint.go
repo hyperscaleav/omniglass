@@ -468,6 +468,17 @@ var operatorStrings = []string{
 	// ADR-2034 sweep because nothing scanned them.
 	filepath.Join("..", "..", "web", "src", "lib", "products.ts"),
 	filepath.Join("..", "..", "web", "src", "pages", "Products.tsx"),
+	// The alarm and rule surfaces, where a rule's condition, an alarm's
+	// condition and a system's incidents read until ADR-2038.
+	filepath.Join("..", "..", "web", "src", "pages", "Rules.tsx"),
+	filepath.Join("..", "..", "web", "src", "pages", "SystemZoom.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "AlarmsPanel.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "SnoozeButton.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "HealthHistory.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "EventsPanel.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "NotificationStatusPill.tsx"),
+	filepath.Join("..", "..", "web", "src", "lib", "alarms.ts"),
+	filepath.Join("..", "..", "web", "src", "lib", "system_history.ts"),
 	filepath.Join("..", "..", "README.md"),
 	// The generated OpenAPI document carries every Huma operation and field
 	// description (#451): the doc: tags flow to the spec, the CLI reference,

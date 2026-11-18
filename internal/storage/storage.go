@@ -1075,18 +1075,19 @@ type Gateway interface {
 	// transaction of the write that triggered it, never as a call of its own.
 	RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error)
 	ClearAlarm(ctx context.Context, actorID, componentName, alarmID string) error
-	// AcknowledgeAlarm records that a human has seen the incident. It is the one
+	// AcknowledgeAlarm records that a human has seen the alarm. It is the one
 	// alarm write that does NOT recompute health: acknowledging is not fixing,
-	// and the raised state belongs to the condition, not to the person looking.
+	// and the raised state belongs to
+	// the problem, not to the person looking.
 	AcknowledgeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error)
-	// SnoozeAlarm snoozes the alarm's condition (component, dedup_key) for a
+	// SnoozeAlarm snoozes the alarm (component, dedup_key) for a
 	// duration from now, setting or replacing the deadline (#1318); it
-	// suppresses the condition's notifications and moves nothing else.
-	// UnsnoozeAlarm ends it early; a condition that is not snoozed is a no-op.
+	// suppresses the alarm's notifications and moves nothing else.
+	// UnsnoozeAlarm ends it early; an alarm that is not snoozed is a no-op.
 	SnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string, d time.Duration) (*Alarm, error)
 	UnsnoozeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error)
 	// EndExpiredSnoozes is the end-of-snooze sweep the notifier's tick runs:
-	// it ends up to max snoozes past their deadline, announcing a condition
+	// it ends up to max snoozes past their deadline, announcing an alarm
 	// still raised again, and reports how many it ended.
 	EndExpiredSnoozes(ctx context.Context, max int) (int, error)
 	// AlarmTimeline reads one alarm's events and audit rows merged by time
