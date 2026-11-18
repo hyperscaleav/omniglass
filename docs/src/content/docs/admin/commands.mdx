@@ -1,15 +1,20 @@
 ---
 title: Commands
 description: "The Commands catalog and the invocations behind it: the canonical names for what a component can be told, the two-armed target and settle window each carries, and the recorded status an issued command earns."
+sidebar:
+  order: 14
+  badge:
+    text: Built
+    variant: success
 ---
 
-import SeededSet from '../../../../components/SeededSet.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
 **Catalog, under Actions: Commands** (with `command_type:read`, covered by every viewer's `*:read` floor) is
 the fleet's **"do" catalog**: the directory of what a component can be **told**. The other
-catalogs name what the fleet knows (a [property](/guides/admin/properties/) is a value, a
-[metric](/guides/admin/metrics/) is a quantity) and what happened (an
-[event](/guides/admin/events/) is an occurrence); a **command type** names an instruction
+catalogs name what the fleet knows (a [property](/admin/properties/) is a value, a
+[metric](/admin/metrics/) is a quantity) and what happened (an
+[event](/admin/events/) is an occurrence); a **command type** names an instruction
 (`set-input`, `reboot`) and carries the two facts that belong to the driver, not the abstract
 signal: the **target** it sets and the **settle window** the device needs to act. The name is
 its canonical identifier, a single lowercase kebab segment.
@@ -65,16 +70,16 @@ visible to every reader; the write gates decide who may change it.
   just that button, its hover reason naming the permission (`Requires command_type:update`,
   `Requires command_type:delete`); the pair never disappears.
 - A command type can carry a **params schema** (a JSON Schema for the invocation params), set
-  through the API for now; the console does not surface it yet. A schema whose `required` list
+  through the API; the console does not show it. A schema whose `required` list
   names a property its `properties` block does not declare is refused at write with the name,
   and the stored schema is **enforced at issue**: an invocation whose params violate it is
   refused (422, naming the violated constraint), and absent params validate as the empty
   object, so a schema with required fields refuses a bare invocation.
-- An **official** command type is always read-only: the blade keeps the Edit and Delete pair in
-  location, greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
+- An **official** command type is always read-only: the blade keeps the Edit and Delete pair
+  in place, greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
   The shared vocabulary is the same from install to
   install, the same deliberate exception to the operator-owned rule the
-  [Properties catalog](/guides/admin/properties/) makes, and for the same reason: a command type
+  [Properties catalog](/admin/properties/) makes, and for the same reason: a command type
   name is the vocabulary a driver maps onto, so a release has to be able to correct it
   ([the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs)).
 
@@ -97,7 +102,7 @@ non-disclosing 404. One transaction records three things:
 
 - the **command row**: the invocation itself, with its params and who issued it;
 - a **caused event**, typed `command-issued`, on the component's
-  [event log](/guides/admin/events/#the-occurrences-behind-the-catalog); and
+  [event log](/admin/events/#the-occurrences-behind-the-catalog); and
 - for a settleable command given a **value**, an **intended** series row in the target's lane:
   the value the device was told to hold, landing beside the observed series so intent and
   reality can be compared. The row names the command that opened it (its `command_id` lineage),
@@ -154,7 +159,7 @@ read but whose commands you may not is a 403. Each command carries:
   observed after, or carried by no endpoint at all;
 - who **issued** it.
 
-Each terminal status also lands on the component's [event log](/guides/admin/events/#the-occurrences-behind-the-catalog)
+Each terminal status also lands on the component's [event log](/admin/events/#the-occurrences-behind-the-catalog)
 as `command-settled`, `command-failed` or `command-timed-out`, naming the command (its reason and
 evidence stay on the command, which takes `command:read`). A reply the server cannot mask, because
 it could not read the endpoint's credentials, is withheld rather than stored.

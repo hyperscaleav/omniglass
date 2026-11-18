@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "`component_make` slice 1: an `official` boolean (not an `origin` enum) for consistency with the type registries; the in-use referential delete guard deferred to the `component_model` slice (nothing references a make yet); `website` scheme-validated to `http`/`https`, client and server, against stored XSS"
 ---
 
-- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Vendors guide](/guides/admin/vendors/)
+- **Date:** 2026-07-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Vendors guide](/admin/products/#vendors)
 - **Decision:** Three calls on the first slice of the `component_make` manufacturer registry (id,
   display_name, icon, support_phone, website), lands ahead of the rest of the make/model catalog.
   **(1) `official boolean`, not an `origin` enum.** The design sketch (below) proposed
