@@ -1,6 +1,9 @@
 ---
 title: Alarms and actions
 description: How Omniglass raises a stateful alarm when a rule fires and responds with an action, which is a flow when it has more than one step.
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 import SchemaTable from '../../../components/SchemaTable.astro';
@@ -25,7 +28,7 @@ component stops occupying its slots; a lesser alarm degrades the component but l
 (#626: an alarm no longer names what it degrades).
 
 Also built: the **event rule** that raises and clears alarms on its own as samples land, with
-sustains held by a durable streak and a sweep, five official rules (`reachability-lost`; `outpost-silent` on an outpost's own component; `ingest-lag-high`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
+sustains held by a durable streak and a sweep, seven official rules (`reachability-lost`; `outpost-silent` and `worklist-stale` on an outpost's own component; `ingest-lag-high`, `rule-sweep-stalled`, `disk-nearly-full` and `retention-behind` on the server's own component), each rule's
 live state, and the console's **Event rules** and **Severity levels** pages. The **event-to-alarm edge** (#938,
 [ADR-0145](/architecture/decisions/#adr-0145-a-rule-records-its-conditions-as-typed-events-and-its-alarm-is-optional)):
 a rule's alarm is optional (an informational rule raises none), it writes typed events each time it
@@ -395,7 +398,10 @@ age is one; the outpost's next heartbeat brings the age back under and clears it
 ([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
 `retention-behind` opens a `warning` alarm on the server's component when a retention lane or
 compaction stays behind its window for 5 minutes, and clears on the first pass that catches up
-([storage](/architecture/storage/#what-a-retention-pass-reports)).
+([storage](/architecture/storage/#what-a-retention-pass-reports)). `rule-sweep-stalled` opens a
+`high` alarm on a server's component when its `rule-sweep-age`, the seconds since its event rule
+sweep last completed, reads past 30 s, with no sustain since the age is one, and clears when the
+sweep resumes ([collection](/architecture/collection/#what-an-alarm-inside-the-platform-cannot-see)).
 
 Criteria are [expressions](/architecture/expressions/) (#957), stored as `{"expr": "..."}` and
 evaluated against a prepared input of five bindings: **`value`** (a metric's number, or a property's
@@ -580,7 +586,8 @@ proves itself with. The kinds are a code-declared enum published through the API
 the first, and it reaches people through the tools they already watch (a chat incoming webhook, a
 paging service) without a mail relay. An `email` target is a fixed set of addresses, a shared
 mailbox ([below](#email-a-shared-mailbox-and-a-persons-directory-email)). A target can also name
-people: a `user_group` or one `user` ([below](#people-group-and-person-targets-and-the-inbox)).
+people: a `user_group` or one `user` ([below](#people-group-and-person-targets-and-the-inbox)),
+or everyone holding a `role` ([below](#role-targets-and-the-shipped-platform-routing)).
 Other channel kinds are later. A target
 is **platform-owned and admin-only**: an egress destination holding a credential reference, so
 `notification_target` is a sensitive resource off the viewer floor, every route takes an
@@ -664,6 +671,56 @@ and to holders of `user:read:admin`; everyone else reads it as withheld
 target takes `user_group:read:admin` or `user:read:admin` on top of
 `notification_target:create`, as binding a secret takes `secret:bind`, and a group or person a
 target names cannot be deleted from under it: the refusal names the target.
+
+### Role targets, and the shipped platform routing
+
+A **`role`** target (#1987) reaches every person **holding a role**, directly or through a grant to one
+of their groups, on the channels it names. The holders are read from the grant table at the transition,
+exactly as a group's membership is: grant someone `admin` and the next alarm tells them, revoke it and the
+next one does not, with no group to keep in step. The match is on the role itself, whatever the grant's
+scope; a person holding it twice (directly and through a group, or through two groups) is told once, as
+is a person two targets on one rule both reach (holding `admin` and `owner`, say), and the per-person scope check above still decides
+which alarms each holder hears about. Only active, unarchived persons are told, and an email to a holder
+is judged again at send: a holder who lost the role since is refused with the reason.
+Binding one takes `role:read:admin` and `user:read:admin`, since it names the role and through it a set of
+people, and the role a target names is shown only to a caller holding `role:read:admin`. A role a target
+names cannot be deleted from under it. Like a group, a role target takes no `:test`.
+
+```bash
+omniglass notification-target create --name site-admins --kind role \
+  --role admin --channels '["inbox"]'
+```
+
+**Platform alarms reach the admins by default.** The boot seed ships two targets and one rule, so a fresh
+install tells somebody when Omniglass itself is unwell:
+
+- `platform-admins`, a `role` target naming `admin`, on `inbox`;
+- `platform-owners`, a `role` target naming `owner`, on `inbox`: owner does not inherit admin, and the
+  bootstrap user holds `owner`, so on a fresh install this is the target that tells somebody;
+- `platform-alarms-to-admins`, an action rule on `raised` and `cleared`, `when: platform`, sending to both.
+
+`platform` is an [action-site binding](#the-action_rule-when-a-message-is-sent): true when the alarm's
+component is one of Omniglass's own parts, a member of the reserved
+[`platform` system](/guides/operator/platform-health/). The flag is read before any rule runs, so a
+transition on a fleet component skips a rule whose `when` is `platform` alone without reading its facts.
+
+The three rows are **official**: the seed is authoritative on what it ships and puts it back on every
+boot (a target's role and channels; a rule's label, description, `on`, `when` and its shipped targets),
+and the API refuses an edit of those, or a delete, with a 409. What an operator owns is left alone:
+**disabling the rule or a target survives a restart**, a target's label is theirs, and so are targets an
+operator adds to the rule beside the shipped ones. The shipped rows live in the `og` namespace, so the
+targets are a catalog like the rules: an operator's own `platform-admins` lands in `local` beside the
+shipped one and the bare name reaches theirs ([the search path](/architecture/glossary/)), while the
+shipped rule keeps the shipped target it links:
+
+```bash
+omniglass action-rule update platform-alarms-to-admins --enabled=false
+omniglass action-rule update platform-alarms-to-admins --targets '["platform-admins","platform-owners","ops-chat"]'
+```
+
+The shipped targets are inbox only: an email channel would fail a row per person per transition on every
+install with no `mail_relay` set, until such a send is skipped rather than failed (#2016). An operator
+wanting mail adds an email-channel role target of their own to the rule.
 
 ### Email: a shared mailbox, and a person's directory email
 
@@ -752,7 +809,9 @@ omniglass action-rule create --name page-ops --on '["raised","cleared"]' \
 
 `when` is the **action** site of the [expression engine](/architecture/expressions/): its bindings
 are the alarm facts above in snake_case (`component`, `location`, `severity`, `message`, `rule`, ...)
-plus `severity_rank`, so a floor reads as a comparison (`severity_rank >= 40` is high and above).
+plus `severity_rank`, so a floor reads as a comparison (`severity_rank >= 40` is high and above), and
+`platform`, true when the alarm is on one of Omniglass's own parts (the shipped
+[platform routing](#role-targets-and-the-shipped-platform-routing) is `when: platform`).
 **Acknowledgement never notifies**, and neither does a snooze: an operator act is not an alarm's
 edge ([cycle safety](#cycle-safety-in-the-action-layer) rule 2), with the one exception of a snooze's
 end announcing a still-raised alarm again ([above](#snooze-silencing-an-alarm-for-a-while)). A clear is
@@ -827,6 +886,33 @@ switch reboot downs 20 endpoints; the system-scoped rule owns the room-level cau
 system-owned alarm, dependency suppression mutes the 20 child alarms, and grouping coalesces the
 rest into one dispatch: the cause, not 20 symptoms.
 :::
+
+## The heartbeat: what an alarm inside the platform cannot see
+
+An alarm is raised by the thing it reports on: the event rule sweep decides it, the server writes it,
+the notifier sends it. So the failures an alarm can never report are the ones that stop all three at
+once. A server that has crashed, lost its network or lost its database raises nothing, and silence
+reads as health. The `rule-sweep-stalled` alarm closes the narrow part of that gap: the sweep is the
+clock that fires and clears every rule that needs time, and when it stops while the server lives on,
+`rule-sweep-age` grows past 30 s and the alarm opens (in the same server's report window, and from a
+second server's read of the shared database). It catches **a stalled sweep, not a dead server**: a peer
+judges only a server that is still marking itself seen, so a dead one drops out of its read rather
+than holding open an alarm nothing would clear.
+
+The remedy for the rest is a **dead-man's switch**: a signal whose *absence* is the alarm, watched from
+outside. The server's **heartbeat** is that signal. Name a webhook
+[notification target](#notification-targets-where-a-message-goes) in the `heartbeat.target` platform
+setting and the server sends it a signed request every `heartbeat.interval_seconds` (60 by default).
+The request is a notification like any other: built and signed by the same pipeline (the target's bound
+`hmac-key` secret signs it, and a target with none bound is refused, never sent unsigned), sent through the egress contract (`internal/egress`, above) so the allow list
+decides where it may go, and audited. The body carries the server's name, its build and the count of
+open alarms on the platform's own components, as the `heartbeat` transition's facts
+(`server`, `build`, `open_platform_alarms`). It is **off by default**: with no target set the server
+sends nothing.
+
+Omniglass does not host the receiver. Point it at a dead-man's-switch service (anything that pages when
+a ping fails to arrive within a grace period) and size that period to a few intervals. Each server
+sends its own; a count that stays above zero tells the receiver the install is up and not quiet.
 
 ::::design[Action durability and egress (ADR-0050)]
 
@@ -984,11 +1070,12 @@ catalogs, the `action_rule` and the targets it sends to (`action_rule_target`), 
 <SchemaTable
   table="notification_target"
   notes={{
-    kind: 'The target kind, a code-declared enum: webhook, email, user_group or user; a CHECK holds each kind to its own columns',
+    kind: 'The target kind, a code-declared enum: webhook, email, user_group, user or role; a CHECK holds each kind to its own columns',
     addresses: 'An email target\'s recipients, a shared mailbox; empty for every other kind',
     url: 'A webhook\'s destination; masked on every read, revealed whole under an audit row. NULL for a person target',
     user_group_id: 'The group a user_group target reaches, expanded at every transition (ON DELETE RESTRICT)',
     user_id: 'The one person a person target reaches (ON DELETE RESTRICT)',
+    role_id: 'The role a role target reaches: every person holding it, directly or through a group grant, read at every transition (ON DELETE RESTRICT)',
     channels: 'The channels a person target delivers on (inbox, email); empty for a webhook or an email target',
     secret_id: 'The platform hmac-key or bearer-token secret it signs or authenticates with; a bound secret cannot be deleted (RESTRICT)',
   }}

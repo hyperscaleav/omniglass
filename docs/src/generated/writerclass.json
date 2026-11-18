@@ -131,6 +131,7 @@
       "retention-pass-duration",
       "retention-pass-failure-count",
       "retention-window-days",
+      "rule-sweep-age",
       "schedule-gap-excess",
       "schedule-lateness",
       "schedule-skip-count",
