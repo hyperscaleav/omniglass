@@ -12,6 +12,7 @@
 #   agent-trust.sh fix      may this comment or review start a fix?
 #   agent-trust.sh verdict  does the reviewer say ship on this PR's head?
 #   agent-trust.sh actors   the logins whose comments the model may read
+#   agent-trust.sh open     may this dispatch open a PR from a session's branch?
 #   agent-trust.sh teams O  print {"maintainers":[...],"contributors":[...]} for
 #                           org O, read with gh (needs a token that can read
 #                           org teams); a team that is missing or unreadable is
@@ -26,11 +27,14 @@
 # auto_rounds (the App's Changes-requested reviews on the PR, this one
 # included), maintainers and contributors. verdict reads app_bot, head_sha and
 # reviews ([{user, state, commit_id}] in the order GitHub lists them). actors
-# reads maintainers and contributors. A comment reaches fix only when it mentions @hyperscale-agent or @claude, so a
-# comment needs only a team member as sender; a review runs when it requests
-# changes or mentions either name.
+# reads maintainers and contributors. open reads sender (who dispatched
+# agent-open-pr), head_ref (the branch to open the PR from), open_prs (open PRs
+# already on that branch, a count) and maintainers. A comment reaches fix only
+# when it mentions @hyperscale-agent or @claude, so a comment needs only a team
+# member as sender; a review runs when it requests changes or mentions either
+# name.
 #
-# build and fix print "run", or "refuse: <reason>" / "skip: <reason>"; fix
+# build, fix and open print "run", or "refuse: <reason>" / "skip: <reason>"; fix
 # prints "park: <reason>" when the reviewer's automatic rounds are used up, so
 # the PR waits for a person. verdict prints "ship" or "block: <reason>". actors
 # prints the logins, comma-separated, sorted.
@@ -60,8 +64,8 @@ if [ "$mode" = teams ]; then
 fi
 
 case "$mode" in
-  build | fix | verdict | actors) [ $# -eq 1 ] || { printf 'usage: agent-trust.sh %s < facts.json\n' "$mode" >&2; exit 64; } ;;
-  *) printf 'usage: agent-trust.sh build|fix|verdict|actors < facts.json, or teams <org>\n' >&2; exit 64 ;;
+  build | fix | verdict | actors | open) [ $# -eq 1 ] || { printf 'usage: agent-trust.sh %s < facts.json\n' "$mode" >&2; exit 64; } ;;
+  *) printf 'usage: agent-trust.sh build|fix|verdict|actors|open < facts.json, or teams <org>\n' >&2; exit 64 ;;
 esac
 
 facts=$(cat)
@@ -81,6 +85,21 @@ common='
 case "$mode" in
   actors)
     printf '%s' "$facts" | jq -r '((.maintainers // []) + (.contributors // [])) | unique | join(",")'
+    ;;
+
+  # A PR the agents' App opens is one the architect can approve, so only a
+  # maintainer may ask for one, and only from a claude/ branch: a session's
+  # work, never main or a person's branch.
+  open)
+    printf '%s' "$facts" | jq -r "$common"'
+      (.head_ref // "") as $ref
+      | if (.sender // "") == "" then "refuse: the event names no sender"
+        elif maintainer(.sender) | not then
+          "refuse: @\(.sender) is not on the maintainers team"
+        elif ($ref | test("^claude/[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$") | not) or ($ref | contains("..")) then
+          "refuse: \($ref) is not a claude/ branch"
+        elif (.open_prs // 0) > 0 then "refuse: \($ref) already has an open PR"
+        else "run" end'
     ;;
 
   build)
