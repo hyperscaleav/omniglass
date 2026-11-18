@@ -1,9 +1,14 @@
 ---
 title: Location types
 description: "The Location Types catalog: the location classifier catalog (campus, building, floor, room, and your own), operator-owned rows with an icon, an allowed-parents constraint, and a declared-property contract."
+sidebar:
+  order: 8
+  badge:
+    text: Built
+    variant: success
 ---
 
-import SeededSet from '../../../../components/SeededSet.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
 **Catalog, under Locations: Types** (`/location-types`, with `location_type:read`, covered by every
 viewer's `*:read` floor) is the catalog of **location classifiers**: the `location_type` a
@@ -12,8 +17,8 @@ purpose; its former home, a tabbed Types page, shared a fetch with the secret ty
 a viewer without `secret:read` lost both. The two now stand alone (secret shapes live on
 [Secret Types](/admin/secrets/#secret-types)), and two other kinds left even earlier, because a
 bare label catalog was never what they were: a **component**'s shape comes from the
-[product](/guides/admin/products/) it points at, and a **system**'s from the
-[standard](/guides/admin/standards/) it conforms to.
+[product](/admin/products/) it points at, and a **system**'s from the
+[standard](/admin/standards/) it conforms to.
 
 The page is that catalog's directory: a table of its rows, sorted alphabetically by display
 name, each showing the **name** (for example `wing`), **label**, an **icon** glyph key,
@@ -141,12 +146,12 @@ uuid minted by the database, the internal address the handle resolves to
   the shipped one), and **Delete** stays greyed with the reason on hover, "Official: ships with
   Omniglass and updates with it." Once you have changed one, that slot becomes **Restore default**,
   which discards your version and takes whatever the current release ships. The same treatment the
-  [component type](/guides/admin/products/) catalog uses, and the reason both catalogs have it is
+  [component type](/admin/products/) catalog uses, and the reason both catalogs have it is
   that a release must be able to correct the vocabulary it ships.
 - **Delete** is refused (409) while a location still uses that type: reclassify or remove the
   referencing rows first.
 - A location type is **flat**: it has no parent, so it inherits nothing and every fact on it is its
-  own. The nested catalogs beside it, [component type](/guides/admin/products/) and system type, do
+  own. The nested catalogs beside it, [component type](/admin/products/) and system type, do
   inherit, and their blades say so: an empty **Stem**, **Abbrev** or **Icon** box shows the value the
   type would take in grey, and the hint under it names the ancestor that value comes from, which may
   be further up than the immediate parent. Clearing a box therefore tells you what you just fell back
@@ -164,16 +169,16 @@ the [CLI reference](/reference/cli/)).
 ## Declared properties: the location type's contract
 
 A location type's blade carries a **Declared properties** panel, its **contract**: which
-[properties](/guides/admin/properties/) every location of that type exposes, and what each one
-defaults to. It is the same editor as a [product](/guides/admin/products/)'s or a
-[standard](/guides/admin/standards/)'s, and it keeps this page's permission story: the read
+[properties](/admin/properties/) every location of that type exposes, and what each one
+defaults to. It is the same editor as a [product](/admin/products/)'s or a
+[standard](/admin/standards/)'s, and it keeps this page's permission story: the read
 rides `location_type:read`, declaring a line needs `location_type:update`, and withdrawing one
 needs `location_type:delete`. Every contract control lives in the blade's edit mode, so the
 pencil's `location_type:update` is in the path either way.
 
 - **Declare a property** picks a name from the property catalog, optionally types a **default**,
   and optionally marks it **required**. The property must already exist in the catalog; mint it
-  under [Catalog, under Telemetry: Properties](/guides/admin/properties/) first. Declaring is **idempotent**.
+  under [Catalog, under Telemetry: Properties](/admin/properties/) first. Declaring is **idempotent**.
 - **Type and validation are the catalog's**, not the contract's, so a location type cannot
   redefine what a property means, only what a fresh location of that type starts with.
 - **Locations inherit live.** Change a default and every location of the type that has not

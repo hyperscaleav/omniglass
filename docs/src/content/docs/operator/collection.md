@@ -42,7 +42,7 @@ last-heartbeat time, and its tags. A row opens the outpost's detail.
   placement picked from the fleet's locations, not a scope); the **name is immutable** (it is
   the fleet address and enrollment identity). The location clears if that location is deleted.
 - The detail carries a **Tags** panel: with `outpost:update`, edit mode adds and removes governed
-  [tags](/guides/admin/tags/) (keys whose vocabulary allows outposts), the same tag editor the
+  [tags](/admin/tags/) (keys whose vocabulary allows outposts), the same tag editor the
   component and location details use. The outpost list shows a Tags column and filters by any tag key.
 - With `outpost:delete`, **Delete** (the destructive action, left of the footer) **decommissions** the outpost after a confirm: its endpoints, derived tasks, tags, and enrollment are removed. The telemetry it collected for components stays.
 - **Enroll** (or **Re-enroll**, if it is already enrolled) is a secondary action in the detail's

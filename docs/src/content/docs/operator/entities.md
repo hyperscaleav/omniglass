@@ -122,9 +122,9 @@ identity pages.
   template** instead starts from one of the examples Omniglass ships
   ([starting from a template](/operator/templates/)). From scratch, it asks **what** and **where**
   before it asks what to call it, because those are what the naming and labelling rules read.
-  **Classification** comes first: a component picks its [product](/guides/admin/products/), a system
-  its type and the [standard](/guides/admin/standards/) it conforms to, a location its
-  [type](/guides/admin/location-types/). **Placement** comes second (a system, a location, a parent,
+  **Classification** comes first: a component picks its [product](/admin/products/), a system
+  its type and the [standard](/admin/standards/) it conforms to, a location its
+  [type](/admin/location-types/). **Placement** comes second (a system, a location, a parent,
   depending on the entity). **Identity** comes last, and on these three pages both of its fields are
   optional.
 
@@ -305,7 +305,7 @@ A component, a system, and a location each carry a **Properties** panel on their
 property their classifier declares, resolved to the value set here or the classifier's default.
 Overrides are staged with the rest of the edit and committed by the same **Save changes**. It is one
 surface over one resolver, so the panel reads the same on all three; the full walkthrough is in the
-[Properties guide](/guides/admin/properties/#set-a-property-on-an-instance).
+[Properties guide](/admin/properties/#set-a-property-on-an-instance).
 
 A component and a system also carry a **Reconciliation** panel above it, reading the same rows: for
 every property the owner has it shows **want** (what was declared, the value set here or the
@@ -327,7 +327,7 @@ assigned and an **empty slot stays visible**. A slot is not one of the
 Each row is one slot with **where it came from**, **who fills it**, and **how many more it wants**:
 
 - **Inherited or declared here.** A slot marked as coming from the standard is declared on the
-  [standard](/guides/admin/standards/) this system conforms to, and every conforming system has it.
+  [standard](/admin/standards/) this system conforms to, and every conforming system has it.
   A slot declared on this system is this system's own. A **one-off system** (conforming to no standard)
   has only its own.
 - **Assigned and understaffed.** A slot has a **quorum**, how many components should fill it. Two
@@ -337,18 +337,18 @@ Each row is one slot with **where it came from**, **who fills it**, and **how ma
 - **Impact.** Each slot also says what the system loses when the slot is not being filled properly:
   **outage**, **degraded**, or **none**. That is what turns a broken component into a system-level verdict
   further down this page, and it is declared on the
-  [standard](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled) or on the system.
+  [standard](/admin/standards/#slots-what-a-conforming-system-needs-filled) or on the system.
 - **Assign** picks a component to fill the slot; **unassign** takes it out and the slot goes back to
   understaffed. Assigning the same component twice changes nothing.
 - **A component staffing a slot cannot be deleted.** Unassign it first. The refusal is deliberate: a
   delete that silently emptied a slot would leave the system quietly wrong.
 
 **An assignment can be refused, and the refusal tells you why.** A slot's [accepted types and pinned
-products](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled) are the typed-slot
+products](/admin/standards/#slots-what-a-conforming-system-needs-filled) are the typed-slot
 guard: assign a component of the wrong type and you get both parties named
 (`component "panel-1" is a display; slot "Table microphone" wants a video-bar`), which is either a
 sign you picked the wrong component or that the slot needs widening.
 
-Declaring the slots is on the [Standards guide](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled);
+Declaring the slots is on the [Standards guide](/admin/standards/#slots-what-a-conforming-system-needs-filled);
 this panel is where they get staffed.
 

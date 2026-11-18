@@ -10,7 +10,7 @@ sidebar:
 reach, what the fleet runs on, and what happens when something goes wrong.
 
 **In this section:** users, roles, groups and grants; the audit trail; secrets, variables and files;
-and the platform settings. Running the fleet day to day is the [Operator](/operator/) section's job,
+the platform settings; and the catalog, the shared vocabulary the fleet is described in. Running the fleet day to day is the [Operator](/operator/) section's job,
 and standing the platform up is [Deployment](/guides/deployment/).
 
 ## What makes someone an admin
@@ -26,7 +26,7 @@ change.
 ## Two ways in, one API
 
 - **The console.** Its **Admin** group holds Users, Roles, User groups, Settings and Audit; Secrets,
-  Variables and Files sit under **Values**. A page you have no read grant for is hidden and its route
+  Variables and Files sit under **Values**, and the catalog has a **Catalog** group of its own. A page you have no read grant for is hidden and its route
   refused, so the console never paints a page you cannot use.
 - **The CLI.** The same surfaces are generated commands on the [`omniglass` CLI](/guides/cli/)
   (`user`, `user-group`, `secret`, `variable`, `setting` and the rest, all in the
@@ -49,11 +49,21 @@ change.
 - **[Platform settings](/admin/settings/)**: the install-wide namespaces, how long each kind of data
   is kept, and how often an endpoint reports on itself.
 
-The catalog and automation pages are still the **Admin guide** under **Being rebuilt** in the
-sidebar until they land here: [tags](/guides/admin/tags/), [properties](/guides/admin/properties/),
-[metrics](/guides/admin/metrics/), [events](/guides/admin/events/),
-[commands](/guides/admin/commands/), [location types](/guides/admin/location-types/),
-[standards](/guides/admin/standards/), [products](/guides/admin/products/),
-[vendors](/guides/admin/vendors/) and [drivers](/guides/admin/drivers/) (#2190), and
-[rules and severity](/guides/admin/rules/), [calc rules](/guides/admin/calc-rules/) and
-[notifications](/guides/admin/notifications/) (#2191).
+The catalog is the vocabulary everything else is described in. Most of it ships a starter set with
+Omniglass and takes your own entries beside it; each page says which of its rows you may change:
+
+- **[Location types](/admin/location-types/)**: the kinds of place the location tree is built from,
+  which parents each may sit under, and the properties each declares.
+- **[Tags](/admin/tags/)**: the governed tag keys, what each applies to, and whether it cascades.
+- **[Products and vendors](/admin/products/)**: the SKUs a component is, their component type, and
+  the organizations behind them.
+- **[Properties](/admin/properties/)**, **[metrics](/admin/metrics/)**, **[events](/admin/events/)**
+  and **[commands](/admin/commands/)**: the canonical names a driver maps a device onto, one catalog
+  per lane.
+- **[Standards](/admin/standards/)**: the contract a system is built to, and the slots a conforming
+  system fills.
+
+The automation pages and drivers are still the **Admin guide** under **Being rebuilt** in the
+sidebar until they land here: [rules and severity](/guides/admin/rules/),
+[calc rules](/guides/admin/calc-rules/) and [notifications](/guides/admin/notifications/) (#2191),
+and [drivers](/guides/admin/drivers/) (#2200).

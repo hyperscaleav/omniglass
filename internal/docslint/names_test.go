@@ -64,7 +64,7 @@ func TestScanNamesInFence(t *testing.T) {
 // than convenient.
 //
 // A page teaching the name rule has to WRITE the illegal spellings to teach it:
-// guides/admin/properties.mdx says registering `serial-number` once means it
+// admin/properties.mdx says registering `serial-number` once means it
 // cannot drift into `serialNumber` or `serial_number`, and that sentence is
 // correct and must never be "fixed". Prose is therefore out of scope entirely,
 // and a comment inside a fence is prose that happens to sit in a code block. The

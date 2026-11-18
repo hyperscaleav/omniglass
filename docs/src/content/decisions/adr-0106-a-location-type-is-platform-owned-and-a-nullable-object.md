@@ -7,7 +7,7 @@ summary: "`location_type` adopts the **registry fork** (ADR-0095) rather than gr
 
 - **Date:** 2026-08-12 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/),
   [core entities](/architecture/core-entities/), [API](/architecture/api/),
-  [location types](/guides/admin/location-types/)
+  [location types](/admin/location-types/)
 - **Context:** the boot seed's contract is documented as an authoritative upsert, and
   `SeedLocationType` was `on conflict (name) do nothing`. A shipped default was therefore a one-way
   ratchet: adding one reached every estate, removing one reached only new installs.

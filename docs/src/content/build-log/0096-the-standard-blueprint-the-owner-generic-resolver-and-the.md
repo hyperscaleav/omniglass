@@ -16,7 +16,7 @@ form: bullet
   to **`/standards`**. Two contract tables join `product_property` on the identical shape:
   **`standard_property`** and **`location_type_property`** (`<classifier>_id`, `property_name`, an optional
   `default_value`, a `required` flag, unique per pair); `data_type` and `validation` are **never** duplicated onto
-  a contract, they stay in the [property catalog](/guides/admin/properties/). The resolver then generalizes to
+  a contract, they stay in the [property catalog](/admin/properties/). The resolver then generalizes to
   **`EffectiveProperties(ctx, ownerKind, ownerID, read)`**, resolving **component, system, location, and node**
   off **one** parameterized SQL template driven by an **`ownerContract`** table (instance table, classifier
   column, contract table, contract key, arc column): component reads through `component.product_id`, system

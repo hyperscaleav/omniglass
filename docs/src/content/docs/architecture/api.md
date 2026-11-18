@@ -907,7 +907,7 @@ A **contract** is the set of properties a classifier's instances expose
 ([core entities](/architecture/core-entities/#declared-properties-the-classifier-contracts-and-the-declared-rows)).
 Each contract is a **sub-collection of its classifier**, addressed by property name, so the line is
 idempotent: `PUT` declares it or revises it in place. Type and validation come from the
-[property catalog](/guides/admin/properties/), not the body. Three classifiers carry a contract, on
+[property catalog](/admin/properties/), not the body. Three classifiers carry a contract, on
 identical route shapes:
 
 - `GET /products/{id}/properties`, `PUT` / `DELETE /products/{id}/properties/{property}`, gated

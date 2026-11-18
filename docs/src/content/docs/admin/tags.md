@@ -1,6 +1,11 @@
 ---
 title: Tags
 description: "The Tags directory: mint the governed key vocabulary, set what each key applies to and whether it cascades, and edit or delete a key."
+sidebar:
+  order: 9
+  badge:
+    text: Built
+    variant: success
 ---
 
 **Catalog, under Metadata: Tags** (with `tag:read`) is the directory of the governed [tag](/architecture/tags/) key

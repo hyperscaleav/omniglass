@@ -9,7 +9,7 @@ summary: "The standalone **fields** feature retires and folds into the estate mo
   [ADR-0085](#adr-0085-the-component_type-registry-returns-as-the-device-class-genus) (the
   `component_type` registry returns, reshaped above the product) | **Pages:** [core entities](/architecture/core-entities/),
   [config, secrets, and variables](/architecture/variables/), [API](/architecture/api/),
-  [Properties guide](/guides/admin/properties/), [Products guide](/guides/admin/products/)
+  [Properties guide](/admin/properties/), [Products guide](/admin/products/)
 - **Decision:** The standalone **fields** feature is **retired** and folded into the estate model, because a
   **field was never a primitive**: it was a **property with `declared` provenance**, and the same is true of
   **config** (a property with `intended` provenance). Two tables replace it. **`product_property`** is the

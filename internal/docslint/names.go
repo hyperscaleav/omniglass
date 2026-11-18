@@ -23,7 +23,7 @@ import (
 // are deliberate rather than incidental.
 //
 // Prose is out of scope, permanently. A page teaching the name rule has to write
-// the illegal spellings in order to teach them: guides/admin/properties.mdx says
+// the illegal spellings in order to teach them: admin/properties.mdx says
 // registering `serial-number` once means it cannot drift into `serialNumber` in
 // one place and `serial_number` in another, and that sentence is correct. A lint
 // firing on it would make the corpus fixable only by deleting the explanation,

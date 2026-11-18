@@ -171,7 +171,7 @@ From the CLI: `omniglass system health list <name>` and `omniglass location heal
 Once, in order, on a real system:
 
 1. **Declare the slots with their impact.** On the system's
-   [standard](/guides/admin/standards/#slots-what-a-conforming-system-needs-filled), give **Main Display**
+   [standard](/admin/standards/#slots-what-a-conforming-system-needs-filled), give **Main Display**
    impact **outage** and **Room Microphone** impact **degraded** with quorum 2, accepting `video-bar`.
    Every conforming system inherits both immediately.
 2. **Staff the system.** Assign components to each slot from the system's **Slots** panel. A component

@@ -5,7 +5,7 @@ status: "Accepted"
 summary: "**`product`** lands as a first-class catalog entity, the concrete SKU that binds a **`vendor`**, a **`driver`**, a **`kind`** (`device` / `app` / `service` / `vm`), and a capability set via the **`product_capability`** join; **`parent_product_id`** models variants, and **`component.product_id`** (`on delete restrict`) points a component at the SKU it is, making the product the source of a component's shape and retiring the `component_type`-as-shape notion. PR3 of the estate-model shift; consumes the vendor / driver / capability catalogs from ADR-0044"
 ---
 
-- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Products guide](/guides/admin/products/)
+- **Date:** 2026-07-20 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [Products guide](/admin/products/)
 - **Decision:** **`product`** is a first-class catalog entity, the concrete **SKU** (a Cisco Room Bar, a
   Samsung QM55) that ties the [ADR-0044](#adr-0044-the-component-classification-catalogs) leaf catalogs
   together. A product carries a stable `id` and `display_name`, a **`kind`** from a fixed enum (`device` /

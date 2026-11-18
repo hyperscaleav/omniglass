@@ -180,7 +180,7 @@ components' ratios: an outpost that lost 1 of 2 and one that lost none of 98 are
   no ratio.
 
 Select a hop for its explainer: what it does, what counts as out and as lost there, the keys it is
-read from with their descriptions from the [metrics catalog](/guides/admin/metrics/), the class of
+read from with their descriptions from the [metrics catalog](/admin/metrics/), the class of
 platform component that records it, and each component's own share. Each component links to its
 platform component, where its delivery series live with their history.
 
@@ -213,7 +213,7 @@ own bookkeeping) reads on the component page the server's name, or an outpost's 
 
 A panel row is one key: its last hour as a sparkline beside its current figure. Click a row, or tab
 to it and press Enter or Space, to open the full chart beneath it, and again to close it. Hover a key's name, or tab to it, for what
-it measures, the description from the [metrics catalog](/guides/admin/metrics/); the tooltip links
+it measures, the description from the [metrics catalog](/admin/metrics/); the tooltip links
 onto the key's series on the server's platform component, the same component view any device has.
 A key the server has not reported reads **not reported**, never 0, and has no sparkline. A key the
 server writes only for a window that saw something (a request, a landed batch, a slow query) is
@@ -347,7 +347,7 @@ The columns are the platform keys, grouped:
   are on the outpost's platform component, one per kind.
 
 Hover a column's header, or tab to it, for what the key measures; the text is the key's description from the
-[metrics catalog](/guides/admin/metrics/), not prose written into the page. A figure the outpost has
+[metrics catalog](/admin/metrics/), not prose written into the page. A figure the outpost has
 never reported reads **not reported**, never 0: a 0 would claim the outpost measured nothing wrong.
 
 ::screenshot{#platform-health-outpost-worklist}

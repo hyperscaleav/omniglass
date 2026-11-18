@@ -5,7 +5,7 @@ refs: []
 form: bullet
 ---
 
-- **The console can set a name rule, not only clear one.** A [location type](/guides/admin/location-types/)
+- **The console can set a name rule, not only clear one.** A [location type](/admin/location-types/)
   carries an optional **name rule**, and having one is the type's opt-in to the platform naming the
   locations it classifies. An earlier slice gave the console the exit and no entrance, which made the
   affordance half a control: it could undo a state it could not create. It mattered more than an

@@ -1,16 +1,21 @@
 ---
 title: Metrics
 description: "The Metrics catalog and the series behind it: the canonical numeric names, the unit and precision they carry, the contract a product, standard, or location type declares, and where the values come from."
+sidebar:
+  order: 12
+  badge:
+    text: Built
+    variant: success
 ---
 
-import SeededSet from '../../../../components/SeededSet.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
 **Catalog, under Telemetry: Metrics** (with `metric_type:read`, covered by every viewer's `*:read` floor) is the
 **numeric lane** of the fleet's signal catalog: the directory of the quantities the fleet
 measures. A **metric** is a **quantity**: a numeric reading that **aggregates**, so an average, a
 p95, a rate over time all mean something, and beside its name and data type it carries the numeric
 facts, a display **unit** and a **precision**, that the property lane never holds. A
-[property](/guides/admin/properties/) is the other lane: a **value**, including a number used as a
+[property](/admin/properties/) is the other lane: a **value**, including a number used as a
 name (a serial number identifies a unit, it measures nothing).
 
 A metric is used in three moves, and this page walks all three: the **catalog** names it, a
@@ -50,7 +55,7 @@ every reader; the write gates decide who may change it.
   greyed, with the reason on hover: "Official: ships with Omniglass and updates with it." The
   shared vocabulary is the same from install to install, the same
   deliberate exception to the operator-owned rule the
-  [Properties catalog](/guides/admin/properties/) makes, and for the same reason: a metric name is
+  [Properties catalog](/admin/properties/) makes, and for the same reason: a metric name is
   the vocabulary a driver maps onto, so a release has to be able to correct it
   ([the seed model](/architecture/core-entities/#the-seed-model-templates-versus-canonical-catalogs)).
 
@@ -70,11 +75,11 @@ not silently dropped and not invented.
 ## Declare a metric on a classifier
 
 The catalog says a metric **exists**; a **classifier** says which metrics its instances **carry**.
-The contract shape is the same as the [property contract](/guides/admin/properties/#declare-a-property-on-a-classifier),
+The contract shape is the same as the [property contract](/admin/properties/#declare-a-property-on-a-classifier),
 held in the metric siblings of the property contract tables (`product_metric`,
-`standard_metric`, `location_type_metric`): a [product](/guides/admin/products/) declares for its
-components, a [standard](/guides/admin/standards/) for its systems, and a
-[location type](/guides/admin/location-types/) for the locations of that type. Each line names a catalog
+`standard_metric`, `location_type_metric`): a [product](/admin/products/) declares for its
+components, a [standard](/admin/standards/) for its systems, and a
+[location type](/admin/location-types/) for the locations of that type. Each line names a catalog
 metric, optionally gives it a **default**, and optionally marks it **required**: a product ships a
 default sample rate, a standard requires a seat count. An outpost's own probe metric (`tcp-connect-time`,
 `icmp-rtt-avg` and the rest) is a reserved key no contract declares, as on the property side.
@@ -99,7 +104,7 @@ A metric's values are **telemetry**, not something typed on an instance's detail
 - An **observed** value arrives through [collection](/operator/collection/): a task samples
   the device and pushes the reading. The shipped probes write the timings in the seeded set above:
   the TCP-connect probe `tcp-connect-time`, the ICMP probe `icmp-rtt-avg`. Each probe's state
-  (`tcp-open`, `icmp-reachable`) is a [property](/guides/admin/properties/), stored when it
+  (`tcp-open`, `icmp-reachable`) is a [property](/admin/properties/), stored when it
   changes, not a metric row every tick.
 - A **calculated** value is produced by a rule from other telemetry, and the row names the rule
   that produced it, so a derived number is never mistaken for a reading.

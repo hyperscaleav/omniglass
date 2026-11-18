@@ -16,7 +16,7 @@ form: bullet
   update, both client and server side (a non-browser caller is refused with a 422), closing a
   stored-XSS path a `javascript:`/`data:` value would otherwise open when the console rendered it
   as a live link; a value that still fails the check renders as plain text, never a dead or unsafe
-  anchor. The console ships a **[Makes](/guides/admin/vendors/)** catalog page (`FlatList` + blade,
+  anchor. The console ships a **[Makes](/admin/products/#vendors)** catalog page (`FlatList` + blade,
   an official row read-only, same shape as [Types](/guides/admin/types/)) and the generated CLI
   (`omniglass component-make list/get/create/update/delete`). Proven by a storage round-trip
   (official read-only, duplicate id, alphabetical list), a seed idempotency test, a real-binary API

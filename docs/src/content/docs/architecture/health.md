@@ -472,5 +472,5 @@ hall's head-end) relates to its subsystems' verdicts is decided with the groupin
 Related: [core entities](/architecture/core-entities/#system-slots-what-a-system-needs-filled)
 (the slot, the typed-slot guard, the quorum), [alarms and actions](/architecture/alarms-actions/) (the
 detection tier), [samples](/architecture/properties/) (the `property` lane and the owner arc), and
-the [Standards](/guides/admin/standards/) and [Work with an entity](/operator/entities/)
+the [Standards](/admin/standards/) and [Work with an entity](/operator/entities/)
 guides for the operator loop.
