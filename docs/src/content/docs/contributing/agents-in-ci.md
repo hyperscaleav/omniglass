@@ -12,7 +12,7 @@ ruleset, and none can merge ([ADR-2175](/architecture/decisions/#adr-2175-agent-
 | Workflow | Starts on | Does |
 | --- | --- | --- |
 | `agent-build.yml` | `run:dev-gha` on an issue | builds the ticket into a draft PR that closes it, and marks it ready when done |
-| `agent-review.yml` | every same-repo PR that is opened, pushed, reopened or marked ready | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only as parallel lenses, posts their findings as one review, and passes its check only when it says ship |
+| `agent-review.yml` | every same-repo PR that is opened, pushed, reopened or marked ready, and every merge-queue entry | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only as parallel lenses, posts their findings as one review, and passes its check only when it says ship |
 | `agent-fix.yml` | `@hyperscale-agent` (or `@claude`) on a PR, a review that requests changes, or agent-review's own Changes requested | pushes a fix to the PR's branch |
 
 A fourth, `agent-open-pr.yml`, runs no agent: it opens a PR as the agents' App from a branch a
@@ -67,12 +67,13 @@ draft saying what is left.
 
 ## Review on every PR
 
-Every same-repo PR that is not a draft gets one adversarial review: inline findings, each with
+Every same-repo PR that is not a draft or from dependabot gets one adversarial review: inline findings, each with
 its failure scenario, and one summary review that requests changes or comments. It never
 approves. Its check, `agent-review`, is the verdict: red while its latest review on the PR's
 head requests changes, green when it says ship. The review is composed and the verdict read
 with the default branch's `scripts/agent-review.sh` and `scripts/agent-trust.sh`, so a PR
-cannot rewrite its own check. The check is not in either main ruleset yet; making it required
+cannot rewrite its own check. The one exception was the PR that added `agent-review.sh`
+(#2211): main had no copy yet, so its own review used the PR's. The check is not in either main ruleset yet; making it required
 is the architect's call. Opus reviews PRs that close a `risk:high` ticket, sonnet the rest. The
 reviewer reads the diff and the code, never the PR's conversation.
 
