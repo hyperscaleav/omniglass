@@ -4157,8 +4157,8 @@
     ],
     "uniques": [
      {
-      "name": "alarm_open_condition_key",
-      "definition": "CREATE UNIQUE INDEX alarm_open_condition_key ON public.alarm USING btree (component_id, dedup_key) WHERE (cleared_at IS NULL)"
+      "name": "alarm_open_identity_key",
+      "definition": "CREATE UNIQUE INDEX alarm_open_identity_key ON public.alarm USING btree (component_id, dedup_key) WHERE (cleared_at IS NULL)"
      }
     ]
    },
@@ -5171,7 +5171,7 @@
      }
     ]
    },
-   "event_rule_condition": {
+   "event_rule_firing": {
     "columns": [
      {
       "name": "rule_id",

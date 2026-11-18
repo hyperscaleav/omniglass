@@ -32,7 +32,7 @@ function mount(me: Me, alarm: { id: string; snoozed_until?: string; snoozed_by?:
 describe("SnoozeButton", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("snoozes the condition for the chosen duration, and teaches how a snooze differs", async () => {
+  it("snoozes the alarm for the chosen duration, and teaches how a snooze differs", async () => {
     const calls: { url: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;

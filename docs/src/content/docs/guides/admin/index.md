@@ -49,7 +49,7 @@ Every task on these pages has two front doors, and they call the same API with t
   typed values and **[metrics](/guides/admin/metrics/)** for the numeric quantities, with their
   units and precision.
 - **[Rules and severity](/guides/admin/rules/)** is where alarms come from when nobody raises them:
-  writing an event rule (what it reads, when it fires and clears, how long a condition must hold),
+  writing an event rule (what it reads, when it fires and clears, how long its criteria must hold),
   watching its live state, and the ranked severity levels its alarms are raised at, which you can
   add to, rename, recolor and re-rank on the console.
 - **[Calc rules](/guides/admin/calc-rules/)** derive a value from others, on each component or on each

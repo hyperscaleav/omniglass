@@ -459,8 +459,8 @@ slot assignment, in one transaction: it lands whole or not at all.
 level's rank moves health fleet-wide) lists the severity levels least to most severe,
 each with whether an alarm at it puts a component in outage; official levels are read-only. `/event-rules`
 (gated `rule:*`; read like a catalog, written only on an all-scope grant) authors the rules that raise alarms: a sample
-key, fire and clear criteria, sustains, a selector, the event types it writes when its condition starts
-(`fire_event_type`, required) and ends (`clear_event_type`, optional), and a severity level, which is
+key, fire and clear criteria, sustains, a selector, the event types it writes when it fires
+(`fire_event_type`, required) and clears (`clear_event_type`, optional), and a severity level, which is
 optional: a rule without one is informational and raises no alarm, and a PATCH with an empty `severity`
 makes a rule informational (an empty `clear_event_type` drops the clear event; the fire type cannot be
 emptied). Criteria are expressions (#957): a body gives `{expr}` or the short form `{op, value}`, which is
@@ -498,12 +498,12 @@ type was deleted stays editable (it matches nothing by the stale entry), while a
 exist. `POST /event-rules/{name}:rename` (gated `rule:update` on an all-scope grant; `omniglass event-rule
 rename`) moves an operator rule's name (#977) and answers the rule with its `id`; every reference inside
 the platform holds that uuid (an alarm's `raised_by_rule_id` and its `dedup_key`, `rule:<uuid>[:<instance>]`,
-a condition, a streak, an event's `derived_by_rule_id`), so a rename bumps no version and leaves streaks
-and conditions running. An event keeps the name it was written under (`derived_by_rule`). An official
+a firing, a streak, an event's `derived_by_rule_id`), so a rename bumps no version and leaves streaks
+and firings running. An event keeps the name it was written under (`derived_by_rule`). An official
 rule keeps its name (409, the seed matches it by name), a taken name is a 409, an illegal or uuid-shaped
-one a 422. The list and a get carry each rule's live state as counts (`conditions_in_force`, `open_alarms`,
+one a 422. The list and a get carry each rule's live state as counts (`firing`, `open_alarms`,
 `pending_streaks`), read for the whole list in one query; `GET /event-rules/{name}/state` lists the
-conditions in force, the alarms and the streaks themselves.
+firings, the alarms and the streaks themselves.
 Both are fenced to the caller's component read scope. The list, a get and the state also carry
 `last_judged_at`, when the rule last judged an arriving sample, to within 5s (absent when it never has);
 it names no component, so it is not fenced. Because writing a rule needs an all-scope grant,
@@ -1078,10 +1078,10 @@ An alarm hangs off its component and rides that component's gating:
 - `GET /components/{name}/alarms` lists them newest first (`component:read`), the **active** set by
   default, the whole history with `include_cleared`, and the queue an operator actually works with
   `unacknowledged` (on its own, raised and unacknowledged; with `include_cleared`, also the
-  incidents that came and went unattended).
+  alarms that came and went unattended).
 - `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
   `component:update`). `severity` names a [severity level](/architecture/alarms-actions/#severity-a-catalog-of-named-levels) (`GET /severity-levels`, an unknown one a 422), driving the component's own
-  verdict (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the condition
+  verdict (any active alarm degrades it, one at or above `high` is an outage); `dedup_key` is the alarm's
   identity, defaulting to the message. A bad severity is a **422**.
 - `DELETE /components/{name}/alarms/{id}` clears it (204, `component:update`). The row is **kept**, so
   the record of what was wrong outlives the fix; clearing one already cleared, or another
@@ -1111,11 +1111,11 @@ Un-acknowledging is deliberately not a verb yet
 
 **Snooze rides the same shape** (#1318): `POST /components/{name}/alarms/{id}:snooze` (a `duration`,
 `1m` to `7d`, else a 422 naming the bound) and `:unsnooze`, both gated by **`alarm:snooze`**, its scope
-resolved on the component tier from that permission. A snooze belongs to the alarm's condition
+resolved on the component tier from that permission. A snooze belongs to the alarm's identity
 (`component`, `dedup_key`), not to the row, so every alarm read carries `snoozed_until` and
-`snoozed_by` on each alarm of a snoozed condition; it does not acknowledge or recompute health, and
+`snoozed_by` on each alarm of a snoozed identity; it does not acknowledge or recompute health, and
 both verbs are audited on the alarm they name
-([alarms and actions](/architecture/alarms-actions/#snooze-a-fact-about-a-condition)).
+([alarms and actions](/architecture/alarms-actions/#snooze-silencing-an-alarm-for-a-while)).
 
 An alarm's transitions also queue its **notifications** (#618): `/notification-types` (the message
 catalog, `notification_type:*`, read on the viewer floor, `:rename` and a `:preview` that renders against
@@ -1164,7 +1164,7 @@ The reports are one shape over two owners:
   ([#940](https://github.com/hyperscaleav/omniglass/issues/940)).
 - `GET /systems/{name}/alarms` (`system:read`) is every member's alarms in one read, newest first, each
   naming its component: the active ones whatever their age and those cleared in the last 30 days, capped
-  at 500. A system's Activity explains its incidents with it, one request however many members the
+  at 500. A system's health history explains its unhealthy stretches with it, one request however many members the
   system has.
 
 Both resolve their owner **within the caller's scope first** (an out-of-scope system or location is a
@@ -1303,6 +1303,10 @@ an append that does not name the conversation's last message is a 409 ([ADR-2113
 `{name}:run` runs omnibot on one on the server and answers `text/event-stream`, the run narrated as
 AG-UI events; it ends in an interrupt when a call waits on the person, answered by the next run's
 `resume` ([ADR-2121](/architecture/decisions/#adr-2121-the-server-runs-omnibot-as-the-person-streaming-ag-ui)).
+Its AG-UI `context` (at most 20 entries of at most 2000 characters) is framed for the model as data
+ahead of the person's message, and `forwardedProps.skill` (`{name, arguments}`) runs an embedded
+skill's rendered prompt in place of one; an unknown skill or a missing argument is a 422
+([ADR-2122](/architecture/decisions/#adr-2122-a-console-subject-is-a-stamp-on-the-shared-primitives-gathered-by-one-modifier-click-handler)).
 It is a 503 on a server with no model, a 403 for an agent or an impersonation session, and a 409 for a
 resume that names no waiting call, a prompt while one waits, or a run while another holds the
 conversation (a run claims it before any tool runs; an append while the claim is live is a 409 too). It is not an MCP tool.

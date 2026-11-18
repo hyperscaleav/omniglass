@@ -342,7 +342,7 @@ telemetry: {
     fire_event_type_id: uuid {constraint: foreign_key}
     severity: text {constraint: foreign_key}
   }
-  event_rule_condition: {
+  event_rule_firing: {
     shape: sql_table
     component_id: uuid {constraint: primary_key}
     instance: text {constraint: primary_key}
@@ -761,8 +761,8 @@ telemetry.event.system_id -> fleet.system.id
 telemetry.event_rule.clear_event_type_id -> telemetry.event_type.id
 telemetry.event_rule.fire_event_type_id -> telemetry.event_type.id
 telemetry.event_rule.severity -> telemetry.severity_level.name
-telemetry.event_rule_condition.component_id -> fleet.component.id
-telemetry.event_rule_condition.rule_id -> telemetry.event_rule.id
+telemetry.event_rule_firing.component_id -> fleet.component.id
+telemetry.event_rule_firing.rule_id -> telemetry.event_rule.id
 telemetry.event_rule_live.rule_id -> telemetry.event_rule.id
 telemetry.event_rule_state.component_id -> fleet.component.id
 telemetry.event_rule_state.rule_id -> telemetry.event_rule.id

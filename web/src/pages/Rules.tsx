@@ -96,9 +96,9 @@ export const RULE_HINTS = {
   severity:
     "The level the alarm is raised at. A level marked outage takes its component out; any other degrades it. None makes the rule informational: it records its events and raises no alarm.",
   events:
-    "The events the rule writes: one when its condition comes into force (after the fire sustain), one when it leaves force (after the clear sustain), never one per sample. condition-started and condition-ended are the generic pair; a type of your own says what happened.",
-  conditions:
-    "A condition is in force on a component and endpoint from the moment the rule's fire criteria have held for the sustain until its clear criteria have. Every rule holds conditions, informational or not; a rule with a severity also holds an alarm open beside each.",
+    "The events the rule writes: one when it fires (after the fire sustain), one when it clears (after the clear sustain), never one per sample. rule-fired and rule-cleared are the generic pair; a type of your own says what happened.",
+  firings:
+    "A rule is firing on a component and endpoint from the moment its fire criteria have held for the sustain until its clear criteria have. Every rule fires, informational or not; a rule with a severity also holds an alarm open beside each firing.",
   open:
     "One alarm per endpoint: a component whose two endpoints both fail carries two alarms, and one recovering clears only its own.",
   pending:
@@ -109,7 +109,7 @@ export const RULE_HINTS = {
   enabled: "A disabled rule evaluates nothing, and disabling it clears the alarms it holds open (each stays in its component's history). Enabling it again judges the newest samples at once.",
   message: "The alarm's message. Blank uses the rule's label, or its name.",
   name:
-    "A lowercase kebab name, e.g. too-hot: the address an operator types and a link carries. Renaming it breaks bookmarks and external references by design; inside the platform nothing moves, since the rule's alarms, conditions and events all hold its uuid. Past events keep the name they were written under.",
+    "A lowercase kebab name, e.g. too-hot: the address an operator types and a link carries. Renaming it breaks bookmarks and external references by design; inside the platform nothing moves, since the rule's alarms, firings and events all hold its uuid. Past events keep the name they were written under.",
   deleted:
     "Deleted since the rule was written, so the rule matches nothing by it; the rest of what it watches still applies. Remove it to tidy the rule, or leave it: saving other changes keeps it as it is.",
 } as const;
@@ -153,8 +153,8 @@ function severityCell(severity: string | undefined): JSX.Element {
     : <span class="badge badge-ghost badge-sm" title="Records its events and raises no alarm">informational</span>;
 }
 
-// The live state at a glance, from the counts on the list row: conditions in
-// force in the info hue, open alarms in the error hue, streaks in the warning
+// The live state at a glance, from the counts on the list row: firings
+// in the info hue, open alarms in the error hue, streaks in the warning
 // hue, and a quiet "clear" when the rule holds nothing right now. A disabled
 // rule says so first (disabling ended what it held). Its (i) says when it
 // last judged a sample, which tells a quiet rule from one whose key has
@@ -163,14 +163,14 @@ function severityCell(severity: string | undefined): JSX.Element {
 function RuleLive(p: { rule: EventRule }): JSX.Element {
   const open = () => p.rule.open_alarms;
   const pending = () => p.rule.pending_streaks;
-  const inForce = () => p.rule.conditions_in_force;
+  const firing = () => p.rule.firing;
   return (
     <span class="inline-flex flex-wrap items-center gap-1" data-live={p.rule.name}>
       <Show when={!p.rule.enabled}>
         <span class="badge badge-ghost badge-sm">disabled</span>
       </Show>
-      <Show when={inForce() > 0}>
-        <span class="badge badge-soft badge-info badge-sm whitespace-nowrap tabular-nums" title={`${inForce()} conditions in force`}>{inForce()} in force</span>
+      <Show when={firing() > 0}>
+        <span class="badge badge-soft badge-info badge-sm whitespace-nowrap tabular-nums" title={`${firing()} firings`}>{firing()} firing</span>
       </Show>
       <Show when={open() > 0}>
         <span class="badge badge-soft badge-error badge-sm whitespace-nowrap tabular-nums">{open()} open</span>
@@ -178,7 +178,7 @@ function RuleLive(p: { rule: EventRule }): JSX.Element {
       <Show when={pending() > 0}>
         <span class="badge badge-soft badge-warning badge-sm whitespace-nowrap tabular-nums" title={`${pending()} waiting out a sustain`}>{pending()} pending</span>
       </Show>
-      <Show when={p.rule.enabled && inForce() === 0 && open() === 0 && pending() === 0}>
+      <Show when={p.rule.enabled && firing() === 0 && open() === 0 && pending() === 0}>
         <span class="text-[12px] text-base-content/40">clear</span>
       </Show>
       <span class="inline-flex" onClick={(e) => e.stopPropagation()}>
@@ -291,7 +291,7 @@ export default function Rules(): JSX.Element {
                 What a rule does
                 <InfoTip
                   label="rules"
-                  text="A rule watches one property or metric on the components it selects. When the value meets its fire criteria for its sustain, its condition comes into force: it writes an event and, when it has a severity, opens an alarm at it. It ends the same way. A rule with no severity is informational: events only, no alarm. Live counts refresh every few seconds."
+                  text="A rule watches one property or metric on the components it selects. When the value meets its fire criteria for its sustain, it fires: it writes an event and, when it has a severity, raises an alarm. It clears the same way. A rule with no severity is informational: events only, no alarm. Live counts refresh every few seconds."
                 />
               </span>
             ),
@@ -619,15 +619,15 @@ function RuleBladeBody(p: { name: string }): JSX.Element {
             </div>
           </section>
 
-          <section class="flex flex-col gap-2" aria-label="Conditions in force">
+          <section class="flex flex-col gap-2" aria-label="Firing">
             <Eyebrow
-              label={`Conditions in force${state.data ? ` (${state.data.conditions.length})` : ""}`}
-              hint={RULE_HINTS.conditions}
+              label={`Firing${state.data ? ` (${state.data.firings.length})` : ""}`}
+              hint={RULE_HINTS.firings}
             />
             <Show when={state.data} fallback={<span class="text-[12px] text-base-content/40">Loading…</span>}>
               <StateList
-                items={state.data!.conditions}
-                empty="No condition in force."
+                items={state.data!.firings}
+                empty="Not firing anywhere."
                 trailing={(k) => (
                   <span class="w-20 text-right text-[11px] text-base-content/50" title={fmtTime(k.since)}>since {rel(k.since)}</span>
                 )}

@@ -389,7 +389,7 @@ func TestAnOwnersRuleJudgesAFannedValue(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "in-a-call", SampleKey: "call-state",
-		Fire: rules.Criteria{Expr: `value == "active"`}, Severity: "high", FireEventType: "condition-started"}, all); err != nil {
+		Fire: rules.Criteria{Expr: `value == "active"`}, Severity: "high", FireEventType: "rule-fired"}, all); err != nil {
 		t.Fatal(err)
 	}
 	subject, ev := f.webhookLane(&ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{

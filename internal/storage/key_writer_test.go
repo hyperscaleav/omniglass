@@ -457,7 +457,7 @@ func TestWriterMismatchRefused(t *testing.T) {
 			return err
 		},
 		"a reply on a collected":  func() error { return f.gw.WriteReplyObservation(f.ctx, comp.ID, "video-input", "ssh", "hdmi1") },
-		"a rule firing its event": func() error { return f.gw.WriteRuleEvent(f.ctx, ruleID, "condition-started", comp.ID, "ssh") },
+		"a rule firing its event": func() error { return f.gw.WriteRuleEvent(f.ctx, ruleID, "rule-fired", comp.ID, "ssh") },
 		"the process on health":   func() error { return f.gw.AdmitWrite(f.ctx, "property", writerclass.Process, "health", "") },
 		"a command's own outcome": func() error { return f.gw.AdmitWrite(f.ctx, "event", writerclass.Command, "command-timed-out", "") },
 		"the pin on the host key": func() error {
@@ -610,7 +610,7 @@ func TestDeclarationsRefuseAKeyTheirWriterDoesNot(t *testing.T) {
 			t.Errorf("an event rule firing %s = %v, want it refused naming the key", fire, err)
 		}
 		_, err = f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "forge-clear", SampleKey: "video-input",
-			Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "condition-started", ClearEventType: fire}, all)
+			Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "rule-fired", ClearEventType: fire}, all)
 		if !errors.Is(err, storage.ErrEventRuleInvalid) || !strings.Contains(err.Error(), fire) {
 			t.Errorf("an event rule clearing with %s = %v, want it refused naming the key", fire, err)
 		}
@@ -781,7 +781,7 @@ func TestLegacyRuleFiringAReservedEventLetsTheSampleLand(t *testing.T) {
 	f := newWriterFixture(t)
 	all := scope.Set{All: true}
 	if _, err := f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "legacy-forge", SampleKey: "endpoint-reachable",
-		Fire: rules.Criteria{Expr: `value == "down"`}, FireEventType: "condition-started"}, all); err != nil {
+		Fire: rules.Criteria{Expr: `value == "down"`}, FireEventType: "rule-fired"}, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.conn.Exec(f.ctx, `update event_rule set fire_event_type_id = (select id from event_type where name = 'collection-failed')

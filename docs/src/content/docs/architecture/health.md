@@ -158,7 +158,7 @@ Two consequences follow from `impact` describing failure rather than absence:
 A slot inside a **choice** whose alternate did not win contributes nothing at all, `incomplete`
 included: the build the room was not made to is not outstanding work.
 
-Health is **distinct from severity**: severity is an alarm's alert importance
+Health is **distinct from severity**: severity is an alarm's urgency
 ([alarms and actions](/architecture/alarms-actions/)), health an entity's operational state; a
 `high` alarm on a component filling no slot moves nothing above it.
 
@@ -320,7 +320,7 @@ Health is **acknowledgement-independent**, and that is enforced rather than mere
 acknowledging an alarm annotates it and never closes it, so it recomputes no verdict and a broken
 room cannot be made to look healthy by somebody looking at it
 ([alarms and actions](/architecture/alarms-actions/#acknowledgement-a-fact-about-a-person)). The
-verdict answers "is this component out", which is a question about the condition; the
+verdict answers "is this component out", which is a question about the fault; the
 acknowledgement answers "has anybody seen this", which is a question about a person.
 
 The health report carries the acknowledgement anyway. Each alarm under `slots[].alarms[]` has
@@ -360,10 +360,10 @@ owned on the same arc as samples, below.
 The alarm arc is **component-only** today; the design gives an alarm the same
 [exclusive-arc owner](/architecture/core-entities/#ownership-the-exclusive-arc) every sample and
 event has, so a **system-scoped** rule reading member data raises a **system-owned** alarm for a
-condition only the system cares about (a display on **input 2** is normal for the display, wrong for
+fault only the system cares about (a display on **input 2** is normal for the display, wrong for
 the room); the component stays generic. **SaaS and vendor status**
 ([shared-API collection](/architecture/collection/)) follows the same discipline: a vendor's
-"offline" is an observed signal to author system conditions over, **corroborated**, never a verdict.
+"offline" is an observed signal to author system rules over, **corroborated**, never a verdict.
 The acyclic discipline holds: an alarm that **feeds** health impairs a component's own verdict, the
 alarm that fires **off** the `health` state impairs nothing; health rolls up only, no loop.
 

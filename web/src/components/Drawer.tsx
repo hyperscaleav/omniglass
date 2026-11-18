@@ -24,16 +24,21 @@ export default function Drawer(props: {
   // component's API surface and its answers, #890).
   wide?: boolean;
   footer?: JSX.Element;
+  // Over the blade stack (z-index 61 and up), for a panel opened from inside a
+  // blade: omnibot, when an alt-click there gathers a subject (#2122).
+  above?: boolean;
   children: JSX.Element;
 }) {
+  const layer = () => (props.above ? { "z-index": 1000 } : undefined);
   const actions = createFormActions();
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-60 bg-black/45" />
+        <Dialog.Overlay class="fixed inset-0 z-60 bg-black/45" style={layer()} />
         <Dialog.Content
           class="fixed inset-y-0 right-0 z-60 flex w-full flex-col border-l border-base-300 bg-base-100 shadow-2xl"
           classList={{ "max-w-md": !props.wide, "max-w-2xl": !!props.wide }}
+          style={layer()}
         >
           <header class="flex items-center justify-between gap-3 border-b border-base-300 px-4 py-3">
             <Dialog.Title class="min-w-0 flex-1 truncate text-sm font-semibold">{props.title}</Dialog.Title>

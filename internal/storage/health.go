@@ -32,7 +32,7 @@ import (
 // can change health recomputes the affected chain before it commits: raising or
 // clearing an alarm, staffing or unstaffing a slot, declaring or withdrawing one,
 // creating a system, and changing the standard it conforms to or the location it
-// sits in. A component's own condition is now purely its active alarms (#626),
+// sits in. A component's own health is now purely its active alarms (#626),
 // so a product swap or a capability fact no longer belongs to that list. The
 // alternative, RECORDING on read, would stamp every transition at the moment
 // somebody opened a page, which is precisely the inaccuracy the record exists to

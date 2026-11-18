@@ -125,7 +125,7 @@ func TestCommandLifecycleIsTheCommandsAlone(t *testing.T) {
 	}
 	for _, rule := range []storage.EventRuleSpec{
 		{Name: "forge-fire", SampleKey: "video-input", Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "command-issued"},
-		{Name: "forge-clear", SampleKey: "video-input", Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "condition-started", ClearEventType: "command-issued"},
+		{Name: "forge-clear", SampleKey: "video-input", Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "rule-fired", ClearEventType: "command-issued"},
 	} {
 		if _, err := f.gw.CreateEventRule(f.ctx, "", rule, all); !errors.Is(err, storage.ErrEventRuleInvalid) || !strings.Contains(err.Error(), "command-issued") {
 			t.Errorf("event rule %s = %v, want it refused naming command-issued", rule.Name, err)
@@ -138,7 +138,7 @@ func TestCommandLifecycleIsTheCommandsAlone(t *testing.T) {
 	// A rule stored before the refusal fires nothing, and the sample it
 	// judged still lands.
 	if _, err := f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "legacy-forge", SampleKey: "video-input",
-		Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "condition-started"}, all); err != nil {
+		Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "rule-fired"}, all); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.conn.Exec(f.ctx, `update event_rule set fire_event_type_id = (select id from event_type where name = 'command-issued')
@@ -578,18 +578,18 @@ func TestARuleWhoseEventBecameReservedCanStillLetGo(t *testing.T) {
 	all := scope.Set{All: true}
 	d1 := f.componentID(t, "disp-1")
 	if _, err := f.gw.CreateEventRule(f.ctx, "", storage.EventRuleSpec{Name: "legacy-clear", SampleKey: "video-input",
-		Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "condition-started", ClearEventType: "condition-ended"}, all); err != nil {
+		Fire: rules.Criteria{Expr: `value == "hdmi1"`}, FireEventType: "rule-fired", ClearEventType: "rule-cleared"}, all); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.gw.InsertPropertySamples(f.ctx, storage.PushWriter(), []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: d1, Key: "video-input", Value: "hdmi1"}}); err != nil {
 		t.Fatal(err)
 	}
-	conditions := func() int {
-		return f.count(t, `select count(*) from event_rule_condition c join event_rule r on r.id = c.rule_id where r.name = 'legacy-clear'`)
+	firings := func() int {
+		return f.count(t, `select count(*) from event_rule_firing c join event_rule r on r.id = c.rule_id where r.name = 'legacy-clear'`)
 	}
-	if n := conditions(); n != 1 {
-		t.Fatalf("the rule holds %d conditions, want 1 in force", n)
+	if n := firings(); n != 1 {
+		t.Fatalf("the rule holds %d firings, want 1 in force", n)
 	}
 	if _, err := f.conn.Exec(f.ctx, `update event_rule set clear_event_type_id = (select id from event_type where name = 'command-issued')
 		where name = 'legacy-clear'`); err != nil {
@@ -611,8 +611,8 @@ func TestARuleWhoseEventBecameReservedCanStillLetGo(t *testing.T) {
 	if err := f.gw.DeleteEventRule(f.ctx, f.actor, "legacy-clear", all); err != nil {
 		t.Fatalf("delete the legacy rule: %v", err)
 	}
-	if n := conditions(); n != 0 {
-		t.Errorf("%d conditions outlive the rule's delete", n)
+	if n := firings(); n != 0 {
+		t.Errorf("%d firings outlive the rule's delete", n)
 	}
 	if n := f.count(t, `select count(*) from event where event_type_id = (select id from event_type where name = 'command-issued')`); n != 0 {
 		t.Errorf("the rule's clear wrote %d command-issued events", n)

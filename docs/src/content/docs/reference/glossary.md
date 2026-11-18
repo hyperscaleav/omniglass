@@ -13,7 +13,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 
 | Term | Meaning | API | Permission | Formerly |
 | --- | --- | --- | --- | --- |
-| **alarm** | A raised problem on a component, with a severity, from the moment it raises until it clears. | `/alarms` | `alarm` |  |
+| **alarm** | A raised problem on a component, with a severity, from the moment it raises until it clears. | `/alarms` | `alarm` | incident, alert |
 | **command** | One instruction sent to a component, typed by a command type, and its outcome. |  | `command` |  |
 | **component** | One managed device or service, an instance of a product, placed at a location and usually a member of a system. | `/components` | `component` |  |
 | **declared value** | The state an operator declares a component or system should hold, which reconcile compares with what the device reports. |  |  | declared config, desired state, desired value, set the config, config drift, override on value |
@@ -48,6 +48,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **driver** | The declared recipe that collects from a product, what to fetch, how to read it and what it can set. | `/drivers` | `driver` |  |
 | **event rule** | A rule that watches signals and fires when its criteria hold, raising an alarm if it carries a severity. | `/event-rules` | `rule` |  |
 | **event type** | A kind of discrete occurrence in the catalog, what an event is typed by. | `/event-types` | `event_type` |  |
+| **firing** | One stretch of a rule's criteria holding on a component, from the moment it fires until it clears. |  |  | condition |
 | **location type** | What kind of location a location is, and which kinds it may sit under. | `/location-types` | `location_type` |  |
 | **metric type** | A numeric signal in the catalog, the series a sample measures, with its unit and precision. | `/metric-types` | `metric_type` |  |
 | **notification target** | Where a notification goes, a webhook, a mailbox, a user group or a person. | `/notification-targets` | `notification_target` |  |

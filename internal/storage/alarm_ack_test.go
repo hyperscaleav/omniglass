@@ -13,7 +13,7 @@ import (
 )
 
 // The acknowledgement is a fact about a PERSON, and an alarm's raised state is a
-// fact about its CONDITION (ADR-0075: the one-open invariant is per (component,
+// fact about its IDENTITY (ADR-0075: the one-open invariant is per (component,
 // dedup_key)). These tests pin that the two never move each other: acknowledging
 // leaves cleared_at and the component's verdict exactly where they were, and
 // clearing neither grants nor erases an acknowledgement.
@@ -81,10 +81,10 @@ func TestAcknowledgeRecordsWhoAndWhenWithoutTouchingRaisedState(t *testing.T) {
 		t.Errorf("acknowledged by %q, want the acting user's name %q", acked.AcknowledgedBy, "jordan-ops")
 	}
 	if acked.ClearedAt != nil || !acked.Active() {
-		t.Error("acknowledging cleared the alarm: an alarm's raised state belongs to its condition, not to the person who looked at it")
+		t.Error("acknowledging cleared the alarm: an alarm's raised state belongs to its identity, not to the person who looked at it")
 	}
 	if acked.ID != raised.ID || acked.DedupKey != raised.DedupKey {
-		t.Errorf("acknowledging moved the incident identity: %s/%s then %s/%s", raised.ID, raised.DedupKey, acked.ID, acked.DedupKey)
+		t.Errorf("acknowledging moved the alarm identity: %s/%s then %s/%s", raised.ID, raised.DedupKey, acked.ID, acked.DedupKey)
 	}
 
 	// And the same is true when read back, not only in the returned row.
@@ -136,7 +136,7 @@ func TestAcknowledgingRecordsNoHealthTransition(t *testing.T) {
 // the FIRST sighting is the operationally meaningful one (time to acknowledge),
 // so a second acknowledgement keeps the first person and the first time, returns
 // the row rather than an error, and writes no second audit row, exactly as a
-// re-raise of an open condition returns the existing incident (ADR-0075).
+// re-raise of an open alarm returns the existing row (ADR-0075).
 func TestAcknowledgingTwiceIsIdempotent(t *testing.T) {
 	t.Parallel()
 	gw, dsn, comp, raised := ackFixture(t)
@@ -182,13 +182,13 @@ func TestClearingAndAcknowledgingAreOrthogonal(t *testing.T) {
 	}
 	kept := findAlarm(t, gw, comp, raised.ID)
 	if !kept.Acknowledged() {
-		t.Error("clearing erased the acknowledgement: who looked at the incident outlives the fix, like the row does")
+		t.Error("clearing erased the acknowledgement: who looked at the alarm outlives the fix, like the row does")
 	}
 	if kept.Active() {
 		t.Error("the alarm is still active after clearing")
 	}
 
-	// A second condition that comes and goes with nobody looking at it.
+	// A second alarm that comes and goes with nobody looking at it.
 	quiet, err := gw.RaiseAlarm(ctx, actor, comp, storage.AlarmSpec{
 		Severity: "warning", Message: "fan degraded", DedupKey: "fan.degraded",
 	})
@@ -319,7 +319,7 @@ func TestListAlarmsExpressesRaisedAndUnacknowledged(t *testing.T) {
 	}
 
 	// The filter is about the acknowledgement, not about the clear: asking for the
-	// history as well brings the cleared, never-acknowledged incident back.
+	// history as well brings the cleared, never-acknowledged alarm back.
 	history, err := gw.ListAlarms(ctx, comp, storage.AlarmFilter{Unacknowledged: true, IncludeCleared: true})
 	if err != nil {
 		t.Fatalf("list unacknowledged history: %v", err)

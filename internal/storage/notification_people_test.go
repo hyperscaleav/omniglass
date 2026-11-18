@@ -145,7 +145,7 @@ func TestAGroupTargetQueuesOneRowPerMemberWhoCanReadTheAlarm(t *testing.T) {
 		t.Fatalf("display-2's raise queued %v, want one row each for alice and bob", got)
 	}
 
-	// A re-raise of the open condition writes no person rows.
+	// A re-raise of the open alarm writes no person rows.
 	if _, err := f.gw.RaiseAlarm(f.ctx, "", "display-2", storage.AlarmSpec{Severity: "high", Message: "no audio"}); err != nil {
 		t.Fatal(err)
 	}
