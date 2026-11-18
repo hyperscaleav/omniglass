@@ -823,9 +823,9 @@ non-disclosing 404 on the read and on the write. The catalog and its contract sh
 ## Retention
 
 How long the server keeps each lane is the `retention` settings: `omniglass setting list` shows the
-effective windows under `values.retention`. They are changed on the console's Settings page; the
-CLI's `setting update` cannot carry a body yet (#1333). A metric or property type can keep a window
-of its own, overriding its lane's, shipped types included:
+effective windows under `values.retention`, and `omniglass setting update retention --body
+'{"metric_days": 30}'` changes one ([platform settings](/admin/settings/)). A metric or property type
+can keep a window of its own, overriding its lane's, shipped types included:
 
 ```sh
 omniglass metric-type setRetention tcp-connect-time --days 3       # keep this type 3 days
