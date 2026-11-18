@@ -143,8 +143,8 @@ jobs:
                   "## Comments from the project\n\n" + (map("**@\(.user):**\n\n\(.body)\n") | join("\n")) end' >> "$out"
           case "$TIER" in
             tier:sr) echo "model=opus" >> "$GITHUB_OUTPUT"; echo "turns=200" >> "$GITHUB_OUTPUT" ;;
-            tier:jr) echo "model=sonnet" >> "$GITHUB_OUTPUT"; echo "turns=60" >> "$GITHUB_OUTPUT" ;;
-            *) echo "model=sonnet" >> "$GITHUB_OUTPUT"; echo "turns=120" >> "$GITHUB_OUTPUT" ;;
+            tier:jr) echo "model=sonnet" >> "$GITHUB_OUTPUT"; echo "turns=120" >> "$GITHUB_OUTPUT" ;;
+            *) echo "model=sonnet" >> "$GITHUB_OUTPUT"; echo "turns=200" >> "$GITHUB_OUTPUT" ;;
           esac
           echo "bot_name=${SLUG}[bot]" >> "$GITHUB_OUTPUT"
           echo "bot_id=$(gh api "users/${SLUG}%5Bbot%5D" --jq .id)" >> "$GITHUB_OUTPUT"
