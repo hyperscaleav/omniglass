@@ -40,7 +40,8 @@ export type LocationNode = {
   // side panel act on.
   id: string;
   // The locations this row stands for, top first: one, or a folded chain.
-  chain: { id: string; label: string; typeName: string }[];
+  // name is the location's reference, what omnibot is handed (#2122).
+  chain: { id: string; name: string; label: string; typeName: string }[];
   type: string;
   typeName: string;
   icon: string;
@@ -192,7 +193,7 @@ export function buildOutline(input: OutlineInput): Outline {
     const here = (systemsAt.get(loc.id) ?? []).slice().sort((a, b) => entityLabel(a).localeCompare(entityLabel(b)) || a.id.localeCompare(b.id));
     const loose = looseAt.get(loc.id) ?? [];
     const kids = (childrenOf.get(loc.id) ?? []).filter((k) => !visiting.has(k.id));
-    const link = [...chain, { id: loc.id, label: entityLabel(loc), typeName: loc.location_type }];
+    const link = [...chain, { id: loc.id, name: loc.name, label: entityLabel(loc), typeName: loc.location_type }];
 
     // Fold: a location holding nothing of its own whose only child is another
     // location becomes one row with that child.
@@ -255,7 +256,7 @@ export function buildOutline(input: OutlineInput): Outline {
     ];
     unplaced = {
       id: "unplaced",
-      chain: [{ id: "unplaced", label: "Placed nowhere you can see", typeName: "" }],
+      chain: [{ id: "unplaced", name: "", label: "Placed nowhere you can see", typeName: "" }],
       type: "",
       typeName: "",
       icon: "",

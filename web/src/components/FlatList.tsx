@@ -6,6 +6,7 @@ import { type BladeController, type BladeDef, BladesContext, createBladeControll
 import { ChevronDown, ChevronRight, Plus } from "./icons";
 import Button from "./Button";
 import { resolveFilterKeys, type Chip, type FilterKeys } from "../lib/predicate";
+import { stamped, type Subject } from "../lib/handover";
 
 // FlatList is the body for a flat (non-tree) list surface: a sortable table over
 // the ListShell-filtered rows, with an optional row -> side Drawer detail, an
@@ -74,6 +75,9 @@ export type FlatConfig<T> = {
   // motivated it was retired for the shell); the contract stays pinned by
   // FlatList.test for the next mixed-kind surface.
   blades?: { registry: Record<string, BladeDef>; rootKind: string; rowKind?: (r: T) => string; controller?: BladeController };
+  // What a row is when the person hands it to omnibot (#2122): a kind and a
+  // name. Absent, a blade page's row is its blade kind and its name.
+  subject?: (r: T) => Subject | undefined;
   // Controlled chip state (optional, forwarded to ListShell): a page whose own
   // controls construct chips owns the signal and passes both; omit both for the
   // shell-owned default every shipped page uses today (no page passes these yet).
@@ -96,6 +100,12 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
 
   // A row opens either a blade (cross-entity stack) or the single Drawer detail.
   const blades = cfg.blades?.controller ?? createBladeController();
+  const rowSubject = (r: T): Subject | undefined => {
+    if (cfg.subject) return cfg.subject(r);
+    const name = (r as { name?: unknown }).name;
+    if (!cfg.blades || typeof name !== "string") return undefined;
+    return { kind: cfg.blades.rowKind?.(r) ?? cfg.blades.rootKind, ref: name };
+  };
   const openRow = (r: T) => {
     if (cfg.blades && cfg.rowId) blades.push({ kind: cfg.blades.rowKind?.(r) ?? cfg.blades.rootKind, id: cfg.rowId(r) });
     else setSelected(() => r);
@@ -225,6 +235,8 @@ export default function FlatList<T>(props: { config: FlatConfig<T> }) {
                     >
                       {(r) => (
                         <tr
+                          data-subject-kind={stamped(rowSubject(r))?.kind}
+                          data-subject-ref={stamped(rowSubject(r))?.ref}
                           class={`border-base-200 ${cfg.rowClass?.(r) ?? ""} ${openable ? "cursor-pointer hover:bg-base-100" : ""}`}
                           onClick={openable ? () => openRow(r) : undefined}
                         >

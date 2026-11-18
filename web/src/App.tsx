@@ -1,6 +1,6 @@
 import { type ParentComponent, Show, createMemo, createSignal, createEffect, onCleanup } from "solid-js";
 import { useLocation } from "@solidjs/router";
-import { handOverPage, isHandOverKey } from "./lib/handover";
+import { gatherer, handOverPage, isHandOverKey } from "./lib/handover";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import ImpersonationBanner from "./components/ImpersonationBanner";
@@ -61,6 +61,11 @@ const App: ParentComponent = (props) => {
   };
   window.addEventListener("keydown", onKey);
   onCleanup(() => window.removeEventListener("keydown", onKey));
+
+  // Alt-click on a stamped row gathers it into omnibot's tray (#2122).
+  const onGather = gatherer(mayAsk, () => setOmnibotOpen(true));
+  window.addEventListener("click", onGather, true);
+  onCleanup(() => window.removeEventListener("click", onGather, true));
 
   return (
     <>

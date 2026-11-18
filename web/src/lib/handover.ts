@@ -38,6 +38,43 @@ export function subjectOf(el: HTMLElement): Subject | undefined {
   return { kind, ref };
 }
 
+// alarmSubject is an alarm by its component's name and the rule that raised
+// it, or when it was raised: never its message, which a device may write.
+export function alarmSubject(a: { component: string; raised_by_rule?: string | null; raised_at: string }): Subject {
+  return { kind: "alarm", ref: a.raised_by_rule ? `${a.component}/${a.raised_by_rule}` : `${a.component}@${a.raised_at}` };
+}
+
+const STAMP = "[data-subject-kind]";
+const CONTROL = "button,a,input,select,textarea,label,summary";
+
+// gathered is what an alt-click on target gathers: the stamped element it
+// lands in, or with range every stamped sibling from the anchor (the last one
+// gathered) to it. A click on a control inside a stamp gathers nothing, so the
+// control keeps its own meaning (an outline chevron's alt expands all).
+export function gathered(target: Element, anchor: Element | undefined, range: boolean): { stamp: HTMLElement; subjects: Subject[] } | undefined {
+  const stamp = target.closest<HTMLElement>(STAMP);
+  if (!stamp) return undefined;
+  const control = target.closest(CONTROL);
+  if (control && control !== stamp && stamp.contains(control)) return undefined;
+  const own = subjectOf(stamp);
+  if (!own) return undefined;
+  const list = stamp.parentElement;
+  if (!range || !anchor || anchor === stamp || !list || anchor.parentElement !== list) return { stamp, subjects: [own] };
+  const kids = [...list.children];
+  const [from, to] = [kids.indexOf(anchor), kids.indexOf(stamp)].sort((x, y) => x - y);
+  const subjects = kids
+    .slice(from, to + 1)
+    .map((el) => (el instanceof HTMLElement && el.matches(STAMP) ? subjectOf(el) : undefined))
+    .filter((s): s is Subject => !!s);
+  return { stamp, subjects };
+}
+
+// stamped is the subject a primitive stamps on its row, as data-subject-kind
+// and data-subject-ref; nothing for an empty reference or a uuid.
+export function stamped(s: Subject | undefined): Subject | undefined {
+  return s && s.kind && s.ref && !UUID.test(s.ref) ? s : undefined;
+}
+
 const same = (a: Subject, b: Subject) => a.kind === b.kind && a.ref === b.ref;
 
 // contextEntries is what a run is sent for the subjects: one entry each, in
@@ -68,6 +105,25 @@ export function removeSubject(s: Subject) {
 
 export function clearTray() {
   setSubjects([]);
+}
+
+// gatherer is the console's click listener, for the capture phase: an
+// alt-click on a stamped row adds its subject to the tray, a shift-alt-click
+// every row from the last one gathered, and opens omnibot. Not ⌘ or Ctrl,
+// which open a link in a new tab. Capturing runs ahead of Solid's delegated
+// handlers, so the row's own click does not run as well.
+export function gatherer(mayAsk: () => boolean, open: () => void): (e: MouseEvent) => void {
+  let anchor: Element | undefined;
+  return (e) => {
+    if (!e.altKey || e.metaKey || e.ctrlKey || !mayAsk() || !(e.target instanceof Element)) return;
+    const g = gathered(e.target, anchor, e.shiftKey);
+    if (!g) return;
+    e.preventDefault();
+    e.stopPropagation();
+    addSubjects(g.subjects);
+    anchor = g.stamp;
+    open();
+  };
 }
 
 // isHandOverKey is the key that hands omnibot the console: ⌘J or Ctrl-J, beside

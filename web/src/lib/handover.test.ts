@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { addSubjects, clearTray, contextEntries, handOverPage, isHandOverKey, pageSubject, removeSubject, subjectOf, tray } from "./handover";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { addSubjects, alarmSubject, clearTray, contextEntries, gathered, gatherer, handOverPage, isHandOverKey, pageSubject, removeSubject, stamped, subjectOf, tray } from "./handover";
 
 // The context builder (#2122): what the person hands omnibot is references and
 // the page as a query, never what the console rendered and never a uuid.
@@ -33,6 +33,15 @@ describe("subjectOf", () => {
     row.dataset.subjectKind = "component";
     row.dataset.subjectRef = UUID;
     expect(subjectOf(row)).toBeUndefined();
+  });
+});
+
+describe("stamped", () => {
+  it("is the subject a row stamps, or nothing for an empty reference or a uuid", () => {
+    expect(stamped({ kind: "vendor", ref: "crestron" })).toEqual({ kind: "vendor", ref: "crestron" });
+    expect(stamped({ kind: "vendor", ref: "" })).toBeUndefined();
+    expect(stamped({ kind: "vendor", ref: UUID })).toBeUndefined();
+    expect(stamped(undefined)).toBeUndefined();
   });
 });
 
@@ -92,5 +101,109 @@ describe("the hand-over key", () => {
     addSubjects([{ kind: "alarm", ref: "hq.a/offline" }]);
     handOverPage("/alarms", "");
     expect(tray()).toEqual([{ kind: "alarm", ref: "hq.a/offline" }]);
+  });
+});
+
+describe("alarmSubject", () => {
+  it("is the component's name and the rule that raised it, else when it was raised", () => {
+    expect(alarmSubject({ component: "hq.lobby.display-1", raised_by_rule: "offline", raised_at: "2026-11-18T10:00:00Z" })).toEqual({ kind: "alarm", ref: "hq.lobby.display-1/offline" });
+    expect(alarmSubject({ component: "hq.lobby.display-1", raised_at: "2026-11-18T10:00:00Z" })).toEqual({ kind: "alarm", ref: "hq.lobby.display-1@2026-11-18T10:00:00Z" });
+  });
+});
+
+describe("gathered", () => {
+  const list = () => {
+    const tbody = document.createElement("tbody");
+    for (const name of ["a", "b", "c", "d"]) {
+      const tr = document.createElement("tr");
+      tr.dataset.subjectKind = "vendor";
+      tr.dataset.subjectRef = name;
+      const td = document.createElement("td");
+      td.textContent = name;
+      const btn = document.createElement("button");
+      td.append(btn);
+      tr.append(td);
+      tbody.append(tr);
+    }
+    document.body.append(tbody);
+    return [...tbody.children].map((tr) => tr.firstElementChild as HTMLElement);
+  };
+
+  it("is the stamped element a click lands in", () => {
+    const cells = list();
+    const g = gathered(cells[1], undefined, false);
+    expect(g?.subjects).toEqual([{ kind: "vendor", ref: "b" }]);
+    expect(g?.stamp).toBe(cells[1].parentElement);
+  });
+
+  it("is every stamped sibling from the last one gathered, either way, for a range", () => {
+    const cells = list();
+    const anchor = cells[3].parentElement!;
+    expect(gathered(cells[1], anchor, true)?.subjects.map((s) => s.ref)).toEqual(["b", "c", "d"]);
+    expect(gathered(cells[3], cells[0].parentElement!, true)?.subjects.map((s) => s.ref)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("is the one element for a range with no anchor in the same list", () => {
+    const cells = list();
+    const other = list();
+    expect(gathered(cells[2], other[0].parentElement!, true)?.subjects.map((s) => s.ref)).toEqual(["c"]);
+  });
+
+  it("is nothing off a stamp, or on a control inside one, which keeps its own meaning", () => {
+    const cells = list();
+    expect(gathered(document.body, undefined, false)).toBeUndefined();
+    expect(gathered(cells[0].querySelector("button")!, undefined, false)).toBeUndefined();
+  });
+});
+
+describe("gatherer", () => {
+  beforeEach(() => clearTray());
+
+  const rows = () => {
+    const ul = document.createElement("ul");
+    for (const name of ["hq.a", "hq.b", "hq.c"]) {
+      const li = document.createElement("li");
+      li.dataset.subjectKind = "component";
+      li.dataset.subjectRef = name;
+      li.textContent = name;
+      ul.append(li);
+    }
+    document.body.append(ul);
+    return [...ul.children] as HTMLElement[];
+  };
+  const listen = (may = true) => {
+    const open = vi.fn();
+    const onRow = vi.fn();
+    const g = gatherer(() => may, open);
+    window.addEventListener("click", g, true);
+    document.addEventListener("click", onRow);
+    return { open, onRow, done: () => (window.removeEventListener("click", g, true), document.removeEventListener("click", onRow)) };
+  };
+  const click = (el: Element, mods: MouseEventInit = {}) => el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ...mods }));
+
+  it("gathers an alt-clicked row, then a shift-alt range, opens omnibot, and keeps the row's own click from running", () => {
+    const [a, , c] = rows();
+    const { open, onRow, done } = listen();
+    click(a, { altKey: true });
+    click(c, { altKey: true, shiftKey: true });
+    done();
+    expect(tray().map((s) => s.ref)).toEqual(["hq.a", "hq.b", "hq.c"]);
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(onRow).not.toHaveBeenCalled();
+  });
+
+  it("leaves a plain, a ⌘ or Ctrl click, and anyone who may not ask omnibot, alone", () => {
+    const [a] = rows();
+    let l = listen();
+    click(a);
+    click(a, { altKey: true, metaKey: true });
+    click(a, { altKey: true, ctrlKey: true });
+    l.done();
+    expect(l.onRow).toHaveBeenCalledTimes(3);
+    l = listen(false);
+    click(a, { altKey: true });
+    l.done();
+    expect(l.onRow).toHaveBeenCalledTimes(1);
+    expect(tray()).toEqual([]);
   });
 });
