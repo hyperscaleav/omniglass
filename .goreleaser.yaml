@@ -55,8 +55,8 @@ checksum:
 sboms:
   - artifacts: archive
 
-# The GitHub Release carries GitHub's generated notes; GoReleaser must not also
-# emit a changelog into the release body.
+# The GitHub Release carries the workflow's grouped notes (cmd/releasenotes);
+# GoReleaser must not also emit a changelog into the release body.
 changelog:
   disable: true
 
