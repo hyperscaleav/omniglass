@@ -1,6 +1,9 @@
 ---
 title: Views
 description: "The read side: a view is a named, parameterized, scope-checked query returning a uniform ViewResult, the backend-for-frontend every read goes through."
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 ::::design[Target design: the ViewResult contract, tracked in #523]

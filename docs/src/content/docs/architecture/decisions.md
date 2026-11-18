@@ -5,6 +5,8 @@ description: "The dated history of architectural calls: reversals, settled open 
 # docs/src/content/decisions/, spliced in where ::decision-index and ::decision-log sit
 # by docs/src/plugins/remark-fragments.mjs. Record one with /record-decision; internal/docslint
 # fails an entry or an index row written here.
+sidebar:
+  order: 3
 ---
 
 The pages are written in the present tense as the **target design**, and each rebuilt page carries a

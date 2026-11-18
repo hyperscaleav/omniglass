@@ -39,15 +39,18 @@ Each is a gate; a red one blocks the ship.
    and one file per entry is what keeps two PRs from conflicting (#1095). A page that
    gained a built capability but kept a `Design` badge is a red gate.
    Beyond status, **every operator surface the diff moves takes its guide in the same PR**. Grep
-   the diff and walk the surfaces, mapping each to its home; a surface that moved while its guide
-   did not is a red gate:
+   the diff and walk the surfaces, mapping each to its home in the audience section of whoever
+   does the task (Operator, Admin, Developer, Deployment); until that section is rebuilt (#2153),
+   its old page under **Being rebuilt** is the home. A surface that moved while its guide did not
+   is a red gate:
    - a new or changed **API route / Huma op** (`internal/api`, `api/openapi.*`) to the API
-     reference (`architecture/api.md`);
-   - a new or changed **CLI command** to the CLI guide (`guides/cli.md`), **including a generated
-     command**: if `make gen` touched `internal/cli/api_gen.go`, the CLI guide is in scope (this
-     is how the password and profile commands shipped undocumented);
-   - a changed **console surface** (`web/src`) to the console guide (`guides/console.md`) plus the
-     live screenshots (item 9).
+     reference (`architecture/api.md`) and the Developer section;
+   - a new or changed **CLI command** to the CLI guide (`guides/cli.md` until Developer is
+     rebuilt), **including a generated command**: if `make gen` touched
+     `internal/cli/api_gen.go`, the CLI guide is in scope (this is how the password and profile
+     commands shipped undocumented);
+   - a changed **console surface** (`web/src`) to its Operator or Admin page (`guides/operator/`
+     or `guides/admin/` until those sections are rebuilt) plus the live screenshots (item 9).
 
    Mechanically, run the docs lint suite; it must be green:
    `go test ./internal/docslint/ ./internal/cli/ -run 'TestVocabulary|TestDecisionsFormat|TestBuildLogFormat|TestLogsStayFragments|TestDocsOnlyNameRealCommands|TestBadgeFence' -count=1`.

@@ -1,6 +1,9 @@
 ---
 title: Simulation
 description: How Omniglass simulates a fleet of devices on loopback addresses, so collection, alarms and the console can be exercised and taught without real gear.
+# An old page: listed under Being rebuilt, deleted when its section is rebuilt (ADR-2087.2).
+sidebar:
+  hidden: true
 ---
 
 Omniglass ships a device simulator in the same binary. It serves a whole fleet of fictional AV
