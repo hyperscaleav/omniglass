@@ -53,7 +53,7 @@ Ask in order; the first yes decides.
 6. **Does the component push to us rather than us reaching it?** Then it is a push transport
    over the one listener primitive (ADR-1024): the listener runs where its placement puts it.
    Webhooks are hosted by the server (#1024); shared tcp and udp ports, syslog and SNMP traps by
-   the node next to the gear (#1148, #1149, #1150). Scope the attribution (the channel authorizes,
+   the outpost next to the gear (#1148, #1149, #1150). Scope the attribution (the channel authorizes,
    a payload identity only selects within it), the scheme, and the abuse limits.
 
 Discovery (WS-Discovery, Who-Is, mDNS, SSDP) is never part of a collection issue; it
@@ -67,7 +67,7 @@ filing a sibling.
 
 ## File it
 
-Native Issue Type `Feature`, labels `area:collection` and `area:node`, linked as a
+Native Issue Type `Feature`, labels `area:collection` and `area:outpost`, linked as a
 sub-issue of #603. Title: `feat: the <name> transport` / `feat: the <transport> gains
 <capability>, proven by a <driver> driver` / `feat: specs for the <name> driver`. The body
 carries, in prose:

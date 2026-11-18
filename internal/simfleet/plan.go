@@ -48,17 +48,17 @@ var AttachSecret = map[string]string{
 	"kestrel-api":      KestrelLoginSecret,
 	// The Relay codec and the Gaze camera answer behind the same login the
 	// VRoom does (#897).
-	"kestrel-relay-api":     KestrelLoginSecret,
-	"kestrel-gaze-api":      KestrelLoginSecret,
-	"http-json":             CensusKeySecret,
-	"ucc-rooms":             UCCTokenSecret,
-	"boreal-cast-api":       CastKeySecret,
-	"recording-service-api": RecordingKeySecret,
-	"lyra-arc-snmp":         CommunitySecret,
-	"lyra-hx-snmp":          CommunitySecret,
-	"ferrite-pdu-snmp":      CommunitySecret,
-	"meridian-mx-snmp":      CommunitySecret,
-	"meridian-xl-snmp":      CommunitySecret,
+	"kestrel-relay-api":      KestrelLoginSecret,
+	"kestrel-gaze-api":       KestrelLoginSecret,
+	"tessellate-census-http": CensusKeySecret,
+	"ucc-rooms":              UCCTokenSecret,
+	"boreal-cast-api":        CastKeySecret,
+	"recording-service-api":  RecordingKeySecret,
+	"lyra-arc-snmp":          CommunitySecret,
+	"lyra-hx-snmp":           CommunitySecret,
+	"ferrite-pdu-snmp":       CommunitySecret,
+	"meridian-mx-snmp":       CommunitySecret,
+	"meridian-xl-snmp":       CommunitySecret,
 }
 
 // AddressCap is how many addresses the simulated block holds: 256 third
@@ -172,7 +172,7 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	"ferrite-pdu-snmp":  snmpAttach,
 	"meridian-mx-snmp":  snmpAttach,
 	"meridian-xl-snmp":  snmpAttach,
-	"newtron-nvp":       nvpAttach,
+	"newtron-panel-nvp": nvpAttach,
 	"newtron-core-nvp":  nvpAttach,
 	"newtron-slate-nvp": nvpAttach,
 	// The Kestrel bar's https API on 443, its key pinned on first use (the
@@ -182,7 +182,7 @@ var Attach = map[string]func(addr string, shift func(int) int) map[string]string
 	// on 443 behind the same login (#897).
 	"kestrel-relay-api": kestrelAttach,
 	"kestrel-gaze-api":  kestrelAttach,
-	"http-json": func(addr string, shift func(int) int) map[string]string {
+	"tessellate-census-http": func(addr string, shift func(int) int) map[string]string {
 		return map[string]string{"host": addr, "port": strconv.Itoa(shift(80)), "key": CensusKeySecret}
 	},
 	// The Boreal Cast media player's http API on 80, its key in a header.

@@ -137,10 +137,10 @@ func TestLogsAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodGet, "/components/disp-1/logs?severity=loud", nil, http.StatusUnprocessableEntity)
 }
 
-// nodeLogsResp mirrors the node self-log read body: the node and its own lines.
-type nodeLogsResp struct {
-	Node string `json:"node"`
-	Logs []struct {
+// outpostLogsResp mirrors the outpost self-log read body: the outpost and its own lines.
+type outpostLogsResp struct {
+	Outpost string `json:"outpost"`
+	Logs    []struct {
 		TS         time.Time       `json:"ts"`
 		Source     string          `json:"source"`
 		Severity   string          `json:"severity"`
@@ -150,12 +150,12 @@ type nodeLogsResp struct {
 	} `json:"logs"`
 }
 
-// TestNodeLogsAPI drives the per-node self-log read over HTTP (ADR-0066): a node's
+// TestOutpostLogsAPI drives the per-outpost self-log read over HTTP (ADR-0066): an outpost's
 // own operational log lines come back newest-first with severity and attributes,
-// owner-bound to the node not a component. A node is fleet-wide, so an all-scope
-// viewer reads them (node:read), an unknown node is a 404, and an unauthenticated
+// owner-bound to the outpost not a component. An outpost is fleet-wide, so an all-scope
+// viewer reads them (outpost:read), an unknown outpost is a 404, and an unauthenticated
 // request is a 401. Skipped under -short.
-func TestNodeLogsAPI(t *testing.T) {
+func TestOutpostLogsAPI(t *testing.T) {
 	t.Parallel()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -177,46 +177,46 @@ func TestNodeLogsAPI(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all, all); err != nil {
-		t.Fatalf("create node: %v", err)
+	if _, err := gw.CreateOutpost(ctx, "", storage.OutpostSpec{Name: "site-a"}, all, all); err != nil {
+		t.Fatalf("create outpost: %v", err)
 	}
 
 	t0 := time.Now().UTC().Add(-2 * time.Minute)
 	t1 := t0.Add(time.Minute)
-	if err := gw.InsertNodeLogs(ctx, []storage.NodeLogWrite{
-		{Node: "site-a", Source: "node", Severity: "info", Facility: "enrollment", Message: "connected to bus", TS: t0},
-		{Node: "site-a", Source: "collection", Severity: "warning", Facility: "collection", Message: "task skipped", Attributes: []byte(`{"task":"t-a"}`), TS: t1},
+	if err := gw.InsertOutpostLogs(ctx, []storage.OutpostLogWrite{
+		{Outpost: "site-a", Source: "outpost", Severity: "info", Facility: "enrollment", Message: "connected to bus", TS: t0},
+		{Outpost: "site-a", Source: "collection", Severity: "warning", Facility: "collection", Message: "task skipped", Attributes: []byte(`{"task":"t-a"}`), TS: t1},
 	}); err != nil {
-		t.Fatalf("insert node logs: %v", err)
+		t.Fatalf("insert outpost logs: %v", err)
 	}
 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	out := c.do(ownerTok, http.MethodGet, "/nodes/site-a/logs", nil, http.StatusOK)
-	var r nodeLogsResp
+	out := c.do(ownerTok, http.MethodGet, "/outposts/site-a/logs", nil, http.StatusOK)
+	var r outpostLogsResp
 	if err := json.Unmarshal(out, &r); err != nil {
-		t.Fatalf("decode node logs: %v", err)
+		t.Fatalf("decode outpost logs: %v", err)
 	}
-	if r.Node != "site-a" || len(r.Logs) != 2 {
-		t.Fatalf("node logs: want site-a with 2 lines, got %+v", r)
+	if r.Outpost != "site-a" || len(r.Logs) != 2 {
+		t.Fatalf("outpost logs: want site-a with 2 lines, got %+v", r)
 	}
 	// Newest first: the warning/collection line with its structured attributes.
 	if r.Logs[0].Message != "task skipped" || r.Logs[0].Severity != "warning" || r.Logs[0].Source != "collection" {
-		t.Fatalf("newest node log: want 'task skipped' warning/collection, got %+v", r.Logs[0])
+		t.Fatalf("newest outpost log: want 'task skipped' warning/collection, got %+v", r.Logs[0])
 	}
 	if string(r.Logs[0].Attributes) != `{"task":"t-a"}` {
-		t.Fatalf("newest node log attributes: want {task t-a}, got %s", r.Logs[0].Attributes)
+		t.Fatalf("newest outpost log attributes: want {task t-a}, got %s", r.Logs[0].Attributes)
 	}
 	if r.Logs[1].Message != "connected to bus" || r.Logs[1].Facility != "enrollment" {
-		t.Fatalf("oldest node log: want 'connected to bus' enrollment, got %+v", r.Logs[1])
+		t.Fatalf("oldest outpost log: want 'connected to bus' enrollment, got %+v", r.Logs[1])
 	}
 
-	// A node is fleet-wide: an all-scope viewer reads its logs (node:read). An
-	// unknown node is a 404; an unauthenticated request is a 401.
-	viewerTok := setupAllViewer(t, ctx, dsn, "viewer-node")
-	c.do(viewerTok, http.MethodGet, "/nodes/site-a/logs", nil, http.StatusOK)
-	c.do(ownerTok, http.MethodGet, "/nodes/ghost/logs", nil, http.StatusNotFound)
-	c.do("", http.MethodGet, "/nodes/site-a/logs", nil, http.StatusUnauthorized)
+	// An outpost is fleet-wide: an all-scope viewer reads its logs (outpost:read). An
+	// unknown outpost is a 404; an unauthenticated request is a 401.
+	viewerTok := setupAllViewer(t, ctx, dsn, "viewer-outpost")
+	c.do(viewerTok, http.MethodGet, "/outposts/site-a/logs", nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/outposts/ghost/logs", nil, http.StatusNotFound)
+	c.do("", http.MethodGet, "/outposts/site-a/logs", nil, http.StatusUnauthorized)
 }

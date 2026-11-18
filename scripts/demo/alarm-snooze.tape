@@ -9,16 +9,16 @@
 # (#1318).
 
 Hide
-Type `demo_hush 'omniglass principal create --username ops --email ops@example.com && omniglass principal grant create ops --role operator --scope-kind all'`
+Type `demo_hush 'omniglass user create --username ops --email ops@example.com && omniglass user grant create ops --role operator --scope-kind all'`
 Enter
 Wait
-Type `demo_hush 'omniglass principal create --username vic && omniglass principal grant create vic --role viewer --scope-kind all'`
+Type `demo_hush 'omniglass user create --username vic && omniglass user grant create vic --role viewer --scope-kind all'`
 Enter
 Wait
-Type `demo_hush 'vic=$(omniglass principal impersonate vic --mode act_as | jq -r .token)'`
+Type `demo_hush 'vic=$(omniglass user impersonate vic --mode act_as | jq -r .token)'`
 Enter
 Wait
-Type `demo_hush 'export OMNIGLASS_TOKEN=$(omniglass principal impersonate ops --mode act_as | jq -r .token)'`
+Type `demo_hush 'export OMNIGLASS_TOKEN=$(omniglass user impersonate ops --mode act_as | jq -r .token)'`
 Enter
 Wait
 Type "clear"

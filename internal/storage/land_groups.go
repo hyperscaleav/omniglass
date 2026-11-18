@@ -12,8 +12,8 @@ import (
 )
 
 // IngestGroup is one task's share of an ingest batch (#1582): the rows one
-// tick of a node collected for one task, under the writer the task resolves
-// to (NodeWriter, its Node set). A batch carries many, and lands them all in
+// tick of an outpost collected for one task, under the writer the task resolves
+// to (OutpostWriter, its Outpost set). A batch carries many, and lands them all in
 // one transaction; a group a row of which is refused (IsRefusedWrite) is
 // dropped on its own, its siblings land.
 type IngestGroup struct {
@@ -27,6 +27,10 @@ type IngestGroup struct {
 	LogLines   []LogLineWrite
 	Fanned     *FannedRows
 	Unbound    []UnboundIdentityWrite
+	// SeenEndpoint is the endpoint that delivered the group's task, stamped
+	// seen (endpoint_live) in the batch's transaction unless the group is
+	// refused (#933, #1928). Empty stamps nothing.
+	SeenEndpoint string
 }
 
 // GroupRefusal is one group a batch dropped: its position in
@@ -82,12 +86,12 @@ func (g IngestGroup) carries() bool {
 }
 
 // allMetrics is every metric sample the batch carries, its groups' and
-// fanned rows' and its node-self report's included: the days a partition
+// fanned rows' and its outpost-self report's included: the days a partition
 // miss has to make.
 func (b IngestBatch) allMetrics() []MetricSampleWrite {
 	var out []MetricSampleWrite
-	if b.NodeSelf != nil {
-		out = append(out, b.NodeSelf.writes("")...)
+	if b.OutpostSelf != nil {
+		out = append(out, b.OutpostSelf.writes("")...)
 	}
 	for _, g := range b.groups() {
 		out = append(out, g.Metrics...)
@@ -124,17 +128,17 @@ func (g IngestGroup) ownerRefs() [][2]string {
 }
 
 // preloadArcs resolves, in one statement, the primary key of every owner the
-// batch names by id (and every node it names by name) that the batch has not
+// batch names by id (and every outpost it names by name) that the batch has not
 // resolved yet, so a tick of many groups, each on its own component, costs
 // one read for its owners however many groups it carries (#1582). An owner
 // the read does not find is left to ownerArcValue, which names the miss.
-// selfNode is the node whose self-report the batch carries (#1625), "" for
-// none: the same read resolves its platform component (nodeSelfArc).
-func (p *PG) preloadArcs(ctx context.Context, bt *batchTx, groups []landGroup, nodeLogs []NodeLogWrite, selfNode string) error {
+// selfOutpost is the outpost whose self-report the batch carries (#1625), "" for
+// none: the same read resolves its platform component (outpostSelfArc).
+func (p *PG) preloadArcs(ctx context.Context, bt *batchTx, groups []landGroup, outpostLogs []OutpostLogWrite, selfOutpost string) error {
 	ids := map[string][]string{}
-	var nodeNames, selfNodes []string
-	if _, ok := bt.arcs[nodeSelfArc(selfNode)]; selfNode != "" && !ok {
-		selfNodes = append(selfNodes, selfNode)
+	var outpostNames, selfOutposts []string
+	if _, ok := bt.arcs[outpostSelfArc(selfOutpost)]; selfOutpost != "" && !ok {
+		selfOutposts = append(selfOutposts, selfOutpost)
 	}
 	seen := map[string]bool{}
 	want := func(kind, ref string) {
@@ -147,10 +151,10 @@ func (p *PG) preloadArcs(ctx context.Context, bt *batchTx, groups []landGroup, n
 			return
 		}
 		switch {
-		case isUUID(ref) && (kind == "component" || kind == "system" || kind == "location" || kind == "node"):
+		case isUUID(ref) && (kind == "component" || kind == "system" || kind == "location" || kind == "outpost"):
 			ids[kind] = append(ids[kind], ref)
-		case kind == "node":
-			nodeNames = append(nodeNames, ref)
+		case kind == "outpost":
+			outpostNames = append(outpostNames, ref)
 		}
 	}
 	for _, g := range groups {
@@ -158,20 +162,20 @@ func (p *PG) preloadArcs(ctx context.Context, bt *batchTx, groups []landGroup, n
 			want(r[0], r[1])
 		}
 	}
-	for _, l := range nodeLogs {
-		want("node", l.Node)
+	for _, l := range outpostLogs {
+		want("outpost", l.Outpost)
 	}
-	if len(ids)+len(nodeNames)+len(selfNodes) == 0 {
+	if len(ids)+len(outpostNames)+len(selfOutposts) == 0 {
 		return nil
 	}
 	rows, err := bt.Query(ctx, `select 'component', id::text, id::text from component where id = any($1::uuid[])
 		union all select 'system', id::text, id::text from system where id = any($2::uuid[])
 		union all select 'location', id::text, id::text from location where id = any($3::uuid[])
-		union all select 'node', principal_id::text, principal_id::text from node where principal_id = any($4::uuid[])
-		union all select 'node', name, principal_id::text from node where name = any($5::text[])
-		union all select 'platform', name, platform_component_id::text from node
+		union all select 'outpost', user_id::text, user_id::text from outpost where user_id = any($4::uuid[])
+		union all select 'outpost', name, user_id::text from outpost where name = any($5::text[])
+		union all select 'platform', name, platform_component_id::text from outpost
 			where name = any($6::text[]) and platform_component_id is not null`,
-		ids["component"], ids["system"], ids["location"], ids["node"], nodeNames, selfNodes)
+		ids["component"], ids["system"], ids["location"], ids["outpost"], outpostNames, selfOutposts)
 	if err != nil {
 		return fmt.Errorf("storage: land batch: resolve owners: %w", err)
 	}
@@ -294,7 +298,7 @@ func primeKeyWriters(ctx context.Context, bt *batchTx, groups []landGroup) error
 
 // admitGroup holds every row of one group to its writer before anything of
 // the batch lands: each owner resolved, each key's writer class and each
-// node's binding checked (admitWrites), each log line on a component. The
+// outpost's binding checked (admitWrites), each log line on a component. The
 // lanes check them again as they write, from the batch's memos, at no cost; a
 // refusal here drops the group before its rows could fail its siblings'.
 func (p *PG) admitGroup(ctx context.Context, tx pgx.Tx, g landGroup) error {
@@ -335,7 +339,7 @@ func (p *PG) admitGroup(ctx context.Context, tx pgx.Tx, g landGroup) error {
 	}
 	for _, ln := range g.LogLines {
 		if ln.OwnerKind != "component" {
-			return fmt.Errorf("storage: log line %s: log_line is component-owned (#589), refusing owner_kind %q (a node's self-logs land in node_log)", ln.OwnerID, ln.OwnerKind)
+			return fmt.Errorf("storage: log line %s: log_line is component-owned (#589), refusing owner_kind %q (an outpost's self-logs land in outpost_log)", ln.OwnerID, ln.OwnerKind)
 		}
 		if _, err := p.ownerArcValue(ctx, tx, "component", ln.OwnerID); err != nil {
 			return fmt.Errorf("storage: log line %s: %w", ln.OwnerID, err)

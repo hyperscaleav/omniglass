@@ -112,7 +112,7 @@
     },
     "push": {
       "type": "object",
-      "description": "A push face (#1743): the device is an outside actor that holds a bearer token and posts POST /telemetry:push on its own cadence, for every system its grant names (read off GET /auth/me). The lab seeds its principal and mints its token for a scenario's declared pusher.",
+      "description": "A push face (#1743): the device is an outside actor that holds a bearer token and posts POST /telemetry:push on its own cadence, for every system its grant names (read off GET /auth/me). The lab seeds its user and mints its token for a scenario's declared pusher.",
       "required": [
         "every",
         "body"

@@ -129,7 +129,7 @@ func TestTokenMintAndRevokeAreAudited(t *testing.T) {
 	}
 
 	// A token ended by a logout that presents it as the session (RevokeBearer, by
-	// hash) is a revoke too, by the principal it belonged to.
+	// hash) is a revoke too, by the user it belonged to.
 	_, h, prefix, err := auth.NewBearerToken()
 	if err != nil {
 		t.Fatal(err)

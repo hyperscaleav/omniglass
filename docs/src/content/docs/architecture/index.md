@@ -1,7 +1,17 @@
 ---
 title: Architecture
 description: "The architecture told as one journey, following a single reading from the gear through its whole life to the answer and the action on it."
+sidebar:
+  label: Overview
+  order: 0
 ---
+
+**For:** contributors and evaluators who want to know how Omniglass is built: one page per
+subsystem, each rebuilt page badged with its status, the architecture of record. **In this section:** this
+overview, the [implementation status](/architecture/status/) grid, the
+[roadmap](/architecture/roadmap/), the [decision log](/architecture/decisions/) and the
+[build log](/architecture/build-log/). The subsystem pages are being rebuilt (#2161); until then the
+current ones sit under **Being rebuilt** in the sidebar.
 
 Monitoring, stripped down, is one shape: **collect the data, evaluate it, see it, act on it.** The
 point is to **know your systems**, and the question that matters most:
@@ -14,16 +24,15 @@ in the [glossary](/architecture/glossary/).
 
 :::note[A proposed architecture]
 This is a **proposed, forward-looking architecture**: the target design, written in present tense,
-not a promise that every detail ships unchanged. Each page carries a status badge, **Design**
-(specified, little or none built), **Partial** (some capabilities shipped), **Built** (all shipped
-and tested), or **Diverged** (built, but differing from this design, see the page's note); the
-badge is the page's floor. The per-capability breakdown lives on
-[implementation status](/architecture/status/); undecided design points are flagged inline as
+not a promise that every detail ships unchanged. The docs site is being rebuilt by audience, and
+these pages predate the rebuild: they carry no status badge, and each leaves when its section is
+rebuilt ([ADR-2087.2](/architecture/decisions/#adr-20872-the-docs-site-is-rebuilt-by-audience-the-old-pages-leave-as-their-section-lands)). The rebuilt pages carry the badges, which
+[implementation status](/architecture/status/) lists; undecided design points are flagged inline as
 `Open question` asides; how a call was made or reversed, and where the build diverges, lives in the
 [decision log](/architecture/decisions/); the epics and the arc ahead are indexed on the
 [roadmap](/architecture/roadmap/). Unbuilt prose inside a page sits in a marked **design fence**,
 and the pages that are *entirely* unbuilt live in the sidebar's own **Design sketches** group, a
-working queue that empties as subsystems land, so a page's place in the nav tells you whether any
+working queue that empties as subsystems land, so a page's position in the nav tells you whether any
 of it exists. Every prose architecture page is also published machine-readable at
 [/llms-full.txt](/llms-full.txt) (curated index: [/llms.txt](/llms.txt)); the interactive `.mdx`
 pages are not included.
@@ -38,7 +47,7 @@ Three nouns describe what you operate.
 - A **system** is a set of components that work together to do one job: a meeting room, a
   classroom, a broadcast chain. The word is deliberately universal: a system is the unit you
   actually care about, whatever shape it takes.
-- A **location** ties systems and components to a physical place (campus, building, floor, room).
+- A **location** ties systems and components to a physical location (campus, building, floor, room).
 
 ```d2
 direction: down
@@ -57,14 +66,14 @@ system -> c3
 ## Collect
 
 AV gear is **agentless**: nothing can be installed inside it, so the reading comes from outside.
-Sometimes the component **pushes** it to Omniglass; usually Omniglass **polls** on an interval. Either way, a **[node](/architecture/nodes/)** running close to the gear reaches a
+Sometimes the component **pushes** it to Omniglass; usually Omniglass **polls** on an interval. Either way, a **[outpost](/architecture/outposts/)** running close to the gear reaches a
 component over an **[endpoint](/architecture/collection/)** (whatever the device speaks: SNMP, HTTP,
 SSH, a control processor's own command language) and reads.
 
 How to reach a class of component, and what to read from it, is declared once in its
 **[driver](/architecture/collection/#drivers-the-declarative-menu)**: a declarative spec of the
 inputs an attachment supplies, the polls to run, the pushes to listen for, and the commands it can
-send. Attaching a driver to a component's endpoint derives the node's work from that spec. The node
+send. Attaching a driver to a component's endpoint derives the outpost's work from that spec. The outpost
 runs it and **parses the answer at the edge**, turning a vendor's raw response into a normalized reading on
 the spot.
 
@@ -106,10 +115,10 @@ back.
 
 ## Detect
 
-An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its condition, an
-**[expression](/architecture/expressions/)**, is met, recording an
+An **[event_rule](/architecture/alarms-actions/)** watches a sample and fires when its criteria, an
+**[expression](/architecture/expressions/)**, are met, recording an
 **[event](/architecture/events/)**: our assertion that something happened. Pair a fire
-with a clear and the two events open and resolve an **alarm**, the stateful incident, one row per
+with a clear and the two events open and resolve an **alarm**, the stateful record of a fault, one row per
 occurrence, the thing an operator works and a ticket binds to. An alarm impairs its **component's
 own verdict** wholesale, turning a detection into a verdict on the system.
 
@@ -117,8 +126,8 @@ own verdict** wholesale, turning a detection into a verdict on the system.
 
 A single alarm is rarely the point. The headline is **[health](/architecture/health/)**: a verdict on
 the **system**, carried as a calculated sample. The chain: an alarm at or above `high` takes a component's own
-verdict to outage, so it no longer **occupies** the **role** it was filling (a lesser alarm degrades
-it but leaves it in place); a role below its **quorum** is
+verdict to outage, so it no longer **occupies** the **slot** it was filling (a lesser alarm degrades
+it but leaves it in place); a slot below its **quorum** is
 impaired and contributes its declared **impact** (outage, degraded, or none); the system takes the
 worst contribution, and a location the worst of its systems. A target on that verdict over time is a
 real uptime **SLA**.
@@ -150,7 +159,7 @@ direction: right
 
 # Shape colors are deliberately omitted: the inline SVG is themed from the site's
 # brand tokens in custom.css so it follows Starlight's light/dark toggle. Only
-# structure (rounding, dashes, the highlighted key node) lives here.
+# structure (rounding, dashes, the highlighted key outpost) lives here.
 classes: {
   node: { style.border-radius: 8 }
   key: { style: { border-radius: 8; bold: true } }
@@ -165,7 +174,7 @@ action: "action\nnotify · remediate · ticket" { class: node }
 declared: "declared\noperator-set" { class: node }
 views: "views → console" { class: node }
 
-gear -> sample: collect (node + edge parse)
+gear -> sample: collect (outpost + edge parse)
 sample -> event: event_rule
 event -> alarm: fire / clear
 alarm -> health: impairs the component
@@ -184,7 +193,7 @@ The journey rides on a few foundations:
 - the **[Storage Gateway](/architecture/storage/)** is the one door to the database; every read and
   write goes through it, which is where **scope** ([identity and access](/architecture/identity-access/))
   is enforced: a permission on every route, a visibility filter on every query. A grant can target a
-  **[group](/architecture/groups/)** of principals as well as a single one.
+  **[group](/architecture/groups/)** of users as well as a single one.
 - the **[workers](/architecture/workers/)** are durable JetStream consumers over the
   **[messaging](/architecture/messaging/)** subject contract; the built one is the telemetry
   consumer. Not all background work rides one yet: the event rule sweep closes sustains and
@@ -216,12 +225,12 @@ A handful of patterns hold everywhere:
   and its siblings) gated on its own, so it moves one column and nothing else
   ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
 - **Exclusive-arc ownership**: every sample, event, and alarm names exactly one owner (component,
-  system, location, or node), so system-level signals are first-class (a location's are its declared properties and its health).
+  system, location, or outpost), so system-level signals are first-class (a location's are its declared properties and its health).
 - **Templates fork, nothing pins**: creating from a [template](/architecture/templates/) is a
   one-time clone with no back-pointer, so a template can be rewritten in any release without
   migrating an install ([ADR-0071](/architecture/decisions/#adr-0071-a-template-is-a-clonable-example-not-a-versioned-shape-an-instance-pins)).
 - **On-row lineage**: a derived row carries its own evidence; there is no separate execution table.
-- **The `official` boolean**: every registry (`metric_type`, `property_type`, `event_type`,
+- **The `official` boolean**: every catalog (`metric_type`, `property_type`, `event_type`,
   `command_type`, and the
   catalogs) and rule row carries an `official` boolean: the curated ship-with set, seeded at boot
   and authoritative; the rest is operator-authored and local to a deployment.

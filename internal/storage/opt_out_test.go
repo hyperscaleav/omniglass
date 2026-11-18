@@ -71,8 +71,8 @@ func TestAMemberOptsOutOfARuleTheAdminAllows(t *testing.T) {
 	if _, err := f.gw.SetRuleOptOut(f.ctx, alice, alice, "page-on-call", true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "z-alice", Kind: storage.TargetPrincipal,
-		Principal: "alice", Channels: []string{storage.DeliveryInbox}}, f.all, storage.SecretUse{}, bindAll); err != nil {
+	if _, err := f.gw.CreateNotificationTarget(f.ctx, "", storage.NotificationTargetSpec{Name: "z-alice", Kind: storage.TargetUser,
+		User: "alice", Channels: []string{storage.DeliveryInbox}}, f.all, storage.SecretUse{}, bindAll); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.gw.UpdateActionRule(f.ctx, "", "page-on-call", storage.ActionRulePatch{Targets: &[]string{"on-call-page", "z-alice"}}, f.all); err != nil {

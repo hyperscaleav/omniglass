@@ -13,12 +13,12 @@ import (
 
 // TestRecordPlatformMetricsLandsOnThePlatformComponent: the process's write
 // of a platform key (#1625) lands on the component it names, and a component
-// gone since (a node deleted between the read and the write) costs only its
+// gone since (an outpost deleted between the read and the write) costs only its
 // own rows.
 func TestRecordPlatformMetricsLandsOnThePlatformComponent(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	kept := platformNode(t, ctx, gw, "edge-kept")
+	kept := platformOutpost(t, ctx, gw, "edge-kept")
 	at := time.Now().UTC().Truncate(time.Millisecond)
 	err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{
 		{ComponentID: "00000000-0000-0000-0000-000000000001", Key: writerclass.CheckinAge, Value: 9, TS: at},
@@ -38,23 +38,23 @@ func TestRecordPlatformMetricsLandsOnThePlatformComponent(t *testing.T) {
 func TestRecordPlatformMetricsRefusesAKeyNotThePlatforms(t *testing.T) {
 	t.Parallel()
 	gw, ctx := platformGateway(t)
-	c := platformNode(t, ctx, gw, "edge-x")
+	c := platformOutpost(t, ctx, gw, "edge-x")
 	err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{{ComponentID: c.ID, Key: "tcp-connect-time", Value: 1, TS: time.Now()}})
 	if !errors.Is(err, storage.ErrKeyWriterRefused) {
 		t.Fatalf("record a collected key = %v, want ErrKeyWriterRefused", err)
 	}
 }
 
-// TestNodeCheckinsReadsEveryClaimedNode: the check-in age's input (#1625) is
-// every claimed node with its platform component and the time it last spoke:
-// its last heartbeat, else its claim. A node never claimed has not started
+// TestOutpostCheckinsReadsEveryClaimedOutpost: the check-in age's input (#1625) is
+// every claimed outpost with its platform component and the time it last spoke:
+// its last heartbeat, else its claim. An outpost never claimed has not started
 // its silence and is absent.
-func TestNodeCheckinsReadsEveryClaimedNode(t *testing.T) {
+func TestOutpostCheckinsReadsEveryClaimedOutpost(t *testing.T) {
 	t.Parallel()
 	gw, ctx, dsn := platformGatewayDSN(t)
-	live := platformNode(t, ctx, gw, "edge-live")
-	quiet := platformNode(t, ctx, gw, "edge-quiet")
-	platformNode(t, ctx, gw, "edge-unclaimed")
+	live := platformOutpost(t, ctx, gw, "edge-live")
+	quiet := platformOutpost(t, ctx, gw, "edge-quiet")
+	platformOutpost(t, ctx, gw, "edge-unclaimed")
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -62,25 +62,25 @@ func TestNodeCheckinsReadsEveryClaimedNode(t *testing.T) {
 	defer conn.Close(ctx)
 	heard := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 	claimed := heard.Add(-time.Hour)
-	if _, err := conn.Exec(ctx, `update node set enrolled_at = $1,
+	if _, err := conn.Exec(ctx, `update outpost set enrolled_at = $1,
 		last_heartbeat_at = case when name = 'edge-live' then $2::timestamptz end
 		where name in ('edge-live', 'edge-quiet')`, claimed, heard); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := gw.NodeCheckins(ctx)
+	got, err := gw.OutpostCheckins(ctx)
 	if err != nil {
-		t.Fatalf("node checkins: %v", err)
+		t.Fatalf("outpost checkins: %v", err)
 	}
-	want := map[string]storage.NodeCheckin{
-		"edge-live":  {Node: "edge-live", ComponentID: live.ID, Since: heard},
-		"edge-quiet": {Node: "edge-quiet", ComponentID: quiet.ID, Since: claimed},
+	want := map[string]storage.OutpostCheckin{
+		"edge-live":  {Outpost: "edge-live", ComponentID: live.ID, Since: heard},
+		"edge-quiet": {Outpost: "edge-quiet", ComponentID: quiet.ID, Since: claimed},
 	}
 	if len(got) != len(want) {
-		t.Fatalf("checkins = %+v, want the two claimed nodes", got)
+		t.Fatalf("checkins = %+v, want the two claimed outposts", got)
 	}
 	for _, c := range got {
-		w, ok := want[c.Node]
+		w, ok := want[c.Outpost]
 		if !ok || c.ComponentID != w.ComponentID || !c.Since.Equal(w.Since) {
 			t.Errorf("checkin %+v, want %+v", c, w)
 		}

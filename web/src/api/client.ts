@@ -26,7 +26,7 @@ const BASE_URL = `${origin}/api/v1`;
 // onUnauthorized fires when a request to a protected route is rejected with 401,
 // which means a session that WAS valid has ended (expired, revoked by a password
 // reset, or the account locked out). The app registers a handler (in index.tsx)
-// that drops the cached principal so the AuthGuard bounces to /login immediately,
+// that drops the cached user so the AuthGuard bounces to /login immediately,
 // rather than waiting for /auth/me to refetch on its own. Nil until registered.
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void): void {
@@ -54,6 +54,12 @@ async function send(url: string, init: RequestInit): Promise<{ request: Request;
   const response = await globalThis.fetch(request);
   if (response.status === 401 && !isAuthEndpoint(request.url)) onUnauthorized?.();
   return { request, response };
+}
+
+// sendRaw is send for a caller that reads the response itself, a streamed one
+// included (omnibot's :run event stream).
+export async function sendRaw(url: string, init: RequestInit): Promise<Response> {
+  return (await send(url, init)).response;
 }
 
 // ogFetch is the mutator orval's generated operations call (orval.config.mjs), so

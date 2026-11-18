@@ -140,7 +140,7 @@ func TestExpressionDiagnosticsAPI(t *testing.T) {
 		CriteriaWarnings []ruleNote `json:"criteria_warnings"`
 	}
 	er := map[string]any{"name": "exactly-warm", "sample_key": "room-temperature",
-		"fire_criteria": map[string]any{"expr": "value == 21.5"}, "fire_event_type": "condition-started"}
+		"fire_criteria": map[string]any{"expr": "value == 21.5"}, "fire_event_type": "rule-fired"}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/event-rules", er, http.StatusCreated), &ev); err != nil {
 		t.Fatal(err)
 	}

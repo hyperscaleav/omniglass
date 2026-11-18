@@ -37,7 +37,7 @@ func TestCurrentValueReads(t *testing.T) {
 	}
 
 	// A collected key, so the observed, declared and intended series may all
-	// be written (ADR-0161): a native probe key's observation is the node's
+	// be written (ADR-0161): a native probe key's observation is the outpost's
 	// alone.
 	// Postgres timestamptz keeps microsecond precision; truncate at the source so
 	// the round-tripped ts compares equal to what we wrote.

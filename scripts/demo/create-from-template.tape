@@ -8,14 +8,14 @@
 Type "# A floor of meeting rooms under the West Building, systems and all"
 Enter
 Wait
-Type `omniglass location createFromTemplate --template meeting-floor --parent hq.west --name level-7 --label 'Level 7' | jq -c '{places: [.places[] | "\(.parent)/\(.location) (\(.type))"], systems: [.systems[] | "\(.location): \(.standard)"]}'`
+Type `omniglass location createFromTemplate --template meeting-floor --parent hq.west --name level-7 --label 'Level 7' | jq -c '{locations: [.locations[] | "\(.parent)/\(.location) (\(.type))"], systems: [.systems[] | "\(.location): \(.standard)"]}'`
 Enter
 Wait
 
-Type "# One more system, at a room, with its touch panel attached on the node"
+Type "# One more system, at a room, with its touch panel attached on the outpost"
 Enter
 Wait
-Type `omniglass system createFromTemplate --template mr55-system --location hq.west.level-7.mr-1 --name mr-1-b --node edge-hq --attach '{"touch-control":[{"host":"127.0.0.9"}]}' | jq -c '{system, standard, standards_created, components: [.components[] | "\(.role) \(.attached)"]}'`
+Type `omniglass system createFromTemplate --template mr55-system --location hq.west.level-7.mr-1 --name mr-1-b --outpost edge-hq --attach '{"touch-control":[{"host":"127.0.0.9"}]}' | jq -c '{system, standard, standards_created, components: [.components[] | "\(.slot) \(.attached)"]}'`
 Enter
 Wait
 
@@ -24,10 +24,10 @@ Type "clear"
 Enter
 Wait
 Show
-Type "# Its staffing reads complete: every role filled to quorum"
+Type "# Its staffing reads complete: every slot filled to quorum"
 Enter
 Wait
-Type `omniglass system role list mr-1-b | jq -r '.roles[] | "\(.name): quorum \(.quorum), understaffed \(.understaffed)"'`
+Type `omniglass system slot list mr-1-b | jq -r '.slots[] | "\(.name): quorum \(.quorum), understaffed \(.understaffed)"'`
 Enter
 Wait
 Type "# A single component, unattached until it is given an address"

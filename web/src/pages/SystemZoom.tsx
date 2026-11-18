@@ -7,13 +7,13 @@ import HealthBadge from "../components/HealthBadge";
 import HealthHistory from "../components/HealthHistory";
 import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
-import PlaceCard from "../components/PlaceCard";
+import LocationCard from "../components/LocationCard";
 import TemplateNotice from "../components/TemplateNotice";
 import MemberRows from "../components/MemberRows";
 import OutlineWorkspace from "../components/OutlineWorkspace";
 import { FLEET_VIEW_KEY, fleetView, childrenIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey, verdictOf } from "../lib/health";
-import { systemRoles, systemRolesKey } from "../lib/system_roles";
+import { systemSlots, systemSlotsKey } from "../lib/system_slots";
 import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { mapMarkers, parseStandardMap } from "../lib/system_map";
@@ -40,38 +40,38 @@ import AlarmTimeline, { createTimelineToggles } from "../components/AlarmTimelin
 import RuleLink from "../components/RuleLink";
 import SeverityBadge from "../components/SeverityBadge";
 import AcknowledgeButton from "../components/AcknowledgeButton";
-import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
+import { stretchReasons, memberAlarmRows, stretchesOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
 import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey, type SystemLogs } from "../lib/system_activity";
 import type { LogFilter } from "../lib/logs";
 import LogFilters from "../components/LogFilters";
 import { SERIES_POLL_MS, metricBuckets, metricBucketsKey } from "../lib/series";
 import { CalcRuleLink } from "../components/RuleLink";
-import { memberModel, systemCrumbs, systemsAtPlace, type MemberContext } from "../lib/detail";
+import { memberModel, systemCrumbs, systemsAtLocation, type MemberContext } from "../lib/detail";
 import TimeseriesChart from "../components/TimeseriesChart";
 import { systemMembers, systemMembersKey } from "../lib/members";
 import { LEAF_POLL_MS } from "../lib/component_leaf";
 import { CLOCK_TICK_MS, createClock } from "../lib/clock";
 
 // The system's detail view (#636, reoriented in #872). Systems are the unit
-// Omniglass monitors; places are folders and metadata; components are the
+// Omniglass monitors; locations are folders and metadata; components are the
 // pieces of systems. So this one view is what an operator lands on from a
-// room: the place as a card of context, then the system itself (verdict,
+// room: the location as a card of context, then the system itself (verdict,
 // since-when, standard, slots only while something is missing) with its
 // three tabs. Overview reads top-down: why (cause before arithmetic), the
 // components as rows, the standard's map, the data. Activity is the history,
 // the events and the logs; Configure is the one form.
 //
-// A sole system's view is titled by its place, and its path ends at the
-// place's parent, so the room is named once. A place shared by several
-// systems keeps its own view and stays in the path. A place with places
+// A sole system's view is titled by its location, and its path ends at the
+// location's parent, so the room is named once. A location shared by several
+// systems keeps its own view and stays in the path. A location with locations
 // beneath it lists them under the system, as the outline rooted there.
 //
 // It refreshes on its own while open (#940), the way a component's view does
 // (#934): the system's own reads (its health report, which carries the
-// verdict, Why and the roles' staffing; its declared roles; its members, each
+// verdict, Why and the slots' staffing; its declared slots; its members, each
 // with its own verdict; its data) poll at the leaf's cadence. The fleet view
-// is read once, for the place, the path and who the members are; nothing
+// is read once, for the location, the path and who the members are; nothing
 // polled grows with the fleet. TanStack holds every poll while the tab is
 // hidden.
 // The Data table reads a day at five-minute buckets (#1269): 288 of them, the
@@ -89,10 +89,10 @@ export default function SystemZoom() {
   const navigate = useNavigate();
   // The router's location, not the window's: on a client-side navigation the
   // window's query lags the route being rendered (#932).
-  const location = useLocation();
+  const route = useLocation();
   const me = useMe();
   const id = () => params.id;
-  // Unsaved Configure drafts (the system's and its sole place's) the tab rail asks about.
+  // Unsaved Configure drafts (the system's and its sole location's) the tab rail asks about.
   const leave = createLeaveGuard();
   // Every age on the card reads one ticking clock: a poll that returns the
   // same report changes nothing a query can see, so an age pinned to the data
@@ -103,7 +103,7 @@ export default function SystemZoom() {
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()), refetchInterval: LEAF_POLL_MS }));
-  const declared = useQuery(() => ({ queryKey: systemRolesKey(id()), queryFn: () => systemRoles(id()), refetchInterval: LEAF_POLL_MS }));
+  const declared = useQuery(() => ({ queryKey: systemSlotsKey(id()), queryFn: () => systemSlots(id()), refetchInterval: LEAF_POLL_MS }));
   // Each member's own verdict, polled off the system's members read: the
   // fleet view's dots (read once) stand in until it answers.
   const membersQ = useQuery(() => ({ queryKey: systemMembersKey(id()), queryFn: () => systemMembers(id()), refetchInterval: LEAF_POLL_MS }));
@@ -114,16 +114,16 @@ export default function SystemZoom() {
   createEffect(() => {
     if (!view.data || system()) return;
     const matches = (view.data.systems ?? []).filter((s) => s.name === id());
-    if (matches.length === 1) navigate(`/systems/${matches[0].id}${location.search}`, { replace: true });
+    if (matches.length === 1) navigate(`/systems/${matches[0].id}${route.search}`, { replace: true });
   });
 
-  const placeId = () => system()?.location ?? null;
-  const place = createMemo(() => (placeId() ? (view.data?.locations ?? []).find((l) => l.id === placeId()) : undefined));
-  // A sole system is the room: the view wears the place's name. A shared
-  // place keeps its own view, so a system there wears its own.
-  const sole = createMemo(() => (view.data && placeId() ? systemsAtPlace(view.data, placeId()!).length === 1 : false));
-  const hasBeneath = createMemo(() => (view.data && placeId() ? (childrenIndex(view.data).get(placeId()!) ?? []).length > 0 : false));
-  const title = () => (sole() && place() ? entityLabel(place()!) : system() ? entityLabel(system()!) : "System");
+  const locationId = () => system()?.location ?? null;
+  const location = createMemo(() => (locationId() ? (view.data?.locations ?? []).find((l) => l.id === locationId()) : undefined));
+  // A sole system is the room: the view wears the location's name. A shared
+  // location keeps its own view, so a system there wears its own.
+  const sole = createMemo(() => (view.data && locationId() ? systemsAtLocation(view.data, locationId()!).length === 1 : false));
+  const hasBeneath = createMemo(() => (view.data && locationId() ? (childrenIndex(view.data).get(locationId()!) ?? []).length > 0 : false));
+  const title = () => (sole() && location() ? entityLabel(location()!) : system() ? entityLabel(system()!) : "System");
 
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
   const systemsList = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
@@ -139,7 +139,7 @@ export default function SystemZoom() {
   // Each alarm row in the Why strip opens its timeline in place (#950).
   const timelines = createTimelineToggles();
   // The strip reads red when any alarm on it is at an outage level (the
-  // registry's flag, #917), amber when they only degrade.
+  // catalog's flag, #917), amber when they only degrade.
   const inOutage = createMemo(() => alarms().some((a) => scale().outage(a.severity)));
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
   const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()), refetchInterval: LEAF_POLL_MS }));
@@ -218,7 +218,7 @@ export default function SystemZoom() {
   }));
   const logLines = () => logsQ.data?.logs ?? [];
   // The history's now: the coarse clock, but never behind the report's own
-  // last edge, which a poll can bring in between two ticks (an incident that
+  // last edge, which a poll can bring in between two ticks (a stretch that
   // opened seconds ago would otherwise have a negative length and vanish).
   const historyNow = createMemo(() => {
     const t = health.data?.transitions ?? [];
@@ -228,7 +228,7 @@ export default function SystemZoom() {
     timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.verdict })), health.data?.verdict ?? null, historyNow()),
   );
   const uptime = createMemo(() => uptimePct(verdictSpans()));
-  const incidentList = createMemo(() => incidentsOf(verdictSpans(), historyNow()));
+  const stretches = createMemo(() => stretchesOf(verdictSpans(), historyNow()));
   // A good uptime wears the muted healthy green (#1067); one that should
   // worry someone wears the trouble hue.
   const uptimeTone = () => {
@@ -237,8 +237,8 @@ export default function SystemZoom() {
     const v = Number(u);
     return v >= 99 ? "good" : v >= 95 ? "warn" : "bad";
   };
-  const [openIncident, setOpenIncident] = createSignal<number | null>(null);
-  const incidents = createMemo(() => {
+  const [openStretch, setOpenStretch] = createSignal<number | null>(null);
+  const windowAlarms = createMemo(() => {
     const byComponent = new Map<string, NonNullable<typeof alarmHistory.data>>();
     for (const a of alarmHistory.data ?? []) byComponent.set(a.component_id, [...(byComponent.get(a.component_id) ?? []), a]);
     const members: MemberAlarms[] = memberIds().map((m) => ({
@@ -246,11 +246,11 @@ export default function SystemZoom() {
       componentId: m.componentId,
       alarms: byComponent.get(m.componentId) ?? [],
     }));
-    return incidentRows(members, historyNow(), 30 * 24, scale().levels);
+    return memberAlarmRows(members, historyNow(), 30 * 24, scale().levels);
   });
   const otherAlarms = createMemo(() => {
-    const inIncident = new Set(incidentList().flatMap((inc) => incidentReasons(inc, incidents()).map((r) => r.id)));
-    return incidents().filter((r) => !inIncident.has(r.id));
+    const inStretch = new Set(stretches().flatMap((inc) => stretchReasons(inc, windowAlarms()).map((r) => r.id)));
+    return windowAlarms().filter((r) => !inStretch.has(r.id));
   });
   const comps = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const prods = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
@@ -317,7 +317,7 @@ export default function SystemZoom() {
 
   return (
     <BladesContext.Provider value={blades}>
-    <Page title={title()} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+    <Page title={title()} name={system()?.name} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
       {/* A create from a template lands here with ?from= (#1329). */}
       <TemplateNotice />
       <DetailGate
@@ -330,12 +330,12 @@ export default function SystemZoom() {
         onRetry={retry}
       >
         <div class="flex flex-col gap-3">
-          <Show when={placeId()}>
-            {(pid) => <PlaceCard placeId={pid()} showName={!sole()} />}
+          <Show when={locationId()}>
+            {(pid) => <LocationCard locationId={pid()} showName={!sole()} />}
           </Show>
           <section data-testid="system-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
             <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-base-300 px-4 py-3 text-sm">
-              <Eyebrow label="System" hint="The logical group of components that makes this place work, and the thing Omniglass monitors: its verdict is what the components filling its roles add up to." />
+              <Eyebrow label="System" hint="The logical group of components that makes this location work, and the thing Omniglass monitors: its verdict is what the components filling its slots add up to." />
               <HealthBadge verdict={health.data?.verdict} size="sm" />
               <Show when={health.data && sinceOf(health.data, now())}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
@@ -347,7 +347,7 @@ export default function SystemZoom() {
               <span class="text-base-content/30">·</span>
               <span data-testid="component-count" class="tabular-nums text-base-content/70">{componentCount()} {componentCount() === 1 ? "component" : "components"}</span>
               {/* Slot arithmetic speaks only when hardware is MISSING: a
-                  deployed room fills every role (#785), and a down occupant
+                  deployed room fills every slot (#785), and a down occupant
                   is a failure the alarms explain, not a gap. */}
               <Show when={strip() && strip()!.empty > 0}>
                 <span class="text-base-content/30">·</span>
@@ -356,21 +356,21 @@ export default function SystemZoom() {
             </div>
             <TabRail tabs={tabs()} activeKey={tab} guard={leave} />
             <Show when={tab() === "configure"}>
-              {/* A sole system's place has no page of its own: it configures
+              {/* A sole system's location has no page of its own: it configures
                   here, first, as the page reads (its card sits above the
                   system's), in its own section with its own Edit (#872). A
-                  place shared by several systems keeps its own view and is
+                  location shared by several systems keeps its own view and is
                   configured there. */}
-              <Show when={sole() && placeId()} keyed>
+              <Show when={sole() && locationId()} keyed>
                 {(pid) => (
                   <section class="border-b border-base-300">
-                    <div class="px-4 pt-4"><Eyebrow label="Place" hint="Where this system sits: the place's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
-                    <ConfigureFace kind="location" id={pid} editValue="place" testid="configure-face-place" guard={leave} />
+                    <div class="px-4 pt-4"><Eyebrow label="Location" hint="Where this system sits: the location's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
+                    <ConfigureFace kind="location" id={pid} editValue="location" testid="configure-face-location" guard={leave} />
                   </section>
                 )}
               </Show>
-              {/* Named only beside the place's section; alone it needs no name. */}
-              <Show when={sole() && placeId()}>
+              {/* Named only beside the location's section; alone it needs no name. */}
+              <Show when={sole() && locationId()}>
                 <div class="px-4 pt-4"><Eyebrow label="System" /></div>
               </Show>
               {/* Keyed on the id: another system is another face, so the edit
@@ -397,10 +397,10 @@ export default function SystemZoom() {
               <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
                 <HealthHistory compact transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
                 <div class="relative mt-1 h-2">
-                  <For each={incidents()}>
+                  <For each={windowAlarms()}>
                     {(inc) => (
                       <span
-                        data-testid={`incident-marker-${inc.id}`}
+                        data-testid={`alarm-marker-${inc.id}`}
                         class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
                         classList={{ "border-b-error": scale().outage(inc.severity), "border-b-warning": !scale().outage(inc.severity) }}
                         style={{ left: `${markerX(inc.raisedAt, historyNow(), 30 * 24 * 3600_000) * 100}%` }}
@@ -413,16 +413,16 @@ export default function SystemZoom() {
             </div>
 
             <div>
-              <Eyebrow label="Incidents" hint="One entry per contiguous stretch away from healthy, however many verdict changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
-              <Show when={incidentList().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
-                <ul data-testid="incident-list" class="mt-2 flex flex-col gap-2">
-                  <For each={incidentList()}>
+              <Eyebrow label="Health history" hint="One entry per contiguous stretch away from healthy, however many verdict changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
+              <Show when={stretches().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
+                <ul data-testid="stretch-list" class="mt-2 flex flex-col gap-2">
+                  <For each={stretches()}>
                     {(inc, idx) => {
-                      const reasons = () => incidentReasons(inc, incidents());
-                      const open = () => openIncident() === idx();
+                      const reasons = () => stretchReasons(inc, windowAlarms());
+                      const open = () => openStretch() === idx();
                       return (
                         <li
-                          data-testid={`incident-${idx()}`}
+                          data-testid={`stretch-${idx()}`}
                           class="rounded-box border"
                           classList={{
                             "border-error/45 bg-error/5": inc.worst === "outage",
@@ -431,7 +431,7 @@ export default function SystemZoom() {
                             "border-base-300": inc.worst === "healthy",
                           }}
                         >
-                          <button type="button" class="flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-left text-sm" onClick={() => setOpenIncident(open() ? null : idx())}>
+                          <button type="button" class="flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-left text-sm" onClick={() => setOpenStretch(open() ? null : idx())}>
                             <HealthBadge verdict={inc.worst} size="xs" />
                             <span class="font-medium">
                               {inc.worst === "incomplete" ? "Commissioning" : inc.worst === "outage" ? "Outage" : "Degraded"}
@@ -465,7 +465,7 @@ export default function SystemZoom() {
                               </Show>
                               <Show
                                 when={reasons().length > 0}
-                                fallback={<p class="mt-2 text-xs text-base-content/50">No alarm overlaps this stretch: a commissioning gap (a role nobody staffed), not a failure.</p>}
+                                fallback={<p class="mt-2 text-xs text-base-content/50">No alarm overlaps this stretch: a commissioning gap (a slot nobody staffed), not a failure.</p>}
                               >
                                 <ul class="mt-2 flex flex-col gap-1">
                                   <For each={reasons()}>
@@ -545,7 +545,7 @@ export default function SystemZoom() {
         </Show>
         <Show when={tab() === "activity"}>
           <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
-            <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; a node's own logs live on the node." />
+            <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; an outpost's own logs live on the outpost." />
             <LogFilters filter={logFilter()} sources={logsQ.data?.sources ?? []} onChange={setLogFilter} />
             <Show
               when={logLines().length > 0}
@@ -567,7 +567,7 @@ export default function SystemZoom() {
               {(z) => (
                 <div data-testid="overview-tab" class="flex flex-col gap-5 p-4">
                   {/* Cause before arithmetic (#785): what is wrong, on which
-                      component, impairing which role, since when. */}
+                      component, impairing which slot, since when. */}
                   <Show when={alarms().length > 0}>
                     <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": inOutage(), "border-warning/40 bg-warning/5": !inOutage() }}>
                       <h2 class="eyebrow">Why</h2>
@@ -580,7 +580,7 @@ export default function SystemZoom() {
                               <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
                                 {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                               </Show>
-                              <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
+                              <span class="text-xs text-base-content/50">impairs {a.slotLabel} · {durationText(now() - Date.parse(a.raisedAt))}</span>
                               <Show when={a.acknowledged}>
                                 <span class="text-xs text-base-content/50">
                                   · acknowledged{a.acknowledgedBy ? ` by ${a.acknowledgedBy}` : ""}{a.acknowledgedAt ? ` ${fmtTime(a.acknowledgedAt)}` : ""}
@@ -598,7 +598,7 @@ export default function SystemZoom() {
                     </section>
                   </Show>
                   <section class="flex flex-col gap-2">
-                    <Eyebrow label="Components" hint="The pieces of this system, each with the role it fills. A role gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
+                    <Eyebrow label="Components" hint="The pieces of this system, each with the slot it fills. A slot gets its own header only where it says something a column cannot: more than one wanted, a shortfall, or nobody staffing it yet." />
                     <MemberRows rows={members().rows} groups={members().groups} onOpen={openComponent} />
                   </section>
                   <Show when={mapDecl()}>
@@ -662,10 +662,10 @@ export default function SystemZoom() {
               )}
             </Show>
           </section>
-          <Show when={sole() && hasBeneath() && placeId()}>
+          <Show when={sole() && hasBeneath() && locationId()}>
             {(pid) => (
               <section data-testid="beneath" class="flex flex-col gap-2">
-                <Eyebrow label={`Beneath ${place() ? entityLabel(place()!) : "this place"}`} hint="The places inside this one, as Explore draws them, counted by the systems they hold." />
+                <Eyebrow label={`Beneath ${location() ? entityLabel(location()!) : "this location"}`} hint="The locations inside this one, as Explore draws them, counted by the systems they hold." />
                 <OutlineWorkspace rootId={pid()} />
               </section>
             )}

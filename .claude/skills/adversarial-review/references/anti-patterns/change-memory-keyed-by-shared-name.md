@@ -8,4 +8,4 @@
   second does. One duplicate per run, forever, into a table nothing prunes.
 - **Fix:** key the memory by the emitter's own identity (the emit's index in its function, carried
   from the interpreter on `driver.Emitted.Emit` and `collection.Sample.Emit`), and test with two
-  emits that share a name (`occurrenceSlot`, internal/node/schedule.go).
+  emits that share a name (`occurrenceSlot`, internal/outpost/schedule.go).

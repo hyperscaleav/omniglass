@@ -11,18 +11,18 @@ type RawSettings struct {
 	// Bracket is OMNIGLASS_CLOSED_LOOP_BRACKET: how often the ring brackets.
 	Bracket string
 	// Heartbeat is OMNIGLASS_CLOSED_LOOP_HEARTBEAT: the check-in interval the
-	// server assumes for each node.
+	// server assumes for each outpost.
 	Heartbeat string
 	// ProbeEvery is OMNIGLASS_CLOSED_LOOP_PROBE_EVERY: the probe interval the
-	// server assumes for each node.
+	// server assumes for each outpost.
 	ProbeEvery string
 }
 
 // Settings is the closed loop's server settings: the ring's bracket interval
-// and the cadence the server assumes for every node, which it is not told.
+// and the cadence the server assumes for every outpost, which it is not told.
 type Settings struct {
 	Every   time.Duration
-	Cadence NodeCadence
+	Cadence OutpostCadence
 }
 
 // MinBracket is the shortest bracket a server takes: a bracket is a request
@@ -30,11 +30,11 @@ type Settings struct {
 const MinBracket = time.Second
 
 // ParseSettings reads raw, unset figures taking the defaults: a bracket each
-// RingEvery and a node at defaultHeartbeat with a probe on every check-in. A
+// RingEvery and an outpost at defaultHeartbeat with a probe on every check-in. A
 // figure that is not a positive duration, or a bracket outside MinBracket to
 // RingEvery, is an error naming its variable, so it fails the boot.
 func ParseSettings(raw RawSettings, defaultHeartbeat time.Duration) (Settings, error) {
-	s := Settings{Every: RingEvery, Cadence: NodeCadence{Heartbeat: defaultHeartbeat}}
+	s := Settings{Every: RingEvery, Cadence: OutpostCadence{Heartbeat: defaultHeartbeat}}
 	for _, f := range []struct {
 		name, raw string
 		into      *time.Duration

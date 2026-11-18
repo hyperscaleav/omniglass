@@ -12,7 +12,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
-// SeverityLevel is one named level of the severity registry (#917,
+// SeverityLevel is one named level of the severity catalog (#917,
 // ADR-0050): an alarm and a rule name it, the console renders its label and
 // color, and its rank compares it to the others (higher is more severe).
 // Official levels ship with the boot seed and are read-only.

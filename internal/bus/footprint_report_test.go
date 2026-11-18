@@ -19,14 +19,17 @@ import (
 // wantStatementsPerReportBatch is every statement one endpoint's collection
 // report batch costs (#1369): the window's poll duration, poll CPU time
 // (#1870) and pushed message count, metric lane only. Exact, as the standard batch's is.
-const wantStatementsPerReportBatch = 13
+// 13 until #1928 read the event rules and probed the calc rules once a batch
+// and read the catalogs' fingerprint once every few seconds (10); its seen
+// stamp moved into the batch's transaction at the same one statement.
+const wantStatementsPerReportBatch = 10
 
-// reportBatch is one endpoint's collection report for a window, as the node
+// reportBatch is one endpoint's collection report for a window, as the outpost
 // publishes it, its one task group (#1582): an endpoint that polls and holds a listening session, at
 // its healthiest, three rows (a failure or an unclaimed count adds one each).
 func reportBatch(task footprint.Task, window int, end time.Time) *ogv1.TelemetryBatch {
 	ts := timestamppb.New(end)
-	return &ogv1.TelemetryBatch{NodeId: task.Node, Groups: []*ogv1.TaskGroup{{TaskId: task.ID, Ts: ts, Metrics: []*ogv1.MetricSample{
+	return &ogv1.TelemetryBatch{OutpostId: task.Outpost, Groups: []*ogv1.TaskGroup{{TaskId: task.ID, Ts: ts, Metrics: []*ogv1.MetricSample{
 		{Name: probekeys.PollDuration, Value: 40 + float64(window%7), Ts: ts},
 		{Name: probekeys.PollCPUTime, Value: 0.4 + float64(window%7)/10, Ts: ts},
 		{Name: probekeys.PushMessageCount, Value: float64(window % 3), Ts: ts},
@@ -53,7 +56,7 @@ func TestCollectionReportFootprint(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.seq++
-			m := &deliveredMsg{subject: collection.TelemetrySubject(task.Node), data: data,
+			m := &deliveredMsg{subject: collection.TelemetrySubject(task.Outpost), data: data,
 				header: nats.Header{jetstream.MsgIDHeader: []string{fmt.Sprintf("fp-report-%d", f.seq)}}}
 			f.srv.handleTelemetry(m)
 			if !m.acked || m.termed || m.naked {

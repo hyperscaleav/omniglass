@@ -42,7 +42,7 @@ func loadMakeTargets() (map[string]bool, error) {
 
 // loadEnvUniverse scans non-test Go under internal/ and cmd/ for OMNIGLASS_*
 // reads. The source of truth is the whole binary, not one config package: the
-// secret KEK, the CLI client, and the node runner all read their own vars.
+// secret KEK, the CLI client, and the outpost runner all read their own vars.
 // The console's dev tooling (web/src/dev, read by vite.config.ts) is scanned
 // too: it reads OMNIGLASS_LAB_URL to proxy the console loop to a lab (#1196).
 func loadEnvUniverse() (map[string]bool, error) {
@@ -174,7 +174,7 @@ func ScanEnvVars() ([]Finding, error) {
 
 // ScanEnvDocsCoverage is the inverse: every env var the binary reads is
 // documented somewhere in the docs tree. Which page owns it differs by
-// audience (the container guide for server and node runtime, the CLI guide
+// audience (the container guide for server and outpost runtime, the CLI guide
 // for client vars); what cannot happen is a knob the code reads and no page
 // names.
 func ScanEnvDocsCoverage() ([]Finding, error) {

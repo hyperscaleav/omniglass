@@ -8,7 +8,7 @@ import (
 
 // The transport registry is code, not a table (ADR-0073): the set of wires the
 // platform can speak over is a build-time fact, so the registry is the one
-// source the storage validator, the API route, and the node's probe dispatch
+// source the storage validator, the API route, and the outpost's probe dispatch
 // all read. These tests pin the contract the rest of slice 1 hangs off.
 
 func TestRegistryCarriesTheTwelveTransports(t *testing.T) {
@@ -156,10 +156,47 @@ func TestWebhookIsAPushTransportWithNoRung(t *testing.T) {
 	}
 	for _, other := range transport.All() {
 		if other.Name != "webhook" && other.Push {
-			t.Errorf("%s: Push set on a transport a node dials", other.Name)
+			t.Errorf("%s: Push set on a transport an outpost dials", other.Name)
 		}
 	}
 	if !transport.IsPush("webhook") || transport.IsPush("http") || transport.IsPush("nope") {
 		t.Fatal("IsPush reads the registry's flag, false for an unknown name")
+	}
+}
+
+// A built transport an outpost dials declares the keys its probe lands and the
+// params it reads (#1087), and the lab's expectation (BuiltIn, Answered) is a
+// subset of that declaration: the probe lands what the lab expects of it. A
+// push transport has no probe, so it declares neither. internal/outpost binds
+// each declaration to the probe that lands it.
+func TestAProbedTransportDeclaresItsParamsAndProbeKeys(t *testing.T) {
+	for _, tr := range transport.All() {
+		if tr.Push {
+			if len(tr.ProbeKeys) != 0 || len(tr.Params) != 0 {
+				t.Errorf("%s: a push transport has no probe, yet declares params %v and probe keys %v", tr.Name, tr.Params, tr.ProbeKeys)
+			}
+			continue
+		}
+		if !tr.Built {
+			continue
+		}
+		if len(tr.Params) == 0 || tr.Params[0] != "target" {
+			t.Errorf("%s: Params = %v, want the probe's params led by target", tr.Name, tr.Params)
+		}
+		if len(tr.ProbeKeys) == 0 {
+			t.Errorf("%s: a built, dialed transport declares no probe keys", tr.Name)
+		}
+		seen := map[string]bool{}
+		for _, k := range tr.ProbeKeys {
+			if seen[k] {
+				t.Errorf("%s: probe key %q declared twice", tr.Name, k)
+			}
+			seen[k] = true
+		}
+		for _, k := range append(append([]string{}, tr.BuiltIn...), tr.Answered...) {
+			if !seen[k] {
+				t.Errorf("%s: the lab expects %q of the probe but ProbeKeys does not declare it", tr.Name, k)
+			}
+		}
 	}
 }

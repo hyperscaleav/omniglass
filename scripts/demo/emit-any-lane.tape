@@ -1,6 +1,6 @@
 # A driver emit lands on any lane
 #
-# The shipped newtron-nvp driver lands one push from the simulated touch panel on two lanes (the
+# The shipped newtron-panel-nvp driver lands one push from the simulated touch panel on two lanes (the
 # video-input property and an input-changed event carrying the input), a diagnostics line as a log
 # line with its severity, and a push nothing claims as a raw log line; kestrel-api lands a call
 # starting and ending as events carrying the call's id. Nothing is polled for any of it (#1145).
@@ -14,7 +14,7 @@ Wait
 Type "# The shipped driver: one push lands on several lanes, and what nothing claims lands as a log line"
 Enter
 Wait
-Type `omniglass driver get newtron-nvp | jq -c '{unmatched: .spec.unmatched, listeners: [.spec.listeners[] | {name, match: .match.prefix, emits: [.emits[] | (.name // "a log line")]}]}'`
+Type `omniglass driver get newtron-panel-nvp | jq -c '{unmatched: .spec.unmatched, listeners: [.spec.listeners[] | {name, match: .match.prefix, emits: [.emits[] | (.name // "a log line")]}]}'`
 Enter
 Wait
 

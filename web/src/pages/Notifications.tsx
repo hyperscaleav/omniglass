@@ -22,25 +22,25 @@ import {
 } from "../lib/notification_types";
 import { COMPONENTS_KEY, listComponents, type Component } from "../lib/components";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { catalogLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
 import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Notifications (Catalog > Actions > Notifications, #618): the outbound message
-// registry, the peer of Commands. A notification type says WHAT a message about
-// an alarm says, as a one-line subject and a body text, each a template in the
+// catalog, the peer of Commands. A notification type says WHAT a message about
+// an alarm says, as a one-line subject and a body text, each a rule in the
 // same sandbox a label rule runs in, reading the alarm facts. The blade previews
 // a type (or the draft being edited) against a real alarm through the server's
 // own engine, so an author sees exactly what a receiver would get and which
-// facts a template can read. When and where a message is sent is an action
+// facts a rule can read. When and where a message is sent is an action
 // rule's and a target's, not this page's.
 
 export const NOTIFICATION_HINTS = {
   subject: "One line a receiver reads first: a chat message's title, a page's summary. Whitespace collapses to single spaces.",
   text: "The body. Lines are kept. Reads the same facts as the subject; a fact the alarm does not have renders empty.",
-  preview: "Renders the templates against a component's most recent alarm, through the same engine a delivery uses. Writes nothing.",
+  preview: "Renders the subject and text against a component's most recent alarm, through the same engine a delivery uses. Writes nothing.",
   transition: "Which edge to render for. A raised and a cleared message usually say different things.",
 };
 
@@ -159,10 +159,10 @@ function NotificationTypeBladeBody(p: { name: string }): JSX.Element {
       row() && !row()!.official && can(me.data, "notification_type", "delete")
         ? { label: "Delete", tone: "danger", onClick: remove }
         : undefined,
-    locked: () => registryLock(row(), me.data, "notification_type"),
+    locked: () => catalogLock(row(), me.data, "notification_type"),
   });
 
-  // The preview renders the drafts while editing and the stored templates
+  // The preview renders the drafts while editing and the stored rules
   // otherwise, so what it shows is always what Save would store.
   const drafts = () => (edit.editing() ? { subject: subject(), text: text() } : {});
 
@@ -198,8 +198,8 @@ export function componentOption(c: Pick<Component, "name" | "label">): string {
 
 // PreviewPanel renders a type against a real alarm through the server's engine:
 // pick a component (its most recent alarm is the one rendered) and the edge.
-// It is the surface that teaches what a template sees: the rendered message
-// beside every fact the templates could have read.
+// It is the surface that teaches what a rule sees: the rendered message
+// beside every fact the rules could have read.
 export function PreviewPanel(p: { type: string; drafts: () => { subject?: string; text?: string } }): JSX.Element {
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const options = createMemo(() => [...(components.data ?? [])].sort((a, b) => entityLabel(a).localeCompare(entityLabel(b))) as Component[]);
@@ -262,7 +262,7 @@ export function PreviewPanel(p: { type: string; drafts: () => { subject?: string
             <KVStacked label="Rendered subject" value={<span class="font-data text-[12px]">{res().subject}</span>} />
             <KVStacked label="Rendered text" value={<pre class="whitespace-pre-wrap font-data text-[12px]">{res().text}</pre>} />
             <div class="flex flex-col gap-1">
-              <span class="eyebrow">Facts a template reads ({res().transition})</span>
+              <span class="eyebrow">Facts a rule reads ({res().transition})</span>
               <table class="table table-xs">
                 <tbody>
                   <For each={res().facts ?? []}>
@@ -283,16 +283,16 @@ export function PreviewPanel(p: { type: string; drafts: () => { subject?: string
   );
 }
 
-// CreateNotificationTypeForm registers an operator type. Both templates start
+// CreateNotificationTypeForm registers an operator type. Both rules start
 // from the official raised message's shape, so an author edits a working
-// template rather than facing two empty boxes.
+// rule rather than facing two empty boxes.
 export function CreateNotificationTypeForm(p: { onCreated: (r: NotificationTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
   const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [subject, setSubject] = createSignal("[{{.SeverityLabel}}] {{.ComponentLabel}}: {{.Message}}");
-  const [text, setText] = createSignal("{{.ComponentLabel}}{{if .Place}} at {{.Place}}{{end}}: {{.Message}}");
+  const [text, setText] = createSignal("{{.ComponentLabel}}{{if .Location}} at {{.Location}}{{end}}: {{.Message}}");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
 

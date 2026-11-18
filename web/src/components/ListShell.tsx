@@ -30,8 +30,7 @@ export default function ListShell<T>(props: {
   // Fill mode (optional): the shell stretches to its parent's fixed height and
   // hands the surplus to the body, whose scroll region scrolls internally
   // instead of growing the page. The FilterBar header (and any footer) stay
-  // pinned. Off (the default), the shell grows with content exactly as every
-  // list page does today.
+  // pinned. Off (the default), the shell grows with content.
   fill?: boolean;
   children: (filtered: Accessor<T[]>, chips: Accessor<Chip[]>) => JSX.Element;
 }) {

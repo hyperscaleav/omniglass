@@ -10,8 +10,8 @@ import { snoozedUntilWords, timelineWhat } from "../lib/alarms";
 // badge every reader sees. Each test mounts the control twice for one alarm,
 // as the component blade does (its Why strip and its alarms panel), on two
 // surfaces.
-const operator: Me = { principal: { id: "p", kind: "human" }, permissions: ["alarm:snooze"], grants: [] };
-const viewer: Me = { principal: { id: "v", kind: "human" }, permissions: ["alarm:read"], grants: [] };
+const operator: Me = { user: { id: "p", kind: "person" }, permissions: ["alarm:snooze"], grants: [] };
+const viewer: Me = { user: { id: "v", kind: "person" }, permissions: ["alarm:read"], grants: [] };
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -32,7 +32,7 @@ function mount(me: Me, alarm: { id: string; snoozed_until?: string; snoozed_by?:
 describe("SnoozeButton", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("snoozes the condition for the chosen duration, and teaches how a snooze differs", async () => {
+  it("snoozes the alarm for the chosen duration, and teaches how a snooze differs", async () => {
     const calls: { url: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;

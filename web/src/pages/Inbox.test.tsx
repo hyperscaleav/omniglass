@@ -9,9 +9,9 @@ import { INBOX_COUNT_KEY, inboxListKey, type Inbox as InboxRead, type InboxEntry
 // The console inbox (#1355). The inbox reads are seeded into the query cache;
 // fetch answers only the writes (and the refetches they cause) a test drives,
 // and refuses anything else.
-const viewer: Me = { principal: { id: "u-1", kind: "human" }, human: { username: "ada" }, permissions: ["*:read", "notification:subscribe"], grants: [] };
-const readOnly: Me = { principal: { id: "u-2", kind: "human" }, human: { username: "bo" }, permissions: ["*:read"], grants: [] };
-const noInbox: Me = { principal: { id: "u-3", kind: "human" }, human: { username: "cy" }, permissions: ["component:read"], grants: [] };
+const viewer: Me = { user: { id: "u-1", kind: "person" }, person: { username: "ada" }, permissions: ["*:read", "notification:subscribe"], grants: [] };
+const readOnly: Me = { user: { id: "u-2", kind: "person" }, person: { username: "bo" }, permissions: ["*:read"], grants: [] };
+const noInbox: Me = { user: { id: "u-3", kind: "person" }, person: { username: "cy" }, permissions: ["component:read"], grants: [] };
 
 function entry(over: Partial<InboxEntry>): InboxEntry {
   return {
