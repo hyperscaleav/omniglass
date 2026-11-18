@@ -15,6 +15,9 @@ ruleset, and none can merge ([ADR-2175](/architecture/decisions/#adr-2175-agent-
 | `agent-review.yml` | every same-repo PR that is opened, pushed, reopened or marked ready | runs the [adversarial review](https://github.com/hyperscaleav/omniglass/tree/main/.claude/skills/adversarial-review) read-only, posts findings, and passes its check only when it says ship |
 | `agent-fix.yml` | `@hyperscale-agent` (or `@claude`) on a PR, a review that requests changes, or agent-review's own Changes requested | pushes a fix to the PR's branch |
 
+A fourth, `agent-open-pr.yml`, runs no agent: it opens a PR as the agents' App from a branch a
+Claude session pushed, as described in [PRs from a session](#prs-from-a-session).
+
 ## The flow
 
 Work moves through five stages, and the architect has three gates in them: starting the work,
@@ -101,11 +104,23 @@ works, then finishes as success when the run pushed, neutral when it pushed noth
 when the run broke. A run that pushed shows the finished check on the new head as well, since a
 PR lists only its head's checks. The check is not required; it is there to be seen.
 
+## PRs from a session
+
+A Claude session that opens its PR with a person's token makes that person the author, and GitHub
+never counts an author's approval, so the architect could only merge it by bypassing the rules.
+Instead the session pushes its work to a `claude/` branch and dispatches `agent-open-pr.yml` with
+the branch, a title and a body. The workflow opens the PR with the agents' App token, so the
+author is `hyperscale-agent[bot]` and the architect's approval counts. A PR the App opens starts
+agent-review and the required checks like any other.
+
+Only a maintainer may dispatch it, only for a `claude/` branch that is already pushed and has no
+open PR. The gate is `scripts/agent-trust.sh open`; a refusal fails the run with its reason.
+
 ## Who can start what
 
 | Who | Can start |
 | --- | --- |
-| `maintainers` team | builds (`run:dev-gha`), fixes |
+| `maintainers` team | builds (`run:dev-gha`), fixes, PRs from a session's branch |
 | `contributors` team | fixes, and their comments reach a building agent |
 | anyone else | nothing; their comments never reach a model |
 
