@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { ROUTE_MANIFEST } from "../src/lib/routemanifest";
+import { gotoSettled } from "./settle.mjs";
 
 // The route smoke tier (#760): one test per manifest entry, visiting its smoke
 // address and failing on any page error or console error. The manifest is the
@@ -40,7 +41,8 @@ test.describe("console routes", () => {
         await page.waitForURL((url) => !url.pathname.endsWith("/login"));
       }
 
-      await page.goto("/web" + r.smoke, { waitUntil: "networkidle" });
+      // Not networkidle: a page bound to live data holds its views stream open.
+      await gotoSettled(page, "/web" + r.smoke);
       // The page rendered SOMETHING (the shell, a list, a stub, a miss face);
       // a blank root means the route resolved no component.
       await expect(page.locator("#root > *").first()).toBeVisible();

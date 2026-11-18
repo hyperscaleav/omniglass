@@ -173,7 +173,9 @@ func WithCommandWaitLimits(total, perUser int) Option {
 // ends it for the client to reconnect, and how often an idle one sends its
 // position and rechecks its caller. Zero keeps a default.
 func WithViewWatchLimits(perUser int, lifetime, heartbeat time.Duration) Option {
-	return func(o *options) { o.viewWatch = viewWatchLimits{perUser: perUser, lifetime: lifetime, heartbeat: heartbeat} }
+	return func(o *options) {
+		o.viewWatch = viewWatchLimits{perUser: perUser, lifetime: lifetime, heartbeat: heartbeat}
+	}
 }
 
 // WithTelemetryPublisher supplies the bus seam the push-ingest route publishes
