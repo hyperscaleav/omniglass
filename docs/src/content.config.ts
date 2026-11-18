@@ -14,6 +14,8 @@ const screenshotStep = z.object({
   value: z.string().optional(),
   // wait only: how long to hold for the selector, in ms (default two minutes).
   timeout: z.number().int().positive().optional(),
+  // click only: keys held through the click (Alt, Shift, Control, Meta).
+  modifiers: z.array(z.enum(['Alt', 'Shift', 'Control', 'Meta'])).optional(),
 });
 
 const screenshot = z.object({

@@ -263,7 +263,9 @@ export default function ExpressionField(p: {
                 <Show when={at}>
                   {(a) => (
                     <pre
-                      aria-hidden="true"
+                      tabindex="0"
+                      role="region"
+                      aria-label={`Line ${d.line} of the expression, with the fault marked`}
                       class="overflow-x-auto rounded bg-base-200 px-2 py-1 font-data text-[12px] leading-snug text-base-content/80 [font-variant-ligatures:none]"
                     >
                       {`${a().text}\n${a().caret}`}

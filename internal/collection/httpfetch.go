@@ -27,12 +27,12 @@ import (
 // judged by the status table the architect ruled (decision 5 of #1113). A
 // credential is written only into the outgoing request: no error, reason or
 // log line carries it, a query-parameter key is redacted from every URL the
-// node names, and a component's text is scrubbed of the credential before it
+// outpost names, and a component's text is scrubbed of the credential before it
 // reaches a reason.
 
 // DefaultBodyCap bounds the body a fetch reads: 1 MiB, ample for a status
 // document or a status page, and a ceiling on what a component can make a
-// node hold.
+// outpost hold.
 const DefaultBodyCap = 1 << 20
 
 // HTTPExchange is one http request to send: the endpoint's target
@@ -82,14 +82,14 @@ type HTTPFetcher interface {
 func NewHTTPFetcher() HTTPFetcher { return httpFetcher{} }
 
 // NewTalliedHTTPFetcher is the real http fetcher counting each connection and
-// each request (a digest challenge and its answer are two) on the node's
+// each request (a digest challenge and its answer are two) on the outpost's
 // tally (#1639).
 func NewTalliedHTTPFetcher(tally *RequestTally) HTTPFetcher { return httpFetcher{tally: tally} }
 
 type httpFetcher struct{ tally *RequestTally }
 
 // fetchTransport is the fetcher's transport: one request per connection, so
-// the node's connections reconcile against the component's accepts.
+// the outpost's connections reconcile against the component's accepts.
 func fetchTransport(dialer *net.Dialer, x HTTPExchange) *http.Transport {
 	return &http.Transport{DialContext: dialer.DialContext, DisableKeepAlives: true, ResponseHeaderTimeout: x.Timeout,
 		MaxResponseHeaderBytes: maxResponseHeaderBytes}
@@ -198,8 +198,8 @@ func (f httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, 
 			}
 			if !answered {
 				// The credential was never sent: the component offers no
-				// challenge this node answers, which is no verdict on it.
-				return HTTPAnswer{}, &RequestFault{Status: resp.StatusCode, Reason: "the component's 401 offers no digest challenge this node answers (" + offeredSchemes(resp.Header) + ")"}
+				// challenge this outpost answers, which is no verdict on it.
+				return HTTPAnswer{}, &RequestFault{Status: resp.StatusCode, Reason: "the component's 401 offers no digest challenge this outpost answers (" + offeredSchemes(resp.Header) + ")"}
 			}
 		}
 		if int64(len(body)) > x.BodyCap {
@@ -216,7 +216,7 @@ func (f httpFetcher) Exchange(ctx context.Context, x HTTPExchange) (HTTPAnswer, 
 
 // maxResponseHeaderBytes bounds the headers a component's answer may carry:
 // a status document's headers are small, and a hostile component cannot make
-// a node hold megabytes of cookies or challenges.
+// an outpost hold megabytes of cookies or challenges.
 const maxResponseHeaderBytes = 64 << 10
 
 // offeredSchemes names the auth schemes a 401's challenges offer, never
@@ -289,7 +289,7 @@ func BuildHTTPRequest(ctx context.Context, x HTTPExchange) (*http.Request, error
 	if err != nil {
 		return nil, fmt.Errorf("collection: http request %s: %v", x.redactedURL(u), Scrub(fmt.Sprint(errors.Unwrap(err)), c, x.Redact...))
 	}
-	req.Header.Set("User-Agent", "omniglass-node")
+	req.Header.Set("User-Agent", "omniglass-outpost")
 	for k, v := range r.Headers {
 		req.Header.Set(k, v)
 	}

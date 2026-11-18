@@ -105,7 +105,11 @@ export const Eye: Component<P> = (p) => (
 export const Key: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.7 12.3 20 3" /><path d="m17 6 2 2" /><path d="m14 9 2 2" /></Svg>
 );
-// ShieldCheck is trusting a key (#1078): a decision about who the node may
+// Bot is omnibot (#1167).
+export const Bot: Component<P> = (p) => (
+  <Svg size={p.size}><path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2" /><path d="M20 14h2" /><path d="M15 13v2" /><path d="M9 13v2" /></Svg>
+);
+// ShieldCheck is trusting a key (#1078): a decision about who the outpost may
 // talk to, not a retry.
 export const ShieldCheck: Component<P> = (p) => (
   <Svg size={p.size}><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></Svg>
@@ -210,7 +214,7 @@ export const Siren: Component<P> = (p) => (
   <Svg size={p.size}><path d="M7 18v-6a5 5 0 0 1 10 0v6" /><path d="M3 21h18" /><path d="M12 2v1M4.5 5.5l.7.7M19.5 5.5l-.7.7" /></Svg>
 );
 
-// Place-type glyphs: the leading icon a location wears in the tree, resolved from
+// Location-type glyphs: the leading icon a location wears in the tree, resolved from
 // its location_type's icon key (see resolveIcon below).
 export const Landmark: Component<P> = (p) => (
   <Svg size={p.size}><path d="M3 22h18" /><path d="m12 2 9 5H3z" /><path d="M6 10v8M10 10v8M14 10v8M18 10v8" /></Svg>

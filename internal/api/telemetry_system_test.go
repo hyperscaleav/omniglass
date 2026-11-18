@@ -179,8 +179,8 @@ func TestASystemOwnsItsPushedTelemetry(t *testing.T) {
 	if len(r.Rejected) != 2 || !strings.Contains(reasons["avg-temp"], "room-mean") || reasons["health"] == "" {
 		t.Fatalf("rejected = %+v, want avg-temp naming room-mean and health refused", r.Rejected)
 	}
-	// Location and node owners are not pushed at all.
-	for _, kind := range []string{"location", "node"} {
+	// Location and outpost owners are not pushed at all.
+	for _, kind := range []string{"location", "outpost"} {
 		c.do(ownerTok, http.MethodPost, "/telemetry:push", map[string]any{
 			"owner":   map[string]any{"kind": kind, "ref": "anything"},
 			"metrics": []map[string]any{{"name": "room-temperature", "value": 1}},
@@ -251,7 +251,7 @@ func TestASystemPushIsFencedOnTheSystemTier(t *testing.T) {
 	}
 
 	// A push-only integration on sys-a pushes there and learns nothing else.
-	pushOnly := principalWithGrants(t, ctx, dsn, "push-only-a", []grant{{role: "push-only", scopeKind: "system", scopeID: ids["sys-a"]}})
+	pushOnly := userWithGrants(t, ctx, dsn, "push-only-a", []grant{{role: "push-only", scopeKind: "system", scopeID: ids["sys-a"]}})
 	push(pushOnly, "system", "sys-a", http.StatusAccepted)
 	push(pushOnly, "system", ids["sys-a"], http.StatusAccepted)
 	push(pushOnly, "system", "sys-b", http.StatusNotFound)
@@ -263,7 +263,7 @@ func TestASystemPushIsFencedOnTheSystemTier(t *testing.T) {
 
 	// A wide read and a narrow push: the read decides only the refusal, a
 	// truthful 403 on a system it can see but may not push to.
-	wideNarrow := setupScopedPrincipal(t, ctx, dsn, "wide-read-narrow-push-sys",
+	wideNarrow := setupScopedUser(t, ctx, dsn, "wide-read-narrow-push-sys",
 		grantSpec{role: "viewer", scopeKind: "all"},
 		grantSpec{role: "operator", scopeKind: "system", scopeID: ids["sys-b"]},
 	)

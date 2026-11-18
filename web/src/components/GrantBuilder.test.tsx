@@ -21,7 +21,7 @@ const scopeName = (id: string): string | undefined => ({ "loc-boi": "boi", "loc-
 function mount(current: ExistingGrant[] = []) {
   const onSave = vi.fn().mockResolvedValue(undefined);
   const utils = render(() => (
-    <GrantBuilder principalId="p1" current={current} roles={roles} entities={entities} scopeName={scopeName} canGrant canRevoke onSave={onSave} />
+    <GrantBuilder userId="p1" current={current} roles={roles} entities={entities} scopeName={scopeName} canGrant canRevoke onSave={onSave} />
   ));
   return { onSave, ...utils };
 }
@@ -122,7 +122,7 @@ describe("GrantBuilder", () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     const { getByRole, queryByLabelText } = render(() => (
       <GrantBuilder
-        principalId="p1"
+        userId="p1"
         current={[]}
         roles={roles}
         entities={(k) => (k === "location" ? locs() : [])}

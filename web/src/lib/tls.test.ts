@@ -35,7 +35,7 @@ describe("certTone", () => {
 describe("tlsMode", () => {
   it("names each mode and marks skip as a warning", () => {
     expect(tlsMode("pin")).toMatchObject({ word: "pinned on first use", tone: "ok" });
-    expect(tlsMode("verify")).toMatchObject({ word: "verified against the node's roots", tone: "ok" });
+    expect(tlsMode("verify")).toMatchObject({ word: "verified against the outpost's roots", tone: "ok" });
     expect(tlsMode("skip")).toMatchObject({ word: "not verified", tone: "warn" });
   });
   it("teaches what each mode trusts", () => {

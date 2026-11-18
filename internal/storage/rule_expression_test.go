@@ -39,7 +39,7 @@ func TestRuleCriteriaAreExpressions(t *testing.T) {
 	gw, all := f.gw, scope.Set{All: true}
 
 	short, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "short-form", SampleKey: "endpoint-reachable",
-		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), FireEventType: "condition-started", Enabled: ptrBool(false)}, all)
+		Fire: criteria("eq", "down"), Clear: ptrCriteria(criteria("eq", "up")), FireEventType: "rule-fired", Enabled: ptrBool(false)}, all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestRuleCriteriaAreExpressions(t *testing.T) {
 		left join component_type ct on ct.id = p.component_type_id where c.name = 'bar-1'`)
 	src := `value == "down" && instance != "aux" && key == "endpoint-reachable" && component.name == "bar-1" && component.type == "` + typ + `"`
 	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "expr-form", SampleKey: "endpoint-reachable",
-		Fire: exprCriteria(src), Clear: ptrCriteria(exprCriteria(`value == "up"`)), Severity: "high", FireEventType: "condition-started"}, all); err != nil {
+		Fire: exprCriteria(src), Clear: ptrCriteria(exprCriteria(`value == "up"`)), Severity: "high", FireEventType: "rule-fired"}, all); err != nil {
 		t.Fatal(err)
 	}
 	prop := func(instance, value string) {
@@ -76,7 +76,7 @@ func TestRuleCriteriaAreExpressions(t *testing.T) {
 	}
 
 	if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "metric-expr", SampleKey: "room-temperature",
-		Fire: exprCriteria("value >= 40"), Severity: "high", FireEventType: "condition-started"}, all); err != nil {
+		Fire: exprCriteria("value >= 40"), Severity: "high", FireEventType: "rule-fired"}, all); err != nil {
 		t.Fatal(err)
 	}
 	if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
@@ -98,7 +98,7 @@ func TestRuleCriteriaAreExpressions(t *testing.T) {
 		{storage.EventRuleSpec{Name: "bad-3", SampleKey: "endpoint-reachable", Fire: exprCriteria(`value == "down"`), Clear: ptrCriteria(exprCriteria("value > 2"))}, "clear_criteria", 1, 7},
 		{storage.EventRuleSpec{Name: "bad-4", SampleKey: "room-temperature", Fire: exprCriteria("now() > 0")}, "fire_criteria", 1, 1},
 	} {
-		tc.spec.FireEventType = "condition-started"
+		tc.spec.FireEventType = "rule-fired"
 		_, err := gw.CreateEventRule(ctx, "", tc.spec, all)
 		var ce *rules.CriteriaError
 		var ee *expression.Error
@@ -121,7 +121,7 @@ func TestRuleCompilesOncePerVersion(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "hot", SampleKey: "room-temperature",
-		Fire: criteria("gt", 40), Severity: "high", FireEventType: "condition-started"}, f.all); err != nil {
+		Fire: criteria("gt", 40), Severity: "high", FireEventType: "rule-fired"}, f.all); err != nil {
 		t.Fatal(err)
 	}
 	batch := func(base float64) {
@@ -158,7 +158,7 @@ func TestRuleRunErrorHoldsAndLogsOnce(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "greedy", SampleKey: "endpoint-reachable",
-		Fire: exprCriteria(`value + value + value contains "zz"`), Severity: "high", FireEventType: "condition-started"}, f.all); err != nil {
+		Fire: exprCriteria(`value + value + value contains "zz"`), Severity: "high", FireEventType: "rule-fired"}, f.all); err != nil {
 		t.Fatal(err)
 	}
 	long := strings.Repeat("a", 6000)
@@ -212,7 +212,10 @@ func TestCriteriaBackfill(t *testing.T) {
 	conn := connectDSN(t, dsn)
 	mustExec(t, conn, `insert into severity_level (name, rank, official) values ('high', 40, true) on conflict do nothing`)
 	mustExec(t, conn, `insert into event_type (name) values ('cond-x')`)
-	mustExec(t, conn, `insert into property_type (name, data_type) values ('endpoint-reachable', 'string'), ('door-open', 'bool'), ('doc', 'json')`)
+	// endpoint-reachable ships (official), as it did then: it is a reserved
+	// key, so an operator's row of it beside the shipped one reaches no
+	// reader (#1447).
+	mustExec(t, conn, `insert into property_type (name, data_type, official) values ('endpoint-reachable', 'string', true), ('door-open', 'bool', false), ('doc', 'json', false)`)
 	type old struct {
 		name, key, lane, dataType string
 		fire, clear               string
@@ -400,7 +403,7 @@ func TestCriteriaThatCannotCompileAreVisible(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 	if _, err := f.gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: "was-text", SampleKey: "endpoint-reachable",
-		Fire: criteria("eq", "down"), Severity: "high", FireEventType: "condition-started"}, f.all); err != nil {
+		Fire: criteria("eq", "down"), Severity: "high", FireEventType: "rule-fired"}, f.all); err != nil {
 		t.Fatal(err)
 	}
 	mustExec(t, f.conn, `update property_type set data_type = 'bool' where name = 'endpoint-reachable'`)

@@ -100,7 +100,7 @@ func (p *PG) reconcileProperties(ctx context.Context, q querier, ownerKind, arc 
 // instances (worstCaseValue). arc is a resolved, scope-checked arc, so the
 // series reads bind it directly rather than re-resolving the owner per key.
 func (p *PG) reconcileKey(ctx context.Context, q querier, ownerKind, col, arc, key string, want json.RawMessage) (*PropertyReconciliation, error) {
-	observed, err := readPropertyValues(ctx, q, arc, key, latestObservedPerInstanceSQL("property", declaredCurrentExpr, col), ownerKind, arc, key, transportNames())
+	observed, err := readPropertyValues(ctx, q, arc, key, observedPropertySQL(col), ownerKind, arc, key, transportNames())
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (p *PG) reconcileKey(ctx context.Context, q querier, ownerKind, col, arc, k
 // owner kind, $2 arc) has an observed row of or a command targeted: the keys
 // beyond the declared cascade that the properties read can carry. The reserved
 // family ($3, writerclass.ReservedNames: a native probe key, health, a command
-// lifecycle key) is left out: a probe key is the node's verdict on an
+// lifecycle key) is left out: a probe key is the outpost's verdict on an
 // endpoint, whose own surface is the reachability read (which withholds a
 // gated rung's frozen fact), and health is the rollup's, not a property an
 // operator could ask for. One probe per catalog key, each an index prefix
@@ -195,7 +195,7 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 // same-instant ties.
 //
 // The two orders are split by who supplies `ts` (#712). The observed lane
-// accepts a caller-supplied timestamp (a node backfilling, a device reporting
+// accepts a caller-supplied timestamp (an outpost backfilling, a device reporting
 // a reading it took a minute ago), so `ts` LEADS there and a late-arriving
 // older sample must not become current merely by being written last. The cost
 // of that ordering is that a database clock stepping backwards between two
@@ -233,7 +233,12 @@ func (p *PG) latestValue(ctx context.Context, q querier, ownerKind, ownerID, key
 	} else if err != nil {
 		return nil, err
 	}
-	sql := fmt.Sprintf(`select `+declaredCurrentExpr+`, ts, provenance from property
+	// An observed value reads typed, as a declared one is (observedValueExpr).
+	valueExpr := declaredCurrentExpr
+	if provenance == "observed" {
+		valueExpr = observedValueExpr("value", keyDataTypeSQL)
+	}
+	sql := fmt.Sprintf(`select `+valueExpr+`, ts, provenance from property
 		where owner_kind = $1 and %s = $2
 		  and property_type_id = (select id from property_type_in_effect() property_type where name = $3)
 		  and instance = $4 and provenance = $5

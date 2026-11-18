@@ -37,10 +37,10 @@ import {
 // was removed from, so the cell passes only the verdict.
 
 const LOOK: Record<Verdict, { badge: string; icon: Component<{ size?: number }>; hint: string }> = {
-  healthy: { badge: "badge-healthy", icon: CircleCheck, hint: "Every role this system needs is filled." },
-  incomplete: { badge: "badge-incomplete", icon: CircleDashed, hint: "A role is short because its hardware was never installed. A commissioning gap, not a fault: no alarm will ever fire for it." },
-  degraded: { badge: "badge-warning", icon: TriangleAlert, hint: "A role is impaired, but the system is still up." },
-  outage: { badge: "badge-error", icon: OctagonX, hint: "An impaired role takes this out of service." },
+  healthy: { badge: "badge-healthy", icon: CircleCheck, hint: "Every slot this system needs is filled." },
+  incomplete: { badge: "badge-incomplete", icon: CircleDashed, hint: "A slot is short because its hardware was never installed. A commissioning gap, not a fault: no alarm will ever fire for it." },
+  degraded: { badge: "badge-warning", icon: TriangleAlert, hint: "A slot is impaired, but the system is still up." },
+  outage: { badge: "badge-error", icon: OctagonX, hint: "An impaired slot takes this out of service." },
 };
 
 export default function HealthBadge(props: {

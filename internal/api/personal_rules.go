@@ -59,7 +59,7 @@ type createPersonalRuleInput struct {
 		Label            string   `json:"label,omitempty" required:"false" doc:"A human label"`
 		Description      string   `json:"description,omitempty" required:"false" doc:"What it is for"`
 		On               []string `json:"on" minItems:"1" doc:"The alarm transitions it fires on: raised, cleared, or both"`
-		When             string   `json:"when,omitempty" required:"false" doc:"A predicate over the alarm facts (component, place, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read"`
+		When             string   `json:"when,omitempty" required:"false" doc:"A predicate over the alarm facts (component, location, severity, severity_rank, message, rule, ...); absent always holds. Judged only for alarms on components you can read"`
 		NotificationType string   `json:"notification_type,omitempty" required:"false" doc:"The notification type to send, by name or uuid; absent sends the official one for the transition"`
 		Channels         []string `json:"channels" minItems:"1" doc:"How it tells you: inbox, email (your directory email)"`
 		Targets          []string `json:"targets,omitempty" required:"false" doc:"Refused when set (a 422): a personal rule tells you alone and names no target"`
@@ -268,7 +268,7 @@ func mapPersonalRuleErr(err error) error {
 		return huma.Error409Conflict("you own the most personal rules a person may (50); delete one first")
 	}
 	if errors.Is(err, storage.ErrPersonalRuleOwner) {
-		return huma.Error422UnprocessableEntity("a personal rule belongs to a person: a service account or a node is no one to tell")
+		return huma.Error422UnprocessableEntity("a personal rule belongs to a person: a machine user or an outpost is no one to tell")
 	}
 	return mapActionRuleErr(err)
 }

@@ -41,15 +41,15 @@ import { useFormActions } from "../lib/formactions";
 import { bindSelectValue } from "../lib/selectvalue";
 import { describeError } from "../lib/format";
 import { type BladeDef, createBladeController, useBlades, useBladeEdit } from "../lib/blades";
-import { OFFICIAL_LOCK, registryLock } from "../lib/catalog";
+import { OFFICIAL_LOCK, catalogLock } from "../lib/catalog";
 
-// Severity levels (Catalog > Actions > Severity, #921): the ranked registry an
+// Severity levels (Catalog > Actions > Severity, #921): the ranked catalog an
 // event rule raises at (#917), beside the rules. Each row is a level's rank, its
 // label in its own color (the chip every alarm at it wears), whether an active
 // alarm at it takes its component out, and its origin, worst first, the order an
 // operator triages in. An operator level is created, renamed, relabelled,
 // recolored, re-ranked and deleted here in a Drawer (#930). Reads are
-// registry-shaped (any grant), but a level's rank moves health fleet-wide, so
+// catalog-shaped (any grant), but a level's rank moves health fleet-wide, so
 // every write is judged on the caller's all-scope permissions (fleetView), like
 // an event rule's; official levels are read-only. The form teaches the rank: where the typed
 // rank sits among the levels, and whether its alarms take a component out.
@@ -60,7 +60,7 @@ export const SEVERITY_HINTS = {
   rank:
     "Higher is worse. The shipped levels are spaced ten apart, so a level of your own slots between two without renumbering.",
   outage:
-    "An active alarm at an outage level takes its component out (it stops filling its roles); at any other level it degrades the component and leaves it in place. The line is fixed at the official High level's rank: a level ranked at or above it is an outage level. Re-ranking a level across the line recomputes the health of every component with an open alarm at it.",
+    "An active alarm at an outage level takes its component out (it stops filling its slots); at any other level it degrades the component and leaves it in place. The line is fixed at the official High level's rank: a level ranked at or above it is an outage level. Re-ranking a level across the line recomputes the health of every component with an open alarm at it.",
   name: "A lowercase kebab name, e.g. major. Alarms and rules name the level by it; renaming it carries every alarm and rule with it.",
   color: "The hue every alarm at this level wears, from the console's palette.",
 } as const;
@@ -203,7 +203,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
       const l = row();
       if (!l) return null;
       if (l.official) return OFFICIAL_LOCK;
-      return canUpdate() ? null : registryLock(l, fleetView(me.data), "severity_level");
+      return canUpdate() ? null : catalogLock(l, fleetView(me.data), "severity_level");
     },
   });
 
@@ -247,7 +247,7 @@ function SeverityLevelBladeBody(p: { name: string }): JSX.Element {
 // ---- the form ----------------------------------------------------------------
 
 // The query prefixes a level write moves: the levels themselves, the rules
-// naming them, every component's alarms, every system's and place's health,
+// naming them, every component's alarms, every system's and location's health,
 // the fleet verdicts and the fleet view.
 const LEVEL_DEPENDENTS: readonly (readonly string[])[] = [
   severityLevelsKey,

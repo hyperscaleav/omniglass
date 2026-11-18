@@ -31,16 +31,16 @@ func recipientsFor(ctx context.Context, q querier, componentID string, targetIDs
 	rows, err := q.Query(ctx, `
 		select t.id::text, pr.id::text, h.username, t.channels
 		  from notification_target t
-		  join principal_group_member m on m.group_id = t.principal_group_id
-		  join principal pr on pr.id = m.principal_id
-		  join human h on h.principal_id = pr.id
-		 where t.id = any($1::uuid[]) and t.kind = 'principal_group' and pr.active and pr.archived_at is null
+		  join user_group_member m on m.group_id = t.user_group_id
+		  join users pr on pr.id = m.user_id
+		  join person h on h.user_id = pr.id
+		 where t.id = any($1::uuid[]) and t.kind = 'user_group' and pr.active and pr.archived_at is null
 		union all
 		select t.id::text, pr.id::text, h.username, t.channels
 		  from notification_target t
-		  join principal pr on pr.id = t.principal_id
-		  join human h on h.principal_id = pr.id
-		 where t.id = any($1::uuid[]) and t.kind = 'principal' and pr.active and pr.archived_at is null
+		  join users pr on pr.id = t.user_id
+		  join person h on h.user_id = pr.id
+		 where t.id = any($1::uuid[]) and t.kind = 'user' and pr.active and pr.archived_at is null
 		order by 1, 3`, targetIDs)
 	if err != nil {
 		return nil, fmt.Errorf("storage: expand notification recipients: %w", err)
@@ -83,16 +83,16 @@ func recipientsFor(ctx context.Context, q querier, componentID string, targetIDs
 	return out, nil
 }
 
-// readersOf reports which of the principals can read the component: each
+// readersOf reports which of the users can read the component: each
 // one's component read scope, resolved from their effective grants exactly
 // as a request of theirs would resolve it (scope.Resolve over the role
 // index), judged against the component's ancestry walked once.
-func readersOf(ctx context.Context, q querier, componentID string, principalIDs []string) (map[string]bool, error) {
-	grants, idx, chain, err := accessOf(ctx, q, componentID, principalIDs)
+func readersOf(ctx context.Context, q querier, componentID string, userIDs []string) (map[string]bool, error) {
+	grants, idx, chain, err := accessOf(ctx, q, componentID, userIDs)
 	if err != nil {
 		return nil, err
 	}
-	return admitReaders(principalIDs, grants, idx, chain), nil
+	return admitReaders(userIDs, grants, idx, chain), nil
 }
 
 // subscribersOf reports which personal rule owners may be told about the
@@ -116,12 +116,12 @@ func subscribersOf(ctx context.Context, q querier, componentID string, ownerIDs 
 	return out, nil
 }
 
-// accessOf loads what judging principals against one component takes, in
+// accessOf loads what judging users against one component takes, in
 // three statements whatever their number: their effective grants, the role
 // index, and the component's ancestry.
-func accessOf(ctx context.Context, q querier, componentID string, principalIDs []string) (map[string][]scope.Grant, rbac.RoleIndex, []string, error) {
-	grants := make(map[string][]scope.Grant, len(principalIDs))
-	if err := eachPrincipalGrant(ctx, q, principalIDs, func(owner string, g Grant) {
+func accessOf(ctx context.Context, q querier, componentID string, userIDs []string) (map[string][]scope.Grant, rbac.RoleIndex, []string, error) {
+	grants := make(map[string][]scope.Grant, len(userIDs))
+	if err := eachUserGrant(ctx, q, userIDs, func(owner string, g Grant) {
 		sg := scope.Grant{Role: g.Role, ScopeKind: g.ScopeKind, ScopeOp: g.ScopeOp}
 		if g.ScopeID != nil {
 			sg.ScopeID = *g.ScopeID
@@ -141,11 +141,11 @@ func accessOf(ctx context.Context, q querier, componentID string, principalIDs [
 	return grants, idx, chain, nil
 }
 
-// admitReaders is the pure half of readersOf: a principal is admitted when
+// admitReaders is the pure half of readersOf: a user is admitted when
 // its component read scope admits the component whose ancestry is chain.
-func admitReaders(principalIDs []string, grants map[string][]scope.Grant, idx rbac.RoleIndex, chain []string) map[string]bool {
-	out := make(map[string]bool, len(principalIDs))
-	for _, id := range principalIDs {
+func admitReaders(userIDs []string, grants map[string][]scope.Grant, idx rbac.RoleIndex, chain []string) map[string]bool {
+	out := make(map[string]bool, len(userIDs))
+	for _, id := range userIDs {
 		if scope.Resolve(grants[id], idx, "component", "read").AdmitsChain(chain) {
 			out[id] = true
 		}

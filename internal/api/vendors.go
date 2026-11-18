@@ -9,7 +9,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// vendorBody is the wire shape of a vendor registry row. The registry lists
+// vendorBody is the wire shape of a vendor catalog row. The catalog lists
 // alphabetically by label, like the product catalog.
 type vendorBody struct {
 	ID           string `json:"id" doc:"The vendor's uuid, the stable handle that survives a rename"`
@@ -92,8 +92,8 @@ func validWebsiteScheme(website string) bool {
 	return u.Scheme == "http" || u.Scheme == "https"
 }
 
-// registerVendorRoutes wires the vendor registry CRUD surface, on the same
-// pattern as the component/location/system type registries. Gated by
+// registerVendorRoutes wires the vendor catalog CRUD surface, on the same
+// pattern as the component/location/system type catalogs. Gated by
 // vendor:read|create|update|delete: vendor:read sits in the viewer read-floor
 // (*:read), the mutations at the admin tier, exactly like type:*.
 func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -103,7 +103,7 @@ func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/vendors",
 		Summary:     "List vendors",
-		Description: "Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.",
+		Description: "Lists the vendor catalog, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.",
 	}, "vendor", "read"), func(ctx context.Context, _ *struct{}) (*listVendorsOutput, error) {
 		makes, err := gw.ListVendors(ctx)
 		if err != nil {

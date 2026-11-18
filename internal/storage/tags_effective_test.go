@@ -39,7 +39,7 @@ func tagFleet(t *testing.T, gw storage.Gateway) (campus, room, sysID, compID str
 }
 
 // TestEffectiveTagsComponent covers the full four-band cascade for a component:
-// union on key, override on value (system beats location beats platform), and the
+// union on key, shadow on value (system shadows location shadows platform), and the
 // non-propagating key resolving only from the component itself.
 func TestEffectiveTagsComponent(t *testing.T) {
 	t.Parallel()

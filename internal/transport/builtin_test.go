@@ -14,7 +14,7 @@ import (
 // registry without its built-in set is a failing test here, not a silent gap
 // in the lab.
 
-func TestEveryDeclaredBuiltInKeyIsRuledNodeProbeOrPlatform(t *testing.T) {
+func TestEveryDeclaredBuiltInKeyIsRuledOutpostProbeOrPlatform(t *testing.T) {
 	for _, tr := range transport.All() {
 		keys := slices.Concat(tr.BuiltIn, tr.Answered)
 		for _, k := range keys {
@@ -23,7 +23,7 @@ func TestEveryDeclaredBuiltInKeyIsRuledNodeProbeOrPlatform(t *testing.T) {
 				t.Errorf("%s declares %q, which no reserved writer class rules", tr.Name, k)
 				continue
 			}
-			want := writerclass.NodeProbe
+			want := writerclass.OutpostProbe
 			if tr.Push {
 				want = writerclass.Platform
 			}
@@ -82,13 +82,13 @@ func TestWhatADriverShapeAddsToTheBuiltInSet(t *testing.T) {
 		shape     transport.DriverShape
 		want      []string
 	}{
-		{"a poller reports a poll duration", "snmp", transport.DriverShape{Polls: true}, []string{probekeys.PollDuration}},
+		{"a poller reports a poll duration and its cpu time", "snmp", transport.DriverShape{Polls: true}, []string{probekeys.PollDuration, probekeys.PollCPUTime}},
 		{"no driver adds nothing", "ssh", transport.DriverShape{}, nil},
 		{"a listener on a held session reports a push count", "tls", transport.DriverShape{Listeners: true}, []string{probekeys.PushMessageCount, probekeys.SessionState}},
 		{"a listener on udp reports a push count but holds no session", "udp", transport.DriverShape{Listeners: true}, []string{probekeys.PushMessageCount}},
-		{"a bare tcp driver holds no session", "tcp", transport.DriverShape{Polls: true}, []string{probekeys.PollDuration}},
+		{"a bare tcp driver holds no session", "tcp", transport.DriverShape{Polls: true}, []string{probekeys.PollDuration, probekeys.PollCPUTime}},
 		{"a tcp driver with a session block holds one", "tcp", transport.DriverShape{Session: true}, []string{probekeys.SessionState}},
-		{"http holds no session however its driver reads", "http", transport.DriverShape{Polls: true, Session: true}, []string{probekeys.PollDuration}},
+		{"http holds no session however its driver reads", "http", transport.DriverShape{Polls: true, Session: true}, []string{probekeys.PollDuration, probekeys.PollCPUTime}},
 		{"a webhook's listeners run on the server", "webhook", transport.DriverShape{Polls: true, Listeners: true}, nil},
 	}
 	for _, c := range cases {

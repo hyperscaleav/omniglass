@@ -13,13 +13,13 @@ import (
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 )
 
-// The fan-out (#1282, ADR-1282): one owner-resolution step the node lane and
+// The fan-out (#1282, ADR-1282): one owner-resolution step the outpost lane and
 // the webhook lane both pass. A sample naming an identity (a match key and
 // its value) is the conduit's report about another owner: it lands on the
 // one owner the conduit's identity binding for it names, or on no owner at
 // all, kept in the conduit's inbox. Nothing in the payload names an owner:
 // the identity is resolved only against the bindings of the conduit the
-// batch is already confined to (the task's component on the node lane, the
+// batch is already confined to (the task's component on the outpost lane, the
 // webhook token's component on the push lane).
 
 // splitIdentified takes a batch's identified samples out for the fan-out:
@@ -47,7 +47,7 @@ func splitIdentified(ev *ogv1.TelemetryBatch) (own, fanned *ogv1.TelemetryBatch)
 	if n == 0 {
 		return ev, nil
 	}
-	own = &ogv1.TelemetryBatch{TaskId: ev.GetTaskId(), NodeId: ev.GetNodeId(), Ts: ev.GetTs(), Labels: ev.GetLabels(),
+	own = &ogv1.TelemetryBatch{TaskId: ev.GetTaskId(), OutpostId: ev.GetOutpostId(), Ts: ev.GetTs(), Labels: ev.GetLabels(),
 		Owner: ev.GetOwner(), Source: ev.GetSource(), Logs: ev.GetLogs(), TaskLogs: ev.GetTaskLogs()}
 	fanned = &ogv1.TelemetryBatch{Ts: ev.GetTs()}
 	for _, m := range ev.GetMetrics() {
@@ -99,7 +99,7 @@ func identityKeys(fanned *ogv1.TelemetryBatch) []storage.IdentityKey {
 }
 
 // identityKey reads a received identity, or refuses it: an identity is a
-// claim from a node or a sender, so the server holds it again to the
+// claim from an outpost or a sender, so the server holds it again to the
 // engine's own bounds (driver.ValidIdentity: a key and a value each
 // non-empty, at most 256 bytes, valid UTF-8, free of control characters, a
 // NUL among them, which would fail the batch's one transaction) before it
@@ -134,7 +134,7 @@ type fanPlan struct {
 // time. t counts each sample that lands no row under its outcome (#1641):
 // unidentified, unbound, or its lane's refusal.
 func planFanOut(fanned *ogv1.TelemetryBatch, conduitID, conduitName, endpoint string,
-	owners map[storage.IdentityKey]storage.IdentityOwner, reg collection.Registry, now time.Time, t *delivery.Tally) fanPlan {
+	owners map[storage.IdentityKey]storage.IdentityOwner, reg collection.Catalog, now time.Time, t *delivery.Tally) fanPlan {
 	w := storage.FanoutWriter(conduitID)
 	p := fanPlan{rows: storage.FannedRows{Writer: w}}
 	source := conduitName + "/" + endpoint

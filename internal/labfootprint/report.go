@@ -56,7 +56,7 @@ type Run struct {
 }
 
 // The containers in the order the report lists them, then their total.
-var containerOrder = []string{"server", "node", "db"}
+var containerOrder = []string{"server", "outpost", "db"}
 
 // ContainerStat is one container's figures over the windows.
 type ContainerStat struct {

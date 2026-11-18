@@ -25,16 +25,16 @@ func (p *PG) RetentionStatus(ctx context.Context) (RetentionStatus, error) {
 		return RetentionStatus{}, err
 	}
 	st := RetentionStatus{Partitions: parts, TableBytes: map[string]int64{}}
-	var metric, trend, block, property, logLine, nodeLog int64
+	var metric, trend, block, property, logLine, outpostLog int64
 	if err := p.pool.QueryRow(ctx, `select
 			(select coalesce(sum(pg_total_relation_size(inhrelid)), 0)::bigint from pg_inherits where inhparent = 'metric'::regclass),
 			pg_total_relation_size('metric_trend'), pg_total_relation_size('metric_block'),
 			pg_total_relation_size('property'), pg_total_relation_size('log_line'),
-			pg_total_relation_size('node_log'), pg_database_size(current_database())`).
-		Scan(&metric, &trend, &block, &property, &logLine, &nodeLog, &st.DatabaseBytes); err != nil {
+			pg_total_relation_size('outpost_log'), pg_database_size(current_database())`).
+		Scan(&metric, &trend, &block, &property, &logLine, &outpostLog, &st.DatabaseBytes); err != nil {
 		return RetentionStatus{}, fmt.Errorf("storage: retention status sizes: %w", err)
 	}
 	st.TableBytes["metric"], st.TableBytes["metric_trend"], st.TableBytes["metric_block"] = metric, trend, block
-	st.TableBytes["property"], st.TableBytes["log_line"], st.TableBytes["node_log"] = property, logLine, nodeLog
+	st.TableBytes["property"], st.TableBytes["log_line"], st.TableBytes["outpost_log"] = property, logLine, outpostLog
 	return st, nil
 }

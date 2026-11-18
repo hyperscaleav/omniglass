@@ -70,7 +70,7 @@ func (p *udpPeer) setDrop(drop func(n int32) bool) {
 	p.mu.Unlock()
 }
 
-// push sends an unsolicited datagram to the node's socket.
+// push sends an unsolicited datagram to the outpost's socket.
 func (p *udpPeer) push(t *testing.T, to net.Addr, line string) {
 	t.Helper()
 	if _, err := p.conn.WriteTo([]byte(line+"\r\n"), to); err != nil {

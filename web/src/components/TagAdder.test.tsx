@@ -5,7 +5,7 @@ import TagAdder from "./TagAdder";
 import { TAGS_KEY, entityTagsKey, type Tag, type TagBinding, type EntityKind } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
 
-const registry: Tag[] = [
+const catalog: Tag[] = [
   { id: uuidFor("environment"), name: "environment", applies_to: [], propagates: true, allowed_values: [] },
   { id: uuidFor("category"), name: "category", applies_to: ["component"], propagates: true, allowed_values: [] },
   { id: uuidFor("rack_position"), name: "rack_position", applies_to: ["location"], propagates: true, allowed_values: [] },
@@ -14,7 +14,7 @@ const registry: Tag[] = [
 function mount(opts: { kind?: EntityKind; canUpdate?: boolean; canCreateKey?: boolean; bindings?: TagBinding[] } = {}) {
   const kind = opts.kind ?? "component";
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...TAGS_KEY], registry);
+  qc.setQueryData([...TAGS_KEY], catalog);
   qc.setQueryData([...entityTagsKey(kind, "codec")], opts.bindings ?? [{ key: "environment", value: "prod" }]);
   return render(() => (
     <QueryClientProvider client={qc}>

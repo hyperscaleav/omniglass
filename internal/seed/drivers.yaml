@@ -1,6 +1,6 @@
 # The official drivers, seeded idempotently at boot. A driver is the
 # implementation that gets/emits/sets a product's signals; a product points at
-# one. The registry lists alphabetically by label. Starter set,
+# one. The catalog lists alphabetically by label. Starter set,
 # operator-extensible later; tune freely. Fictional-brand drivers match the
 # omniglass-lab device surfaces: Kestrel speaks an HTTP JSON device API,
 # Newtron a vendor control protocol, Boreal and the audio rack SNMP.
@@ -341,7 +341,7 @@ drivers:
       # request behind basic auth, switching one outlet on or off by its id.
       # It carries the PDU's commands, and reads only the identity the JSON
       # document's agent block names (the poll that carries its login to the
-      # node); ferrite-pdu-snmp reads the outlets, so its next status poll
+      # outpost); ferrite-pdu-snmp reads the outlets, so its next status poll
       # shows the switch. Both
       # commands are fire-and-forget, settled at their issue, so no reply
       # settles them; settling against the outlet's state waits on one
@@ -398,7 +398,8 @@ drivers:
         - name: volume-change
           match: { event: change, field: { path: path, equals: status.audio.volume } }
           emits:
-            - { name: volume, extract: { jsonpath: value } }
+            # The bar reports 0 to 100; the canon stores the ratio.
+            - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
         - name: mute-change
           match: { event: change, field: { path: path, equals: status.audio.mic_mute } }
           emits:
@@ -453,12 +454,15 @@ drivers:
           schedule: { every: 30s }
           request: { path: /api/audio }
           emits:
-            - { name: volume, extract: { jsonpath: volume } }
+            - { name: volume, extract: { jsonpath: volume }, transform: { scale: 0.01 } }
             - { name: mute, extract: { jsonpath: mic_mute } }
       commands:
         # A whole-leaf ${value} keeps the intended value's type: the volume
-        # rides as a number. The bar acknowledges with {"ok": true}.
+        # rides as a number. The intended ratio goes out in the bar's own
+        # 0 to 100 (the inverse of the emit scale). The bar acknowledges with
+        # {"ok": true}.
         - command_type: set-volume
+          transform: { scale: 100 }
           request: { method: POST, path: /api/audio/volume, body: { volume: "${value}" } }
           settle: { from: response, success: { regex: '"ok":\s*true' } }
         - command_type: set-mute
@@ -559,7 +563,7 @@ drivers:
       # use, the upgrade carrying basic auth. One held socket carries it all:
       # the subscription armed on every connection, the pushes the listeners
       # land, and the polls and commands, each answered by the frame that
-      # carries back the id the node mints into it, whatever pushes arrive
+      # carries back the id the outpost mints into it, whatever pushes arrive
       # between.
       transport: wss
       inputs:
@@ -596,15 +600,15 @@ drivers:
         - name: volume-change
           match: { field: { path: path, equals: status.audio.volume } }
           emits:
-            - { name: volume, extract: { jsonpath: value } }
+            - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
       polls:
-        # A get is a frame; reply.correlate names the field the node writes
+        # A get is a frame; reply.correlate names the field the outpost writes
         # a fresh id into, and the answer is the frame carrying it back.
         - name: volume
           schedule: { every: 60s }
           request: { body: { type: get, path: status.audio.volume }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
           emits:
-            - { name: volume, extract: { jsonpath: value } }
+            - { name: volume, extract: { jsonpath: value }, transform: { scale: 0.01 } }
         - name: mute
           schedule: { every: 60s }
           request: { body: { type: get, path: status.audio.mic_mute }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
@@ -616,17 +620,19 @@ drivers:
           emits:
             - { name: power-state, extract: { jsonpath: value } }
       commands:
-        # A whole-leaf ${value} keeps the intended value's type. The bar
-        # pushes the change, then answers with the value it set, which
-        # settles the command against its intent.
+        # A whole-leaf ${value} keeps the intended value's type. The intended
+        # ratio goes out in the bar's own 0 to 100 and its answer is read back
+        # through the same scale. The bar pushes the change, then answers with
+        # the value it set, which settles the command against its intent.
         - command_type: set-volume
+          transform: { scale: 100 }
           request: { body: { type: set, path: status.audio.volume, value: "${value}" }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
           settle: { from: response, extract: { jsonpath: value } }
         - command_type: set-mute
           request: { body: { type: set, path: status.audio.mic_mute, value: "${value}" }, reply: { correlate: id, error: { regex: '"type":"error"' } } }
           settle: { from: response, extract: { jsonpath: value } }
-  - id: newtron-nvp
-    label: Newtron NVP
+  - id: newtron-panel-nvp
+    label: Newtron Panel NVP
     version: "1.0.0"
     spec:
       version: 1
@@ -653,7 +659,7 @@ drivers:
       # The NVP conversation is line-oriented over a held TCP session: the
       # subscribes arm on establish (and re-arm on every recover), and the
       # device pushes lines the listeners claim by prefix. The standing
-      # listen tasks are what make the node hold the endpoint's session
+      # listen tasks are what make the outpost hold the endpoint's session
       # (#816): the subscribes are sent on every connection before it reads
       # up, the pushes land with no poll involved, and the status poll and
       # set-input command borrow the same connection (#817).
@@ -862,10 +868,10 @@ drivers:
         - { name: host, kind: string, required: true }
         - { name: port, kind: number, default: "51327" }
         # The local port this endpoint binds, which its requests leave from
-        # and the panel's pushes arrive on (#1037). No default: the node
+        # and the panel's pushes arrive on (#1037). No default: the outpost
         # binds a port of its own and the panel pushes to the source of
         # SUBSCRIBE INPUT. Set it where the component is configured with a
-        # fixed destination, and open the node's firewall for it.
+        # fixed destination, and open the outpost's firewall for it.
         - { name: listen-port, kind: number }
       # The same NVP conversation as datagrams. An open udp port cannot be
       # detected, so the transport rung is GET INPUT answered: an answer
@@ -897,8 +903,8 @@ drivers:
         - command_type: set-input
           request: { line: "SET INPUT ${value}", reply: { prefix: "INPUT ", error: { prefix: "-ERR" } }, retries: 2 }
           settle: { from: response, extract: { regex: "^INPUT (\\S+)$" } }
-  - id: http-json
-    label: HTTP JSON
+  - id: tessellate-census-http
+    label: Tessellate Census HTTP
     version: "1.0.0"
     spec:
       version: 1
@@ -1017,7 +1023,7 @@ drivers:
       # The Newtron panel's https API sits behind its sign-in page (#1114).
       # The login is the session's auth step, carried over to http: one form
       # post naming the login secret's fields, the session cookie the panel
-      # sets kept in the node's memory alone, and a redirect back to /login
+      # sets kept in the outpost's memory alone, and a redirect back to /login
       # read as the session lapsing, which logs in once more and replays.
       # The panel sending the login itself back to /login is a wrong
       # password: one attempt, and the endpoint reads rejected.
@@ -1052,7 +1058,7 @@ drivers:
       version: 1
       # The Boreal display's web admin answers HTTP digest (#1114): the
       # password never crosses the wire, only a hash of it with the
-      # display's nonce. The node holds the challenge and answers each
+      # display's nonce. The outpost holds the challenge and answers each
       # request preemptively; a nonce the display calls stale is answered
       # afresh, and an answer refused outright is a wrong password.
       transport: http

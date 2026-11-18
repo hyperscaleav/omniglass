@@ -8,10 +8,10 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestUpdateHumanProfile proves the self-profile write against a real Postgres:
+// TestUpdatePersonProfile proves the self-profile write against a real Postgres:
 // a provided field is set, an absent field is left unchanged, and an explicitly
 // empty field clears the nullable column. Skipped under -short.
-func TestUpdateHumanProfile(t *testing.T) {
+func TestUpdatePersonProfile(t *testing.T) {
 	t.Parallel()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -27,7 +27,7 @@ func TestUpdateHumanProfile(t *testing.T) {
 	}
 
 	// The bearer secret_hash is all-zeros, so AuthenticateBearer(zeros) resolves the
-	// owner and hands back the principal id the profile write needs.
+	// owner and hands back the user id the profile write needs.
 	zeros := make([]byte, 32)
 	created, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{
 		Username: "ops", Email: "ops@old.example", Label: "Old Name",
@@ -42,18 +42,18 @@ func TestUpdateHumanProfile(t *testing.T) {
 	}
 	pid := pr.ID
 
-	reload := func() *storage.HumanProfile {
+	reload := func() *storage.PersonProfile {
 		t.Helper()
 		p, err := gw.AuthenticateBearer(ctx, zeros)
 		if err != nil {
 			t.Fatalf("reload: %v", err)
 		}
-		return p.Human
+		return p.Person
 	}
 
 	// Update only the label: email is left untouched.
 	newName := "New Name"
-	if err := gw.UpdateHumanProfile(ctx, pid, storage.HumanProfilePatch{Label: &newName}); err != nil {
+	if err := gw.UpdatePersonProfile(ctx, pid, storage.PersonProfilePatch{Label: &newName}); err != nil {
 		t.Fatalf("update label: %v", err)
 	}
 	if h := reload(); h.Label != "New Name" || h.Email != "ops@old.example" {
@@ -63,7 +63,7 @@ func TestUpdateHumanProfile(t *testing.T) {
 	// Update the email and explicitly clear the label (empty -> NULL).
 	empty := ""
 	newEmail := "new@example.test"
-	if err := gw.UpdateHumanProfile(ctx, pid, storage.HumanProfilePatch{Email: &newEmail, Label: &empty}); err != nil {
+	if err := gw.UpdatePersonProfile(ctx, pid, storage.PersonProfilePatch{Email: &newEmail, Label: &empty}); err != nil {
 		t.Fatalf("update email + clear name: %v", err)
 	}
 	if h := reload(); h.Email != "new@example.test" || h.Label != "" {
@@ -71,7 +71,7 @@ func TestUpdateHumanProfile(t *testing.T) {
 	}
 
 	// An empty patch is a no-op that changes nothing.
-	if err := gw.UpdateHumanProfile(ctx, pid, storage.HumanProfilePatch{}); err != nil {
+	if err := gw.UpdatePersonProfile(ctx, pid, storage.PersonProfilePatch{}); err != nil {
 		t.Fatalf("empty patch: %v", err)
 	}
 	if h := reload(); h.Email != "new@example.test" || h.Username != "ops" {

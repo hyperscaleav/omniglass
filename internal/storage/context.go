@@ -16,18 +16,18 @@ import (
 // through every mutating gateway method.
 type realActorKey struct{}
 
-// RealActorContextKey is the context key carrying the real actor principal id when
+// RealActorContextKey is the context key carrying the real actor user id when
 // a request is impersonated. Set it via WithRealActor (or huma.WithValue in
-// middleware); the audit writer records it as the row's real_actor_principal_id.
+// middleware); the audit writer records it as the row's real_actor_user_id.
 var RealActorContextKey = realActorKey{}
 
-// WithRealActor returns a context carrying the real actor principal id behind an
+// WithRealActor returns a context carrying the real actor user id behind an
 // impersonated request. An empty id leaves the audit real_actor null.
 func WithRealActor(ctx context.Context, realActorID string) context.Context {
 	return context.WithValue(ctx, RealActorContextKey, realActorID)
 }
 
-// realActorFrom reads the real actor principal id from the context, empty if none.
+// realActorFrom reads the real actor user id from the context, empty if none.
 func realActorFrom(ctx context.Context) string {
 	id, _ := ctx.Value(RealActorContextKey).(string)
 	return id
@@ -43,7 +43,16 @@ const (
 	// AuditChannelMCP marks an action taken through a tool call on the MCP
 	// server: the same route, gate and scope as a direct call, arrived by MCP.
 	AuditChannelMCP AuditChannel = "mcp"
+	// AuditChannelOmnibot marks an action omnibot, the built-in assistant,
+	// took (#1166): a tool call on the MCP server made with an agent token
+	// minted for the omnibot channel alone. The server stamps it from the
+	// credential, never from the name a client declares.
+	AuditChannelOmnibot AuditChannel = "omnibot"
 )
+
+// AuditChannels is every channel audit_log.channel can hold, in the check's
+// order; the API's channel filter offers these plus AuditChannelDirect.
+var AuditChannels = []AuditChannel{AuditChannelMCP, AuditChannelOmnibot}
 
 // auditChannelKey is the context key under which the MCP dispatch sets the
 // channel and the declaring client. Unexported, with WithAuditChannel the only
@@ -72,6 +81,39 @@ func auditChannelFrom(ctx context.Context) (channel, client any) {
 		return nil, nil
 	}
 	return string(v.channel), nullize(v.client)
+}
+
+// ReplaceAuditChannel returns a context whose audited writes record channel
+// in place of the one ctx carries, keeping the declared client. The API sets
+// it when a request's credential settles its channel (an omnibot token).
+func ReplaceAuditChannel(ctx context.Context, channel AuditChannel) context.Context {
+	v, _ := ctx.Value(auditChannelKey{}).(auditChannelValue)
+	v.channel = channel
+	return context.WithValue(ctx, auditChannelKey{}, v)
+}
+
+// AuditChannelOf returns the channel the context's request arrived through,
+// empty for a direct API call. The API reads it to apply the agent ceiling
+// (#1179) to every request an MCP tool call makes, whatever its credential.
+func AuditChannelOf(ctx context.Context) AuditChannel {
+	v, _ := ctx.Value(auditChannelKey{}).(auditChannelValue)
+	return v.channel
+}
+
+// agentKey carries the agent an agent-token request acts as (#1179).
+type agentKey struct{}
+
+// WithAgent returns a context whose audited writes record that the named agent
+// took them, on the actor's behalf. Set by the API's authn when the request
+// authenticated with an agent token; empty leaves the column null.
+func WithAgent(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, agentKey{}, name)
+}
+
+// agentFrom reads the agent for an audit row: a SQL null when there is none.
+func agentFrom(ctx context.Context) any {
+	name, _ := ctx.Value(agentKey{}).(string)
+	return nullize(name)
 }
 
 // auditClientMax bounds a declared client name, matching the column's check.

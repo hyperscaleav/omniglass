@@ -95,7 +95,7 @@ func startsScheme(s string) bool {
 }
 
 // maxChallengeParam bounds a challenge parameter: a realm, a nonce or an
-// opaque past it is not a challenge this node answers.
+// opaque past it is not a challenge this outpost answers.
 const maxChallengeParam = 1024
 
 // parseDigestChallenge reads one challenge; ok is false for another scheme,
@@ -205,7 +205,7 @@ func (c digestChallenge) qopAuth() (auth, legacy bool) {
 func digestAuthorization(c digestChallenge, method, uri, user, pass string, nc uint32, cnonce string) (string, error) {
 	newHash := c.hasher()
 	if newHash == nil {
-		return "", &RequestFault{Status: 401, Reason: fmt.Sprintf("the component's digest algorithm %s is not one this node answers (MD5, SHA-256)", snippet([]byte(c.algorithm), nil))}
+		return "", &RequestFault{Status: 401, Reason: fmt.Sprintf("the component's digest algorithm %s is not one this outpost answers (MD5, SHA-256)", snippet([]byte(c.algorithm), nil))}
 	}
 	h := func(s string) string {
 		hh := newHash()
@@ -216,7 +216,7 @@ func digestAuthorization(c digestChallenge, method, uri, user, pass string, nc u
 	if !auth && !legacy {
 		// Nothing is sent: an unanswerable challenge is no verdict on the
 		// credential, and never gates.
-		return "", &RequestFault{Status: 401, Reason: fmt.Sprintf("the component's digest qop %s offers no auth, which is the one this node answers", snippet([]byte(c.qop), nil))}
+		return "", &RequestFault{Status: 401, Reason: fmt.Sprintf("the component's digest qop %s offers no auth, which is the one this outpost answers", snippet([]byte(c.qop), nil))}
 	}
 	ha1 := h(user + ":" + c.realm + ":" + pass)
 	if strings.HasSuffix(strings.ToUpper(c.algorithm), "-SESS") {

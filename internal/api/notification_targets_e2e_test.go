@@ -100,6 +100,10 @@ func TestNotificationTargetAPI(t *testing.T) {
 		[]string{"notification_target:*", "secret:read"}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := conn.Exec(ctx, `insert into role (name, official, permissions, inherits) values ('notifier-binder', false, $1, '{viewer}')`,
+		[]string{"notification_target:*", "secret:bind"}); err != nil {
+		t.Fatal(err)
+	}
 	conn.Close(ctx)
 	rcv := &receiver{}
 	hook := httptest.NewTLSServer(rcv)
@@ -110,8 +114,8 @@ func TestNotificationTargetAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	viewer := setupAllViewer(t, ctx, dsn, "nt-viewer")
-	operator := principalWithGrants(t, ctx, dsn, "nt-operator", []grant{{role: "operator", scopeKind: "all"}})
-	admin := principalWithGrants(t, ctx, dsn, "nt-admin", []grant{{role: "admin", scopeKind: "all"}})
+	operator := userWithGrants(t, ctx, dsn, "nt-operator", []grant{{role: "operator", scopeKind: "all"}})
+	admin := userWithGrants(t, ctx, dsn, "nt-admin", []grant{{role: "admin", scopeKind: "all"}})
 
 	url := hook.URL + "/services/T0/B0/the-secret-path"
 	body := map[string]any{"name": "ops-chat", "kind": "webhook", "url": url}
@@ -184,11 +188,11 @@ func TestNotificationTargetAPI(t *testing.T) {
 		t.Fatalf("envelope = %s (%v), headers %v", got.Body, err, got.Header)
 	}
 
-	// Binding a secret takes the right to reveal it (a confused deputy
+	// Binding a secret takes secret:bind over it (a confused deputy
 	// otherwise: a target holder could bind a token it cannot read to a URL it
 	// controls and receive it on the next send). A holder of every target
-	// permission but no secret:reveal is refused, and binds nothing.
-	notifier := principalWithGrants(t, ctx, dsn, "nt-notifier", []grant{{role: "notifier", scopeKind: "all"}})
+	// permission but no secret right is refused, and binds nothing.
+	notifier := userWithGrants(t, ctx, dsn, "nt-notifier", []grant{{role: "notifier", scopeKind: "all"}})
 	c.do(notifier, http.MethodPost, "/notification-targets", map[string]any{"name": "exfil", "kind": "webhook", "url": hook.URL + "/x", "secret": "ops-chat-signing"}, http.StatusNotFound)
 	c.do(notifier, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"secret": "ops-chat-signing"}, http.StatusNotFound)
 	c.do(notifier, http.MethodGet, "/notification-targets/exfil", nil, http.StatusNotFound)
@@ -196,7 +200,7 @@ func TestNotificationTargetAPI(t *testing.T) {
 	c.do(notifier, http.MethodPost, "/notification-targets", map[string]any{"name": "plain-hook", "kind": "webhook", "url": hook.URL + "/p"}, http.StatusCreated)
 	// Nor can it move a target that already binds a secret to a URL it
 	// controls: the next send would deliver the credential there. The same
-	// patch by an admin, who may reveal the secret, goes through.
+	// patch by an admin, who may bind the secret, goes through.
 	c.do(notifier, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"url": hook.URL + "/attacker"}, http.StatusForbidden)
 	var still notificationTargetWire
 	if err := json.Unmarshal(c.do(admin, http.MethodPost, "/notification-targets/ops-chat:reveal", nil, http.StatusOK), &revealed); err != nil {
@@ -211,9 +215,18 @@ func TestNotificationTargetAPI(t *testing.T) {
 	c.do(admin, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"url": url}, http.StatusOK)
 	// A target with no secret moves freely: it carries nothing to deliver.
 	c.do(notifier, http.MethodPatch, "/notification-targets/plain-hook", map[string]any{"url": hook.URL + "/q"}, http.StatusOK)
-	// One that can read the secret but not reveal it is told so, and binds nothing.
-	reader := principalWithGrants(t, ctx, dsn, "nt-reader", []grant{{role: "notifier-reader", scopeKind: "all"}})
-	c.do(reader, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"secret": "ops-chat-signing"}, http.StatusForbidden)
+	// One that can read the secret but not bind it is told so, and binds nothing.
+	reader := userWithGrants(t, ctx, dsn, "nt-reader", []grant{{role: "notifier-reader", scopeKind: "all"}})
+	if b := c.do(reader, http.MethodPatch, "/notification-targets/ops-chat", map[string]any{"secret": "ops-chat-signing"}, http.StatusForbidden); !strings.Contains(string(b), "secret:bind") {
+		t.Fatalf("a refused bind = %s, want it to name secret:bind", b)
+	}
+	// One that may bind it but never reveal it binds it and moves the target
+	// (#2047): binding chooses where a credential goes, never reads it.
+	binder := userWithGrants(t, ctx, dsn, "nt-binder", []grant{{role: "notifier-binder", scopeKind: "all"}})
+	c.do(binder, http.MethodPost, "/notification-targets", map[string]any{"name": "bound-hook", "kind": "webhook", "url": hook.URL + "/b", "secret": "ops-chat-signing"}, http.StatusCreated)
+	c.do(binder, http.MethodPatch, "/notification-targets/bound-hook", map[string]any{"url": hook.URL + "/b2"}, http.StatusOK)
+	c.do(binder, http.MethodPost, "/secrets/ops-chat-signing:reveal", nil, http.StatusForbidden)
+	c.do(admin, http.MethodDelete, "/notification-targets/bound-hook", nil, http.StatusNoContent)
 
 	// A secret a target signs with cannot be deleted from under it.
 	c.do(admin, http.MethodDelete, "/secrets/ops-chat-signing", nil, http.StatusConflict)

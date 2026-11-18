@@ -80,6 +80,36 @@ const declaredProvenance = "declared"
 // and a JSON null is the unset tombstone, resolving to SQL NULL (no value).
 const declaredCurrentExpr = `nullif(value, 'null'::jsonb)`
 
+// observedValueExpr reads an observed row's stored value as the typed jsonb a
+// declared or intended row of the same property holds (#1202). An observed
+// value is stored as the JSON string of its text form (the ingest's
+// propertyText, over to_jsonb(text)), a declared one as typed jsonb, so a
+// bool observed true is "true" beside a declared true, and a json value is
+// its compact text. This is the one place the two encodings are reconciled:
+// every read that sets an observed value beside a declared or intended one
+// goes through it, and sameValue compares the results. value is the column
+// expression (the stored jsonb), dataType a SQL expression for the property
+// type's data_type. A string property is read as stored (its text is its
+// value); a json property whose text is not JSON is a JSON string and stays
+// one. The JSON null literal is no value, as declaredCurrentExpr has it.
+func observedValueExpr(value, dataType string) string {
+	return fmt.Sprintf(`case
+		when jsonb_typeof(%[1]s) <> 'string' then nullif(%[1]s, 'null'::jsonb)
+		when %[2]s = 'bool' and %[1]s #>> '{}' in ('true', 'false') then to_jsonb((%[1]s #>> '{}')::boolean)
+		when %[2]s = 'json' and %[1]s #>> '{}' <> 'null' and (%[1]s #>> '{}') is json value then (%[1]s #>> '{}')::jsonb
+		else %[1]s end`, value, dataType)
+}
+
+// keyDataTypeSQL is the data_type of the property type a read names by $3, the
+// argument observedValueExpr takes.
+const keyDataTypeSQL = `(select k.data_type from property_type_in_effect() k where k.name = $3)`
+
+// observedPropertySQL is latestObservedPerInstanceSQL over the property lane,
+// each instance's value read typed (observedValueExpr).
+func observedPropertySQL(col string) string {
+	return latestObservedPerInstanceSQL("property", observedValueExpr("value", keyDataTypeSQL), col)
+}
+
 // declaredSeriesCols is the read shape of one declared series row.
 const declaredSeriesCols = `id::text, owner_kind, (select pr.name from property_type pr where pr.id = property.property_type_id) as property_type_name, property.property_type_id as property_type_id, instance, provenance, value, ts`
 
@@ -155,7 +185,7 @@ func (p *PG) setPropertyTx(ctx context.Context, tx pgx.Tx, actorID, ownerKind, o
 		return nil, err
 	}
 	// An operator's declared value, held to the key's writer class
-	// (ADR-0161): never a node's observation or the platform's verdict.
+	// (ADR-0161): never an outpost's observation or the platform's verdict.
 	if err := admitWrites(ctx, tx, writeProperty, gatewayWriter(writerclass.Operator), []keyedWrite{{key: propertyName, instance: instance}}); err != nil {
 		return nil, err
 	}
@@ -292,7 +322,7 @@ type ownerContract struct {
 	contractKeyCol string // the contract column matching the classifier
 	arcCol         string // the property arc column for this owner kind
 	// arcMatch is the instance column the arc points AT: the primary key for the
-	// three fleet kinds, and still the name for a node until the collection tier
+	// three fleet kinds, and still the name for an outpost until the collection tier
 	// converts. Naming it here keeps the query shape identical across kinds.
 	arcMatch string
 	notFound error
@@ -307,9 +337,9 @@ var ownerContracts = map[string]ownerContract{
 	"component": {"component", "product_id", "product_property", "product_id", "component_id", "id", ErrComponentNotFound, "product_metric"},
 	"system":    {"system", "standard_id", "standard_property", "standard_id", "system_id", "id", ErrSystemNotFound, "standard_metric"},
 	"location":  {"location", "location_type", "location_type_property", "location_type_id", "location_id", "id", ErrLocationNotFound, "location_type_metric"},
-	// A node has the arc but no classifier, so it resolves ad-hoc values only. Its
-	// arc points at principal_id, the node's primary key.
-	"node": {"node", "", "", "", "node_id", "principal_id", ErrNodeNotFound, ""},
+	// An outpost has the arc but no classifier, so it resolves ad-hoc values only. Its
+	// arc points at user_id, the outpost's primary key.
+	"outpost": {"outpost", "", "", "", "outpost_id", "user_id", ErrOutpostNotFound, ""},
 }
 
 // contractDefaultSQL is a contract line's default as the effective reads take
@@ -401,10 +431,9 @@ func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind
 			select property_type_id, value, source_rule, source_rule_id from (
 				select distinct on (s.property_type_id)
 				       s.property_type_id,
-				       -- A sample's value is text; a bool property's reads as the
-				       -- bool a declared value is.
-				       case when pt.data_type = 'bool' and s.value #>> '{}' in ('true', 'false')
-				            then to_jsonb((s.value #>> '{}')::boolean) else s.value end as value,
+				       -- A sample's value is text; it reads as the typed value a
+				       -- declared one is (observedValueExpr).
+				       `+observedValueExpr("s.value", "pt.data_type")+` as value,
 				       s.provenance, s.source_rule, s.source_rule_id::text as source_rule_id
 				from property s
 				join inst on s.%[1]s = inst.arc
@@ -539,11 +568,11 @@ func (p *PG) declaredProperties(ctx context.Context, oc ownerContract, ownerKind
 // ownerInScope reports whether the named owner exists and falls within the given
 // scope, for any owner kind on the arc. An absent owner is that kind's not-found
 // sentinel (nothing to disclose); an existing but out-of-scope owner returns
-// inScope=false so each caller picks its own sentinel. A node is fleet-wide (not
-// scope-tree scoped, like a principal), so it is in scope once it exists.
+// inScope=false so each caller picks its own sentinel. An outpost is fleet-wide (not
+// scope-tree scoped, like a user), so it is in scope once it exists.
 // ownerArcValue resolves an owner reference to the value its arc column stores.
 // For every kind that is the entity's primary key: a uuid for the three fleet
-// kinds, principal_id for a node, so a rename never touches the arc.
+// kinds, user_id for an outpost, so a rename never touches the arc.
 //
 // The reference itself may be either form, since scopedByName resolves a uuid or
 // a name; this is only about what gets written.
@@ -570,14 +599,14 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 			return "", err
 		}
 		return l.ID, nil
-	case "node":
+	case "outpost":
 		col := "name"
 		if isUUID(ownerRef) {
-			col = "principal_id"
+			col = "user_id"
 		}
 		var pid string
-		if err := q.QueryRow(ctx, `select principal_id from node where `+col+` = $1`, ownerRef).Scan(&pid); err != nil {
-			return "", ErrNodeNotFound
+		if err := q.QueryRow(ctx, `select user_id from outpost where `+col+` = $1`, ownerRef).Scan(&pid); err != nil {
+			return "", ErrOutpostNotFound
 		}
 		return pid, nil
 	}
@@ -594,8 +623,8 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 // SetProperty, ClearProperty, IssueCommand, and CommandSettlement each
 // leaked an out-of-scope row's uuid on a name unique to the caller's own
 // scope but ambiguous fleet-wide, even after ownerInScope's own fix.
-// Nodes have no scope tree (node_name_key stays a plain global unique
-// constraint, so a bare node name is never ambiguous); this delegates to the
+// Outposts have no scope tree (outpost_name_key stays a plain global unique
+// constraint, so a bare outpost name is never ambiguous); this delegates to the
 // scope-blind resolve for that one kind.
 //
 // Four of those six no longer resolve a name at all, which is the stronger
@@ -622,7 +651,7 @@ func (p *PG) ownerArcValueInScope(ctx context.Context, q querier, ownerKind, own
 			return "", err
 		}
 		return l.ID, nil
-	case "node":
+	case "outpost":
 		return p.ownerArcValue(ctx, q, ownerKind, ownerRef)
 	}
 	return "", ErrUnknownOwnerKind
@@ -638,7 +667,7 @@ func (p *PG) ownerArcValueInScope(ctx context.Context, q querier, ownerKind, own
 // same-query subquery to an up-front resolve.
 func isOwnerNotFound(err error) bool {
 	return errors.Is(err, ErrComponentNotFound) || errors.Is(err, ErrSystemNotFound) ||
-		errors.Is(err, ErrLocationNotFound) || errors.Is(err, ErrNodeNotFound)
+		errors.Is(err, ErrLocationNotFound) || errors.Is(err, ErrOutpostNotFound)
 }
 
 // The three tree kinds resolve through scopedByNameInScope, not
@@ -671,14 +700,14 @@ func (p *PG) ownerInScope(ctx context.Context, q querier, ownerKind, ownerID str
 	case "location":
 		_, err := scopedByNameInScope(ctx, q, locationConfig, ownerID, ownerKind, s)
 		return errAsNotFound(err, ErrLocationNotFound)
-	case "node":
-		// A node is not a scope tree, so existence is the whole check.
+	case "outpost":
+		// An outpost is not a scope tree, so existence is the whole check.
 		var exists bool
-		if err := q.QueryRow(ctx, `select exists (select 1 from node where name = $1)`, ownerID).Scan(&exists); err != nil {
-			return false, fmt.Errorf("storage: resolve node %q: %w", ownerID, err)
+		if err := q.QueryRow(ctx, `select exists (select 1 from outpost where name = $1)`, ownerID).Scan(&exists); err != nil {
+			return false, fmt.Errorf("storage: resolve outpost %q: %w", ownerID, err)
 		}
 		if !exists {
-			return false, ErrNodeNotFound
+			return false, ErrOutpostNotFound
 		}
 		return true, nil
 	}

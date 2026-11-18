@@ -1,18 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
   verdictHue,
-  activeRoles,
+  activeSlots,
   impactPhrase,
-  inactiveRoles,
+  inactiveSlots,
   quorumLabel,
   verdictOf,
   verdictRank,
   worstVerdict,
   type FleetHealth,
-  type HealthRole,
+  type HealthSlot,
 } from "./health";
 
-const role = (over: Partial<HealthRole>): HealthRole => ({
+const slot = (over: Partial<HealthSlot>): HealthSlot => ({
   name: "main-display",
   label: "Main display",
   impact: "outage",
@@ -63,34 +63,34 @@ describe("worstVerdict", () => {
   });
 });
 
-describe("activeRoles and inactiveRoles", () => {
-  it("reads an absent health as no roles at all rather than throwing", () => {
-    expect(activeRoles(undefined)).toEqual([]);
-    expect(inactiveRoles(undefined)).toEqual([]);
+describe("activeSlots and inactiveSlots", () => {
+  it("reads an absent health as no slots at all rather than throwing", () => {
+    expect(activeSlots(undefined)).toEqual([]);
+    expect(inactiveSlots(undefined)).toEqual([]);
   });
 
-  // A role belonging to a choice's LOSING alternate can still read impaired
+  // A slot belonging to a choice's LOSING alternate can still read impaired
   // on its own terms (active: false); its impaired/short/spare did not move
   // the verdict, because a different alternate answered the choice. Showing
   // it as an ordinary impairment is the exact contradiction active exists to
-  // prevent (see healthRoleBody's own doc string): the seeded huddle-room
+  // prevent (see healthSlotBody's own doc string): the seeded huddle-room
   // shape is precisely this (a satisfied all-in-one alternate beside an
   // unbuilt component-built one).
   const withInactiveChoice = {
     verdict: "healthy",
-    roles: [
-      role({ name: "video-bar", label: "Video bar", impaired: false, impact: "outage", active: true, choice: "conferencing", alternate: "all-in-one" }),
-      role({ name: "codec", label: "Codec", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
-      role({ name: "camera", label: "Camera", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
+    slots: [
+      slot({ name: "video-bar", label: "Video bar", impaired: false, impact: "outage", active: true, choice: "conferencing", alternate: "all-in-one" }),
+      slot({ name: "codec", label: "Codec", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
+      slot({ name: "camera", label: "Camera", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
     ],
   } as unknown as FleetHealth;
 
-  it("counts only the roles whose alternate answered the choice as in play", () => {
-    expect(activeRoles(withInactiveChoice).map((r) => r.name)).toEqual(["video-bar"]);
+  it("counts only the slots whose alternate answered the choice as in play", () => {
+    expect(activeSlots(withInactiveChoice).map((r) => r.name)).toEqual(["video-bar"]);
   });
 
-  it("keeps the losing alternate's roles apart rather than dropping them", () => {
-    expect(inactiveRoles(withInactiveChoice).map((r) => r.name)).toEqual(["codec", "camera"]);
+  it("keeps the losing alternate's slots apart rather than dropping them", () => {
+    expect(inactiveSlots(withInactiveChoice).map((r) => r.name)).toEqual(["codec", "camera"]);
   });
 });
 
@@ -98,7 +98,7 @@ describe("quorumLabel and impactPhrase", () => {
   it("reads the fill against the quorum in the API's own terms", () => {
     expect(quorumLabel({ satisfying: 1, quorum: 2 })).toBe("1 of 2 satisfying");
   });
-  it("says what an impaired role means for its system", () => {
+  it("says what an impaired slot means for its system", () => {
     expect(impactPhrase("outage")).toBe("outage");
     expect(impactPhrase("degraded")).toBe("degraded");
     expect(impactPhrase("none")).toBe("no change");

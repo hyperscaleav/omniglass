@@ -47,25 +47,25 @@ describe("endpoints data layer", () => {
     expect(req.url).toContain("/api/v1/endpoints/if-1");
   });
 
-  it("posts the create body (transport, component, node, params.target) and returns the created endpoint", async () => {
+  it("posts the create body (transport, component, outpost, params.target) and returns the created endpoint", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: uuidFor("if-1"), name: "disp-1-tcp", transport: "tcp", component: "disp-1" }, 201),
     );
-    const created = await createEndpoint({ transport: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } });
+    const created = await createEndpoint({ transport: "tcp", component: "disp-1", outpost: "edge-hq", params: { target: "10.0.0.1:22" } });
     expect(created.id).toBe(uuidFor("if-1"));
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/endpoints");
-    expect(await req.json()).toMatchObject({ transport: "tcp", component: "disp-1", node: "edge-hq", params: { target: "10.0.0.1:22" } });
+    expect(await req.json()).toMatchObject({ transport: "tcp", component: "disp-1", outpost: "edge-hq", params: { target: "10.0.0.1:22" } });
   });
 
-  it("patches only the mutable fields (node, params) on update, addressed by id", async () => {
+  it("patches only the mutable fields (outpost, params) on update, addressed by id", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: uuidFor("if-1"), name: "disp-1-tcp", transport: "tcp" }));
-    await updateEndpoint("if-1", { node: "edge-east", params: { target: "9.9.9.9" } });
+    await updateEndpoint("if-1", { outpost: "edge-east", params: { target: "9.9.9.9" } });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
     expect(req.url).toContain("/api/v1/endpoints/if-1");
-    expect(await req.json()).toEqual({ node: "edge-east", params: { target: "9.9.9.9" } });
+    expect(await req.json()).toEqual({ outpost: "edge-east", params: { target: "9.9.9.9" } });
   });
 
   it("deletes an endpoint by id", async () => {

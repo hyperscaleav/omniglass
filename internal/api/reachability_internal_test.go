@@ -83,12 +83,12 @@ func TestCapReason(t *testing.T) {
 	}
 }
 
-// TestReachabilityReadsOnlyNodeOnlyKeys ties the reachability read to #1080's
-// ruling: every key it serves as the node's account (the verdict, its rungs,
+// TestReachabilityReadsOnlyOutpostOnlyKeys ties the reachability read to #1080's
+// ruling: every key it serves as the outpost's account (the verdict, its rungs,
 // the probe layers and their timings, a held session's state and reason, the
-// gate) is one the push lane refuses, so no push can stand in for the node
-// here. A new key read here that is not ruled node-only fails this test.
-func TestReachabilityReadsOnlyNodeOnlyKeys(t *testing.T) {
+// gate) is one the push lane refuses, so no push can stand in for the outpost
+// here. A new key read here that is not ruled outpost-only fails this test.
+func TestReachabilityReadsOnlyOutpostOnlyKeys(t *testing.T) {
 	t.Parallel()
 	keys := []string{verdictKey, responsiveKey, authKey, sessionStateKey, sessionReasonKey, rejectionKey,
 		tlsKeyKey, tlsExpiryKey, tlsDaysLeftKey, tlsHandshakeKey, udpResponseKey, snmpResponseKey}
@@ -96,8 +96,8 @@ func TestReachabilityReadsOnlyNodeOnlyKeys(t *testing.T) {
 		keys = append(keys, l.SignalKey, l.TimingKey)
 	}
 	for _, key := range keys {
-		if !probekeys.IsNodeOnly(key) {
-			t.Errorf("the reachability read serves %s as the node's, but probekeys does not rule it node-only", key)
+		if !probekeys.IsOutpostOnly(key) {
+			t.Errorf("the reachability read serves %s as the outpost's, but probekeys does not rule it outpost-only", key)
 		}
 	}
 }
@@ -127,7 +127,7 @@ func TestParseGateReasonsServesEveryReasonBesideTheRefusal(t *testing.T) {
 	}
 }
 
-// TestPendingReason holds why a verdict is null (#981): an endpoint no node
+// TestPendingReason holds why a verdict is null (#981): an endpoint no outpost
 // probes is waiting on an assignment, an assigned one on its first probe, and a
 // row with a verdict is waiting on nothing, so the field is absent.
 func TestPendingReason(t *testing.T) {
@@ -135,18 +135,18 @@ func TestPendingReason(t *testing.T) {
 	verdict := &reachVerdictBody{Value: "up"}
 	cases := []struct {
 		name    string
-		node    string
+		outpost string
 		verdict *reachVerdictBody
 		want    string
 	}{
-		{"no node, no verdict", "", nil, pendingNoNode},
-		{"node assigned, no verdict", "edge-1", nil, pendingAwaitingProbe},
-		{"node assigned, verdict", "edge-1", verdict, ""},
-		{"no node, verdict", "", verdict, ""},
+		{"no outpost, no verdict", "", nil, pendingNoOutpost},
+		{"outpost assigned, no verdict", "edge-1", nil, pendingAwaitingProbe},
+		{"outpost assigned, verdict", "edge-1", verdict, ""},
+		{"no outpost, verdict", "", verdict, ""},
 	}
 	for _, c := range cases {
-		if got := pendingReason(c.node, c.verdict); got != c.want {
-			t.Errorf("%s: pendingReason(%q, %v) = %q, want %q", c.name, c.node, c.verdict, got, c.want)
+		if got := pendingReason(c.outpost, c.verdict); got != c.want {
+			t.Errorf("%s: pendingReason(%q, %v) = %q, want %q", c.name, c.outpost, c.verdict, got, c.want)
 		}
 	}
 }

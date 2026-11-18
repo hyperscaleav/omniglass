@@ -17,9 +17,9 @@ import (
 )
 
 // TestReachabilityListSaysWhyTheVerdictIsNull is #981's CLI acceptance: on an
-// install with no node, `omniglass component reachability list` for a component
+// install with no outpost, `omniglass component reachability list` for a component
 // with a probed endpoint prints the null verdict beside the reason, so the
-// operator is told a node must be assigned rather than left with a bare null.
+// operator is told an outpost must be assigned rather than left with a bare null.
 // Skipped under -short.
 func TestReachabilityListSaysWhyTheVerdictIsNull(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
@@ -69,7 +69,7 @@ func TestReachabilityListSaysWhyTheVerdictIsNull(t *testing.T) {
 	if v, present := row["verdict"]; !present || v != nil {
 		t.Errorf("verdict = %v (present %v), want an explicit null", v, present)
 	}
-	if row["pending"] != "no-node" {
-		t.Errorf("pending = %v, want no-node", row["pending"])
+	if row["pending"] != "no-outpost" {
+		t.Errorf("pending = %v, want no-outpost", row["pending"])
 	}
 }

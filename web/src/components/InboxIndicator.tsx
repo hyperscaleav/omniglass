@@ -7,7 +7,7 @@ import { badgeText, useUnreadCount } from "../lib/inbox";
 // InboxIndicator is the shell's door to the console inbox (#1355): a bell in
 // the top bar with the unread count on it, linking to /inbox. The count polls
 // (lib/inbox INBOX_POLL_MS) and refreshes the moment an entry is marked read
-// anywhere, since every inbox read shares one cache prefix. A principal who
+// anywhere, since every inbox read shares one cache prefix. A user who
 // cannot read notifications gets no bell at all, so nothing asks a route the
 // server would refuse.
 export default function InboxIndicator() {

@@ -12,9 +12,9 @@ export type SecretField = {
   secret: boolean;
 };
 
-// The secret_type registry (the shapes a secret can take) lives in
+// The secret_type catalog (the shapes a secret can take) lives in
 // lib/secret_types.ts, its own module, so a page that only needs secrets never
-// couples to the registry fetch and vice versa (#598).
+// couples to the catalog fetch and vice versa (#598).
 
 export type Secret = {
   id: string;
