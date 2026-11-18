@@ -182,6 +182,8 @@ export class ViewHub {
         }
       }
     });
+    const opened = Date.now();
+    let ended = false;
     try {
       const res = await this.open(`/views:watch?bindings=${encodeURIComponent(JSON.stringify(bindings))}`, ctl.signal);
       if (!res.ok || !res.body) throw new Error(`views watch answered ${res.status}`);
@@ -192,13 +194,18 @@ export class ViewHub {
         if (done) break;
         parse(text.decode(value, { stream: true }));
       }
+      ended = true;
     } catch {
-      // A refused or dropped stream retries below, as one that ends does.
+      // A refused or dropped stream retries below.
     }
     if (ctl.signal.aborted) return;
     // After a reset the server ends the stream, and the other bindings
-    // resume at once; a stream that dropped retries after a pause.
-    this.reconnect(reset ? this.settleMs : this.retryMs);
+    // resume at once. So does a stream that ran and then ended (the server
+    // ends every watch at its lifetime, or when its caller's access changed):
+    // the reconnect carries on from its cursor. A stream refused, dropped, or
+    // ended as soon as it opened retries after a pause.
+    const ranItsCourse = ended && Date.now() - opened >= this.retryMs;
+    this.reconnect(reset || ranItsCourse ? this.settleMs : this.retryMs);
   }
 }
 

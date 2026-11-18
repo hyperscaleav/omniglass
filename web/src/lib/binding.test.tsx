@@ -203,6 +203,17 @@ describe("ViewHub", () => {
     expect(opened[1].bindings()[0].cursor).toBe("boot.6");
   });
 
+  it("reconnects at once from its cursor when a stream that ran ends, as the server ends one at its lifetime", async () => {
+    hub.subscribe(metric(["a"]), "boot.4", { rows: () => {}, reset: () => {} });
+    await settle();
+    await settle(1000);
+    live()[0].send("mark", { cursor: "boot.9" }, "boot.9");
+    live()[0].end();
+    await settle();
+    expect(opened).toHaveLength(2);
+    expect(opened[1].bindings()[0].cursor).toBe("boot.9");
+  });
+
   it("closes the stream when the last subscriber leaves", async () => {
     const off = hub.subscribe(metric(["a"]), "boot.4", { rows: () => {}, reset: () => {} });
     await settle();

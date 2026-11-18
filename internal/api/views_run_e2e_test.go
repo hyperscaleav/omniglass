@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/bus"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -32,7 +33,7 @@ type viewsFixture struct {
 	c        *apiClient
 }
 
-func newViewsFixture(t *testing.T) *viewsFixture {
+func newViewsFixture(t *testing.T, opts ...api.Option) *viewsFixture {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres + nats-server")
@@ -60,7 +61,7 @@ func newViewsFixture(t *testing.T) *viewsFixture {
 		t.Fatalf("start bus: %v", err)
 	}
 	t.Cleanup(busSrv.Shutdown)
-	srv := httptest.NewServer(api.NewHandler(gw, api.WithTelemetryPublisher(busSrv)))
+	srv := httptest.NewServer(api.NewHandler(gw, append([]api.Option{api.WithTelemetryPublisher(busSrv)}, opts...)...))
 	t.Cleanup(srv.Close)
 	return &viewsFixture{ctx: ctx, dsn: dsn, base: srv.URL, ownerTok: ownerTok, c: &apiClient{t: t, ctx: ctx, base: srv.URL}}
 }
@@ -470,4 +471,108 @@ func TestViewsWatchServesEveryBindingOnOneConnection(t *testing.T) {
 	if got[0] != "20" || got[1] != "call up" || got[2] != "loud" {
 		t.Fatalf("rows per binding: %v", got)
 	}
+}
+
+// ends reads the stream until the server ends it, failing on a reset or on it
+// running past within.
+func (w *watch) ends(t *testing.T, what string, within time.Duration) {
+	t.Helper()
+	deadline := time.After(within)
+	for {
+		select {
+		case ev, ok := <-w.events:
+			if !ok {
+				return
+			}
+			if ev.Event == "reset" {
+				t.Fatalf("the stream reset (%s), want it to end because %s", ev.Data, what)
+			}
+		case <-deadline:
+			t.Fatalf("the stream ran past %s, want it ended because %s", within, what)
+		}
+	}
+}
+
+// A watch is not forever on the scope it resolved at connect: the server ends
+// it once it has run its lifetime, so the client reconnects and resolves again,
+// and it carries a last mark first so the reconnect resumes with no gap.
+func TestViewsWatchEndsAtItsLifetime(t *testing.T) {
+	t.Parallel()
+	f := newViewsFixture(t, api.WithViewWatchLimits(0, time.Second, 0))
+	w := f.openWatch(t, f.ownerTok, []map[string]any{metricBinding(nil)}, "")
+	start := time.Now()
+	w.ends(t, "it ran its lifetime", 10*time.Second)
+	if took := time.Since(start); took < 900*time.Millisecond {
+		t.Fatalf("the stream ended after %s, before its lifetime", took)
+	}
+}
+
+// The heartbeat rechecks the caller the stream opened for: a session revoked,
+// or grants changed, ends the stream, and the reconnect answers honestly.
+func TestViewsWatchEndsWhenItsCallerNoLongerStands(t *testing.T) {
+	t.Parallel()
+	f := newViewsFixture(t, api.WithViewWatchLimits(0, 0, 200*time.Millisecond))
+	conn, err := pgx.Connect(f.ctx, f.dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(f.ctx)
+	bindings := []map[string]any{metricBinding(nil)}
+
+	revoked := userWithGrants(t, f.ctx, f.dsn, "revoked-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	w := f.openWatch(t, revoked, bindings, "")
+	w.until(t, "the opening mark", func(ev sseEvent) bool { return ev.Event == "mark" })
+	if _, err := conn.Exec(f.ctx, `delete from credential where secret_hash = $1`, auth.HashToken(revoked)); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	w.ends(t, "its session was revoked", 5*time.Second)
+	if again := f.openWatch(t, revoked, bindings, ""); again.status != http.StatusUnauthorized {
+		t.Fatalf("a reconnect on the revoked session: %d, want 401", again.status)
+	}
+
+	regranted := userWithGrants(t, f.ctx, f.dsn, "regranted-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	w = f.openWatch(t, regranted, bindings, "")
+	w.until(t, "the opening mark", func(ev sseEvent) bool { return ev.Event == "mark" })
+	if _, err := conn.Exec(f.ctx, `delete from user_grant where user_id = (select user_id from credential where secret_hash = $1)`, auth.HashToken(regranted)); err != nil {
+		t.Fatalf("drop the grants: %v", err)
+	}
+	w.ends(t, "its grants changed", 5*time.Second)
+	if again := f.openWatch(t, regranted, bindings, ""); again.status != http.StatusForbidden {
+		t.Fatalf("a reconnect with no grants: %d, want 403", again.status)
+	}
+
+	steady := f.openWatch(t, f.ownerTok, bindings, "")
+	beats := 0
+	steady.until(t, "three heartbeats on a caller that still stands", func(ev sseEvent) bool {
+		if ev.Event == "mark" {
+			beats++
+		}
+		return beats >= 4
+	})
+}
+
+// One user holds a bounded number of watches open: past it the open is a
+// 429, and a watch the client closes frees its place.
+func TestViewsWatchRefusesPastThePerUserLimit(t *testing.T) {
+	t.Parallel()
+	f := newViewsFixture(t, api.WithViewWatchLimits(2, 0, 0))
+	bindings := []map[string]any{metricBinding(nil)}
+	first := f.openWatch(t, f.ownerTok, bindings, "")
+	second := f.openWatch(t, f.ownerTok, bindings, "")
+	if first.status != http.StatusOK || second.status != http.StatusOK {
+		t.Fatalf("the first two watches: %d and %d, want 200", first.status, second.status)
+	}
+	if third := f.openWatch(t, f.ownerTok, bindings, ""); third.status != http.StatusTooManyRequests {
+		t.Fatalf("a third watch: %d, want 429", third.status)
+	}
+	other := userWithGrants(t, f.ctx, f.dsn, "other-viewer", []grant{{role: "viewer", scopeKind: "all"}})
+	if w := f.openWatch(t, other, bindings, ""); w.status != http.StatusOK {
+		t.Fatalf("another user's watch: %d, want 200: the limit is per user", w.status)
+	}
+	first.cancel()
+	waitFor(t, "the closed watch's place freed", func() bool {
+		w := f.openWatch(t, f.ownerTok, bindings, "")
+		w.cancel()
+		return w.status == http.StatusOK
+	})
 }

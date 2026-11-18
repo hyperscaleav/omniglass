@@ -78,6 +78,9 @@ type options struct {
 	// waiting on their outcome at once, in all and per caller; zero takes the
 	// defaults.
 	commandWaiters, commandWaitersPerUser int
+	// viewWatch bounds the /views:watch streams (#1830); a zero field takes
+	// the default.
+	viewWatch viewWatchLimits
 	// lab marks a server `omniglass lab` started (#1195); /auth/status
 	// reports it so the console shows the lab banner.
 	lab bool
@@ -163,6 +166,14 @@ func WithNatsURL(u string) Option { return func(o *options) { o.natsURL = u } }
 // refused before anything is issued). Zero keeps a default.
 func WithCommandWaitLimits(total, perUser int) Option {
 	return func(o *options) { o.commandWaiters, o.commandWaitersPerUser = total, perUser }
+}
+
+// WithViewWatchLimits bounds the /views:watch streams (#1830): how many one
+// user may hold open (past it, a 429), how long one runs before the server
+// ends it for the client to reconnect, and how often an idle one sends its
+// position and rechecks its caller. Zero keeps a default.
+func WithViewWatchLimits(perUser int, lifetime, heartbeat time.Duration) Option {
+	return func(o *options) { o.viewWatch = viewWatchLimits{perUser: perUser, lifetime: lifetime, heartbeat: heartbeat} }
 }
 
 // WithTelemetryPublisher supplies the bus seam the push-ingest route publishes
@@ -483,7 +494,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 		viewLog = slog.Default()
 	}
 	registerViewRoutes(api, a, gw, viewLog)
-	registerViewRunRoutes(api, a, gw, viewLog)
+	registerViewRunRoutes(api, a, gw, viewLog, o.viewWatch)
 	registerPlatformSimulationView(api, a, gw, o.ring, viewLog)
 	registerOutpostRoutes(api, a, gw, o.natsURL, o.simHub)
 	registerSecretRoutes(api, a, gw)

@@ -36,10 +36,38 @@ const (
 	viewWatchMaxBody = 32 << 10
 )
 
-// viewHeartbeat is how often an idle watch sends its position, which keeps
-// the connection alive through proxies and keeps the resume cursor inside
-// the tail's ring. A var so a test can shorten it.
-var viewHeartbeat = 15 * time.Second
+// The watch's bounds. A watch runs at most viewWatchLifetime, then the
+// server ends it with its position and the client reconnects, so no stream
+// lives on the scope it resolved long ago. Every viewWatchHeartbeat an idle
+// one sends its position (keeping the connection alive through proxies and
+// the resume cursor inside the tail's ring) and rechecks its caller. One user
+// holds at most viewWatchesPerUser open, a server viewWatchesTotal.
+const (
+	viewWatchLifetime  = 15 * time.Minute
+	viewWatchHeartbeat = 15 * time.Second
+	viewWatchesPerUser = 16
+	viewWatchesTotal   = 1024
+)
+
+// viewWatchLimits are the watch's bounds a handler runs with; a zero field
+// takes its default.
+type viewWatchLimits struct {
+	perUser             int
+	lifetime, heartbeat time.Duration
+}
+
+func (l viewWatchLimits) withDefaults() viewWatchLimits {
+	if l.perUser <= 0 {
+		l.perUser = viewWatchesPerUser
+	}
+	if l.lifetime <= 0 {
+		l.lifetime = viewWatchLifetime
+	}
+	if l.heartbeat <= 0 {
+		l.heartbeat = viewWatchHeartbeat
+	}
+	return l
+}
 
 type viewFilterBody struct {
 	System     string `json:"system,omitempty" maxLength:"200" doc:"Components that are members of this system (name or uuid). Component bindings only"`
@@ -398,7 +426,7 @@ type viewResetEvent struct {
 
 type watchViewsInput struct {
 	Bindings        string `query:"bindings" required:"true" maxLength:"32768" doc:"The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)"`
-	DurationSeconds int    `query:"duration_seconds" minimum:"1" maximum:"3600" doc:"Ends the stream after this many seconds; unset, it runs until the client leaves. A script or the CLI sets it to read a bounded tail"`
+	DurationSeconds int    `query:"duration_seconds" minimum:"1" maximum:"900" doc:"Ends the stream after this many seconds, for a script or the CLI reading a bounded tail. Unset, or past it, the stream ends at its 900 second lifetime, and the client reconnects from its position"`
 	LastEventID     string `header:"Last-Event-ID" maxLength:"64" doc:"The last event id the client received, sent by an EventSource on reconnect: every binding resumes from it or its own cursor, whichever is later"`
 }
 
@@ -507,7 +535,9 @@ func viewTailRows(matches []viewMatch, commits []tail.Commit, seqs []uint64, now
 }
 
 // registerViewRunRoutes wires the views binding's two routes.
-func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, log *slog.Logger) {
+func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, log *slog.Logger, limits viewWatchLimits) {
+	limits = limits.withDefaults()
+	watches := newWaitLimiter(viewWatchesTotal, limits.perUser)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "run-views",
 		Extensions:  mcpExposed(),
@@ -538,7 +568,7 @@ func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, l
 		Method:      http.MethodGet,
 		Path:        "/views:watch",
 		Summary:     "Follow view bindings live over one SSE stream",
-		Description: "Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to.",
+		Description: "Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (15 minutes, or duration_seconds) with its position, and on each 15 second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. One user holds at most 16 watches open; past it the open is a 429.",
 	}, "view", "read")
 	op.Responses = map[string]*huma.Response{"200": {Description: "The event stream", Content: map[string]*huma.MediaType{
 		"text/event-stream": {Schema: viewWatchSchema(api)},
@@ -592,19 +622,39 @@ func registerViewRunRoutes(api huma.API, a *authenticator, gw storage.Gateway, l
 			after = max(after, resume)
 			matches[i] = newViewMatch(b, ents, after)
 		}
+		life := limits.lifetime
+		if d := time.Duration(in.DurationSeconds) * time.Second; d > 0 && d < life {
+			life = d
+		}
+		// The place is taken last, so a refused open holds none, and freed
+		// when the stream ends, however it ends.
+		user := actorID(ctx)
+		if !watches.acquire(user) {
+			return nil, huma.NewError(http.StatusTooManyRequests, fmt.Sprintf("too many open watches: a user holds at most %d; close one, or bind more on one watch", limits.perUser))
+		}
 		return &huma.StreamResponse{Body: func(hctx huma.Context) {
+			defer watches.release(user)
 			hctx.SetHeader("Content-Type", "text/event-stream")
 			hctx.SetHeader("Cache-Control", "no-store")
 			hctx.SetStatus(http.StatusOK)
 			w := &sseWriter{w: hctx.BodyWriter()}
-			streamViews(hctx.Context(), hub, w, matches, reset, time.Duration(in.DurationSeconds)*time.Second)
+			stands := func() bool { return a.callerStands(ctx) }
+			streamViews(hctx.Context(), hub, w, matches, reset, viewWatchClock{life: life, beat: limits.heartbeat, stands: stands})
 		}}, nil
 	})
 }
 
-// streamViews follows the tail for matches until the client leaves or the
-// duration ends.
-func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, matches []viewMatch, reset []int, d time.Duration) {
+// viewWatchClock is one stream's time: it ends after life, and every beat
+// it sends its position and asks stands whether its caller still holds the
+// credential and the grants it opened with.
+type viewWatchClock struct {
+	life, beat time.Duration
+	stands     func() bool
+}
+
+// streamViews follows the tail for matches until the client leaves, the
+// stream's life ends, or its caller no longer stands.
+func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, matches []viewMatch, reset []int, clock viewWatchClock) {
 	pos := ^uint64(0)
 	for _, m := range matches {
 		pos = min(pos, m.after)
@@ -630,13 +680,9 @@ func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, matches []vie
 	if err := w.send(cursor, "mark", viewMarkEvent{Cursor: cursor}); err != nil {
 		return
 	}
-	var done <-chan time.Time
-	if d > 0 {
-		t := time.NewTimer(d)
-		defer t.Stop()
-		done = t.C
-	}
-	beat := time.NewTicker(viewHeartbeat)
+	done := time.NewTimer(clock.life)
+	defer done.Stop()
+	beat := time.NewTicker(clock.beat)
 	defer beat.Stop()
 	sent := cursor
 	for {
@@ -668,12 +714,18 @@ func streamViews(ctx context.Context, hub *tail.Hub, w *sseWriter, matches []vie
 		select {
 		case <-ctx.Done():
 			return
-		case <-done:
+		case <-done.C:
 			if sent != cursor {
 				_ = w.send(cursor, "mark", viewMarkEvent{Cursor: cursor})
 			}
 			return
 		case <-beat.C:
+			// A caller whose session ended or whose grants changed gets no
+			// more rows: the stream ends, and the reconnect authenticates
+			// and resolves its scope again.
+			if !clock.stands() {
+				return
+			}
 			if err := w.send(cursor, "mark", viewMarkEvent{Cursor: cursor}); err != nil {
 				return
 			}

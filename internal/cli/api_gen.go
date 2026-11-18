@@ -10476,7 +10476,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "watch",
 					Short:   "Follow view bindings live over one SSE stream",
-					Long:    "Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to.",
+					Long:    "Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (15 minutes, or duration_seconds) with its position, and on each 15 second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. One user holds at most 16 watches open; past it the open is a 429.",
 					Example: "  omniglass view watch",
 					Args:    pathArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -10496,7 +10496,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&qBindings, "bindings", "", "The bindings followed, as a JSON array: each the body of a /views:run binding plus its cursor (the result's cursor it resumes after; unset follows from now)")
 				_ = cmd.MarkFlagRequired("bindings")
-				cmd.Flags().IntVar(&qDurationSeconds, "duration-seconds", 0, "Ends the stream after this many seconds; unset, it runs until the client leaves. A script or the CLI sets it to read a bounded tail")
+				cmd.Flags().IntVar(&qDurationSeconds, "duration-seconds", 0, "Ends the stream after this many seconds, for a script or the CLI reading a bounded tail. Unset, or past it, the stream ends at its 900 second lifetime, and the client reconnects from its position")
 				return cmd
 			}()
 			return cmd

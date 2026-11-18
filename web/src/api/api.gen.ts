@@ -7888,7 +7888,7 @@ export type ViewPropertySeriesBody = {
 export type ViewResultBody = {
   /** The earliest instant the read could hold data for: the raw retention's floor, or the trend floor when hourly trends answered the older hours */
   covered_from: string;
-  /** The tail cursor this history was read at: /views:watch from it carries exactly what the history does not */
+  /** The tail cursor this history was read at: /views:watch from it carries exactly what the history does not. A cursor is <boot>.<sequence>; two from one server boot order by the sequence */
   cursor: string;
   /**
      * The entities the selector resolved to, in scope
@@ -9499,9 +9499,9 @@ export type WatchViewsParams = {
    */
   bindings: string;
   /**
-   * Ends the stream after this many seconds; unset, it runs until the client leaves. A script or the CLI sets it to read a bounded tail
+   * Ends the stream after this many seconds, for a script or the CLI reading a bounded tail. Unset, or past it, the stream ends at its 900 second lifetime, and the client reconnects from its position
    * @minimum 1
-   * @maximum 3600
+   * @maximum 900
    */
   duration_seconds?: number;
 };
@@ -28428,7 +28428,7 @@ export const getWatchViewsUrl = (params: WatchViewsParams,) => {
 }
 
 /**
- * Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to.
+ * Streams the rows that land for every binding as Server-Sent Events, one connection for all of them (ADR-1830). Each binding resumes after its own cursor (the /views:run result's), so history and live rows meet with no gap and no duplicate. A rows event carries each binding's matching rows and has the cursor after them as its id; a mark event advances that position when nothing matched; a reconnecting EventSource sends it back as Last-Event-ID and every binding resumes from it or its own cursor, whichever is later. A reset event names bindings whose cursor the tail no longer holds (too old, or from before a server restart), and the stream ends: the client re-runs their history and reconnects. The tail is the ingest landing point of this server, not a poll; rows a calc or rule derives are not on it. Gated by view:read, with each binding's <kind>:read and scope as /views:run: the selector resolves once at connect, and the stream carries only rows of the entities it resolved to. A stream is bounded so that scope never goes stale: it ends at its lifetime (15 minutes, or duration_seconds) with its position, and on each 15 second heartbeat it rechecks its caller, ending once the session no longer resolves or the caller's grants changed; the client reconnects from its cursor, and the reconnect authenticates and resolves again. One user holds at most 16 watches open; past it the open is a 429.
  * @summary Follow view bindings live over one SSE stream
  */
 export const watchViews = async (params: WatchViewsParams, options?: Parameters<typeof ogFetch>[1]): Promise<watchViewsResponse> => {
