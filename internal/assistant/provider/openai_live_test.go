@@ -14,7 +14,8 @@ import (
 // defaults when unset, so any provider the adapter claims can be proven:
 // Bedrock's gpt-oss is base URL
 // https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1 and model
-// openai.gpt-oss-20b-1:0, with a Bedrock API key.
+// openai.gpt-oss-20b-1:0, with a Bedrock API key. .env.example carries the
+// three, for a local .env.
 func TestOpenAILive(t *testing.T) {
 	key := os.Getenv("OMNIGLASS_TEST_MODEL_KEY")
 	if key == "" {
