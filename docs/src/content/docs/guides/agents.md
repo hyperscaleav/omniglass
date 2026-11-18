@@ -424,7 +424,7 @@ answer: a sample's text, labels and identity, the faults, and a refusal's text.
 
 ## Seeing what it did
 
-An agent's writes are yours in the [audit trail](/guides/admin/audit/), with how they arrived beside
+An agent's writes are yours in the [audit trail](/admin/audit/), with how they arrived beside
 them. In the console, Admin > Audit marks each with an `mcp` pill over its client and, for an agent
 token, an `agent <name>` tag beside you; type `channel:mcp` to see only what came through an agent. An
 admin reads the same from the CLI with:

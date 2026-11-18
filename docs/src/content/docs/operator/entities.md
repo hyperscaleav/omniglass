@@ -87,7 +87,7 @@ On an identity blade, **Edit** (right) opens edit mode: the profile becomes inpu
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
 available, with no need to enter edit mode: a red **Delete** for a group (a user instead has the escalating
-[lifecycle](/guides/admin/users/) of **Disable**, then **Archive**, then **Purge**, so its left slot is
+[lifecycle](/admin/users/) of **Disable**, then **Archive**, then **Purge**, so its left slot is
 **Disable / Enable** and the stronger steps sit in the kebab), each behind a confirm. Secondary actions like **Impersonate** fold into a
 **⋯** menu. A blade you may not write keeps the Edit and Delete pair in place, **greyed**, with the
 reason on hover (or on keyboard focus): an **official** catalog row reads "Official: ships with
@@ -322,7 +322,7 @@ location owns no observed value.
 A **system** carries one more panel: **Slots**, the places it needs filled. A slot (a room
 microphone, a main display) is a position, not a component, so the system can say what it needs before anything is
 assigned and an **empty slot stays visible**. A slot is not one of the
-[roles that grant people access](/guides/admin/access/): a role is IAM's word, a slot the system's.
+[roles that grant people access](/admin/access/): a role is IAM's word, a slot the system's.
 
 Each row is one slot with **where it came from**, **who fills it**, and **how many more it wants**:
 
