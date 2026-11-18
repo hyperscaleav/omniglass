@@ -62,8 +62,8 @@ function parse(path: string, src: string): DocPage {
   };
 }
 
-// Journey order: site index, then Why, then Overview, then the rest alphabetically.
-const PRIORITY = ['', 'architecture/why', 'architecture'];
+// Journey order: site index, then Start here in reading order, then the rest alphabetically.
+const PRIORITY = ['', 'start', 'start/what-omniglass-is', 'start/the-model', 'start/first-ten-minutes'];
 const rank = (slug: string) => {
   const i = PRIORITY.indexOf(slug);
   return i === -1 ? PRIORITY.length : i;

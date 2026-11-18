@@ -146,12 +146,11 @@ export default defineConfig({
           // section deletes it and its entry here (ADR-2087.2). The group leaves with the last one.
           label: 'Being rebuilt',
           items: [
-            { label: 'Try omniglass in five minutes', slug: 'guides/lab' },
+            { label: 'The lab', slug: 'guides/lab' },
             {
               label: 'Architecture',
               collapsed: true,
               items: [
-                { label: 'Why Omniglass', slug: 'architecture/why' },
                 // the fleet model, then the shapes it pins
                 { label: 'Core entities', slug: 'architecture/core-entities' },
                 // the journey, in the order the data travels
