@@ -18,7 +18,9 @@ refs: [2122, 523, 2121, 2026, 1167]
      them is gatherable with no code of its own. One capture-phase handler reads the stamp: alt-click
      adds a row, shift-alt-click every stamped sibling from the last one gathered, and a control
      inside a row keeps its own meaning. ⌘ and Ctrl are left to the browser's open-in-new-tab.
-  3. **⌘J hands over the page** when nothing else is gathered, and opens omnibot.
+  3. **⌘J hands over the page** when nothing else is gathered, and opens omnibot. A detail page
+     passes its entity's name or address to the `Page` primitive, which ⌘J puts in place of the
+     uuid its route holds.
   4. **Triage is an embedded skill, by name.** A run's `forwardedProps.skill` names a skill and its
      arguments; the server renders the skill's own prompt ([ADR-2026](/architecture/decisions/#adr-2026-the-mcp-server-serves-embedded-skills-as-prompts)),
      so the console never composes skill text. An unknown skill or a missing argument is a 422.

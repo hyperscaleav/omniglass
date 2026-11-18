@@ -110,7 +110,8 @@ the shared primitives set it from their row: `FlatList`, `Outline`, the entity b
 rows. One console-wide handler reads it, so a page built from those primitives is gatherable with no
 code of its own: alt-click adds a row to omnibot's tray, shift-alt-click every stamped row from the
 last one gathered, and a control inside a row keeps its own meaning. ⌘J hands over the page itself, as
-its route and arguments. A uuid is never a subject.
+its route and arguments; a detail page names its entity by name or address (the `Page` primitive's
+`name`) in place of the uuid its route holds. A uuid is never a subject.
 
 :::note[Divergence: the stamp is on the list primitives, not ViewResult]
 The renderer contract above would let a view's column declare what a row is. It is not built, so the
