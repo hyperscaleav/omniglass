@@ -20,6 +20,7 @@ const (
 	fixture         = "testdata/run.sse"
 	fixtureApproved = "testdata/resume-approved.sse"
 	fixtureDeclined = "testdata/resume-declined.sse"
+	fixtureStopped  = "testdata/step-limit.sse"
 )
 
 // matchFixture holds a narration to its committed fixture, rewriting it when
@@ -224,5 +225,33 @@ func TestRunNarratesADeclinedResult(t *testing.T) {
 	}
 	if evs[1]["toolCallId"] != "call-2" || !strings.Contains(evs[1]["content"].(string), "declined") {
 		t.Errorf("result = %v", evs[1])
+	}
+}
+
+// A run that reached its step ceiling without an answer still finishes in
+// success, but says so: its result names the limit and the steps it took, so a
+// client tells "stopped" from "answered".
+func TestRunFinishesStoppedAtTheStepLimit(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	r := NewRun(&buf, "lobby", "run-5")
+	r.Start()
+	r.Hear(assistant.Event{Kind: assistant.EventText, Text: "Stopped after 10 steps without an answer."})
+	r.Stopped(10)
+	r.Finish()
+	got := buf.Bytes()
+	matchFixture(t, fixtureStopped, got)
+	evs := events(t, got)
+	last := evs[len(evs)-1]
+	outcome, _ := last["outcome"].(map[string]any)
+	if last["type"] != "RUN_FINISHED" || outcome["type"] != "success" {
+		t.Fatalf("finished = %v, want a success outcome", last)
+	}
+	result, _ := last["result"].(map[string]any)
+	if result["stopped"] != "step_limit" || result["steps"] != float64(10) {
+		t.Errorf("result = %v, want the step limit and 10 steps", last["result"])
+	}
+	if n := strings.Count(strings.Join(types(evs), ","), "RUN_FINISHED"); n != 1 {
+		t.Errorf("RUN_FINISHED %d times, want once", n)
 	}
 }

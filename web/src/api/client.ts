@@ -56,6 +56,12 @@ async function send(url: string, init: RequestInit): Promise<{ request: Request;
   return { request, response };
 }
 
+// sendRaw is send for a caller that reads the response itself, a streamed one
+// included (omnibot's :run event stream).
+export async function sendRaw(url: string, init: RequestInit): Promise<Response> {
+  return (await send(url, init)).response;
+}
+
 // ogFetch is the mutator orval's generated operations call (orval.config.mjs), so
 // each of them goes through send and returns orval's { data, status, headers }.
 export async function ogFetch<T>(url: string, init: RequestInit): Promise<T> {

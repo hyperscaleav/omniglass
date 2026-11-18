@@ -6,15 +6,15 @@ import { EventSchema, InterruptSchema, RunAgentInputSchema } from "@ag-ui/core/s
 
 // The server narrates an omnibot run as AG-UI events (#2121). The Go package
 // that writes them records runs to fixtures (internal/assistant/agui): one
-// that pauses on an ask, and each answer to it. This test holds every fixture
-// to the protocol's own schemas, so the server's events are what any AG-UI
-// client, the console's included, reads. Each event must parse, and name only
-// fields its type declares: the schemas let an unknown field through, so a
-// misspelt one would otherwise pass unseen.
+// that pauses on an ask, each answer to it, and one stopped at its step limit.
+// This test holds every fixture to the protocol's own schemas, so the server's
+// events are what any AG-UI client, the console's included, reads. Each event
+// must parse, and name only fields its type declares: the schemas let an
+// unknown field through, so a misspelt one would otherwise pass unseen.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const testdata = join(here, "../../../internal/assistant/agui/testdata");
-const fixtures = ["run.sse", "resume-approved.sse", "resume-declined.sse"];
+const fixtures = ["run.sse", "resume-approved.sse", "resume-declined.sse", "step-limit.sse"];
 const read = (name: string) => events(readFileSync(join(testdata, name), "utf8"));
 
 // declared is the fields an event's type names in the protocol.

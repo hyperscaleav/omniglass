@@ -1,0 +1,27 @@
+# Omnibot in the console (#1167): the top bar opens omnibot in a panel, a
+# prompt runs on the server (#2121), each tool call shows as a card, and the
+# write the agent policy asks about waits on a confirm card. The lab's server
+# plays a recording (internal/lab/omnibot-replay.yaml) that reads the meeting
+# 405 video bar and asks to tag it, so every run goes the same way.
+title: Ask omnibot from the console
+description: Open omnibot from the top bar, ask it to tag a video bar, watch its reads arrive as cards, and confirm the write it asks about.
+steps:
+  - goto: /
+    caption: Omnibot is one button away in the top bar, for anyone who may use the assistant.
+  - click: 'button[aria-label="Ask omnibot"]'
+    caption: Open omnibot. It acts as you, through the same API, and your agent policy decides each write.
+  - wait: { selector: '[data-testid=omnibot-empty]' }
+    caption: The panel says what omnibot may do before the first prompt.
+  - type: { target: 'textarea[aria-label="Ask omnibot"]', text: tag the meeting 405 video bar AV-0415 }
+    caption: Ask it in plain words.
+  - press: Enter
+    caption: Send it. The run streams back from the server.
+  - wait: { selector: '[data-testid=omnibot-ask]', timeout: 30000 }
+    caption: Its read shows as a card linking to the video bar. Tagging it is a write, so it waits for you.
+    poster: true
+    hold: 2000
+  - click: { role: button, name: Confirm }
+    caption: Confirm it. The call runs as omnibot, on your behalf, and the audit log says so.
+  - wait: { text: Tagged the meeting 405 video bar as AV-0415., timeout: 30000 }
+    caption: The tag is set, the card marks the call approved, and omnibot reports what it did.
+    hold: 2000

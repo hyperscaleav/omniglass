@@ -1,29 +1,20 @@
-import { createIdentity, entityLabel } from "../lib/entities";
-import { For, Show, createEffect, createMemo, createSignal, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
 import BladeTitle from "../components/BladeTitle";
-import TreeSelect from "../components/TreeSelect";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import KVStacked from "../components/KVStacked";
 import SecretFields from "../components/SecretFields";
-import { useFormActions } from "../lib/formactions";
-import { Plus } from "../components/icons";
-import { type TreeNode } from "../lib/treeselect";
+import CreateSecretForm from "../components/CreateSecretForm";
 import {
   type Secret,
-  type OwnerKind,
   SECRETS_KEY,
   listSecrets,
-  createSecret,
   updateSecret,
   deleteSecret,
 } from "../lib/secrets";
-import { SECRET_TYPES_KEY, listSecretTypes } from "../lib/secret_types";
-import { LOCATIONS_KEY, listLocations } from "../lib/locations";
-import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { useMe, can, canAtPlatform, platformTierGap, platformAuthorityHint } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -33,8 +24,6 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // component; the system band is retired, ADR-0052) and resolved down the cascade; this page is the admin
 // directory (create, inspect masked, delete). A secret reaches a component by
 // being sourced into a field; this directory manages the cells themselves.
-
-const OWNER_KINDS: OwnerKind[] = ["platform", "location", "component"];
 
 function ownerLabel(s: Secret): string {
   if (s.owner_kind === "platform") return "Platform";
@@ -237,142 +226,6 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
         </div>
       )}
     </Show>
-  );
-}
-
-// CreateSecretForm: pick a type and a scope, then fill the type's operator
-// fields. Secret fields use a password input; the values are sealed server-side.
-function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
-  const qc = useQueryClient();
-  const me = useMe();
-  const types = useQuery(() => ({ queryKey: SECRET_TYPES_KEY, queryFn: listSecretTypes }));
-  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
-  const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
-
-  // The operator types the label and the cascade name follows it, until they
-  // take the name over by hand (createIdentity, the catalog-page affordance).
-  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
-  const [typeId, setTypeId] = createSignal("");
-  const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
-  const [owner, setOwner] = createSignal("");
-  const [fields, setFields] = createSignal<Record<string, string>>({});
-  const [busy, setBusy] = createSignal(false);
-  const [formErr, setFormErr] = createSignal<string | null>(null);
-
-  // The Scope select offers only the tiers this user may actually write at.
-  // The platform tier is install-wide, gated server-side on platform:create on top
-  // of secret:create, so offering it to a caller holding only the resource half
-  // would be offering a control the server refuses.
-  const tierGap = () => platformTierGap(me.data, "secret", ["create"]);
-  const ownerKinds = createMemo(() => (tierGap().length > 0 ? OWNER_KINDS.filter((k) => k !== "platform") : OWNER_KINDS));
-  // Keep the choice inside the offered set: /auth/me may resolve after the form
-  // mounts, and the default ("platform") is exactly the one that can fall away.
-  createEffect(() => {
-    if (!ownerKinds().includes(ownerKind())) setOwnerKind(ownerKinds()[0]);
-  });
-
-  // typeId holds the name (ADR-0062: the name is the address the API resolves).
-  const shape = createMemo(() => (types.data ?? []).find((t) => t.name === typeId()));
-  // The fields the operator fills (lifecycle-origin fields are set by the secret's
-  // own machinery, never at creation).
-  const operatorFields = createMemo(() => (shape()?.fields ?? []).filter((f) => f.origin !== "lifecycle"));
-  // The owner picker is a tree: locations and components nest by
-  // parent_id, so the dropdown indents each candidate to its tier (the shared
-  // TreeSelect, same as the location/parent pickers). Keyed on uuid, not name
-  // (#627): two same-named owners in different placement buckets are legal,
-  // and flattenTree keys its id set and children map on TreeNode.id, so a
-  // name-keyed picker rendered duplicates as identical, value-indistinguishable
-  // options. The posted owner is a uuid, which resolveSecretOwner accepts
-  // (ADR-0062, uuid-or-name dual accept).
-  const ownerTree = createMemo<TreeNode[]>(() => {
-    switch (ownerKind()) {
-      case "location": return (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id }));
-      case "component": return (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id }));
-      default: return [];
-    }
-  });
-
-  useFormActions().bind({
-    submitLabel: "Create secret",
-    submitIcon: Plus,
-    submit: () => void submit(),
-    busy,
-    disabled: () => !typeId() || !name().trim() || (ownerKind() !== "platform" && !owner()),
-  });
-
-  async function submit() {
-    setBusy(true);
-    setFormErr(null);
-    try {
-      const created = await createSecret({
-        name: name().trim(),
-        label: display().trim(),
-        secret_type: typeId(),
-        owner_kind: ownerKind(),
-        owner: ownerKind() === "platform" ? undefined : owner() || undefined,
-        fields: fields(),
-      });
-      await qc.invalidateQueries({ queryKey: SECRETS_KEY });
-      p.onCreated(created);
-    } catch (er) {
-      setFormErr(describeError(er));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form class="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <Show when={formErr()}>
-        <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
-      </Show>
-      <FieldRow bind="label" hint="What an operator reads in lists. Optional: a secret with none reads as its name.">
-        <input class="input input-bordered w-full" value={display()} placeholder="Polling community" onInput={(e) => setDisplay(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "What the cascade resolves by; unique per owner."}>
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-community" onInput={(e) => setName(e.currentTarget.value)} />
-      </FieldRow>
-      <FieldRow label="Type">
-        <select class="select select-bordered w-full" value={typeId()} onChange={(e) => { setTypeId(e.currentTarget.value); setFields({}); }}>
-          <option value="" disabled>Choose a type…</option>
-          <For each={types.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
-        </select>
-      </FieldRow>
-      <div class="grid grid-cols-2 gap-3">
-        <FieldRow
-          label="Scope"
-          info="The fleet scope this secret attaches to. It cascades down onto the components below it: platform, or a location or component (a secret has no system band, ADR-0052)."
-          docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
-          hint={tierGap().length > 0 ? platformAuthorityHint("A secret", tierGap()) : undefined}
-        >
-          <select class="select select-bordered w-full" value={ownerKind()} onChange={(e) => { setOwnerKind(e.currentTarget.value as OwnerKind); setOwner(""); }}>
-            <For each={ownerKinds()}>{(k) => <option value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>}</For>
-          </select>
-        </FieldRow>
-        <Show when={ownerKind() !== "platform"}>
-          <FieldRow label={ownerKind().charAt(0).toUpperCase() + ownerKind().slice(1)}>
-            <TreeSelect items={ownerTree()} value={owner()} onChange={setOwner} rootLabel="Choose…" />
-          </FieldRow>
-        </Show>
-      </div>
-      <Show when={shape()}>
-        <div class="flex flex-col gap-3 border-t border-base-300 pt-3">
-          <span class="eyebrow">Fields</span>
-          <For each={operatorFields()}>
-            {(f) => (
-              <FieldRow label={f.name} hint={f.secret ? "Encrypted at rest." : undefined}>
-                <input
-                  class="input input-bordered w-full font-data"
-                  type={f.secret ? "password" : "text"}
-                  value={fields()[f.name] ?? ""}
-                  onInput={(e) => setFields({ ...fields(), [f.name]: e.currentTarget.value })}
-                />
-              </FieldRow>
-            )}
-          </For>
-        </div>
-      </Show>
-    </form>
   );
 }
 
