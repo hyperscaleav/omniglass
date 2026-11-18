@@ -1,11 +1,14 @@
 package storage
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -396,11 +399,11 @@ func (e *ruleEvaluator) judge(ctx context.Context, tx pgx.Tx, lane rules.Lane, o
 		if !picked {
 			continue
 		}
-		window, err := e.p.ruleWindow(ctx, tx, r, ownerID, instance)
+		history, err := e.p.ruleHistory(ctx, tx, r, ownerID, instance)
 		if err != nil {
 			return nil, err
 		}
-		action, ok := e.p.decide(r, o, instance, value, window)
+		action, ok := e.p.decide(r, o, instance, value, history)
 		if ok {
 			judged = append(judged, r.ID)
 		}
@@ -604,11 +607,11 @@ func (p *PG) primeRule(ctx context.Context, tx pgx.Tx, r EventRule) error {
 		if !picked {
 			continue
 		}
-		window, err := p.ruleWindow(ctx, tx, r, s.component, s.instance)
+		history, err := p.ruleHistory(ctx, tx, r, s.component, s.instance)
 		if err != nil {
 			return err
 		}
-		action, ok := p.decide(r, o, s.instance, s.value, window)
+		action, ok := p.decide(r, o, s.instance, s.value, history)
 		if !ok {
 			continue
 		}
@@ -899,11 +902,11 @@ func (p *PG) streakStillHolds(ctx context.Context, tx pgx.Tx, r EventRule, d due
 	if err != nil || len(newest) == 0 {
 		return nil, nil, nil, err
 	}
-	window, err := p.ruleWindow(ctx, tx, r, d.component, d.instance)
+	history, err := p.ruleHistory(ctx, tx, r, d.component, d.instance)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	action, ok := p.decide(r, o, d.instance, newest[0].value, window)
+	action, ok := p.decide(r, o, d.instance, newest[0].value, history)
 	if !ok || action != d.streak.Pending {
 		return nil, nil, nil, nil
 	}
@@ -1222,14 +1225,9 @@ type ruleCandidate struct {
 // one shape: the streak pending is the newest sample's decision, unless that
 // decision is already in force (or decides nothing), and then no streak at
 // all. No query, so the scan pays nothing for a series that agrees; the
-// rule's compiled criteria come from the gateway's per-version cache. A
-// windowed rule's decision rests on its window, which only a query reads, so
-// its touched series always rejudge (#1985): rejudgeSeries reads the window
-// and leaves an agreeing series as it found it.
+// rule's compiled criteria come from the gateway's per-version cache. A rule
+// that reads its series' history cannot be judged here (readsHistory).
 func (p *PG) drifted(c ruleCandidate) bool {
-	if c.rule.SampleWindow > 0 {
-		return true
-	}
 	action, err := p.decideSample(c.rule, rules.Sample{Value: c.value, Key: c.rule.SampleKey, Instance: c.instance,
 		Component: rules.Component{Name: c.componentName, Type: c.componentType}})
 	if err != nil {
@@ -1246,6 +1244,61 @@ func (p *PG) drifted(c ruleCandidate) bool {
 	return want != have
 }
 
+// readsHistory reports whether a rule's criteria read its series' window
+// or age (#1985), which only a query reads: drifted cannot judge its series
+// in memory, so a pass rejudges each one it touched (rejudgeSeries reads
+// the history and leaves an agreeing series as it found it).
+func (p *PG) readsHistory(r EventRule) bool {
+	j, err := p.judges.judge(r)
+	return err == nil && ((r.SampleWindow > 0 && j.ReadsWindow()) || j.ReadsAge())
+}
+
+// ruleWork is one series a reconcile pass works, and what the scan read of it.
+type ruleWork struct {
+	key ruleSeries
+	c   ruleCandidate
+}
+
+// reconcileWork orders a pass's work: the series that drifted first (each a
+// disagreement found in memory), then the series held for a retry (in key
+// order), then at most limit of the history readers' touched series. A
+// history reader's rejudge mostly finds its series agreeing (the ingest
+// judged the sample with its history when it landed), so it runs after the
+// drift and the retries, and capped, so a fleet of windowed series cannot
+// spend the pass's deadline first; one past the cap is rejudged by its next
+// sample. A series in more than one list is worked once, at its first.
+func reconcileWork(drifted []ruleCandidate, retry map[ruleSeries]int, rejudge []ruleCandidate, limit int) []ruleWork {
+	var out []ruleWork
+	seen := map[ruleSeries]bool{}
+	add := func(k ruleSeries, c ruleCandidate) bool {
+		if seen[k] {
+			return false
+		}
+		seen[k] = true
+		out = append(out, ruleWork{k, c})
+		return true
+	}
+	keyOf := func(c ruleCandidate) ruleSeries { return ruleSeries{c.rule.ID, c.rule.Name, c.component, c.instance} }
+	for _, c := range drifted {
+		add(keyOf(c), c)
+	}
+	held := slices.SortedFunc(maps.Keys(retry), func(a, b ruleSeries) int {
+		return cmp.Or(cmp.Compare(a.ruleID, b.ruleID), cmp.Compare(a.component, b.component), cmp.Compare(a.instance, b.instance))
+	})
+	for _, k := range held {
+		add(k, ruleCandidate{rule: EventRule{ID: k.ruleID, Name: k.rule}, component: k.component, instance: k.instance})
+	}
+	for _, c := range rejudge {
+		if limit <= 0 {
+			break
+		}
+		if add(keyOf(c), c) {
+			limit--
+		}
+	}
+	return out
+}
+
 // Reconcile bounds (#928).
 const (
 	// RuleReconcileLookback is how many sample ids per lane a fresh state's
@@ -1259,6 +1312,9 @@ const (
 	// ruleReconcileRetryCap bounds the series held for a retry at once; past
 	// it, a new failure is logged and not held.
 	ruleReconcileRetryCap = 1_000
+	// ruleReconcileRejudgeCap bounds the history readers' touched series a
+	// pass rejudges (#1985), each a transaction with its window read.
+	ruleReconcileRejudgeCap = 200
 )
 
 // ruleSeries names one rule's series on one component and instance.
@@ -1342,7 +1398,7 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 		st.started = true
 	}
 	from := st.marks[0].Min(st.marks[1])
-	var drifted []ruleCandidate
+	var drifted, rejudge []ruleCandidate
 	for _, lane := range []struct {
 		lane     rules.Lane
 		from, to int64
@@ -1355,7 +1411,10 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 			return err
 		}
 		for _, c := range cands {
-			if p.drifted(c) {
+			switch {
+			case p.readsHistory(c.rule):
+				rejudge = append(rejudge, c)
+			case p.drifted(c):
 				drifted = append(drifted, c)
 			}
 		}
@@ -1364,17 +1423,14 @@ func (p *PG) ReconcileEventRules(ctx context.Context, st *RuleReconcileState) er
 	if err != nil {
 		return err
 	}
-	work := map[ruleSeries]ruleCandidate{}
-	for k := range st.retry {
-		work[k] = ruleCandidate{rule: EventRule{ID: k.ruleID, Name: k.rule}, component: k.component, instance: k.instance}
+	if rejudge, err = p.watched(ctx, rejudge); err != nil {
+		return err
 	}
-	for _, c := range drifted {
-		work[ruleSeries{c.rule.ID, c.rule.Name, c.component, c.instance}] = c
-	}
-	for k, c := range work {
+	for _, w := range reconcileWork(drifted, st.retry, rejudge, ruleReconcileRejudgeCap) {
 		if ctx.Err() != nil {
 			break // the pass's deadline: the retry set and the marks keep what is left
 		}
+		k, c := w.key, w.c
 		err := p.reconcileSeries(ctx, c)
 		if err != nil {
 			slog.Warn("event rule reconcile could not correct a series; it will be retried", "facility", "rules", "rule", k.rule,
@@ -1559,11 +1615,11 @@ func (p *PG) rejudgeSeries(ctx context.Context, c ruleCandidate, releaseEmpty bo
 		}
 		return tx.Commit(ctx)
 	}
-	window, err := p.ruleWindow(ctx, tx, r, c.component, c.instance)
+	history, err := p.ruleHistory(ctx, tx, r, c.component, c.instance)
 	if err != nil {
 		return err
 	}
-	action, _ := p.decide(r, o, c.instance, newest[0].value, window)
+	action, _ := p.decide(r, o, c.instance, newest[0].value, history)
 	now, err := dbNow(ctx, tx)
 	if err != nil {
 		return err

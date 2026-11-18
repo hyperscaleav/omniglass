@@ -93,3 +93,57 @@ func TestWindowBucket(t *testing.T) {
 		}
 	}
 }
+
+// A rule's age (#1985) is how long the series it judges has run: an age
+// gate holds a trend criterion until the series is old enough that its
+// window is not a fill from empty or a refill after a restart.
+func TestAgeGatesATrend(t *testing.T) {
+	j, err := Compile(LaneMetric, "", Criteria{Expr: "age >= 36000 && growth(window) > 0.25"}, &Criteria{Expr: "growth(window) <= 0.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rising, _ := trendSeries()
+	for _, tc := range []struct {
+		name string
+		age  float64
+		want Action
+	}{
+		{"a series younger than the gate", 21600, Hold},
+		{"a series past the gate", 36000, Fire},
+	} {
+		got, err := j.Decide(Sample{Value: 1.0, Key: "process-heap-size", Window: rising, Age: tc.age})
+		if err != nil || got != tc.want {
+			t.Errorf("%s: Decide = %v, %v; want %v", tc.name, got, err, tc.want)
+		}
+	}
+}
+
+// ReadsAge tells a rule whose criteria read the series' age, so a store
+// reads one only for a rule that asks for it.
+func TestJudgeReadsAge(t *testing.T) {
+	for _, tc := range []struct {
+		fire  string
+		clear string
+		want  bool
+	}{
+		{"value > 1", "", false},
+		{"growth(window) > 0.2", "", false},
+		{"age > 60 && value > 1", "", true},
+		{"value > 1", "age < 60", true},
+	} {
+		var clear *Criteria
+		if tc.clear != "" {
+			clear = &Criteria{Expr: tc.clear}
+		}
+		j, err := Compile(LaneMetric, "", Criteria{Expr: tc.fire}, clear)
+		if err != nil {
+			t.Fatalf("%q: %v", tc.fire, err)
+		}
+		if got := j.ReadsAge(); got != tc.want {
+			t.Errorf("%q / %q: ReadsAge = %v, want %v", tc.fire, tc.clear, got, tc.want)
+		}
+	}
+	if _, err := Compile(LaneProperty, "string", Criteria{Expr: "age > 0"}, nil); err == nil {
+		t.Error("a property's criteria compiled reading age")
+	}
+}

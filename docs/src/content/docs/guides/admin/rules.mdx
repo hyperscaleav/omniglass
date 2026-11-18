@@ -33,12 +33,12 @@ server would refuse the write.
 
 ## The rules that ship
 
-Five rules ship with Omniglass, rendered here from the seed itself:
+These rules ship with Omniglass, rendered here from the seed itself:
 
 <SeededSet kind="event_rules" />
 
-All five are **official**: they update with Omniglass, so they are read-only, and the blade greys Edit
-and Delete with that reason. Four of them watch Omniglass itself. `ingest-lag-high` opens a warning alarm on
+All of them are **official**: they update with Omniglass, so they are read-only, and the blade greys Edit
+and Delete with that reason. All but `reachability-lost` watch Omniglass itself. `ingest-lag-high` opens a warning alarm on
 the server's own component when the server lands telemetry more than 30 s behind its samples for 2
 minutes ([messaging](/architecture/messaging/#measuring-the-pipeline)). `outpost-silent` opens a high
 alarm on an outpost's own component once the outpost has gone 90 s, three heartbeats, without checking in,
@@ -47,7 +47,14 @@ and clears when it next does ([outposts](/architecture/outposts/#self-monitoring
 data directory stays over 90% used for 2 minutes, and clears once it is back at 85% or under
 ([collection](/architecture/collection/#self-monitoring-the-servers-account-of-itself)).
 `retention-behind` opens a warning alarm on the server's component when a retention lane stays
-behind its window for 5 minutes ([storage](/architecture/storage/#what-a-retention-pass-reports)). `reachability-lost` is what makes an unplugged component move its system: unplug a
+behind its window for 5 minutes ([storage](/architecture/storage/#what-a-retention-pass-reports)).
+Three judge a trend rather than a level ([write a trend rule](#write-a-trend-rule), below), each an
+average alarm: `process-heap-growing` and `process-goroutines-growing` open on a process's platform
+component when its heap or goroutine count has risen steadily by more than a quarter over six hours,
+held an hour, once the process has run ten hours (so a restart's refill is not read as a leak), and
+`db-size-growing` on the server's component when the database has grown by more than a quarter over
+a day, held six hours, once `db-size` has a week of history (so a fresh install filling its retention
+windows is not read as bloat). `reachability-lost` is what makes an unplugged component move its system: unplug a
 simulated component ([simulate a fleet](/guides/operator/simulation/#break-it-on-purpose)) and, once
 its endpoint has read `down` for the rule's fire sustain (above), the rule's row on the Event rules page
 shows **1 open**, its blade lists the component and the endpoint, and the component and its system
@@ -166,6 +173,9 @@ back is not applied, which the panel says. A series with nothing deciding in the
 started unknown, and the panel counts those; on a fleet with more samples than the preview's cap it
 judges whole series up to it and says how many of how many.
 
+A preview refuses a [trend rule](#write-a-trend-rule)'s criteria (those that read `window` or `age`):
+it judges each sample alone, so it could only ever answer that a trend never fires.
+
 A rule's blade shows its criteria in words and, beneath, as the expressions it judges by (an absent
 clear is `!(fire)`).
 
@@ -173,6 +183,37 @@ The walkthrough below writes a rule's criteria as an expression: the builder's c
 the expression itself, an unfinished line pointed at, the fix, a preview of the last day, and the save.
 
 ::walkthrough{#write-a-rule-as-an-expression}
+
+### Write a trend rule
+
+A rule on a metric can fire on where its series is heading rather than where it is: a heap that keeps
+climbing, a database that keeps growing. The drawer does not edit this yet; write it with the API or
+the CLI (`--sample-window 6h` on the create command). Its **`sample_window`** (a duration up to a
+week) is how much of the series' history the criteria read, bound as **`window`**: the series' points
+over it, oldest first, in at most 360 even buckets. Three functions read it: `span(window)` is the
+seconds the points cover, `slope(window)` the fitted rise per second, and `growth(window)` that rise
+across the span as a share of the series' level, so `growth(window) > 0.25` reads "rose by more than
+a quarter", whatever the key's unit.
+
+A metric's criteria also read **`age`**, how long the series has run in seconds: on a process's own key
+(its heap, its goroutines) the time since the process last started, on any other the time since the
+series' oldest sample still kept, so never more than the key's retention (`metric_days`, 14 by
+default). Gate a trend on it. A series that starts from empty, or refills after a restart, rises
+steadily without anything being wrong. The shipped heap rule reads:
+
+```yaml
+sample_key: process-heap-size
+sample_window: 6h
+fire_criteria: { expr: 'age >= 36000 && span(window) >= 18000 && growth(window) > 0.25' }
+clear_criteria: { expr: 'growth(window) <= 0.1' }
+fire_sustain: 1h
+```
+
+A rule whose `sample_window` its criteria never read, or criteria that read `window` with no
+`sample_window`, is refused when you write it. A trend can move with no new sample, so the server
+rejudges such a rule's series on its periodic reconcile pass as well as on each sample. The
+[alarms page](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample) explains the
+window, the age and the thresholds.
 
 ### A worked example
 

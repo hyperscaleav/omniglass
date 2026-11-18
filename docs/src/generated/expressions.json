@@ -334,17 +334,22 @@
       {
        "name": "window",
        "type": "[]record",
-       "doc": "The series' samples over the rule's sample_window, oldest first, each a record of value and at (unix seconds), averaged into at most 360 even buckets; empty for a rule with no sample_window. Read it with slope, growth and span"
+       "doc": "The series' samples over the rule's sample_window, oldest first, each a record of value and at (unix seconds), in at most 360 even buckets, each the mean of its newest 4 samples; empty for a rule with no sample_window. Read it with slope, growth and span"
       },
       {
        "name": "window[].value",
        "type": "float64",
-       "doc": "The sample's value (a bucket's mean, over a long window)"
+       "doc": "The bucket's mean value"
       },
       {
        "name": "window[].at",
        "type": "float64",
-       "doc": "When the sample was taken, in unix seconds (a bucket's mean time, over a long window)"
+       "doc": "The bucket's mean time, in unix seconds"
+      },
+      {
+       "name": "age",
+       "type": "float64",
+       "doc": "How long the series has run, in seconds: since the process last started for a process's own key (process-uptime), else since the series' oldest sample still kept; gate a trend on it so a fill from empty or a refill after a restart is not growth"
       }
      ]
     },

@@ -54,7 +54,8 @@ Expressions are **sandboxed**: no I/O, no network, no unbounded loops, bounded e
   points, or no time between them, has no trend: 0. A fit, not the newest point less the oldest, so a
   noisy flat series reads near 0 and one outlier at either end does not read as a rise. They are
   admitted where a site binds such a list: an [event rule's `window`](/architecture/alarms-actions/#a-trend-rule-reads-a-window-not-a-sample)
-  and a calc rule's windowed input. A list function given anything but
+  (beside its number `age`, how long the series has run, the gate that keeps a fill or a restart's
+  refill from reading as a trend) and a calc rule's windowed input. A list function given anything but
   its list is refused at compile time on the argument. Their names, like every builtin's, can never be
   bound, so admitting one later never changes what a stored expression means. Expr parses `any`, `all`
   and `sum` as predicate builtins only, so a call of one with a single argument is told apart before

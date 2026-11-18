@@ -60,3 +60,11 @@ const ExportRuleMarksSQL = ruleMarksSQL
 // ExportRuleCandidatesSQL is the reconcile's candidates scan on a lane ($1
 // the lane, $2 and $3 the id window), so a test can EXPLAIN it.
 func ExportRuleCandidatesSQL(lane string) string { return ruleCandidatesSQL(rules.Lane(lane)) }
+
+// ExportRuleWindowSQL is a windowed rule's window read ($1 component, $2 key,
+// $3 instance, $4 bucket seconds, $5 buckets, $6 samples a bucket), so a
+// test can EXPLAIN it.
+const ExportRuleWindowSQL = ruleWindowSQL
+
+// ExportWindowBucketSamples is the most samples a window's bucket reads.
+const ExportWindowBucketSamples = windowBucketSamples

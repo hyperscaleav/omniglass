@@ -237,11 +237,11 @@ func TestSeedFactsSeverityAndRules(t *testing.T) {
 		{Name: "retention-behind", SampleKey: "retention-behind", Fire: "value == 1", Clear: "value == 0", FireSustain: "5m", Severity: "warning"},
 		// A process's heap or goroutines, or the database, growing steadily
 		// across a window (#1985).
-		{Name: "process-heap-growing", SampleKey: "process-heap-size", SampleWindow: "6h", Fire: "span(window) >= 18000 && growth(window) > 0.25",
+		{Name: "process-heap-growing", SampleKey: "process-heap-size", SampleWindow: "6h", Fire: "age >= 36000 && span(window) >= 18000 && growth(window) > 0.25",
 			Clear: "growth(window) <= 0.1", FireSustain: "1h", Severity: "average"},
-		{Name: "process-goroutines-growing", SampleKey: "process-goroutine-count", SampleWindow: "6h", Fire: "span(window) >= 18000 && growth(window) > 0.25",
+		{Name: "process-goroutines-growing", SampleKey: "process-goroutine-count", SampleWindow: "6h", Fire: "age >= 36000 && span(window) >= 18000 && growth(window) > 0.25",
 			Clear: "growth(window) <= 0.1", FireSustain: "1h", Severity: "average"},
-		{Name: "db-size-growing", SampleKey: "db-size", SampleWindow: "24h", Fire: "span(window) >= 72000 && growth(window) > 0.25",
+		{Name: "db-size-growing", SampleKey: "db-size", SampleWindow: "24h", Fire: "age >= 604800 && span(window) >= 72000 && growth(window) > 0.25",
 			Clear: "growth(window) <= 0.1", FireSustain: "6h", Severity: "average"},
 	} {
 		w.FireEventType, w.ClearEventType = "rule-fired", "rule-cleared"

@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/rules"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/writerclass"
 )
 
 // trendCriteria fire on a series that rose a quarter of its level across at
@@ -124,9 +126,138 @@ func TestSampleWindowIsChecked(t *testing.T) {
 		}
 	}
 	// A preview judges each sample alone, so it refuses criteria that read
-	// window rather than answer that a trend never fires.
-	_, err := f.gw.PreviewEventRule(ctx, storage.RulePreviewSpec{SampleKey: "room-temperature", Fire: exprCriteria(trendFire)}, scope.Set{All: true})
-	if !errors.Is(err, storage.ErrEventRuleInvalid) {
-		t.Errorf("previewing a windowed criterion: err %v, want ErrEventRuleInvalid", err)
+	// window or age rather than answer that a trend never fires.
+	for _, fire := range []string{trendFire, "age > 60 && value > 40"} {
+		_, err := f.gw.PreviewEventRule(ctx, storage.RulePreviewSpec{SampleKey: "room-temperature", Fire: exprCriteria(fire)}, scope.Set{All: true})
+		if !errors.Is(err, storage.ErrEventRuleInvalid) {
+			t.Errorf("previewing %q: err %v, want ErrEventRuleInvalid", fire, err)
+		}
 	}
+}
+
+// TestARuleReadsItsSeriesAge proves a rule's age is how long the series it
+// judges has run (#1985): a device key's from its oldest kept sample, so a
+// gate past the series' hour holds a rise it would otherwise fire on; and a
+// process's own key's from the process's start (its process-uptime), not
+// from a series that spans restarts, so a process just restarted is young
+// however long its heap series has run.
+func TestARuleReadsItsSeriesAge(t *testing.T) {
+	t.Parallel()
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	gw, all := f.gw, scope.Set{All: true}
+	now := time.Now()
+	rise := func(i int) float64 { return 20e6 + float64(i)*20e6/58 }
+
+	for i := 0; i <= 58; i++ {
+		if err := insertMetrics(ctx, gw, []storage.MetricSampleWrite{{OwnerKind: "component", OwnerID: "bar-1",
+			Key: "room-temperature", Instance: "aged", Value: rise(i) / 1e6, TS: now.Add(time.Duration(i-58) * time.Minute)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	young, err := gw.EnsureServerComponent(ctx, "restarted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := gw.EnsureServerComponent(ctx, "long-running")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both heaps rose across the past hour; one process started ten minutes
+	// ago, the other two hours ago.
+	if err := gw.RecordPlatformMetrics(ctx, []storage.PlatformMetric{
+		{ComponentID: young, Key: writerclass.ProcessUptime, Value: 600, TS: now},
+		{ComponentID: old, Key: writerclass.ProcessUptime, Value: 7200, TS: now},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var heap []storage.PlatformMetric
+	for i := 0; i <= 58; i++ {
+		for _, c := range []string{young, old} {
+			heap = append(heap, storage.PlatformMetric{ComponentID: c, Key: writerclass.ProcessHeapSize,
+				Value: rise(i), TS: now.Add(time.Duration(i-58) * time.Minute)})
+		}
+	}
+	if err := gw.RecordPlatformMetrics(ctx, heap); err != nil {
+		t.Fatal(err)
+	}
+
+	create := func(name, key string, age int) {
+		t.Helper()
+		if _, err := gw.CreateEventRule(ctx, "", storage.EventRuleSpec{Name: name, SampleKey: key,
+			Fire: exprCriteria(fmt.Sprintf("age >= %d && %s", age, trendFire)), Clear: ptrCriteria(exprCriteria(trendClear)),
+			SampleWindow: time.Hour, Severity: "high", FireEventType: "rule-fired"}, all); err != nil {
+			t.Fatal(err)
+		}
+	}
+	open := func(rule, component string) int {
+		t.Helper()
+		return count(t, f.conn, fmt.Sprintf(`select count(*) from alarm a join event_rule r on r.id = a.raised_by_rule_id
+			where r.name = '%s' and a.cleared_at is null and a.component_id = (select id from component where id::text = '%s' or name = '%s')`,
+			rule, component, component))
+	}
+
+	create("aged-under", "room-temperature", 3000)
+	create("aged-over", "room-temperature", 7200)
+	if open("aged-under", "bar-1") != 1 || open("aged-over", "bar-1") != 0 {
+		t.Errorf("an hour-old series: gated at 50m %d, at 2h %d open alarms, want 1 and 0",
+			open("aged-under", "bar-1"), open("aged-over", "bar-1"))
+	}
+
+	create("heap-aged", writerclass.ProcessHeapSize, 3600)
+	if open("heap-aged", old) != 1 || open("heap-aged", young) != 0 {
+		t.Errorf("an hour's heap rise gated at an hour's uptime: long-running %d, restarted %d open alarms, want 1 and 0",
+			open("heap-aged", old), open("heap-aged", young))
+	}
+}
+
+// TestTheRuleWindowIsABoundedProbe proves a window's read is bounded by its
+// buckets, not by the series' cadence (#1985): a series written fifty times
+// a bucket reads at most windowBucketSamples rows a bucket, where grouping
+// the window's rows and limiting after would read every one.
+func TestTheRuleWindowIsABoundedProbe(t *testing.T) {
+	t.Parallel()
+	f := newHealthFixture(t)
+	ctx := context.Background()
+	now := time.Now()
+	const samples = 3000
+	dense := make([]storage.MetricSampleWrite, samples)
+	for i := range dense {
+		dense[i] = storage.MetricSampleWrite{OwnerKind: "component", OwnerID: "bar-1", Key: "room-temperature",
+			Instance: "dense", Value: float64(i), TS: now.Add(-time.Duration(i) * 200 * time.Millisecond)}
+	}
+	if err := insertMetrics(ctx, f.gw, dense); err != nil {
+		t.Fatal(err)
+	}
+	var comp string
+	if err := f.conn.QueryRow(ctx, `select id from component where name = 'bar-1'`).Scan(&comp); err != nil {
+		t.Fatal(err)
+	}
+	// An hour's window: 10s buckets, so the ten minutes written fall in at
+	// most 62 buckets, of fifty samples each. (The plan's row counts are
+	// per-loop means, rounded, so the sum is a little off a whole count.)
+	bucket := rules.WindowBucket(time.Hour).Seconds()
+	var plan []map[string]any
+	if err := f.conn.QueryRow(ctx, "explain (analyze, format json) "+storage.ExportRuleWindowSQL,
+		comp, "room-temperature", "dense", bucket, rules.MaxWindowPoints, storage.ExportWindowBucketSamples).Scan(&plan); err != nil {
+		t.Fatal(err)
+	}
+	read := metricRowsRead(plan[0]["Plan"].(map[string]any))
+	if limit := float64(62 * storage.ExportWindowBucketSamples); read == 0 || read > limit {
+		t.Errorf("the window read %v metric rows of %d, want at most %v (its buckets' newest few)", read, samples, limit)
+	}
+}
+
+// metricRowsRead sums the rows a plan's scans of the metric partitions
+// returned, across every loop.
+func metricRowsRead(node map[string]any) float64 {
+	var n float64
+	if rel, _ := node["Relation Name"].(string); rel == "metric" || strings.HasPrefix(rel, "metric_p") {
+		n += node["Actual Rows"].(float64) * node["Actual Loops"].(float64)
+	}
+	kids, _ := node["Plans"].([]any)
+	for _, k := range kids {
+		n += metricRowsRead(k.(map[string]any))
+	}
+	return n
 }

@@ -103,8 +103,11 @@ rules:
   # A process whose heap climbs steadily for six hours (#1985), the shape of a
   # leak: the least-squares line through the window rises by more than a
   # quarter of the heap's mean, and the window holds at least five hours of
-  # samples, so a process just started (its warm-up) does not judge on a short
-  # series. The garbage collector's sawtooth averages out of a six-hour fit;
+  # samples. The series spans restarts, so the rule also waits out ten hours
+  # of the process's uptime (age, from its process-uptime): an ordinary
+  # restart drops the heap and its caches refill over hours, a rise that is
+  # not a leak, and ten hours is the six-hour window clear of a four-hour
+  # refill. The garbage collector's sawtooth averages out of a six-hour fit;
   # the hour's sustain absorbs a load step. Raised on the platform component
   # of the process that reports it, an outpost's or the server's; it clears once
   # the fitted rise is back under a tenth.
@@ -113,7 +116,7 @@ rules:
     description: An Omniglass process's heap has grown steadily by more than a quarter over six hours.
     sample_key: process-heap-size
     sample_window: 6h
-    fire: 'span(window) >= 18000 && growth(window) > 0.25'
+    fire: 'age >= 36000 && span(window) >= 18000 && growth(window) > 0.25'
     fire_sustain: 1h
     clear: 'growth(window) <= 0.1'
     severity: average
@@ -121,13 +124,14 @@ rules:
     clear_event_type: rule-cleared
   # A process whose goroutine count climbs steadily for six hours (#1985): a
   # goroutine started per request or per session and never returned. The same
-  # shape and thresholds as process-heap-growing.
+  # shape, thresholds and uptime gate as process-heap-growing: a restarted
+  # process's workers and sessions come back over hours too.
   - name: process-goroutines-growing
     label: Process goroutines growing
     description: An Omniglass process's goroutine count has grown steadily by more than a quarter over six hours.
     sample_key: process-goroutine-count
     sample_window: 6h
-    fire: 'span(window) >= 18000 && growth(window) > 0.25'
+    fire: 'age >= 36000 && span(window) >= 18000 && growth(window) > 0.25'
     fire_sustain: 1h
     clear: 'growth(window) <= 0.1'
     severity: average
@@ -138,15 +142,18 @@ rules:
   # six hours. A database at its retention window holds level across a day
   # (a day's metric partition dropped as the next fills), so a quarter is
   # bloat or a lane retention does not reach. A fresh database grows while
-  # its windows fill, a day's data on a few days' is past a quarter, so it
-  # raises this alarm in its first days. Raised on the server's platform
-  # component; it clears once the day's rise is back under a tenth.
+  # its windows fill, a day's data on a few days' past a quarter, so the rule
+  # waits until db-size's own series is a week old (age, from its oldest
+  # kept sample): by then a day's fill is a seventh, under the quarter. Its
+  # age is capped by the metric lane's retention, so a metric_days under 7
+  # never judges it. Raised on the server's platform component; it clears
+  # once the day's rise is back under a tenth.
   - name: db-size-growing
     label: Database size growing
     description: The Omniglass database has grown by more than a quarter over a day, past what retention trims.
     sample_key: db-size
     sample_window: 24h
-    fire: 'span(window) >= 72000 && growth(window) > 0.25'
+    fire: 'age >= 604800 && span(window) >= 72000 && growth(window) > 0.25'
     fire_sustain: 6h
     clear: 'growth(window) <= 0.1'
     severity: average
