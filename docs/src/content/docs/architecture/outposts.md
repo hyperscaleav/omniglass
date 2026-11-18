@@ -102,7 +102,7 @@ sees a driver spec, only resolved task and command instances.
 
 :::design[Target design: `$var:` values and placement in the worklist, tracked in #296]
 The server, not the driver spec, decides placement (next; today an endpoint names its outpost) and
-resolves the rest of the cascade (`$var:` values, an effective `interval` overriding the driver's
+resolves the rest of the cascade (`$var:` values, an effective `interval` shadowing the driver's
 schedule) before handing the outpost concrete work. The outpost never sees a driver spec, only
 materialized, resolved task and command instances.
 :::
@@ -127,7 +127,7 @@ moved is recycled on the pull that carries it. The worklist reply also carries a
 `0` when none). It moves at **operator-config pace, not
 telemetry pace**: the sample-write path never touches `endpoint.updated_at`. The outpost does not
 gate on it today, since a full pull each tick leaves nothing to invalidate. An earlier design cached
-endpoint config on the outpost and added a `:apply` custom method to re-render it from declared config;
+endpoint config on the outpost and added a `:apply` custom method to re-render it from declared values;
 neither was built, and `:apply` retired with the template authoring model
 ([ADR-0827](/architecture/decisions/#adr-0827-the-template-layer-owns-the-clone-model-and-the-componenttemplate-authoring-model-is-superseded-by-the-driver-spec)).
 :::
@@ -265,7 +265,7 @@ the outpost pulls at once ([ADR-1945](/architecture/decisions/#adr-1945-a-workli
   - a location moved to a new parent: the outposts of every endpoint on a component placed in it or
     below it;
   - a platform settings write that moves `collection.report_seconds`, which every worklist carries:
-    every outpost. Only a write to the `collection` namespace (or a reset of every override) reads the
+    every outpost. Only a write to the `collection` namespace (or a reset of every binding) reads the
     window before and after; a write elsewhere cannot move it.
 
   Writes that change no worklist nudge nothing: a component delete is refused while it owns
@@ -409,7 +409,7 @@ the spool above, its caps (count, bytes, age) fixed in code and a drop told in t
 
 :::design[Target design: the buffer knobs, tracked in #430; retention is #417]
 Both the **buffer** (size, shed policy) and **retention** are **cascade-resolved**
-([cascade](/architecture/cascade/)) with an install-wide `platform` binding, overridable down the
+([cascade](/architecture/cascade/)) with an install-wide `platform` binding, shadowable down the
 tree. (Retention is built as one install-wide window per sample lane, not cascade-resolved:
 [ADR-0417](/architecture/decisions/#adr-0417-the-server-prunes-each-sample-lane-to-a-window-in-bounded-chunks).) A full buffer **sheds oldest metrics first and surfaces it** as a
 `outpost.buffer` sample (depth, drops): visible, never silent.
@@ -581,7 +581,7 @@ assemble the same telemetry payload (below).
 :::design[Target design: the Expr transform and cascading labels at the edge, tracked in #1253; raw on failure is #1251]
 Per task the outpost runs the protocol over the endpoint's connection, then **normalizes at the
 edge**: the locate + Expr extraction ([collection](/architecture/collection/)) produces samples and
-stamps labels (cascading union + override), keeping the wire bytes as `raw` only on a parse or
+stamps labels (cascading union + shadow), keeping the wire bytes as `raw` only on a parse or
 validation failure (for `collection.failed`) or under dev raw-mode.
 :::
 
@@ -957,7 +957,7 @@ narrows it: host pings + get silent = "reachable, SNMP not answering this commun
 with ICMP fully blocked even that is lost. The ssh probe still tries a params credential on every probe
 (#1060); the built telnet probe never logs in (it
 reads the first negotiation or banner bytes; the login is the held session's auth step, so a probe
-cannot retry a bad credential on every run, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). A driver's `ladder.transport.request.get` overrides the probe OID.
+cannot retry a bad credential on every run, [ADR-0157](/architecture/decisions/#adr-0157-telnet-and-ssh-are-held-line-transports-their-login-is-the-drivers-and-the-ssh-host-key-is-pinned-on-first-use)). A driver's `ladder.transport.request.get` replaces the probe OID.
 
 **One gate, a set of reasons.** Every endpoint has one gate, the layered gate generalized
 ([ADR-1637](/architecture/decisions/#adr-1637-a-node-runs-each-kind-of-work-on-its-own-timer-and-pool-one-request-per-endpoint-at-a-time), [ADR-1650](/architecture/decisions/#adr-1650-an-endpoint-gate-holds-a-set-of-reasons)).

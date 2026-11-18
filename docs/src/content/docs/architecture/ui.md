@@ -163,7 +163,7 @@ rules, config, groups, schedules, severity levels, the IAM resources). The type 
 hold their own page: location types (CRUD; Catalog, under Locations: Types) and secret types
 (read-only, at `/secret-types` by URL with no subrail entry), the former tabbed Types page having split with the
 system and component kinds already moved to Standards and Products ([build log](/architecture/build-log/)).
-Editing a setting is editing **[config](/architecture/variables/)**, an audited mutation, not a
+Editing a setting is editing **[a declared value](/architecture/variables/)**, an audited mutation, not a
 separate prop store ([audit](/architecture/audit/)).
 
 The standout is the **rule-authoring page**. Its **Expr editor** for a rule's criteria and a calc
@@ -280,7 +280,7 @@ down the cascade, a distinct kind of thing from the entities themselves. **Confi
 configuration, optionally observed back to detect drift and reconcile), distinct from platform
 Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
 interpolated values, no observed side); the full split is
-[config, secrets, and variables](/architecture/variables/).
+[variables, secrets, and declared values](/architecture/variables/).
 
 **Explore holds the fleet entities**: locations, systems, and components, reached through its
 outline of locations. **Outposts**, the collection daemons, are infrastructure rather than fleet

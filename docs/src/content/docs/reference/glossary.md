@@ -16,6 +16,7 @@ carry (`component:read`); **Formerly** is a word it replaced, which no longer ap
 | **alarm** | A raised problem on a component, with a severity, from the moment it raises until it clears. | `/alarms` | `alarm` |  |
 | **command** | One instruction sent to a component, typed by a command type, and its outcome. |  | `command` |  |
 | **component** | One managed device or service, an instance of a product, placed at a location and usually a member of a system. | `/components` | `component` |  |
+| **declared value** | The state an operator declares a component or system should hold, which reconcile compares with what the device reports. |  |  | declared config, desired state, desired value, set the config, config drift, override on value |
 | **degraded** | The health of a system that still works but has lost something it should have. |  |  |  |
 | **detail view** | An entity's own page, a system with its location as context, or a location or component on its own. |  |  | workspace |
 | **endpoint** | A connection to a component over one transport, the API Omniglass reaches it through. | `/endpoints` | `endpoint` | interface |

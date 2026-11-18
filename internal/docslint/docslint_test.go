@@ -706,3 +706,45 @@ func TestADR2034GenusFires(t *testing.T) {
 		}
 	}
 }
+
+// TestADR2037DeclaredValueFires proves the ADR-2037 entries catch the retired
+// declared-state words and the cascade sense of override, and pass the
+// catalog's sparse edit, which keeps the word override.
+func TestADR2037DeclaredValueFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, msg := range scanLine(line) {
+			if strings.Contains(msg, "ADR-2037") {
+				return true
+			}
+		}
+		return false
+	}
+	for _, line := range []string{
+		"re-render it from declared config",
+		"the reconcile desired-state loop",
+		"projects desired state onto the device",
+		"each desired value resolves down the cascade",
+		"set the config on the room",
+		"the world drifted from intent (config drift)",
+		"tags resolve union-on-key, override-on-value",
+		"union on key, override on value",
+		"the HQ credential overrides the product's binding",
+	} {
+		if !fires(line) {
+			t.Errorf("retired by ADR-2037 but passed: %q", line)
+		}
+	}
+	for _, line := range []string{
+		"re-render it from declared values",
+		"tags resolve union-on-key, shadow-on-value",
+		"the HQ credential shadows the product's binding",
+		"drift from the declared value",
+		"an override is your sparse edit to a shipped catalog row",
+		"the row's origin is overridden",
+		"a column sort overrides the default order",
+	} {
+		if fires(line) {
+			t.Errorf("kept sense fired: %q", line)
+		}
+	}
+}

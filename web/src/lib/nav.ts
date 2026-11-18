@@ -78,11 +78,11 @@ export const navItems: NavItem[] = [
   // surface, so its door shows only while a simulator is connected.
   { label: "Simulation", path: "/simulation", icon: Icons.FlaskConical, live: true, resource: "simulation", when: "simulator", hint: "The simulated components a simulator serves beside an outpost: the hits collection lands on them, what is broken, and each one's API surface." },
   {
-    label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the fleet.",
+    label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and declared values, each resolved down the scope cascade, plus the files kept with the fleet.",
     children: [
       { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
-      { label: "Config", path: "/config", hint: "Reconciled component and system configuration: desired values operators set, optionally observed back from the device to detect drift and reconcile." },
+      { label: "Declared", path: "/config", hint: "The state operators declare for components and systems, optionally observed back from the device to detect drift and reconcile." },
       // Files are operator-uploaded content, not a cascaded value: a flat, tenant-wide
       // store of opaque bytes kept beside the fleet. It sits in Values as the
       // non-cascading member (deliberately off the exclusive arc).

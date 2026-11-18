@@ -121,7 +121,7 @@ func outpostLogOverridePrunesOutpostLogsAndOnlyThem(t *testing.T, at time.Time) 
 			rep.Deleted["outpost_log/debug"], count("outpost_log", "outpost-old-debug"))
 	}
 
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "retention", map[string]any{"outpost_log_debug_days": 1}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "retention", map[string]any{"outpost_log_debug_days": 1}); err != nil {
 		t.Fatalf("set the outpost override: %v", err)
 	}
 	rep := pass()
@@ -144,7 +144,7 @@ func outpostLogOverridePrunesOutpostLogsAndOnlyThem(t *testing.T, at time.Time) 
 
 	// Restoring the override (a null in the merge patch) returns outpost_log to
 	// the shared window: an outpost line two days old survives again.
-	if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "retention", map[string]any{"outpost_log_debug_days": nil}); err != nil {
+	if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "retention", map[string]any{"outpost_log_debug_days": nil}); err != nil {
 		t.Fatalf("restore the outpost override: %v", err)
 	}
 	line("outpost_log", "debug", 2*day, "outpost-old-debug-2")

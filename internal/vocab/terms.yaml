@@ -340,6 +340,36 @@ terms:
     schema: SecretBody
     permission: secret
     nav: /secrets
+  # A value set at one cascade level is a binding a deeper one shadows
+  # (ADR-2037); override is kept for the catalog's sparse edit alone, so the
+  # cascade sense is retired here with the declared-state words.
+  - word: declared value
+    plural: declared values
+    definition: The state an operator declares a component or system should hold, which reconcile compares with what the device reports.
+    audience: operator
+    nav: /config
+    nav_label: Declared
+    retired:
+      - word: declared config
+        pattern: '(?i)\bdeclared[- ]config\b'
+        origin: ADR-2037
+      - word: desired state
+        pattern: '(?i)\bdesired[- ]states?\b'
+        origin: ADR-2037
+      - word: desired value
+        pattern: '(?i)\bdesired[- ]values?\b'
+        origin: ADR-2037
+      - word: set the config
+        pattern: '(?i)\bset the config\b'
+        origin: ADR-2037
+      - word: config drift
+        pattern: '(?i)\bconfig[- ]drift\b'
+        origin: ADR-2037
+        replacement: drift (a declared value the device no longer reports)
+      - word: override on value
+        pattern: '(?i)\boverride[- ]on[- ]value\b|\boverrides the (?:platform|product|location|system|standard|component|group|user|driver)\x27s\b'
+        origin: ADR-2037
+        replacement: shadow on value (a deeper binding shadows a shallower one); override is the catalog's sparse edit alone
   - word: file
     plural: files
     definition: Uploaded content kept with the fleet, such as a firmware image, a config dump or a runbook.
@@ -511,7 +541,5 @@ not_terms:
     reason: the lab simulator
   - nav: /platform
     reason: Status, the platform's own health page
-  - nav: /config
-    reason: a stub whose word is being decided (ADR-2037)
   - nav: /log-types
     reason: a stub, the log lane is untyped today

@@ -1543,7 +1543,7 @@ export type EffectivePropertyBody = {
   default_value?: unknown;
   /** True when the component's product declares the property; false for one set directly on the component */
   from_contract: boolean;
-  /** True when the component overrides the contract default */
+  /** True when the component declares its own value over the contract default */
   is_set: boolean;
   /** The property's human label; omitted when unset */
   label?: string;
@@ -1555,13 +1555,13 @@ export type EffectivePropertyBody = {
   reconciliation?: ReconciliationBody;
   /** Whether the product contract requires a value; always false off-contract */
   required: boolean;
-  /** The component's override; omitted when the property is unset */
+  /** The component's declared value; omitted when the property is unset */
   set_value?: unknown;
   /** The calc rule whose calculated sample is the value, by the name it was written under; absent when the value is a declared one or a default */
   source_rule?: string;
   /** That calc rule's uuid, the stable form of source_rule */
   source_rule_id?: string;
-  /** The effective value: the override, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation */
+  /** The effective value: the declared value, else a calc rule's calculated value, else the contract default; omitted for a property nothing declares or calculates (one only observed or told), whose standing is its reconciliation */
   value?: unknown;
   /** The stored value's id when set; omitted when the property is unset */
   value_id?: string;
@@ -1744,7 +1744,7 @@ export type ComponentTypeBody = {
   /** A compact form of label; empty inherits the nearest ancestor's */
   abbrev?: string;
   /**
-     * Tags every instance of this type (or a descendant that does not override) starts with
+     * Tags every instance of this type (or a descendant that does not set its own) starts with
      * @nullable
      */
   default_tags: string[] | null;
@@ -13209,7 +13209,7 @@ export const getEffectiveTagsUrl = (name: string,
 }
 
 /**
- * Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union, values override most-specific-wins, with the winner and shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
+ * Resolves the tags that cascade onto a component (platform -> location -> system -> component): keys union and the most specific binding shadows the rest, with the winner and the shadowed candidates. A non-propagating key resolves only from a binding on the component itself. The system band comes from MEMBERSHIP: pass ?system= (a name or a uuid, ADR-0062) to resolve against one the component belongs to (a shared device answers differently for each), or omit it to resolve against its primary membership. Gated by component:read; the component must be in the caller's component read scope.
  * @summary Effective tags for a component
  */
 export const effectiveTags = async (name: string,
@@ -13254,7 +13254,7 @@ export const getEffectiveVariablesUrl = (name: string,) => {
 }
 
 /**
- * Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union, values override most-specific-wins, with the winner and the shadowed candidates it overrode. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.
+ * Resolves the variables that cascade onto a component (platform -> location -> system -> component): names union and the most specific binding shadows the rest, with the winner and the shadowed candidates. The system band comes from the component's PRIMARY membership; resolving against a named system is not offered here yet, unlike effective-tags. Gated by variable:read; the component must be in the caller's component read scope.
  * @summary Effective variables for a component
  */
 export const effectiveVariables = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<effectiveVariablesResponse> => {
@@ -13796,7 +13796,7 @@ export const getListComponentPropertiesUrl = (name: string,) => {
 }
 
 /**
- * Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks the override), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+ * Every property the component has: each its product declares, resolved to the component's own value or the contract default (is_set marks a declared value), each set directly on the component (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by component:read; an out-of-scope component is a non-disclosing 404.
  * @summary List a component's properties and where each stands
  */
 export const listComponentProperties = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listComponentPropertiesResponse> => {
@@ -17552,7 +17552,7 @@ export const getListLocationPropertiesUrl = (name: string,) => {
 }
 
 /**
- * Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks the override), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
+ * Every property the location's type declares, resolved to the location's own value or the contract default (is_set marks a declared value), plus any property set directly on the location (from_contract false), in the component and system properties read's shape. A location owns no observed sample, so a row's reconciliation carries want and never is. Gated by location:read; an out-of-scope location is a non-disclosing 404.
  * @summary List a location's effective properties
  */
 export const listLocationProperties = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listLocationPropertiesResponse> => {
@@ -21600,7 +21600,7 @@ export const getDeleteSettingsNamespaceUrl = (namespace: string,) => {
 }
 
 /**
- * Drops the namespace's platform override, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
+ * Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
  * @summary Restore a settings namespace to defaults
  */
 export const deleteSettingsNamespace = async (namespace: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSettingsNamespaceResponse> => {
@@ -21644,7 +21644,7 @@ export const getPatchSettingsNamespaceUrl = (namespace: string,) => {
 }
 
 /**
- * Applies an RFC 7386 JSON Merge Patch to the namespace's platform override; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
+ * Applies an RFC 7386 JSON Merge Patch to the namespace's platform binding; null on a key restores it (for example {"egress_allow":null}). Gated by settings:update and platform:update.
  * @summary Update a settings namespace
  */
 export const patchSettingsNamespace = async (namespace: string,
@@ -21703,7 +21703,7 @@ export const getRestoreSettingsDefaultsUrl = () => {
 }
 
 /**
- * Removes every platform override (a factory reset). Gated by settings:update and platform:update.
+ * Removes every platform binding (a factory reset). Gated by settings:update and platform:update.
  * @summary Restore all settings to defaults
  */
 export const restoreSettingsDefaults = async ( options?: Parameters<typeof ogFetch>[1]): Promise<restoreSettingsDefaultsResponse> => {
@@ -23867,7 +23867,7 @@ export const getListSystemPropertiesUrl = (name: string,) => {
 }
 
 /**
- * Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks the override), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+ * Every property the system has: each its standard declares, resolved to the system's own value or the contract default (is_set marks a declared value), each set directly on the system (from_contract false), each a calc rule writes (source_rule), and each only observed or told by a command. Every row but a calculated one carries its reconciliation: want (declared), told (intended), is (observed, worst case across every live instance, naming is_instance) and drift, computed on read. Gated by system:read; an out-of-scope system is a non-disclosing 404.
  * @summary List a system's properties and where each stands
  */
 export const listSystemProperties = async (name: string, options?: Parameters<typeof ogFetch>[1]): Promise<listSystemPropertiesResponse> => {

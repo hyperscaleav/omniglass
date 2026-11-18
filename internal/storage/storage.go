@@ -875,7 +875,7 @@ type Gateway interface {
 	// model. product_property is the product's contract (which properties it declares
 	// and their defaults); property_value is the value store on the shared owner arc.
 	// EffectiveProperties resolves a component against its product's contract
-	// (default < override) and adds the ad-hoc values the contract does not declare.
+	// (default < declared value) and adds the ad-hoc values the contract does not declare.
 	ListProductProperties(ctx context.Context, productID string) ([]ProductProperty, error)
 
 	// The standard and location-type contracts: the system-side and place-side
@@ -1129,7 +1129,7 @@ type Gateway interface {
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
 	// binding a value is the owner's own write, so the binding methods take the
 	// owner's read/action scopes. ResolveTags is the per-component effective-tags
-	// view (union on key, override on value) down the structural cascade.
+	// view (union on key, shadow on value) down the structural cascade.
 	ListTags(ctx context.Context) ([]Tag, error)
 	DistinctTagValues(ctx context.Context, key string) ([]string, error)
 	CreateTag(ctx context.Context, actorID string, spec TagSpec, create scope.Set) (*Tag, error)
@@ -1159,18 +1159,18 @@ type Gateway interface {
 
 	// The settings engine (unscoped: platform config, not fleet data, so no ABAC
 	// scope applies; the route gates on settings:<action> only). The single
-	// setting_override table holds only what an operator changed at a cascade level;
+	// setting_binding table holds only what an operator changed at a cascade level;
 	// the base layers (the type's declared defaults, the operator file) live in
 	// memory. Slice-0 uses scope "platform" (user_id NULL). Every write is
 	// audited.
-	GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error)
-	UpsertSettingOverride(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingOverride, error)
-	// MergePatchSettingOverride applies an RFC 7386 merge patch to the (scope,
-	// namespace) platform override as one atomic read-modify-write, serialized against
+	GetSettingBindings(ctx context.Context, scope string) ([]SettingBinding, error)
+	UpsertSettingBinding(ctx context.Context, actorID, scope, namespace string, doc map[string]any, locks []string) (*SettingBinding, error)
+	// MergePatchSettingBinding applies an RFC 7386 merge patch to the (scope,
+	// namespace) platform binding as one atomic read-modify-write, serialized against
 	// concurrent patches to the same namespace so no update is lost.
-	MergePatchSettingOverride(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingOverride, error)
-	DeleteSettingOverride(ctx context.Context, actorID, scope, namespace string) error
-	DeleteAllSettingOverrides(ctx context.Context, actorID, scope string) error
+	MergePatchSettingBinding(ctx context.Context, actorID, scope, namespace string, patch map[string]any) (*SettingBinding, error)
+	DeleteSettingBinding(ctx context.Context, actorID, scope, namespace string) error
+	DeleteAllSettingBindings(ctx context.Context, actorID, scope string) error
 
 	// The notification_type catalog (#618): official types from the boot
 	// seed, operator types created, patched and deleted; a type addressed by
@@ -1203,7 +1203,7 @@ type Gateway interface {
 	MailRelay(ctx context.Context) (*MailRelay, string, error)
 	// MergePatchNotificationSettings patches the notification namespace,
 	// judging the mail relay's secret binding on the result (the bind right).
-	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingOverride, error)
+	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error)
 	// The action rule (#618): reads catalog-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
 	GetActionRule(ctx context.Context, ref string) (*ActionRule, error)
@@ -1312,7 +1312,7 @@ func WithBlobStore(store blob.Store) Option {
 // dictionary), and it needs it passed IN rather than loaded here because the
 // file's path is a bootstrap config the server owns and the other run modes do
 // not have. A lane that passes none resolves the declared defaults and the
-// database override, which is every layer that lane HAS; the alternative,
+// database binding, which is every layer that lane HAS; the alternative,
 // skipping the file quietly, would render labels from one dictionary while the
 // settings read served another.
 func WithSettingsFile(doc settings.Doc) Option {
@@ -1380,7 +1380,7 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	}
 	// The gateway's own settings resolver. It is built here rather than injected
 	// because the only thing it needs beyond the file layer is a reader for the
-	// platform override, which is this gateway: injecting a service that closes
+	// platform binding, which is this gateway: injecting a service that closes
 	// over the gateway would make the two mutually constructing, and the settings
 	// package deliberately does not import storage.
 	p.settings = settings.NewService(p.settingsFile, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
@@ -1419,11 +1419,11 @@ func (p *PG) PoolStat() PoolStat {
 	}
 }
 
-// settingLevel reads the override rows at a scope and adapts them into a
+// settingLevel reads the binding rows at a scope and adapts them into a
 // settings level. The querier is a parameter because a gateway path resolving a
 // setting inside its own transaction must read it there.
 func (p *PG) settingLevel(ctx context.Context, q querier, scope string) (settings.Doc, map[string][]string, error) {
-	rows, err := settingOverridesOn(ctx, q, scope)
+	rows, err := settingBindingsOn(ctx, q, scope)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1431,11 +1431,11 @@ func (p *PG) settingLevel(ctx context.Context, q querier, scope string) (setting
 	return doc, locks, nil
 }
 
-// SettingLevel adapts override rows into the shape the settings resolver takes:
+// SettingLevel adapts binding rows into the shape the settings resolver takes:
 // one document per namespace, plus the locked key-paths. Pure, and exported
 // because every caller building a settings.Service over this gateway needs the
 // same adaptation and there is no reason for each to spell it out.
-func SettingLevel(rows []SettingOverride) (settings.Doc, map[string][]string) {
+func SettingLevel(rows []SettingBinding) (settings.Doc, map[string][]string) {
 	doc := settings.Doc{}
 	locks := map[string][]string{}
 	for _, r := range rows {

@@ -121,7 +121,7 @@ Each stop is a page:
    it, and parses it at the edge.
 2. **[Properties](/architecture/properties/)** type every reading into one owned, canonical signal,
    the same measurement across vendors.
-3. **[Config](/architecture/variables/)** holds what a device *should* be, so drift becomes
+3. **[Declared values](/architecture/variables/)** hold what a device *should* be, so drift becomes
    a signal you can see and a fix you can push.
 4. **[Health](/architecture/health/)** rolls the signals up the system tree into the one answer that
    matters.

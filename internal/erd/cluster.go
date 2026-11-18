@@ -60,7 +60,7 @@ var Subsystems = []Cluster{
 		"identity_binding", "unbound_identity",
 	}},
 	{Name: "config", Tables: []string{
-		"setting_override", "variable",
+		"setting_binding", "variable",
 		// label_rule is the global tier of the label rules (#682, ADR-0098),
 		// one row per labelled entity kind. It sits with config rather than
 		// with the fleet it labels: it is platform-wide policy an operator

@@ -339,7 +339,7 @@ react; a command's intended sample then re-enters the data lane on the device ro
 outpost is `audit_log`, the ground-truth record of operator writes (including config changes); observed
 and calculated samples carry `source_rule` on the row, and intended names its command via
 `command_id`. The raw payload is not stored: a parse or validation failure rides a
-`collection.failed` event. [config](/architecture/variables/) holds declared intent (PG-first),
+`collection.failed` event. A [declared value](/architecture/variables/) holds declared intent (PG-first),
 keyed to a property sample as its observed side.
 
 :::

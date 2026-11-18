@@ -586,7 +586,7 @@ order by r.key, r.band desc, r.depth asc`
 
 // EffectiveTags resolves the winning effective tags for a batch of owners of one
 // kind in a single query: for each id, the key -> winning value map its cascade
-// produces (the same union-on-key, override-on-value rule ResolveTags applies to
+// produces (the same union-on-key, shadow-on-value rule ResolveTags applies to
 // one component, batched and reduced to winners only). It is the read that feeds
 // the directory Tags column, so it is deliberately scopeless: the caller passes
 // ids already filtered to the read scope by the list query (the same contract as

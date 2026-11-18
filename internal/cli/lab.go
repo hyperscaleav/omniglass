@@ -572,7 +572,7 @@ func runLabSeed(ctx context.Context, out io.Writer, scenario, outpost, user, pas
 		return fmt.Errorf("this lab has no user %q to sign in as; start over with omniglass lab run --fresh", user)
 	}
 	if reportSeconds > 0 {
-		if _, err := gw.MergePatchSettingOverride(ctx, "", "platform", "collection", map[string]any{"report_seconds": reportSeconds}); err != nil {
+		if _, err := gw.MergePatchSettingBinding(ctx, "", "platform", "collection", map[string]any{"report_seconds": reportSeconds}); err != nil {
 			return err
 		}
 	}

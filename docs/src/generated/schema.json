@@ -2048,7 +2048,7 @@
      }
     ]
    },
-   "setting_override": {
+   "setting_binding": {
     "columns": [
      {
       "name": "id",
@@ -2098,14 +2098,14 @@
     ],
     "checks": [
      {
-      "name": "setting_override_scope_check",
+      "name": "setting_binding_scope_check",
       "expr": "CHECK ((scope = 'platform'::text))"
      }
     ],
     "uniques": [
      {
-      "name": "setting_override_identity",
-      "definition": "CREATE UNIQUE INDEX setting_override_identity ON public.setting_override USING btree (scope, user_id, namespace) NULLS NOT DISTINCT"
+      "name": "setting_binding_identity",
+      "definition": "CREATE UNIQUE INDEX setting_binding_identity ON public.setting_binding USING btree (scope, user_id, namespace) NULLS NOT DISTINCT"
      }
     ]
    },

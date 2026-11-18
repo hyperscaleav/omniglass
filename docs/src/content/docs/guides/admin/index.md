@@ -143,5 +143,5 @@ every outpost to pull its worklist at once, so it is in force within a second. S
 for what each count means.
 
 The model behind all of this is [identity and access](/architecture/identity-access/) and
-[config and credentials](/architecture/variables/); those pages say how it is built, these say
+[variables, secrets, and declared values](/architecture/variables/); those pages say how it is built, these say
 how to run it.

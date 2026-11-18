@@ -49,7 +49,7 @@ func (m *mailbox) to() []string {
 
 func (f *peopleFixture) relay(t *testing.T) {
 	t.Helper()
-	if _, err := f.gw.MergePatchSettingOverride(f.ctx, "", "platform", "notification", map[string]any{
+	if _, err := f.gw.MergePatchSettingBinding(f.ctx, "", "platform", "notification", map[string]any{
 		"mail_relay": "relay.example.com:587", "mail_from": "Omniglass <alerts@example.com>"}); err != nil {
 		t.Fatal(err)
 	}

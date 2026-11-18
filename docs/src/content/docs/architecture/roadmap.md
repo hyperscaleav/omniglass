@@ -107,7 +107,7 @@ that describes the target:
    #1047), and the outpost's push listeners (shared tcp and udp ports, syslog, traps: #1148 to #1150).
 2. **The data model.** Landed except one piece: [properties](/architecture/properties/) (the
    canonical-signal catalog and the exclusive-arc owner columns), the sample sinks,
-   [config and variables](/architecture/variables/) resolved down the
+   [variables, secrets, and declared values](/architecture/variables/) resolved down the
    [cascade](/architecture/cascade/) all shipped, and so has the
    [expression engine](/architecture/expressions/) the rules share. Still ahead on this band: the
    rest of the expression design (the Omniglass functions, unit conversion, and the sites beyond rule
