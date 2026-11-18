@@ -39,7 +39,14 @@ type component struct {
 
 func newComponent(t *testing.T, answer func(string) []string) *component {
 	t.Helper()
-	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	return newComponentAt(t, net.IPv4(127, 0, 0, 1), answer)
+}
+
+// newComponentAt is a component on its own loopback address: the address,
+// not the port, is what tells the component from a stranger (#1103).
+func newComponentAt(t *testing.T, ip net.IP, answer func(string) []string) *component {
+	t.Helper()
+	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: ip})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +432,7 @@ func TestAUDPEndpointDropsAndLogsAnotherSourcesDatagramsOncePerTick(t *testing.T
 	if held == nil {
 		t.Fatal("no socket held for the endpoint")
 	}
-	stranger := newComponent(t, nil)
+	stranger := newComponentAt(t, net.IPv4(127, 0, 0, 2), nil)
 	for i := 0; i < 2; i++ {
 		if _, err := stranger.conn.WriteTo([]byte("EVT INPUT dp1\r\n"), held.sock.LocalAddr()); err != nil {
 			t.Fatal(err)
@@ -644,7 +651,7 @@ func TestAUDPSocketWhoseReaderDiedIsReboundOnTheNextReconcile(t *testing.T) {
 func TestTheUDPRequestRungFollowsAMovedName(t *testing.T) {
 	// Serial: it swaps the slog default to count the move log lines.
 	x := newComponent(t, nvpAnswers)
-	y := newComponent(t, nvpAnswers)
+	y := newComponentAt(t, net.IPv4(127, 0, 0, 2), nvpAnswers)
 	var mu sync.Mutex
 	current := x.conn.LocalAddr().(*net.UDPAddr)
 	var failure error

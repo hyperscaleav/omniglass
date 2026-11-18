@@ -21,6 +21,11 @@ summary: "`udp` is the line protocol as datagrams, built and stateless, its tran
      apart two endpoints behind one address, the IP-to-serial gateway shape
      [ADR-0153](#adr-0153-the-held-session-proof-is-the-line-protocol-over-tcp-other-held-transports-are-their-own-issues)
      sends serial gear through.
+     *Amended 2026-11-13 (#1103):* the component is an address, not an address and port. A datagram
+     from the component's address on any port is the component's; any other address is foreign.
+     With a socket per endpoint the port match protected nothing, and it read gear that answers
+     from a separate send socket or an ephemeral source port as silent (`timeout`) while it was
+     answering. A datagram from a different address (a relay, NAT) is still foreign.
   3. **Unconnected, with the error queue on.** #1037 asked for a connected socket so a closed port
      reads `refused`. A connected udp socket filters other sources in the kernel, and those must be
      counted, so the socket stays unconnected and the node turns on its error queue (`IP_RECVERR` on

@@ -56,7 +56,7 @@ func exchangeOK(t *testing.T, c *collection.DatagramConn) {
 
 func TestDatagramRetargetFollowsTheNameToItsNewAddress(t *testing.T) {
 	x := newUDPPeer(t, answerOK)
-	y := newUDPPeer(t, answerOK)
+	y := newUDPPeerAt(t, net.IPv4(127, 0, 0, 2), answerOK)
 	res := &stubResolver{}
 	res.set(x.addr(), nil)
 	c := listenDatagram(t, collection.DatagramConfig{Target: "component.test:5000", Resolve: res.resolve})
@@ -129,8 +129,10 @@ func TestDatagramLiteralIPTargetNeverResolves(t *testing.T) {
 }
 
 func TestDatagramRetargetAcceptsOnlyTheNewAddressAsTheComponent(t *testing.T) {
+	// The component is told by its address alone (#1103), so the name moves
+	// to another loopback address.
 	x := newUDPPeer(t, answerOK)
-	y := newUDPPeer(t, answerOK)
+	y := newUDPPeerAt(t, net.IPv4(127, 0, 0, 2), answerOK)
 	res := &stubResolver{}
 	res.set(x.addr(), nil)
 	c := listenDatagram(t, collection.DatagramConfig{Target: "component.test:5000", Resolve: res.resolve})

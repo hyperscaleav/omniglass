@@ -293,14 +293,15 @@ func (c *DatagramConn) DrainForeign() (n int, last string) {
 	return n, last
 }
 
-// fromPeer reports a datagram from the component itself: its address and
-// its port.
+// fromPeer reports a datagram from the component itself: its address, on any
+// port. The socket is the endpoint's own, so the address alone tells the
+// component from a stranger, and gear that answers from a second socket or an
+// ephemeral port is still the component (#1103).
 func (c *DatagramConn) fromPeer(from *net.UDPAddr) bool {
 	if from == nil {
 		return false
 	}
-	peer := c.peerAddr()
-	return from.Port == peer.Port && from.IP.Equal(peer.IP)
+	return from.IP.Equal(c.peerAddr().IP)
 }
 
 // read is the reader goroutine: every datagram from the component is split

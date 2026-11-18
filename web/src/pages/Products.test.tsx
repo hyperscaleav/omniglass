@@ -294,7 +294,7 @@ describe("Products type picker (#614)", () => {
   it("blocks Create product until a type is chosen, even with a label and a kind", async () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
-    const display = screen.getByPlaceholderText("Crestron TSW-1070") as HTMLInputElement;
+    const display = screen.getByPlaceholderText("Kestrel VRoom") as HTMLInputElement;
     fireEvent.input(display, { target: { value: "Acme Screen" } });
     const submit = screen.getByRole("button", { name: /create product/i }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
@@ -314,7 +314,7 @@ describe("Products type picker (#614)", () => {
     });
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
-    fireEvent.input(screen.getByPlaceholderText("Crestron TSW-1070"), { target: { value: "Acme Screen" } });
+    fireEvent.input(screen.getByPlaceholderText("Kestrel VRoom"), { target: { value: "Acme Screen" } });
     await pickTree(await screen.findByLabelText("Type"), "Display");
     fireEvent.click(screen.getByRole("button", { name: /create product/i }));
     await waitFor(() => expect(sent).toBeTruthy());
@@ -447,8 +447,8 @@ describe("Products create identity", () => {
     mount();
     expect(await screen.findByText("Acme Panel")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
-    const display = screen.getByPlaceholderText("Crestron TSW-1070") as HTMLInputElement;
-    const key = screen.getByPlaceholderText("crestron-tsw-1070") as HTMLInputElement;
+    const display = screen.getByPlaceholderText("Kestrel VRoom") as HTMLInputElement;
+    const key = screen.getByPlaceholderText("kestrel-vroom") as HTMLInputElement;
     return { display, key };
   };
 
