@@ -143,13 +143,15 @@ on close), and never set Priority or the iteration: those are the architect's al
   session cookie; `gh image check-token` verifies it), or commit under `.github/screenshots/` and
   embed by immutable commit SHA. No UI surface, write "n/a".
 
-## Pre-deployment stance
+## Compatibility
 
-Omniglass has no external deployment, no installed base, and no operator data outside dev, CI and the lab. Until the first external deployment:
+Omniglass has external deployments and an installed base. Before changing a released API route, CLI command, schema element, or config key:
 
-- When the correct fix is destructive (renaming seeded keys or fixtures, reshaping schema, removing or renaming an API field, deleting a compatibility shim), make it. Do not add back-compat paths, deprecation periods, or data-migration machinery for data that does not exist.
-- Migration mechanics are unchanged: never edit an applied migration; express schema changes as new migrations.
-- Remove this section in the PR that prepares the first external deployment.
+- Use `BREAKING CHANGE:` in the PR footer (or `!` after the type in the PR title) so the release notes surface it, and note the change in the docs page that documents the surface.
+- If a smooth upgrade path exists (a deprecation period, an alias, a forward migration), prefer it over a hard cut.
+- Migrations stay forward-only: never edit an applied migration; express every schema change as a new migration.
+
+A change is released once it ships in a final release tag, not a release candidate.
 
 ## Migrations and seeding
 
