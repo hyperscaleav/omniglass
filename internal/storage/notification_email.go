@@ -222,14 +222,21 @@ func (p *PG) mailRelay(ctx context.Context, q querier) (*MailRelay, string, erro
 // platformBasicAuthSecret finds a platform basic-auth secret by its bare
 // name.
 func platformBasicAuthSecret(ctx context.Context, q querier, name string) (string, error) {
+	return platformSecretOfType(ctx, q, name, "basic-auth")
+}
+
+// platformSecretOfType finds a platform secret of one built-in type by its
+// bare name: the server's own credentials (the mail relay's, omnibot's model
+// key) are bound this way.
+func platformSecretOfType(ctx context.Context, q querier, name, typ string) (string, error) {
 	var id string
 	err := q.QueryRow(ctx, `select s.id::text from secret s join secret_type st on st.id = s.secret_type
-		where s.owner_kind = 'platform' and s.name = $1 and st.namespace = 'og' and st.name = 'basic-auth'`, name).Scan(&id)
+		where s.owner_kind = 'platform' and s.name = $1 and st.namespace = 'og' and st.name = $2`, name, typ).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrSecretNotFound
 	}
 	if err != nil {
-		return "", fmt.Errorf("storage: mail relay secret %q: %w", name, err)
+		return "", fmt.Errorf("storage: platform %s secret %q: %w", typ, name, err)
 	}
 	return id, nil
 }

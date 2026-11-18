@@ -1221,6 +1221,12 @@ type Gateway interface {
 	// MergePatchNotificationSettings patches the notification namespace,
 	// judging the mail relay's secret binding on the result (the bind right).
 	MergePatchNotificationSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error)
+	// OmnibotModel reads the model omnibot runs on, its key unsealed (#2109);
+	// nil when none is configured. Never returned by a route.
+	OmnibotModel(ctx context.Context) (*OmnibotModelConfig, error)
+	// MergePatchAssistantSettings patches the assistant namespace, judging
+	// the model key's binding on the result (the bind right).
+	MergePatchAssistantSettings(ctx context.Context, actorID string, patch map[string]any, use SecretUse) (*SettingBinding, error)
 	// The action rule (#618): reads catalog-shaped, writes all-scope.
 	ListActionRules(ctx context.Context) ([]ActionRule, error)
 	// UpsertNotificationTarget and UpsertActionRule install the shipped
