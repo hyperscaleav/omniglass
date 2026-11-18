@@ -16,7 +16,6 @@ import { entityLabel } from "../lib/entities";
 import { verdictOf } from "../lib/health";
 import type { OutpostStatus } from "../lib/outposts";
 import { createViewBinding } from "../lib/binding";
-import { metricSubject } from "../lib/handover";
 import {
   NOT_REPORTED,
   PLATFORM_VIEW_KEY,
@@ -446,7 +445,6 @@ function Row(props: { row: PanelRow; server: PlatformServer; view: PlatformView;
   const chart = (spark: boolean) => (
     <TimeseriesChart
       spark={spark}
-      subject={metricSubject(props.server.component, props.row.key)}
       buckets={panelRowBuckets(props.series, props.row)}
       resolutionMs={PANEL_SERIES_RESOLUTION_S * 1000}
       now={now()}

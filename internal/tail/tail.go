@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -69,13 +70,17 @@ type Commit struct {
 // The reader re-reads history to get a fresh one.
 var ErrExpired = errors.New("tail: cursor expired")
 
+// ErrMarkBusy is returned by Mark when commits keep racing its snapshot after
+// markMaxRetries attempts. The caller returns a retryable error (503).
+var ErrMarkBusy = errors.New("tail: mark busy")
+
+// markMaxRetries is how many times Mark retries when a commit races its
+// snapshot before giving up and returning ErrMarkBusy.
+const markMaxRetries = 3
+
 // Hub is the published tail. A nil Hub is a store with no tail: Commit
 // commits through and Mark marks nothing.
 type Hub struct {
-	// fence orders commits against marks: commits share it, a mark holds it
-	// alone while the reader takes its snapshot.
-	fence sync.RWMutex
-
 	mu   sync.Mutex
 	boot string
 	seq  uint64
@@ -87,6 +92,9 @@ type Hub struct {
 	oldest   uint64
 	maxBytes int
 	wake     chan struct{}
+	// marking counts how many Mark calls are currently inside their open
+	// function; Commit reads it to decide whether to record a seam hint.
+	marking atomic.Int32
 }
 
 // New returns a hub whose ring holds the last commits commits, and of those
@@ -110,14 +118,13 @@ func RowBytes(r Row) int {
 }
 
 // Commit runs commit and, when it succeeds, publishes rows as the next
-// commit. The publish happens before the fence is released, so a Mark that
-// follows sees it below its cursor.
+// commit. No lock is held across the database I/O so a concurrent Mark
+// never stalls ingest; the optimistic seq check in Mark detects any commit
+// that raced its snapshot and retries.
 func (h *Hub) Commit(commit func() error, rows []Row) error {
 	if h == nil {
 		return commit()
 	}
-	h.fence.RLock()
-	defer h.fence.RUnlock()
 	if err := commit(); err != nil {
 		return err
 	}
@@ -155,18 +162,38 @@ func (h *Hub) drop() {
 	h.oldest++
 }
 
-// Mark runs open with every commit fenced out and returns the cursor of the
-// last commit before it. open is where the reader pins its snapshot.
+// Mark runs open and returns the cursor of the last commit whose ring
+// publish completed before open returned. No lock is held across open's
+// database I/O, so ingest commits are never stalled by a view read.
+//
+// If commits raced the snapshot (seq advanced during open), Mark retries
+// up to markMaxRetries times. After that it returns ErrMarkBusy; the
+// caller should return a retryable 503 so the client backs off.
 func (h *Hub) Mark(open func() error) (string, error) {
 	if h == nil {
 		return "", open()
 	}
-	h.fence.Lock()
-	defer h.fence.Unlock()
-	if err := open(); err != nil {
-		return "", err
+	for range markMaxRetries {
+		h.mu.Lock()
+		before := h.seq
+		h.mu.Unlock()
+
+		h.marking.Add(1)
+		err := open()
+		h.mu.Lock()
+		after := h.seq
+		cur := h.cursor(after)
+		h.mu.Unlock()
+		h.marking.Add(-1)
+
+		if err != nil {
+			return "", err
+		}
+		if before == after {
+			return cur, nil
+		}
 	}
-	return h.Cursor(), nil
+	return "", ErrMarkBusy
 }
 
 // Cursor is the hub's newest cursor.

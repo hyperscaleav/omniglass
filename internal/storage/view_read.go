@@ -140,14 +140,18 @@ var (
 // ViewTail is the tail the views watch follows.
 func (p *PG) ViewTail() *tail.Hub { return p.tail }
 
+// ErrViewBusy is returned when ReadViews cannot take a clean snapshot after
+// several retries because commits keep racing it. The caller returns a
+// retryable error (503) so the client backs off and tries again.
+var ErrViewBusy = errors.New("storage: view snapshot busy")
+
 // ReadViews reads every binding inside one snapshot taken under the tail's
-// mark (ADR-1830).
+// mark (ADR-1830). The connection is acquired before the mark so ingest
+// writers that already hold a pooled connection never wait on the mark.
+// The mark itself uses an optimistic seq check: if commits raced the
+// snapshot, it retries; ErrViewBusy surfaces as a 503.
 func (p *PG) ReadViews(ctx context.Context, bindings []ViewBinding) (ViewSnapshot, error) {
 	var out ViewSnapshot
-	// The connection and the transaction are taken before the mark, never
-	// inside it: a sample writer already holds its pooled connection when it
-	// waits on the fence, so a mark waiting on the pool would wait on the
-	// writer it fences out. Only the snapshot statement runs fenced.
 	conn, err := p.pool.Acquire(ctx)
 	if err != nil {
 		return out, fmt.Errorf("storage: acquire view read: %w", err)
@@ -159,15 +163,19 @@ func (p *PG) ReadViews(ctx context.Context, bindings []ViewBinding) (ViewSnapsho
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	cursor, err := p.tail.Mark(func() error {
-		// A REPEATABLE READ transaction takes its snapshot at its first
-		// statement, not at begin: inside the mark, so no commit lands
-		// between the snapshot and the cursor.
+		// REPEATABLE READ pins its snapshot at the first statement. The
+		// optimistic seq check in Mark ensures the cursor covers exactly
+		// the commits visible here: if any commit races this statement,
+		// Mark retries the whole attempt with a fresh transaction snapshot.
 		if err := tx.QueryRow(ctx, `select now()`).Scan(&out.Now); err != nil {
 			return fmt.Errorf("storage: view read snapshot: %w", err)
 		}
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, tail.ErrMarkBusy) {
+			return out, ErrViewBusy
+		}
 		return out, err
 	}
 	out.Cursor = cursor
@@ -303,6 +311,34 @@ func viewRefErr(ref string, err, notFound error) error {
 	return err
 }
 
+// resolveFilterSystem resolves a filter.system ref to its UUID. Names are
+// unique only per placement (since migration 20260808090000), so a bare name
+// that matches more than one system is refused with a 422 rather than
+// silently merging their members. A UUID always resolves uniquely.
+var ErrFilterSystemAmbiguous = errors.New("storage: filter.system name matches more than one system; use a uuid")
+
+func (p *PG) resolveFilterSystem(ctx context.Context, q querier, ref string) (string, error) {
+	rows, err := q.Query(ctx, `select id::text from system where name = $1 or id::text = $1 limit 3`, ref)
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve filter system %q: %w", ref, err)
+	}
+	ids, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (string, error) {
+		var id string
+		return id, r.Scan(&id)
+	})
+	if err != nil {
+		return "", fmt.Errorf("storage: resolve filter system %q: %w", ref, err)
+	}
+	switch len(ids) {
+	case 0:
+		return "", nil
+	case 1:
+		return ids[0], nil
+	default:
+		return "", ErrFilterSystemAmbiguous
+	}
+}
+
 // listViewEntities is every entity of b.Kind in b.Read that the filter keeps,
 // by name, refused past ViewMaxEntities.
 func (p *PG) listViewEntities(ctx context.Context, q querier, b ViewBinding) ([]ViewEntity, error) {
@@ -320,8 +356,14 @@ func (p *PG) listViewEntities(ctx context.Context, q querier, b ViewBinding) ([]
 		conds = append(conds, fmt.Sprintf(cond, len(args)))
 	}
 	if b.Filter.System != "" {
-		add(`v.id in (select sm.component_id from system_member sm join system s on s.id = sm.system_id
-			where s.name = $%[1]d or s.id::text = $%[1]d)`, b.Filter.System)
+		systemID, err := p.resolveFilterSystem(ctx, q, b.Filter.System)
+		if err != nil {
+			return nil, err
+		}
+		if systemID == "" {
+			return nil, nil
+		}
+		add(`v.id in (select sm.component_id from system_member sm where sm.system_id = $%[1]d::uuid)`, systemID)
 	}
 	if b.Filter.Product != "" {
 		add(`v.product_id in (select pd.id from product_in_effect() pd where pd.name = $%[1]d or pd.id::text = $%[1]d)`, b.Filter.Product)
@@ -588,7 +630,6 @@ func (p *PG) viewMetric(ctx context.Context, q querier, b ViewBinding, ids []str
 			continue
 		}
 		split := splitMetricRead(g.lo, now, b.Step, t.days, trendDays)
-		covered = later(covered, split.covered)
 		var parts []metricPart
 		if split.trends {
 			rows, err := q.Query(ctx, `
@@ -596,7 +637,7 @@ func (p *PG) viewMetric(ctx context.Context, q querier, b ViewBinding, ids []str
 					sum(tr.count)::bigint, min(tr.min), max(tr.max), sum(tr.sum), (array_agg(tr.last order by tr.hour desc, s.id desc))[1]
 				from metric_series s join metric_trend tr on tr.series_id = s.id
 				where s.metric_type_id = $1::uuid and s.owner_kind = $6 and s.owner_id = any($2::uuid[])
-				  and s.provenance = 'observed' and tr.hour >= $4 and tr.hour < $5
+				  and s.provenance in `+measuredProvenance+` and tr.hour >= $4 and tr.hour < $5
 				group by 1, 2, 3`, t.id, ids, b.Step.Seconds(), split.trendFrom, split.rawFrom, b.Kind)
 			if err != nil {
 				return fmt.Errorf("storage: read view metric trends %s: %w", key, err)
@@ -604,6 +645,16 @@ func (p *PG) viewMetric(ctx context.Context, q querier, b ViewBinding, ids []str
 			if parts, err = scanMetricParts(rows, parts); err != nil {
 				return err
 			}
+		}
+		// Advance covered_from to the trend floor only when trend rows were
+		// found: a calculated series has no trend rows (metric_trend rolls up
+		// only observed), so its coverage floor is the raw floor, not the
+		// trend floor. Without this check a calculated series past raw
+		// retention claims coverage it cannot supply.
+		if len(parts) > 0 {
+			covered = later(covered, split.covered)
+		} else {
+			covered = later(covered, split.rawFrom)
 		}
 		rows, err := q.Query(ctx, `
 			select s.owner_id::text, s.instance, date_bin(make_interval(secs => $7), m.ts, timestamptz 'epoch'),

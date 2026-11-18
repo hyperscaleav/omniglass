@@ -16,7 +16,12 @@ refs: [1830, 523, 1829, 1161, 2050, 2051]
      read past 20,000 points or a grid past 5,000 buckets is a 422, never a truncated answer.
   2. **The cursor is the seam.** Every sample write commits to an in-process tail (a ring of 4,096 commits
      or 64 MiB of rows, whichever is less, its cursor `<boot>.<seq>`) inside the same write. A view read
-     takes its connection before the tail fence, so ingest never waits on a read queued for the pool. `/views:run` reads every binding from one snapshot and
+     takes its connection before the mark, so ingest never waits on a read queued for the pool.
+     The mark is optimistic: it reads the hub's seq before and after `select now()` and retries if any
+     commit published to the ring during that window (up to 3 times); if commits keep racing it after
+     all retries the read answers a retryable 503 so the client backs off. No lock is held across
+     database I/O, so ingest commits are never stalled behind a view read.
+     `/views:run` reads every binding from one snapshot and
      answers the cursor it was taken at. A range with no `to` reads its raw rows with no upper bound, as the
      tail has none, so a row stamped ahead of the server's clock is in the history or after the cursor,
      never both and never neither.

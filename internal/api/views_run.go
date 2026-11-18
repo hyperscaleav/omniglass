@@ -234,14 +234,17 @@ func viewBindings(ctx context.Context, a *authenticator, in []viewBindingBody, w
 }
 
 // viewReadErr maps a views read's failure: a literal ref out of reach is the
-// non-disclosing 404, a bound passed or a malformed page a 422, anything else
-// logged and opaque.
+// non-disclosing 404, a bound passed or a malformed page a 422, a busy
+// snapshot a retryable 503, anything else logged and opaque.
 func viewReadErr(ctx context.Context, log *slog.Logger, err error) error {
 	switch {
 	case errors.Is(err, storage.ErrViewEntityNotFound):
 		return huma.Error404NotFound(strings.TrimPrefix(err.Error(), "storage: "))
-	case errors.Is(err, storage.ErrViewTooLarge), errors.Is(err, storage.ErrViewPage), errors.Is(err, storage.ErrUnknownSeverity):
+	case errors.Is(err, storage.ErrViewTooLarge), errors.Is(err, storage.ErrViewPage), errors.Is(err, storage.ErrUnknownSeverity),
+		errors.Is(err, storage.ErrFilterSystemAmbiguous):
 		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: "))
+	case errors.Is(err, storage.ErrViewBusy):
+		return huma.Error503ServiceUnavailable("view snapshot busy; retry")
 	}
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
