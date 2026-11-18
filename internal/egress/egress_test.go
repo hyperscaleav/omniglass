@@ -269,3 +269,40 @@ func TestFetchReadsADocumentUnderTheContract(t *testing.T) {
 		t.Errorf("missing = %v, want the 404", err)
 	}
 }
+
+// Do is the contract for a caller that builds its own request (the omnibot
+// model call, #2109): the URL is judged before any byte leaves, and the dial
+// is judged again, exactly as for Post.
+func TestDoSendsACallersRequestUnderTheContract(t *testing.T) {
+	var hits int
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	roots := x509.NewCertPool()
+	roots.AddCert(srv.Certificate())
+	req := func() *http.Request {
+		r, err := http.NewRequest(http.MethodPost, srv.URL+"/chat/completions", strings.NewReader("{}"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+
+	if _, err := egress.New(egress.Policy{}, egress.Options{RootCAs: roots}).Do(req()); !errors.Is(err, egress.ErrRefused) || hits != 0 {
+		t.Fatalf("default policy = %v (hits %d), want refused before any request", err, hits)
+	}
+	plain, _ := http.NewRequest(http.MethodPost, "http://example.com/x", nil)
+	if _, err := egress.New(egress.Policy{}, egress.Options{}).Do(plain); !errors.Is(err, egress.ErrRefused) {
+		t.Errorf("http to an unlisted host = %v, want refused", err)
+	}
+	resp, err := egress.New(mustPolicy(t, "127.0.0.1"), egress.Options{RootCAs: roots}).Do(req())
+	if err != nil {
+		t.Fatalf("allowed = %v, want the answer", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || hits != 1 {
+		t.Errorf("allowed = %d (hits %d), want 200 once", resp.StatusCode, hits)
+	}
+}
