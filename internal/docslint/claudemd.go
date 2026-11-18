@@ -2,11 +2,12 @@ package docslint
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 // claudeMdPath is the path to CLAUDE.md, relative to this package.
-var claudeMdPath = repoRoot + "/CLAUDE.md"
+var claudeMdPath = filepath.Join(repoRoot, "CLAUDE.md")
 
 // ScanClaudeMd checks CLAUDE.md for section headings that must not appear
 // once Omniglass has an external deployment. The "Pre-deployment stance"
