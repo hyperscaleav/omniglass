@@ -6,7 +6,7 @@ summary: "The server prunes metric and property samples, and log lines by severi
 refs: [417, 1265, 591, 419, 420, 1276, 801]
 ---
 
-- **Date:** 2026-10-28 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [settings](/architecture/settings/), [admin guide](/guides/admin/)
+- **Date:** 2026-10-28 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [settings](/architecture/settings/), [platform settings](/admin/settings/)
 - **Decision:** (#417, the first of its three PRs, ruled 2026-10-28.)
   1. **One window per sample lane, install-wide.**
      - A platform-domain `retention` settings namespace holds `metric_days` (14), `property_days` (90) and `trend_days` (730, read once hourly trends exist, #1276).

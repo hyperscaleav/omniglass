@@ -491,7 +491,7 @@ the same way.)
 A signed-in user manages its own account through the generated self-scoped commands
 (`omniglass auth me`, `auth update-profile`, `auth change-password`, `auth set-avatar` /
 `auth remove-avatar`); an administrator manages other users, roles, user groups, secrets,
-and variables through the resource commands, all covered in the [admin guide](/guides/admin/)
+and variables through the resource commands, all covered in the [Admin section](/admin/)
 and listed in full in the [CLI reference](/reference/cli/).
 
 ## Tags
@@ -823,9 +823,9 @@ non-disclosing 404 on the read and on the write. The catalog and its contract sh
 ## Retention
 
 How long the server keeps each lane is the `retention` settings: `omniglass setting list` shows the
-effective windows under `values.retention`. They are changed on the console's Settings page; the
-CLI's `setting update` cannot carry a body yet (#1333). A metric or property type can keep a window
-of its own, overriding its lane's, shipped types included:
+effective windows under `values.retention`, and `omniglass setting update retention --body
+'{"metric_days": 30}'` changes one ([platform settings](/admin/settings/)). A metric or property type
+can keep a window of its own, overriding its lane's, shipped types included:
 
 ```sh
 omniglass metric-type setRetention tcp-connect-time --days 3       # keep this type 3 days

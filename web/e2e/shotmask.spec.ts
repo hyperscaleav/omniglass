@@ -125,7 +125,7 @@ const cases: {
 }[] = [
   {
     name: "audit's When column (an hour that is not zero-padded)",
-    page: "guides/admin/audit.md",
+    page: "admin/audit.md",
     shot: "audit",
     value: "text=/\\d+\\/\\d+\\/\\d{4}/",
     markup: tableRow(190),
@@ -135,7 +135,7 @@ const cases: {
   },
   {
     name: "files' Added column (a day that is not zero-padded)",
-    page: "guides/admin/files.md",
+    page: "admin/files.md",
     shot: "files",
     value: "text=/[A-Z][a-z]{2} \\d{1,2}, \\d{2}:\\d{2} (AM|PM)/",
     markup: tableRow(170),

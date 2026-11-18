@@ -50,6 +50,16 @@ export default defineConfig({
     // The joint Types guide split into one page per catalog (#598); the old
     // URL lands on the location half, which inherited most of its content.
     '/guides/admin/types/': '/guides/admin/location-types/',
+    // The Admin guide's access and values pages became the Admin section (#2158);
+    // secret types folded into the secrets page.
+    '/guides/admin/': '/admin/',
+    '/guides/admin/users/': '/admin/users/',
+    '/guides/admin/access/': '/admin/access/',
+    '/guides/admin/audit/': '/admin/audit/',
+    '/guides/admin/secrets/': '/admin/secrets/',
+    '/guides/admin/secret-types/': '/admin/secrets/#secret-types',
+    '/guides/admin/variables/': '/admin/variables/',
+    '/guides/admin/files/': '/admin/files/',
     // Find things in your fleet folded into the outline guide (#861).
     '/guides/operator/inventory/': '/operator/fleet/',
     // The operator guide became the Operator section (#2157); alarms and
@@ -240,15 +250,7 @@ export default defineConfig({
               label: 'Admin guide',
               collapsed: true,
               items: [
-                { label: 'Overview', slug: 'guides/admin' },
-                { label: 'Manage users', slug: 'guides/admin/users' },
-                { label: 'Roles, groups, and grants', slug: 'guides/admin/access' },
-                { label: 'The audit trail', slug: 'guides/admin/audit' },
-                { label: 'Secrets', slug: 'guides/admin/secrets' },
-                { label: 'Variables', slug: 'guides/admin/variables' },
-                { label: 'Files', slug: 'guides/admin/files' },
                 { label: 'Location types', slug: 'guides/admin/location-types' },
-                { label: 'Secret types', slug: 'guides/admin/secret-types' },
                 { label: 'Properties', slug: 'guides/admin/properties' },
                 { label: 'Metrics', slug: 'guides/admin/metrics' },
                 { label: 'Events', slug: 'guides/admin/events' },

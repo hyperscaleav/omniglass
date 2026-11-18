@@ -6,7 +6,7 @@ summary: "Amends ADR-1179. Handing a secret to a target is its own action, secre
 refs: [2047, 1179, 2063, 2048]
 ---
 
-- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#agent-tokens), [alarms and actions](/architecture/alarms-actions/), [connect an agent](/guides/agents/), [secrets](/guides/admin/secrets/)
+- **Date:** 2026-11-16 | **Status:** Accepted | **Pages:** [identity and access](/architecture/identity-access/#agent-tokens), [alarms and actions](/architecture/alarms-actions/), [connect an agent](/guides/agents/), [secrets](/admin/secrets/)
 - **Decision:** (#2047, ruled 2026-11-16, amending
   [ADR-1179](#adr-1179-an-agent-token-is-a-token-type-on-its-persons-credential-and-never-reveals).)
   1. **`secret:bind` is the action that hands a secret to a target.** An endpoint attach, an edit of
