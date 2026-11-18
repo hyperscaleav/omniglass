@@ -221,9 +221,11 @@ jobs:
           facts=$(jq -cn --arg run "$RUN_URL" --arg sha "$pushed" --arg state "$state" --arg sum "$summary" \
             '{workflow: "agent-fix", state: $state, run_url: $run, pushed: $sha, summary: $sum}')
           body=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" body)
-          gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT}" -f body="$body" --silent
+          gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT}" -f body="$body" --silent \
+            || echo "::warning::could not update the status comment (${COMMENT}); it still says agent-fix is working"
           if [ -n "$CHECK" ]; then
             conclusion=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" conclusion)
             gh api -X PATCH "repos/${REPO}/check-runs/${CHECK}" -f status=completed -f conclusion="$conclusion" \
-              -f "output[title]=agent-fix: ${state}" -f "output[summary]=${summary:-Nothing to report.}" --silent
+              -f "output[title]=agent-fix: ${state}" -f "output[summary]=${summary:-Nothing to report.}" --silent \
+              || echo "::warning::could not close the agent-fix check (${CHECK}); it stays in progress"
           fi

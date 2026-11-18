@@ -242,7 +242,8 @@ jobs:
           body=$(jq -cn --arg run "$RUN_URL" --arg pr "$pr" --arg state "$state" --arg sum "$summary" \
             '{workflow: "agent-build", state: $state, run_url: $run, pr_url: $pr, summary: $sum}' \
             | bash "${RUNNER_TEMP}/agent-status.sh" body)
-          gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT}" -f body="$body" --silent
+          gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT}" -f body="$body" --silent \
+            || echo "::warning::could not update the status comment (${COMMENT}); it still says agent-build is working"
 
       - name: Unlock the conversation
         if: always() && steps.gate.outputs.decision == 'run' && steps.gate.outputs.was_locked != 'true'
