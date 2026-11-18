@@ -1,9 +1,9 @@
 name: agent-fix
 
 # Address feedback on a PR with a Claude Code agent (#2175). It starts on:
-# - an @claude comment on a PR, or an @claude review comment, from a member of
-#   the maintainers or contributors team;
-# - a review from either team that requests changes or mentions @claude;
+# - an @hyperscale-agent or @claude comment on a PR, or a review comment with
+#   either, from a member of the maintainers or contributors team;
+# - a review from either team that requests changes or mentions either name;
 # - a Changes-requested review from agent-review, up to five rounds per PR;
 #   after that the PR parks with needs-fred until a person steps in.
 # Everyone else's mention does nothing, and fork PRs are skipped. Every decision is
@@ -36,8 +36,10 @@ jobs:
     if: >-
       vars.AGENT_CI_ENABLED == 'true'
       && (
-        (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude'))
-        || (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request
+          && (contains(github.event.comment.body, '@hyperscale-agent') || contains(github.event.comment.body, '@claude')))
+        || (github.event_name == 'pull_request_review_comment'
+          && (contains(github.event.comment.body, '@hyperscale-agent') || contains(github.event.comment.body, '@claude')))
         || github.event_name == 'pull_request_review'
       )
     runs-on: ubuntu-latest
@@ -84,7 +86,7 @@ jobs:
           rounds=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate --jq '.[] | {user: .user.login, state}' \
             | jq -s --arg bot "$bot" '[.[] | select(.user == $bot and .state == "CHANGES_REQUESTED")] | length')
           case "$EVENT" in pull_request_review) kind=review ;; *) kind=comment ;; esac
-          mentions=false; case "$BODY" in *@claude*) mentions=true ;; esac
+          mentions=false; case "$BODY" in *@hyperscale-agent* | *@claude*) mentions=true ;; esac
           facts=$(jq -cn --argjson t "$teams" --argjson p "$pr" --arg event "$kind" --arg sender "$SENDER" \
             --arg state "$STATE" --argjson mentions "$mentions" --arg bot "$bot" --argjson rounds "$rounds" \
             '$t + {event: $event, sender: $sender, review_state: $state, mentions: $mentions,
@@ -113,7 +115,7 @@ jobs:
         run: |
           gh pr edit "$NUMBER" --repo "$REPO" --add-label needs-fred
           gh pr comment "$NUMBER" --repo "$REPO" \
-            --body "agent-fix: five automatic fix rounds did not satisfy agent-review, so this PR waits for a person (needs-fred). Request changes or mention @claude to run another round."
+            --body "agent-fix: five automatic fix rounds did not satisfy agent-review, so this PR waits for a person (needs-fred). Request changes or mention @hyperscale-agent to run another round."
 
       # Say on the PR that the agent is at work, so a person can see it: one
       # comment, edited in place when the run stops, and a check on the head
@@ -233,7 +235,7 @@ jobs:
             fi
           fi
           summary=""; [ -f "${RUNNER_TEMP}/agent-summary.md" ] && summary=$(head -c 4000 "${RUNNER_TEMP}/agent-summary.md")
-          if [ "$state" = failed ]; then summary="${summary:+${summary}$'\n\n'}Comment \`@claude\` on this PR to retry."; fi
+          if [ "$state" = failed ]; then summary="${summary:+${summary}$'\n\n'}Comment \`@hyperscale-agent\` on this PR to retry."; fi
           facts=$(jq -cn --arg run "$RUN_URL" --arg sha "$pushed" --arg state "$state" --arg why "$reason" --arg sum "$summary" \
             '{workflow: "agent-fix", state: $state, run_url: $run, pushed: $sha, reason: $why, summary: $sum}')
           body=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" body)
