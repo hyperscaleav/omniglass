@@ -10,6 +10,7 @@ import (
 // by: the same grants in another order are the same access, and any change to
 // a grant or to an agent's bounds is not.
 func TestAccessKeyComparesGrantsAndAgentBounds(t *testing.T) {
+	t.Parallel()
 	loc := "loc-a"
 	group := "ops"
 	base := func() *storage.User {

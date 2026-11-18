@@ -14,8 +14,9 @@ refs: [1830, 523, 1829, 1161, 2050, 2051]
      one series per entity, key and instance, raw or on an epoch-aligned bucket grid; an event or log
      binding answers a page of rows, newest first, and a `next_page`. A selector past 200 entities, a raw
      read past 20,000 points or a grid past 5,000 buckets is a 422, never a truncated answer.
-  2. **The cursor is the seam.** Every sample write commits to an in-process tail (a ring of 4,096 commits,
-     its cursor `<boot>.<seq>`) inside the same write. `/views:run` reads every binding from one snapshot and
+  2. **The cursor is the seam.** Every sample write commits to an in-process tail (a ring of 4,096 commits
+     or 64 MiB of rows, whichever is less, its cursor `<boot>.<seq>`) inside the same write. A view read
+     takes its connection before the tail fence, so ingest never waits on a read queued for the pool. `/views:run` reads every binding from one snapshot and
      answers the cursor it was taken at. A range with no `to` reads its raw rows with no upper bound, as the
      tail has none, so a row stamped ahead of the server's clock is in the history or after the cursor,
      never both and never neither.
@@ -23,13 +24,17 @@ refs: [1830, 523, 1829, 1161, 2050, 2051]
   3. **One stream per page.** `/views:watch` multiplexes up to 32 bindings on one SSE connection. A `rows`
      event carries each binding's matching rows, its id the cursor after them; a `mark` advances an idle
      stream every 15 s. A reconnect's `Last-Event-ID` resumes each binding from the later of it and the
-     binding's own cursor. A cursor the ring no longer holds (too old, or from before a restart) is a
+     binding's own cursor, and the client likewise only advances a binding's cursor, never back to a
+     slower binding's stream position. A cursor the ring no longer holds (too old, or from before a restart) is a
      `reset` naming the binding, and the stream ends: the client re-runs that history and reconnects.
   4. **The door and the fence.** Both routes are gated by `view:read`; each binding also needs its kind's
      read (`component:read`, `system:read`) and resolves inside that read's scope. A filter selector
      resolves to the visible entities; a literal ref out of scope is the same 404 as one that does not
      exist. The watch resolves its selectors once, at connect, and its matcher carries only rows of the
-     entities they resolved to.
+     entities they resolved to. So that resolution never goes stale, a watch ends at its 15 minute lifetime
+     and, on each 15 s heartbeat, once its caller's session no longer resolves or their grants changed; the
+     client reconnects from its cursor and the reconnect resolves again. One user holds at most 16 watches
+     (1,024 per server); past it the open is a 429.
   5. **Retention picks the source.** A metric step that is a whole number of hours and reaches past the raw
      retention answers the older hours from the hourly trends, and `covered_from` says where the data
      can begin. Every metric bucket carries `count`, `min`, `max`, `avg` and `last`, so a renderer picks
@@ -56,8 +61,11 @@ refs: [1830, 523, 1829, 1161, 2050, 2051]
     (`TestViewsWatchResumesFromItsLastEventWithNoDuplicates`).
   - The tail is one server's ingest landing, in memory. Rows a calc or a rule derives are not on it, and a
     second server would not see the first's commits: a multi-server tail is a bus subject, not built.
-  - A stream outlives a scope change made after it connected until it reconnects; its selectors resolve
-    at connect.
+  - A stream ending at its lifetime, or on a heartbeat that finds its caller changed, is closed in
+    `TestViewsWatchEndsAtItsLifetime` and `TestViewsWatchEndsWhenItsCallerNoLongerStands` (a deleted
+    credential reconnects to a 401, a removed grant to a 403); the per-user cap in
+    `TestViewsWatchRefusesPastThePerUserLimit`. A scope change made to an entity (it moves out of a
+    location the caller sees) still reaches a stream only at its next reconnect, at most its lifetime.
   - The client's live fold takes the newest row to land as a bucket's `last`, which is the newest by time
     for a series that reports in order.
 - **Not chosen:**

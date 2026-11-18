@@ -48,6 +48,13 @@ is the property a live chart needs to stay correct without a reload. Up to 32 bi
 - a `reset` names a binding whose cursor the tail no longer holds (too old, or from before a restart),
   and its reader re-runs the history.
 
+A binding's cursor only moves forward: a stream starts at its slowest binding, so the client keeps each
+binding at the later of its own cursor and the stream's position, and a reconnect resends nothing a
+history already holds. The tail holds the last 4,096 commits or 64 MiB of rows, whichever is less, so a
+burst of wide commits cannot grow it without bound; a cursor older than that is a `reset`. A view read
+takes its database connection before it fences the tail, so ingest never waits on a read queued for a
+connection.
+
 The tail is the server's own ingest landing, so a value a [calc](/architecture/calculations/) or a rule derives
 is not on it, and a second server would not see the first's commits.
 
@@ -58,6 +65,14 @@ Both routes need `view:read`, and each binding also needs its kind's read (`comp
 resolves to the entities the caller can see; a literal ref outside the scope is the same 404 as one that
 does not exist, so a binding never confirms what it may not show. The stream resolves its selectors once,
 when it connects, and carries rows of those entities only.
+
+So that a resolved scope never goes stale, a stream is bounded: it ends at its 15 minute lifetime (or its
+`duration_seconds`, if shorter), and on each 15 second heartbeat it rechecks its caller, ending once the
+session no longer resolves (a revoked token, a deleted user) or the caller's grants changed. The client
+reconnects from its cursor at once, and the reconnect authenticates and resolves its selectors again, so a
+revoked caller gets the 401 or 403 and a narrowed one the narrower scope. One user holds at most 16
+watches open (1,024 across the server); past it the open is a 429, and the console binds every binding on
+a page over one watch, so a page needs one.
 
 ### From the CLI and an agent
 
