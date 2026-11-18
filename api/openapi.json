@@ -567,6 +567,36 @@
         ],
         "type": "object"
       },
+      "AguiContextInput": {
+        "additionalProperties": true,
+        "properties": {
+          "description": {
+            "description": "What it is: a kind, or page",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "value": {
+            "description": "A name or dotted address, or a route and its query; never a rendered value",
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "value"
+        ],
+        "type": "object"
+      },
+      "AguiForwardedInput": {
+        "additionalProperties": true,
+        "properties": {
+          "skill": {
+            "$ref": "#/components/schemas/AguiSkillInput",
+            "description": "An embedded skill to run, its prompt ahead of the person's message"
+          }
+        },
+        "type": "object"
+      },
       "AguiMessageInput": {
         "additionalProperties": true,
         "properties": {
@@ -608,6 +638,27 @@
         "required": [
           "interruptId",
           "status"
+        ],
+        "type": "object"
+      },
+      "AguiSkillInput": {
+        "additionalProperties": true,
+        "properties": {
+          "arguments": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The skill's arguments, by name",
+            "type": "object"
+          },
+          "name": {
+            "description": "The skill, as omniglass mcp skill lists it",
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -14409,6 +14460,21 @@
             "readOnly": true,
             "type": "string"
           },
+          "context": {
+            "description": "What the person handed over with the prompt, read as data ahead of it; ignored on a resume",
+            "items": {
+              "$ref": "#/components/schemas/AguiContextInput"
+            },
+            "maxItems": 20,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "forwardedProps": {
+            "$ref": "#/components/schemas/AguiForwardedInput",
+            "description": "An embedded skill to run; ignored on a resume"
+          },
           "messages": {
             "description": "The client's view of the conversation; only its last user message is read, as the prompt",
             "items": {
@@ -20004,7 +20070,7 @@
     },
     "/assistant/conversations/{name}:run": {
       "post": {
-        "description": "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. A server with no model is a 503. Gated by assistant:use.",
+        "description": "Runs your prompt (the last user message) as your omnibot, over the stored conversation, and streams the run as AG-UI events (text/event-stream). A call your agent policy asks about ends the run on an interrupt naming it; run again with resume to answer it. A run that reaches its step limit without an answer finishes with the result {\"stopped\": \"step_limit\", \"steps\": N}. The run's tool calls are audited as omnibot's, on your behalf. Only you, as yourself, run your conversations: anyone else's is a 404, and an agent or an impersonation session is a 403. A resume that names no waiting call, a prompt while one waits, or a run while another holds the conversation is a 409. Context entries the person hands over with a prompt (references and the page, at most 20) are framed as data ahead of it. forwardedProps.skill names an embedded skill whose prompt, with its arguments, the run carries out; an unknown skill or a missing argument is a 422. A server with no model is a 503. Gated by assistant:use.",
         "operationId": "run-assistant-conversation",
         "parameters": [
           {

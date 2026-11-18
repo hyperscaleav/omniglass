@@ -156,6 +156,18 @@ describe("AlarmsPanel", () => {
     expect(within(alarmRow(getByText("HDMI board failed"))).queryByText(/by rule/)).toBeNull();
   });
 
+  // The subject stamp (#2122): an alarm is handed to omnibot by its
+  // component's name and the rule that raised it, or when it was raised, never
+  // by its message, which a device may write.
+  it("stamps each alarm, active or cleared, by component and rule, never its message", () => {
+    const { getByText } = mount();
+    const byRule = alarmRow(getByText("Lamp hours exceeded"));
+    expect(byRule).toHaveAttribute("data-subject-kind", "alarm");
+    expect(byRule).toHaveAttribute("data-subject-ref", "disp-1/lamp-life");
+    expect(alarmRow(getByText("HDMI board failed")).getAttribute("data-subject-ref")).toBe(`disp-1@${alarms[1].raised_at}`);
+    expect(alarmRow(getByText("Firmware mismatch"))).toHaveAttribute("data-subject-kind", "alarm");
+  });
+
   it("puts the worst alarm first, since that is the one that explains the room", () => {
     const { getAllByText } = mount();
     const messages = getAllByText(/HDMI board failed|Lamp hours exceeded/).map((e) => e.textContent);

@@ -99,6 +99,12 @@ describe("folding a run into the panel", () => {
     expect(closed(done)).toBe(done);
   });
 
+  it("shows what the person handed over beside their prompt", () => {
+    const context = [{ description: "page", value: "/alarms" }];
+    expect(ask(initialRun, "why?", context).items[0]).toEqual({ kind: "user", text: "why?", context });
+    expect(ask(initialRun, "why?").items[0]).toEqual({ kind: "user", text: "why?" });
+  });
+
   it("joins text deltas of one message", () => {
     let s = reduce(initialRun, { type: "TEXT_MESSAGE_START", messageId: "m", role: "assistant" });
     s = reduce(s, { type: "TEXT_MESSAGE_CONTENT", messageId: "m", delta: "Hel" });
@@ -123,6 +129,26 @@ describe("running omnibot", () => {
     expect(body.messages).toEqual([{ role: "user", content: "look around" }]);
     expect(body.resume).toBeUndefined();
     expect(seen.at(-1)).toBe("RUN_FINISHED");
+  });
+
+  it("hands over the context the person gathered, as AG-UI context entries", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(streamOf(fixture("step-limit.sse"))));
+    const context = [{ description: "alarm", value: "hq.lobby.display-1/offline" }];
+    await runOmnibot("lobby", { prompt: "why?", context }, () => {});
+    const body = await (fetchMock.mock.calls[0][0] as Request).json();
+    expect(body.context).toEqual(context);
+    expect(body.messages).toEqual([{ role: "user", content: "why?" }]);
+  });
+
+  it("runs a skill by name in forwardedProps, with no message of its own", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(streamOf(fixture("step-limit.sse"))));
+    const context = [{ description: "alarm", value: "mic-1/icmp-unreachable" }];
+    const skill = { name: "triage-alarm", arguments: { component: "mic-1", alarm: "icmp-unreachable" } };
+    await runOmnibot("lobby", { skill, context }, () => {});
+    const body = await (fetchMock.mock.calls[0][0] as Request).json();
+    expect(body.forwardedProps).toEqual({ skill });
+    expect(body.messages).toEqual([]);
+    expect(body.context).toEqual(context);
   });
 
   it("answers an interrupt by resume", async () => {

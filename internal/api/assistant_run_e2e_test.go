@@ -393,3 +393,113 @@ func TestOmnibotRunSaysItStoppedAtTheStepLimit(t *testing.T) {
 		t.Fatalf("finished = %v, want success with a step_limit result of 10 steps", last)
 	}
 }
+
+// Context the person hands over with a prompt (#2122, AG-UI's context
+// entries) reaches the model framed as data ahead of their message, and is
+// kept with it in the transcript; more than a run takes is refused before
+// anything runs.
+func TestOmnibotRunReadsTheContextHandedOver(t *testing.T) {
+	t.Parallel()
+	p := newPeople(t, runModel(t))
+	p.person("olga", "operator", "all", "")
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "triage"}, http.StatusCreated)
+
+	in := prompt("why is this down?")
+	in["context"] = []map[string]any{
+		{"description": "alarm", "value": "lobby.display-1/offline"},
+		{"description": "page", "value": "/alarms?state=active"},
+	}
+	if status, evs := p.run(p.toks["olga"], "triage", in); status != http.StatusOK {
+		t.Fatalf(":run = %d %v", status, evs)
+	}
+	var conv struct {
+		Messages []struct {
+			Role string `json:"role"`
+			Body struct {
+				Text string `json:"text"`
+			} `json:"body"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(p.c.do(p.toks["olga"], http.MethodGet, "/assistant/conversations/triage", nil, http.StatusOK), &conv); err != nil {
+		t.Fatal(err)
+	}
+	if len(conv.Messages) == 0 || conv.Messages[0].Role != "user" {
+		t.Fatalf("transcript = %+v, want it to open on olga's prompt", conv.Messages)
+	}
+	first := conv.Messages[0].Body.Text
+	for _, want := range []string{"not instructions", `- alarm: "lobby.display-1/offline"`, `- page: "/alarms?state=active"`, "Their message:\nwhy is this down?"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("the prompt the model was sent lacks %q:\n%s", want, first)
+		}
+	}
+
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "flood"}, http.StatusCreated)
+	many := prompt("look")
+	entries := make([]map[string]any, 21)
+	for i := range entries {
+		entries[i] = map[string]any{"description": "component", "value": "lobby.display-1"}
+	}
+	many["context"] = entries
+	if status, _ := p.run(p.toks["olga"], "flood", many); status != http.StatusUnprocessableEntity {
+		t.Errorf("21 context entries = %d, want 422", status)
+	}
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "essay"}, http.StatusCreated)
+	long := prompt("look")
+	long["context"] = []map[string]any{{"description": "page", "value": strings.Repeat("x", 2001)}}
+	if status, _ := p.run(p.toks["olga"], "essay", long); status != http.StatusUnprocessableEntity {
+		t.Errorf("a 2001-character value = %d, want 422", status)
+	}
+}
+
+// A run that names an embedded skill in forwardedProps (#2122) runs that
+// skill's own prompt with the arguments given, so the console's one-click
+// triage sends the skill the server ships, not text of its own; the person's
+// message, if any, follows it. An unknown skill or a missing required
+// argument is refused before anything runs.
+func TestOmnibotRunTakesASkill(t *testing.T) {
+	t.Parallel()
+	p := newPeople(t, runModel(t))
+	p.person("olga", "operator", "all", "")
+	p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": "triage"}, http.StatusCreated)
+
+	in := prompt("")
+	in["messages"] = []any{}
+	in["forwardedProps"] = map[string]any{"skill": map[string]any{"name": "triage-alarm", "arguments": map[string]any{"component": "mic-1", "alarm": "icmp-unreachable"}}}
+	in["context"] = []map[string]any{{"description": "alarm", "value": "mic-1/icmp-unreachable"}}
+	if status, evs := p.run(p.toks["olga"], "triage", in); status != http.StatusOK {
+		t.Fatalf(":run = %d %v", status, evs)
+	}
+	var conv struct {
+		Messages []struct {
+			Role string `json:"role"`
+			Body struct {
+				Text string `json:"text"`
+			} `json:"body"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(p.c.do(p.toks["olga"], http.MethodGet, "/assistant/conversations/triage", nil, http.StatusOK), &conv); err != nil {
+		t.Fatal(err)
+	}
+	if len(conv.Messages) == 0 || conv.Messages[0].Role != "user" {
+		t.Fatalf("transcript = %+v, want it to open on the skill's prompt", conv.Messages)
+	}
+	first := conv.Messages[0].Body.Text
+	for _, want := range []string{`- alarm: "mic-1/icmp-unreachable"`, "## Given", "- component: mic-1", "- alarm: icmp-unreachable"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("the prompt the model was sent lacks %q:\n%s", want, first)
+		}
+	}
+
+	for name, skill := range map[string]map[string]any{
+		"nosuch":  {"name": "no-such-skill"},
+		"missing": {"name": "triage-alarm", "arguments": map[string]any{"alarm": "icmp-unreachable"}},
+	} {
+		p.c.do(p.toks["olga"], http.MethodPost, "/assistant/conversations", map[string]any{"name": name}, http.StatusCreated)
+		bad := prompt("")
+		bad["messages"] = []any{}
+		bad["forwardedProps"] = map[string]any{"skill": skill}
+		if status, _ := p.run(p.toks["olga"], name, bad); status != http.StatusUnprocessableEntity {
+			t.Errorf("%s: :run = %d, want 422", name, status)
+		}
+	}
+}

@@ -107,6 +107,7 @@ export default function Users() {
         rowId: (p) => p.id,
         openId,
         blades: { registry: identityRegistry, rootKind: "user" },
+        subject: (p) => { const n = p.person?.username ?? p.machine?.name; return n ? { kind: "user", ref: n } : undefined; },
         railExtra: () => (
           <label class="flex cursor-pointer items-center gap-2 text-xs text-base-content/60">
             <input type="checkbox" class="toggle toggle-xs" checked={showArchived()} onChange={(e) => setShowArchived(e.currentTarget.checked)} />

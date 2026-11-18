@@ -3,7 +3,7 @@ import Button from "./Button";
 import Drawer from "./Drawer";
 import OmnibotStep, { StepArgs } from "./OmnibotStep";
 import CreateSecretForm from "./CreateSecretForm";
-import { Bot, Key, Plus } from "./icons";
+import { Bot, Key, Plus, X } from "./icons";
 import {
   answer,
   ask,
@@ -18,6 +18,7 @@ import {
   type RunState,
 } from "../lib/assistant";
 import { describeError } from "../lib/format";
+import { clearTray, contextEntries, pendingTriage, removeSubject, requestTriage, tray, triageCall, type Subject } from "../lib/handover";
 
 // OmnibotPanel is omnibot in the console (#1167): a drawer over one of the
 // person's conversations, run on the server (#2121). A prompt streams back as
@@ -27,6 +28,39 @@ import { describeError } from "../lib/format";
 // audited as its own, and it never sees a secret's value. The credential
 // button creates a secret through the secrets route and puts only its name in
 // the prompt, so a credential the person types never reaches the model.
+// What the person gathered from the console (#2122) waits in a tray above the
+// composer and goes with the next prompt as references, never as what the
+// console rendered. An alarm in the tray triages in one click: the run is the
+// embedded triage-alarm skill, its text the server's, on that alarm with the
+// rest of the tray as context.
+
+// SubjectChip is one handed-over subject: its kind and its name, address or
+// page, with a remove button while it waits in the tray, and a triage button
+// for an alarm there.
+function SubjectChip(props: { subject: Subject; onRemove?: () => void; onTriage?: () => void }) {
+  return (
+    <span class="badge badge-sm gap-1 max-w-full">
+      <span class="text-base-content/60">{props.subject.kind}</span>
+      <span class="font-data truncate min-w-0">{props.subject.ref}</span>
+      <Show when={props.onTriage}>
+        <button
+          type="button"
+          class="cursor-pointer text-primary font-medium"
+          aria-label={`Triage alarm ${props.subject.ref}`}
+          title="Run the triage-alarm skill on this alarm"
+          onClick={() => props.onTriage?.()}
+        >
+          Triage
+        </button>
+      </Show>
+      <Show when={props.onRemove}>
+        <button type="button" class="cursor-pointer" aria-label={`Remove ${props.subject.kind} ${props.subject.ref}`} onClick={() => props.onRemove?.()}>
+          <X size={12} />
+        </button>
+      </Show>
+    </span>
+  );
+}
 
 export default function OmnibotPanel(props: { open: boolean; onClose: () => void; prompt?: string }) {
   const [state, setState] = createSignal<RunState>(initialRun);
@@ -72,10 +106,31 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
   function send() {
     const text = draft().trim();
     if (!text || busy()) return;
+    const context = contextEntries(tray());
     setDraft("");
-    setState((s) => ask(s, text));
-    void run({ prompt: text });
+    clearTray();
+    setState((s) => ask(s, text, context));
+    void run({ prompt: text, context });
   }
+
+  // triage runs the triage-alarm skill on an alarm, the whole tray going with
+  // it as context.
+  function triage(s: Subject) {
+    const skill = triageCall(s);
+    if (!skill || busy()) return;
+    const context = contextEntries([s, ...tray()]);
+    clearTray();
+    setState((st) => ask(st, `Triage alarm ${s.ref}`, context));
+    void run({ skill, context });
+  }
+
+  // A triage asked for from the palette runs once the panel is open.
+  createEffect(() => {
+    const s = pendingTriage();
+    if (!props.open || !s || busy()) return;
+    requestTriage(undefined);
+    triage(s);
+  });
 
   function decide(approved: boolean) {
     const id = state().interrupt?.id;
@@ -104,6 +159,14 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
         send();
       }}
     >
+      <Show when={tray().length > 0}>
+        <div data-testid="omnibot-tray" class="flex flex-wrap items-center gap-1.5" aria-label="Handed to omnibot with your next prompt">
+          <span class="text-xs text-base-content/60">With your prompt</span>
+          <For each={tray()}>
+            {(s) => <SubjectChip subject={s} onRemove={() => removeSubject(s)} onTriage={triageCall(s) && !busy() ? () => triage(s) : undefined} />}
+          </For>
+        </div>
+      </Show>
       <textarea
         ref={composer}
         aria-label="Ask omnibot"
@@ -137,6 +200,7 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
         open={props.open}
         onClose={props.onClose}
         wide
+        above
         title={
           <span class="inline-flex items-center gap-2">
             <Bot size={16} /> Omnibot
@@ -168,7 +232,18 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
             {(item) => (
               <Switch>
                 <Match when={item.kind === "user" && item}>
-                  {(u) => <div class="self-end max-w-[85%] rounded-box bg-primary/10 px-3 py-2 text-sm whitespace-pre-wrap">{u().text}</div>}
+                  {(u) => (
+                    <div class="self-end flex max-w-[85%] flex-col items-end gap-1">
+                      <Show when={u().context}>
+                        {(c) => (
+                          <div data-testid="omnibot-handed" class="flex flex-wrap justify-end gap-1">
+                            <For each={c()}>{(e) => <SubjectChip subject={{ kind: e.description, ref: e.value }} />}</For>
+                          </div>
+                        )}
+                      </Show>
+                      <div class="rounded-box bg-primary/10 px-3 py-2 text-sm whitespace-pre-wrap">{u().text}</div>
+                    </div>
+                  )}
                 </Match>
                 <Match when={item.kind === "text" && item}>
                   {(t) => <div class="text-sm whitespace-pre-wrap">{t().text}</div>}
@@ -224,7 +299,7 @@ export default function OmnibotPanel(props: { open: boolean; onClose: () => void
           <div ref={end} data-testid="omnibot-end" />
         </div>
       </Drawer>
-      <Drawer open={credential()} onClose={() => setCredential(false)} title="Add a credential">
+      <Drawer open={credential()} onClose={() => setCredential(false)} above title="Add a credential">
         <p class="mb-4 text-xs text-base-content/60">
           The secret is sealed on the server. Omnibot gets its name, to use where a call takes a secret, and never its value.
         </p>
