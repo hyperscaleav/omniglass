@@ -30633,7 +30633,7 @@
     },
     "/settings/{namespace}": {
       "delete": {
-        "description": "Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
+        "description": "Drops the namespace's platform binding, restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.",
         "operationId": "delete-settings-namespace",
         "parameters": [
           {

@@ -7017,7 +7017,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <namespace>",
 					Short:   "Restore a settings namespace to defaults",
-					Long:    "Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
+					Long:    "Drops the namespace's platform binding, restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.",
 					Example: "  omniglass setting delete <namespace>",
 					Args:    pathArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

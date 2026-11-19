@@ -106,14 +106,14 @@ threshold past which the server logs and counts a query as slow, re-read each re
 
 ## Storage: one binding table, unscoped
 
-The declared defaults and the file layer live in memory, so Postgres holds **only the binding
-levels**: a single `setting_binding(scope, user_id, namespace, doc, locks, ...)` table with a
+The declared defaults, the file layer and the env layer live in memory, so Postgres holds **only
+the binding levels**: a single `setting_binding(scope, user_id, namespace, doc, locks, ...)` table with a
 `unique nulls not distinct (scope, user_id, namespace)` identity (a surrogate `id` primary
 key; `user_id` is nullable, and Postgres forbids NULL in a PK column). `scope` is under a
 CHECK naming the persisted levels, today `platform` alone, so a level the resolver would
 never read cannot be written and a future tier rename fails loudly. Restore falls out of the layer
 model: **restore a namespace** is a `DELETE` of its row, **restore everything** truncates the
-scope, and the file layer plus declared defaults re-supply the values. The table is **never
+scope, and the env layer, the file layer and the declared defaults re-supply the values. The table is **never
 boot-seeded** (operator data). Persisting only the bindings is a recorded call
 ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)),
 diverging from the scaling page's "materialized in Postgres" sketch.
@@ -273,7 +273,7 @@ Two read audiences, two read endpoints, and merge-patch writes:
   Merge Patch onto the namespace's binding at the acting scope (`platform` in slice-0); `null`
   restores a key.
 - **`DELETE /settings/{namespace}`** (same gates): drop the binding, restoring the namespace to
-  defaults.
+  its env layer, file layer and defaults.
 - **`POST /settings:restoreDefaults`** (same gates): an AIP custom method, a factory reset of the
   acting scope.
 

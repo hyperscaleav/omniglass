@@ -127,7 +127,7 @@ func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, 
 		Path:          "/settings/{namespace}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Restore a settings namespace to defaults",
-		Description:   "Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.",
+		Description:   "Drops the namespace's platform binding, restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.",
 	}, "settings", "update"), "update"), func(ctx context.Context, in *settingsNamespaceInput) (*struct{}, error) {
 		if err := a.requirePlatform(ctx, "update"); err != nil {
 			return nil, err

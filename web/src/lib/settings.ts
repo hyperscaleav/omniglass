@@ -87,8 +87,8 @@ export function usePatchNamespace() {
   };
 }
 
-// useRestoreNamespace drops a namespace's platform override, restoring the file layer
-// and the declared defaults, then invalidates the read and /settings/me.
+// useRestoreNamespace drops a namespace's platform override, restoring the env layer,
+// the file layer and the declared defaults, then invalidates the read and /settings/me.
 export function useRestoreNamespace() {
   const qc = useQueryClient();
   return async (namespace: string): Promise<{ ok: true } | { ok: false; message: string }> => {

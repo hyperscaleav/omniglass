@@ -22,9 +22,14 @@ refs: [2223, 33, 41]
      still wins, so an operator trying a value in the console is never silently clamped by a
      container variable.
   4. **Profile domain refused.** A per-user namespace (`ui`, `keybindings`, any `profile`) has no
-     process-wide meaning: a theme is not a server setting. The parser refuses the variable at
-     boot, naming it; the rest still loads.
-  5. **Rendered in the generated reference.** The env-var reference (`<ConfigVars />`) emits one
+     process-wide meaning: a theme is not a server setting. The parser refuses the variable and
+     the boot fails, naming it, as an unknown key or a value that does not parse does.
+  5. **Trusted as the file is.** The env layer is the deployment's own, like the settings file:
+     whoever sets the server's environment already sets `OMNIGLASS_ENCRYPTION_KEY` and
+     `OMNIGLASS_DSN`, so holds every sealed secret. The `secret:bind` gate on `assistant.base_url`,
+     `assistant.key_secret` and the mail relay is an API caller's check, so neither base layer
+     takes it, and the console still takes it when an admin moves them there.
+  6. **Rendered in the generated reference.** The env-var reference (`<ConfigVars />`) emits one
      row per settable key, so the reference stays complete by construction and the registry's
      drift gate still fails when the facts move.
 - **Context:** The twelve-factor rung between the file image (GitOps, ConfigMap) and the DB console

@@ -1002,14 +1002,25 @@ func TestPlanOmnibotKeyGoesToTheSeedAlone(t *testing.T) {
 
 // Every OMNIGLASS_ variable a lab hands a service is one the binary may read:
 // config.Get panics on an undeclared key, so a seed handed one it reads
-// undeclared stops the lab before it is ready (#2109).
+// undeclared stops the lab before it is ready (#2109). A variable in a declared
+// family (the settings layer's, #2223) is read through config.Environ, so its
+// prefix declares it.
 func TestPlanHandsOnlyDeclaredVariables(t *testing.T) {
 	declared := map[string]bool{}
 	for _, v := range config.Registry {
 		declared[v.Key] = true
 	}
+	inFamily := func(key string) bool {
+		for _, f := range config.Families {
+			if strings.HasPrefix(key, f.Prefix) {
+				return true
+			}
+		}
+		return false
+	}
 	o := testOptions()
 	o.OmnibotKey = "ghp-lab-key"
+	o.ServerSettingsEnv = []string{"OMNIGLASS_SETTING__ASSISTANT__MODEL=openai.gpt-oss-20b-1:0"}
 	for _, opts := range []Options{o, scaleOptions()} {
 		s, err := Plan(opts)
 		if err != nil {
@@ -1018,7 +1029,7 @@ func TestPlanHandsOnlyDeclaredVariables(t *testing.T) {
 		for _, svc := range s.Services() {
 			for _, e := range svc.Env {
 				key, _, _ := strings.Cut(e, "=")
-				if strings.HasPrefix(key, "OMNIGLASS_") && !declared[key] {
+				if strings.HasPrefix(key, "OMNIGLASS_") && !declared[key] && !inFamily(key) {
 					t.Errorf("%s is handed %s, which internal/config/registry.go does not declare", svc.Name, key)
 				}
 			}

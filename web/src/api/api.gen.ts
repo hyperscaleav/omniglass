@@ -20340,7 +20340,7 @@ export const getDeleteSettingsNamespaceUrl = (namespace: string,) => {
 }
 
 /**
- * Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
+ * Drops the namespace's platform binding, restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.
  * @summary Restore a settings namespace to defaults
  */
 export const deleteSettingsNamespace = async (namespace: string, options?: Parameters<typeof ogFetch>[1]): Promise<deleteSettingsNamespaceResponse> => {

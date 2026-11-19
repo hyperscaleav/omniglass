@@ -38,6 +38,13 @@ var (
 // value that will not parse fails with the variable's NAME; the value is
 // never quoted because it may be a bare secret name or a URL.
 //
+// Every platform-domain key is settable, assistant.base_url and key_secret and
+// the mail relay's included. The secret:bind gate on those keys judges an API
+// caller moving a credential's destination; the env layer, like the settings
+// file, is the deployment's own, and whoever sets the server's environment
+// already sets OMNIGLASS_ENCRYPTION_KEY and OMNIGLASS_DSN, so holds every
+// sealed secret the gate protects (ADR-2223).
+//
 // env is a list of KEY=VALUE strings, as os.Environ returns. Variables that do
 // not start with the prefix are ignored.
 func LoadEnv(env []string) (Doc, error) {

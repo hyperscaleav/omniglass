@@ -5506,7 +5506,7 @@ Restore a settings namespace to defaults
 omniglass setting delete <namespace>
 ```
 
-Drops the namespace's platform binding, restoring the file layer and the declared defaults. Gated by settings:update and platform:update.
+Drops the namespace's platform binding, restoring the env layer, the file layer and the declared defaults. Gated by settings:update and platform:update.
 
 Example:
 
