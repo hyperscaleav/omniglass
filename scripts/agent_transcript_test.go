@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -19,7 +20,17 @@ const fixRun = "testdata/agent-transcript/fix-run.json"
 func agentTranscript(t *testing.T, args ...string) (string, string, int) {
 	t.Helper()
 	requireTools(t)
+	return agentTranscriptEnv(t, nil, args...)
+}
+
+// agentTranscriptEnv runs the script with env added to this process's.
+func agentTranscriptEnv(t *testing.T, env []string, args ...string) (string, string, int) {
+	t.Helper()
+	requireTools(t)
 	cmd := exec.Command("bash", append([]string{"agent-transcript.sh"}, args...)...)
+	if env != nil {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
@@ -146,6 +157,7 @@ func TestAgentTranscriptMasksTokensAndKeys(t *testing.T) {
 	}
 	msgs := []map[string]any{
 		{"type": "assistant", "message": map[string]any{"content": []map[string]any{
+			{"type": "text", "text": "Found " + strings.Join(secrets, " ")},
 			{"type": "tool_use", "id": "t1", "name": "Bash", "input": map[string]any{"command": "curl -H 'Authorization: token " + secrets[1] + "' x"}},
 		}}},
 		{"type": "user", "message": map[string]any{"content": []map[string]any{
@@ -178,6 +190,86 @@ func TestAgentTranscriptMasksTokensAndKeys(t *testing.T) {
 	// The rest of the transcript is kept.
 	if !strings.Contains(redacted, `"tool_use_id": "t1"`) {
 		t.Fatalf("redact dropped more than the secrets: %s", redacted)
+	}
+}
+
+// The kept transcript carries no tool output: an agent that printed its git
+// config, its environment or a file could have printed anything, and no list
+// of token shapes catches everything. Only each result's exit code line
+// stays, so the command list reads the same from the kept copy as from the
+// original.
+func TestAgentTranscriptWithholdsToolOutput(t *testing.T) {
+	redacted, errs, rc := agentTranscript(t, "redact", fixRun)
+	if rc != 0 {
+		t.Fatalf("redact: exit %d: %s", rc, errs)
+	}
+	for _, s := range []string{`add a test`, `package x`, `commit the regenerated files`} {
+		if strings.Contains(redacted, s) {
+			t.Errorf("tool output %q survived: %s", s, redacted)
+		}
+	}
+	if !strings.Contains(redacted, "Reading the review.") {
+		t.Errorf("redact dropped the agent's own text: %s", redacted)
+	}
+	kept := filepath.Join(t.TempDir(), "kept.json")
+	if err := os.WriteFile(kept, []byte(redacted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, want := commandsOf(t, kept), commandsOf(t, fixRun)
+	gb, _ := json.Marshal(got)
+	wb, _ := json.Marshal(want)
+	if string(gb) != string(wb) {
+		t.Fatalf("commands from the kept copy = %s\nfrom the original = %s", gb, wb)
+	}
+}
+
+// The run's own secrets are masked by value, whatever their shape, and so are
+// the encodings an agent is likely to print: base64 of the value, and the
+// basic auth header git's credential config carries. JWTs, auth headers and
+// credentials in a URL are masked by shape.
+func TestAgentTranscriptMasksTheRunsOwnSecretsAndTheirEncodings(t *testing.T) {
+	// Shapes no pattern knows, so only the exact-value mask can catch them.
+	appToken := "v1." + strings.Repeat("d", 40)
+	oauth := "oauth-" + strings.Repeat("e", 30)
+	b64 := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	jwt := "eyJ" + strings.Repeat("h", 20) + ".eyJ" + strings.Repeat("p", 30) + "." + strings.Repeat("s", 30)
+	leaks := []string{
+		appToken,
+		b64(appToken),
+		b64("x-access-token:" + appToken),
+		oauth,
+		jwt,
+		"AUTHORIZATION: basic " + b64("someone:"+strings.Repeat("q", 20)),
+		"Authorization: Bearer " + strings.Repeat("r", 30),
+		"https://someone:" + strings.Repeat("u", 20) + "@github.com/o/r",
+	}
+	survivors := []string{
+		appToken[:20], b64(appToken)[:20], b64("x-access-token:" + appToken)[:24], oauth[:20],
+		"hhhhhhhhhh", b64("someone:")[:8], strings.Repeat("r", 20), strings.Repeat("u", 20),
+	}
+	msgs := []map[string]any{
+		{"type": "assistant", "message": map[string]any{"content": []map[string]any{
+			{"type": "text", "text": strings.Join(leaks, "\n")},
+			{"type": "tool_use", "id": "t1", "name": "Bash", "input": map[string]any{"command": "echo " + strings.Join(leaks, " ")}},
+		}}},
+		{"type": "result", "result": strings.Join(leaks, " ")},
+	}
+	b, _ := json.Marshal(msgs)
+	file := filepath.Join(t.TempDir(), "run.json")
+	if err := os.WriteFile(file, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := []string{"GITHUB_TOKEN=" + appToken, "CLAUDE_CODE_OAUTH_TOKEN=" + oauth}
+	for _, mode := range []string{"redact", "commands"} {
+		out, errs, rc := agentTranscriptEnv(t, env, mode, file)
+		if rc != 0 {
+			t.Fatalf("%s: exit %d: %s", mode, rc, errs)
+		}
+		for i, s := range survivors {
+			if strings.Contains(out, s) {
+				t.Errorf("%s: %q (from %q) survived: %s", mode, s, leaks[i], out)
+			}
+		}
 	}
 }
 

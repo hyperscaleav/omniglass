@@ -307,13 +307,16 @@ jobs:
       # Keep what the agent ran (#2230), so the daily lessons sweep can tell a
       # miss from a flake: the action's transcript and each shell command with
       # its exit code, for 14 days. This repo is public and so are its
-      # artifacts, so tokens and private keys are masked first. A missing
-      # transcript warns; it never fails the run.
+      # artifacts, so the kept transcript drops every tool's output and masks
+      # secrets: the run's own tokens by value (they are here only for that),
+      # the rest by shape. A missing transcript warns; it never fails the run.
       - name: Keep the agent's transcript
         id: transcript
         if: always() && steps.agent.outcome != 'skipped'
         env:
           EXECUTION_FILE: ${{ steps.agent.outputs.execution_file }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
           set -uo pipefail
           dir="${RUNNER_TEMP}/agent-transcript"
