@@ -209,7 +209,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/review"
           diff=$RUNNER_TEMP/review/review.diff
           mode=full; base=""; turns=80
-          if bash "$script" turns 0 >/dev/null 2>&1; then
+          # Only the #2224 script takes an open-threads file, so this probe
+          # tells it from main's older copies (which may already have turns).
+          open=$RUNNER_TEMP/review/open.json
+          printf '[]' > "$open"
+          if bash "$script" lenses "$catalog" "" "$open" >/dev/null 2>&1; then
             last=$(gh api "repos/${REPO}/pulls/${NUMBER}/reviews" --paginate \
                 --jq '.[] | {user: .user.login, commit_id, body: (.body // "")}' \
               | jq -s -c --arg bot "$POSTER" '{reviewer_bot: $bot, reviews: .}' \
@@ -221,24 +225,16 @@ jobs:
             lines=$(grep -E '^[+-]' "$diff" | grep -cvE '^(\+\+\+|---)( |$)' || true)
             turns=$(bash "$script" turns "${lines:-0}")
             echo "$lines changed line(s): $turns turns per lens"
-            # Each open reviewer thread goes to the recheck lens, when the
-            # default branch's script has one.
-            open=$RUNNER_TEMP/review/open.json
-            printf '[]' > "$open"
-            if bash "$script" lenses "$catalog" "" "$open" >/dev/null 2>&1; then
-              gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
-                  -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
-                | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \
-                | bash "$script" threads > "$open"
-              echo "$(jq length "$open") open finding(s) to recheck"
-              lenses=$(bash "$script" lenses "$catalog" "$diff" "$open")
-            else
-              echo "::warning::the default branch's agent-review.sh has no recheck lens; open findings only carry forward"
-              lenses=$(bash "$script" lenses "$catalog" "$diff")
-            fi
+            # Each open reviewer thread goes to the recheck lens.
+            gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
+                -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
+              | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \
+              | bash "$script" threads > "$open"
+            echo "$(jq length "$open") open finding(s) to recheck"
+            lenses=$(bash "$script" lenses "$catalog" "$diff" "$open")
           else
             # Only until #2224 lands: main's copy reviews the whole PR.
-            echo "::warning::the default branch's agent-review.sh has no incremental re-review; reviewing the whole PR"
+            echo "::warning::the default branch's agent-review.sh predates #2224; reviewing the whole PR"
             lenses=$(bash "$script" lenses "$catalog")
           fi
           {
@@ -481,7 +477,10 @@ jobs:
           # count in this verdict. Reading them fails the check rather than
           # dropping them.
           open='[]'
-          if bash "$script" turns 0 >/dev/null 2>&1; then
+          # followups exits 2 on bad input in the #2224 script and 64 (unknown)
+          # in older copies, which have no threads either.
+          probe=0; printf '{}' | bash "$script" followups >/dev/null 2>&1 || probe=$?
+          if [ "$probe" -eq 2 ]; then
             open=$(gh api graphql --paginate -F owner="${REPO%%/*}" -F name="${REPO#*/}" -F number="$NUMBER" \
                 -f query="$THREADS_QUERY" --jq '.data.repository.pullRequest.reviewThreads.nodes[]' \
               | jq -s -c --arg a "$POSTER" --arg b "$BOT" '{bots: [$a, $b], threads: .}' \

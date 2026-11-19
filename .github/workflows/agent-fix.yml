@@ -378,7 +378,9 @@ jobs:
           body=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" body)
           gh api -X PATCH "repos/${REPO}/issues/comments/${COMMENT}" -f body="$body" --silent \
             || echo "::warning::could not update the status comment (${COMMENT}); it still says agent-fix is working"
-          printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" replies | jq -c '.[]' | while IFS= read -r r; do
+          # main's agent-status.sh before #2224 has no replies; then there are none.
+          replies=$(printf '%s' "$facts" | bash "${RUNNER_TEMP}/agent-status.sh" replies 2>/dev/null) || replies='[]'
+          jq -c '.[]' <<<"$replies" | while IFS= read -r r; do
             id=$(jq -r .comment_id <<<"$r")
             gh api -X POST "repos/${REPO}/pulls/${NUMBER}/comments/${id}/replies" -f body="$(jq -r .body <<<"$r")" --silent \
               || echo "::warning::could not reply on review comment ${id}"
