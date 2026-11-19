@@ -363,3 +363,137 @@ describe("a blade heading renders through the primitive", () => {
   });
 });
 
+// IAM vocabulary guard.
+//
+// The subject of a grant is a user, not a principal (ADR-2036). These four
+// terms were retired when #2076 built the console; this guard keeps them from
+// drifting back into operator-visible .tsx source the way "intended datapoint"
+// survived a vocabulary migration in a seeded description that nothing scanned.
+//
+// Patterns and allow lists mirror internal/vocab/terms.yaml so both lints apply
+// the same rules: the Go gate catches docs and seed files; this one catches
+// every tsx source file in a single Vitest run, without listing files explicitly.
+interface IAMTerm {
+  word: string;
+  pattern: RegExp;
+  allow?: RegExp;
+  replacement: string;
+}
+
+const IAM_RETIRED: IAMTerm[] = [
+  {
+    word: "principal",
+    // The noun anywhere in an operator-visible string; identifiers included.
+    // Mirrors the terms.yaml pattern for "principal".
+    pattern: /\bprincipal(?:s|_\w+)?\b/i,
+    // English adjective uses keep the word (terms.yaml allow, adjective arm only;
+    // the backtick code-span arm is a markdown concept and does not apply in tsx).
+    allow: /\bprincipal (?:axis|axes|reasons?|surfaces?|concerns?|risks?|costs?|goals?|aims?|purposes?|ones|uses?|questions?|ways?|means)\b/i,
+    replacement: "user (a person or a machine user)",
+  },
+  {
+    word: "principal group",
+    pattern: /\bprincipal[- ]groups?\b/i,
+    replacement: "user group",
+  },
+  {
+    word: "service account",
+    pattern: /\bservice[- ]accounts?\b/i,
+    replacement: "machine user",
+  },
+  {
+    word: "human (as a kind)",
+    // The kind pairing and compound forms from terms.yaml.
+    pattern:
+      /\bhuman (?:principals?|users?|members?|kinds?|accounts?|identit(?:y|ies))\b|\bhumans? (?:and|or|vs\.?|versus) (?:service|machine)\b|\b(?:service|machine)(?: users?| principals?| accounts?)? (?:and|or) humans?\b|\bhuman\/service\b/i,
+    replacement: "person (the kind of user a human signs in as; the other kind is machine)",
+  },
+];
+
+// iamFired returns any retired IAM term whose pattern matches line outside of
+// its allow clause, applying the allow per-match position so an allowed sense
+// on the same line does not suppress an uncovered one.
+function iamFired(line: string): Array<{ word: string; replacement: string }> {
+  const hits: Array<{ word: string; replacement: string }> = [];
+  for (const term of IAM_RETIRED) {
+    const re = new RegExp(term.pattern.source, "gi");
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(line)) !== null) {
+      if (term.allow) {
+        const ar = new RegExp(term.allow.source, "gi");
+        let covered = false;
+        let am: RegExpExecArray | null;
+        while ((am = ar.exec(line)) !== null) {
+          if (am.index <= m.index && m.index + m[0].length <= am.index + am[0].length) {
+            covered = true;
+            break;
+          }
+        }
+        if (covered) continue;
+      }
+      hits.push({ word: term.word, replacement: term.replacement });
+      break; // one hit per term per line is enough
+    }
+  }
+  return hits;
+}
+
+describe("IAM vocabulary (ADR-2036)", () => {
+  // Failing-first pins: these lines must fire the guard before it scans the
+  // corpus, and their allowed counterparts must pass. Mirrors TestADR2036TheUserFires
+  // in internal/docslint for the web-side scanner.
+  it("fires on retired IAM words and passes their allowed senses", () => {
+    const shouldFire = [
+      `  <button>Add Principal</button>`,
+      `  const label = "principal";`,
+      `  "All principals in the install"`,
+      `  perm: "principal:read:admin"`,
+      `  col = "principal_id"`,
+      `  "add a principal group for the night shift"`,
+      `  "service account token"`,
+      `  "human users and machine users"`,
+    ];
+    for (const line of shouldFire) {
+      if (iamFired(line).length === 0) {
+        throw new Error(`IAM guard should fire on: ${line}`);
+      }
+    }
+
+    const shouldPass = [
+      `  // the principal table was renamed to users (ADR-2036)`,
+      `  "the principal reason for the split"`,
+      `  "a user holds grants"`,
+      `  "machine user token"`,
+      `  "a person signs in with a password"`,
+      `  "a human reads the label"`,
+      `  "human-in-the-loop gate"`,
+    ];
+    for (const line of shouldPass) {
+      if (!isComment(line) && iamFired(line).length > 0) {
+        throw new Error(`IAM guard should not fire on: ${line}`);
+      }
+    }
+  });
+
+  it("uses no retired IAM word in operator-visible .tsx source", () => {
+    const offenders: string[] = [];
+    for (const file of walk(SRC, { tests: false })) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, i) => {
+          if (isComment(line)) return;
+          for (const { word, replacement } of iamFired(line)) {
+            offenders.push(`${file.replace(SRC + "/", "")}:${i + 1}  "${word}" -> ${replacement}`);
+          }
+        });
+    }
+    expect(
+      offenders,
+      `\nThese carry a retired IAM word in operator-visible .tsx source:\n` +
+        `  ${offenders.join("\n  ")}\n\n` +
+        `Retired (ADR-2036): principal -> user, principal group -> user group, ` +
+        `service account -> machine user, human [as kind] -> person.\n`,
+    ).toEqual([]);
+  });
+});
+

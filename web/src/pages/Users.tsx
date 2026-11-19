@@ -142,7 +142,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: User) => void
   const [busy, setBusy] = createSignal(false);
   const [err, setErr] = createSignal<string | null>(null);
   // A password-policy rejection from the server (the denylist) is shown inline under
-  // the password field, not in the head-of-form alert, so it reads like the client checks.
+  // the password field, not in the head-of-form alarm, so it reads like the client checks.
   const [pwServerError, setPwServerError] = createSignal<string | null>(null);
 
   useFormActions().bind({
