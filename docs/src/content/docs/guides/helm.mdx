@@ -89,7 +89,7 @@ externalDsn: "postgres://user:pass@managed-db.example.com:5432/omniglass?sslmode
 
 The `externalDsn` value contains credentials. The chart creates a Secret from it and injects `OMNIGLASS_DSN` into the server, migrate, and bootstrap init containers. Supply it at install time via `--set externalDsn=...` or `--set-file externalDsn=<file>`, or use your GitOps secret tooling (such as External Secrets Operator) to populate the value before install.
 
-### Durable state
+### Persistent data
 
 Persistent state is the external Postgres database. The server's data volume and JetStream store are covered in [Durable state](#durable-state). Backup and restore practices, retention policies, and recovery procedures are covered in #1286.
 
