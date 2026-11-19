@@ -99,8 +99,9 @@ func checkBareParams(transportName string, params []byte) error {
 }
 
 // checkTimeout refuses a bare endpoint's params whose timeout value is not a
-// valid Go duration string (the outpost calls time.ParseDuration on it at probe
-// time; a bad value would skip the task forever).
+// positive Go duration string (the outpost calls time.ParseDuration on it at
+// probe time; a bad value would skip the task forever), the same rule a
+// driver-attached endpoint's timeout input is held to.
 func checkTimeout(p map[string]any) error {
 	raw, ok := p["timeout"]
 	if !ok {
@@ -110,8 +111,8 @@ func checkTimeout(p map[string]any) error {
 	if !isString {
 		return fmt.Errorf("params.timeout must be a duration string (e.g. \"2s\"), and %v is not", raw)
 	}
-	if _, err := time.ParseDuration(s); err != nil {
-		return fmt.Errorf("params.timeout must be a duration string (e.g. \"2s\"), and %q is not", s)
+	if d, err := time.ParseDuration(s); err != nil || d <= 0 {
+		return fmt.Errorf("params.timeout must be a positive duration string (e.g. \"2s\"), and %q is not", s)
 	}
 	return nil
 }

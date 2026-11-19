@@ -47,6 +47,7 @@ func TestABareDialedEndpointsParamsNameATarget(t *testing.T) {
 		{"tcp not an object", "tcp", `"127.0.0.1:8080"`, "target"},
 		{"tcp target missing port", "tcp", `{"target":"10.0.0.1"}`, "target"},
 		{"tcp bad timeout", "tcp", `{"target":"10.0.0.1:8080","timeout":"five minutes"}`, "timeout"},
+		{"tcp zero timeout", "tcp", `{"target":"10.0.0.1:8080","timeout":"0s"}`, "timeout"},
 		{"tcp good timeout", "tcp", `{"target":"10.0.0.1:8080","timeout":"30s"}`, ""},
 		{"ssh target missing port", "ssh", `{"target":"10.0.0.9"}`, "target"},
 		{"snmp bare host defaults to 161", "snmp", `{"target":"10.0.0.9"}`, ""},
