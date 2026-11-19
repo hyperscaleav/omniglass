@@ -59,7 +59,7 @@ func TestEndpointAPI(t *testing.T) {
 	// named (name = type), so the create body carries no name; capture the surrogate
 	// id the create returns.
 	ifA := createEndpoint(c, ownerTok, map[string]any{
-		"transport": "tcp", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1"},
+		"transport": "tcp", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1:23"},
 	})
 	ifB := createEndpoint(c, ownerTok, map[string]any{
 		"transport": "tcp", "component": "comp-b",

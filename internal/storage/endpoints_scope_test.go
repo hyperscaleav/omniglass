@@ -92,11 +92,11 @@ func TestInterfaceScopeCRUD(t *testing.T) {
 	if _, err := gw.UpdateEndpoint(ctx, "", ifB.ID, storage.EndpointPatch{Params: []byte(`{"target":"x"}`)}, readA, readA); !errors.Is(err, storage.ErrEndpointNotFound) {
 		t.Errorf("update B's interface under A-scope = %v, want ErrEndpointNotFound", err)
 	}
-	if _, err := gw.UpdateEndpoint(ctx, "", ifA.ID, storage.EndpointPatch{Params: []byte(`{"target":"10.0.0.9"}`)}, readA, scope.Set{}); !errors.Is(err, storage.ErrEndpointForbidden) {
+	if _, err := gw.UpdateEndpoint(ctx, "", ifA.ID, storage.EndpointPatch{Params: []byte(`{"target":"10.0.0.9:23"}`)}, readA, scope.Set{}); !errors.Is(err, storage.ErrEndpointForbidden) {
 		t.Errorf("update A's interface in-read not-action = %v, want ErrEndpointForbidden", err)
 	}
-	upd, err := gw.UpdateEndpoint(ctx, "", ifA.ID, storage.EndpointPatch{Params: []byte(`{"target":"10.0.0.9"}`)}, readA, readA)
-	if err != nil || string(upd.Params) != `{"target": "10.0.0.9"}` {
+	upd, err := gw.UpdateEndpoint(ctx, "", ifA.ID, storage.EndpointPatch{Params: []byte(`{"target":"10.0.0.9:23"}`)}, readA, readA)
+	if err != nil || string(upd.Params) != `{"target": "10.0.0.9:23"}` {
 		t.Fatalf("update A's interface params = %q (err %v)", string(upd.Params), err)
 	}
 	if err := gw.DeleteEndpoint(ctx, "", ifB.ID, readA, readA); !errors.Is(err, storage.ErrEndpointNotFound) {

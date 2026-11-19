@@ -16,8 +16,8 @@ import (
 // (#1187): host and port are not keys (the address goes under target as
 // host[:port]), and params without a target would be skipped by the node
 // forever, so they are refused at write, on create and on an edit, naming
-// target. Port is optional: a bare host is valid for all transports (the
-// outpost handles default or missing ports at probe time). udp binds a local
+// target. The target needs a port except on icmp, which dials none, and snmp,
+// which defaults to 161: a bare host elsewhere would dial nothing. udp binds a local
 // port and a push transport is dialed by no one, so neither needs one;
 // tls-mode and listen-port stay checked as they were. Skipped under -short.
 func TestABareDialedEndpointsParamsNameATarget(t *testing.T) {
@@ -45,10 +45,11 @@ func TestABareDialedEndpointsParamsNameATarget(t *testing.T) {
 		{"tcp empty target", "tcp", `{"target":"  "}`, "target"},
 		{"tcp target not a string", "tcp", `{"target":8080}`, "target"},
 		{"tcp not an object", "tcp", `"127.0.0.1:8080"`, "target"},
-		{"tcp bare host", "tcp", `{"target":"10.0.0.1"}`, ""},
+		{"tcp target missing port", "tcp", `{"target":"10.0.0.1"}`, "target"},
 		{"tcp bad timeout", "tcp", `{"target":"10.0.0.1:8080","timeout":"five minutes"}`, "timeout"},
 		{"tcp good timeout", "tcp", `{"target":"10.0.0.1:8080","timeout":"30s"}`, ""},
-		{"ssh bare host", "ssh", `{"target":"10.0.0.9"}`, ""},
+		{"ssh target missing port", "ssh", `{"target":"10.0.0.9"}`, "target"},
+		{"snmp bare host defaults to 161", "snmp", `{"target":"10.0.0.9"}`, ""},
 		{"icmp empty object", "icmp", `{}`, "target"},
 		{"icmp host", "icmp", `{"target":"10.0.0.1","count":3,"timeout":"2s"}`, ""},
 		{"icmp bad timeout", "icmp", `{"target":"10.0.0.1","timeout":"five minutes"}`, "timeout"},

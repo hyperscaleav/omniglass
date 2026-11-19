@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -136,14 +137,20 @@ func checkCount(params []byte) error {
 	return nil
 }
 
+// portOptional is the dialed transports whose target may omit the port: icmp
+// dials none and snmp defaults to 161.
+var portOptional = map[string]bool{"icmp": true, "snmp": true}
+
 // checkTarget refuses a dialed endpoint's params that carry no target the
 // outpost can dial (#1187): the outpost reads the one `target` key as host[:port]
 // and skips a task whose target is empty, forever, so the endpoint's
 // reachability would never read. Params left out are not this check's (an
 // unchanged edit carries none); a host or port key is the likely mistake, and
-// the message names the key to use instead. Port is optional for all transports:
-// a bare host is valid and the outpost resolves a missing port at probe time.
-func checkTarget(_ string, params []byte) error {
+// the message names the key to use instead. The target needs a port on every
+// transport the outpost dials by host:port with no default: icmp dials no port,
+// and snmp falls back to 161 (collection/snmp.go), so those two take a bare host.
+// A bare host on any other transport would dial nothing and read down forever.
+func checkTarget(transportName string, params []byte) error {
 	var p map[string]any
 	if err := json.Unmarshal(params, &p); err != nil {
 		return fmt.Errorf("params must be a JSON object holding a %s", targetParam)
@@ -156,6 +163,11 @@ func checkTarget(_ string, params []byte) error {
 	target, _ := p[targetParam].(string)
 	if strings.TrimSpace(target) == "" {
 		return fmt.Errorf("params.%s is required: the address the outpost dials, as host[:port]", targetParam)
+	}
+	if !portOptional[transportName] {
+		if _, port, err := net.SplitHostPort(target); err != nil || port == "" {
+			return fmt.Errorf("params.%s must be host:port on %s, and %q is not (did you omit the port?)", targetParam, transportName, target)
+		}
 	}
 	return nil
 }
