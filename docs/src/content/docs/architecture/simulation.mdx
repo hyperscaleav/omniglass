@@ -424,10 +424,10 @@ Beside those, the fixture's simulated endpoints wire the rest:
   seeded 5% of them each way).
 - **The webhooks**: the UCC platform's webhook endpoint (`ucc-webhook`),
   which the simulator subscribes the platform to ([below](#a-simulated-service-posts-from-the-start)).
-- **Every collection method healthy on one location** (#1370): the HQ boardroom runs the three drivers
+- **Every collection method healthy on one location** (#1370): the HQ boardroom runs the four drivers
   the rest of the fleet never attaches, the bar's control socket (`kestrel-ws`, JSON over wss on
-  9443), the display's web admin over http digest (`boreal-edge-web`) and the panel's https API
-  behind its sign-in form (`newtron-panel-web`); the healthy twins of the ssh and telnet faults (the
+  9443), the display's web admin over http digest (`boreal-edge-web`), the panel's https API
+  behind its sign-in form (`newtron-panel-web`) and the PDU's control API (`ferrite-pdu-api`, #1653); the healthy twins of the ssh and telnet faults (the
   right login and no stale pin); and a bare `icmp` probe. A simulated device's ssh host key, like its
   https key, is derived from its id, so a key the outpost pinned on first use survives a simulator
   restart. The [table below](#every-collection-method-in-the-dev-fleet) lists every method, the
